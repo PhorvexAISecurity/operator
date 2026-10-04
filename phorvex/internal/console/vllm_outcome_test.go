@@ -470,7 +470,18 @@ func TestEndpointRouteDisambiguatesAdminServiceViaRouteAnnotation(t *testing.T) 
 func TestExactJSONPatchBindsUIDResourceVersionAndAbsentMap(t *testing.T) {
 	var command string
 	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
-		command = strings.Join(args, " ")
+		for i, a := range args {
+			if a == "--patch-file" && i+1 < len(args) {
+				b, err := os.ReadFile(args[i+1])
+				if err != nil {
+					return "", err
+				}
+				command = string(b)
+			}
+			if a == "-p" {
+				t.Fatalf("patch passed as argv; must use --patch-file: %v", args)
+			}
+		}
 		return "patched", nil
 	}}}
 	after := map[string]string{"phorvex.ai/guardrail-variant": "pgv1"}
@@ -481,6 +492,36 @@ func TestExactJSONPatchBindsUIDResourceVersionAndAbsentMap(t *testing.T) {
 		if !strings.Contains(command, required) {
 			t.Fatalf("exact patch omitted %q: %s", required, command)
 		}
+	}
+}
+
+// A real vLLM Pod carried a 72 KB Phoenix applied-sec-events annotation, so the exact patch
+// (test + replace of the whole map) exceeded the 128 KiB argv limit and endpoint-rotate failed
+// with "argument list too long". The patch must reach kubectl intact through a file at any size.
+func TestExactJSONPatchHandlesAnnotationsBeyondArgvLimit(t *testing.T) {
+	var staged int
+	s := &Server{cfg: Config{Exec: func(_ time.Duration, _ string, args ...string) (string, error) {
+		for i, a := range args {
+			if len(a) > 128<<10 {
+				t.Fatalf("argv element of %d bytes would fail exec", len(a))
+			}
+			if a == "--patch-file" {
+				b, err := os.ReadFile(args[i+1])
+				if err != nil {
+					return "", err
+				}
+				staged = len(b)
+			}
+		}
+		return "patched", nil
+	}}}
+	before := map[string]string{"amtd.r6security.com/applied-sec-events": strings.Repeat("x", 80<<10)}
+	after := map[string]string{"amtd.r6security.com/applied-sec-events": before["amtd.r6security.com/applied-sec-events"], "phorvex.ai/route-key": "ep-new"}
+	if err := s.exactJSONPatch("pod", "vllm-0", "pod-uid", "17", replaceOptionalMapPatch("/metadata/annotations", &before, &after)...); err != nil {
+		t.Fatal(err)
+	}
+	if staged <= 160<<10 {
+		t.Fatalf("staged patch %d bytes; expected the full >160 KiB test+replace payload", staged)
 	}
 }
 

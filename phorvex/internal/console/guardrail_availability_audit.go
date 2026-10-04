@@ -273,6 +273,37 @@ func availabilityProjectAuditNamespace(raw []byte, before availabilitySnapshot, 
 	return rows, unbound, nil
 }
 
+// availabilityDecisionRecords maps a decision id to its complete audit row.
+type availabilityDecisionRecords map[string]audit.Record
+
+// availabilityMatchedRecords returns the complete audit rows behind the selected or actuated
+// target rows, keyed by decision id, taken from the exact verified interval the projection
+// read. A caller binds the decision's objective math + economics from these rows instead of
+// re-reading the live tail, which at ~35 MB/min of audit no longer holds a decision minutes old.
+func availabilityMatchedRecords(raw []byte, rows []availabilityDecision) availabilityDecisionRecords {
+	out := availabilityDecisionRecords{}
+	want := map[string]bool{}
+	for _, row := range rows {
+		if row.DecisionID != "" && (row.Selected || row.Actuated) {
+			want[row.DecisionID] = true
+		}
+	}
+	if len(want) == 0 {
+		return out
+	}
+	for _, line := range bytes.Split(bytes.TrimSuffix(raw, []byte{'\n'}), []byte{'\n'}) {
+		var rec audit.Record
+		if len(line) == 0 || len(line) > 1<<20 || json.Unmarshal(line, &rec) != nil ||
+			rec.Kind != "phorvex.decision" || rec.DecisionTrace == nil || !want[rec.DecisionTrace.DecisionID] {
+			continue
+		}
+		if prev, ok := out[rec.DecisionTrace.DecisionID]; !ok || (rec.Actuated && !prev.Actuated) {
+			out[rec.DecisionTrace.DecisionID] = rec
+		}
+	}
+	return out
+}
+
 func (w *availabilityWorker) auditClose(start availabilityAuditStart, event *availabilityEvent) (availabilityAuditTerminal, error) {
 	begin := time.Now()
 	out := availabilityAuditTerminal{Schema: "guardrail-availability-audit-terminal-v1", Status: "AUDIT_COVERAGE_GAP", SourceIdentity: w.rm.cfg.AuditSourceIdentity, RawAuditRetained: false, TargetRows: []availabilityDecision{}, ChunkReceipts: []availabilityAuditChunk{}}
@@ -385,6 +416,7 @@ func (w *availabilityWorker) auditClose(start availabilityAuditStart, event *ava
 	}
 	out.TargetRows = rows
 	out.UnboundTargetRows = &unbound
+	w.decisionRecords = availabilityMatchedRecords(raw.Bytes(), rows)
 	out.AuditReadElapsedSeconds = time.Since(begin).Seconds()
 	if out.AuditReadElapsedSeconds >= 180 {
 		return out, errors.New("absolute audit read deadline exhausted")

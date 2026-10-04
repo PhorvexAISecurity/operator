@@ -65,6 +65,8 @@ func (s *Server) waitVoiceMCPDecision(ctx context.Context, record *attackRecord,
 				}
 				trace := row.DecisionTrace
 				if row.Selected {
+					matched := row
+					bindDecisionRecord(record, &matched)
 					return voiceMCPDecision{voiceMemoryDecision: voiceMemoryDecision{Action: row.Action, DecisionID: trace.DecisionID,
 						TickID: trace.TickID, SelectedAt: row.Time, Selected: true, Actuated: row.Actuated &&
 							row.DispatchOutcome == model.DispatchEmitted && trace.DispatchOutcome == model.DispatchEmitted}}, nil

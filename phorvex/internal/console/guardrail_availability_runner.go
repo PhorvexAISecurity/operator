@@ -129,6 +129,9 @@ type availabilityWorker struct {
 	// Empty preserves the historical vLLM guardrail projection. A separately
 	// pinned LiteLLM Live worker uses the same authenticated audit transport.
 	auditNamespace string
+	// decisionRecords keeps the complete audit rows behind the selected target rows of the
+	// last verified close, keyed by decision id (see availabilityMatchedRecords).
+	decisionRecords availabilityDecisionRecords
 }
 
 func availabilityHash(b []byte) string { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
