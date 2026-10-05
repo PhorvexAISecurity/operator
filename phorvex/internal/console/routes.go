@@ -154,6 +154,7 @@ func (s *Server) apiRoutes() []route {
 		control("/api/voice/mcp/live/fire", s.voiceMCPLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/litellm/live/fire", s.liteLLMLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),
 		control("/api/litellm/output/fire", s.liteLLMOutputFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),
+		control(crmLiveRoute, s.crmRefundLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "crm"}),
 		control("/api/workload/attack", s.workloadAttack, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),

@@ -291,6 +291,8 @@ export const api = {
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/live/fire", { scenario }, lens),
   litellmOutputFire: (scenario: "ai2-sensitive-info-disclosure" | "ai2-system-prompt-leakage", lens: Lens) =>
     post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/litellm/output/fire", { scenario }, lens),
+  crmRefundFire: (scenario: "ai2-cross-record-refund", lens: Lens) =>
+    post<{ ok: boolean; scenario: string; message: string; attackId?: string }>("/api/crm/live/fire", { scenario }, lens),
   workloadAttack: (namespace: string, action: "foothold" | "clear", lens: Lens) => post<{ ok: boolean; action: string; message: string; pod?: string; expect?: string; attackId?: string }>("/api/workload/attack", { namespace, action }, lens),
   attackResults: (lens: Lens, includeObservations = false) => get<{ attacks: AttackResult[] }>(`/api/attack-results${includeObservations ? "?includeObservations=true" : ""}`, lens),
   attackResultsPage: (lens: Lens, limit: number, filters: { q?: string; id?: string; includeObservations?: string } = {}, cursor?: string, signal?: AbortSignal) =>

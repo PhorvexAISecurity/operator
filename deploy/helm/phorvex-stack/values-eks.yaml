@@ -105,6 +105,8 @@ phorvex:
     litellmClientRevoke:
       enabled: true
       statusSecret: phorvex-litellm-status-token
+    crmRefundRevoke:
+      enabled: true
     # PHVX-9b requires every NaN-cost veto to be visible. The live EKS cluster
     # already runs kube-prometheus-stack, so render the dedicated rule here.
     costNaNAlert:
@@ -164,6 +166,12 @@ phorvex:
         enabled: true
         configMapName: phorvex-voice-output-profile-742557bfdee0
         profileSHA256: 742557bfdee0973e96174c9aa4078d6f1cc03ed971aa4c7ae953c4b22fef800a
+      # CRM cross-account refund Live producer (HTTP-driven). Arms the /api/crm/live/fire
+      # button and renders the console's resourceName-scoped GET of crm-refund-guard. The
+      # crm-refund-revoke actuator (phorvex.crmRefundRevoke) must also be enabled and the
+      # crm-defense policy must list the action before a Fire can be defended.
+      crmRefundLive:
+        enabled: true
       # LiteLLM Live (ai2-unbounded-consumption, ai2-query-extraction). The profile ConfigMap,
       # trial-seed and status-token Secrets were created out of band by install.sh prepare;
       # the gateway sidecar serves the litellm Service on 4001 since install.sh switch.

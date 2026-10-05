@@ -464,6 +464,8 @@ spec:
         - name: PHORVEX_CONSOLE_VOICE_MCP_LIVE_PROFILE_SHA256
           value: {{ .Values.phorvex.console.voiceMCPLive.profileSHA256 | quote }}
         {{- end }}
+        - name: PHORVEX_CONSOLE_CRM_LIVE_ENABLED
+          value: {{ .Values.phorvex.console.crmRefundLive.enabled | default false | quote }}
         {{- if or .Values.phorvex.console.guardrailAvailability.enabled .Values.phorvex.console.guardrailEffect.enabled .Values.phorvex.console.guardrailOutput.enabled .Values.phorvex.console.drainLive.enabled }}
         - name: PHORVEX_CONSOLE_POD_NAME
           valueFrom:

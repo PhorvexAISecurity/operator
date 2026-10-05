@@ -85,6 +85,7 @@ type attackRecord struct {
 	VoiceMCPProbe        *voiceMCPLiveProbeResult    `json:"voiceMCPProbe,omitempty"`
 	LiteLLMLiveProbe     *liteLLMLiveProbeResult     `json:"litellmLiveProbe,omitempty"`
 	LiteLLMOutputProbe   *liteLLMOutputProbeResult   `json:"litellmOutputProbe,omitempty"`
+	CRMLiveProbe         *crmLiveProbeResult         `json:"crmLiveProbe,omitempty"`
 	OutcomeClass         string                      `json:"outcomeClass,omitempty"`
 	LoRACleanupStatus    string                      `json:"loraCleanupStatus,omitempty"`
 	LoRACleanupError     string                      `json:"loraCleanupError,omitempty"`
@@ -435,6 +436,11 @@ func cloneAttackRecord(r *attackRecord) *attackRecord {
 		probe.Issues = append([]string(nil), r.LiteLLMOutputProbe.Issues...)
 		probe.ReservedRuleSlots = append([]string(nil), r.LiteLLMOutputProbe.ReservedRuleSlots...)
 		c.LiteLLMOutputProbe = &probe
+	}
+	if r.CRMLiveProbe != nil {
+		probe := *r.CRMLiveProbe
+		probe.Issues = append([]string(nil), r.CRMLiveProbe.Issues...)
+		c.CRMLiveProbe = &probe
 	}
 	if r.Claim != nil {
 		claim := *r.Claim

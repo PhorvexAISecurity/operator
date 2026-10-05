@@ -76,6 +76,7 @@ def run():
 
     # 2. Phorvex guard revokes OR-5002: replay is denied, state is unchanged.
     write_guard(guard, ["OR-5002"])
+    assert app.phorvex_guard_state() == {"denied_order_ids": ["OR-5002"]}, app.phorvex_guard_state()
     try:
         app.issue_refund(app.RefundIn(order_id="OR-5002", amount=499.0, reason="replay"))
         raise AssertionError("revoked order was still refunded")
