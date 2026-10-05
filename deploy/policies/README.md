@@ -43,7 +43,8 @@ intentional live edit is overwritten.
 
 | policy | minAvailableReplicas | enabled actions | objective |
 | --- | --- | --- | --- |
-| ci-reports, crm, mcp | 0 | 11 (full repertoire incl. quarantine) | lambda 0.4 |
+| ci-reports, mcp | 0 | 11 (full repertoire incl. quarantine) | lambda 0.4 |
+| crm | 0 | 12 (full repertoire incl. quarantine; `crm-refund-revoke` added 2026-10-05 for the CRM Live refund deny-guard) | lambda 0.4 |
 | chroma, mongo | 1 | 11 | lambda 0.4 |
 | nats | 2 | 11 | lambda 0.4 |
 | voice | 1 | 10 (no quarantine: isolating a serving pod makes it return 503) | lambda 0.4 |
