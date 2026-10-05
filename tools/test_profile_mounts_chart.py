@@ -157,10 +157,11 @@ class ProfileMountChart(unittest.TestCase):
         grants = json.loads(object_named("ConfigMap", "phorvex-phorvex-console-grants")["data"]["grants.json"])
         reviewed_grants = json.loads(yaml.safe_load((CPU_PACKAGE / "grant-overlay-proposed.yaml").read_text())["phorvex"]["phorvex"]["console"]["auth"]["grants"]["data"])
         # Preserve the original CPU-only receipt. Later reviewed activations add
-        # exact journal access and the isolated CRM fixture tenant to this caller.
+        # exact journal access, the isolated CRM fixture tenant and the live CRM tenant
+        # (CRM refund Live attack) to this caller.
         e2e = next(subject for subject in reviewed_grants["subjects"]
                    if subject["subject"] == "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e")
-        e2e["tenants"].extend(["phorvex-system", "phorvex-catalogue-crm"])
+        e2e["tenants"].extend(["phorvex-system", "phorvex-catalogue-crm", "crm"])
         self.assertEqual(grants, reviewed_grants)
 
     def test_umbrella_cpu_profile_is_default_off_and_adds_only_exact_source(self):

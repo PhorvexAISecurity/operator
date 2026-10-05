@@ -95,7 +95,8 @@ class ProfileGrantChart(unittest.TestCase):
         self.assertEqual(campaign["subject"], SA)
         self.assertEqual(campaign["roles"], ["operator"])
         self.assertEqual(campaign["targets"], ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"])
-        self.assertEqual(campaign["tenants"], ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu"])
+        self.assertEqual(campaign["tenants"], ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu",
+                                              "phorvex-system", "phorvex-catalogue-crm", "crm"])
         self.assertEqual(checksum(docs), hashlib.sha256(raw.encode()).hexdigest())
 
     def test_only_grant_data_changes_checksum(self):

@@ -410,7 +410,7 @@ phorvex:
                   "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
                   "subject": "system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e",
                   "roles": ["operator"],
-                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu", "phorvex-system", "phorvex-catalogue-crm"],
+                  "tenants": ["voice", "nats", "vllm", "document-store", "litellm", "mcp", "phorvex-catalogue-cpu", "phorvex-system", "phorvex-catalogue-crm", "crm"],
                   "targets": ["default", "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"],
                   "note": "End-to-End pipeline (CI) and reviewed fixed catalogue profiles in the listed namespaces; token minted per run, never stored."
                 }
