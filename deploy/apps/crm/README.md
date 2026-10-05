@@ -45,13 +45,20 @@ kubectl -n crm create configmap crm-refund-guard \
 # restore: set it back to {"denied_order_ids":[]}
 ```
 
-## The actuator (reviewed next step, not yet wired into the live operator)
+## The actuator and the Live attack
 
-A native `crm-refund-revoke` action — same shape as `litellm-client-revoke` and
-`voice-refund-pair-deny` — would, on a trusted CRM refund-abuse SecurityEvent, add
-the abused `order_id` to `crm-refund-guard` and read it back from every serving CRM
-Pod. It must be wired into the brain candidate set, native dispatch, the capability
-gate and RBAC (named ConfigMap get/update verbs), then enabled in `crm-defense`.
-Enabling a new actuator type is done through the reviewed fix loop because a wrong
-registration wedges the operator (see the startup-preflight RBAC note); it is
-intentionally **not** hot-applied here.
+`crm-refund-revoke` is the native action that answers a trusted
+`phorvex.attack.crm-refund-abuse` SecurityEvent: it CAS-appends the abused `order_id`
+to `crm-refund-guard` (with an operator ledger under `state.json`) and reads the deny
+back from every serving Pod through `GET /phorvex-guard/state` on this app. The
+console Live attack `ai2-cross-record-refund` (`/api/crm/live/fire`) performs a real
+cross-account refund, stamps that event only after it lands, and checks that the
+brain revokes exactly that order on every Pod while an unrelated refund still works.
+
+It is enabled per policy in `deploy/policies/crm--crm-defense.yaml` (manual-sync
+Argo app). The `/phorvex-guard/state` endpoint above must be in the live `crm-code`
+ConfigMap (apply it with the commands in the section above); the guard may keep its
+hand-installed `{"denied_order_ids": []}` until the first revoke writes the canonical
+form. Restore an order by editing the guard back yourself only together with its
+`state.json` ledger — a deny set that disagrees with the ledger is refused as an
+out-of-band write.
