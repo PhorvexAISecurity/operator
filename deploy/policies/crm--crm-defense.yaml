@@ -9,7 +9,6 @@ spec:
   actions:
     enabled:
     - rotate
-    - quarantine
     - route-rotate
     - warm-swap
     - kv-reset
