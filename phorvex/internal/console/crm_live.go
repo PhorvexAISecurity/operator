@@ -514,8 +514,10 @@ func crmLiveAllPodsDeny(ctx context.Context, snap crmLiveSnapshot, orderID strin
 	return true, nil
 }
 
+// crmLiveWaitAllPodsDeny allows for the kubelet's projected-ConfigMap refresh (observed
+// ~60-90s on this cluster), which the actuator's own bounded readback often outlasts.
 func crmLiveWaitAllPodsDeny(ctx context.Context, snap crmLiveSnapshot, orderID string) (bool, error) {
-	deadline := time.NewTimer(90 * time.Second)
+	deadline := time.NewTimer(150 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()

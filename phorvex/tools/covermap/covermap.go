@@ -37,6 +37,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
 	"github.com/phorvex/phorvex/internal/recon"
+	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
 // SchemaVersion is bumped whenever the JSON block's shape changes.
@@ -90,6 +91,41 @@ type PodSpec struct {
 	ModelShard                string                               `json:"modelShard,omitempty"`
 	ParallelGroup             string                               `json:"parallelGroup,omitempty"`
 	Role                      string                               `json:"role,omitempty"`
+	Bound                     *BoundSpec                           `json:"bound,omitempty"`
+}
+
+// BoundSpec carries the ingestion-bound, admission-stamped observations of the
+// application-scoped actuators, plus the Pod-side source pins each one is checked
+// against. Each pointer is copied verbatim onto model.Pod; nil leaves it unbound.
+type BoundSpec struct {
+	VoiceMemoryConfigMap        string                           `json:"voiceMemoryConfigMap,omitempty"`
+	VoiceMemorySourceSHA256     string                           `json:"voiceMemorySourceSHA256,omitempty"`
+	VoiceMemoryDeploymentUID    string                           `json:"voiceMemoryDeploymentUID,omitempty"`
+	VoiceMemoryEventCreator     string                           `json:"voiceMemoryEventCreator,omitempty"`
+	VoiceMemoryObservation      *model.VoiceMemoryObservation    `json:"voiceMemoryObservation,omitempty"`
+	VoiceRefundConfigMap        string                           `json:"voiceRefundConfigMap,omitempty"`
+	VoiceRefundSourceSHA256     string                           `json:"voiceRefundSourceSHA256,omitempty"`
+	VoiceRefundDeploymentUID    string                           `json:"voiceRefundDeploymentUID,omitempty"`
+	VoiceRefundEventCreator     string                           `json:"voiceRefundEventCreator,omitempty"`
+	VoiceRefundObservation      *model.VoiceRefundObservation    `json:"voiceRefundObservation,omitempty"`
+	VoiceMCPConfigMap           string                           `json:"voiceMcpConfigMap,omitempty"`
+	VoiceMCPSourceSHA256        string                           `json:"voiceMcpSourceSHA256,omitempty"`
+	VoiceMCPDeploymentUID       string                           `json:"voiceMcpDeploymentUID,omitempty"`
+	VoiceMCPEventCreator        string                           `json:"voiceMcpEventCreator,omitempty"`
+	VoiceMCPObservation         *model.VoiceMCPObservation       `json:"voiceMcpObservation,omitempty"`
+	VoiceOutputConfigMap        string                           `json:"voiceOutputConfigMap,omitempty"`
+	VoiceOutputSourceSHA256     string                           `json:"voiceOutputSourceSHA256,omitempty"`
+	VoiceOutputDeploymentUID    string                           `json:"voiceOutputDeploymentUID,omitempty"`
+	VoiceOutputEventCreator     string                           `json:"voiceOutputEventCreator,omitempty"`
+	VoiceOutputObservation      *model.VoiceOutputObservation    `json:"voiceOutputObservation,omitempty"`
+	VoiceAdmissionConfigMap     string                           `json:"voiceAdmissionConfigMap,omitempty"`
+	VoiceAdmissionSourceSHA256  string                           `json:"voiceAdmissionSourceSHA256,omitempty"`
+	VoiceAdmissionDeploymentUID string                           `json:"voiceAdmissionDeploymentUID,omitempty"`
+	VoiceAdmissionEventCreator  string                           `json:"voiceAdmissionEventCreator,omitempty"`
+	VoiceAdmissionObservation   *model.VoiceAdmissionObservation `json:"voiceAdmissionObservation,omitempty"`
+	LiteLLMClientObservation    *model.LiteLLMClientObservation  `json:"litellmClientObservation,omitempty"`
+	EndpointLeaseObservation    *model.EndpointLeaseObservation  `json:"endpointLeaseObservation,omitempty"`
+	CRMRefundObservation        *model.CRMRefundObservation      `json:"crmRefundObservation,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -229,7 +265,76 @@ func Fixtures() []Fixture {
 		return Fixture{Name: name, Why: why, Pod: pod, Ctx: gpuCtx,
 			Events: []EventSpec{{Type: typ, TargetsPod: targetsPod, Trust: "trusted", AgeSeconds: age}}}
 	}
-	return []Fixture{
+	at := time.Unix(1, 0).UTC()
+	const consoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
+	uid := func(n int) string { return fmt.Sprintf("%08d-0000-4000-8000-%012d", n, n) }
+	sha := func(c string) string { return strings.Repeat(c, 64) }
+	// The admitted typed observation alone mints each application-scoped fact (ingest binds it
+	// from the trusted event); recon never reads the raw event for these, so none is attached.
+	boundFixture := func(name, why, namespace, podUID string, b BoundSpec) Fixture {
+		return Fixture{Name: name, Why: why, Ctx: unit,
+			Pod: PodSpec{Namespace: namespace, Name: name, UID: podUID, Node: "node-a", Bound: &b}}
+	}
+	admissionPod, admissionDeploy, admissionCM := uid(61), uid(62), uid(63)
+	admission := voiceadmissionpolicy.EventAssertion{Version: 1, ScenarioID: voiceadmissionpolicy.ScenarioID, CaseID: "case-1",
+		RunSHA256: sha("1"), SessionID: uid(64), DeploymentUID: admissionDeploy, PodUID: admissionPod,
+		AdmissionSourceSHA256: sha("2"), LegacyBundleSHA256: sha("3"), AuthProfileSHA256: sha("4"), PolicyCMUID: admissionCM,
+		PolicyResourceVersion: "7", RuleSHA256: sha("5"), SecurityPolicyUID: uid(65), SecurityPolicyGeneration: 1,
+		ObservedAtUnixMs: 1000, EvidenceSource: "TEST_INJECTED", Observed: true, SentAudioFrames: 10, SentAudioBytes: 640,
+		ReceiptSHA256: sha("6"), ProviderEvidenceSHA256: sha("7")}
+	appScoped := []Fixture{
+		boundFixture("voice-memory", "Admitted Voice memory-note observation bound to the exact Pod, owner, source and rule: voiceMemoryContamination appears at 3x and only voice-memory-note-revoke covers it.",
+			ns, uid(11), BoundSpec{VoiceMemoryConfigMap: "voice-memory-policy", VoiceMemorySourceSHA256: sha("a"),
+				VoiceMemoryDeploymentUID: uid(12), VoiceMemoryEventCreator: consoleCreator,
+				VoiceMemoryObservation: &model.VoiceMemoryObservation{EventName: "observed", EventUID: uid(13), CreatorIdentity: consoleCreator,
+					ScenarioID: "ai2-agent-memory-contamination", CaseID: "case-1", TargetPodUID: uid(11), DeploymentUID: uid(12), ConfigMapUID: uid(14),
+					SourceSHA256: sha("a"), CallerID: "+15550000001", NoteSHA256: sha("b"), PolicyName: "voice-defense", PolicyUID: uid(15), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("voice-refund", "Admitted asserted-caller/order pair after an owned CRM refund side effect: voiceRefundPairExposure appears at 3x and only voice-refund-pair-deny covers it.",
+			ns, uid(21), BoundSpec{VoiceRefundConfigMap: "voice-refund-policy", VoiceRefundSourceSHA256: sha("a"),
+				VoiceRefundDeploymentUID: uid(22), VoiceRefundEventCreator: consoleCreator,
+				VoiceRefundObservation: &model.VoiceRefundObservation{EventName: "observed", EventUID: uid(23), CreatorIdentity: consoleCreator,
+					ScenarioID: "ai2-agent-excessive-agency", CaseID: "case-1", TargetPodUID: uid(21), DeploymentUID: uid(22), ConfigMapUID: uid(24),
+					SourceSHA256: sha("a"), AssertedCallerSHA256: sha("c"), OrderSHA256: sha("d"), PolicyName: "voice-defense", PolicyUID: uid(25), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("voice-mcp", "Admitted poisoned-descriptor observation for the installed MCP tool: voiceMcpDescriptorSteering appears at 3x and only voice-mcp-tool-pin covers it.",
+			"voice", uid(31), BoundSpec{VoiceMCPConfigMap: "voice-mcp-tool-policy", VoiceMCPSourceSHA256: sha("a"),
+				VoiceMCPDeploymentUID: uid(32), VoiceMCPEventCreator: consoleCreator,
+				VoiceMCPObservation: &model.VoiceMCPObservation{EventName: "observed", EventUID: uid(33), CreatorIdentity: consoleCreator,
+					ScenarioID: "ai2-mcp-tool-poisoning", RunSHA256: sha("e"), TargetPodUID: uid(31), DeploymentUID: uid(32), ConfigMapUID: uid(34),
+					SourceConfigMapUID: uid(35), SourceSHA256: sha("a"), ToolName: "store_directory", GoodDescriptorSHA256: sha("f"), ObservedDescriptorSHA256: sha("9"),
+					MCPServiceName: "mcp-server", MCPServiceUID: uid(36), MCPPodName: "mcp-server-0", MCPPodUID: uid(37), MCPDeploymentUID: uid(38),
+					MCPConfigMapUID: uid(39), MCPSourceSHA256: sha("8"), PolicyName: "voice-defense", PolicyUID: uid(40), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("voice-output", "Admitted raw-model and assistant-output marker observation: voiceOutputExposure appears at 3x and only voice-output-policy-activate covers it.",
+			"voice", uid(41), BoundSpec{VoiceOutputConfigMap: "voice-output-policy", VoiceOutputSourceSHA256: sha("a"),
+				VoiceOutputDeploymentUID: uid(42), VoiceOutputEventCreator: consoleCreator,
+				VoiceOutputObservation: &model.VoiceOutputObservation{EventName: "observed", EventUID: uid(43), CreatorIdentity: consoleCreator,
+					ScenarioID: "ai2-system-prompt-leakage", EvidenceSource: "TEST_INJECTED", TargetPodUID: uid(41), DeploymentUID: uid(42), ConfigMapUID: uid(44),
+					SourceSHA256: sha("a"), MarkerSHA256: sha("b"), PolicyName: "voice-defense", PolicyUID: uid(45), PolicyGeneration: 1,
+					RawModelMarkerObserved: true, AssistantOutputMarkerObserved: true, ObservedAt: at}}),
+		boundFixture("voice-admission", "Admitted unsigned-media session assertion matching the exact admission rule: voiceAdmissionAccess appears at 3x and only voice-session-admission-enforce covers it.",
+			"voice", admissionPod, BoundSpec{VoiceAdmissionConfigMap: voiceadmissionpolicy.ConfigMapName, VoiceAdmissionSourceSHA256: sha("2"),
+				VoiceAdmissionDeploymentUID: admissionDeploy, VoiceAdmissionEventCreator: voiceadmissionpolicy.Creator,
+				VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid(66), CreatorIdentity: voiceadmissionpolicy.Creator,
+					ScenarioID: voiceadmissionpolicy.ScenarioID, EvidenceSource: "TEST_INJECTED", TargetPodUID: admissionPod, DeploymentUID: admissionDeploy,
+					ConfigMapUID: admissionCM, ConfigMapResourceVersion: "7", RuleSHA256: sha("5"), SourceSHA256: sha("2"), SessionID: uid(64),
+					PolicyName: "voice-defense", PolicyUID: uid(65), PolicyGeneration: 1, Assertion: admission, ObservedAt: at}}),
+		boundFixture("litellm-client", "Admitted owned synthetic client abuse at the installed gateway: litellmOwnedClientChannel appears at 3x and only litellm-client-revoke covers it.",
+			"litellm", uid(71), BoundSpec{LiteLLMClientObservation: &model.LiteLLMClientObservation{
+				EventName: "observed", EventUID: uid(72), CreatorIdentity: consoleCreator, TargetPodUID: uid(71), PeerPodUID: uid(73),
+				ClientSHA256: sha("a"), ConfigMapUID: uid(74), ClientsConfigMapUID: uid(75), SeedSHA256: sha("b"), ServiceUID: uid(76),
+				GatewaySourceSHA256: sha("c"), PolicyName: "litellm-defense", PolicyUID: uid(77), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("endpoint-lease", "Admitted reuse of one revocable caller lease while the retained caller still works: endpointLeaseReuse appears at 3x and only endpoint-lease-revoke covers it.",
+			"vllm", uid(81), BoundSpec{EndpointLeaseObservation: &model.EndpointLeaseObservation{
+				EventName: "observed", EventUID: uid(82), CreatorIdentity: consoleCreator, ScenarioID: "ai2-endpoint-security", EvidenceSource: "TEST_INJECTED",
+				PolicyName: "vllm-defense", PolicyUID: uid(83), PolicyGeneration: 1, TargetPodUID: uid(81), ServiceUID: uid(84), PolicyConfigMapUID: uid(85),
+				ProxySourceSHA256: sha("a"), SecretUID: uid(86), SeedSHA256: sha("b"), RevokedClientHMAC: sha("c"), RetainedClientHMAC: sha("d"),
+				AcceptedStatus: 200, AcceptedResponseSHA256: sha("e"), RetainedBaselineStatus: 200, RetainedBaselineResponseSHA256: sha("f"), ObservedAt: at}}),
+		boundFixture("crm-refund", "Admitted cross-account refund of one exact order bound to the live deny-guard and serving Pods: crmRefundOrderAbuse appears at 3x and only crm-refund-revoke covers it.",
+			"crm", uid(91), BoundSpec{CRMRefundObservation: &model.CRMRefundObservation{
+				EventName: "observed", EventUID: uid(92), CreatorIdentity: consoleCreator, OrderID: "OR-5002", OrderAccountID: "AC-1002",
+				CallerAccountID: "AC-1001", GuardConfigMapUID: uid(93), ServiceUID: uid(94), TargetPodUID: uid(91), PeerPodUID: uid(95),
+				PolicyName: "crm-defense", PolicyUID: uid(96), PolicyGeneration: 1, ObservedAt: at}}),
+	}
+	return append([]Fixture{
 		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts, rotate process-state grants and the quarantine network grant; route selector changes are coverless.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
 		{Name: "pod-bound-api", Why: "Exact current Pod UID and resourceVersion, ServiceAccount UID, and admitted mounted default API-audience projection: the separate planned API-auth capability fact appears with rotate-only cover; copied credential knowledge stays audit-only.",
@@ -295,7 +400,7 @@ func Fixtures() []Fixture {
 		{Name: "plain-vector-kv", Why: "CPU pod with a KV vector event: the boost lives inside the AI branch, so a non-serving pod is not steered.",
 			Pod: PodSpec{Namespace: ns, Name: "plain-vector-kv", Node: "node-a"}, Ctx: unit,
 			Events: []EventSpec{{Type: model.AttackVectorKV, TargetsPod: true, Trust: "trusted"}}},
-	}
+	}, appScoped...)
 }
 
 // buildView turns a fixture into the exact producer inputs.
@@ -318,6 +423,26 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 			"phorvex.ai/parallel-group": f.Pod.ParallelGroup,
 			"phorvex.ai/role":           f.Pod.Role,
 		}
+	}
+	if b := f.Pod.Bound; b != nil {
+		pod.VoiceMemoryConfigMap, pod.VoiceMemorySourceSHA256 = b.VoiceMemoryConfigMap, b.VoiceMemorySourceSHA256
+		pod.VoiceMemoryDeploymentUID, pod.VoiceMemoryEventCreator = b.VoiceMemoryDeploymentUID, b.VoiceMemoryEventCreator
+		pod.VoiceMemoryObservation = b.VoiceMemoryObservation
+		pod.VoiceRefundConfigMap, pod.VoiceRefundSourceSHA256 = b.VoiceRefundConfigMap, b.VoiceRefundSourceSHA256
+		pod.VoiceRefundDeploymentUID, pod.VoiceRefundEventCreator = b.VoiceRefundDeploymentUID, b.VoiceRefundEventCreator
+		pod.VoiceRefundObservation = b.VoiceRefundObservation
+		pod.VoiceMCPConfigMap, pod.VoiceMCPSourceSHA256 = b.VoiceMCPConfigMap, b.VoiceMCPSourceSHA256
+		pod.VoiceMCPDeploymentUID, pod.VoiceMCPEventCreator = b.VoiceMCPDeploymentUID, b.VoiceMCPEventCreator
+		pod.VoiceMCPObservation = b.VoiceMCPObservation
+		pod.VoiceOutputConfigMap, pod.VoiceOutputSourceSHA256 = b.VoiceOutputConfigMap, b.VoiceOutputSourceSHA256
+		pod.VoiceOutputDeploymentUID, pod.VoiceOutputEventCreator = b.VoiceOutputDeploymentUID, b.VoiceOutputEventCreator
+		pod.VoiceOutputObservation = b.VoiceOutputObservation
+		pod.VoiceAdmissionConfigMap, pod.VoiceAdmissionSourceSHA256 = b.VoiceAdmissionConfigMap, b.VoiceAdmissionSourceSHA256
+		pod.VoiceAdmissionDeploymentUID, pod.VoiceAdmissionEventCreator = b.VoiceAdmissionDeploymentUID, b.VoiceAdmissionEventCreator
+		pod.VoiceAdmissionObservation = b.VoiceAdmissionObservation
+		pod.LiteLLMClientObservation = b.LiteLLMClientObservation
+		pod.EndpointLeaseObservation = b.EndpointLeaseObservation
+		pod.CRMRefundObservation = b.CRMRefundObservation
 	}
 	if pod.SuspectAdapter != "" {
 		pod.UID = "fixture-pod-uid"

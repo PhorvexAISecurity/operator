@@ -70,7 +70,7 @@ func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID strin
 	}
 	// The app-facing bytes must already agree with the ledger, or an out-of-band writer
 	// touched the guard and the actuator must not build on it.
-	if guard.Data[GuardKey] != "" && guard.Data[GuardKey] != state.EncodeAppGuard() {
+	if raw := guard.Data[GuardKey]; raw != "" && !AppGuardMatches(raw, state) {
 		return Live{}, errors.New("crm-refund app guard and operator ledger disagree")
 	}
 	var pods corev1.PodList

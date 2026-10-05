@@ -75,6 +75,39 @@ func (g Guard) EncodeAppGuard() string {
 	return string(raw)
 }
 
+// AppGuardMatches reports whether the app-facing denied.json bytes deny exactly the
+// ledger's active orders. It compares meaning, not bytes: the guard is installed by hand
+// as YAML (`{"denied_order_ids": []}` plus a trailing newline) before the actuator ever
+// writes its canonical encoding, and that formatting difference must not read as an
+// out-of-band writer. Unknown keys, duplicates or a different id set still disagree.
+func AppGuardMatches(raw string, g Guard) bool {
+	if len(raw) > 65536 {
+		return false
+	}
+	var app struct {
+		DeniedOrderIDs []string `json:"denied_order_ids"`
+	}
+	d := json.NewDecoder(bytes.NewReader([]byte(raw)))
+	d.DisallowUnknownFields()
+	if d.Decode(&app) != nil || d.Decode(new(any)) != io.EOF || app.DeniedOrderIDs == nil {
+		return false
+	}
+	want := map[string]bool{}
+	for _, e := range g.Entries {
+		if e.Active {
+			want[e.OrderID] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range app.DeniedOrderIDs {
+		if !want[id] || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return len(seen) == len(want)
+}
+
 func (g Guard) Entry(orderID string) (Entry, bool) {
 	for _, e := range g.Entries {
 		if e.OrderID == orderID {

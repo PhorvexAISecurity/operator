@@ -67,3 +67,33 @@ func TestParseObservationRejectsSameAccountAndBadFields(t *testing.T) {
 		t.Fatal("partial observation accepted")
 	}
 }
+
+// The guard is first installed by hand as YAML, so its app bytes are formatted differently
+// from the actuator's canonical encoding. Formatting must not read as an out-of-band writer;
+// a different deny set, a duplicate or an unknown key must.
+func TestAppGuardMatchesMeaningNotBytes(t *testing.T) {
+	empty := Guard{Version: 2, Entries: []Entry{}}
+	for _, raw := range []string{`{"denied_order_ids":[]}`, "{\"denied_order_ids\": []}\n", "{ \"denied_order_ids\" : [ ] }"} {
+		if !AppGuardMatches(raw, empty) {
+			t.Fatalf("installed empty guard %q must match the empty ledger", raw)
+		}
+	}
+	one, err := empty.Append("OR-5002", "decision-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !AppGuardMatches(one.EncodeAppGuard(), one) || !AppGuardMatches(`{"denied_order_ids": ["OR-5002"]}`, one) {
+		t.Fatal("canonical and reformatted single-order guards must match")
+	}
+	for _, raw := range []string{
+		`{"denied_order_ids":[]}`,                       // ledger revoked an order the app does not deny
+		`{"denied_order_ids":["OR-5002","OR-5002"]}`,   // duplicate
+		`{"denied_order_ids":["OR-5003"]}`,             // different order
+		`{"denied_order_ids":["OR-5002"],"extra":true}`, // unknown key
+		`{"denied_order_ids":null}`, `not json`, `{"denied_order_ids":["OR-5002"]} {}`,
+	} {
+		if AppGuardMatches(raw, one) {
+			t.Fatalf("%q must disagree with the one-order ledger", raw)
+		}
+	}
+}

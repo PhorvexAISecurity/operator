@@ -19,6 +19,7 @@ spec:
     - request-drain
     - guardrail-rotate
     - kv-migrate-invalidate
+    - crm-refund-revoke
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:

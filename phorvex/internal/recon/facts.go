@@ -124,6 +124,10 @@ const (
 	// synthetic client credential at the installed admission gateway. It does
 	// not represent copied master-key knowledge or prior completions.
 	FactLiteLLMOwnedClientChannel = "litellmOwnedClientChannel"
+	// FactCRMRefundOrderAbuse is the repeat path of one observed cross-account refund
+	// against one exact CRM order at the unauthenticated mini-CRM. The first refund is
+	// irreversible; this fact describes only further refunds of that order.
+	FactCRMRefundOrderAbuse = "crmRefundOrderAbuse"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement
