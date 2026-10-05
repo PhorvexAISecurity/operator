@@ -349,6 +349,68 @@ func (w *availabilityWorker) retainedSourceMode(source map[string]any) error {
 
 const availabilityRuntimeCode = "import hashlib,json,http.client,os,signal,sys\nkey=sys.stdin.buffer.read(257)\nif len(key)>256 or any(c<33 or c>126 for c in key):raise RuntimeError('caller_bound')\nsignal.alarm(30)\no={'_mountedSourceSHA256':hashlib.sha256(open('/src/guardrail_proxy.py','rb').read(1<<20)).hexdigest()}\np='/src/dual_server.py'\no['_mountedBoundarySHA256']=hashlib.sha256(open(p,'rb').read(1<<20)).hexdigest() if os.path.isfile(p) else ''\no['_rawAuthConfigured']=bool(os.environ.get('VLLM_API_KEY',''))\nfor port,path in ((8000,'/v1/guardrail/state'),(8000,'/v1/models'),(8001,'/v1/models')):\n c=http.client.HTTPConnection('127.0.0.1',port,timeout=8)\n try:\n  headers={}\n  if port==8000 and key:headers['Authorization']='Bearer '+key.decode('ascii')\n  if port==8001:\n   raw_key=os.environ.get('VLLM_API_KEY','')\n   if raw_key:headers['Authorization']='Bearer '+raw_key\n  c.request('GET',path,headers=headers);r=c.getresponse();b=r.read(8193)\n  if len(b)>8192:raise RuntimeError('body bound')\n  o[str(port)+path]={'status':r.status,'body':json.loads(b)}\n finally:c.close()\nprint(json.dumps(o,sort_keys=True))\n"
 
+// availabilityLeaseSourceFiles is the reviewed five-file endpoint-lease closure. Each file
+// is projected read-only by subPath at /src/<file>, matching render_guardrail_profile.py.
+var availabilityLeaseSourceFiles = []string{"guardrail_proxy.py", "dual_server.py", "endpoint_lease.py", "drain_v11.py", "drain_v11_init.py"}
+
+// availabilityGuardrailSourceMounted proves the guardrail container runs exactly the
+// source ConfigMap volume. The legacy closure mounts the whole volume once at /src; the
+// endpoint-lease closure projects each reviewed file read-only by subPath and nothing
+// else under /src, so a mixed or partial projection is refused either way.
+func availabilityGuardrailSourceMounted(pod map[string]any, volume string, leaseClosure bool) bool {
+	containers, _ := availabilityMap(pod["spec"])["containers"].([]any)
+	guardrails := 0
+	for _, c := range containers {
+		m := availabilityMap(c)
+		if m["name"] != "guardrail" {
+			continue
+		}
+		guardrails++
+		mounts, _ := m["volumeMounts"].([]any)
+		whole, files, other := 0, map[string]int{}, 0
+		for _, mount := range mounts {
+			v := availabilityMap(mount)
+			path := availabilityString(v, "mountPath")
+			underSrc := path == "/src" || strings.HasPrefix(path, "/src/")
+			if v["name"] != volume {
+				if underSrc {
+					other++
+				}
+				continue
+			}
+			switch {
+			case v["subPathExpr"] != nil:
+				other++
+			case v["subPath"] == nil:
+				whole++
+			default:
+				sub := availabilityString(v, "subPath")
+				if path != "/src/"+sub || v["readOnly"] != true {
+					other++
+				} else {
+					files[sub]++
+				}
+			}
+		}
+		if !leaseClosure {
+			// Unchanged legacy rule: exactly one whole-volume source mount.
+			if whole != 1 {
+				return false
+			}
+			continue
+		}
+		if whole != 0 || other != 0 || len(files) != len(availabilityLeaseSourceFiles) {
+			return false
+		}
+		for _, name := range availabilityLeaseSourceFiles {
+			if files[name] != 1 {
+				return false
+			}
+		}
+	}
+	return guardrails == 1
+}
+
 func availabilityBoundarySource(source, runtime map[string]any, pin string) (string, error) {
 	if pin == "" {
 		return "", nil
@@ -769,22 +831,8 @@ func (w *availabilityWorker) snapshot(label string) (availabilitySnapshot, error
 	if mountName == "" {
 		return out, errors.New("source ConfigMap not mounted")
 	}
-	var sourceMounts int
-	containers, _ := availabilityMap(pod["spec"])["containers"].([]any)
-	for _, c := range containers {
-		m := availabilityMap(c)
-		if m["name"] != "guardrail" {
-			continue
-		}
-		mounts, _ := m["volumeMounts"].([]any)
-		for _, mount := range mounts {
-			v := availabilityMap(mount)
-			if v["name"] == mountName && v["subPath"] == nil && v["subPathExpr"] == nil {
-				sourceMounts++
-			}
-		}
-	}
-	if sourceMounts != 1 {
+	_, leaseClosure := availabilityMap(source["data"])["endpoint_lease.py"]
+	if !availabilityGuardrailSourceMounted(pod, mountName, leaseClosure) {
 		return out, errors.New("exact guardrail source mount differs")
 	}
 	out.ClusterUID = availabilityUID(cluster)
