@@ -240,6 +240,17 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionLiteLLMClientRevoke] = append(af.CoverByAction[model.ActionLiteLLMClientRevoke], f.Key())
 	}
+	if view.Pod.HasBoundCRMRefundObservation() {
+		o := view.Pod.CRMRefundObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactCRMRefundOrderAbuse, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorCRMRefundAbuse,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorCRMRefundAbuse, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionCRMRefundRevoke] = append(af.CoverByAction[model.ActionCRMRefundRevoke], f.Key())
+	}
 	if view.Pod.HasBoundEndpointLeaseObservation() {
 		o := view.Pod.EndpointLeaseObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointLeaseReuse, Weight: base * urg * vectorDominance}

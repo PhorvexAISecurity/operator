@@ -79,6 +79,7 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionVoiceSessionAdmissionEnforce:  true,
 	model.ActionLiteLLMClientRevoke:           true,
 	model.ActionEndpointLeaseRevoke:           true,
+	model.ActionCRMRefundRevoke:               true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -314,6 +315,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "litellm-client-revoke: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionCRMRefundRevoke {
+		o := v.Pod.CRMRefundObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "crm-refund-revoke: event policy identity differs from current policy"}
+		}
+	}
 	if action == model.ActionEndpointLeaseRevoke {
 		o := v.Pod.EndpointLeaseObservation
 		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
@@ -421,6 +428,8 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundVoiceAdmissionObservation()
 	case model.ActionLiteLLMClientRevoke:
 		return pod.HasBoundLiteLLMClientObservation()
+	case model.ActionCRMRefundRevoke:
+		return pod.HasBoundCRMRefundObservation()
 	case model.ActionEndpointLeaseRevoke:
 		return pod.HasBoundEndpointLeaseObservation()
 	default:
@@ -547,6 +556,11 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundLiteLLMClientObservation() || pod.LiteLLMClientObservation.PolicyName != w.policyName ||
 			pod.LiteLLMClientObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/source-bound LiteLLM owned-client observation"
+		}
+	case model.ActionCRMRefundRevoke:
+		if !pod.HasBoundCRMRefundObservation() || pod.CRMRefundObservation.PolicyName != w.policyName ||
+			pod.CRMRefundObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/guard-bound CRM refund-abuse observation"
 		}
 	case model.ActionEndpointLeaseRevoke:
 		if w.operatorNamespace == "" {

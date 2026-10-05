@@ -122,7 +122,7 @@ func TestCapable_AllPredicatesGreen(t *testing.T) {
 			}
 			continue
 		}
-		if action == model.ActionVoiceSessionAdmissionEnforce || action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionVoiceOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke {
+		if action == model.ActionVoiceSessionAdmissionEnforce || action == model.ActionSensitiveOutputPolicyActivate || action == model.ActionVoiceMemoryNoteRevoke || action == model.ActionVoiceRefundPairDeny || action == model.ActionVoiceOutputPolicyActivate || action == model.ActionLiteLLMClientRevoke || action == model.ActionCRMRefundRevoke {
 			continue // unlike generic AI actions, this requires an exact trusted event
 		}
 		if ok, why := wit.Capable(views[0], action); !ok {
