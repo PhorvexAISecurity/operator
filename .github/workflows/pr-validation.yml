@@ -33,7 +33,7 @@ jobs:
         run: |
           diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml
           bash tools/check-vendored-chart.sh
-          helm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --include-crds > /dev/null
+          helm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --api-versions monitoring.coreos.com/v1/PodMonitor --include-crds > /dev/null
           python tools/check-claim-language.py
       - run: python -m unittest discover -s tools -p 'test_*.py' -v
       - run: python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v
