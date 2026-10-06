@@ -1,0 +1,47 @@
+%% PHORVEX current decision flow, main @ f8787fa8 (v0.4.215).
+%% Companion to PHORVEX_CURRENT_DECISION_FLOW.md. Stage IDs (S*) and trust transitions (T*)
+%% match that document. Dashed edges are learned/cross-tick state; red nodes are trust transitions.
+flowchart TD
+    classDef ext fill:#fdecea,stroke:#c0392b,color:#000
+    classDef learned fill:#fff4e0,stroke:#d68910,color:#000
+    classDef det fill:#eaf2fb,stroke:#2e86c1,color:#000
+    classDef gate fill:#e9f7ef,stroke:#1e8449,color:#000
+
+    CRD["T15 PhorvexPolicy CRD"]:::ext --> S0["S0 Policy admission<br/>ValidatePhorvexPolicy / Upsert"]:::gate
+    SE["T1/T2 SecurityEvents<br/>(detectors + console)"]:::ext --> S2
+    OBS["T3/T4 typed observation &<br/>protected-outcome annotations"]:::ext --> S2
+    PROM["T5 Prometheus"]:::ext --> S3
+    EPSS["T6 EPSS ConfigMap<br/>(no expiry in legacy mode)"]:::ext --> S4
+    META["T7 workload labels / owners / PDBs"]:::ext --> S1
+
+    S0 --> S1["S1 Tick + cluster snapshot<br/>ingest.collectSnapshot"]:::det
+    S1 --> S2["S2 Event ingest + trust classification<br/>creator allowlist"]:::gate
+    S1 --> S3["S3 Telemetry<br/>Present-only usable"]:::det
+    S1 --> S4["S4 Physics / dispersion"]:::det
+    S2 --> S5
+    S3 --> S5
+    S4 --> S5["S5 View assembly<br/>(snap.Pods order, unsorted)"]:::det
+    CLK["T11 exposure clock / intents<br/>(memory)"]:::learned -.-> S5
+    S5 --> S6["S6 Context signals"]:::det
+    S6 --> S7["S7 Kill-chain belief<br/>stage, Weibull hazard, pHold<br/>fixed Beta(1,4) prior"]:::det
+    S7 --> S8["S8 Recon facts + weights + CoverByAction<br/>vector dominance x3"]:::det
+    S8 --> S9["S9 Candidate generation + gates<br/>capability, feasibility, capacity"]:::gate
+    SSAR["T12 RBAC SSAR<br/>(error = fail-open)"]:::ext --> S9
+    S9 <--> S10["S10 Cost<br/>C_norm rubric + C_flow + CHi"]:::det
+    RLS["T8 RLS theta,P (rotate, mig-rebind)<br/>T9 conformal residuals (rotate)"]:::learned -.-> S10
+    S10 --> CONF{"conformal SLO-cost gate<br/>CHi > ceiling 1.2 => exclude"}:::gate
+    CONF --> S12
+    S11["S11 Objective coefficient<br/>legacy lambda_runtime | fixed beta"]:::det --> S12
+    LAM["T10 lambda_runtime<br/>(memory)"]:::learned -.-> S11
+    S12["S12 Greedy selection<br/>strict gain > 0, budget B,<br/>M99 existential priority"]:::det
+    S12 -. "lambda step (before dispatch)" .-> LAM
+    S12 --> TRACE["Decision trace v7<br/>(Validate() not called at runtime)"]:::det
+    S12 --> S13["S13 Runner gates<br/>dry-run, kill switch, emit re-check,<br/>selection-ID presence, fences, capacity"]:::gate
+    KS["T13 kill switch / dry-run / opt-out<br/>(absent ConfigMap = disengaged)"]:::ext --> S13
+    S13 --> S14["S14 Actuator<br/>native handlers | Phoenix/AMTD (quarantine only)"]:::det
+    S14 --> S15["S15 Effect confirmation<br/>journals, readbacks, rotate readiness<br/>(strongest stamp: emitted-unconfirmed)"]:::det
+    S14 --> S16["S16 Audit JSONL v2<br/>(after actuation; error ignored)"]:::det
+    TRACE --> S16
+    S15 --> S17["S17 Feedback"]:::learned
+    S17 -.-> RLS
+    S17 -.-> CLK
