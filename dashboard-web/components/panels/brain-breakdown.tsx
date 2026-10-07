@@ -161,7 +161,7 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
             <KV k="βFlow (fixed preference)" v={exactNumber(economics.flow)} strong />
           </> : <KV k="common cost coefficient" v={exactNumber(economics.coefficient)} strong />}
           <KV k="λ (legacy move pressure)" v={exactNumber(economics.lambda)} dim />
-          <KV k="proactive rate" v={n(sel.proactiveRate, 4)} dim />
+          <KV k="proactive rate" v={economics.independent ? "—" : n(sel.proactiveRate, 4)} dim />
           <Sep label="recorded objective" />
           <div className="my-1 text-[10px] text-muted-foreground">{economics.formula}. Selection also depends on marginal coverage, gates and budgets; λ is not a resource shadow price.</div>
           <KV k="recorded net" v={n(sel.net, 4)} />
