@@ -1,0 +1,22 @@
+[Unit]
+Description=Phorvex benchmark dashboard
+After=phorvex-benchmark-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hami/phorvex-benchmark/current/benchmark/apps/web
+Environment=NODE_ENV=production
+Environment=PATH=/home/hami/phorvex-benchmark/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
+Environment=BENCHMARK_API_ORIGIN=http://127.0.0.1:4101
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=4100
+ExecStart=/home/hami/phorvex-benchmark/runtime/node/bin/node .next/standalone/server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
