@@ -1,6 +1,6 @@
 # Phorvex Benchmark Lab
 
-An isolated operator-monorepo app: Persian/RTL Next.js dashboard, NestJS API,
+An isolated operator-monorepo app: English/LTR Next.js dashboard, NestJS API,
 durable SQLite scheduler, and an evidence-preserving Python worker. The browser
 never receives Kubernetes credentials or the LLM key. It does not execute LLM
 commands. The supplied request/context informs an advisory plan; the complete
@@ -14,6 +14,9 @@ current Live catalogue remains the execution scope.
   `BENCHMARK_BLOCKED_CASES=namespace:catalogue-id,...` and an explicit
   `BENCHMARK_BLOCK_REASON`. Original catalogue flags remain intact; these cases
   carry a separate benchmark block annotation and never earn a defense verdict.
+  `BENCHMARK_MUTATIONS_PAUSED_REASON` blocks new runs/queue claims while an
+  operator reconciles ambiguous producer effects. History, plans, exports and
+  metrics stay available; clearing it requires deliberate server configuration.
 - Serial: one case at a time. Parallel: concurrent app groups, one case per app;
   shared model-gateway/CRM locks prevent interacting trials from overlapping.
 - Uses the existing authenticated Console routes and normal Brain selection.

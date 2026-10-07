@@ -1,7 +1,8 @@
 # Benchmark web
 
-Standalone Next.js interface for the benchmark API. The UI uses Persian labels
-and displays engineering identifiers left-to-right. All model choices,
+Standalone Next.js interface for the benchmark API. The UI uses English labels
+and a responsive left-to-right layout. User requests and original evidence retain
+their original language and use automatic text direction. All model choices,
 applications, plans, results and files come from the authenticated API.
 
 ```sh
