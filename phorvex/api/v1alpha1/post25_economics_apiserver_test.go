@@ -2,6 +2,8 @@ package v1alpha1_test
 
 import (
 	"context"
+	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"testing"
 
@@ -96,5 +98,40 @@ spec:
 	}
 	if value, configured, err := typed.Spec.EffectiveDisruptionAversion(); err != nil || configured || value != 0 {
 		t.Fatalf("explicit empty did not resolve to legacy semantics: value=%g configured=%t err=%v", value, configured, err)
+	}
+
+	// The same isolated API server verifies the P2 presence/conflict contract.
+	for i, tc := range []struct {
+		name      string
+		objective map[string]any
+		valid     bool
+	}{
+		{"zero", map[string]any{"costPreferences": map[string]any{"norm": "0", "flow": "0"}}, true},
+		{"different", map[string]any{"costPreferences": map[string]any{"norm": "0.2", "flow": "10"}}, true},
+		{"empty-beta", map[string]any{"disruptionAversion": "", "costPreferences": map[string]any{"norm": "1", "flow": "2"}}, true},
+		{"missing-norm", map[string]any{"costPreferences": map[string]any{"flow": "0"}}, false},
+		{"missing-flow", map[string]any{"costPreferences": map[string]any{"norm": "0"}}, false},
+		{"empty", map[string]any{"costPreferences": map[string]any{}}, false},
+		{"negative", map[string]any{"costPreferences": map[string]any{"norm": "-1", "flow": "0"}}, false},
+		{"out-of-range", map[string]any{"costPreferences": map[string]any{"norm": "0", "flow": "10.01"}}, false},
+		{"nonfinite", map[string]any{"costPreferences": map[string]any{"norm": "NaN", "flow": "0"}}, false},
+		{"conflict", map[string]any{"disruptionAversion": "0", "costPreferences": map[string]any{"norm": "0", "flow": "0"}}, false},
+	} {
+		t.Run("cost-preferences-"+tc.name, func(t *testing.T) {
+			candidate := obj.DeepCopy()
+			candidate.SetName(fmt.Sprintf("preferences-%d", i))
+			candidate.SetResourceVersion("")
+			candidate.SetUID("")
+			if err := unstructured.SetNestedMap(candidate.Object, tc.objective, "spec", "objective"); err != nil {
+				t.Fatal(err)
+			}
+			err := c.Create(ctx, candidate)
+			if tc.valid && err != nil {
+				t.Fatalf("valid preferences rejected: %v", err)
+			}
+			if !tc.valid && !apierrors.IsInvalid(err) {
+				t.Fatalf("invalid preferences require admission error, got %v", err)
+			}
+		})
 	}
 }

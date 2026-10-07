@@ -197,7 +197,7 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		}
 		candidateKey := traceCandidateKey(c.Key, c.Action)
 		evaluated[candidateKey] = marginal
-		gain := objectiveGain(marginal, prov(c.Key), costCoefficient, c.ECost)
+		gain := marginal*prov(c.Key) - candidatePenalty(c, costCoefficient)
 		if preferExistential(active, len(c.SLOExclusions) == 0, gain, bestActive, bestSafe, bestGain, bestIdx >= 0) {
 			bestActive, bestSafe = active, len(c.SLOExclusions) == 0
 			bestGain = gain

@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import { Lens, liveStream } from "@/lib/api";
+import { decisionEconomics, exactNumber } from "@/lib/economics";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Loader2, Eye, Cpu, Zap, ArrowRight, Pause, Play, ShieldCheck, ShieldOff, Scale } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -89,8 +90,7 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
   const selected = !!sel.selected;
   const actuated = !!sel.actuated;
   const isNoop = (sel.action || "noop") === "noop";
-  const perDollar = sel.perDollar, lambda = sel.lambda;
-  const beatsLambda = typeof perDollar === "number" && typeof lambda === "number" && perDollar > lambda;
+  const economics = decisionEconomics(sel);
 
   return (
     <div className="space-y-4">
@@ -155,11 +155,16 @@ export function BrainBreakdownPanel({ lens }: { lens: Lens }) {
           )}
           <Sep label="the price of acting" />
           <KV k="ECost (unitless)" v={n(sel.cost)} strong />
-          <KV k="λ shadow price" v={n(lambda)} strong />
+          <KV k="objective version" v={economics.version} mono />
+          {economics.independent ? <>
+            <KV k="βNorm (fixed preference)" v={exactNumber(economics.norm)} strong />
+            <KV k="βFlow (fixed preference)" v={exactNumber(economics.flow)} strong />
+          </> : <KV k="common cost coefficient" v={exactNumber(economics.coefficient)} strong />}
+          <KV k="λ (legacy move pressure)" v={exactNumber(economics.lambda)} dim />
           <KV k="proactive rate" v={n(sel.proactiveRate, 4)} dim />
-          <Sep label="the decisive comparison" />
-          <Verdict beats={beatsLambda} perDollar={perDollar} lambda={lambda} />
-          <KV k="net (risk − λ·cost)" v={n(sel.net, 4)} />
+          <Sep label="recorded objective" />
+          <div className="my-1 text-[10px] text-muted-foreground">{economics.formula}. Selection also depends on marginal coverage, gates and budgets; λ is not a resource shadow price.</div>
+          <KV k="recorded net" v={n(sel.net, 4)} />
           <KV k="feasible?" v={sel.feasible ? "yes — passed the SLO gate" : "NO — vetoed"} bad={!sel.feasible} />
         </Stage>
 
@@ -303,23 +308,6 @@ function Attrib({ source, value, delay }: { source: string; value: number; delay
       <div className="mt-0.5 h-1 overflow-hidden rounded bg-border/50">
         <div className={cn("h-full rounded motion-safe:transition-all motion-safe:duration-700", neg ? "bg-danger/70" : "bg-success/70")}
           style={{ width: `${mag}%` }} />
-      </div>
-    </div>
-  );
-}
-
-// Verdict is the one comparison that decides everything: value-per-dollar against the shadow price.
-function Verdict({ beats, perDollar, lambda }: { beats: boolean; perDollar: any; lambda: any }) {
-  return (
-    <div className={cn("my-1 rounded border p-2", beats ? "border-success/40 bg-success/5" : "border-muted/30 bg-panel/40")}>
-      <div className="flex items-center justify-center gap-2 font-mono text-[12px]">
-        <span className={cn("tabular font-semibold", beats ? "text-success" : "text-foreground")}>{n(perDollar)}</span>
-        <span className={cn("text-[13px] font-bold", beats ? "text-success" : "text-danger")}>{beats ? ">" : "≤"}</span>
-        <span className="tabular font-semibold text-warning">{n(lambda)}</span>
-      </div>
-      <div className="mt-1 text-center text-[10px] leading-relaxed text-muted-foreground">
-        value per unit cost {beats ? "beats" : "does not beat"} the shadow price λ —{" "}
-        {beats ? "acting is worth the disruption" : "acting would cost more than it saves, so it holds"}
       </div>
     </div>
   );

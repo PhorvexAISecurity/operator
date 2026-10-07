@@ -55,3 +55,48 @@ None of the nine sets `spec.objective.disruptionAversion` (a persistent preferen
 costly or disruptive actions, parsed by `EffectiveDisruptionAversion()` in
 `phorvex/api/v1alpha1/defaults.go`, range 0–10). See
 `phorvex/config/samples/fixed-disruption-aversion.yaml` for the field's shape.
+
+## Independent cost preferences (Task 254)
+
+The proposed policy migration adds `objective.costPreferences` to all nine policies.
+It implements the task's P2 objective:
+
+```
+gain = marginalSecurity * provenance - norm * CNorm - flow * CFlow
+```
+
+`norm` and `flow` are required decimal strings in `[0,10]` when the object is
+present. Explicit `"0"` disables one term; an omitted component is invalid.
+They are fixed utility preferences, not learned duals, physical capacities or
+service outage allowances. The bound matches the existing fixed-coefficient API.
+For example:
+
+```yaml
+objective:
+  costPreferences:
+    norm: '0.20'
+    flow: '0.30'
+  costWeights:
+    normSparsity: '0.4'
+    flowDisruption: '0.6'
+  lambda: '0.5'
+```
+
+In this mode the legacy count-pressure lambda remains compatibility telemetry and
+does not multiply the two preferences. Existing `costWeights` still define the
+cost estimate and SLO gate. `disruptionAversion` must be absent or empty when
+`costPreferences` is present. Policies without `costPreferences` retain their
+previous legacy-lambda or fixed-`disruptionAversion` behavior.
+
+Migration values preserve the **initial configured** objective: each preference
+is the policy's configured lambda seed times its corresponding existing weight.
+vLLM and LiteLLM use `(0.20, 0.30)`; the other seven use `(0.16, 0.24)`.
+These are untuned compatibility values. They do not preserve a decayed runtime
+lambda or establish validated operational cost budgets.
+
+Deploy the new operator **and its updated CRD before manually syncing**
+`phorvex-policies`. An old operator cannot implement these fields and an old CRD
+may prune them. Review actual live drift before sync. This PR does not synchronize
+or validate the live cluster. Rollback removes `costPreferences` to restore the
+previous legacy objective, or restores the previously used `disruptionAversion`;
+keep the expanded CRD until policies have been rolled back.

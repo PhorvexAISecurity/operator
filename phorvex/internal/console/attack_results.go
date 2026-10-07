@@ -128,22 +128,24 @@ type attackRecord struct {
 	DecisionAuditCoverage    string             `json:"decisionAuditCoverage,omitempty"`
 
 	// real decision reasoning (from the in-cluster operator's audit)
-	Why                       string  `json:"why"`
-	PerDollar                 float64 `json:"perDollar"`
-	PerDollarAvailable        bool    `json:"perDollarAvailable"`
-	Stage                     string  `json:"stage"`
-	CoveredFacts              int     `json:"coveredFacts"`
-	CoveredFactsAvailable     bool    `json:"coveredFactsAvailable"`
-	PHold                     float64 `json:"pHold"`
-	Lambda                    float64 `json:"lambda"`
-	LambdaAvailable           bool    `json:"lambdaAvailable"`
-	EconomicsVersion          string  `json:"economicsVersion,omitempty"`
-	DisruptionAversion        float64 `json:"disruptionAversion,omitempty"`
-	DisruptionAversionPresent bool    `json:"disruptionAversionPresent"`
-	EffectiveCostCoefficient  float64 `json:"effectiveCostCoefficient,omitempty"`
-	EconomicsAvailable        bool    `json:"economicsAvailable"`
-	R6Would                   string  `json:"r6Would"`
-	R6Note                    string  `json:"r6Note"`
+	Why                       string               `json:"why"`
+	PerDollar                 float64              `json:"perDollar"`
+	PerDollarAvailable        bool                 `json:"perDollarAvailable"`
+	Stage                     string               `json:"stage"`
+	CoveredFacts              int                  `json:"coveredFacts"`
+	CoveredFactsAvailable     bool                 `json:"coveredFactsAvailable"`
+	PHold                     float64              `json:"pHold"`
+	Lambda                    float64              `json:"lambda"`
+	LambdaAvailable           bool                 `json:"lambdaAvailable"`
+	EconomicsVersion          string               `json:"economicsVersion,omitempty"`
+	DisruptionAversion        float64              `json:"disruptionAversion,omitempty"`
+	DisruptionAversionPresent bool                 `json:"disruptionAversionPresent"`
+	EffectiveCostCoefficient  float64              `json:"effectiveCostCoefficient,omitempty"`
+	NormPreference            *model.OptionalFloat `json:"normPreference,omitempty"`
+	FlowPreference            *model.OptionalFloat `json:"flowPreference,omitempty"`
+	EconomicsAvailable        bool                 `json:"economicsAvailable"`
+	R6Would                   string               `json:"r6Would"`
+	R6Note                    string               `json:"r6Note"`
 
 	// real uptime, sampled around the attack (ready/desired * 100)
 	UptimeBefore float64 `json:"uptimeBefore"`
@@ -1218,6 +1220,7 @@ func (s *Server) fillReasoning(ctxName string, r *attackRecord) {
 }
 
 func (s *Server) fillReasoningWithTimeout(ctxName string, r *attackRecord, timeout time.Duration) error {
+	r.NormPreference, r.FlowPreference = nil, nil
 	s.parseDescReasoning(r)
 	target := r.Pod
 	if r.DefendedPod != "" {
@@ -1340,11 +1343,19 @@ func (s *Server) fillReasoningWithTimeout(ctxName string, r *attackRecord, timeo
 		chosen = best
 	}
 	if chosen != nil {
+		r.NormPreference, r.FlowPreference = nil, nil
 		if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
 			r.Lambda = chosen.Lambda
 			r.LambdaAvailable = true
 			r.EconomicsVersion = economics.Version
+			r.NormPreference = nil
+			r.FlowPreference = nil
 			r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
+			if economics.NormPreference.Present {
+				n, f := economics.NormPreference, economics.FlowPreference
+				r.NormPreference = &n
+				r.FlowPreference = &f
+			}
 			r.DisruptionAversionPresent = economics.DisruptionAversion.Present
 			if economics.DisruptionAversion.Present {
 				r.DisruptionAversion = economics.DisruptionAversion.Value
@@ -1624,11 +1635,19 @@ func bindDecisionRecord(r *attackRecord, chosen *audit.Record) {
 	}
 	r.DecisionEvidence = &evidence
 	r.DecisionTraceEvidence = []decisionEvidence{evidence}
+	r.NormPreference, r.FlowPreference = nil, nil
 	if economics, ok := decodeAuditEconomics(chosen.Economics, chosen.Lambda); ok {
 		r.Lambda = chosen.Lambda
 		r.LambdaAvailable = true
 		r.EconomicsVersion = economics.Version
+		r.NormPreference = nil
+		r.FlowPreference = nil
 		r.EffectiveCostCoefficient = economics.EffectiveCostCoefficient
+		if economics.NormPreference.Present {
+			n, f := economics.NormPreference, economics.FlowPreference
+			r.NormPreference = &n
+			r.FlowPreference = &f
+		}
 		r.DisruptionAversionPresent = economics.DisruptionAversion.Present
 		if economics.DisruptionAversion.Present {
 			r.DisruptionAversion = economics.DisruptionAversion.Value

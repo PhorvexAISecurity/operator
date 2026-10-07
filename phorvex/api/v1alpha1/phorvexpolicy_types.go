@@ -191,7 +191,9 @@ type SojournScaleSpec struct {
 }
 
 // ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
-// runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
+// runtime lambda; disruptionAversion sets a fixed common coefficient and
+// costPreferences sets independent fixed coefficients on CNorm and CFlow.
+// +kubebuilder:validation:XValidation:rule="!has(self.costPreferences) || !has(self.disruptionAversion) || size(self.disruptionAversion) == 0",message="costPreferences and nonempty disruptionAversion are mutually exclusive"
 type ObjectiveSpec struct {
 	// Lambda configures the initial seed of P1's per-tenant legacy runtime lambda,
 	// which multiplies the dimensionless ECost score. Runtime state then adapts from
@@ -213,11 +215,33 @@ type ObjectiveSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == '' || double(self) <= 10.0",message="disruptionAversion must be between 0 and 10"
 	DisruptionAversion string `json:"disruptionAversion,omitempty"`
 
+	// CostPreferences chooses independent fixed preferences in utility per CNorm
+	// and CFlow unit. It replaces the scoring coefficient, without changing the
+	// costWeights used for cost estimation and the SLO gate. These are preferences,
+	// not learned resource multipliers or physical resource allowances.
+	// +kubebuilder:validation:Optional
+	CostPreferences *CostPreferences `json:"costPreferences,omitempty"`
+
 	// CostWeights splits the switching cost K = normSparsity*C_norm +
 	// flowDisruption*C_flow (PRD §5.1B). Decimal strings; empty defaults to
 	// {0.4,0.6} in code.
 	// +kubebuilder:validation:Optional
 	CostWeights CostWeights `json:"costWeights,omitempty"`
+}
+
+// CostPreferences holds the fixed P2 objective preferences. Both entries are
+// required; explicit "0" disables that cost term. Decimal strings in [0,10].
+type CostPreferences struct {
+	// Norm multiplies the action's dimensionless CNorm directly.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(0|[1-9][0-9]*)(\.[0-9]+)?$`
+	// +kubebuilder:validation:XValidation:rule="double(self) <= 10.0",message="norm preference must be between 0 and 10"
+	Norm string `json:"norm"`
+	// Flow multiplies the action's dimensionless CFlow directly.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Pattern=`^(0|[1-9][0-9]*)(\.[0-9]+)?$`
+	// +kubebuilder:validation:XValidation:rule="double(self) <= 10.0",message="flow preference must be between 0 and 10"
+	Flow string `json:"flow"`
 }
 
 // CostWeights are the two switching-cost coefficients (PRD §5.1B).

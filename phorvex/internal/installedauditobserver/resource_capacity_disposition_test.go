@@ -13,6 +13,7 @@ func TestResourceCapacityDispositionRequiresV7AndUnscoredInfeasible(t *testing.T
 		want                 bool
 	}{
 		{"v7", model.DecisionTraceSchemaV7, model.ActionStatusInfeasible, boolPtr(false), true},
+		{"v8", model.DecisionTraceSchemaV8, model.ActionStatusInfeasible, boolPtr(false), true},
 		{"historical-v6", model.DecisionTraceSchemaV6, model.ActionStatusInfeasible, boolPtr(false), false},
 		{"wrong-status", model.DecisionTraceSchemaV7, model.ActionStatusNoCover, boolPtr(false), false},
 		{"scored", model.DecisionTraceSchemaV7, model.ActionStatusInfeasible, boolPtr(true), false},

@@ -101,6 +101,35 @@ func (s *PhorvexPolicySpec) EffectiveDisruptionAversion() (value float64, config
 	return value, true, nil
 }
 
+// EffectiveCostPreferences resolves the independent fixed objective preferences.
+// A present object requires both finite decimal values; missing and invalid values
+// never silently become zero. Empty disruptionAversion retains its absence semantics.
+func (s *PhorvexPolicySpec) EffectiveCostPreferences() (norm, flow float64, configured bool, err error) {
+	prefs := s.Objective.CostPreferences
+	if prefs == nil {
+		return 0, 0, false, nil
+	}
+	if s.Objective.DisruptionAversion != "" {
+		return 0, 0, true, fmt.Errorf("costPreferences and nonempty disruptionAversion are mutually exclusive")
+	}
+	parse := func(name, raw string) (float64, error) {
+		value, parseErr := strconv.ParseFloat(raw, 64)
+		if !nonnegativeDecimal.MatchString(raw) || parseErr != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > model.MaxDisruptionAversion {
+			return 0, fmt.Errorf("costPreferences.%s %q must be a finite decimal between 0 and 10", name, raw)
+		}
+		return value, nil
+	}
+	norm, err = parse("norm", prefs.Norm)
+	if err != nil {
+		return 0, 0, true, err
+	}
+	flow, err = parse("flow", prefs.Flow)
+	if err != nil {
+		return 0, 0, true, err
+	}
+	return norm, flow, true, nil
+}
+
 // EffectiveNormSparsity is the C_norm weight (default 0.4).
 func (s *PhorvexPolicySpec) EffectiveNormSparsity() float64 {
 	return ParseDecimal(s.Objective.CostWeights.NormSparsity, defaultNormSparsity)

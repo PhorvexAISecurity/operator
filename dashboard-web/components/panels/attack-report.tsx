@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { decisionEconomics, exactNumber } from "@/lib/economics";
 import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, AttackResult, AttackCost } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
@@ -253,7 +254,9 @@ function AttackCard({ r, selected = false }: { r: AttackResult; selected?: boole
               {r.stage && <span>stage={r.stage}</span>}
               {r.coveredFacts > 0 && <span>facts={r.coveredFacts}</span>}
               {r.pHold > 0 && <span>pHold={r.pHold.toFixed(2)}</span>}
-              <span>λ={r.lambda?.toFixed(2)}</span>
+              <span>objective={decisionEconomics(r).version}</span>
+              {decisionEconomics(r).independent && <span>{decisionEconomics(r).preferences}</span>}
+              <span>λ (legacy move pressure)={exactNumber(decisionEconomics(r).lambda)}</span>
             </div>
             {r.r6Note && <div className="mt-1 text-warning/90"><span className="text-muted-foreground">R6 counterfactual: </span>{r.r6Note}</div>}
           </div>

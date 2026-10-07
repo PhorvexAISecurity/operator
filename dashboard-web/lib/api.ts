@@ -492,7 +492,31 @@ export interface AttackCost {
   preventNone?: number; preventR6?: number; preventPhorvex?: number;
   ratesSource?: string; operatorCost?: number; r6Churn?: number;
 }
-export interface AttackResult {
+// Presence is explicit: a recorded zero differs from an unavailable value.
+export interface OptionalFloat { present: boolean; value: number }
+export interface EconomicsMetadata {
+  version: string;
+  normPreference?: OptionalFloat;
+  flowPreference?: OptionalFloat;
+  disruptionAversion?: OptionalFloat;
+  lambdaRuntimeLegacy?: OptionalFloat;
+  effectiveCostCoefficient?: number; // omitted for independent preferences
+  coefficientSource: string;
+  flowCostSemanticsVersion?: string;
+}
+export interface DecisionEconomicsFields {
+  economics?: EconomicsMetadata;
+  economicsVersion?: string;
+  economicsAvailable?: boolean;
+  normPreference?: OptionalFloat | null;
+  flowPreference?: OptionalFloat | null;
+  effectiveCostCoefficient?: number;
+  disruptionAversion?: number;
+  disruptionAversionPresent?: boolean;
+  lambda?: number;
+  lambdaAvailable?: boolean;
+}
+export interface AttackResult extends DecisionEconomicsFields {
   claim?: ClaimScope;
   id: string; firedAt: string; service: string; namespace: string; pod: string; defendedPod: string; deploy: string;
   attack: string; attackId: string; mitre: string; expectedActuator: string; stateful: boolean;

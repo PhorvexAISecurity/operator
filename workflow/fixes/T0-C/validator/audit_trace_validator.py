@@ -39,6 +39,8 @@ TRACE_V4 = "phorvex.decision-trace.v4"
 TRACE_V5 = "phorvex.decision-trace.v5"
 TRACE_V6 = "phorvex.decision-trace.v6"
 TRACE_V7 = "phorvex.decision-trace.v7"
+TRACE_V8 = "phorvex.decision-trace.v8"
+ECON_PREFERENCES = "independent-cost-preferences-v1"
 AUDIT_V2 = "phorvex.audit.v2"
 
 ECON_LEGACY = "legacy-runtime-lambda-v1"
@@ -271,7 +273,7 @@ def check_schema(rec: dict, tr: dict) -> Check:
     if env != AUDIT_V2:
         problems.append(f"schemaVersion={env!r} (want {AUDIT_V2!r})")
     tv = tr.get("schemaVersion")
-    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
+    if tv not in (TRACE_V2, TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
         problems.append(f"decisionTrace.schemaVersion={tv!r} (want v2, v3, v4, v5, v6, or v7)")
     if problems:
         return Check(1, "schema", FAIL, "; ".join(problems))
@@ -423,8 +425,8 @@ def check_ecost(tr: dict) -> Check:
 
 def check_netgain(tr: dict) -> Check:
     # decision_trace.go Validate() ~390-396; coverage.go legacyMixedGain + lambdaContribution = lambda*ECost
-    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7)
-    fixed = has_v4 and tr.get("economicsVersion") == ECON_FIXED
+    has_v4 = tr.get("schemaVersion") in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8)
+    fixed = has_v4 and tr.get("economicsVersion") in (ECON_FIXED, ECON_PREFERENCES)
     coefficient = tr.get("effectiveCostCoefficient") if has_v4 else tr.get("lambdaRuntime")
     contribution_key = "objectiveCostContribution" if fixed else "lambdaContribution"
     fails, checked, skipped = [], 0, []
@@ -736,7 +738,7 @@ def check_redaction(rec: dict) -> Check:
 
 def check_economics(rec: dict, tr: dict) -> Check:
     """Reconstruct the V4 scoring coefficient and exact trace-off audit descriptor."""
-    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
+    if tr.get("schemaVersion") not in (TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
         return Check(13, "economics-v4", SKIPPED, "trace is v2/v3; economics metadata is not required")
 
     problems = []
@@ -744,12 +746,24 @@ def check_economics(rec: dict, tr: dict) -> Check:
     source = tr.get("costCoefficientSource")
     coefficient = tr.get("effectiveCostCoefficient")
     runtime = tr.get("lambdaRuntimeLegacy")
-    for name, value in (("effectiveCostCoefficient", coefficient), ("lambdaRuntimeLegacy", runtime)):
+    fields = [("lambdaRuntimeLegacy", runtime)]
+    if mode != ECON_PREFERENCES: fields.append(("effectiveCostCoefficient", coefficient))
+    for name, value in fields:
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or not (0 <= value <= MAX_COEFFICIENT):
             problems.append(f"decisionTrace.{name}={value!r} is not a finite coefficient in [0,{MAX_COEFFICIENT:g}]")
 
+    norm = optional(tr, "normPreference", "decisionTrace")
+    flow = optional(tr, "flowPreference", "decisionTrace")
+    if mode != ECON_PREFERENCES and ("normPreference" in tr or "flowPreference" in tr):
+        problems.append("scalar trace cannot carry independent preferences")
     beta = optional(tr, "disruptionAversion", "decisionTrace")
-    if mode == ECON_LEGACY:
+    if mode == ECON_PREFERENCES:
+        if tr.get("schemaVersion") != TRACE_V8 or "effectiveCostCoefficient" in tr or "disruptionAversion" in tr or source != "costPreferences":
+            problems.append("independent preferences have invalid version/scalar/source")
+        for preference in (norm, flow):
+            if not preference.ok or not isinstance(preference.value,(int,float)) or isinstance(preference.value,bool) or not math.isfinite(preference.num) or not 0 <= preference.num <= MAX_COEFFICIENT:
+                problems.append("independent preference missing/invalid")
+    elif mode == ECON_LEGACY:
         if "disruptionAversion" in tr:
             problems.append("legacy V4 must omit decisionTrace.disruptionAversion")
         if source != COEFF_LAMBDA:
@@ -776,7 +790,13 @@ def check_economics(rec: dict, tr: dict) -> Check:
 
     for i, candidate in enumerate(tr.get("candidates") or []):
         expected = optional(candidate, "expectedCost", cand_path(i))
+        if mode == ECON_PREFERENCES and optional(candidate,"netGain",cand_path(i)).ok and not all(optional(candidate,key,cand_path(i)).ok for key in ("expectedCost","cNorm","cFlow","provenance","marginalCoverage")):
+            problems.append("scored independent candidate missing reconstruction inputs")
+        if mode != ECON_PREFERENCES and ("normCostContribution" in candidate or "flowCostContribution" in candidate):
+            problems.append("scalar candidate cannot carry independent contributions")
         if not expected.ok:
+            if any(k in candidate for k in ("normCostContribution","flowCostContribution","objectiveCostContribution")) or optional(candidate,"lambdaContribution",cand_path(i)).ok:
+                problems.append("unpriced candidate cannot carry cost contributions")
             continue
         lam = optional(candidate, "lambdaContribution", cand_path(i))
         obj = optional(candidate, "objectiveCostContribution", cand_path(i))
@@ -785,6 +805,13 @@ def check_economics(rec: dict, tr: dict) -> Check:
                 problems.append(f"{cand_path(i)} legacy contribution has wrong presence")
             elif isinstance(coefficient, (int, float)) and not approx(lam.num, coefficient * expected.num):
                 problems.append(f"{lam.path} does not reconstruct from the effective coefficient")
+        elif mode == ECON_PREFERENCES:
+            cn = optional(candidate,"cNorm",cand_path(i)); cf = optional(candidate,"cFlow",cand_path(i))
+            nc = optional(candidate,"normCostContribution",cand_path(i)); fc = optional(candidate,"flowCostContribution",cand_path(i))
+            if lam.present is not False or not all(x.ok for x in (obj,cn,cf,nc,fc,norm,flow)):
+                problems.append(f"{cand_path(i)} independent contribution inputs missing")
+            elif not (approx(nc.num,norm.num*cn.num) and approx(fc.num,flow.num*cf.num) and approx(obj.num,nc.num+fc.num)):
+                problems.append(f"{cand_path(i)} independent contribution does not reconstruct")
         elif mode == ECON_FIXED:
             if "lambdaContribution" not in candidate or lam.present is not False or not obj.ok:
                 problems.append(f"{cand_path(i)} fixed contribution has wrong presence")
@@ -799,6 +826,13 @@ def check_economics(rec: dict, tr: dict) -> Check:
         envelope_runtime = optional(envelope, "lambdaRuntimeLegacy", "economics")
         if not envelope_runtime.ok or not isinstance(envelope_runtime.value, (int, float)) or isinstance(envelope_runtime.value, bool) or not (0 <= envelope_runtime.num <= MAX_COEFFICIENT):
             problems.append("audit economics.lambdaRuntimeLegacy missing, malformed, or out of bounds")
+        if mode == ECON_PREFERENCES:
+            if "effectiveCostCoefficient" in envelope:
+                problems.append("independent envelope must omit scalar coefficient")
+            for key, expected in (("normPreference",norm),("flowPreference",flow)):
+                value=optional(envelope,key,"economics")
+                if not value.ok or not expected.ok or value.num != expected.num:
+                    problems.append("independent envelope/trace preference mismatch")
         expected_beta_present = mode == ECON_FIXED
         if envelope_beta.ok != expected_beta_present:
             problems.append("audit economics.disruptionAversion presence disagrees with trace mode")
@@ -808,7 +842,7 @@ def check_economics(rec: dict, tr: dict) -> Check:
             problems.append("audit exact lambdaRuntimeLegacy disagrees with trace")
         if expected_beta_present and beta.ok and (not envelope_beta.ok or envelope_beta.num != beta.num):
             problems.append("audit exact disruptionAversion disagrees with trace")
-        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7):
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
             if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
                 problems.append("V5 trace flowCostSemanticsVersion is missing or unknown")
             if envelope.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -816,8 +850,9 @@ def check_economics(rec: dict, tr: dict) -> Check:
 
     if problems:
         return Check(13, "economics-v4", FAIL, "; ".join(problems))
+    coefficients = f"betaNorm={norm.num!r}, betaFlow={flow.num!r}" if mode == ECON_PREFERENCES else f"{source}={coefficient!r}"
     return Check(13, "economics-v4", PASS,
-                 f"{mode} uses exact {source}={coefficient!r}; lambdaDemand={lambda_demand}, objectiveDemand={objective_demand}")
+                 f"{mode} uses exact {coefficients}; lambdaDemand={lambda_demand}, objectiveDemand={objective_demand}")
 
 
 # --- v3 hooks --------------------------------------------------------------
@@ -853,11 +888,11 @@ def v3_action_status(tr: dict) -> list[str]:
         st, ek = r.get("status"), r.get("exclusionKind")
         if st not in V3_STATUS:
             problems.append(f"{p}.status={st!r} not in vocabulary")
-        if ek not in V3_EXCLUSION_KIND and not (ek == "resource-capacity" and tr.get("schemaVersion") == TRACE_V7):
+        if ek not in V3_EXCLUSION_KIND and not (ek == "resource-capacity" and tr.get("schemaVersion") in (TRACE_V7, TRACE_V8)):
             problems.append(f"{p}.exclusionKind={ek!r} not in vocabulary")
         if ek == "resource-capacity" and (st != "infeasible" or r.get("scored") is not False):
             problems.append(f"{p}: resource-capacity requires unscored infeasible status")
-        if ek == "resource-capacity" and tr.get("schemaVersion") == TRACE_V7:
+        if ek == "resource-capacity" and tr.get("schemaVersion") in (TRACE_V7, TRACE_V8):
             matching = [c for c in tr.get("candidates") or []
                         if isinstance(c, dict) and c.get("action") == r.get("action")]
             if len(matching) != 1:
@@ -908,7 +943,7 @@ def v3_cost_high(tr: dict) -> list[str]:
             q = cq.num if cq.ok else 0.0
             g = slack.num if (applied and slack.ok) else 0.0
             extra = max(q, g)
-        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7):
+        if tr.get("schemaVersion") in (TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
             uncertainty = optional(c, "flowUncertaintySlack", p)
             if uncertainty.ok:
                 extra = max(extra, uncertainty.num)
@@ -949,7 +984,7 @@ def v3_dispatch(tr: dict) -> list[str]:
 
 
 def check_v3(tr: dict, strict: bool) -> Check:
-    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7):
+    if tr.get("schemaVersion") not in (TRACE_V3, TRACE_V4, TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
         if strict:
             return Check(12, "v3-hooks", FAIL, f"--strict-v3: trace is {tr.get('schemaVersion')!r}, not v3/v4/v5/v6/v7")
         return Check(12, "v3-hooks", SKIPPED, "trace is v2; v3 laws (actionStatus/costHigh/coveredBefore/dispatch) not applicable")
@@ -960,7 +995,7 @@ def check_v3(tr: dict, strict: bool) -> Check:
 
 
 def check_flow_v5(tr: dict) -> Check:
-    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6, TRACE_V7):
+    if tr.get("schemaVersion") not in (TRACE_V5, TRACE_V6, TRACE_V7, TRACE_V8):
         return Check(14, "flow-regime-v5", SKIPPED, "historical trace; V5 flow-regime contract is not applicable")
     problems = []
     if tr.get("flowCostSemanticsVersion") != FLOW_SEMANTICS_V1:
@@ -1080,7 +1115,7 @@ def check_resources_v6(tr: dict) -> Check:
     version = tr.get("schemaVersion")
     capacities = tr.get("resources")
     candidates = tr.get("candidates") or []
-    if version not in (TRACE_V6, TRACE_V7):
+    if version not in (TRACE_V6, TRACE_V7, TRACE_V8):
         problems = []
         if capacities not in (None, []):
             problems.append("historical trace carries V6 resource capacities")

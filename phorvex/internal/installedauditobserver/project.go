@@ -183,7 +183,7 @@ func safeActionDisposition(schema, status, exclusion string, scored *bool) bool 
 		return false
 	}
 	if exclusion == model.ExclusionResourceCapacity {
-		return schema == model.DecisionTraceSchemaV7 && status == model.ActionStatusInfeasible && scored != nil && !*scored
+		return (schema == model.DecisionTraceSchemaV7 || schema == model.DecisionTraceSchemaV8) && status == model.ActionStatusInfeasible && scored != nil && !*scored
 	}
 	switch exclusion {
 	case model.ExclusionNone, model.ExclusionNotEnabled, model.ExclusionReconCover, model.ExclusionFeasibility,

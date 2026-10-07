@@ -35,6 +35,9 @@ spec:
     tickInterval: 10s
   mode: active
   objective:
+    costPreferences:
+      norm: '0.16'
+      flow: '0.24'
     costWeights:
       flowDisruption: '0.6'
       normSparsity: '0.4'

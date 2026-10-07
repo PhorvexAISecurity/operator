@@ -323,8 +323,34 @@ spec:
               objective:
                 description: |-
                   ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
-                  runtime lambda; an explicit disruptionAversion opts into a fixed coefficient.
+                  runtime lambda; disruptionAversion sets a fixed common coefficient and
+                  costPreferences sets independent fixed coefficients on CNorm and CFlow.
                 properties:
+                  costPreferences:
+                    description: |-
+                      CostPreferences chooses independent fixed preferences in utility per CNorm
+                      and CFlow unit. It replaces the scoring coefficient, without changing the
+                      costWeights used for cost estimation and the SLO gate. These are preferences,
+                      not learned resource multipliers or physical resource allowances.
+                    properties:
+                      flow:
+                        description: Flow multiplies the action's dimensionless CFlow directly.
+                        pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: flow preference must be between 0 and 10
+                          rule: double(self) <= 10.0
+                      norm:
+                        description: Norm multiplies the action's dimensionless CNorm directly.
+                        pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
+                        type: string
+                        x-kubernetes-validations:
+                        - message: norm preference must be between 0 and 10
+                          rule: double(self) <= 10.0
+                    required:
+                    - flow
+                    - norm
+                    type: object
                   costWeights:
                     description: |-
                       CostWeights splits the switching cost K = normSparsity*C_norm +
@@ -368,6 +394,9 @@ spec:
                     - message: lambda must be between 0 and 10
                       rule: self == '' || double(self) <= 10.0
                 type: object
+                x-kubernetes-validations:
+                - message: costPreferences and nonempty disruptionAversion are mutually exclusive
+                  rule: '!has(self.costPreferences) || !has(self.disruptionAversion) || size(self.disruptionAversion) == 0'
               selector:
                 description: |-
                   Selector chooses the pods this policy protects, including matchExpressions.

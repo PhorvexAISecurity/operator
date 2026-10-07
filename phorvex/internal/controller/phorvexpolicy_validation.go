@@ -43,6 +43,9 @@ func ValidatePhorvexPolicy(p *v1alpha1.PhorvexPolicy) field.ErrorList {
 				"must be a decimal between 0 and 10"))
 		}
 	}
+	if _, _, _, err := p.Spec.EffectiveCostPreferences(); err != nil {
+		errs = append(errs, field.Invalid(specPath.Child("objective", "costPreferences"), p.Spec.Objective.CostPreferences, err.Error()))
+	}
 	if raw := p.Spec.Belief.ExposurePressureCap; raw != "" {
 		cap, err := strconv.ParseFloat(raw, 64)
 		if !exposurePressureCapPattern.MatchString(raw) || err != nil || math.IsNaN(cap) || math.IsInf(cap, 0) || cap <= 0 || cap >= 1 {

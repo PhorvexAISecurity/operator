@@ -58,7 +58,7 @@ func greedyThenSwaps(set actionset.ActionSet, B int, prov func(string) float64, 
 					marg += set.FactWeights[k]
 				}
 			}
-			if g := marg*prov(c.Key) - lambda*c.ECost; g > bestGain {
+			if g := marg*prov(c.Key) - candidatePenalty(c, lambda); g > bestGain {
 				bestGain, best = g, i
 			}
 		}

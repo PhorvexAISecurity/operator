@@ -130,3 +130,48 @@ func TestValidatePhorvexPolicyRejectsExposurePressureCapOutsideUnitInterval(t *t
 		}
 	}
 }
+
+func TestPhorvexPolicyWebhookCostPreferences(t *testing.T) {
+	validator := PhorvexPolicyValidator{}
+	for _, tc := range []struct {
+		name        string
+		preferences *v1alpha1.CostPreferences
+		common      string
+		valid       bool
+	}{
+		{"absent", nil, "", true},
+		{"explicit-zero", &v1alpha1.CostPreferences{Norm: "0", Flow: "0"}, "", true},
+		{"independent-boundaries", &v1alpha1.CostPreferences{Norm: "0.2", Flow: "10"}, "", true},
+		{"empty-object", &v1alpha1.CostPreferences{}, "", false},
+		{"missing-norm", &v1alpha1.CostPreferences{Flow: "0"}, "", false},
+		{"missing-flow", &v1alpha1.CostPreferences{Norm: "0"}, "", false},
+		{"negative", &v1alpha1.CostPreferences{Norm: "-1", Flow: "0"}, "", false},
+		{"nonfinite", &v1alpha1.CostPreferences{Norm: "0", Flow: "NaN"}, "", false},
+		{"above-bound", &v1alpha1.CostPreferences{Norm: "10.01", Flow: "0"}, "", false},
+		{"conflicting-zero", &v1alpha1.CostPreferences{Norm: "0", Flow: "0"}, "0", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := validAdmissionPolicy()
+			p.Spec.Objective.CostPreferences = tc.preferences
+			p.Spec.Objective.DisruptionAversion = tc.common
+			errs := ValidatePhorvexPolicy(p)
+			if tc.valid {
+				if len(errs) != 0 {
+					t.Fatalf("valid preferences rejected: %v", errs)
+				}
+			} else if len(errs) != 1 || errs[0].Field != "spec.objective.costPreferences" {
+				t.Fatalf("invalid preferences require one costPreferences error, got %v", errs)
+			}
+			_, createErr := validator.ValidateCreate(context.Background(), p)
+			_, updateErr := validator.ValidateUpdate(context.Background(), validAdmissionPolicy(), p)
+			for _, err := range []error{createErr, updateErr} {
+				if tc.valid && err != nil {
+					t.Fatalf("valid preferences rejected by admission: %v", err)
+				}
+				if !tc.valid && !apierrors.IsInvalid(err) {
+					t.Fatalf("invalid preferences accepted by admission: %v", err)
+				}
+			}
+		})
+	}
+}

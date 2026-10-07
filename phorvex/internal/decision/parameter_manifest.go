@@ -182,7 +182,13 @@ func EffectivePolicyParameterSet(pol model.Policy) (model.EffectivePolicyOverrid
 		// cannot change the effective-policy identity.
 		fixedBeta = 0
 	}
+	normPreference, flowPreference := 0.0, 0.0
+	if pol.CostPreferencesConfigured {
+		normPreference, flowPreference = pol.NormPreference, pol.FlowPreference
+	}
 	values := []model.EffectivePolicyParameter{
+		{Name: "policy.norm-preference", Unit: "utility per CNorm", Present: pol.CostPreferencesConfigured, Value: normPreference},
+		{Name: "policy.flow-preference", Unit: "utility per CFlow", Present: pol.CostPreferencesConfigured, Value: flowPreference},
 		{Name: "policy.lambda-seed", Unit: "dimensionless", Present: true, Value: pol.Lambda},
 		{Name: "policy.fixed-beta", Unit: "dimensionless", Present: pol.DisruptionAversionConfigured, Value: fixedBeta},
 		{Name: "policy.norm-sparsity", Unit: "weight", Present: true, Value: pol.NormSparsity},
