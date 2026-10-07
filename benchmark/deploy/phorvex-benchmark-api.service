@@ -1,0 +1,26 @@
+[Unit]
+Description=Phorvex benchmark API and durable campaign queue
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hami/phorvex-benchmark/current/benchmark/apps/api
+EnvironmentFile=/home/hami/phorvex-benchmark/config/server.env
+Environment=PATH=/home/hami/phorvex-benchmark/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOST=127.0.0.1
+Environment=PORT=4101
+Environment=BENCHMARK_ROOT=/home/hami/phorvex-benchmark/current/benchmark
+Environment=DATA_DIR=/home/hami/phorvex-benchmark/data
+Environment=PYTHON=/home/hami/phorvex-benchmark/runtime/python/bin/python
+ExecStart=/home/hami/phorvex-benchmark/runtime/node/bin/node dist/src/main.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=1000
+KillMode=mixed
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

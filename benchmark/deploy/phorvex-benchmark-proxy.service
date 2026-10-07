@@ -1,0 +1,18 @@
+[Unit]
+Description=Phorvex benchmark HTTPS endpoint
+After=phorvex-benchmark-web.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hami/phorvex-benchmark/config
+Environment=XDG_DATA_HOME=/home/hami/phorvex-benchmark/runtime/caddy-data
+Environment=XDG_CONFIG_HOME=/home/hami/phorvex-benchmark/runtime/caddy-config
+ExecStart=/home/hami/phorvex-benchmark/runtime/caddy/caddy run --config /home/hami/phorvex-benchmark/config/Caddyfile --adapter caddyfile
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

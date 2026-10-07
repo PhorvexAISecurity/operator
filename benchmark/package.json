@@ -1,0 +1,14 @@
+{
+  "name": "phorvex-benchmark",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Live catalogue benchmark dashboard in the operator monorepo",
+  "scripts": {
+    "install:apps": "npm --prefix apps/api ci && npm --prefix apps/web ci",
+    "build": "npm --prefix apps/api run build && npm --prefix apps/web run build",
+    "test:api": "npm --prefix apps/api test",
+    "test:worker": "python3 -m unittest discover -s worker -p 'test_*.py'",
+    "typecheck": "npm --prefix apps/web run typecheck"
+  },
+  "engines": { "node": ">=22.12.0" }
+}
