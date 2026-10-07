@@ -32,6 +32,7 @@ const (
 	DecisionTraceSchemaV6 = "phorvex.decision-trace.v6"
 	// DecisionTraceSchemaV7 adds an explicit resource-capacity exclusion kind.
 	// Earlier closed vocabularies remain readable and cannot carry the new kind.
+	DecisionTraceSchemaV8 = "phorvex.decision-trace.v8"
 	DecisionTraceSchemaV7 = "phorvex.decision-trace.v7"
 	// DecisionActionVocabularyOutput16 identifies the first trace vocabulary
 	// containing sensitive-output-policy-activate. An absent marker retains the
@@ -441,6 +442,8 @@ type DecisionCandidateV2 struct {
 	LambdaContribution OptionalFloat `json:"lambdaContribution"`
 	// ObjectiveCostContribution is authoritative in fixed-beta mode. The legacy
 	// lambda contribution remains absent there so readers cannot relabel beta as lambda.
+	NormCostContribution      *OptionalFloat `json:"normCostContribution,omitempty"`
+	FlowCostContribution      *OptionalFloat `json:"flowCostContribution,omitempty"`
 	ObjectiveCostContribution *OptionalFloat `json:"objectiveCostContribution,omitempty"`
 	NetGain                   OptionalFloat  `json:"netGain"`
 	Feasible                  OptionalBool   `json:"feasible"`
@@ -563,6 +566,8 @@ type DecisionTraceV2 struct {
 	LambdaConfiguredPolicy    float64              `json:"lambdaConfiguredPolicy"`
 	LambdaRuntimeLegacy       float64              `json:"lambdaRuntimeLegacy"`
 	EconomicsVersion          string               `json:"economicsVersion,omitempty"`
+	NormPreference            *OptionalFloat       `json:"normPreference,omitempty"`
+	FlowPreference            *OptionalFloat       `json:"flowPreference,omitempty"`
 	DisruptionAversion        *OptionalFloat       `json:"disruptionAversion,omitempty"`
 	EffectiveCostCoefficient  float64              `json:"effectiveCostCoefficient,omitempty"`
 	CostCoefficientSource     string               `json:"costCoefficientSource,omitempty"`
@@ -656,6 +661,14 @@ func cleanOptional(v OptionalFloat) OptionalFloat {
 // records that lack the v3 arrays.)
 func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 	out := t
+	if t.NormPreference != nil {
+		v := cleanOptional(*t.NormPreference)
+		out.NormPreference = &v
+	}
+	if t.FlowPreference != nil {
+		v := cleanOptional(*t.FlowPreference)
+		out.FlowPreference = &v
+	}
 	if t.DisruptionAversion != nil {
 		cleaned := cleanOptional(*t.DisruptionAversion)
 		out.DisruptionAversion = &cleaned
@@ -782,6 +795,14 @@ func (t DecisionTraceV2) Canonical() DecisionTraceV2 {
 		c.ExpectedCost = cleanOptional(c.ExpectedCost)
 		c.CostHigh = cleanOptional(c.CostHigh)
 		c.LambdaContribution = cleanOptional(c.LambdaContribution)
+		if c.NormCostContribution != nil {
+			v := cleanOptional(*c.NormCostContribution)
+			c.NormCostContribution = &v
+		}
+		if c.FlowCostContribution != nil {
+			v := cleanOptional(*c.FlowCostContribution)
+			c.FlowCostContribution = &v
+		}
 		if c.ObjectiveCostContribution != nil {
 			cleaned := cleanOptional(*c.ObjectiveCostContribution)
 			c.ObjectiveCostContribution = &cleaned
@@ -859,7 +880,7 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 	type alias DecisionTraceV2
 	canonical := t.Canonical()
 	raw, err := json.Marshal(alias(canonical))
-	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6 && canonical.SchemaVersion != DecisionTraceSchemaV7) {
+	if err != nil || (canonical.SchemaVersion != DecisionTraceSchemaV4 && canonical.SchemaVersion != DecisionTraceSchemaV5 && canonical.SchemaVersion != DecisionTraceSchemaV6 && canonical.SchemaVersion != DecisionTraceSchemaV7 && canonical.SchemaVersion != DecisionTraceSchemaV8) {
 		return raw, err
 	}
 	var object map[string]json.RawMessage
@@ -876,6 +897,9 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 		}
 		object[name] = encoded
 	}
+	if canonical.EconomicsVersion == EconomicsIndependentPreferencesV1 {
+		delete(object, "effectiveCostCoefficient")
+	}
 	return json.Marshal(object)
 }
 
@@ -885,7 +909,7 @@ func (t DecisionTraceV2) MarshalJSON() ([]byte, error) {
 // non-test caller — it is a test-time contract, not a runtime guard; the
 // production reconstruction check lives in the independent validator.
 func (t DecisionTraceV2) Validate() error {
-	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 && t.SchemaVersion != DecisionTraceSchemaV7 {
+	if t.SchemaVersion != DecisionTraceSchemaV2 && t.SchemaVersion != DecisionTraceSchemaV3 && t.SchemaVersion != DecisionTraceSchemaV4 && t.SchemaVersion != DecisionTraceSchemaV5 && t.SchemaVersion != DecisionTraceSchemaV6 && t.SchemaVersion != DecisionTraceSchemaV7 && t.SchemaVersion != DecisionTraceSchemaV8 {
 		return fmt.Errorf("schemaVersion %q", t.SchemaVersion)
 	}
 	actions, err := DecisionTraceActions(t.ActionVocabularyVersion)
@@ -909,7 +933,7 @@ func (t DecisionTraceV2) Validate() error {
 	isV4 := t.SchemaVersion == DecisionTraceSchemaV4
 	isV5 := t.SchemaVersion == DecisionTraceSchemaV5
 	isV6 := t.SchemaVersion == DecisionTraceSchemaV6
-	isV7 := t.SchemaVersion == DecisionTraceSchemaV7
+	isV7 := t.SchemaVersion == DecisionTraceSchemaV7 || t.SchemaVersion == DecisionTraceSchemaV8
 	hasV6 := isV6 || isV7
 	hasV5 := isV5 || hasV6
 	finite := func(values ...float64) bool {
@@ -1019,7 +1043,7 @@ func (t DecisionTraceV2) Validate() error {
 			selectedKey = c.CandidateKey
 		}
 		contribution := c.LambdaContribution
-		if (isV4 || hasV5) && t.EconomicsVersion == EconomicsFixedDisruptionAversionV1 {
+		if (isV4 || hasV5) && t.EconomicsVersion != EconomicsLegacyRuntimeLambdaV1 {
 			if c.ObjectiveCostContribution != nil {
 				contribution = *c.ObjectiveCostContribution
 			} else {
@@ -1144,7 +1168,14 @@ func (t DecisionTraceV2) validateV4() error {
 	if !finiteBoundedCoefficient(t.EffectiveCostCoefficient) {
 		return errors.New("v4 effective cost coefficient must be between 0 and 10")
 	}
+	if t.EconomicsVersion != EconomicsIndependentPreferencesV1 && (t.NormPreference != nil || t.FlowPreference != nil) {
+		return errors.New("scalar trace cannot carry independent preferences")
+	}
 	switch t.EconomicsVersion {
+	case EconomicsIndependentPreferencesV1:
+		if t.SchemaVersion != DecisionTraceSchemaV8 || t.DisruptionAversion != nil || t.EffectiveCostCoefficient != 0 || t.CostCoefficientSource != CostCoefficientSourcePreferences || t.NormPreference == nil || t.FlowPreference == nil || !t.NormPreference.Present || !t.FlowPreference.Present || !finiteBoundedCoefficient(t.NormPreference.Value) || !finiteBoundedCoefficient(t.FlowPreference.Value) {
+			return errors.New("v8 independent preference metadata is contradictory")
+		}
 	case EconomicsLegacyRuntimeLambdaV1:
 		if t.DisruptionAversion != nil || t.CostCoefficientSource != CostCoefficientSourceLambda ||
 			t.EffectiveCostCoefficient != t.LambdaRuntimeLegacy {
@@ -1160,6 +1191,15 @@ func (t DecisionTraceV2) validateV4() error {
 		return fmt.Errorf("v4 economicsVersion %q", t.EconomicsVersion)
 	}
 	for _, candidate := range t.Candidates {
+		if t.EconomicsVersion == EconomicsIndependentPreferencesV1 && candidate.NetGain.Present && (!candidate.ExpectedCost.Present || !candidate.CNorm.Present || !candidate.CFlow.Present || !candidate.Provenance.Present || !candidate.MarginalCoverage.Present) {
+			return errors.New("scored independent candidate is missing reconstruction inputs")
+		}
+		if t.EconomicsVersion != EconomicsIndependentPreferencesV1 && (candidate.NormCostContribution != nil || candidate.FlowCostContribution != nil) {
+			return errors.New("scalar candidate cannot carry independent contributions")
+		}
+		if !candidate.ExpectedCost.Present && (candidate.NormCostContribution != nil || candidate.FlowCostContribution != nil || candidate.ObjectiveCostContribution != nil || candidate.LambdaContribution.Present) {
+			return errors.New("unpriced candidate cannot carry cost contributions")
+		}
 		if !candidate.ExpectedCost.Present {
 			continue
 		}
@@ -1167,6 +1207,15 @@ func (t DecisionTraceV2) validateV4() error {
 			if !candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution != nil ||
 				math.Abs(candidate.LambdaContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
 				return fmt.Errorf("candidate %q has contradictory legacy cost contribution", candidate.CandidateKey)
+			}
+		} else if t.EconomicsVersion == EconomicsIndependentPreferencesV1 {
+			if !candidate.CNorm.Present || !candidate.CFlow.Present || candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution == nil || !candidate.ObjectiveCostContribution.Present || candidate.NormCostContribution == nil || !candidate.NormCostContribution.Present || candidate.FlowCostContribution == nil || !candidate.FlowCostContribution.Present {
+				return fmt.Errorf("candidate %q independent components missing", candidate.CandidateKey)
+			}
+			norm := t.NormPreference.Value * candidate.CNorm.Value
+			flow := t.FlowPreference.Value * candidate.CFlow.Value
+			if !finiteTraceNumber(candidate.ObjectiveCostContribution.Value) || !finiteTraceNumber(candidate.NormCostContribution.Value) || !finiteTraceNumber(candidate.FlowCostContribution.Value) || math.Abs(candidate.NormCostContribution.Value-norm) > 1e-9 || math.Abs(candidate.FlowCostContribution.Value-flow) > 1e-9 || math.Abs(candidate.ObjectiveCostContribution.Value-norm-flow) > 1e-9 {
+				return fmt.Errorf("candidate %q independent contribution does not reconstruct", candidate.CandidateKey)
 			}
 		} else if candidate.LambdaContribution.Present || candidate.ObjectiveCostContribution == nil || !candidate.ObjectiveCostContribution.Present ||
 			math.Abs(candidate.ObjectiveCostContribution.Value-t.EffectiveCostCoefficient*candidate.ExpectedCost.Value) > 1e-9 {
@@ -1351,7 +1400,7 @@ func (t DecisionTraceV2) validateV3() error {
 			return fmt.Errorf("actionStatus[%d] exclusionKind %q is outside the closed vocabulary", i, row.ExclusionKind)
 		}
 		if row.ExclusionKind == ExclusionResourceCapacity {
-			if t.SchemaVersion != DecisionTraceSchemaV7 {
+			if t.SchemaVersion != DecisionTraceSchemaV7 && t.SchemaVersion != DecisionTraceSchemaV8 {
 				return fmt.Errorf("actionStatus[%d] resource-capacity requires v7 schema", i)
 			}
 			if row.Status != ActionStatusInfeasible || row.Scored {
@@ -1461,7 +1510,7 @@ func (t DecisionTraceV2) validateV3() error {
 		} else if c.ConformalQuantile.Present || (c.GPUEnvelopeApplied.Present && c.GPUEnvelopeApplied.Value) {
 			return fmt.Errorf("candidate %q is non-rotate but carries rotate slack terms", c.CandidateKey)
 		}
-		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6 || t.SchemaVersion == DecisionTraceSchemaV7) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
+		if (t.SchemaVersion == DecisionTraceSchemaV5 || t.SchemaVersion == DecisionTraceSchemaV6 || t.SchemaVersion == DecisionTraceSchemaV7 || t.SchemaVersion == DecisionTraceSchemaV8) && c.FlowUncertaintySlack != nil && c.FlowUncertaintySlack.Present && c.FlowUncertaintySlack.Value > slack {
 			slack = c.FlowUncertaintySlack.Value
 		}
 		want += slack
@@ -1512,5 +1561,27 @@ func (t DecisionTraceV2) validateV3() error {
 	default:
 		return fmt.Errorf("dispatchOutcome %q is outside the closed vocabulary", t.DispatchOutcome)
 	}
+	return nil
+}
+
+func finiteTraceNumber(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
+
+// UnmarshalJSON preserves the contract that a P2 wire descriptor has no scalar price.
+func (t *DecisionTraceV2) UnmarshalJSON(raw []byte) error {
+	type alias DecisionTraceV2
+	var value alias
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value.EconomicsVersion == EconomicsIndependentPreferencesV1 {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &object); err != nil {
+			return err
+		}
+		if _, present := object["effectiveCostCoefficient"]; present {
+			return errors.New("independent trace cannot carry a scalar coefficient")
+		}
+	}
+	*t = DecisionTraceV2(value)
 	return nil
 }

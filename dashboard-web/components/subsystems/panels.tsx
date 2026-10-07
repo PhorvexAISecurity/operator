@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { decisionEconomics, exactNumber } from "@/lib/economics";
 import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, ScanResult, PolicyView, RegistryView, AblationResult } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
@@ -121,10 +122,10 @@ export function OptimizationPanel({ lens }: { lens: Lens }) {
   const rows = acted.length ? acted : recs;
   return (
     <div className="space-y-4">
-      <SectionLabel>Modeled selection opportunity − λ·cost scoring · not measured mitigation</SectionLabel>
+      <SectionLabel>Recorded objective scoring · not measured mitigation</SectionLabel>
       <Card><CardContent className="p-0">
         <Table>
-          <THead><TH>Workload</TH><TH>Action</TH><TH>Modeled coverage</TH><TH>Cost (ECost)</TH><TH>Net = cov − λ·cost</TH><TH>per-$</TH><TH>λ</TH></THead>
+          <THead><TH>Workload</TH><TH>Action</TH><TH>Modeled coverage</TH><TH>Cost (ECost)</TH><TH>Recorded net</TH><TH>Coverage / ECost</TH><TH>Objective coefficients</TH></THead>
           <tbody>{rows.map((r, i) => (
             <TR key={i} className={cn(r.selected && "bg-primary/[0.04]")}>
               <TD className="font-mono text-[12px]">{r.namespace}/{r.pod}<ClaimScopeNote claim={r.claim} /></TD>
@@ -133,7 +134,11 @@ export function OptimizationPanel({ lens }: { lens: Lens }) {
               <TD className="tabular">{(r.cost ?? 0).toFixed(2)}</TD>
               <TD className={cn("tabular font-medium", (r.net ?? 0) > 0 ? "text-success" : "text-muted-foreground")}>{(r.net ?? 0).toFixed(2)}</TD>
               <TD className="tabular">{(r.perDollar ?? 0).toFixed(2)}</TD>
-              <TD className="tabular text-muted-foreground">{(r.lambda ?? 0).toFixed(2)}</TD>
+              <TD className="tabular text-muted-foreground">
+                {decisionEconomics(r).independent ? decisionEconomics(r).preferences : `common=${exactNumber(decisionEconomics(r).coefficient)}`}
+                <div className="text-[10px]">{decisionEconomics(r).version}</div>
+                <div className="text-[10px]">λ legacy move pressure={exactNumber(decisionEconomics(r).lambda)}</div>
+              </TD>
             </TR>
           ))}</tbody>
         </Table>
@@ -178,19 +183,20 @@ export function CostPanel({ lens }: { lens: Lens }) {
   const recs = audit.data;
   if (!recs) return audit.error ? <ReadStatus error={audit.error} hasData={false} onRetry={() => void audit.refetch()} /> : <Loading label="Reading the cost solution from the live stream…" rows={3} />;
   if (recs.length === 0) return <Empty msg="No live decisions yet — start Phorvex (Protect) to see the cost-vs-coverage tradeoff." />;
-  const lambda = recs.find((r) => typeof r.lambda === "number" && r.lambda > 0)?.lambda ?? 0;
+  const economics = decisionEconomics(recs[0]);
   const pts = recs.map((r) => ({ cov: r.coveredWeight ?? r.risk ?? 0, cost: r.cost ?? 0, sel: r.selected }));
   const maxCov = Math.max(0.5, ...pts.map((p) => p.cov)), maxCost = Math.max(0.5, ...pts.map((p) => p.cost));
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Mini label="λ shadow-price" value={lambda.toFixed(2)} />
+        <Mini label={economics.independent ? "Latest fixed preferences" : "Latest common cost coefficient"}
+          value={economics.independent ? economics.preferences : exactNumber(economics.coefficient)} />
         <Mini label="moves / tick" value={String(recs.filter((r) => r.selected).length)} />
         <Mini label="decisions" value={String(recs.length)} />
         <Mini label="actuated" value={String(recs.filter((r) => r.actuated).length)} />
       </div>
       <Card><CardContent className="p-4">
-        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Cost vs modeled coverage · λ = the shadow-price slope (move fires when per-$ &gt; λ)</div>
+        <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">Cost vs modeled coverage · recorded selections; no universal scalar threshold</div>
         <svg viewBox="0 0 600 260" className="w-full">
           <line x1="40" y1="220" x2="580" y2="220" stroke="hsl(222 18% 16%)" /><line x1="40" y1="20" x2="40" y2="220" stroke="hsl(222 18% 16%)" />
           <text x="300" y="250" textAnchor="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>modeled coverage value →</text>
@@ -198,9 +204,8 @@ export function CostPanel({ lens }: { lens: Lens }) {
             <circle key={i} cx={40 + (p.cov / maxCov) * 530} cy={220 - (p.cost / maxCost) * 190} r={p.sel ? 6 : 4}
               fill={p.sel ? "hsl(184 78% 46% / 0.7)" : "hsl(215 14% 58% / 0.4)"} stroke={p.sel ? "hsl(184 78% 46%)" : "none"} />
           ))}
-          {lambda > 0 && <line x1="40" y1="220" x2={Math.min(580, 40 + (maxCost / (lambda * maxCost) * 530))} y2="20" stroke="hsl(38 92% 56% / 0.5)" strokeDasharray="4 4" />}
         </svg>
-        <div className="text-[10px] text-muted-foreground/60">λ/per-$/cost are IP — Investor/Operator only.</div>
+        <div className="text-[10px] text-muted-foreground/60">Latest objective: {economics.version}. λ legacy move pressure: {exactNumber(economics.lambda)}. This is telemetry, not a resource shadow price. ECost retains SLO cost weights; independent preferences apply directly to CNorm and CFlow.</div>
       </CardContent></Card>
     </div>
   );
@@ -328,7 +333,7 @@ export function HealthPanel({ lens }: { lens: Lens }) {
 
 /* ---------- METHODOLOGY (honesty) ---------- */
 const KNOBS = [
-  ["Weibull shape k", "2", "hazard IFR"], ["λ seed / step / clamp", "0.6 / 0.05 / [0,10]", "dual descent"],
+  ["Weibull shape k", "2", "hazard IFR"], ["legacy λ seed / step / clamp", "0.6 / 0.05 / [0,10]", "move-count pressure"],
   ["conformal α / cap", "0.1 / 200", "SLO gate"], ["RLS forgetting", "0.99", "cost calibration"],
   ["MaxDispersionMult", "4", "EMR cap"], ["CoResidencyCap", "4", "co-location"], ["GPUEnvelopeMax", "1.0", "SP-0 fail-safe"],
 ];
@@ -338,7 +343,7 @@ export function MethodologyPanel({ lens }: { lens: Lens }) {
     <div className="space-y-5">
       <Card><CardContent className="p-5">
         <div className="text-[13px] font-semibold">No LLM in the decision path</div>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">A deterministic brain: a submodular coverage-minus-λ-cost optimizer over a semi-Markov Weibull kill-chain hazard with Beta-Bernoulli belief. Reproducible at <span className="font-mono text-foreground/80">masterSeed 1337</span> given the same warm state.</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">A deterministic brain: a coverage optimizer with versioned cost preferences over a semi-Markov Weibull kill-chain hazard with Beta-Bernoulli belief. Reproducible at <span className="font-mono text-foreground/80">masterSeed 1337</span> given the same warm state.</p>
       </CardContent></Card>
       <Card><CardContent className="p-5">
         <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">How to read the numbers (honesty legend)</div>

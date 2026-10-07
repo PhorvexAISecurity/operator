@@ -619,6 +619,9 @@ func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolut
 
 // Upsert adds or updates a tenant policy in the registry.
 func (m *Manager) Upsert(p *v1alpha1.PhorvexPolicy) error {
+	if _, _, _, err := p.Spec.EffectiveCostPreferences(); err != nil {
+		return err
+	}
 	if _, _, err := p.Spec.EffectiveDisruptionAversion(); err != nil {
 		return fmt.Errorf("policy %s/%s: %w", p.Namespace, p.Name, err)
 	}
@@ -2569,6 +2572,9 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		costCoefficient = original.Economics.EffectiveCostCoefficient
 	}
 	d.Net = a.Coverage - costCoefficient*a.Cost
+	if a.ObjectivePenalty.Present {
+		d.Net = a.Coverage - a.ObjectivePenalty.Value
+	}
 	d.Attribution = append([]model.AttributionTerm(nil), a.Attribution...)
 	if a.CounterfactualNote != "" {
 		d.CounterfactualNote = a.CounterfactualNote
@@ -2578,7 +2584,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		d.PerDollar = a.Coverage / a.Cost
 	}
 	d.ProactiveRate = 0
-	if d.PerDollar > costCoefficient {
+	if (original.Economics == nil || original.Economics.Version != model.EconomicsIndependentPreferencesV1) && d.PerDollar > costCoefficient {
 		d.ProactiveRate = d.PerDollar - costCoefficient
 	}
 	d.CoveredFacts = len(a.CoverKeys)
@@ -2586,7 +2592,7 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 		d.Measurements.PerDollar = model.OptionalFloat{Present: a.Cost > 0, Value: d.PerDollar}
 		d.Measurements.CoveredWeight = model.OptionalFloat{Present: true, Value: d.CoveredWeight}
 		d.Measurements.CoveredFacts = model.OptionalInt{Present: true, Value: d.CoveredFacts}
-		d.Measurements.ProactiveRate = model.OptionalFloat{Present: a.Cost > 0, Value: d.ProactiveRate}
+		d.Measurements.ProactiveRate = model.OptionalFloat{Present: a.Cost > 0 && (original.Economics == nil || original.Economics.Version != model.EconomicsIndependentPreferencesV1), Value: d.ProactiveRate}
 	}
 	d.Reason = fmt.Sprintf("same-tick alternative after explicit no-effect refusal of %s; reserved marginal gain %.6g", original.Action, a.Gain)
 	d.Actuated, d.Phoenix = false, nil
@@ -3523,6 +3529,11 @@ func buildPolicy(e *policyEntry) model.Policy {
 		disruptionAversion = math.NaN()
 		disruptionAversionConfigured = true
 	}
+	normPreference, flowPreference, preferencesConfigured, preferencesErr := s.EffectiveCostPreferences()
+	if preferencesErr != nil {
+		normPreference = math.NaN()
+		preferencesConfigured = true
+	}
 	enabled := map[model.Action]bool{}
 	for _, a := range s.Actions.Enabled {
 		enabled[model.Action(a)] = true
@@ -3542,6 +3553,8 @@ func buildPolicy(e *policyEntry) model.Policy {
 		Lambda:                       s.EffectiveLambda(),
 		DisruptionAversion:           disruptionAversion,
 		DisruptionAversionConfigured: disruptionAversionConfigured,
+		CostPreferencesConfigured:    preferencesConfigured,
+		NormPreference:               normPreference, FlowPreference: flowPreference,
 		NormSparsity:                 s.EffectiveNormSparsity(),
 		FlowDisruption:               s.EffectiveFlowDisruption(),
 		CostCeiling:                  s.EffectiveCostCeiling(),

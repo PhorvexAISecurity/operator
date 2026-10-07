@@ -1224,6 +1224,9 @@ type Policy struct {
 	Lambda                       float64
 	DisruptionAversion           float64
 	DisruptionAversionConfigured bool
+	CostPreferencesConfigured    bool
+	NormPreference               float64
+	FlowPreference               float64
 	NormSparsity                 float64
 	FlowDisruption               float64
 	CostCeiling                  float64

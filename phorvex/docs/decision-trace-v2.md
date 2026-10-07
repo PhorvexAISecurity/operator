@@ -1,8 +1,29 @@
-# Decision Trace V2 / V3 / V4 / V5 / V6 / V7
+# Decision Trace V2 / V3 / V4 / V5 / V6 / V7 / V8
 
 `phorvex.decision-trace.v7` supersedes `v6`, `v5`, `v4`, `v3`, and `v2`, which remain readable. It is
 nested under `decisionTrace` in each `phorvex.audit.v2` per-asset decision record.
 It records the current P1 decision path.
+
+**V8 addition (independent fixed cost preferences):** emitted only for
+`economicsVersion=independent-cost-preferences-v1`. `normPreference` and
+`flowPreference` are explicit optional-number fields (including real zero), with
+`costCoefficientSource=costPreferences`. The unavailable common
+`effectiveCostCoefficient` and `disruptionAversion` fields are omitted. Each
+costed candidate includes `normCostContribution = normPreference * cNorm`,
+`flowCostContribution = flowPreference * cFlow`, and their sum in
+`objectiveCostContribution`. The marginal ranking gain subtracts that sum from
+`marginalCoverage * provenance`. `expectedCost`, its `normWeight`/`flowWeight`
+decomposition and the hard SLO envelope are unchanged. `lambdaRuntimeLegacy`
+and its controller update remain compatibility telemetry; they never multiply
+these preferences. These are fixed preferences, not independently learned duals.
+No resource-cap multiplier is implemented or claimed by this mode.
+`proactiveRate` is unavailable in optional measurements because the old scalar
+ratio has no meaning for independent coefficients; `perDollar` remains the legacy
+security/weighted-dimensionless-cost reporting ratio, not a currency value.
+V8 inherits every V7 hard resource, authority and exclusion gate. Earlier records
+retain their original versions and formulas. Candidate scores are marginal to a
+selection round; selected-set diagnostics count shared facts once. Neither is a
+measured dispatch or protection outcome.
 
 **V7 addition (typed resource refusal):** an enabled replica-removing action
 excluded by missing, unknown, or exhausted shared/quarantine capacity records

@@ -126,7 +126,7 @@ func setObjective(picks []actionset.Candidate, w map[string]float64, prov func(s
 	cover := map[string]float64{} // key -> max prov among covering picks
 	cost := 0.0
 	for _, c := range picks {
-		cost += c.ECost
+		cost += candidatePenalty(c, lambda)
 		p := prov(c.Key)
 		for _, k := range c.CoverKeys {
 			if p > cover[k] {
@@ -138,7 +138,7 @@ func setObjective(picks []actionset.Candidate, w map[string]float64, prov func(s
 	for k, p := range cover {
 		g += w[k] * p
 	}
-	return g - lambda*cost
+	return g - cost
 }
 
 // exactObjective brute-forces the optimal feasible selection (one move per asset, ≤B mutating picks)
@@ -263,7 +263,7 @@ func greedyPicksOnSet(set actionset.ActionSet, B int, prov func(string) float64,
 					marginal += set.FactWeights[k]
 				}
 			}
-			gain := marginal*prov(c.Key) - lambda*c.ECost
+			gain := marginal*prov(c.Key) - candidatePenalty(c, lambda)
 			if gain > bestGain {
 				bestGain = gain
 				bestIdx = i
@@ -340,12 +340,18 @@ func (e *CoverageEngine) computeOptimality(decs []model.Decision, set actionset.
 	}
 	prov := provFn(ctxByKey, pol.ProactiveFloor.Seconds())
 	// greedy objective uses the same frozen coefficient as the real selection.
-	gObj := 0.0
+	picks := []actionset.Candidate{}
 	for _, d := range decs {
 		if d.Selected {
-			gObj += d.CoveredWeight*prov(d.Namespace+"/"+d.Pod) - costCoefficient*d.Cost
+			for _, c := range set.Candidates {
+				if c.Key == d.Namespace+"/"+d.Pod && c.Action == d.Action {
+					picks = append(picks, c)
+					break
+				}
+			}
 		}
 	}
+	gObj := setObjective(picks, set.FactWeights, prov, costCoefficient)
 	out.GreedyObjective = gObj
 	out.CoversDisjoint, out.SharedKeyNote = coversDisjoint(set)
 	// greedy-then-swaps over the same substrate + frozen λ + re-created prov (>= greedy always).

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { decisionEconomics, exactNumber } from "@/lib/economics";
 import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, LiveHistoryPage, RunStatus, AttackResult } from "@/lib/api";
 import { dispatchLiveAttack, liveAttackFollowMessage, liveAttackPollBudgetMs, liveAttackRoute, liveAttackVerdict } from "@/lib/live-attack-dispatch";
@@ -688,7 +689,12 @@ function DecisionCard({ e, attack }: { e: any; attack?: { scenario: string; runn
               {num(e.sloHeadroom) != null && <Metric label="SLO headroom" value={num(e.sloHeadroom)} />}
               {num(e.exposure) != null && <Metric label="exposure" value={num(e.exposure)} />}
               {num(e.threatPosture) != null && <Metric label="threat posture" value={num(e.threatPosture)} />}
-              {num(e.lambda) != null && e.lambda > 0 && <Metric label="λ (cost weight)" value={num(e.lambda)} />}
+              <Metric label="objective version" value={decisionEconomics(e).version} />
+              {decisionEconomics(e).independent && <>
+                <Metric label="βNorm (fixed preference)" value={exactNumber(decisionEconomics(e).norm)} />
+                <Metric label="βFlow (fixed preference)" value={exactNumber(decisionEconomics(e).flow)} />
+              </>}
+              <Metric label="λ (legacy move pressure)" value={exactNumber(decisionEconomics(e).lambda)} />
               {num(e.preemptMargin) != null && e.preemptMargin > 0 && <Metric label="preempt margin" value={`${(e.preemptMargin * 100).toFixed(0)}%`} />}
               {num(e.pHold) != null && e.pHold > 0 && <Metric label="p(hold)" value={num(e.pHold)} />}
               {e.phase && <Metric label="phase" value={e.phase} />}

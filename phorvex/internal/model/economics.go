@@ -1,11 +1,14 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 )
 
 const (
+	EconomicsIndependentPreferencesV1  = "independent-cost-preferences-v1"
+	CostCoefficientSourcePreferences   = "costPreferences"
 	EconomicsLegacyRuntimeLambdaV1     = "legacy-runtime-lambda-v1"
 	EconomicsFixedDisruptionAversionV1 = "fixed-disruption-aversion-v1"
 	CostCoefficientSourceLambda        = "lambdaRuntimeLegacy"
@@ -20,6 +23,8 @@ const (
 // EconomicsMetadata identifies the coefficient used by one frozen decision.
 // DisruptionAversion.Present distinguishes an explicit zero from legacy absence.
 type EconomicsMetadata struct {
+	NormPreference           OptionalFloat `json:"normPreference"`
+	FlowPreference           OptionalFloat `json:"flowPreference"`
 	Version                  string        `json:"version"`
 	DisruptionAversion       OptionalFloat `json:"disruptionAversion"`
 	LambdaRuntimeLegacy      OptionalFloat `json:"lambdaRuntimeLegacy"`
@@ -36,6 +41,12 @@ func (p Policy) Economics(lambdaRuntime float64) (EconomicsMetadata, error) {
 	}
 	if math.IsNaN(lambdaRuntime) || math.IsInf(lambdaRuntime, 0) || lambdaRuntime < 0 || lambdaRuntime > MaxDisruptionAversion {
 		return EconomicsMetadata{}, fmt.Errorf("legacy runtime lambda must be finite and between 0 and 10")
+	}
+	if p.CostPreferencesConfigured {
+		if p.DisruptionAversionConfigured || !finiteBoundedCoefficient(p.NormPreference) || !finiteBoundedCoefficient(p.FlowPreference) {
+			return EconomicsMetadata{}, fmt.Errorf("cost preferences must be finite in [0,10] and cannot accompany disruptionAversion")
+		}
+		return EconomicsMetadata{Version: EconomicsIndependentPreferencesV1, CoefficientSource: CostCoefficientSourcePreferences, NormPreference: OptionalFloat{Present: true, Value: p.NormPreference}, FlowPreference: OptionalFloat{Present: true, Value: p.FlowPreference}, LambdaRuntimeLegacy: OptionalFloat{Present: true, Value: lambdaRuntime}, FlowCostSemanticsVersion: FlowCostSemanticsConservativeRegimeV1}, nil
 	}
 	if !p.DisruptionAversionConfigured {
 		return EconomicsMetadata{
@@ -74,7 +85,14 @@ func ValidateEconomicsMetadata(metadata *EconomicsMetadata) error {
 	if metadata.FlowCostSemanticsVersion != "" && metadata.FlowCostSemanticsVersion != FlowCostSemanticsConservativeRegimeV1 {
 		return fmt.Errorf("unknown flow-cost semantics version %q", metadata.FlowCostSemanticsVersion)
 	}
+	if metadata.Version != EconomicsIndependentPreferencesV1 && (metadata.NormPreference.Present || metadata.FlowPreference.Present) {
+		return fmt.Errorf("scalar economics cannot carry independent preferences")
+	}
 	switch metadata.Version {
+	case EconomicsIndependentPreferencesV1:
+		if metadata.DisruptionAversion.Present || metadata.EffectiveCostCoefficient != 0 || metadata.CoefficientSource != CostCoefficientSourcePreferences || !metadata.NormPreference.Present || !metadata.FlowPreference.Present || !finiteBoundedCoefficient(metadata.NormPreference.Value) || !finiteBoundedCoefficient(metadata.FlowPreference.Value) {
+			return fmt.Errorf("independent economics metadata is contradictory")
+		}
 	case EconomicsLegacyRuntimeLambdaV1:
 		if metadata.DisruptionAversion.Present || metadata.CoefficientSource != CostCoefficientSourceLambda ||
 			metadata.EffectiveCostCoefficient != metadata.LambdaRuntimeLegacy.Value {
@@ -94,4 +112,52 @@ func ValidateEconomicsMetadata(metadata *EconomicsMetadata) error {
 
 func finiteBoundedCoefficient(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && value <= MaxDisruptionAversion
+}
+
+// CostPenalty resolves the frozen objective without changing the SLO cost model.
+func (m EconomicsMetadata) CostPenalty(norm, flow, expected float64) float64 {
+	if m.Version == EconomicsIndependentPreferencesV1 {
+		return m.NormPreference.Value*norm + m.FlowPreference.Value*flow
+	}
+	return m.EffectiveCostCoefficient * expected
+}
+
+// Independent preferences have no common scalar coefficient. Omit that unavailable
+// field on the wire instead of reporting a misleading numeric zero.
+func (m EconomicsMetadata) MarshalJSON() ([]byte, error) {
+	type alias EconomicsMetadata
+	raw, err := json.Marshal(alias(m))
+	if err != nil {
+		return raw, err
+	}
+	var object map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &object); err != nil {
+		return nil, err
+	}
+	if m.Version == EconomicsIndependentPreferencesV1 {
+		delete(object, "effectiveCostCoefficient")
+	} else {
+		delete(object, "normPreference")
+		delete(object, "flowPreference")
+	}
+	return json.Marshal(object)
+}
+
+func (m *EconomicsMetadata) UnmarshalJSON(raw []byte) error {
+	type alias EconomicsMetadata
+	var value alias
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	if value.Version == EconomicsIndependentPreferencesV1 {
+		var object map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &object); err != nil {
+			return err
+		}
+		if _, present := object["effectiveCostCoefficient"]; present {
+			return fmt.Errorf("independent economics cannot carry a scalar coefficient")
+		}
+	}
+	*m = EconomicsMetadata(value)
+	return nil
 }

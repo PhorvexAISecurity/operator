@@ -22,15 +22,20 @@ import (
 
 // Candidate is one feasible (asset, action) with a non-empty recon cover set and costs.
 type Candidate struct {
-	GenerationRank int
-	SLOExclusions  []string
-	Key            string // "ns/pod"
-	View           *model.WorkloadView
-	Action         model.Action
-	CoverKeys      []string // recon fact keys this move invalidates
-	ECost          float64  // expected (objective) cost
-	CHi            float64  // conformal worst-case cost (used by the hard SLO gate)
-	Resources      []model.ResourceConsumption
+	// ObjectivePenalty is frozen by the decision engine only for independent preferences.
+	// ECost and CHi retain their original weighted cost/SLO meanings.
+	ObjectivePenalty model.OptionalFloat
+	CNorm            float64
+	CFlow            float64
+	GenerationRank   int
+	SLOExclusions    []string
+	Key              string // "ns/pod"
+	View             *model.WorkloadView
+	Action           model.Action
+	CoverKeys        []string // recon fact keys this move invalidates
+	ECost            float64  // expected (objective) cost
+	CHi              float64  // conformal worst-case cost (used by the hard SLO gate)
+	Resources        []model.ResourceConsumption
 	// RBACUnknown is set when the capability gate's SSAR errored (T1-E fail-open): the
 	// candidate is NOT excluded, but the record flags that its RBAC could not be
 	// confirmed this tick (P-NO-FREEZE) — surfaced in the trace + a metric.
