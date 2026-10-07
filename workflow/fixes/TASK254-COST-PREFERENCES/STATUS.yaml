@@ -1,0 +1,240 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 21
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: task254-lead
+    artifact: 03-decision.md
+    sha256: bf9ae46e12aaca68e2b5f4167c5aa52dc578ea8234a2420d06e9ad6f8bf378a6
+    source_sha: dfd1a39d6fb7a596f35e3274d896a4aedd9cdb01
+    at: '2026-10-07T08:59:14+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  red:
+    result: PASS
+    by: task254-lead
+    artifact: evidence/lead/red.md
+    sha256: 9bc709d3e8daf4b9b69ca4003b81f9adac62a611297bbae8d39a9f6e02bb642c
+    source_sha: dfd1a39d6fb7a596f35e3274d896a4aedd9cdb01
+    at: '2026-10-07T09:04:26+00:00'
+  implementation:
+    result: PASS
+    by: task254-worker
+    artifact: 04-diff.patch
+    sha256: 5a7c19f1a595e1a809b7892c499d4e65f723d94e3d81522f0c1a61d94b29aa38
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:34:22+00:00'
+  l1:
+    result: PASS
+    by: task254-worker
+    artifact: evidence/worker/focused-709b7b13.jsonl
+    sha256: 10b6e0b126d2d08067a419cf15efe07182758f9e68957aeba011f234ba833e97
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:34:49+00:00'
+  l2:
+    result: PASS
+    by: task254-worker
+    artifact: evidence/worker/focused-709b7b13.jsonl
+    sha256: 10b6e0b126d2d08067a419cf15efe07182758f9e68957aeba011f234ba833e97
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:34:49+00:00'
+  positive_control:
+    result: PASS
+    by: task254-worker
+    artifact: evidence/worker/focused-709b7b13.jsonl
+    sha256: 10b6e0b126d2d08067a419cf15efe07182758f9e68957aeba011f234ba833e97
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:34:49+00:00'
+  preflight:
+    result: UNAVAILABLE
+    by: task254-worker
+    artifact: evidence/worker/preflight-final-status.md
+    sha256: 69371dc096ff392078d2c01db99f17f6469884b70d138a9ca5544caf99b23137
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:35:33+00:00'
+  l0:
+    result: FAIL
+    by: task254-worker
+    artifact: evidence/worker/remaining-retest.log
+    sha256: 4a9b5be256a5c28c92135db94d2816a98be1ba268d12ef6782461a5d417c77eb
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:35:34+00:00'
+  incident:
+    result: PASS
+    by: task254-lead
+    artifact: evidence/incident.md
+    sha256: acb7a49c88b9e7906ec9d05e5619ab252939fc6b59988aa0d55bf10180085580
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:38:07+00:00'
+    baseline_sha: dfd1a39d6fb7a596f35e3274d896a4aedd9cdb01
+  p3:
+    result: PASS
+    by: task254-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f277fd889931f23941b57b4efecad3c0d07df09b86ba84d736bf0b76f3669470
+    source_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+    at: '2026-10-07T09:38:14+00:00'
+    incident_sha256: acb7a49c88b9e7906ec9d05e5619ab252939fc6b59988aa0d55bf10180085580
+fix_id: TASK254-COST-PREFERENCES
+issues: []
+title: Independent cost preferences separate from legacy move-pressure lambda
+profile: standard
+state: IMPLEMENTED
+roles:
+  human_owner: hami
+  proposer: task254-lead
+  implementer: task254-worker
+  skeptic: task254-lead
+  live_verifier: task254-lead
+  coordinator: task254-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: dfd1a39d6fb7a596f35e3274d896a4aedd9cdb01
+  deployed_image: null
+  deployed_git_sha: null
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/task254-independent-cost-preferences
+  base_sha: dfd1a39d6fb7a596f35e3274d896a4aedd9cdb01
+  head_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: FAIL
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers:
+- Repository-wide L0 retains independently reproduced baseline failures; no aggregate
+  PASS.
+- Full preflight has no passing receipt; baseline context-budget failure remains.
+residuals:
+- Live rollout and service validation not executed; proposed policy values require
+  operator and CRD installation before manual sync.
+- Physical resource duals require evidence-backed accounts and operational allowances.
+next_action:
+  owner: task254-lead
+  action: Publish independently reviewed draft PR with failed gates retained; resolve
+    baseline validation before readiness.
+updated_at: '2026-10-07T09:41:44+00:00'
+configuration_history:
+- at: '2026-10-07T08:57:48+00:00'
+  by: task254-lead
+  fields:
+  - baseline
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: null
+- at: '2026-10-07T09:29:56+00:00'
+  by: task254-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-10-07T09:34:19+00:00'
+  by: task254-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-10-07T09:41:44+00:00'
+  by: task254-lead
+  fields:
+  - blockers
+  - next_action
+  - residuals
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-10-07T08:59:01+00:00'
+  by: task254-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-10-07T08:59:22+00:00'
+  by: task254-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-10-07T09:36:50+00:00'
+  by: task254-worker
+  artifact: 04-diff.patch
+  note: P2 implementation committed; focused regressions pass, full L0 and preflight
+    blocked by reproduced baseline failures and local disk limit. No verification
+    gate waived.
+  approval_ref: null
+  forced: false
+check_history:
+- check: implementation
+  result: PASS
+  by: task254-worker
+  artifact: 04-diff.patch
+  sha256: 9f8787c7d2c9a67626109855f4c6a97036db4b85f309d618fdf2f4aeb38db4ab
+  source_sha: faef47b0d5a788d902694726258ce557f1602f2b
+  at: '2026-10-07T09:30:25+00:00'
+- check: l1
+  result: PASS
+  by: task254-worker
+  artifact: evidence/worker/focused-final.jsonl
+  sha256: ce9211bb38bf7e743f04ce3dc9a483b0b6e7cc6da0c0ff19a4484923cdc1d9d9
+  source_sha: faef47b0d5a788d902694726258ce557f1602f2b
+  at: '2026-10-07T09:30:47+00:00'
+- check: l2
+  result: PASS
+  by: task254-worker
+  artifact: evidence/worker/focused-final.jsonl
+  sha256: ce9211bb38bf7e743f04ce3dc9a483b0b6e7cc6da0c0ff19a4484923cdc1d9d9
+  source_sha: faef47b0d5a788d902694726258ce557f1602f2b
+  at: '2026-10-07T09:30:47+00:00'
+- check: positive_control
+  result: PASS
+  by: task254-worker
+  artifact: evidence/worker/focused-final.jsonl
+  sha256: ce9211bb38bf7e743f04ce3dc9a483b0b6e7cc6da0c0ff19a4484923cdc1d9d9
+  source_sha: faef47b0d5a788d902694726258ce557f1602f2b
+  at: '2026-10-07T09:30:48+00:00'
