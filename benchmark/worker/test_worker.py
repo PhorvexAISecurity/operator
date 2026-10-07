@@ -133,6 +133,40 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(campaign.cases[0]['status'], 'completed')
             self.assertEqual(campaign.cases[1]['status'], 'cancelled')
 
+    def test_ambiguous_post_quarantines_only_its_locks_and_logs_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory); (out / 'raw').mkdir(); (out / 'failures').mkdir()
+            crm = {'namespace': 'crm', 'id': 'foothold', 'endpoint': '/api/workload/attack', 'compatible': True, 'armed': True}
+            crm_other = {'namespace': 'crm', 'id': 'ai2-cross-record-refund', 'endpoint': '/api/crm/live/fire', 'compatible': True, 'armed': True}
+            vllm = {'namespace': 'vllm', 'id': 'poison', 'endpoint': '/api/vllm/attack', 'compatible': True, 'armed': True}
+            live = {'crm': [crm, crm_other], 'vllm': [vllm]}
+            class Fake:
+                def request(self, path, method='GET', body=None):
+                    if method == 'POST':
+                        if path == '/api/workload/attack': raise HTTPFailure(502, {'error': 'console transport'})
+                        return {'attackId': 'rec-vllm'}
+                    if path.startswith('/api/workload/attacks'):
+                        return {'live': live[urllib.parse.parse_qs(urllib.parse.urlsplit(path).query)['namespace'][0]]}
+                    return {'attacks': [{'id': 'rec-vllm', 'namespace': 'vllm', 'status': 'done', 'outcome': ''}]}
+            campaign = Campaign({'id': 'run'}, out, Fake())
+            ready = threading.Event(); ready.set()
+            for ns in ('crm', 'vllm'): campaign.captures[ns] = SimpleNamespace(ready=ready, result={'gaps': []})
+            with patch.dict('os.environ', {'BENCHMARK_POLL_SECONDS': '0.001'}):
+                campaign.execute(crm)        # ambiguous POST -> quarantines crm + shared-crm, logs failure
+                campaign.execute(crm_other)  # shares shared-crm -> blocked, campaign NOT stopped
+                campaign.execute(vllm)       # disjoint locks -> still runs to completion
+            by_id = {c['id']: c for c in campaign.cases}
+            self.assertEqual(by_id['foothold']['status'], 'incomplete')
+            self.assertEqual(by_id['ai2-cross-record-refund']['status'], 'blocked')
+            self.assertIn('quarantined', by_id['ai2-cross-record-refund']['reason'])
+            self.assertEqual(by_id['poison']['status'], 'completed')
+            self.assertFalse(campaign.global_failure)
+            self.assertIn('shared-crm', campaign.poisoned)
+            self.assertNotIn('vllm', campaign.poisoned)
+            self.assertTrue((out / 'failures' / 'crm__foothold.log').exists())
+            logged = [json.loads(line) for line in (out / 'failures.jsonl').read_text().splitlines()]
+            self.assertTrue(any(entry['caseId'] == 'foothold' for entry in logged))
+
     def test_sse_cap_is_explicit_gap(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory); (out / 'raw').mkdir()

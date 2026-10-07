@@ -103,7 +103,9 @@ test('plans only retain the authenticated catalogue; model annotations cannot ad
     assert.equal(p.cases.length,4);assert.ok(p.cases.every(c=>c.id==='fixed-case'&&c.endpoint==='/api/live/fixed'));
     assert.equal(p.version,'pinned-source');assert.match(p.summary,/external.test/);
     await assert.rejects(()=>service.createPlan({mode:'serial',model:'unknown-model',request:'Test'}));
-    await assert.rejects(()=>service.createPlan({mode:'serial',model:'gpt-6.1-sol',request:'Test',applications:['crm']}));
+    const single=await service.createPlan({mode:'serial',model:'gpt-6.1-sol',request:'Test',applications:['crm']});
+    assert.deepEqual(single.applications,['crm']);assert.ok(single.cases.length===1&&single.cases.every(c=>c.namespace==='crm'));
+    await assert.rejects(()=>service.createPlan({mode:'serial',model:'gpt-6.1-sol',request:'Test',applications:[]}));
     await assert.rejects(()=>service.createPlan({mode:'serial',model:'gpt-6.1-sol',request:'Test',command:'injected'}));
     const r=service.queue({planId:p.id});assert.equal(r.status,'queued');
     assert.throws(()=>service.queue({planId:p.id}),/already has a run/);

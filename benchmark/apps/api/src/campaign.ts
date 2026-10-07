@@ -106,7 +106,7 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
     const input = parsed.data;
     if (!this.config.models.includes(input.model)) throw new BadRequestException('Model is not enabled');
     const applications = [...new Set(input.applications || APPLICATIONS)];
-    if (applications.length !== 4) throw new BadRequestException('This benchmark includes all four applications');
+    if (!applications.length) throw new BadRequestException('Select at least one application');
     const catalogue = await this.catalogue(true);
     const cases = catalogue.applications.filter(a => applications.includes(a.namespace)).flatMap(a => a.live.map(c => ({...c,namespace:a.namespace})));
     const limitations = [...(catalogue.errors || [])];

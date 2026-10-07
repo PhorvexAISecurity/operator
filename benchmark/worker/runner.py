@@ -445,10 +445,41 @@ class Campaign:
         self.total = 0
         self.version = {}
         self.captures = {}
+        # global_failure is reserved for genuinely campaign-wide preflight conditions
+        # (version identity, readiness). A single case's producer ambiguity or observation
+        # timeout no longer stops the whole campaign: it quarantines only the shared
+        # producer locks it held (poisoned), so cases with disjoint locks keep running.
         self.global_failure = ''
+        self.poisoned = {}
 
     def event(self, level, message):
         append(self.out / 'events.jsonl', {'time': utc(), 'level': level, 'message': message})
+
+    def quarantine(self, locks, reason):
+        """Mark the shared producer locks this case held as possibly-active. A later case
+        whose dependency locks intersect this set is blocked; independent cases proceed."""
+        with LOCAL_LOCK:
+            for name in locks:
+                self.poisoned.setdefault(name, reason)
+
+    def blocking_locks(self, locks):
+        with LOCAL_LOCK:
+            return {name: self.poisoned[name] for name in locks if name in self.poisoned}
+
+    def failure(self, case, row, reason, detail=None):
+        """Record one failing benchmark part to its own file and continue the campaign.
+        The per-case log keeps the full reason and any producer error so the stopped part
+        is reconcilable without blocking everything else."""
+        record = {'time': utc(), 'namespace': case['namespace'], 'caseId': case['id'],
+                  'endpoint': case.get('endpoint'), 'status': row.get('status'), 'reason': reason,
+                  'attackRecordId': row.get('attackRecordId'), 'launchError': row.get('launchError'),
+                  'quarantinedLocks': dependency_locks(case), 'detail': detail}
+        safe = re.sub(r'[^A-Za-z0-9._-]', '_', case['namespace'] + '__' + str(case['id']))[:180]
+        with LOCAL_LOCK:
+            append(self.out / 'failures.jsonl', record)
+            with (self.out / 'failures' / (safe + '.log')).open('a') as log:
+                log.write(json.dumps(record, ensure_ascii=False, indent=2) + '\n')
+        self.event('warn', case['namespace'] + '/' + case['id'] + ': logged failure (' + reason + ')')
 
     def stopping(self):
         parent = os.environ.get('BENCHMARK_PARENT_PID')
@@ -479,6 +510,10 @@ class Campaign:
             row.update(status='cancelled', reason='Campaign stopped before launch'); row['finishedAt'] = utc(); self.store(row); return
         if self.global_failure:
             row.update(status='blocked', reason=self.global_failure); row['finishedAt'] = utc(); self.store(row); return
+        blocking = self.blocking_locks(dependency_locks(case))
+        if blocking:
+            row.update(status='blocked', reason='Shared producer quarantined after an earlier unresolved launch: ' + '; '.join(sorted(set(blocking.values()))))
+            row['finishedAt'] = utc(); self.store(row); return
         if case.get('benchmarkBlocked'):
             row.update(status='blocked', reason=case.get('benchmarkBlockReason') or 'Known producer/readback defect'); row['finishedAt'] = utc(); self.store(row); return
         if not case.get('compatible') or not case.get('armed'):
@@ -487,8 +522,9 @@ class Campaign:
         if not capture.ready.is_set() or capture.result['gaps']:
             row.update(status='blocked', reason='Original audit capture unavailable or incomplete before launch'); row['finishedAt'] = utc(); self.store(row); return
         acquired = []
+        acquired_names = dependency_locks(case)
         try:
-            for name in dependency_locks(case):
+            for name in acquired_names:
                 while not self.locks[name].acquire(timeout=.2):
                     if self.stopping():
                         row.update(status='cancelled', reason='Stopped while waiting for shared producer'); return
@@ -496,6 +532,9 @@ class Campaign:
             if self.stopping(): row.update(status='cancelled', reason='Stopped before launch'); return
             if self.global_failure:
                 row.update(status='blocked', reason=self.global_failure); return
+            blocking = self.blocking_locks(acquired_names)
+            if blocking:
+                row.update(status='blocked', reason='Shared producer quarantined while awaiting its lock: ' + '; '.join(sorted(set(blocking.values())))); return
             if capture.result['gaps']:
                 row.update(status='blocked', reason='Audit capture became incomplete while waiting for shared producer'); return
             body = launch_body(case)
@@ -512,16 +551,18 @@ class Campaign:
                 row.update(status='blocked' if error.status in (401, 403) else 'incomplete',
                            reason=str(error), launchError=error.body)
                 if error.status not in (401, 403):
-                    self.global_failure = 'Ambiguous producer POST; no further launches until reconciliation'
+                    reason = 'Ambiguous producer POST; its shared producer is quarantined until reconciliation'
+                    row['reason'] = reason
+                    self.quarantine(acquired_names, reason); self.failure(case, row, reason, detail=error.body)
                 return
-            except (TransportError, ValueError):
+            except (TransportError, ValueError) as error:
                 row.update(status='incomplete', reason='Ambiguous POST acceptance; not retried; reconcile original producer intent')
-                self.global_failure = row['reason']; return
+                self.quarantine(acquired_names, row['reason']); self.failure(case, row, row['reason'], detail=str(error)); return
             row['launchResponse'] = response
             attack_id = response.get('attackId')
             if not isinstance(attack_id, str) or not attack_id:
                 row.update(status='incomplete', reason='Producer response lacks exact record ID; launch not retried')
-                self.global_failure = row['reason']; return
+                self.quarantine(acquired_names, row['reason']); self.failure(case, row, row['reason'], detail=response); return
             row['attackRecordId'] = attack_id
             append(self.out / 'raw' / 'accepted-launches.jsonl', {**intent, 'attackRecordId': attack_id, 'response': response})
             self.event('info', case['namespace'] + '/' + case['id'] + ': following exact result ' + attack_id)
@@ -549,10 +590,11 @@ class Campaign:
                     append(self.out / 'raw' / 'read-errors.jsonl', {'time': utc(), 'attackRecordId': attack_id, **error_details(error)})
                     if isinstance(error, HTTPFailure) and error.status in (400, 401, 403):
                         row.update(status='incomplete', reason='Exact result reader rejected request; accepted launch requires reconciliation', result=last)
-                        self.global_failure = row['reason']; return
+                        self.quarantine(acquired_names, row['reason']); self.failure(case, row, row['reason'], detail=str(error)); return
                 time.sleep(float(os.environ.get('BENCHMARK_POLL_SECONDS', '3')))
             row.update(status='incomplete', reason='Exact record not terminal within producer-specific observation budget', result=last)
-            self.global_failure = 'A producer may still be active after observation timeout; scheduling stopped'
+            reason = 'A producer may still be active after its observation budget; its shared producer is quarantined'
+            self.quarantine(acquired_names, reason); self.failure(case, row, reason)
         except (TransportError, ValueError) as error:
             row.update(status='blocked', reason=str(error))
         finally:
@@ -606,6 +648,8 @@ class Campaign:
         self.errors.extend(after['errors'])
         if self.global_failure and self.global_failure != preflight_error:
             self.errors.append('Scheduling stopped: ' + self.global_failure)
+        if self.poisoned:
+            self.errors.append('Quarantined shared producers (campaign continued; see failures/): ' + ', '.join(sorted(self.poisoned)))
         for capture in self.captures.values(): capture.close()
         gaps = [dict(namespace=ns, **gap) for ns, c in self.captures.items() for gap in c.result['gaps']]
         incomplete = bool(self.global_failure or self.errors or gaps or any(c['status'] == 'incomplete' for c in self.cases))
@@ -688,7 +732,7 @@ def main():
             print(json.dumps(catalogue(console), ensure_ascii=False)); return 0
         if not args.request or not args.out: parser.error('--request and --out are required')
         request = validate_request(json.loads(args.request.read_text()))
-        args.out.mkdir(parents=True, exist_ok=True); (args.out / 'raw').mkdir(exist_ok=True)
+        args.out.mkdir(parents=True, exist_ok=True); (args.out / 'raw').mkdir(exist_ok=True); (args.out / 'failures').mkdir(exist_ok=True)
         if args.export_only:
             manifest = json.loads((args.out / 'manifest.json').read_text())
             print(json.dumps(export_workbooks(args.out, request, manifest))); return 0
