@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 21
+revision: 22
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -111,8 +111,8 @@ implementation:
   head_sha: 709b7b1345f8dfd274fb808377548a18f731a8e2
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator/pull/444
+  reviewed_head: 709b7b1345f8dfd274fb808377548a18f731a8e2
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -152,9 +152,9 @@ residuals:
 - Physical resource duals require evidence-backed accounts and operational allowances.
 next_action:
   owner: task254-lead
-  action: Publish independently reviewed draft PR with failed gates retained; resolve
-    baseline validation before readiness.
-updated_at: '2026-10-07T09:41:44+00:00'
+  action: Draft PR 444 published; resolve documented baseline L0/preflight failures
+    before readiness. No merge or deployment performed.
+updated_at: '2026-10-07T09:43:28+00:00'
 configuration_history:
 - at: '2026-10-07T08:57:48+00:00'
   by: task254-lead
@@ -181,6 +181,12 @@ configuration_history:
   - blockers
   - next_action
   - residuals
+  approval_ref: null
+- at: '2026-10-07T09:43:28+00:00'
+  by: task254-lead
+  fields:
+  - next_action
+  - pull_request
   approval_ref: null
 transitions:
 - from: TRIAGED
