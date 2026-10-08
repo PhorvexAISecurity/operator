@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import BenchmarkDescription from '@/components/BenchmarkDescription';
+import { appRecords, progressMessage, readiness, readinessCounts, readinessReason } from '@/lib/presentation';
 import {
   api, ApiError, activeStatuses, appLabel, display, modelId, modelLabel, namespace,
   safeExternalUrl, versionLabel, type Artifact, type Case, type Event, type Meta, type Mode, type Plan, type Run,
@@ -37,12 +39,20 @@ const statusLabels: Record<string, string> = {
   observed: 'Observed', confirmed: 'Confirmed', emitted: 'Emitted', refused: 'Refused',
   defended: 'Defense confirmed', selected: 'Selected', admitted: 'Admitted',
   ready: 'Ready', partial: 'Partial evidence', gap: 'Evidence gap',
-  incomplete: 'Incomplete evidence', interrupted: 'Interrupted', 'original-record': 'Original record',
+  incomplete: 'Incomplete evidence', interrupted: 'Interrupted', 'original-record': 'Original result record',
 };
-function Badge({ status = 'unknown' }: { status?: string }) {
+const evidenceHelp: Record<string, string> = {
+  evidence: 'Retained observations and supporting records; this is not a defense verdict.',
+  complete: 'Evidence coverage is reported complete; this alone does not confirm a defense.',
+  partial: 'Some evidence was retained, but required coverage is missing.',
+  gap: 'A required observation is missing or uncertain; no defense pass is inferred.',
+  incomplete: 'Observation or capture did not finish the required scope or window.',
+  'original-record': 'The raw decision and outcome record returned by the Console; not independent proof of a defense.',
+};
+function Badge({ status = 'unknown', evidence = false }: { status?: string; evidence?: boolean }) {
   const key = status.toLowerCase();
   const tone = activeStatuses.has(key) ? 'active' : ['failed', 'error', 'aborted', 'blocked', 'refused', 'interrupted'].includes(key) ? 'danger' : ['incomplete', 'partial', 'gap'].includes(key) ? 'warning' : ['unavailable', 'unknown', 'skipped'].includes(key) ? 'muted' : ['completed', 'complete', 'confirmed', 'defended', 'observed', 'succeeded'].includes(key) ? 'good' : 'neutral';
-  return <span className={`badge ${tone}`}>{activeStatuses.has(key) && <i/>}{statusLabels[key] || status}</span>;
+  return <span className={`badge ${tone}`} title={evidence ? evidenceHelp[key] : undefined}>{activeStatuses.has(key) && <i/>}{evidence && ['complete', 'evidence'].includes(key) ? 'Evidence' : statusLabels[key] || status}</span>;
 }
 function date(value?: string) {
   if (!value) return '—';
@@ -67,33 +77,42 @@ function estimateRemaining(run: Run, completed: number, total: number): number |
   if (!Number.isFinite(elapsed) || elapsed <= 0) return null;
   return (elapsed / completed) * (total - completed);
 }
-function appProgress(run: Run) {
-  const byApp = new Map<string, number>();
-  for (const item of run.cases || []) byApp.set(item.namespace, (byApp.get(item.namespace) || 0) + 1);
-  return [...byApp.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-}
 function artifacts(run: Run): Artifact[] {
   if (Array.isArray(run.artifacts)) return run.artifacts;
   if (!run.artifacts) return [];
   return Object.entries(run.artifacts).map(([key, value]) => typeof value === 'string' ? { name: key, filename: value } : { name: key, ...(value && typeof value === 'object' ? value : {}) });
 }
+function EvidenceLegend() {
+  return <div className="table-legend">
+    <p>Evidence describes retained observations. A defense verdict requires the recorded outcome and its evidence scope.</p>
+    <details><summary>Evidence labels and records</summary><dl>
+      <dt>Evidence</dt><dd>Retained observations and supporting records. A complete evidence label describes coverage, not a defended pass.</dd>
+      <dt>Partial evidence</dt><dd>Some evidence was retained, but required coverage is missing.</dd>
+      <dt>Evidence gap</dt><dd>A required observation is missing or uncertain; no defense pass is inferred.</dd>
+      <dt>Incomplete evidence</dt><dd>Observation or capture did not finish the required scope or window.</dd>
+      <dt>Original result record</dt><dd>The raw decision and outcome record from the Console. This preserves what the Console reported; it is not independent proof of a defense.</dd>
+      <dt>Evidence coverage / Evidence record</dt><dd>Coverage shows retained observation counts; the evidence record shows captured observations and supporting metadata.</dd>
+    </dl></details>
+  </div>;
+}
 function CaseTable({ cases, plan = false }: { cases: Case[]; plan?: boolean }) {
   return <div className="table-scroll"><table className="case-table"><thead><tr>
     <th>Application / attack</th><th>{plan ? 'Readiness' : 'Status / outcome'}</th><th>Expected actuator</th>{!plan && <th>Recorded actuator</th>}<th>{plan ? 'Limitation' : 'Evidence / notes'}</th>
   </tr></thead><tbody>{cases.map((item, index) => <tr key={`${item.namespace}/${item.id}/${index}`}>
-    <td><span className="namespace" dir="ltr">{item.namespace}</span><strong dir="auto">{item.name || item.id}</strong><span className="case-id" dir="ltr">{item.id}</span></td>
-    <td><Badge status={plan ? item.benchmarkBlocked || item.armed === false || item.compatible === false ? 'blocked' : item.armed === true && item.compatible === true ? 'ready' : 'unknown' : item.status || (typeof item.outcome === 'string' ? item.outcome : 'pending')}/>
+    <td><span className="namespace" dir="ltr">{item.namespace}</span><strong dir="ltr">{item.name || item.id}</strong><span className="case-id" dir="ltr">{item.id}</span></td>
+    <td><Badge status={plan ? readiness(item) : item.status || (typeof item.outcome === 'string' ? item.outcome : 'pending')}/>
+      {plan && readinessReason(item) && <span className="readiness-reason" dir="ltr">{readinessReason(item)}</span>}
       {!plan && <span className="original-outcome" dir="ltr">{item.outcome ? display(item.outcome) : 'Outcome: unavailable'}</span>}
       {!plan && <span className="actuation-flag" dir="ltr">actuated: {typeof item.actuated === 'boolean' ? String(item.actuated) : 'unknown'}</span>}
     </td>
     <td><code>{display(item.expectedActuator)}</code></td>
     {!plan && <td><code>{display(item.observedActuator || item.action)}</code></td>}
-    <td className="evidence-cell"><span dir="auto">{item.error || (item.errors?.length ? item.errors.map(display).join(' · ') : '') || (item.benchmarkBlocked ? display(item.benchmarkBlockReason) : '') || item.reason || item.limitations?.join(' · ') || (!plan ? (item.resultId ? `Result: ${item.resultId}` : 'Waiting for an observed record') : '—')}</span>
-      {!plan && item.evidenceStatus && <div><Badge status={item.evidenceStatus}/></div>}
-      {!plan && Boolean(item.evidenceKind || item.result?.evidenceKind) && <span className="original-outcome" dir="ltr">{display(item.evidenceKind || item.result?.evidenceKind)}</span>}
-      {!plan && item.evidenceCounts && <details><summary>Evidence coverage</summary><pre dir="ltr">{JSON.stringify(item.evidenceCounts, null, 2)}</pre></details>}
-      {!plan && item.evidence != null && <details><summary>Evidence record</summary><pre dir="ltr">{JSON.stringify(item.evidence, null, 2)}</pre></details>}
-      {!plan && item.result && <details><summary>Original result record</summary><pre dir="ltr">{JSON.stringify(item.result, null, 2)}</pre></details>}
+    <td className="evidence-cell"><span dir="ltr">{item.error || (item.errors?.length ? item.errors.map(display).join(' · ') : '') || (item.benchmarkBlocked ? display(item.benchmarkBlockReason) : '') || item.reason || item.limitations?.join(' · ') || (!plan ? (item.resultId ? `Result: ${item.resultId}` : 'Waiting for an observed record') : '—')}</span>
+      {!plan && item.evidenceStatus && <div><Badge status={item.evidenceStatus} evidence/></div>}
+      {!plan && Boolean(item.evidenceKind || item.result?.evidenceKind) && <span className="original-outcome" dir="ltr">{(item.evidenceKind || item.result?.evidenceKind) === 'original-record' ? 'Original result record (Console)' : display(item.evidenceKind || item.result?.evidenceKind)}</span>}
+      {!plan && item.evidenceCounts && <details><summary>Evidence coverage</summary><p>Counts of retained observations; inspect gaps before interpreting an outcome.</p><pre dir="ltr">{JSON.stringify(item.evidenceCounts, null, 2)}</pre></details>}
+      {!plan && item.evidence != null && <details><summary>Evidence record</summary><p>Captured observations and supporting metadata for this case.</p><pre dir="ltr">{JSON.stringify(item.evidence, null, 2)}</pre></details>}
+      {!plan && item.result && <details><summary>Original result record</summary><p>Raw decision and outcome record from the Console, preserved as returned.</p><pre dir="ltr">{JSON.stringify(item.result, null, 2)}</pre></details>}
       {!plan && item.outcome && typeof item.outcome === 'object' && <details><summary>Recorded outcome</summary><pre dir="ltr">{JSON.stringify(item.outcome, null, 2)}</pre></details>}
     </td>
   </tr>)}</tbody></table>{cases.length === 0 && <div className="empty-inline">No case records have been retained for this run yet.</div>}</div>;
@@ -182,7 +201,7 @@ export default function Dashboard() {
   }
   async function launch() {
     if (!plan || busy) return;
-    if (meta?.executionBlockedReason) { setError(meta.executionBlockedReason); return; }
+    if (meta?.executionBlockedReason) return;
     setBusy('launch'); setError('');
     try {
       const created = await api<Run>('/runs', { method: 'POST', body: JSON.stringify({ planId: plan.id }) });
@@ -209,49 +228,59 @@ export default function Dashboard() {
   const active = runs.find(item => activeStatuses.has(item.status.toLowerCase()));
   const grafanaUrl = safeExternalUrl(run?.grafanaUrl || meta?.grafanaUrl);
   const visibleArtifacts = run ? artifacts(run).filter(item => typeof item === 'string' || item.available !== false) : [];
-  const completed = run?.progress?.completed || 0;
-  const total = run?.progress?.total || run?.cases?.length || 0;
+  // Use only the API's campaign counters; retained row counts are a different measure.
+  const completed = run?.progress?.completed ?? 0;
+  const total = run?.progress?.total ?? 0;
 
   return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" dir="ltr"><span className="brand-mark"><Icon name="lab" size={24}/></span><span>Phorvex<small>BENCHMARK LAB</small></span></a>
     <nav aria-label="Main navigation"><span className="nav-label">Laboratory</span><button className={view === 'new' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('new'); setError(''); }}><Icon name="lab"/>New benchmark</button><button className={view === 'history' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('history'); setError(''); }}><Icon name="history"/>Run history<span className="nav-count">{runs.length}</span></button>{runId.current && <button className={view === 'run' ? 'nav-item selected' : 'nav-item'} onClick={() => setView('run')}><Icon name="layers"/>Selected run</button>}</nav>
     <div className="sidebar-bottom"><div className="scope-note"><Icon name="shield"/><div>Connected cluster<small>Live catalogue · raw evidence</small></div></div><button className="nav-item logout" disabled={!!busy} onClick={logout}><Icon name="logout"/>Sign out</button></div>
   </aside><div className="workspace"><header className="topbar"><div className="breadcrumb"><span>Laboratory</span><span className="slash">/</span><strong>{view === 'new' ? 'New benchmark' : view === 'history' ? 'Run history' : 'Run details'}</strong></div><div className="topbar-right"><span className="version-pill"><span className="dot"/>Current version <code>{versionLabel(meta?.version)}</code></span><button className="icon-button" title="Refresh status" aria-label="Refresh status" onClick={() => { setError(''); void refresh().catch(handleError); }}><Icon name="refresh" size={17}/></button></div></header>
-    <main className="main-content">{error && <div className="notice error" role="alert"><strong>Needs attention</strong><span dir="auto">{error}</span><button aria-label="Dismiss message" onClick={() => setError('')}>×</button></div>}
-    {(meta?.errors || []).length > 0 && <div className="notice warning"><strong>Connection and catalogue status</strong><ul>{meta?.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></div>}
+    <main className="main-content">{error && <div className="notice error" role="alert"><strong>Needs attention</strong><span dir="ltr">{error}</span><button aria-label="Dismiss message" onClick={() => setError('')}>×</button></div>}
+    {meta?.executionBlockedReason && <div className="notice info execution-notice" role="status" id="execution-pause">
+      <strong>New runs are paused</strong><p>New runs are paused while an operator reconciles results — history, plans and exports remain available.</p><p dir="ltr"><strong>Operator reason:</strong> {meta.executionBlockedReason}</p>
+    </div>}
+    {(meta?.errors || []).length > 0 && <div className="notice warning"><strong>Connection and catalogue status</strong><ul>{meta?.errors?.map((item,index) => <li key={index} dir="ltr">{display(item)}</li>)}</ul></div>}
     {view === 'new' && <><div className="page-heading"><div><span className="eyebrow">LIVE SECURITY BENCHMARKS</span><h1>Test with evidence.</h1><p>Run attacks and inspect defense decisions, cost and original outcomes.</p></div><span className="heading-symbol"><Icon name="lab" size={34}/></span></div>
       {active && <div className="notice info"><span><Badge status={active.status}/> A benchmark is active on this cluster.</span><button className="text-button" onClick={() => void selectRun(active.id)}>View run <Icon name="arrow" size={15}/></button></div>}
       <div className="configure-grid"><form className="panel configure-panel" onSubmit={makePlan}><div className="panel-heading"><span className="step-number">1</span><div><h2>Define benchmark</h2><p>Describe the goal and context of your test.</p></div></div><fieldset className="form-fields" disabled={busy === 'plan' || busy === 'launch'}>
         <fieldset className="field-group"><legend>Execution pipeline</legend><div className="mode-options">{(['serial', 'parallel'] as Mode[]).map(value => <button key={value} type="button" aria-pressed={mode === value} className={`mode-card ${mode === value ? 'chosen' : ''}`} onClick={() => { setMode(value); clearPlan(); }}><span className="mode-icon"><Icon name={value}/></span><span><strong>{value === 'serial' ? 'Serial' : 'Parallel'}</strong><em>{value === 'serial' ? 'One attack at a time' : 'Concurrent applications, ordered attacks within each'}</em></span><span className="radio-dot"/></button>)}</div></fieldset>
         <div className="field-group"><label htmlFor="model">Planning model <span>LLM</span></label><select id="model" dir="ltr" required value={model} disabled={!meta || !!busy} onChange={event => { setModel(event.target.value); clearPlan(); }}><option value="" disabled>{meta ? 'Select model' : 'Loading models…'}</option>{(meta?.models || []).map(item => <option key={modelId(item)} value={modelId(item)}>{modelLabel(item)}</option>)}</select></div>
-        <div className="field-group"><label htmlFor="request">What would you like to benchmark?</label><textarea dir="auto" id="request" rows={3} required maxLength={8000} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="For example: Evaluate the latest version against every Live attack and inspect its actuator decisions."/><span className="field-hint">Describe the test objective and the criteria you want to inspect.</span></div>
-        <div className="field-group"><label htmlFor="context">Context and notes <span>Optional</span></label><textarea dir="auto" id="context" rows={3} maxLength={16000} value={context} onChange={event => { setContext(event.target.value); clearPlan(); }} placeholder="Configuration, scenarios or context for interpreting the results…"/></div>
-        <fieldset className="field-group"><legend>Target applications <span className="field-hint">Choose the applications to benchmark.</span></legend><div className="app-options" role="group" aria-label="Target applications">{(meta?.applications || []).map(app => { const ns = namespace(app); const on = selectedApps.includes(ns); return <button type="button" key={ns} role="checkbox" aria-checked={on} className={`app-chip ${on ? 'checked' : ''}`} onClick={() => { setSelectedApps(previous => previous.includes(ns) ? previous.filter(item => item !== ns) : [...previous, ns]); clearPlan(); }}><span className="chip-check"><Icon name="check" size={12}/></span><span dir="ltr">{appLabel(app)}</span></button>; })}</div>{!meta && <span className="field-hint">Loading connected applications…</span>}{meta && (meta.applications || []).length > 0 && <span className="field-hint">{selectedApps.length ? `${selectedApps.length} selected; every catalogue attack for them is considered.` : 'Select at least one application.'}</span>}</fieldset>
+        <div className="field-group"><label htmlFor="request">What would you like to benchmark?</label><textarea dir="ltr" id="request" rows={3} required maxLength={8000} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="For example: Evaluate the latest version against every Live attack and inspect its actuator decisions."/><span className="field-hint">Describe the test objective and the criteria you want to inspect.</span></div>
+        <div className="field-group"><label htmlFor="context">Context and notes <span>Optional</span></label><textarea dir="ltr" id="context" rows={3} maxLength={16000} value={context} onChange={event => { setContext(event.target.value); clearPlan(); }} placeholder="Configuration, scenarios or context for interpreting the results…"/></div>
+        <fieldset className="field-group" aria-describedby="applications-hint"><legend>Target applications</legend><p className="field-hint app-selection-hint">Choose the applications whose Live catalogue entries will be considered.</p><div className="app-options" role="group" aria-label="Target applications">{(meta?.applications || []).map(app => { const ns = namespace(app); const on = selectedApps.includes(ns); return <button type="button" key={ns} role="checkbox" aria-checked={on} className={`app-chip ${on ? 'checked' : ''}`} onClick={() => { setSelectedApps(previous => previous.includes(ns) ? previous.filter(item => item !== ns) : [...previous, ns]); clearPlan(); }}><span className="chip-check"><Icon name="check" size={12}/></span><span dir="ltr">{appLabel(app)}</span></button>; })}</div>{!meta && <span className="field-hint">Loading connected applications…</span>}{meta && <span className="field-hint" id="applications-hint">{(meta.applications || []).length === 0 ? 'No applications are available.' : selectedApps.length ? `${selectedApps.length} of ${meta.applications.length} applications selected. Every Live entry for them is considered, including blocked cases.` : 'Select at least one application to create a plan.'}</span>}</fieldset>
         <div className="form-footer"><span>Review the plan before starting the run.</span><button className="button primary" disabled={!!busy || !meta || !model || !request.trim() || !selectedApps.length}>{busy === 'plan' ? <span className="spinner"/> : <Icon name="arrow" size={18}/>} {busy === 'plan' ? 'Creating plan…' : 'Create benchmark plan'}</button></div>
       </fieldset></form><aside className="context-column"><div className="evidence-card"><span className="eyebrow">FROM ATTACK TO EVIDENCE</span><h2>Every result.<br/>A traceable path.</h2><div className="evidence-path"><div><span>01</span><p>Live attack<small>From each application's Live catalogue</small></p></div><div><span>02</span><p>Decision and action<small>Selection, dispatch and observed outcome</small></p></div><div><span>03</span><p>Reviewable evidence<small>Raw Excel exports and Grafana observations</small></p></div></div></div>
         <div className="panel export-info"><Icon name="file" size={24}/><h3>Two exports. One retained run.</h3><p>Measured cost compared with expected cost</p><code>Cost Measured vs Expected</code><p>Per-tick decisions and action gates</p><code>Tick Action Gates</code><span className="field-hint">Missing data and measurement limitations are explicit in the report.</span></div>
       </aside></div>
-      {plan && <section className="panel plan-panel"><div className="panel-heading"><span className="step-number">2</span><div><h2>Plan ready for review</h2><p dir="auto">{plan.summary}</p></div><span className="badge neutral">{plan.cases.length} attacks</span></div>{(plan.limitations || []).length > 0 && <div className="notice warning"><strong>Plan limitations</strong><ul>{plan.limitations?.map((item, index) => <li key={index} dir="auto">{item}</li>)}</ul></div>}<CaseTable cases={plan.cases} plan/><div className="plan-footer"><span>Live run on {plan.applications.join(', ')} · {plan.mode === 'serial' ? 'Serial' : 'Parallel'}</span><button className="button primary" disabled={!!busy || !!active || !plan.cases.length} onClick={() => void launch()}>{busy === 'launch' ? <span className="spinner"/> : <Icon name="play" size={16}/>}Start benchmark</button></div></section>}
+      {plan && <section className="panel plan-panel">
+        <div className="panel-heading benchmark-heading"><span className="step-number">2</span><div className="benchmark-heading-text"><span className="eyebrow">PLAN REVIEW</span><h2 dir="ltr">{plan.request || 'Live benchmark'}</h2><BenchmarkDescription text={plan.summary || plan.context}/></div></div>
+        <div className="table-legend readiness-legend"><p className="readiness-counts" dir="ltr">{readinessCounts(plan.cases)}</p><p><strong>Ready:</strong> armed and compatible, with no benchmark block. <strong>Blocked:</strong> not armed, not compatible, or excluded for a known producer defect. Blocked cases stay visible and are never counted as defended passes. <strong>Unknown:</strong> readiness flags were not recorded.</p></div>
+        {(plan.limitations || []).length > 0 && <div className="notice warning"><strong>Plan limitations</strong><ul>{plan.limitations?.map((item, index) => <li key={index} dir="ltr">{item}</li>)}</ul></div>}
+        <CaseTable cases={plan.cases} plan/>
+        <div className="plan-footer"><span dir="ltr">Live run on {plan.applications.join(', ')} · {plan.mode === 'serial' ? 'Serial' : 'Parallel'}</span><button className="button primary" disabled={!!busy || !!active || !plan.cases.length || !!meta?.executionBlockedReason} aria-describedby={meta?.executionBlockedReason ? 'execution-pause' : undefined} onClick={() => void launch()}>{busy === 'launch' ? <span className="spinner"/> : <Icon name="play" size={16}/>} {meta?.executionBlockedReason ? 'New runs paused' : 'Start benchmark'}</button></div>
+      </section>}
     </>}
-    {view === 'history' && <><div className="page-heading"><div><span className="eyebrow">RUN HISTORY</span><h1>Retained runs</h1><p>Review the version, status and exports for each benchmark.</p></div><button className="button primary" onClick={() => setView('new')}><Icon name="lab" size={18}/>New benchmark</button></div><section className="panel history-panel">{runs.length === 0 ? <div className="empty-state"><Icon name="history" size={40}/><h2>No runs have been retained yet.</h2><p>Define your first benchmark to start retaining evidence here.</p><button className="button secondary" onClick={() => setView('new')}>Define benchmark</button></div> : runs.map(item => <button key={item.id} className="history-row" onClick={() => void selectRun(item.id)}><span className="history-icon"><Icon name={item.mode === 'parallel' ? 'parallel' : 'serial'}/></span><span className="history-title"><strong dir="auto">{item.request || 'Live benchmark'}</strong><small><span dir="ltr">{item.id}</span> · {date(item.startedAt || item.createdAt)}</small></span><span className="history-meta"><code>{item.model}</code><span>{item.mode === 'parallel' ? 'Parallel' : 'Serial'}</span></span><Badge status={item.status}/><Icon name="arrow" size={18}/></button>)}</section></>}
-    {view === 'run' && (run ? <><div className="page-heading run-heading"><div><span className="eyebrow">BENCHMARK RUN</span><h1 dir="auto">{run.request || 'Live benchmark'}</h1><p><code>{run.id}</code><span className="inline-separator">·</span>{date(run.startedAt || run.createdAt)}</p></div><div className="heading-actions"><Badge status={run.status}/>{activeStatuses.has(run.status.toLowerCase()) && <button className="button danger-outline" disabled={!!busy} onClick={() => void cancel()}><Icon name="stop" size={15}/>{busy === 'cancel' ? 'Requesting stop…' : 'Stop run'}</button>}</div></div>
+    {view === 'history' && <><div className="page-heading"><div><span className="eyebrow">RUN HISTORY</span><h1>Retained runs</h1><p>Review the version, status and exports for each benchmark.</p></div><button className="button primary" onClick={() => setView('new')}><Icon name="lab" size={18}/>New benchmark</button></div><section className="panel history-panel">{runs.length === 0 ? <div className="empty-state"><Icon name="history" size={40}/><h2>No runs have been retained yet.</h2><p>Define your first benchmark to start retaining evidence here.</p><button className="button secondary" onClick={() => setView('new')}>Define benchmark</button></div> : runs.map(item => <button key={item.id} className="history-row" onClick={() => void selectRun(item.id)}><span className="history-icon"><Icon name={item.mode === 'parallel' ? 'parallel' : 'serial'}/></span><span className="history-title"><strong dir="ltr">{item.request || 'Live benchmark'}</strong><small><span dir="ltr">{item.id}</span> · {date(item.startedAt || item.createdAt)}</small></span><span className="history-meta"><code>{item.model}</code><span>{item.mode === 'parallel' ? 'Parallel' : 'Serial'}</span></span><Badge status={item.status}/><Icon name="arrow" size={18}/></button>)}</section></>}
+    {view === 'run' && (run ? <><div className="page-heading run-heading"><div><span className="eyebrow">BENCHMARK RUN</span><h1 dir="ltr">{run.request || 'Live benchmark'}</h1><BenchmarkDescription text={run.summary || run.context}/><p className="run-identity" dir="ltr"><code>{run.id}</code><span className="inline-separator">·</span>{date(run.startedAt || run.createdAt)}</p></div><div className="heading-actions"><Badge status={run.status}/>{activeStatuses.has(run.status.toLowerCase()) && <button className="button danger-outline" disabled={!!busy} onClick={() => void cancel()}><Icon name="stop" size={15}/>{busy === 'cancel' ? 'Requesting stop…' : 'Stop run'}</button>}</div></div>
       {(() => {
-        const percent = total ? Math.min(100, Math.round(completed / total * 100)) : 0;
+        const percent = total > 0 ? Math.max(0, Math.min(100, Math.floor(completed / total * 100))) : 0;
         const live = activeStatuses.has(run.status.toLowerCase());
-        const remaining = live ? estimateRemaining(run, completed, total) : null;
-        const apps = appProgress(run);
-        return <section className="run-overview"><div className="panel progress-card"><span className="stat-label">Case progress</span>
-          <strong><span>{percent}<small>%</small></span><span className="progress-count" dir="ltr">{completed} / {total}</span></strong>
-          <div className={`progress-track${live ? ' live' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={Math.min(completed,total)}><div style={{width: `${percent}%`}}/></div>
-          <span className="field-hint">{live ? (remaining != null ? `Estimated time remaining: ${duration(remaining)}` : 'Running; an estimate appears after the first result.') : run.finishedAt ? `Ready · ${date(run.finishedAt)}` : 'Run finished.'}</span>
-          {apps.length > 0 && <div className="app-progress">{apps.map(([ns, done]) => <span key={ns} className="app-progress-chip"><span className="namespace" dir="ltr">{ns}</span>{done}</span>)}</div>}
+        const remaining = ['running', 'capturing'].includes(run.status.toLowerCase()) ? estimateRemaining(run, completed, total) : null;
+        const apps = appRecords(run);
+        return <section className="run-overview"><div className="panel progress-card"><span className="stat-label">Case completion (reported by service)</span>
+          <strong><span>{run.progress ? <>{percent}<small>%</small></> : '—'}</span><span className="progress-count" dir="ltr">{run.progress ? `${completed} / ${total} cases completed` : 'Progress not reported'}</span></strong>
+          <div className={`progress-track${live ? ' live' : ''}`} role="progressbar" aria-label="Case completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={run.progress ? percent : undefined} aria-valuetext={run.progress ? `${completed} of ${total} cases completed` : 'Progress not reported'}><div style={{width: `${percent}%`}}/></div>
+          <span className="field-hint">{remaining != null ? `Estimated time remaining: ${duration(remaining)}` : progressMessage(run)}</span>
+          {apps.length > 0 && <><span className="field-hint">Retained case records by application (includes blocked records)</span><div className="app-progress">{apps.map(([ns, count]) => <span key={ns} className="app-progress-chip" dir="ltr"><span className="namespace">{ns}</span>{count} {count === 1 ? 'record' : 'records'}</span>)}</div></>}
           <span className="field-hint">A finished run alone does not confirm a defense.</span></div>
         <div className="panel run-stat"><span className="stat-label">Pipeline / model</span><strong>{run.mode === 'parallel' ? 'Parallel' : 'Serial'}</strong><code>{run.model}</code></div>
         <div className="panel run-stat"><span className="stat-label">Retained version</span><strong dir="ltr">{versionLabel(run.version)}</strong><span className="field-hint">{run.finishedAt ? `Finished: ${date(run.finishedAt)}` : 'Waiting for the run to finish'}</span></div></section>;
       })()}
-      <div className="results-toolbar"><div><h2>Attacks and retained decisions</h2><p>Actuator selection, actuation and confirmed effect are retained separately.</p></div>{grafanaUrl && <a className="button secondary" href={grafanaUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" size={16}/>View in Grafana</a>}</div><section className="panel"><CaseTable cases={run.cases || []}/></section>
+      <div className="results-toolbar"><div><h2>Attacks and retained decisions</h2><p>Actuator selection, actuation and confirmed effect are retained separately.</p></div>{grafanaUrl && <a className="button secondary" href={grafanaUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" size={16}/>View in Grafana</a>}</div><section className="panel"><EvidenceLegend/><CaseTable cases={run.cases || []}/></section>
       <div className="run-bottom-grid"><section className="panel artifacts-panel"><div className="panel-heading"><Icon name="download"/><div><h2>Benchmark files</h2><p>Download exports in the raw Excel templates</p></div></div>{visibleArtifacts.length ? visibleArtifacts.map((artifact, index) => { const name = typeof artifact === 'string' ? artifact : artifact.name; return <a key={`${name}/${index}`} className="artifact-link" href={`/api/runs/${encodeURIComponent(run.id)}/artifacts/${encodeURIComponent(name)}`}><span className="file-icon"><Icon name="file"/></span><span><strong>{typeof artifact === 'string' ? artifact : artifact.label || artifact.filename || name}</strong><small>Export from this run</small></span><Icon name="download" size={18}/></a>; }) : <div className="empty-inline">Files become available after evidence is retained and processed.</div>}</section>
-        <section className="panel events-panel"><div className="panel-heading"><Icon name="layers"/><div><h2>Run events</h2><p>Latest retained updates</p></div></div><div className="event-list">{events.length ? events.map((event,index) => <div className={`event-row ${event.level}`} key={`${event.time}/${index}`}><time>{date(event.time)}</time><span dir="auto">{event.message}</span></div>) : <div className="empty-inline">Waiting for events…</div>}</div></section></div>
-      {(run.errors || []).length > 0 && <section className="notice warning"><strong>Retained limitations and errors</strong><ul>{run.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></section>}
+        <section className="panel events-panel"><div className="panel-heading"><Icon name="layers"/><div><h2>Run events</h2><p>Latest retained updates</p></div></div><div className="event-list">{events.length ? events.map((event,index) => <div className={`event-row ${event.level}`} key={`${event.time}/${index}`}><time>{date(event.time)}</time><span dir="ltr">{event.message}</span></div>) : <div className="empty-inline">Waiting for events…</div>}</div></section></div>
+      {(run.errors || []).length > 0 && <section className="notice warning"><strong>Retained limitations and errors</strong><ul>{run.errors?.map((item,index) => <li key={index} dir="ltr">{display(item)}</li>)}</ul></section>}
     </> : <div className="empty-state"><span className="spinner"/><p>Loading run details…</p></div>)}
     <footer className="page-footer"><span dir="ltr">PHORVEX BENCHMARK LAB</span><span>{updatedAt ? `Last status update: ${date(updatedAt)}` : 'Loading service status'}</span></footer>
     </main></div></div>;

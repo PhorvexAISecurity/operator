@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import openpyxl
 
 from exporter import COST_FILE, GATES_FILE, optional, source_rows, export_workbooks, typed_links, template_paths
-from runner import Campaign, Capture, Console, HTTPFailure, TransportError, dependency_locks, launch_body, drift, controller_pods, readiness_error, error_details
+from runner import Campaign, Capture, Console, HTTPFailure, TransportError, dependency_locks, launch_body, drift, controller_pods, readiness_error, error_details, catalogue, selection, main, execution_blocked_reason
 
 
 def fixture():
@@ -88,6 +88,91 @@ class ExportTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_catalogue_preserves_console_flags_reasons_and_opaque_rows(self):
+        original = [
+            {'id': 'ai2-cross-record-refund', 'endpoint': '/api/crm/live/fire', 'armed': False, 'compatible': False,
+             'reason': 'CRM serving stack is required'},
+            {'id': 'opaque-unwired', 'endpoint': '/api/unreviewed', 'armed': True, 'compatible': True, 'reason': 'Console reports armed'},
+            {'id': 'foothold', 'endpoint': '/api/workload/attack', 'armed': True, 'compatible': True, 'reason': 'Console reports armed'},
+            {'id': 'kvcache', 'endpoint': '/api/vllm/attack', 'armed': False, 'compatible': True, 'reason': ''},
+        ]
+        fake = SimpleNamespace(request=lambda path: {} if path == '/api/version' else {'namespace': 'vllm', 'live': original},
+                               kubectl=lambda *_: '{"items":[]}')
+        with patch.dict('os.environ', {'BENCHMARK_BLOCKED_CASES': 'vllm:foothold', 'BENCHMARK_BLOCK_REASON': '   '}):
+            rows = catalogue(fake, ['vllm'])['applications'][0]['live']
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows[0]['reason'], original[0]['reason'])
+        self.assertFalse(rows[0]['armed']); self.assertFalse(rows[0]['compatible'])
+        self.assertNotIn('benchmarkBlocked', rows[0])
+        self.assertTrue(rows[1]['armed']); self.assertTrue(rows[1]['compatible'])
+        self.assertEqual(rows[1]['reason'], 'Console reports armed')
+        self.assertTrue(rows[1]['benchmarkBlocked'])
+        self.assertIn('before any Console POST', rows[1]['benchmarkBlockReason'])
+        self.assertIn('reconciliation', rows[2]['benchmarkBlockReason'])
+        self.assertIn('not armed', rows[3]['reason'])
+        self.assertNotIn('benchmarkBlocked', original[1])
+        counts = selection(rows, ['vllm'])
+        self.assertEqual({k: counts[k] for k in ('total', 'ready', 'benchmarkBlocked', 'launchable', 'blocked')},
+                         {'total': 4, 'ready': 2, 'benchmarkBlocked': 2, 'launchable': 0, 'blocked': 4})
+        with tempfile.TemporaryDirectory() as directory:
+            campaign = Campaign({'id': 'run'}, directory, SimpleNamespace(request=lambda *_: self.fail('Blocked rows cannot call Console')))
+            for row in rows: campaign.execute(row)
+            self.assertEqual(campaign.completed, 4)
+            self.assertTrue(all(row['status'] == 'blocked' and 'result' not in row for row in campaign.cases))
+
+    def test_live_console_502_setup_failure_keeps_precise_reason_and_never_retries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory); (out / 'raw').mkdir(); (out / 'failures').mkdir()
+            case = {'namespace': 'vllm', 'id': 'endpoint-rotate', 'endpoint': '/api/vllm/attack', 'armed': True, 'compatible': True}
+            cause = 'endpoint setup readback did not converge on the exact target and route; exact setup restoration required: target Pod metadata changed; refusing restoration'
+            class Fake:
+                posts = 0
+                def request(self, path, method='GET', body=None):
+                    if method == 'POST':
+                        self.posts += 1
+                        raise HTTPFailure(502, {'error': cause, 'restoration': 'required: target Pod metadata changed; refusing restoration',
+                                                'verdict': 'setup-failed', 'authorization': 'Bearer fixture-private-token'})
+                    return {'namespace': 'vllm', 'live': [case]}
+            fake = Fake(); campaign = Campaign({'id': 'run'}, out, fake)
+            ready = threading.Event(); ready.set()
+            campaign.captures['vllm'] = SimpleNamespace(ready=ready, result={'gaps': []})
+            campaign.execute(case); campaign.execute(case)
+            self.assertEqual(fake.posts, 1)
+            failed, blocked = campaign.cases
+            self.assertEqual(failed['status'], 'incomplete')
+            self.assertEqual(failed['launchHttpStatus'], 502)
+            self.assertIn(cause, failed['reason']); self.assertIn('not retried', failed['reason'])
+            self.assertEqual(failed['launchError']['verdict'], 'setup-failed')
+            self.assertEqual(failed['launchError']['authorization'], '[REDACTED]')
+            self.assertEqual(blocked['status'], 'blocked')
+            self.assertIn('target Pod metadata changed', blocked['reason'])
+            self.assertNotIn('fixture-private-token', (out / 'cases.jsonl').read_text() + (out / 'failures.jsonl').read_text())
+            self.assertNotIn('attackRecordId', failed)
+
+    def test_pause_refuses_worker_before_console_but_keeps_plan_total_and_offline_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            request = {'id': 'paused-run', 'mode': 'serial', 'applications': ['vllm'],
+                       'cases': [{'namespace': 'vllm', 'id': 'opaque-row'} for _ in range(20)]}
+            request_path = out / 'request.json'; request_path.write_text(json.dumps(request))
+            argv = ['runner.py', '--request', str(request_path), '--out', str(out)]
+            with patch.dict('os.environ', {'BENCHMARK_MUTATIONS_PAUSED_REASON': 'Producer reconciliation pending', 'BENCHMARK_ENFORCE_MUTATIONS_PAUSE': 'true'}), \
+                 patch('sys.argv', argv), patch('runner.Console', side_effect=AssertionError('Paused worker must not contact Console')):
+                self.assertEqual(main(), 1)
+            progress = json.loads((out / 'progress.json').read_text())
+            self.assertEqual(progress['total'], 20); self.assertEqual(progress['completed'], 0)
+            self.assertIn('Producer reconciliation pending', progress['errors'][0])
+            self.assertIn('History, plans, exports and metrics remain available', progress['errors'][0])
+            (out / 'cases.jsonl').write_text('')  # Retained empty evidence, as on an observed startup failure.
+            with patch.dict('os.environ', {'BENCHMARK_MUTATIONS_PAUSED_REASON': 'Producer reconciliation pending', 'BENCHMARK_ENFORCE_MUTATIONS_PAUSE': 'true'}), \
+                 patch('sys.argv', argv + ['--export-only']), patch('runner.Console', side_effect=AssertionError('Export must be offline')):
+                self.assertEqual(main(), 0)
+            self.assertTrue((out / COST_FILE).is_file()); self.assertTrue((out / GATES_FILE).is_file())
+
+    def test_pause_reason_without_opt_in_is_not_enforced(self):
+        with patch.dict('os.environ', {'BENCHMARK_MUTATIONS_PAUSED_REASON': 'Producer reconciliation pending', 'BENCHMARK_ENFORCE_MUTATIONS_PAUSE': ''}):
+            self.assertIsNone(execution_blocked_reason())
+
     def test_known_reader_gap_blocks_launch_without_rewriting_live_flags(self):
         with tempfile.TemporaryDirectory() as directory:
             case = {'namespace': 'crm', 'id': 'ai2-cross-record-refund', 'endpoint': '/api/crm/live/fire',
@@ -263,6 +348,34 @@ class RunnerTests(unittest.TestCase):
         names = {path.name for path in template_paths()}
         self.assertEqual(len(names), 2)
         self.assertTrue(all(not name.startswith('.') for name in names))
+
+    def test_worker_refresh_counts_every_row_and_orders_duplicate_ids_by_endpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory); (out / 'raw').mkdir(); (out / 'cases.jsonl').touch()
+            rows = [{'namespace': 'voice', 'id': 'same-opaque-id', 'endpoint': endpoint, 'armed': False, 'compatible': False}
+                    for endpoint in ('/api/fixture-a', '/api/fixture-b')]
+            rows.append({'namespace': 'voice', 'id': 'new-opaque-entry', 'endpoint': '/api/fixture-c', 'armed': False, 'compatible': False})
+            pin = {'apiVersion': {}, 'operator': 'fixture-1', 'console': 'fixture-1', 'deployments': [],
+                   'pods': [], 'namespaces': [], 'policies': [], 'errors': []}
+            class FakeCapture:
+                def __init__(self, *_):
+                    self.result = {'gaps': [], 'records': 0, 'bytes': 0}
+                    self.ready = threading.Event(); self.ready.set()
+                    self.thread = SimpleNamespace(start=lambda: None)
+                def close(self): pass
+            request = {'id': 'run', 'applications': ['voice'], 'mode': 'serial', 'cases': list(reversed(rows[:2]))}
+            campaign = Campaign(request, out, SimpleNamespace(request=lambda *_: self.fail('Preflight blocks all launches')))
+            with patch('runner.snapshot', return_value=pin), \
+                 patch('runner.catalogue', return_value={'applications': [{'namespace': 'voice', 'live': rows}], 'errors': []}), \
+                 patch('runner.Capture', FakeCapture):
+                manifest = campaign.run()
+            self.assertEqual([c['endpoint'] for c in campaign.cases], ['/api/fixture-b', '/api/fixture-a', '/api/fixture-c'])
+            self.assertEqual((manifest['total'], manifest['completed']), (3, 3))
+            self.assertEqual(manifest['selection']['total'], 3)
+            self.assertEqual(manifest['selection']['blocked'], 3)
+            self.assertEqual(json.loads((out / 'progress.json').read_text())['total'], 3)
+            self.assertTrue(all(c['status'] == 'blocked' for c in campaign.cases))
+            self.assertFalse((out / 'raw' / 'launch-intents.jsonl').exists())
 
     def test_rejected_preflight_cannot_report_completed_campaign(self):
         with tempfile.TemporaryDirectory() as directory:

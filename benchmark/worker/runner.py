@@ -124,6 +124,38 @@ def error_details(error):
     return details
 
 
+def console_error_message(error):
+    details = error_details(error)
+    response = details.get('response')
+    reason = response.get('error') if isinstance(response, dict) else None
+    return str(error) + (': ' + reason[:1000] if isinstance(reason, str) and reason.strip() else '')
+
+
+def execution_blocked_reason():
+    if os.environ.get('BENCHMARK_ENFORCE_MUTATIONS_PAUSE') != 'true': return None  # Opt-in, as in the API.
+    reason = os.environ.get('BENCHMARK_MUTATIONS_PAUSED_REASON', '').strip()
+    if not reason: return None
+    return ('New runs and queued launches are paused: ' + reason + '. History, plans, exports and metrics remain available. '
+            'Hami/Milad must reconcile the stated issue, then deliberately clear BENCHMARK_MUTATIONS_PAUSED_REASON '
+            'in server configuration and reload the API while the queue is idle.')
+
+
+def catalogue_block_reason(case):
+    if isinstance(case.get('reason'), str) and case['reason'].strip(): return case['reason']
+    if case.get('compatible') is not True: return 'Console catalogue entry is not compatible with ' + case['namespace']
+    return 'Console catalogue entry is not armed for ' + case['namespace']
+
+
+def selection(cases, applications):
+    def count(rows):
+        ready = sum(c.get('armed') is True and c.get('compatible') is True for c in rows)
+        launchable = sum(c.get('armed') is True and c.get('compatible') is True and c.get('benchmarkBlocked') is not True for c in rows)
+        return {'total': len(rows), 'ready': ready, 'benchmarkBlocked': sum(c.get('benchmarkBlocked') is True for c in rows),
+                'launchable': launchable, 'blocked': len(rows) - launchable}
+    return {**count(cases), 'applications': [{'namespace': ns, 'counts': count([c for c in cases if c['namespace'] == ns])}
+                                           for ns in applications]}
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         # A Console redirect must never carry the identity to another origin.
@@ -288,6 +320,8 @@ def catalogue(console, applications=APPLICATIONS):
     except (TransportError, OSError, subprocess.SubprocessError, ValueError, KeyError):
         errors.append('Actual deployed component versions unavailable; API compile stamp retained separately')
     output = {'applications': [], 'version': actual_versions(deployed, api), 'errors': errors}
+    blocked = {value.strip() for value in os.environ.get('BENCHMARK_BLOCKED_CASES', '').split(',') if value.strip()}
+    block_reason = os.environ.get('BENCHMARK_BLOCK_REASON', '').strip() or 'Known producer/readback defect requires reconciliation before launch'
     for ns in applications:
         try:
             value = console.request('/api/workload/attacks?namespace=' + urllib.parse.quote(ns))
@@ -296,11 +330,16 @@ def catalogue(console, applications=APPLICATIONS):
             live = []
             for entry in value.get('live', []):
                 item = {**entry, 'namespace': ns}
-                blocked = {value.strip() for value in os.environ.get('BENCHMARK_BLOCKED_CASES', '').split(',') if value.strip()}
                 if ns + ':' + str(entry.get('id', '')) in blocked:
-                    item.update(benchmarkBlocked=True, benchmarkBlockReason=os.environ.get('BENCHMARK_BLOCK_REASON', 'Known producer/readback defect requires reconciliation before launch'))
-                try: launch_body(item)
-                except ValueError: item.update(armed=False, compatible=False, reason='No reviewed dispatcher for this namespace/ID/endpoint')
+                    item.update(benchmarkBlocked=True, benchmarkBlockReason=block_reason)
+                if item.get('armed') is True and item.get('compatible') is True:
+                    try: launch_body(item)
+                    except ValueError:
+                        reason = 'No reviewed benchmark launch route matches this namespace, catalogue ID and endpoint; blocked before any Console POST'
+                        if item.get('benchmarkBlockReason'): reason = item['benchmarkBlockReason'] + '; ' + reason
+                        item.update(benchmarkBlocked=True, benchmarkBlockReason=reason)
+                elif not isinstance(item.get('reason'), str) or not item['reason'].strip():
+                    item['reason'] = catalogue_block_reason(item)
                 live.append(item)
             output['applications'].append({'namespace': ns, 'live': live, 'stack': value.get('stack')})
         except (TransportError, ValueError) as error:
@@ -443,6 +482,7 @@ class Campaign:
         self.started = utc()
         self.deadline = time.monotonic() + min(14400, max(60, int(os.environ.get('BENCHMARK_MAX_SECONDS', '14400'))))
         self.total = 0
+        self.selection = None
         self.version = {}
         self.captures = {}
         # global_failure is reserved for genuinely campaign-wide preflight conditions
@@ -490,7 +530,7 @@ class Campaign:
 
     def progress(self, status='running'):
         dump(self.out / 'progress.json', {'status': status, 'total': self.total, 'completed': self.completed,
-                                         'version': self.version, 'errors': self.errors})
+                                         'selection': self.selection, 'version': self.version, 'errors': self.errors})
 
     def store(self, case):
         with LOCAL_LOCK:
@@ -516,8 +556,8 @@ class Campaign:
             row['finishedAt'] = utc(); self.store(row); return
         if case.get('benchmarkBlocked'):
             row.update(status='blocked', reason=case.get('benchmarkBlockReason') or 'Known producer/readback defect'); row['finishedAt'] = utc(); self.store(row); return
-        if not case.get('compatible') or not case.get('armed'):
-            row.update(status='blocked', reason=case.get('reason') or 'Catalogue not compatible/armed'); row['finishedAt'] = utc(); self.store(row); return
+        if case.get('compatible') is not True or case.get('armed') is not True:
+            row.update(status='blocked', reason=catalogue_block_reason(case)); row['finishedAt'] = utc(); self.store(row); return
         capture = self.captures[case['namespace']]
         if not capture.ready.is_set() or capture.result['gaps']:
             row.update(status='blocked', reason='Original audit capture unavailable or incomplete before launch'); row['finishedAt'] = utc(); self.store(row); return
@@ -541,19 +581,25 @@ class Campaign:
             # Refresh arming immediately before firing; stateful prior defenses may retire an entry.
             advertised = self.console.request('/api/workload/attacks?namespace=' + case['namespace'])
             match = next((c for c in advertised.get('live', []) if c.get('id') == case['id'] and c.get('endpoint') == case['endpoint']), None)
-            if not match or not match.get('armed') or not match.get('compatible'):
-                row.update(status='blocked', reason=(match or {}).get('reason') or 'Live entry no longer armed'); return
+            if not match:
+                row.update(status='blocked', reason='Live catalogue entry or endpoint is no longer advertised for this application'); return
+            if match.get('armed') is not True or match.get('compatible') is not True:
+                row.update(status='blocked', reason=catalogue_block_reason({**match, 'namespace': case['namespace']})); return
             intent = {'time': utc(), 'namespace': case['namespace'], 'caseId': case['id'], 'endpoint': case['endpoint'], 'body': body}
             append(self.out / 'raw' / 'launch-intents.jsonl', intent)
             try:
                 response = self.console.request(case['endpoint'], 'POST', body)
             except HTTPFailure as error:
+                diagnostic = error_details(error)
                 row.update(status='blocked' if error.status in (401, 403) else 'incomplete',
-                           reason=str(error), launchError=error.body)
+                           reason=console_error_message(error), launchError=diagnostic['response'], launchHttpStatus=error.status)
                 if error.status not in (401, 403):
-                    reason = 'Ambiguous producer POST; its shared producer is quarantined until reconciliation'
+                    reason = (console_error_message(error) + '. Producer POST effects may already exist; launch was not retried. '
+                              'Its shared producer is quarantined until Hami/Milad reconcile the retained intent and Console error.')
                     row['reason'] = reason
-                    self.quarantine(acquired_names, reason); self.failure(case, row, reason, detail=error.body)
+                    self.quarantine(acquired_names, reason); self.failure(case, row, reason, detail=diagnostic)
+                else:
+                    row['reason'] += '. Console authorization rejected this launch; check the existing Console identity and permissions. Launch was not retried.'
                 return
             except (TransportError, ValueError) as error:
                 row.update(status='incomplete', reason='Ambiguous POST acceptance; not retried; reconcile original producer intent')
@@ -589,8 +635,8 @@ class Campaign:
                 except (TransportError, ValueError) as error:
                     append(self.out / 'raw' / 'read-errors.jsonl', {'time': utc(), 'attackRecordId': attack_id, **error_details(error)})
                     if isinstance(error, HTTPFailure) and error.status in (400, 401, 403):
-                        row.update(status='incomplete', reason='Exact result reader rejected request; accepted launch requires reconciliation', result=last)
-                        self.quarantine(acquired_names, row['reason']); self.failure(case, row, row['reason'], detail=str(error)); return
+                        row.update(status='incomplete', reason=console_error_message(error) + '. Exact result reader rejected the request; accepted launch requires reconciliation and was not retried.', result=last)
+                        self.quarantine(acquired_names, row['reason']); self.failure(case, row, row['reason'], detail=error_details(error)); return
                 time.sleep(float(os.environ.get('BENCHMARK_POLL_SECONDS', '3')))
             row.update(status='incomplete', reason='Exact record not terminal within producer-specific observation budget', result=last)
             reason = 'A producer may still be active after its observation budget; its shared producer is quarantined'
@@ -614,9 +660,10 @@ class Campaign:
         self.version = before
         # Preserve all current entries; optional planner cases are an ordering hint, not a way to silently omit blocked rows.
         all_cases = [entry for app in current['applications'] for entry in app['live']]
-        ordering = {(c.get('namespace'), c.get('id')): i for i, c in enumerate(self.request.get('cases', []))}
-        all_cases.sort(key=lambda c: ordering.get((c['namespace'], c['id']), len(ordering)))
+        ordering = {(c.get('namespace'), c.get('id'), c.get('endpoint')): i for i, c in enumerate(self.request.get('cases', []))}
+        all_cases.sort(key=lambda c: ordering.get((c['namespace'], c['id'], c.get('endpoint')), len(ordering)))
         self.total = len(all_cases)
+        self.selection = selection(all_cases, self.request['applications'])
         self.errors.extend(current.get('errors', []))
         if before['errors']:
             self.errors.extend(before['errors']); self.global_failure = 'Version/configuration identity could not be pinned before launch'
@@ -655,7 +702,7 @@ class Campaign:
         incomplete = bool(self.global_failure or self.errors or gaps or any(c['status'] == 'incomplete' for c in self.cases))
         status = 'cancelled' if self.stopping() else 'incomplete' if incomplete else 'completed'
         manifest = {'id': self.request['id'], 'status': status, 'mode': self.request['mode'], 'model': self.request.get('model'),
-                    'startedAt': self.started, 'finishedAt': utc(), 'total': self.total, 'completed': self.completed,
+                    'startedAt': self.started, 'finishedAt': utc(), 'total': self.total, 'completed': self.completed, 'selection': self.selection,
                     'version': before, 'versionAfter': after, 'versionDrift': changed,
                     'preflight': {'passed': not preflight_error, 'error': preflight_error or None},
                     'capture': {ns: capture.result for ns, capture in self.captures.items()}, 'captureGaps': gaps,
@@ -720,7 +767,7 @@ def main():
     parser.add_argument('--out', type=Path)
     parser.add_argument('--export-only', action='store_true', help='Rebuild both workbooks from retained evidence without network access')
     args = parser.parse_args()
-    console, cluster_lock = None, None
+    console, cluster_lock, campaign, request = None, None, None, None
     try:
         if args.catalogue:
             def finish_catalogue(*_):
@@ -736,6 +783,8 @@ def main():
         if args.export_only:
             manifest = json.loads((args.out / 'manifest.json').read_text())
             print(json.dumps(export_workbooks(args.out, request, manifest))); return 0
+        paused = execution_blocked_reason()
+        if paused: raise ValueError(paused)
         # A resumed process never repeats earlier POSTs. Manual reconciliation keeps old evidence intact.
         if (args.out / 'cases.jsonl').exists() or (args.out / 'raw' / 'launch-intents.jsonl').exists():
             raise ValueError('Run already contains launch evidence; automatic replay refused')
@@ -755,8 +804,10 @@ def main():
         # Error strings here are sanitized; upstream raw records only go to protected artifacts.
         message = str(error) if isinstance(error, (ValueError, TransportError)) else 'Worker failed: ' + type(error).__name__
         if args.out:
-            dump(args.out / 'progress.json', {'status': 'failed', 'errors': [message], 'total': 0, 'completed': 0})
-            dump(args.out / 'manifest.json', {'status': 'failed', 'errors': [message], 'artifacts': [], 'finishedAt': utc()})
+            counts = {'total': campaign.total if campaign and campaign.selection is not None else len((request or {}).get('cases', [])),
+                      'completed': campaign.completed if campaign else 0, 'selection': campaign.selection if campaign else None}
+            dump(args.out / 'progress.json', {'status': 'failed', 'errors': [message], **counts})
+            dump(args.out / 'manifest.json', {'status': 'failed', 'errors': [message], **counts, 'artifacts': [], 'finishedAt': utc()})
         print(json.dumps({'error': message}), file=sys.stderr); return 1
     finally:
         if console: console.close()

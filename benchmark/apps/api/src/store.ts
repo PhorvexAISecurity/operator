@@ -1,18 +1,21 @@
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { Selection } from './selection';
 
 export type RunStatus = 'queued' | 'running' | 'cancelling' | 'completed' | 'incomplete' | 'failed' | 'cancelled' | 'interrupted';
 export interface Plan {
   id: string; summary: string; mode: 'serial' | 'parallel'; model: string;
   request: string; context: string; applications: string[]; cases: Record<string, unknown>[];
   version: unknown; limitations: string[]; createdAt: string; llmStatus: string;
+  selection?: Selection; executionBlockedReason?: string;
 }
 export interface Run {
   id: string; plan: Plan; status: RunStatus; createdAt: string; startedAt?: string;
   finishedAt?: string; workerPid?: number; workerExitedAt?: string; progress: { total: number; completed: number };
   cases: Record<string, unknown>[]; artifacts: { name: string; label?: string }[];
   errors: string[]; version: unknown; events: Record<string, unknown>[];
+  selection?: Selection;
 }
 
 export class Store {

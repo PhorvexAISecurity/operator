@@ -47,7 +47,7 @@ export interface Plan {
 }
 export type Artifact = string | { name: string; label?: string; filename?: string; size?: number; available?: boolean };
 export interface Run {
-  id: string; status: string; mode: Mode; model: string; request: string; context?: string;
+  id: string; status: string; mode: Mode; model: string; request: string; context?: string; summary?: string; applications?: string[];
   startedAt?: string; createdAt?: string; finishedAt?: string;
   progress?: { total: number; completed: number }; cases?: Case[];
   version?: Version; artifacts?: Artifact[] | Record<string, unknown>; errors?: unknown[];
