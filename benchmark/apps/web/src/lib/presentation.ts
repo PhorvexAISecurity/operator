@@ -1,5 +1,23 @@
 import { activeStatuses, type Case, type Run } from './api';
 
+// Request text is display data; only its first non-empty line supplies the title.
+export function splitBenchmarkRequest(request?: string) {
+  const lines = (request || '').split(/\r\n?|\n/);
+  const first = lines.findIndex(line => line.trim());
+  if (first < 0) return { title: 'Live benchmark', description: '' };
+
+  const line = lines[first].trim();
+  const heading = /^ {0,3}#{1,6}(?:[ \t]+|$)(.*)$/.exec(lines[first]);
+  let title = heading ? heading[1].replace(/(?:^|[ \t]+)#+[ \t]*$/, '').trim() : line;
+  const characters = Array.from(title);
+  if (!heading && characters.length > 120) {
+    const prefix = characters.slice(0, 119).join('');
+    const wholeWords = /\s/.test(characters[119]) ? prefix : prefix.replace(/\s+\S*$/, '');
+    title = `${wholeWords.trimEnd()}…`;
+  }
+  return { title: title || 'Live benchmark', description: lines.slice(first + 1).join('\n') };
+}
+
 export function readiness(item: Case): 'ready' | 'blocked' | 'unknown' {
   if (item.benchmarkBlocked || item.armed === false || item.compatible === false) return 'blocked';
   return item.armed === true && item.compatible === true ? 'ready' : 'unknown';

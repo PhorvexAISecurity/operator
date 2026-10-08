@@ -3,6 +3,26 @@ import { test, expect } from '@playwright/test';
 // Synthetic display fixtures only. Every API request is intercepted in the browser.
 const applications = ['vllm', 'voice', 'litellm', 'crm'];
 const request = 'Review retained benchmark evidence';
+const markdownTitle = 'PHORVEX Synthetic Request — Evaluate the Shadow Price of a Retained Fixture Budget';
+const markdownSummary = 'Compare the retained fixture records in this separate plan summary.';
+const markdownRequest = '\n \n# ' + markdownTitle + ' ###\n\n' + String.raw`## Objective
+
+Inspect **synthetic measurements** and compare $\lambda = \frac{\Delta V}{\Delta H}$.
+
+## Procedure
+
+1. Read the retained fixture budget.
+2. Compare two synthetic observations.
+3. Keep the displayed values unchanged.
+
+` + Array.from({ length: 8 }, (_, index) => `## Fixture section ${index + 1}
+
+Retain the synthetic observations for this section as opaque display data.
+
+- Record the fixture budget and its measurement.
+- Preserve the corresponding observation and its limitations.
+
+`).join('') + 'Request end marker.';
 const summary = String.raw`## Scope
 
 **Inspect** the retained observations and compare $x^2$ with \(y^2\).
@@ -61,17 +81,160 @@ async function mockDashboard(page, options = {}) {
   return { calls, errors, meta, externalRequests };
 }
 
-async function createPlan(page) {
-  await page.getByLabel('What would you like to benchmark?').fill(request);
+async function createPlan(page, text = request) {
+  await page.getByLabel('What would you like to benchmark?').fill(text);
   await page.getByRole('button', { name: 'Create benchmark plan' }).click();
   await expect(page.locator('.plan-panel')).toBeVisible();
 }
 
-async function openRun(page) {
+async function openRun(page, title = request) {
   await page.getByRole('button', { name: /^Run history/ }).click();
   await page.locator('.history-row').click();
-  await expect(page.getByRole('heading', { name: request, level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title, level: 1, exact: true })).toBeVisible();
 }
+
+async function expectLongRequest(heading, level) {
+  await heading.scrollIntoViewIfNeeded();
+  const title = heading.getByRole('heading', { level });
+  await expect(title).toHaveText(markdownTitle);
+  await expect(title).not.toContainText('#');
+  const description = heading.locator('.benchmark-request .benchmark-description');
+  await expect(description.locator('strong').filter({ hasText: 'Objective' })).toHaveText('Objective');
+  await expect(description.locator('strong').filter({ hasText: 'synthetic measurements' })).toBeVisible();
+  await expect(description.locator('ol li')).toHaveText([
+    'Read the retained fixture budget.',
+    'Compare two synthetic observations.',
+    'Keep the displayed values unchanged.',
+  ]);
+  await expect(description.locator('.katex')).toHaveCount(1);
+  await expect(description.locator('h1, h2')).toHaveCount(0);
+  await expect(description).not.toContainText('##');
+  await expect(description).not.toContainText(markdownSummary);
+  const planSummary = heading.getByRole('region', { name: 'Plan summary', exact: true });
+  await expect(planSummary.locator('.stat-label')).toHaveText('Plan summary');
+  await expect(planSummary.locator('.benchmark-description')).toHaveText(markdownSummary);
+  await expect(planSummary).not.toContainText('Request end marker.');
+  expect(await title.evaluate(el => parseFloat(getComputedStyle(el).fontSize)))
+    .toBeGreaterThan(await description.evaluate(el => parseFloat(getComputedStyle(el).fontSize)));
+  expect(await description.evaluate(el => el.getBoundingClientRect().top))
+    .toBeGreaterThanOrEqual(await title.evaluate(el => el.getBoundingClientRect().bottom));
+
+  const preview = heading.locator('.benchmark-request-preview');
+  const expand = heading.getByRole('button', { name: 'Show full request', exact: true });
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect(expand).toHaveAttribute('aria-controls', await preview.getAttribute('id'));
+  await expect(preview).toHaveClass(/collapsed/);
+  const collapsed = await preview.evaluate(el => ({
+    height: el.clientHeight, fullHeight: el.scrollHeight,
+    limit: getComputedStyle(el).maxHeight, overflow: getComputedStyle(el).overflowY,
+  }));
+  expect(collapsed.height).toBeLessThanOrEqual(240);
+  expect(collapsed.fullHeight).toBeGreaterThan(collapsed.height);
+  expect(collapsed.limit).toBe('240px');
+  expect(collapsed.overflow).toBe('hidden');
+  const end = description.getByText('Request end marker.', { exact: true });
+  await expect(end).not.toBeInViewport();
+  await expand.click();
+  const collapse = heading.getByRole('button', { name: 'Show less', exact: true });
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  await expect(preview).not.toHaveClass(/collapsed/);
+  const expanded = await preview.evaluate(el => ({ height: el.clientHeight, fullHeight: el.scrollHeight }));
+  expect(expanded.height).toBeGreaterThan(collapsed.height);
+  expect(expanded.fullHeight).toBeLessThanOrEqual(expanded.height + 1);
+  await end.scrollIntoViewIfNeeded();
+  await expect(end).toBeInViewport();
+  await collapse.click();
+  await expect(expand).toHaveAttribute('aria-expanded', 'false');
+  await expect(preview).toHaveClass(/collapsed/);
+  await expect(end).not.toBeInViewport();
+}
+
+test('long markdown run request has only its title in h1 and a collapsible formatted body', async ({ page }) => {
+  const { errors, externalRequests } = await mockDashboard(page, {
+    run: { ...run, request: markdownRequest, summary: markdownSummary },
+  });
+  await openRun(page, markdownTitle);
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expectLongRequest(page.locator('.run-heading'), 1);
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+test('long markdown plan review separates the title, request body and plan summary', async ({ page }) => {
+  const { calls, errors, externalRequests } = await mockDashboard(page, {
+    plan: { request: markdownRequest, summary: markdownSummary },
+  });
+  await createPlan(page, markdownRequest);
+  await expectLongRequest(page.locator('.plan-panel .benchmark-heading'), 2);
+  expect(calls.find(call => call.path === '/api/plans').body.request).toBe(markdownRequest.trim());
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+test('long markdown history rows contain only the title on one line with ellipsis', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockDashboard(page, { run: { ...run, request: markdownRequest, summary: markdownSummary } });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  const row = page.locator('.history-row');
+  const title = row.locator('.history-title strong');
+  await expect(title).toHaveText(markdownTitle);
+  await expect(row).not.toContainText('Objective');
+  await expect(row).not.toContainText('Request end marker.');
+  const style = await title.evaluate(el => ({
+    whiteSpace: getComputedStyle(el).whiteSpace, overflow: getComputedStyle(el).overflowX,
+    ellipsis: getComputedStyle(el).textOverflow, clipped: el.scrollWidth > el.clientWidth,
+    height: el.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(el).lineHeight),
+  }));
+  expect(style.whiteSpace).toBe('nowrap');
+  expect(style.overflow).toBe('hidden');
+  expect(style.ellipsis).toBe('ellipsis');
+  expect(style.clipped).toBe(true);
+  expect(style.height).toBeLessThanOrEqual(style.lineHeight + 1);
+  await row.click();
+  await expect(page.locator('.run-heading h1')).toHaveText(markdownTitle);
+  await expect(page.getByRole('button', { name: 'Show full request', exact: true })).toHaveAttribute('aria-expanded', 'false');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('long plain first lines truncate at a word boundary consistently across views', async ({ page }) => {
+  const longRequest = 'Review ' + Array(18).fill('synthetic').join(' ') + ' measurements\n\n## Details\n\nKeep **fixture** data literal.';
+  const title = 'Review ' + Array(11).fill('synthetic').join(' ') + '…';
+  await mockDashboard(page, { run: { ...run, request: longRequest }, plan: { request: longRequest } });
+  await createPlan(page, longRequest);
+  await expect(page.locator('.plan-panel h2')).toHaveText(title);
+  await expect(page.locator('.plan-panel .benchmark-request strong').filter({ hasText: 'fixture' })).toBeVisible();
+  await expect(page.locator('.plan-panel .benchmark-request-toggle')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-title strong')).toHaveText(title);
+  await page.locator('.history-row').click();
+  await expect(page.locator('.run-heading h1')).toHaveText(title);
+  await expect(page.locator('.run-heading .benchmark-request strong').filter({ hasText: 'fixture' })).toBeVisible();
+  await expect(page.locator('.run-heading .benchmark-request-toggle')).toHaveCount(0);
+});
+
+test('markdown titles ignore leading blank lines, heading markers and CRLF line endings', async ({ page }) => {
+  const text = '\r\n \r\n### Synthetic CRLF title ###\r\n\r\n## Details\r\n\r\nKeep the fixture description.';
+  const title = 'Synthetic CRLF title';
+  await mockDashboard(page, { run: { ...run, request: text }, plan: { request: text } });
+  await createPlan(page, text);
+  await expect(page.locator('.plan-panel h2')).toHaveText(title);
+  await expect(page.locator('.plan-panel .benchmark-request')).toContainText('Keep the fixture description.');
+  await openRun(page, title);
+  await expect(page.locator('.run-heading h1')).toHaveText(title);
+  await expect(page.locator('.run-heading .benchmark-request')).toContainText('Keep the fixture description.');
+});
+
+test('short plain requests keep their existing titles without a request toggle', async ({ page }) => {
+  await mockDashboard(page);
+  await createPlan(page);
+  await expect(page.locator('.plan-panel h2')).toHaveText(request);
+  await expect(page.locator('.plan-panel .benchmark-request')).toHaveCount(0);
+  await expect(page.locator('.plan-panel').getByRole('region', { name: 'Plan summary', exact: true })).toBeVisible();
+  await openRun(page);
+  await expect(page.locator('.run-heading h1')).toHaveText(request);
+  await expect(page.locator('.run-heading .benchmark-request')).toHaveCount(0);
+  await expect(page.locator('.run-heading .benchmark-request-toggle')).toHaveCount(0);
+});
 
 test('plan title, formatted description and all readiness rows are explicit', async ({ page }) => {
   const { errors } = await mockDashboard(page);
