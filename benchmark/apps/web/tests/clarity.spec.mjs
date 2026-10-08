@@ -256,7 +256,9 @@ test('long markdown history rows contain only the title on one line with ellipsi
   const row = page.locator('.history-row');
   const title = row.locator('.history-title strong');
   await expect(title).toHaveText(markdownTitle);
-  await expect(row).not.toContainText('Objective');
+  // Body sections must not leak into the row (the row now also has an "Objective mode" label).
+  await expect(row).not.toContainText('synthetic measurements');
+  await expect(row).not.toContainText('Procedure');
   await expect(row).not.toContainText('Request end marker.');
   const style = await title.evaluate(el => ({
     whiteSpace: getComputedStyle(el).whiteSpace, overflow: getComputedStyle(el).overflowX,
@@ -516,7 +518,7 @@ const retainedVersion = {
   consoleImage: 'registry.invalid/console@sha256:' + 'c'.repeat(64),
   apiVersion: { version: 'compile-fixture-a', gitCommit: 'compile-fixture-commit' },
 };
-const requestVersionNote = 'The request text guides the plan summary only. It does not change code or configuration; this run tested the deployed version shown here.';
+const requestVersionNote = 'The request text guides the plan summary only. It changes neither code nor policy; this run tested the deployed version and the live policy objective shown here.';
 
 async function expectRerunPrefill(page, fixture, model = fixture.model) {
   await expect(page.locator('.breadcrumb strong')).toHaveText('New benchmark');
@@ -721,4 +723,137 @@ test('mobile history and run versions wrap without hiding rerun actions or overf
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Run again', exact: true }).click();
   await expectRerunPrefill(page, run);
+});
+
+const legacyObjective = 'legacy-runtime-lambda-v1';
+const fixedObjective = 'fixed-disruption-aversion-v1';
+function objectiveFixture(modes, coefficients, extra = {}) {
+  return { decisionCount: modes.reduce((count, mode) => count + mode.count, 0), modes, coefficients,
+    mixedModes: modes.filter(mode => mode.objectiveMode !== null).length > 1,
+    unlistedModeCount: 0, unlistedCoefficientCount: 0, skippedRecordCount: 0, ...extra };
+}
+const legacySummary = objectiveFixture([{ objectiveMode: legacyObjective, count: 772 }],
+  [{ objectiveMode: legacyObjective, source: 'lambdaRuntimeLegacy', min: 0, max: 0, count: 772 }]);
+const fixedSummary = objectiveFixture([{ objectiveMode: fixedObjective, count: 4 }],
+  [{ objectiveMode: fixedObjective, source: 'disruptionAversion', min: 0, max: 1, count: 4 }]);
+const mixedSummary = objectiveFixture([{ objectiveMode: legacyObjective, count: 2 }, { objectiveMode: fixedObjective, count: 3 }],
+  [{ objectiveMode: legacyObjective, source: 'lambdaRuntimeLegacy', min: 0, max: 0, count: 2 },
+    { objectiveMode: fixedObjective, source: 'disruptionAversion', min: 1, max: 1, count: 3 }]);
+
+for (const [name, objectiveSummary, compact, mode, coefficient, source, count] of [
+  ['legacy', legacySummary, 'Legacy (runtime lambda)', legacyObjective, '0', 'lambdaRuntimeLegacy', '772 decisions'],
+  ['fixed', fixedSummary, 'Fixed Beta (disruption aversion)', fixedObjective, '0–1 (min–max)', 'disruptionAversion', '4 decisions'],
+]) test(`${name} run shows actual objective, coefficient counts and source despite opaque request text`, async ({ page }) => {
+  const fixture = { ...run, request: 'Fixed Beta beta=1.0\n\nAn opaque requested objective.', objectiveSummary };
+  const { calls, errors, externalRequests } = await mockDashboard(page, { run: fixture });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-objective')).toHaveText(`Objective mode: ${compact}`);
+  await page.locator('.history-row').click();
+  const objective = page.getByRole('region', { name: 'Objective mode', exact: true });
+  await expect(objective).toContainText(`${compact} · ${mode}`);
+  await expect(objective).toContainText(count);
+  const cost = page.getByRole('region', { name: 'Effective cost coefficient', exact: true });
+  await expect(cost.locator('.objective-coefficient')).toHaveText(coefficient);
+  await expect(cost).toContainText(count);
+  await expect(cost).toContainText(`Source: ${source}`);
+  await expect(page.locator('.run-heading .request-version-note')).toHaveText(requestVersionNote);
+  expect(calls.filter(call => call.method === 'POST')).toEqual([]);
+  expect(errors).toEqual([]); expect(externalRequests).toEqual([]);
+});
+
+test('mixed objective history and run views preserve each mode and coefficient source count', async ({ page }) => {
+  await mockDashboard(page, { run: { ...run, objectiveSummary: mixedSummary } });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-objective')).toHaveText('Objective mode: Mixed');
+  await page.locator('.history-row').click();
+  const objective = page.getByRole('region', { name: 'Objective mode', exact: true });
+  await expect(objective).toContainText('Mixed objective modes');
+  await expect(objective.getByRole('listitem').nth(0)).toContainText(`${legacyObjective} · 2 decisions`);
+  await expect(objective.getByRole('listitem').nth(1)).toContainText(`${fixedObjective} · 3 decisions`);
+  const coefficients = page.getByRole('region', { name: 'Effective cost coefficient', exact: true }).getByRole('listitem');
+  await expect(coefficients.nth(0)).toContainText('0 · 2 decisions');
+  await expect(coefficients.nth(0)).toContainText('Source: lambdaRuntimeLegacy');
+  await expect(coefficients.nth(1)).toContainText('1 · 3 decisions');
+  await expect(coefficients.nth(1)).toContainText('Source: disruptionAversion');
+});
+
+for (const [name, objectiveSummary] of [
+  ['missing summary', undefined],
+  ['missing trace fields', objectiveFixture([{ objectiveMode: null, count: 2 }], [{ objectiveMode: null, source: null, min: null, max: null, count: 2 }])],
+]) test(`${name} displays Not recorded without inventing a mode or zero`, async ({ page }) => {
+  await mockDashboard(page, { run: { ...run, objectiveSummary } });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-objective')).toHaveText('Objective mode: Not recorded');
+  await page.locator('.history-row').click();
+  const objective = page.getByRole('region', { name: 'Objective mode', exact: true });
+  await expect(objective).toContainText('Not recorded');
+  await expect(objective).not.toContainText(legacyObjective);
+  await expect(objective).not.toContainText(fixedObjective);
+  const cost = page.getByRole('region', { name: 'Effective cost coefficient', exact: true });
+  await expect(cost).toContainText('Not recorded');
+  await expect(cost.locator('.objective-coefficient').filter({ hasText: /^0$/ })).toHaveCount(0);
+  if (objectiveSummary) {
+    await expect(cost).toContainText('2 decisions');
+    await expect(cost).toContainText('Source: Not recorded');
+  }
+});
+
+test('missing fields remain explicit beside recorded zero, and bounded/partial summaries are visible', async ({ page }) => {
+  const objectiveSummary = objectiveFixture([{ objectiveMode: legacyObjective, count: 1 }, { objectiveMode: null, count: 1 }],
+    [{ objectiveMode: legacyObjective, source: null, min: 0, max: 0, count: 1 },
+      { objectiveMode: null, source: null, min: null, max: null, count: 1 }],
+    { decisionCount: 5, unlistedModeCount: 3, unlistedCoefficientCount: 3, skippedRecordCount: 1 });
+  await mockDashboard(page, { run: { ...run, objectiveSummary } });
+  await openRun(page);
+  await expect(page.getByRole('region', { name: 'Objective mode', exact: true })).toContainText('Not recorded · 1 decision');
+  const cost = page.getByRole('region', { name: 'Effective cost coefficient', exact: true });
+  await expect(cost.locator('.objective-coefficient')).toHaveText(['0', 'Not recorded']);
+  await expect(cost).toContainText('Source: Not recorded');
+  await expect(cost).toContainText('Additional coefficient groups: 3 decisions');
+  await expect(page.getByRole('region', { name: 'Run objective', exact: true })).toContainText('counts above are partial');
+});
+
+test('mobile objective details wrap raw modes and sources within the existing page layout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const objectiveSummary = objectiveFixture([{ objectiveMode: 'unknown-objective-' + 'x'.repeat(180), count: 1 }],
+    [{ objectiveMode: 'unknown-objective-' + 'x'.repeat(180), source: 'source-' + 'y'.repeat(180), min: 0, max: 0, count: 1 }]);
+  await mockDashboard(page, { run: { ...run, objectiveSummary } });
+  await openRun(page);
+  const details = page.getByRole('region', { name: 'Run objective', exact: true });
+  await expect(details).toContainText('Other objective');
+  await expect(details.locator('.objective-coefficient')).toHaveText('0');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const [state, status, message] of [
+  ['pending', 'running', 'Calculated after the run finishes'],
+  ['calculating', 'completed', 'Calculating objective summary…'],
+]) test(`${state} objectives show an explicit stable waiting state in history and detail`, async ({ page }) => {
+  const objectiveSummary = objectiveFixture([], [], { state });
+  const { errors, externalRequests } = await mockDashboard(page, { run: { ...run, status, objectiveSummary } });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-objective')).toHaveText(`Objective mode: ${message}`);
+  await page.locator('.history-row').click();
+  const details = page.getByRole('region', { name: 'Run objective', exact: true });
+  await expect(details.getByRole('region', { name: 'Objective mode', exact: true })).toContainText(message);
+  await expect(details.getByRole('region', { name: 'Effective cost coefficient', exact: true })).toContainText(message);
+  await expect(details).not.toContainText('Not recorded');
+  await expect(details).not.toContainText('No retained decision traces recorded.');
+  await expect(details.locator('.objective-coefficient')).toHaveCount(0);
+  expect(errors).toEqual([]); expect(externalRequests).toEqual([]);
+});
+
+test('calculating objectives become ready through the existing poller without clearing the run view', async ({ page }) => {
+  const fixture = { ...run, objectiveSummary: objectiveFixture([], [], { state: 'calculating' }) };
+  const { calls, errors, externalRequests } = await mockDashboard(page, { run: fixture });
+  await openRun(page);
+  const details = page.getByRole('region', { name: 'Run objective', exact: true });
+  await expect(details).toContainText('Calculating objective summary…');
+  fixture.objectiveSummary = { ...legacySummary, state: 'ready' };
+  await expect(details).toContainText(legacyObjective, { timeout: 20000 });
+  await expect(details.locator('.objective-coefficient')).toHaveText('0');
+  await expect(page.locator('.run-heading')).toBeVisible();
+  await expect(details).not.toContainText('Calculating objective summary…');
+  expect(calls.filter(call => call.method === 'POST')).toEqual([]);
+  expect(errors).toEqual([]); expect(externalRequests).toEqual([]);
 });

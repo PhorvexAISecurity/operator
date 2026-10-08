@@ -46,11 +46,21 @@ export interface Plan {
   context: string; applications: string[]; cases: Case[]; limitations?: string[]; llmStatus?: string; version?: Version;
 }
 export type Artifact = string | { name: string; label?: string; filename?: string; size?: number; available?: boolean };
+export interface ObjectiveSummary {
+  state?: 'ready' | 'pending' | 'calculating';
+  decisionCount: number;
+  mixedModes: boolean;
+  modes: { objectiveMode: string | null; count: number }[];
+  coefficients: { objectiveMode: string | null; source: string | null; min: number | null; max: number | null; count: number }[];
+  unlistedModeCount: number;
+  unlistedCoefficientCount: number;
+  skippedRecordCount: number;
+}
 export interface Run {
   id: string; status: string; mode: Mode; model: string; request: string; context?: string; summary?: string; applications?: string[];
   startedAt?: string; createdAt?: string; finishedAt?: string;
   progress?: { total: number; completed: number }; cases?: Case[];
-  version?: Version; artifacts?: Artifact[] | Record<string, unknown>; errors?: unknown[];
+  version?: Version; objectiveSummary?: ObjectiveSummary; artifacts?: Artifact[] | Record<string, unknown>; errors?: unknown[];
   grafanaUrl?: string;
 }
 export interface Event { time: string; level: string; message: string }

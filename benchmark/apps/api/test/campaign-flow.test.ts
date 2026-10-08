@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -104,10 +104,10 @@ test('80 selected rows retain blocked entries; a single application selects 20; 
     assert.match(single.summary,/Selected all 20 current Live catalogue entries for voice\./);
     const run=service.queue({planId:plan.id});assert.deepEqual(run.progress,{total:80,completed:0});
     const out=join(directory,'runs',run.id);mkdirSync(out,{recursive:true});
-    writeFileSync(join(out,'progress.json'),JSON.stringify({total:2,completed:3}));assert.deepEqual(service.detail(run.id).progress,{total:80,completed:0});
+    writeFileSync(join(out,'progress.json'),JSON.stringify({total:2,completed:3}));assert.deepEqual((await service.detail(run.id)).progress,{total:80,completed:0});
     const workerRows=[{namespace:'voice',armed:true,compatible:true},{namespace:'voice',armed:false,compatible:false}];
     writeFileSync(join(out,'progress.json'),JSON.stringify({total:2,completed:2,selection:selection(workerRows,['voice'])}));
-    const refreshed=service.detail(run.id);assert.deepEqual(refreshed.progress,{total:2,completed:2});assert.equal(refreshed.selection?.total,2);
+    const refreshed=await service.detail(run.id);assert.deepEqual(refreshed.progress,{total:2,completed:2});assert.equal(refreshed.selection?.total,2);
   } finally {store.close();rmSync(directory,{recursive:true});}
 });
 
@@ -118,7 +118,7 @@ test('missing worker executable reports actionable start failure and retains the
     const plan:Plan={id:randomUUID(),...input,mode:'serial',summary:'Offline spawn failure',context:'',applications:['vllm'],cases:[{namespace:'vllm',id:'opaque'}],version:null,limitations:[],createdAt:new Date().toISOString(),llmStatus:'unavailable'};store.savePlan(plan);
     const run=service.queue({planId:plan.id});
     const deadline=Date.now()+2000;while(store.run(run.id)?.status==='running' && Date.now()<deadline)await new Promise(r=>setTimeout(r,10));
-    const failed=service.detail(run.id);assert.equal(failed.status,'failed');assert.equal(failed.progress.total,1);assert.match(failed.errors.join(' '),/ENOENT.*PYTHON.*No automatic retry/);
+    const failed=await service.detail(run.id);assert.equal(failed.status,'failed');assert.equal(failed.progress.total,1);assert.match(failed.errors.join(' '),/ENOENT.*PYTHON.*No automatic retry/);
   } finally {await service.onModuleDestroy();rmSync(directory,{recursive:true});}
 });
 
@@ -144,4 +144,90 @@ test('a configured pause reason is not enforced without the explicit opt-in',()=
     process.env.BENCHMARK_ENFORCE_MUTATIONS_PAUSE='true';
     assert.equal(new Config().mutationsPausedReason,'Fixture reconciliation pending');
   } finally {settings(directory,directory,'');rmSync(directory,{recursive:true});}
+});
+
+test('detail and history backfill objectives from retained audit files and refresh for new decisions',async()=>{
+  const directory=mkdtempSync(join(tmpdir(),'benchmark-objective-flow-'));settings(directory,directory);
+  const store=new Store(':memory:');const service=new CampaignService(new Config(),store);(service as any).tick=async()=>{};
+  try {
+    const plan:Plan={id:randomUUID(),...input,request:'Fixed Beta beta=1.0 (opaque request)',mode:'serial',summary:'Opaque plan annotation',context:'',applications:['vllm'],cases:[],version:null,limitations:[],createdAt:'2026-10-08T17:03:00Z',llmStatus:'unavailable'};
+    store.savePlan(plan);
+    const queued=service.queue({planId:plan.id});assert.equal(queued.objectiveSummary.decisionCount,0);assert.equal(queued.objectiveSummary.state,'pending');
+    const saved=store.run(queued.id)!;saved.status='completed';saved.startedAt='2026-10-08T17:03:55.604Z';saved.finishedAt='2026-10-08T17:16:54.282Z';store.saveRun(saved);
+    const out=join(directory,'runs',saved.id);mkdirSync(join(out,'raw'),{recursive:true});
+    const trace=JSON.parse(readFileSync(join(project,'apps/api/test/fixtures/objective-legacy.json'),'utf8'));
+    const audit=join(out,'raw/audit-vllm.jsonl');writeFileSync(audit,JSON.stringify(trace)+'\n');
+    const before=readFileSync(audit);
+    const detail=await service.detail(saved.id);const history=await service.list();
+    assert.equal(detail.request,plan.request);assert.equal(detail.objectiveSummary.decisionCount,1);
+    assert.deepEqual(detail.objectiveSummary.modes,[{objectiveMode:'legacy-runtime-lambda-v1',count:1}]);
+    assert.deepEqual(detail.objectiveSummary.coefficients,[{objectiveMode:'legacy-runtime-lambda-v1',source:'lambdaRuntimeLegacy',min:0,max:0,count:1}]);
+    assert.deepEqual(history.runs[0].objectiveSummary,detail.objectiveSummary);assert.deepEqual(readFileSync(audit),before);
+    const fixed={...trace,decisionTrace:{...trace.decisionTrace,decisionID:'synthetic-fixed',economicsVersion:'fixed-disruption-aversion-v1',effectiveCostCoefficient:1,costCoefficientSource:'disruptionAversion'}};
+    writeFileSync(audit,JSON.stringify(trace)+'\n'+JSON.stringify(fixed)+'\n');
+    const updated=await service.detail(saved.id);assert.equal(updated.objectiveSummary.decisionCount,2);assert.equal(updated.objectiveSummary.modes.length,2);
+    assert.deepEqual((await service.list()).runs[0].objectiveSummary,updated.objectiveSummary);
+  } finally {await service.onModuleDestroy();rmSync(directory,{recursive:true});}
+});
+
+function objectivePlan(): Plan {
+  return { id:randomUUID(), ...input, mode:'serial', summary:'Retained objective fixture', context:'', applications:['vllm'],
+    cases:[], version:null, limitations:[], createdAt:'2026-10-08T17:03:00Z', llmStatus:'unavailable' };
+}
+function objectiveRun(plan: Plan, status: Run['status'] = 'completed'): Run {
+  return { id:randomUUID(), plan, status, createdAt:plan.createdAt, startedAt:'2026-10-08T17:03:55.604Z',
+    finishedAt:status === 'completed' ? '2026-10-08T17:16:54.282Z' : undefined,
+    progress:{total:0,completed:0}, cases:[], artifacts:[], errors:[], version:null, events:[] };
+}
+function retainObjective(directory: string, run: Run) {
+  const out=join(directory,'runs',run.id);mkdirSync(join(out,'raw'),{recursive:true});
+  const trace=JSON.parse(readFileSync(join(project,'apps/api/test/fixtures/objective-legacy.json'),'utf8'));
+  writeFileSync(join(out,'raw/audit-vllm.jsonl'),JSON.stringify(trace)+'\n');
+}
+async function bounded<T>(promise: Promise<T>, milliseconds=1000): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try { return await Promise.race([promise, new Promise<never>((_, reject) => {
+    timer=setTimeout(()=>reject(new Error('List waited for the raw scan')),milliseconds);
+  })]); } finally { if(timer)clearTimeout(timer); }
+}
+
+test('authenticated GET /api/runs returns before a held scan and polls reuse the same flight',async()=>{
+  const directory=mkdtempSync(join(tmpdir(),'benchmark-objective-list-'));settings(directory,directory);
+  const app=await bootstrap();const service=app.get(CampaignService), store=app.get(Store);
+  let release!:()=>void, started!:()=>void;
+  const held=new Promise<void>(done=>{release=done;}), scanning=new Promise<void>(done=>{started=done;});
+  const reader=(service as any).objectives;
+  const original=reader.summarize.bind(reader);
+  const scan=mock.method(reader,'summarize',async(...args:unknown[])=>{started();await held;return original(...args);});
+  try {
+    const plan=objectivePlan(), run=objectiveRun(plan);store.savePlan(plan);store.insertRun(run);retainObjective(directory,run);
+    const base=`http://127.0.0.1:${app.getHttpServer().address().port}`, headers=await login(base);
+    const list=async()=>{const response=await fetch(base+'/api/runs',{headers});assert.equal(response.status,200);return response.json() as Promise<any>;};
+    assert.equal((await bounded(list())).runs[0].objectiveSummary.state,'calculating');
+    await bounded(scanning);
+    assert.equal((await bounded(list())).runs[0].objectiveSummary.state,'calculating');
+    const detail=await bounded(service.detail(run.id),3000);
+    assert.equal(detail.objectiveSummary.state,'calculating');assert.equal(scan.mock.callCount(),1);
+    release();
+    assert.equal((await service.detail(run.id)).objectiveSummary.decisionCount,1);
+    assert.equal((await list()).runs[0].objectiveSummary.state,'ready');assert.equal(scan.mock.callCount(),1);
+  } finally {release();await app.close();scan.mock.restore();rmSync(directory,{recursive:true});}
+});
+
+test('active runs are pending and defer terminal history scans until the worker is idle',async()=>{
+  const directory=mkdtempSync(join(tmpdir(),'benchmark-objective-active-'));settings(directory,directory,'Offline fixture pause');
+  const store=new Store(':memory:'), service=new CampaignService(new Config(),store);
+  const scan=mock.method((service as any).objectives,'summarize');
+  try {
+    const plan=objectivePlan(), terminal=objectiveRun(plan), active=objectiveRun(plan,'running');
+    store.savePlan(plan);store.insertRun(terminal);store.insertRun(active);retainObjective(directory,terminal);retainObjective(directory,active);
+    const list=await bounded(service.list());
+    assert.equal(list.runs.find(run=>run.id===active.id)!.objectiveSummary.state,'pending');
+    assert.equal(list.runs.find(run=>run.id===terminal.id)!.objectiveSummary.state,'calculating');
+    assert.equal((await service.detail(active.id)).objectiveSummary.state,'pending');
+    await new Promise(done=>setTimeout(done,30));assert.equal(scan.mock.callCount(),0);
+    active.status='completed';active.finishedAt=terminal.finishedAt;store.saveRun(active);
+    assert.equal((await service.detail(terminal.id)).objectiveSummary.decisionCount,1);
+    assert.equal(scan.mock.callCount(),1);
+  } finally {await service.onModuleDestroy();scan.mock.restore();rmSync(directory,{recursive:true});}
 });

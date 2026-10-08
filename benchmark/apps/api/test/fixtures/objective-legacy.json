@@ -1,0 +1,19 @@
+{
+  "_source": {
+    "path": "raw/audit-vllm.jsonl",
+    "line": 1
+  },
+  "time": "2026-10-08T17:04:27.285972299Z",
+  "decisionTrace": {
+    "policyUID": "5cef9d07-12ed-48a2-9f51-f8f45fb2442d",
+    "tickID": "b8777bca9362feb74961fe7791575cdd",
+    "assetUID": "15ac7b82-7752-41c7-a1f2-e93f9b75daf3",
+    "decisionID": "5b8fb209eba3bf6a969f56977734fa20",
+    "timestamp": "2026-10-08T17:04:27.285972299Z",
+    "economicsVersion": "legacy-runtime-lambda-v1",
+    "effectiveCostCoefficient": 0,
+    "costCoefficientSource": "lambdaRuntimeLegacy",
+    "lambdaConfiguredPolicy": 0.5,
+    "lambdaRuntimeLegacy": 0
+  }
+}

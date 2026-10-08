@@ -64,7 +64,7 @@ test('durable queue permits only one claimed campaign across database connection
   } finally {first.close();second.close();rmSync(directory,{recursive:true});}
 });
 
-test('metrics preserve unknown mitigation and artifact downloads reject traversal and unregistered filenames',()=>{
+test('metrics preserve unknown mitigation and artifact downloads reject traversal and unregistered filenames',async()=>{
   const directory=mkdtempSync(join(tmpdir(),'benchmark-artifact-'));const store=new Store(':memory:');
   try {
     const service=new CampaignService(config(directory),store);const r=run(plan());
@@ -83,7 +83,7 @@ test('metrics preserve unknown mitigation and artifact downloads reject traversa
     assert.throws(()=>service.artifact(r.id,'request.json'));
     Object.defineProperty(service.config,'grafanaUrl',{value:'https://grafana.test/d/benchmark'});
     r.startedAt='2026-10-07T10:00:00.000Z';r.finishedAt='2026-10-07T10:05:00.000Z';store.saveRun(r);
-    const link=new URL(service.detail(r.id).grafanaUrl);
+    const link=new URL((await service.detail(r.id)).grafanaUrl);
     assert.equal(link.searchParams.get('var-run_id'),r.id);
     assert.equal(Number(link.searchParams.get('from')),Date.parse(r.startedAt)-15000);
     assert.equal(Number(link.searchParams.get('to')),Date.parse(r.finishedAt)+60000);

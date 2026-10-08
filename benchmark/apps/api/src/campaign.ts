@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Config, APPLICATIONS, ARTIFACT_NAMES, REQUEST_MAX_CHARACTERS } from './config';
 import { Plan, Run, Store, RunStatus } from './store';
 import { selection, SELECTION } from './selection';
+import { ObjectiveSummaryReader, emptyObjectiveSummary, type ObjectiveSummary } from './objective';
 import { BadRequestException, ConflictException, NotFoundException, ServiceUnavailableException } from './errors';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -42,7 +43,13 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
   private dbClosed = false;
   private readonly forcedInterruptions = new Set<string>();
   private readonly instanceId = randomUUID();
-  constructor(readonly config: Config, readonly store: Store) {}
+  private readonly objectives: ObjectiveSummaryReader;
+  constructor(readonly config: Config, readonly store: Store) {
+    const active = store.db.prepare("SELECT 1 FROM runs WHERE status NOT IN ('completed','incomplete','failed','cancelled','interrupted') LIMIT 1");
+    this.objectives = new ObjectiveSummaryReader(config.dataDir, () =>
+      !this.stopping && !this.dbClosed && store.db.open && !this.child && !active.get()
+      && !this.recovered.some(run => !run.workerPid || processAlive(run.workerPid)));
+  }
   onModuleInit() {
     this.acquireLock();
     const recovered=this.store.reconcileInterrupted();
@@ -76,6 +83,7 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
         await this.waitForChildClose(child,3000);
       }
     }
+    await this.objectives.close();
     if (this.lockOwned) this.store.releaseOwner(this.instanceId);
     this.store.close();this.dbClosed=true;
   }
@@ -147,14 +155,19 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
     const run: Run = {id:randomUUID(),plan,status:'queued',createdAt:new Date().toISOString(),progress:{total:plan.cases.length,completed:0},selection:selection(plan.cases,plan.applications),cases:[],artifacts:[],errors:[],version:plan.version,events:[]};
     this.store.insertRun(run); void this.tick(); return this.publicRun(run);
   }
-  list() { return {runs:this.store.runs().map(r=>this.publicRun(this.syncRun(r)))}; }
-  detail(id:string) { return this.publicRun(this.syncRun(this.requireRun(id))); }
+  async list() {
+    const runs = [];
+    // Only metadata and persisted summaries are awaited; raw scans run in the shared background queue.
+    for (const run of this.store.runs()) runs.push(await this.withObjective(this.syncRun(run)));
+    return {runs};
+  }
+  detail(id:string) { return this.withObjective(this.syncRun(this.requireRun(id)), 2000); }
   events(id:string) { const run=this.syncRun(this.requireRun(id)); return {events:run.events.slice(-1000)}; }
   cancel(id:string) {
     const run = this.requireRun(id);
     if (run.status === 'queued') { run.status='cancelled'; run.finishedAt=new Date().toISOString(); this.store.saveRun(run); }
     else if (run.status === 'running' || run.status === 'cancelling') { this.signalCancel(run); run.status='cancelling'; this.store.saveRun(run); }
-    return this.publicRun(run);
+    return this.withObjective(run);
   }
   artifact(id:string,name:string) {
     const run=this.syncRun(this.requireRun(id));
@@ -194,7 +207,11 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
     return lines.join('\n')+'\n';
   }
   private requireRun(id:string):Run { if (!UUID.test(id)) throw new NotFoundException('Run not found'); const run=this.store.run(id); if (!run) throw new NotFoundException('Run not found'); return run; }
-  private publicRun(run:Run) {
+  private async withObjective(run:Run, waitMs = 0) {
+    const objectiveSummary = await this.objectives.read(this.runDir(run.id), run, waitMs);
+    return this.publicRun(run, objectiveSummary);
+  }
+  private publicRun(run:Run, objectiveSummary:ObjectiveSummary = emptyObjectiveSummary('pending')) {
     const cases=run.cases.map(item=>{
       const result=item.result && typeof item.result==='object' ? item.result as Record<string,unknown> : undefined;
       const decision=result?.decisionEvidence && typeof result.decisionEvidence==='object' ? result.decisionEvidence as Record<string,unknown> : undefined;
@@ -203,7 +220,7 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
     const executionBlockedReason=this.executionBlockedReason();
     const limitations=run.plan.limitations.filter(item=>item!==run.plan.executionBlockedReason);
     if(executionBlockedReason)limitations.push(executionBlockedReason);
-    return {id:run.id,status:run.status,mode:run.plan.mode,model:run.plan.model,request:run.plan.request,context:run.plan.context,applications:run.plan.applications,summary:run.plan.summary,limitations,createdAt:run.createdAt,startedAt:run.startedAt,finishedAt:run.finishedAt,progress:run.progress,selection:run.selection,executionBlockedReason,cases,version:run.version,artifacts:run.artifacts.map(a=>({...a,url:`/api/runs/${run.id}/artifacts/${a.name}`})),errors:run.errors,grafanaUrl:this.grafanaLink(run)};
+    return {id:run.id,status:run.status,mode:run.plan.mode,model:run.plan.model,request:run.plan.request,context:run.plan.context,applications:run.plan.applications,summary:run.plan.summary,limitations,createdAt:run.createdAt,startedAt:run.startedAt,finishedAt:run.finishedAt,progress:run.progress,selection:run.selection,executionBlockedReason,cases,version:run.version,objectiveSummary,artifacts:run.artifacts.map(a=>({...a,url:`/api/runs/${run.id}/artifacts/${a.name}`})),errors:run.errors,grafanaUrl:this.grafanaLink(run)};
   }
   private grafanaLink(run:Run) {
     if (!this.config.grafanaUrl) return '';
@@ -273,12 +290,13 @@ export class CampaignService implements OnModuleInit, OnModuleDestroy {
         if (!manifest) current.errors.push('Worker ended without a final manifest; live outcomes remain UNKNOWN.');
         if (spawnError) current.errors.push(this.workerLaunchError(spawnError,true));
         else if (code!==0) current.errors.push(`Worker exited with status ${code ?? 'signal'}; inspect retained evidence.`);
-        current.finishedAt=String(manifest?.finishedAt||new Date().toISOString());current.workerExitedAt=new Date().toISOString(); this.store.saveRun(current); this.child=undefined;this.childRunId=undefined; if(!this.stopping)void this.tick();
+        current.finishedAt=String(manifest?.finishedAt||new Date().toISOString());current.workerExitedAt=new Date().toISOString(); this.store.saveRun(current); this.child=undefined;this.childRunId=undefined;
+        if (!this.stopping) { void this.objectives.read(directory, current); void this.tick(); }
       };
       let finished=false; child.once('error',error=>{if(!finished){finished=true;finish(null,error);}}); child.once('close',code=>{if(!finished){finished=true;finish(code);}});
     } catch(error) {
       // Prevent a half-launched claim from ever being silently retried.
-      if(claimed && !claimed.workerPid){claimed.status='failed';claimed.finishedAt=new Date().toISOString();claimed.errors.push(this.workerLaunchError(error));this.store.saveRun(claimed);}
+      if(claimed && !claimed.workerPid){claimed.status='failed';claimed.finishedAt=new Date().toISOString();claimed.errors.push(this.workerLaunchError(error));this.store.saveRun(claimed);void this.objectives.read(this.runDir(claimed.id),claimed);}
     } finally { this.syncing=false; }
   }
   private workerLaunchError(error:unknown,spawning=false) {

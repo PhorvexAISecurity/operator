@@ -86,6 +86,40 @@ class ExportTests(unittest.TestCase):
             self.assertEqual(cost.cell(2, headers.index('CNorm_expected') + 1).value, 0)
             self.assertIsNone(cost.cell(2, headers.index('CNorm_measured') + 1).value)
 
+    def test_objective_fixture_summary_and_exports_preserve_legacy_fixed_mixed_and_missing(self):
+        # Share the API's reduced sanitized trace; synthetic variants exercise the dashboard contract.
+        sample = json.loads((Path(__file__).resolve().parents[1] / 'apps/api/test/fixtures/objective-legacy.json').read_text())
+        legacy, fixed = 'legacy-runtime-lambda-v1', 'fixed-disruption-aversion-v1'
+        for name, objectives in [('legacy', [(legacy, 0)]), ('fixed', [(fixed, 0), (fixed, 1)]),
+                                 ('mixed', [(legacy, 0), (fixed, 1)]), ('missing', [(None, None)])]:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                out = Path(directory); (out / 'raw').mkdir()
+                records = []
+                for index, (mode, value) in enumerate(objectives):
+                    trace = dict(sample['decisionTrace'], decisionID=f'objective-{index}', selectedAction='noop')
+                    trace.pop('economicsVersion', None); trace.pop('effectiveCostCoefficient', None)
+                    if mode is not None: trace['economicsVersion'] = mode
+                    if value is not None: trace['effectiveCostCoefficient'] = value
+                    records.append(dict(sample, decisionTrace=trace))
+                older = dict(sample, decisionTrace=dict(sample['decisionTrace'], timestamp='2026-10-08T17:00:00Z'))
+                audit = out / 'raw/audit-vllm.jsonl'
+                audit.write_text('\n'.join(json.dumps(record) for record in [older, *records, records[0]]))
+                retained = audit.read_bytes()
+                (out / 'cases.jsonl').write_text('')
+                summary = export_workbooks(out, {'id': 'objective-fixture', 'mode': 'serial', 'request': 'Fixed Beta beta=1.0'},
+                                           {'status': 'completed', 'startedAt': '2026-10-08T17:03:55.604Z', 'finishedAt': '2026-10-08T17:16:54.282Z'})
+                self.assertEqual(summary['uniqueTraces'], len(objectives))
+                self.assertEqual(audit.read_bytes(), retained)
+                workbook = openpyxl.load_workbook(out / COST_FILE, read_only=True, data_only=True)
+                try:
+                    rows = list(workbook['Cost_Comparison'].values)
+                    mode_index = rows[0].index('economics_version')
+                    coefficient_index = rows[0].index('effective_cost_coefficient')
+                    self.assertEqual([(row[mode_index], row[coefficient_index]) for row in rows[1:]], objectives)
+                    run_summary = dict(workbook['Run_Summary'].iter_rows(max_col=2, values_only=True))
+                    self.assertEqual(run_summary['unique_full_decision_traces'], len(objectives))
+                finally: workbook.close()
+
 
 class RunnerTests(unittest.TestCase):
     def test_catalogue_preserves_console_flags_reasons_and_opaque_rows(self):

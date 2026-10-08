@@ -39,7 +39,7 @@ export default function BenchmarkRequestDetails({ description, summary, context 
         {expanded ? 'Show less' : 'Show full request'}
       </button>}
     </div>}
-    <p className="request-version-note">The request text guides the plan summary only. It does not change code or configuration; this run tested the deployed version shown here.</p>
+    <p className="request-version-note">The request text guides the plan summary only. It changes neither code nor policy; this run tested the deployed version and the live policy objective shown here.</p>
     {note?.trim() && <section className="benchmark-summary" aria-label={label} dir="ltr">
       <span className="stat-label">{label}</span><BenchmarkDescription text={note}/>
     </section>}
