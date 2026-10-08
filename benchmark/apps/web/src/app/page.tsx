@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BenchmarkRequestDetails from '@/components/BenchmarkRequestDetails';
+import { REQUEST_MAX_CHARACTERS } from '@/lib/limits';
 import { appRecords, progressMessage, readiness, readinessCounts, readinessReason, splitBenchmarkRequest } from '@/lib/presentation';
 import {
   api, ApiError, activeStatuses, appLabel, display, modelId, modelLabel, namespace,
@@ -129,6 +130,7 @@ export default function Dashboard() {
   const [mode, setMode] = useState<Mode>('serial');
   const [model, setModel] = useState('');
   const [request, setRequest] = useState('');
+  const requestTooLong = request.length > REQUEST_MAX_CHARACTERS;
   const [context, setContext] = useState('');
   const [selectedApps, setSelectedApps] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -195,7 +197,9 @@ export default function Dashboard() {
   }
   function clearPlan() { setPlan(null); setError(''); }
   async function makePlan(event: React.FormEvent) {
-    event.preventDefault(); setBusy('plan'); setError(''); setPlan(null);
+    event.preventDefault();
+    if (requestTooLong) return;
+    setBusy('plan'); setError(''); setPlan(null);
     try { setPlan(await api<Plan>('/plans', { method: 'POST', body: JSON.stringify({ mode, model, request: request.trim(), context: context.trim(), applications: selectedApps }) }, 165_000)); }
     catch (cause) { handleError(cause); } finally { setBusy(null); }
   }
@@ -248,10 +252,10 @@ export default function Dashboard() {
       <div className="configure-grid"><form className="panel configure-panel" onSubmit={makePlan}><div className="panel-heading"><span className="step-number">1</span><div><h2>Define benchmark</h2><p>Describe the goal and context of your test.</p></div></div><fieldset className="form-fields" disabled={busy === 'plan' || busy === 'launch'}>
         <fieldset className="field-group"><legend>Execution pipeline</legend><div className="mode-options">{(['serial', 'parallel'] as Mode[]).map(value => <button key={value} type="button" aria-pressed={mode === value} className={`mode-card ${mode === value ? 'chosen' : ''}`} onClick={() => { setMode(value); clearPlan(); }}><span className="mode-icon"><Icon name={value}/></span><span><strong>{value === 'serial' ? 'Serial' : 'Parallel'}</strong><em>{value === 'serial' ? 'One attack at a time' : 'Concurrent applications, ordered attacks within each'}</em></span><span className="radio-dot"/></button>)}</div></fieldset>
         <div className="field-group"><label htmlFor="model">Planning model <span>LLM</span></label><select id="model" dir="ltr" required value={model} disabled={!meta || !!busy} onChange={event => { setModel(event.target.value); clearPlan(); }}><option value="" disabled>{meta ? 'Select model' : 'Loading models…'}</option>{(meta?.models || []).map(item => <option key={modelId(item)} value={modelId(item)}>{modelLabel(item)}</option>)}</select></div>
-        <div className="field-group"><label htmlFor="request">What would you like to benchmark?</label><textarea dir="ltr" id="request" rows={3} required maxLength={8000} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="For example: Evaluate the latest version against every Live attack and inspect its actuator decisions."/><span className="field-hint">Describe the test objective and the criteria you want to inspect.</span></div>
+        <div className="field-group"><label htmlFor="request">What would you like to benchmark?</label><textarea dir="ltr" id="request" rows={3} required aria-invalid={requestTooLong} aria-describedby={requestTooLong ? 'request-hint request-counter request-error' : 'request-hint request-counter'} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="For example: Evaluate the latest version against every Live attack and inspect its actuator decisions."/><span className="field-hint" id="request-counter" aria-live="polite">{request.length.toLocaleString('en-US')} / {REQUEST_MAX_CHARACTERS.toLocaleString('en-US')} characters</span><span className="field-hint" id="request-hint">Describe the test objective and the criteria you want to inspect.</span>{requestTooLong && <div className="notice error" id="request-error" role="alert">Request exceeds {REQUEST_MAX_CHARACTERS.toLocaleString('en-US')} characters. Shorten it before creating a plan. Your text has been kept in full.</div>}</div>
         <div className="field-group"><label htmlFor="context">Context and notes <span>Optional</span></label><textarea dir="ltr" id="context" rows={3} maxLength={16000} value={context} onChange={event => { setContext(event.target.value); clearPlan(); }} placeholder="Configuration, scenarios or context for interpreting the results…"/></div>
         <fieldset className="field-group" aria-describedby="applications-hint"><legend>Target applications</legend><p className="field-hint app-selection-hint">Choose the applications whose Live catalogue entries will be considered.</p><div className="app-options" role="group" aria-label="Target applications">{(meta?.applications || []).map(app => { const ns = namespace(app); const on = selectedApps.includes(ns); return <button type="button" key={ns} role="checkbox" aria-checked={on} className={`app-chip ${on ? 'checked' : ''}`} onClick={() => { setSelectedApps(previous => previous.includes(ns) ? previous.filter(item => item !== ns) : [...previous, ns]); clearPlan(); }}><span className="chip-check"><Icon name="check" size={12}/></span><span dir="ltr">{appLabel(app)}</span></button>; })}</div>{!meta && <span className="field-hint">Loading connected applications…</span>}{meta && <span className="field-hint" id="applications-hint">{(meta.applications || []).length === 0 ? 'No applications are available.' : selectedApps.length ? `${selectedApps.length} of ${meta.applications.length} applications selected. Every Live entry for them is considered, including blocked cases.` : 'Select at least one application to create a plan.'}</span>}</fieldset>
-        <div className="form-footer"><span>Review the plan before starting the run.</span><button className="button primary" disabled={!!busy || !meta || !model || !request.trim() || !selectedApps.length}>{busy === 'plan' ? <span className="spinner"/> : <Icon name="arrow" size={18}/>} {busy === 'plan' ? 'Creating plan…' : 'Create benchmark plan'}</button></div>
+        <div className="form-footer"><span>Review the plan before starting the run.</span><button className="button primary" disabled={!!busy || !meta || !model || !request.trim() || requestTooLong || !selectedApps.length}>{busy === 'plan' ? <span className="spinner"/> : <Icon name="arrow" size={18}/>} {busy === 'plan' ? 'Creating plan…' : 'Create benchmark plan'}</button></div>
       </fieldset></form><aside className="context-column"><div className="evidence-card"><span className="eyebrow">FROM ATTACK TO EVIDENCE</span><h2>Every result.<br/>A traceable path.</h2><div className="evidence-path"><div><span>01</span><p>Live attack<small>From each application's Live catalogue</small></p></div><div><span>02</span><p>Decision and action<small>Selection, dispatch and observed outcome</small></p></div><div><span>03</span><p>Reviewable evidence<small>Raw Excel exports and Grafana observations</small></p></div></div></div>
         <div className="panel export-info"><Icon name="file" size={24}/><h3>Two exports. One retained run.</h3><p>Measured cost compared with expected cost</p><code>Cost Measured vs Expected</code><p>Per-tick decisions and action gates</p><code>Tick Action Gates</code><span className="field-hint">Missing data and measurement limitations are explicit in the report.</span></div>
       </aside></div>

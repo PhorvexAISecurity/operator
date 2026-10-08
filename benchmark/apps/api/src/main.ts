@@ -37,7 +37,8 @@ export class AppModule {}
 
 export async function bootstrap() {
   const app=await NestFactory.create(AppModule,{bodyParser:false,logger:['error','warn']});
-  app.use(express.json({limit:'32kb',strict:true}));
+  // Accommodate UTF-8 and JSON escaping for the full request and context limits.
+  app.use(express.json({limit:'512kb',strict:true}));
   app.use((_request:Request,response:Response,next:()=>void)=>{response.setHeader('X-Content-Type-Options','nosniff');response.setHeader('Cache-Control','no-store');next();});
   app.enableShutdownHooks();
   await app.listen(Number(process.env.PORT||4101),process.env.HOST||'127.0.0.1');

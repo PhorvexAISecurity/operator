@@ -87,6 +87,83 @@ async function createPlan(page, text = request) {
   await expect(page.locator('.plan-panel')).toBeVisible();
 }
 
+test('request counter updates live from empty to the 32000 character boundary', async ({ page }) => {
+  const { errors, externalRequests } = await mockDashboard(page);
+  const textarea = page.getByLabel('What would you like to benchmark?');
+  const counter = page.locator('#request-counter');
+  await expect(counter).toHaveText('0 / 32,000 characters');
+  await expect(counter).toHaveAttribute('aria-live', 'polite');
+  await textarea.fill('Opaque request');
+  await expect(counter).toHaveText('14 / 32,000 characters');
+  await textarea.fill('x'.repeat(32_000));
+  await expect(counter).toHaveText('32,000 / 32,000 characters');
+  await expect(page.getByRole('button', { name: 'Create benchmark plan' })).toBeEnabled();
+  await expect(textarea).toHaveAttribute('aria-invalid', 'false');
+  await expect(page.locator('#request-error')).toHaveCount(0);
+  await textarea.fill('');
+  await expect(counter).toHaveText('0 / 32,000 characters');
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+test('over-limit requests keep their text, show an error and prevent plan submission', async ({ page }) => {
+  const { calls, errors, externalRequests } = await mockDashboard(page);
+  const textarea = page.getByLabel('What would you like to benchmark?');
+  const button = page.getByRole('button', { name: 'Create benchmark plan' });
+  const text = 'x'.repeat(32_000) + ' ';
+  await textarea.fill(text);
+  await expect(textarea).toHaveValue(text);
+  await expect(page.locator('#request-counter')).toHaveText('32,001 / 32,000 characters');
+  await expect(textarea).toHaveAttribute('aria-invalid', 'true');
+  await expect(textarea).toHaveAttribute('aria-describedby', /request-error/);
+  // Next.js adds its own empty route-announcer alert, so target the request error directly.
+  await expect(page.locator('#request-error')).toHaveAttribute('role', 'alert');
+  await expect(page.locator('#request-error')).toContainText('Request exceeds 32,000 characters.');
+  await expect(page.locator('#request-error')).toContainText('Your text has been kept in full.');
+  await expect(button).toBeDisabled();
+  // Also protect submission paths that bypass the disabled button.
+  await textarea.evaluate(element => element.form.requestSubmit());
+  expect(calls.filter(call => call.path === '/api/plans')).toEqual([]);
+  await expect(page.locator('.plan-panel')).toHaveCount(0);
+  await textarea.fill('x'.repeat(32_000));
+  await expect(page.locator('#request-error')).toHaveCount(0);
+  await expect(textarea).toHaveAttribute('aria-invalid', 'false');
+  await expect(button).toBeEnabled();
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+test('native clipboard pastes are never truncated and the full long request reaches planning', async ({ page, context }) => {
+  const { calls, errors, externalRequests } = await mockDashboard(page);
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://127.0.0.1:14100' });
+  const textarea = page.getByLabel('What would you like to benchmark?');
+  const button = page.getByRole('button', { name: 'Create benchmark plan' });
+  const prefix = 'Opaque pasted request\n\n', suffix = '\nRequest end marker.';
+  const text = prefix + 'x'.repeat(32_000 - prefix.length - suffix.length) + suffix;
+  await expect(textarea).not.toHaveAttribute('maxlength');
+  await page.evaluate(value => navigator.clipboard.writeText(value), text + '!');
+  await textarea.focus();
+  await textarea.press('Control+V');
+  await expect(textarea).toHaveValue(text + '!');
+  await expect(page.locator('#request-counter')).toHaveText('32,001 / 32,000 characters');
+  await expect(page.locator('#request-error')).toBeVisible();
+  await expect(button).toBeDisabled();
+  await page.evaluate(value => navigator.clipboard.writeText(value), text);
+  await textarea.press('Control+A');
+  await textarea.press('Control+V');
+  await expect(textarea).toHaveValue(text);
+  await expect(page.locator('#request-counter')).toHaveText('32,000 / 32,000 characters');
+  await expect(button).toBeEnabled();
+  await button.click();
+  await expect(page.locator('.plan-panel')).toBeVisible();
+  const planned = calls.filter(call => call.path === '/api/plans');
+  expect(planned).toHaveLength(1);
+  expect(planned[0].body.request).toBe(text);
+  expect(planned[0].body.request.endsWith(suffix)).toBe(true);
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
 async function openRun(page, title = request) {
   await page.getByRole('button', { name: /^Run history/ }).click();
   await page.locator('.history-row').click();
