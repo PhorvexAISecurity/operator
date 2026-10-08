@@ -43,7 +43,7 @@ export interface Case {
 }
 export interface Plan {
   id: string; summary: string; mode: Mode; model: string; request: string;
-  context: string; applications: string[]; cases: Case[]; limitations?: string[]; llmStatus?: string;
+  context: string; applications: string[]; cases: Case[]; limitations?: string[]; llmStatus?: string; version?: Version;
 }
 export type Artifact = string | { name: string; label?: string; filename?: string; size?: number; available?: boolean };
 export interface Run {

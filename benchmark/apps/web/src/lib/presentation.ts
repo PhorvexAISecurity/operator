@@ -1,4 +1,40 @@
-import { activeStatuses, type Case, type Run } from './api';
+import { activeStatuses, type Case, type Run, type Version } from './api';
+
+export function recordedVersionFields(version?: Version) {
+  if (!version) return [];
+  if (typeof version === 'string') return [{ key: 'version', label: 'Version', value: version }];
+  const labels: Record<string, string> = {
+    operator: 'Operator', console: 'Console', source: 'Source commit',
+    operatorImage: 'Operator image', consoleImage: 'Console image',
+    manager: 'Manager', release: 'Release', version: 'Version', tag: 'Tag',
+  };
+  const fields = Object.entries(labels).filter(([key]) => Object.hasOwn(version, key))
+    .map(([key, label]) => ({ key, label, value: version[key] }));
+  if (Object.hasOwn(version, 'apiReported') || Object.hasOwn(version, 'apiVersion')) {
+    fields.push({ key: 'apiVersion', label: 'API reported version (compile stamp)', value: version.apiReported ?? version.apiVersion });
+  }
+  return fields;
+}
+
+export function hasRecordedValue(value: unknown) { return value !== undefined && value !== null && value !== ''; }
+
+function stableVersionValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableVersionValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, stableVersionValue(entry)]));
+  }
+  return value;
+}
+
+export function versionsDiffer(current?: Version, previous?: Version) {
+  // Snapshot time, pods, readiness, policies and errors are evidence, not version identity.
+  const identity = (version?: Version) => recordedVersionFields(version)
+    .filter(field => hasRecordedValue(field.value)).map(field => [field.key, stableVersionValue(field.value)]);
+  const currentFields = identity(current), previousFields = identity(previous);
+  // Missing versions cannot establish that a deployment changed.
+  return currentFields.length > 0 && previousFields.length > 0 && JSON.stringify(currentFields) !== JSON.stringify(previousFields);
+}
 
 // Request text is display data; only its first non-empty line supplies the title.
 export function splitBenchmarkRequest(request?: string) {

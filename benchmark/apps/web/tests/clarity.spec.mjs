@@ -51,6 +51,7 @@ const run = {
 
 async function mockDashboard(page, options = {}) {
   const fixture = options.run || run;
+  const history = options.runs || [fixture];
   const meta = { models: ['fixture-model'], applications, ...options.meta };
   const calls = [];
   const errors = [];
@@ -69,10 +70,10 @@ async function mockDashboard(page, options = {}) {
     let body;
     if (url.pathname === '/api/auth/session') body = { authenticated: true };
     else if (url.pathname === '/api/meta') body = meta;
-    else if (url.pathname === '/api/runs' && method === 'GET') body = { runs: [fixture] };
-    else if (url.pathname === '/api/plans' && method === 'POST') body = { ...plan, ...options.plan };
-    else if (url.pathname === `/api/runs/${fixture.id}`) body = fixture;
-    else if (url.pathname === `/api/runs/${fixture.id}/events`) body = { events: [] };
+    else if (url.pathname === '/api/runs' && method === 'GET') body = { runs: history };
+    else if (url.pathname === '/api/plans' && method === 'POST') body = { ...plan, ...route.request().postDataJSON(), ...options.plan };
+    else if (history.some(item => url.pathname === `/api/runs/${item.id}`) && method === 'GET') body = history.find(item => url.pathname === `/api/runs/${item.id}`);
+    else if (history.some(item => url.pathname === `/api/runs/${item.id}/events`) && method === 'GET') body = { events: [] };
     else { await route.abort('blockedbyclient'); throw new Error(`Unexpected mock API request: ${method} ${url.pathname}`); }
     await route.fulfill({ json: body });
   });
@@ -507,4 +508,217 @@ test('mobile headers, description and progress fit with table-only horizontal sc
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.locator('[dir="auto"], [dir="rtl"]')).toHaveCount(0);
+});
+
+const retainedVersion = {
+  operator: 'operator-fixture-a', console: 'console-fixture-a', source: 'a'.repeat(40),
+  operatorImage: 'registry.invalid/operator@sha256:' + 'b'.repeat(64),
+  consoleImage: 'registry.invalid/console@sha256:' + 'c'.repeat(64),
+  apiVersion: { version: 'compile-fixture-a', gitCommit: 'compile-fixture-commit' },
+};
+const requestVersionNote = 'The request text guides the plan summary only. It does not change code or configuration; this run tested the deployed version shown here.';
+
+async function expectRerunPrefill(page, fixture, model = fixture.model) {
+  await expect(page.locator('.breadcrumb strong')).toHaveText('New benchmark');
+  await expect(page.getByLabel('What would you like to benchmark?')).toHaveValue(fixture.request);
+  await expect(page.getByLabel('Context and notes')).toHaveValue(fixture.context || '');
+  await expect(page.getByLabel('Planning model')).toHaveValue(model);
+  await expect(page.getByRole('button', { name: /^Serial/ })).toHaveAttribute('aria-pressed', String(fixture.mode === 'serial'));
+  await expect(page.getByRole('button', { name: /^Parallel/ })).toHaveAttribute('aria-pressed', String(fixture.mode === 'parallel'));
+  for (const name of applications) {
+    await expect(page.getByRole('checkbox', { name })).toHaveAttribute('aria-checked', String(fixture.applications.includes(name)));
+  }
+  await expect(page.locator('.plan-panel')).toHaveCount(0);
+}
+
+test('Run again from run details preserves opaque inputs, clears the old plan and allows a fresh edited plan', async ({ page }) => {
+  const fixture = {
+    ...run, request: '  # Retained rerun goal\n\nKeep **opaque** $x$ and <script>literal</script> data.\n  ',
+    context: '  Retained context\nSecond line.  ', mode: 'parallel', model: 'retained-model', applications: ['voice', 'crm'],
+  };
+  const { calls, errors, externalRequests } = await mockDashboard(page, {
+    run: fixture, meta: { models: ['fixture-model', { id: 'retained-model', label: 'Retained model' }] },
+    plan: { id: 'fresh-fixture-plan' },
+  });
+  await createPlan(page, 'An unrelated old plan');
+  await openRun(page, 'Retained rerun goal');
+  const mutationsBeforeRerun = calls.filter(call => call.method === 'POST').length;
+  await page.getByRole('button', { name: 'Run again', exact: true }).click();
+  await expectRerunPrefill(page, fixture);
+  expect(calls.filter(call => call.method === 'POST')).toHaveLength(mutationsBeforeRerun);
+  await page.getByLabel('What would you like to benchmark?').fill(fixture.request + '\nEdited goal.');
+  await page.getByLabel('Context and notes').fill('Edited context.');
+  await page.getByLabel('Planning model').selectOption('fixture-model');
+  await page.getByRole('button', { name: /^Serial/ }).click();
+  await page.getByRole('checkbox', { name: 'crm' }).click();
+  await page.getByRole('button', { name: 'Create benchmark plan' }).click();
+  await expect(page.locator('.plan-panel')).toBeVisible();
+  const planned = calls.filter(call => call.path === '/api/plans');
+  expect(planned).toHaveLength(2);
+  expect(planned[1].body).toEqual({
+    request: (fixture.request + '\nEdited goal.').trim(), context: 'Edited context.',
+    model: 'fixture-model', mode: 'serial', applications: ['voice'],
+  });
+  await expect(page.getByRole('button', { name: 'Start benchmark', exact: true })).toBeEnabled();
+  expect(calls.filter(call => call.path === '/api/runs' && call.method === 'POST')).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+test('each history row can prefill its own run without fetching details or creating a plan', async ({ page }) => {
+  const fixture = { ...run, id: 'older-fixture-run', request: 'An older opaque request\nRetained body.', context: 'Older context.', mode: 'parallel', applications: ['litellm'] };
+  const { calls, errors, externalRequests } = await mockDashboard(page, { runs: [run, fixture] });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  const entries = page.locator('.history-entry');
+  await expect(entries).toHaveCount(2);
+  await expect(entries.getByRole('button', { name: 'Run again', exact: true })).toHaveCount(2);
+  await entries.nth(1).getByRole('button', { name: 'Run again', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expectRerunPrefill(page, fixture);
+  expect(calls.filter(call => call.path.startsWith('/api/runs/'))).toEqual([]);
+  expect(calls.filter(call => call.method === 'POST')).toEqual([]);
+  await page.getByRole('button', { name: 'Create benchmark plan' }).click();
+  await expect(page.locator('.plan-panel')).toBeVisible();
+  expect(calls.find(call => call.path === '/api/plans').body).toEqual({
+    request: fixture.request, context: fixture.context, model: fixture.model, mode: fixture.mode, applications: fixture.applications,
+  });
+  expect(calls.filter(call => call.path === '/api/runs' && call.method === 'POST')).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(externalRequests).toEqual([]);
+});
+
+for (const source of ['run page', 'history']) {
+  test(`Run again from ${source} falls back to the first allowed model when the retained model was removed`, async ({ page }) => {
+    const fixture = { ...run, model: 'removed-fixture-model' };
+    const { calls, errors } = await mockDashboard(page, {
+      run: fixture, meta: { models: [{ id: 'replacement-fixture-model', label: 'Replacement model' }, 'fixture-model'] },
+    });
+    if (source === 'run page') await openRun(page);
+    else await page.getByRole('button', { name: /^Run history/ }).click();
+    await page.getByRole('button', { name: 'Run again', exact: true }).click();
+    await expectRerunPrefill(page, fixture, 'replacement-fixture-model');
+    expect(calls.filter(call => call.method === 'POST')).toEqual([]);
+    await page.getByRole('button', { name: 'Create benchmark plan' }).click();
+    await expect(page.locator('.plan-panel')).toBeVisible();
+    expect(calls.find(call => call.path === '/api/plans').body.model).toBe('replacement-fixture-model');
+    expect(calls.filter(call => call.path === '/api/runs' && call.method === 'POST')).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('Run again keeps an empty model list explicit and prevents plan submission', async ({ page }) => {
+  const { calls } = await mockDashboard(page, { meta: { models: [] } });
+  await openRun(page);
+  await page.getByRole('button', { name: 'Run again', exact: true }).click();
+  await expectRerunPrefill(page, run, '');
+  await expect(page.getByRole('button', { name: 'Create benchmark plan' })).toBeDisabled();
+  expect(calls.filter(call => call.method === 'POST')).toEqual([]);
+});
+
+test('run details show retained operator, console, source and image versions separately from the current version', async ({ page }) => {
+  const { errors } = await mockDashboard(page, {
+    run: { ...run, version: retainedVersion }, meta: { version: { operator: 'currently-deployed-fixture' } },
+  });
+  await openRun(page);
+  const version = page.getByRole('region', { name: 'Tested version', exact: true });
+  for (const [label, value] of [
+    ['Operator', retainedVersion.operator], ['Console', retainedVersion.console], ['Source commit', retainedVersion.source],
+    ['Operator image', retainedVersion.operatorImage], ['Console image', retainedVersion.consoleImage],
+    ['API reported version (compile stamp)', JSON.stringify(retainedVersion.apiVersion)],
+  ]) {
+    const field = version.locator('.version-field').filter({ has: page.getByText(label + ':', { exact: true }) });
+    await expect(field.locator('code')).toHaveText(value);
+  }
+  await expect(version).not.toContainText('currently-deployed-fixture');
+  await expect(page.locator('.version-pill')).toContainText('currently-deployed-fixture');
+  expect(errors).toEqual([]);
+});
+
+test('history shows each retained version and preserves support for string versions', async ({ page }) => {
+  await mockDashboard(page, { runs: [
+    { ...run, version: retainedVersion },
+    { ...run, id: 'legacy-fixture-run', request: 'Legacy fixture', version: 'legacy-retained-version' },
+  ] });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  const versions = page.locator('.history-version');
+  await expect(versions.nth(0)).toContainText('Tested version');
+  for (const value of [retainedVersion.operator, retainedVersion.console, retainedVersion.source]) {
+    await expect(versions.nth(0)).toContainText(value);
+  }
+  await expect(versions.nth(1)).toContainText('legacy-retained-version');
+  await page.locator('.history-row').nth(1).click();
+  await expect(page.getByRole('region', { name: 'Tested version', exact: true }).locator('code')).toHaveText('legacy-retained-version');
+});
+
+for (const field of ['operator', 'console', 'source', 'operatorImage', 'consoleImage']) {
+  test(`history marks a retained ${field} change against the previous older run`, async ({ page }) => {
+    await mockDashboard(page, { runs: [
+      { ...run, id: 'newer-fixture-run', createdAt: '2026-01-03T00:00:00Z', version: { ...retainedVersion, [field]: 'changed-fixture-value' } },
+      { ...run, id: 'middle-fixture-run', createdAt: '2026-01-02T00:00:00Z', version: retainedVersion },
+      { ...run, id: 'oldest-fixture-run', createdAt: '2026-01-01T00:00:00Z', version: retainedVersion },
+    ] });
+    await page.getByRole('button', { name: /^Run history/ }).click();
+    const rows = page.locator('.history-row');
+    await expect(rows.nth(0).getByText('Version changed since previous run', { exact: true })).toBeVisible();
+    await expect(rows.nth(1).locator('.version-change')).toHaveCount(0);
+    await expect(rows.nth(2).locator('.version-change')).toHaveCount(0);
+    await expect(page.locator('.version-change')).toHaveCount(1);
+  });
+}
+
+test('history ignores snapshot metadata and object key order when the retained version stays the same', async ({ page }) => {
+  const earlierVersion = { ...retainedVersion, apiVersion: undefined, apiReported: { gitCommit: 'compile-fixture-commit', version: 'compile-fixture-a' } };
+  await mockDashboard(page, { runs: [
+    { ...run, id: 'newer-fixture-run', version: { ...retainedVersion, time: '2026-01-02T00:00:00Z', pods: [{ uid: 'new-pod' }], errors: ['snapshot warning'] } },
+    { ...run, id: 'older-fixture-run', version: { ...earlierVersion, time: '2026-01-01T00:00:00Z', pods: [{ uid: 'old-pod' }], errors: [] } },
+  ] });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-row')).toHaveCount(2);
+  await expect(page.locator('.version-change')).toHaveCount(0);
+});
+
+test('missing retained versions are explicit and never borrow the current deployment version', async ({ page }) => {
+  await mockDashboard(page, { meta: { version: { operator: 'current-fixture-version' } }, runs: [
+    { ...run, version: undefined },
+    { ...run, id: 'empty-version-run', version: {} },
+    { ...run, id: 'recorded-version-run', version: retainedVersion },
+  ] });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-version').nth(0)).toContainText('Not recorded');
+  await expect(page.locator('.history-version').nth(1)).toContainText('Not recorded');
+  await expect(page.locator('.history-panel')).not.toContainText('current-fixture-version');
+  await expect(page.locator('.version-change')).toHaveCount(0);
+  await page.locator('.history-row').nth(0).click();
+  const version = page.getByRole('region', { name: 'Tested version', exact: true });
+  await expect(version).toContainText('Not recorded');
+  await expect(version).not.toContainText('current-fixture-version');
+});
+
+test('the request clarification note is visible near the request on both plan and run views', async ({ page }) => {
+  await mockDashboard(page, {
+    plan: { version: retainedVersion, summary: '', context: '' },
+    run: { ...run, version: retainedVersion, summary: '', context: '' },
+  });
+  await createPlan(page);
+  await expect(page.locator('.plan-panel .benchmark-heading .request-version-note')).toHaveText(requestVersionNote);
+  await expect(page.getByRole('region', { name: 'Deployed version at planning' })).toContainText(retainedVersion.operator);
+  await openRun(page);
+  await expect(page.locator('.run-heading .request-version-note')).toHaveText(requestVersionNote);
+  await expect(page.locator('.run-heading .request-version-note')).toBeVisible();
+});
+
+test('mobile history and run versions wrap without hiding rerun actions or overflowing the page', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockDashboard(page, { run: { ...run, version: retainedVersion } });
+  await page.getByRole('button', { name: /^Run history/ }).click();
+  await expect(page.locator('.history-version')).toContainText(retainedVersion.source);
+  await expect(page.getByRole('button', { name: 'Run again', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator('.history-row').click();
+  const version = page.getByRole('region', { name: 'Tested version', exact: true });
+  await expect(version).toContainText(retainedVersion.operatorImage);
+  expect(await version.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Run again', exact: true }).click();
+  await expectRerunPrefill(page, run);
 });
