@@ -9,7 +9,7 @@ import {
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const paths: Record<string, React.ReactNode> = {
     lab: <><path d="M9 3h6M10 3v7l-5 8a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-8V3"/><path d="M8 15h8"/></>,
-    arrow: <><path d="M19 12H5M11 6l-6 6 6 6"/></>,
+    arrow: <><path d="M5 12h14m-6-6 6 6-6 6"/></>,
     play: <path d="m8 5 11 7-11 7V5Z"/>,
     history: <><path d="M3 11a9 9 0 1 1 2.6 7M3 4v7h7M12 7v5l3 2"/></>,
     layers: <><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/></>,
@@ -29,15 +29,15 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 const statusLabels: Record<string, string> = {
-  queued: 'در صف', running: 'در حال اجرا', starting: 'آماده‌سازی', capturing: 'ثبت شواهد',
-  completed: 'اجرا پایان یافت', complete: 'اجرا پایان یافت', succeeded: 'اجرا پایان یافت',
-  failed: 'خطای اجرا', error: 'خطا', aborted: 'متوقف‌شده', cancelled: 'لغوشده',
-  cancelling: 'در حال توقف', cancel_requested: 'در حال توقف', blocked: 'مسدود',
-  unavailable: 'ناموجود', unknown: 'نامشخص', pending: 'در انتظار', skipped: 'اجرا نشده',
-  observed: 'مشاهده‌شده', confirmed: 'تأییدشده', emitted: 'ارسال‌شده', refused: 'ردشده',
-  defended: 'دفاع تأییدشده', selected: 'انتخاب‌شده', admitted: 'پذیرفته‌شده',
-  ready: 'آمادهٔ اجرا', partial: 'شواهد ناقص', gap: 'شکاف شواهد',
-  incomplete: 'اجرا با شواهد ناقص', interrupted: 'اجرای قطع‌شده', 'original-record': 'رکورد اصلی',
+  queued: 'Queued', running: 'Running', starting: 'Preparing', capturing: 'Capturing',
+  completed: 'Run finished', complete: 'Run finished', succeeded: 'Run finished',
+  failed: 'Run failed', error: 'Error', aborted: 'Aborted', cancelled: 'Cancelled',
+  cancelling: 'Stopping', cancel_requested: 'Stopping', blocked: 'Blocked',
+  unavailable: 'Unavailable', unknown: 'Unknown', pending: 'Pending', skipped: 'Not executed',
+  observed: 'Observed', confirmed: 'Confirmed', emitted: 'Emitted', refused: 'Refused',
+  defended: 'Defense confirmed', selected: 'Selected', admitted: 'Admitted',
+  ready: 'Ready', partial: 'Partial evidence', gap: 'Evidence gap',
+  incomplete: 'Incomplete evidence', interrupted: 'Interrupted', 'original-record': 'Original record',
 };
 function Badge({ status = 'unknown' }: { status?: string }) {
   const key = status.toLowerCase();
@@ -47,9 +47,31 @@ function Badge({ status = 'unknown' }: { status?: string }) {
 function date(value?: string) {
   if (!value) return '—';
   const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('fa-IR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed);
+  return Number.isNaN(parsed.getTime()) ? value : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed);
 }
-function errorText(error: unknown) { return error instanceof Error ? error.message : 'ارتباط با سرویس برقرار نشد.'; }
+function errorText(error: unknown) { return error instanceof Error ? error.message : 'Could not connect to the service.'; }
+function duration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '—';
+  const total = Math.round(seconds);
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+// Honest ETA: linear extrapolation from the observed completion rate. Only shown while
+// the run is active and at least one case has finished; it is an estimate, not a promise.
+function estimateRemaining(run: Run, completed: number, total: number): number | null {
+  const start = run.startedAt || run.createdAt;
+  if (!start || completed <= 0 || completed >= total) return null;
+  const elapsed = (Date.now() - new Date(start).getTime()) / 1000;
+  if (!Number.isFinite(elapsed) || elapsed <= 0) return null;
+  return (elapsed / completed) * (total - completed);
+}
+function appProgress(run: Run) {
+  const byApp = new Map<string, number>();
+  for (const item of run.cases || []) byApp.set(item.namespace, (byApp.get(item.namespace) || 0) + 1);
+  return [...byApp.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
 function artifacts(run: Run): Artifact[] {
   if (Array.isArray(run.artifacts)) return run.artifacts;
   if (!run.artifacts) return [];
@@ -57,7 +79,7 @@ function artifacts(run: Run): Artifact[] {
 }
 function CaseTable({ cases, plan = false }: { cases: Case[]; plan?: boolean }) {
   return <div className="table-scroll"><table className="case-table"><thead><tr>
-    <th>برنامه / حمله</th><th>{plan ? 'آمادگی' : 'وضعیت / نتیجه'}</th><th>Actuator مورد انتظار</th>{!plan && <th>Actuator مشاهده‌شده</th>}<th>{plan ? 'محدودیت' : 'شواهد / توضیح'}</th>
+    <th>Application / attack</th><th>{plan ? 'Readiness' : 'Status / outcome'}</th><th>Expected actuator</th>{!plan && <th>Recorded actuator</th>}<th>{plan ? 'Limitation' : 'Evidence / notes'}</th>
   </tr></thead><tbody>{cases.map((item, index) => <tr key={`${item.namespace}/${item.id}/${index}`}>
     <td><span className="namespace" dir="ltr">{item.namespace}</span><strong dir="auto">{item.name || item.id}</strong><span className="case-id" dir="ltr">{item.id}</span></td>
     <td><Badge status={plan ? item.benchmarkBlocked || item.armed === false || item.compatible === false ? 'blocked' : item.armed === true && item.compatible === true ? 'ready' : 'unknown' : item.status || (typeof item.outcome === 'string' ? item.outcome : 'pending')}/>
@@ -66,15 +88,15 @@ function CaseTable({ cases, plan = false }: { cases: Case[]; plan?: boolean }) {
     </td>
     <td><code>{display(item.expectedActuator)}</code></td>
     {!plan && <td><code>{display(item.observedActuator || item.action)}</code></td>}
-    <td className="evidence-cell"><span dir="auto">{item.error || (item.errors?.length ? item.errors.map(display).join(' · ') : '') || (item.benchmarkBlocked ? display(item.benchmarkBlockReason) : '') || item.reason || item.limitations?.join(' · ') || (!plan ? (item.resultId ? `Result: ${item.resultId}` : 'در انتظار رکورد مشاهده') : '—')}</span>
+    <td className="evidence-cell"><span dir="auto">{item.error || (item.errors?.length ? item.errors.map(display).join(' · ') : '') || (item.benchmarkBlocked ? display(item.benchmarkBlockReason) : '') || item.reason || item.limitations?.join(' · ') || (!plan ? (item.resultId ? `Result: ${item.resultId}` : 'Waiting for an observed record') : '—')}</span>
       {!plan && item.evidenceStatus && <div><Badge status={item.evidenceStatus}/></div>}
       {!plan && Boolean(item.evidenceKind || item.result?.evidenceKind) && <span className="original-outcome" dir="ltr">{display(item.evidenceKind || item.result?.evidenceKind)}</span>}
-      {!plan && item.evidenceCounts && <details><summary>پوشش شواهد</summary><pre dir="ltr">{JSON.stringify(item.evidenceCounts, null, 2)}</pre></details>}
-      {!plan && item.evidence != null && <details><summary>رکورد شواهد</summary><pre dir="ltr">{JSON.stringify(item.evidence, null, 2)}</pre></details>}
-      {!plan && item.result && <details><summary>رکورد اصلی نتیجه</summary><pre dir="ltr">{JSON.stringify(item.result, null, 2)}</pre></details>}
-      {!plan && item.outcome && typeof item.outcome === 'object' && <details><summary>نتیجه ثبت‌شده</summary><pre dir="ltr">{JSON.stringify(item.outcome, null, 2)}</pre></details>}
+      {!plan && item.evidenceCounts && <details><summary>Evidence coverage</summary><pre dir="ltr">{JSON.stringify(item.evidenceCounts, null, 2)}</pre></details>}
+      {!plan && item.evidence != null && <details><summary>Evidence record</summary><pre dir="ltr">{JSON.stringify(item.evidence, null, 2)}</pre></details>}
+      {!plan && item.result && <details><summary>Original result record</summary><pre dir="ltr">{JSON.stringify(item.result, null, 2)}</pre></details>}
+      {!plan && item.outcome && typeof item.outcome === 'object' && <details><summary>Recorded outcome</summary><pre dir="ltr">{JSON.stringify(item.outcome, null, 2)}</pre></details>}
     </td>
-  </tr>)}</tbody></table>{cases.length === 0 && <div className="empty-inline">هنوز رکوردی برای این اجرا ثبت نشده است.</div>}</div>;
+  </tr>)}</tbody></table>{cases.length === 0 && <div className="empty-inline">No case records have been retained for this run yet.</div>}</div>;
 }
 
 export default function Dashboard() {
@@ -160,6 +182,7 @@ export default function Dashboard() {
   }
   async function launch() {
     if (!plan || busy) return;
+    if (meta?.executionBlockedReason) { setError(meta.executionBlockedReason); return; }
     setBusy('launch'); setError('');
     try {
       const created = await api<Run>('/runs', { method: 'POST', body: JSON.stringify({ planId: plan.id }) });
@@ -178,9 +201,9 @@ export default function Dashboard() {
   }
 
   if (auth !== 'in') return <main className="login-page"><div className="login-decoration"><div className="orb orb-one"/><div className="orb orb-two"/><div className="login-brand" dir="ltr"><span className="brand-mark"><Icon name="lab" size={26}/></span>Phorvex<span>BENCHMARK LAB</span></div></div>
-    <section className="login-card"><span className="eyebrow">PHORVEX / BENCHMARK LAB</span><h1>شواهد واقعی،<br/>تصمیم روشن.</h1><p>اجرای حمله‌های Live، بررسی تصمیم‌های دفاعی و دریافت داده‌های خام بنچمارک.</p>
-      {auth === 'checking' ? <div className="loading-line"><span className="spinner"/>بررسی نشست…</div> : <form onSubmit={login}><label htmlFor="password">رمز ورود داشبورد</label><div className="password-field"><Icon name="key"/><input id="password" type="password" autoComplete="current-password" required maxLength={256} value={password} onChange={event => setPassword(event.target.value)} placeholder="رمز ورود"/></div>{error && <div role="alert" className="notice error">{error}</div>}<button className="button primary full" disabled={!!busy || !password}>{busy === 'login' ? <span className="spinner"/> : <Icon name="arrow"/>}ورود به آزمایشگاه</button></form>}
-      <span className="login-foot">اتصال امن به خوشه و شواهد ثبت‌شدهٔ اجرا</span>
+    <section className="login-card"><span className="eyebrow">PHORVEX / BENCHMARK LAB</span><h1>Real evidence.<br/>Clear decisions.</h1><p>Run Live attacks, inspect defense decisions and download raw benchmark evidence.</p>
+      {auth === 'checking' ? <div className="loading-line"><span className="spinner"/>Checking your session…</div> : <form onSubmit={login}><label htmlFor="password">Dashboard password</label><div className="password-field"><Icon name="key"/><input id="password" type="password" autoComplete="current-password" required maxLength={256} value={password} onChange={event => setPassword(event.target.value)} placeholder="Password"/></div>{error && <div role="alert" className="notice error">{error}</div>}<button className="button primary full" disabled={!!busy || !password}>{busy === 'login' ? <span className="spinner"/> : <Icon name="arrow"/>}Sign in to the lab</button></form>}
+      <span className="login-foot">Secure cluster access and retained run evidence</span>
     </section></main>;
 
   const active = runs.find(item => activeStatuses.has(item.status.toLowerCase()));
@@ -190,33 +213,46 @@ export default function Dashboard() {
   const total = run?.progress?.total || run?.cases?.length || 0;
 
   return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" dir="ltr"><span className="brand-mark"><Icon name="lab" size={24}/></span><span>Phorvex<small>BENCHMARK LAB</small></span></a>
-    <nav aria-label="منوی اصلی"><span className="nav-label">آزمایشگاه</span><button className={view === 'new' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('new'); setError(''); }}><Icon name="lab"/>بنچمارک جدید</button><button className={view === 'history' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('history'); setError(''); }}><Icon name="history"/>تاریخچه اجراها<span className="nav-count">{runs.length}</span></button>{runId.current && <button className={view === 'run' ? 'nav-item selected' : 'nav-item'} onClick={() => setView('run')}><Icon name="layers"/>جزئیات اجرای انتخابی</button>}</nav>
-    <div className="sidebar-bottom"><div className="scope-note"><Icon name="shield"/><div>خوشهٔ متصل<small>Live catalogue · raw evidence</small></div></div><button className="nav-item logout" disabled={!!busy} onClick={logout}><Icon name="logout"/>خروج</button></div>
-  </aside><div className="workspace"><header className="topbar"><div className="breadcrumb"><span>آزمایشگاه</span><span className="slash">/</span><strong>{view === 'new' ? 'بنچمارک جدید' : view === 'history' ? 'تاریخچه اجراها' : 'جزئیات اجرا'}</strong></div><div className="topbar-right"><span className="version-pill"><span className="dot"/>نسخه جاری <code>{versionLabel(meta?.version)}</code></span><button className="icon-button" title="تازه‌سازی وضعیت" aria-label="تازه‌سازی وضعیت" onClick={() => { setError(''); void refresh().catch(handleError); }}><Icon name="refresh" size={17}/></button></div></header>
-    <main className="main-content">{error && <div className="notice error" role="alert"><strong>نیاز به بررسی</strong><span dir="auto">{error}</span><button aria-label="بستن پیام" onClick={() => setError('')}>×</button></div>}
-    {(meta?.errors || []).length > 0 && <div className="notice warning"><strong>وضعیت اتصال و کاتالوگ</strong><ul>{meta?.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></div>}
-    {view === 'new' && <><div className="page-heading"><div><span className="eyebrow">LIVE SECURITY BENCHMARKS</span><h1>آزمایش، با شواهد.</h1><p>حمله‌ها را اجرا کنید؛ تصمیم دفاعی، هزینه و نتیجه را دقیق بررسی کنید.</p></div><span className="heading-symbol"><Icon name="lab" size={34}/></span></div>
-      {active && <div className="notice info"><span><Badge status={active.status}/> یک بنچمارک فعال در خوشه وجود دارد.</span><button className="text-button" onClick={() => void selectRun(active.id)}>مشاهده اجرا <Icon name="arrow" size={15}/></button></div>}
-      <div className="configure-grid"><form className="panel configure-panel" onSubmit={makePlan}><div className="panel-heading"><span className="step-number">۱</span><div><h2>تعریف بنچمارک</h2><p>هدف و زمینهٔ آزمون را مشخص کنید.</p></div></div><fieldset className="form-fields" disabled={busy === 'plan' || busy === 'launch'}>
-        <fieldset className="field-group"><legend>روش اجرای پایپ‌لاین</legend><div className="mode-options">{(['serial', 'parallel'] as Mode[]).map(value => <button key={value} type="button" aria-pressed={mode === value} className={`mode-card ${mode === value ? 'chosen' : ''}`} onClick={() => { setMode(value); clearPlan(); }}><span className="mode-icon"><Icon name={value}/></span><span><strong>{value === 'serial' ? 'سریال' : 'موازی'} <small dir="ltr">{value === 'serial' ? 'Serial' : 'Parallel'}</small></strong><em>{value === 'serial' ? 'حمله‌ها یکی پس از دیگری' : 'برنامه‌ها هم‌زمان؛ ترتیب حمله در هر برنامه'}</em></span><span className="radio-dot"/></button>)}</div></fieldset>
-        <div className="field-group"><label htmlFor="model">مدل برنامه‌ریز <span>LLM</span></label><select id="model" dir="ltr" required value={model} disabled={!meta || !!busy} onChange={event => { setModel(event.target.value); clearPlan(); }}><option value="" disabled>{meta ? 'Select model' : 'Loading models…'}</option>{(meta?.models || []).map(item => <option key={modelId(item)} value={modelId(item)}>{modelLabel(item)}</option>)}</select></div>
-        <div className="field-group"><label htmlFor="request">چه بنچمارکی نیاز دارید؟</label><textarea id="request" rows={3} required maxLength={8000} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="مثلاً: عملکرد آخرین نسخه در برابر تمام حمله‌های Live و انتخاب Actuator مناسب را بررسی کن."/><span className="field-hint">هدف آزمون و معیارهایی که می‌خواهید بررسی شوند.</span></div>
-        <div className="field-group"><label htmlFor="context">زمینه و توضیحات <span>اختیاری</span></label><textarea id="context" rows={3} maxLength={16000} value={context} onChange={event => { setContext(event.target.value); clearPlan(); }} placeholder="تنظیمات، سناریوی مورد نظر یا توضیحاتی برای تفسیر نتایج…"/></div>
-        <fieldset className="field-group"><legend>برنامه‌های هدف <span className="field-hint">تمام حمله‌های کاتالوگ برای هر چهار برنامه بررسی می‌شوند.</span></legend><div className="app-options">{(meta?.applications || []).map(app => <span key={namespace(app)} className="app-chip checked"><span className="chip-check"><Icon name="check" size={12}/></span><span dir="ltr">{appLabel(app)}</span></span>)}</div>{!meta && <span className="field-hint">دریافت برنامه‌های متصل…</span>}</fieldset>
-        <div className="form-footer"><span>طرح اجرا پیش از شروع نمایش داده می‌شود.</span><button className="button primary" disabled={!!busy || !meta || !model || !request.trim() || !selectedApps.length}>{busy === 'plan' ? <span className="spinner"/> : <Icon name="arrow" size={18}/>} {busy === 'plan' ? 'ساخت طرح…' : 'ساخت طرح بنچمارک'}</button></div>
-      </fieldset></form><aside className="context-column"><div className="evidence-card"><span className="eyebrow">FROM ATTACK TO EVIDENCE</span><h2>هر نتیجه،<br/>یک مسیر قابل بررسی.</h2><div className="evidence-path"><div><span>01</span><p>حملهٔ واقعی<small>از کاتالوگ Live برنامه‌ها</small></p></div><div><span>02</span><p>تصمیم و عمل<small>انتخاب، dispatch و مشاهدهٔ نتیجه</small></p></div><div><span>03</span><p>خروجی قابل بررسی<small>Excel خام و شواهد در Grafana</small></p></div></div></div>
-        <div className="panel export-info"><Icon name="file" size={24}/><h3>دو خروجی، یک اجرای ثبت‌شده</h3><p>هزینهٔ اندازه‌گیری‌شده در برابر هزینهٔ مورد انتظار</p><code>Cost Measured vs Expected</code><p>تصمیم‌ها و گیت‌های هر Tick / Action</p><code>Tick Action Gates</code><span className="field-hint">دادهٔ ناموجود و محدودیت اندازه‌گیری در گزارش مشخص می‌شود.</span></div>
+    <nav aria-label="Main navigation"><span className="nav-label">Laboratory</span><button className={view === 'new' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('new'); setError(''); }}><Icon name="lab"/>New benchmark</button><button className={view === 'history' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('history'); setError(''); }}><Icon name="history"/>Run history<span className="nav-count">{runs.length}</span></button>{runId.current && <button className={view === 'run' ? 'nav-item selected' : 'nav-item'} onClick={() => setView('run')}><Icon name="layers"/>Selected run</button>}</nav>
+    <div className="sidebar-bottom"><div className="scope-note"><Icon name="shield"/><div>Connected cluster<small>Live catalogue · raw evidence</small></div></div><button className="nav-item logout" disabled={!!busy} onClick={logout}><Icon name="logout"/>Sign out</button></div>
+  </aside><div className="workspace"><header className="topbar"><div className="breadcrumb"><span>Laboratory</span><span className="slash">/</span><strong>{view === 'new' ? 'New benchmark' : view === 'history' ? 'Run history' : 'Run details'}</strong></div><div className="topbar-right"><span className="version-pill"><span className="dot"/>Current version <code>{versionLabel(meta?.version)}</code></span><button className="icon-button" title="Refresh status" aria-label="Refresh status" onClick={() => { setError(''); void refresh().catch(handleError); }}><Icon name="refresh" size={17}/></button></div></header>
+    <main className="main-content">{error && <div className="notice error" role="alert"><strong>Needs attention</strong><span dir="auto">{error}</span><button aria-label="Dismiss message" onClick={() => setError('')}>×</button></div>}
+    {(meta?.errors || []).length > 0 && <div className="notice warning"><strong>Connection and catalogue status</strong><ul>{meta?.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></div>}
+    {view === 'new' && <><div className="page-heading"><div><span className="eyebrow">LIVE SECURITY BENCHMARKS</span><h1>Test with evidence.</h1><p>Run attacks and inspect defense decisions, cost and original outcomes.</p></div><span className="heading-symbol"><Icon name="lab" size={34}/></span></div>
+      {active && <div className="notice info"><span><Badge status={active.status}/> A benchmark is active on this cluster.</span><button className="text-button" onClick={() => void selectRun(active.id)}>View run <Icon name="arrow" size={15}/></button></div>}
+      <div className="configure-grid"><form className="panel configure-panel" onSubmit={makePlan}><div className="panel-heading"><span className="step-number">1</span><div><h2>Define benchmark</h2><p>Describe the goal and context of your test.</p></div></div><fieldset className="form-fields" disabled={busy === 'plan' || busy === 'launch'}>
+        <fieldset className="field-group"><legend>Execution pipeline</legend><div className="mode-options">{(['serial', 'parallel'] as Mode[]).map(value => <button key={value} type="button" aria-pressed={mode === value} className={`mode-card ${mode === value ? 'chosen' : ''}`} onClick={() => { setMode(value); clearPlan(); }}><span className="mode-icon"><Icon name={value}/></span><span><strong>{value === 'serial' ? 'Serial' : 'Parallel'}</strong><em>{value === 'serial' ? 'One attack at a time' : 'Concurrent applications, ordered attacks within each'}</em></span><span className="radio-dot"/></button>)}</div></fieldset>
+        <div className="field-group"><label htmlFor="model">Planning model <span>LLM</span></label><select id="model" dir="ltr" required value={model} disabled={!meta || !!busy} onChange={event => { setModel(event.target.value); clearPlan(); }}><option value="" disabled>{meta ? 'Select model' : 'Loading models…'}</option>{(meta?.models || []).map(item => <option key={modelId(item)} value={modelId(item)}>{modelLabel(item)}</option>)}</select></div>
+        <div className="field-group"><label htmlFor="request">What would you like to benchmark?</label><textarea dir="auto" id="request" rows={3} required maxLength={8000} value={request} onChange={event => { setRequest(event.target.value); clearPlan(); }} placeholder="For example: Evaluate the latest version against every Live attack and inspect its actuator decisions."/><span className="field-hint">Describe the test objective and the criteria you want to inspect.</span></div>
+        <div className="field-group"><label htmlFor="context">Context and notes <span>Optional</span></label><textarea dir="auto" id="context" rows={3} maxLength={16000} value={context} onChange={event => { setContext(event.target.value); clearPlan(); }} placeholder="Configuration, scenarios or context for interpreting the results…"/></div>
+        <fieldset className="field-group"><legend>Target applications <span className="field-hint">Choose the applications to benchmark.</span></legend><div className="app-options" role="group" aria-label="Target applications">{(meta?.applications || []).map(app => { const ns = namespace(app); const on = selectedApps.includes(ns); return <button type="button" key={ns} role="checkbox" aria-checked={on} className={`app-chip ${on ? 'checked' : ''}`} onClick={() => { setSelectedApps(previous => previous.includes(ns) ? previous.filter(item => item !== ns) : [...previous, ns]); clearPlan(); }}><span className="chip-check"><Icon name="check" size={12}/></span><span dir="ltr">{appLabel(app)}</span></button>; })}</div>{!meta && <span className="field-hint">Loading connected applications…</span>}{meta && (meta.applications || []).length > 0 && <span className="field-hint">{selectedApps.length ? `${selectedApps.length} selected; every catalogue attack for them is considered.` : 'Select at least one application.'}</span>}</fieldset>
+        <div className="form-footer"><span>Review the plan before starting the run.</span><button className="button primary" disabled={!!busy || !meta || !model || !request.trim() || !selectedApps.length}>{busy === 'plan' ? <span className="spinner"/> : <Icon name="arrow" size={18}/>} {busy === 'plan' ? 'Creating plan…' : 'Create benchmark plan'}</button></div>
+      </fieldset></form><aside className="context-column"><div className="evidence-card"><span className="eyebrow">FROM ATTACK TO EVIDENCE</span><h2>Every result.<br/>A traceable path.</h2><div className="evidence-path"><div><span>01</span><p>Live attack<small>From each application's Live catalogue</small></p></div><div><span>02</span><p>Decision and action<small>Selection, dispatch and observed outcome</small></p></div><div><span>03</span><p>Reviewable evidence<small>Raw Excel exports and Grafana observations</small></p></div></div></div>
+        <div className="panel export-info"><Icon name="file" size={24}/><h3>Two exports. One retained run.</h3><p>Measured cost compared with expected cost</p><code>Cost Measured vs Expected</code><p>Per-tick decisions and action gates</p><code>Tick Action Gates</code><span className="field-hint">Missing data and measurement limitations are explicit in the report.</span></div>
       </aside></div>
-      {plan && <section className="panel plan-panel"><div className="panel-heading"><span className="step-number">۲</span><div><h2>طرح آمادهٔ اجرا</h2><p>{plan.summary}</p></div><span className="badge neutral">{plan.cases.length} حمله</span></div>{(plan.limitations || []).length > 0 && <div className="notice warning"><strong>محدودیت‌های طرح</strong><ul>{plan.limitations?.map((item, index) => <li key={index} dir="auto">{item}</li>)}</ul></div>}<CaseTable cases={plan.cases} plan/><div className="plan-footer"><span>اجرای Live روی {plan.applications.join('، ')} · {plan.mode === 'serial' ? 'سریال' : 'موازی'}</span><button className="button primary" disabled={!!busy || !!active || !plan.cases.length} onClick={() => void launch()}>{busy === 'launch' ? <span className="spinner"/> : <Icon name="play" size={16}/>}شروع بنچمارک</button></div></section>}
+      {plan && <section className="panel plan-panel"><div className="panel-heading"><span className="step-number">2</span><div><h2>Plan ready for review</h2><p dir="auto">{plan.summary}</p></div><span className="badge neutral">{plan.cases.length} attacks</span></div>{(plan.limitations || []).length > 0 && <div className="notice warning"><strong>Plan limitations</strong><ul>{plan.limitations?.map((item, index) => <li key={index} dir="auto">{item}</li>)}</ul></div>}<CaseTable cases={plan.cases} plan/><div className="plan-footer"><span>Live run on {plan.applications.join(', ')} · {plan.mode === 'serial' ? 'Serial' : 'Parallel'}</span><button className="button primary" disabled={!!busy || !!active || !plan.cases.length} onClick={() => void launch()}>{busy === 'launch' ? <span className="spinner"/> : <Icon name="play" size={16}/>}Start benchmark</button></div></section>}
     </>}
-    {view === 'history' && <><div className="page-heading"><div><span className="eyebrow">RUN HISTORY</span><h1>اجراهای ثبت‌شده</h1><p>نسخه، وضعیت و خروجی هر بنچمارک را از اینجا بررسی کنید.</p></div><button className="button primary" onClick={() => setView('new')}><Icon name="lab" size={18}/>بنچمارک جدید</button></div><section className="panel history-panel">{runs.length === 0 ? <div className="empty-state"><Icon name="history" size={40}/><h2>هنوز اجرایی ثبت نشده است.</h2><p>اولین بنچمارک را تعریف کنید تا شواهد آن اینجا ثبت شود.</p><button className="button secondary" onClick={() => setView('new')}>تعریف بنچمارک</button></div> : runs.map(item => <button key={item.id} className="history-row" onClick={() => void selectRun(item.id)}><span className="history-icon"><Icon name={item.mode === 'parallel' ? 'parallel' : 'serial'}/></span><span className="history-title"><strong>{item.request || 'بنچمارک Live'}</strong><small><span dir="ltr">{item.id}</span> · {date(item.startedAt || item.createdAt)}</small></span><span className="history-meta"><code>{item.model}</code><span>{item.mode === 'parallel' ? 'موازی' : 'سریال'}</span></span><Badge status={item.status}/><Icon name="arrow" size={18}/></button>)}</section></>}
-    {view === 'run' && (run ? <><div className="page-heading run-heading"><div><span className="eyebrow">BENCHMARK RUN</span><h1>{run.request || 'بنچمارک Live'}</h1><p><code>{run.id}</code><span className="inline-separator">·</span>{date(run.startedAt || run.createdAt)}</p></div><div className="heading-actions"><Badge status={run.status}/>{activeStatuses.has(run.status.toLowerCase()) && <button className="button danger-outline" disabled={!!busy} onClick={() => void cancel()}><Icon name="stop" size={15}/>{busy === 'cancel' ? 'در حال درخواست توقف…' : 'توقف اجرا'}</button>}</div></div>
-      <section className="run-overview"><div className="panel progress-card"><span className="stat-label">پیشرفت حمله‌ها</span><strong><span>{completed}</span><small> / {total}</small></strong><div className="progress-track" role="progressbar" aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={Math.min(completed,total)}><div style={{width: `${total ? Math.min(100, completed / total * 100) : 0}%`}}/></div><span className="field-hint">پایان اجرا، به‌تنهایی تأیید دفاع نیست.</span></div><div className="panel run-stat"><span className="stat-label">پایپ‌لاین / مدل</span><strong>{run.mode === 'parallel' ? 'موازی' : 'سریال'}</strong><code>{run.model}</code></div><div className="panel run-stat"><span className="stat-label">نسخهٔ ثبت‌شده</span><strong dir="ltr">{versionLabel(run.version)}</strong><span className="field-hint">{run.finishedAt ? `پایان: ${date(run.finishedAt)}` : 'در انتظار پایان اجرا'}</span></div></section>
-      <div className="results-toolbar"><div><h2>حمله‌ها و تصمیم‌های مشاهده‌شده</h2><p>انتخاب Actuator، اجرای عمل و تأیید اثر در شواهد جداگانه ثبت می‌شوند.</p></div>{grafanaUrl && <a className="button secondary" href={grafanaUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" size={16}/>مشاهده در Grafana</a>}</div><section className="panel"><CaseTable cases={run.cases || []}/></section>
-      <div className="run-bottom-grid"><section className="panel artifacts-panel"><div className="panel-heading"><Icon name="download"/><div><h2>فایل‌های بنچمارک</h2><p>دریافت خروجی با قالب‌های خام Excel</p></div></div>{visibleArtifacts.length ? visibleArtifacts.map((artifact, index) => { const name = typeof artifact === 'string' ? artifact : artifact.name; return <a key={`${name}/${index}`} className="artifact-link" href={`/api/runs/${encodeURIComponent(run.id)}/artifacts/${encodeURIComponent(name)}`}><span className="file-icon"><Icon name="file"/></span><span><strong>{typeof artifact === 'string' ? artifact : artifact.label || artifact.filename || name}</strong><small>خروجی این اجرا</small></span><Icon name="download" size={18}/></a>; }) : <div className="empty-inline">فایل‌ها پس از ثبت و پردازش شواهد در دسترس قرار می‌گیرند.</div>}</section>
-        <section className="panel events-panel"><div className="panel-heading"><Icon name="layers"/><div><h2>رویدادهای اجرا</h2><p>آخرین وضعیت‌های ثبت‌شده</p></div></div><div className="event-list">{events.length ? events.map((event,index) => <div className={`event-row ${event.level}`} key={`${event.time}/${index}`}><time>{date(event.time)}</time><span dir="auto">{event.message}</span></div>) : <div className="empty-inline">در انتظار رویداد…</div>}</div></section></div>
-      {(run.errors || []).length > 0 && <section className="notice warning"><strong>محدودیت‌ها و خطاهای ثبت‌شده</strong><ul>{run.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></section>}
-    </> : <div className="empty-state"><span className="spinner"/><p>دریافت جزئیات اجرا…</p></div>)}
-    <footer className="page-footer"><span dir="ltr">PHORVEX BENCHMARK LAB</span><span>{updatedAt ? `آخرین دریافت وضعیت: ${date(updatedAt)}` : 'در حال دریافت وضعیت سرویس'}</span></footer>
+    {view === 'history' && <><div className="page-heading"><div><span className="eyebrow">RUN HISTORY</span><h1>Retained runs</h1><p>Review the version, status and exports for each benchmark.</p></div><button className="button primary" onClick={() => setView('new')}><Icon name="lab" size={18}/>New benchmark</button></div><section className="panel history-panel">{runs.length === 0 ? <div className="empty-state"><Icon name="history" size={40}/><h2>No runs have been retained yet.</h2><p>Define your first benchmark to start retaining evidence here.</p><button className="button secondary" onClick={() => setView('new')}>Define benchmark</button></div> : runs.map(item => <button key={item.id} className="history-row" onClick={() => void selectRun(item.id)}><span className="history-icon"><Icon name={item.mode === 'parallel' ? 'parallel' : 'serial'}/></span><span className="history-title"><strong dir="auto">{item.request || 'Live benchmark'}</strong><small><span dir="ltr">{item.id}</span> · {date(item.startedAt || item.createdAt)}</small></span><span className="history-meta"><code>{item.model}</code><span>{item.mode === 'parallel' ? 'Parallel' : 'Serial'}</span></span><Badge status={item.status}/><Icon name="arrow" size={18}/></button>)}</section></>}
+    {view === 'run' && (run ? <><div className="page-heading run-heading"><div><span className="eyebrow">BENCHMARK RUN</span><h1 dir="auto">{run.request || 'Live benchmark'}</h1><p><code>{run.id}</code><span className="inline-separator">·</span>{date(run.startedAt || run.createdAt)}</p></div><div className="heading-actions"><Badge status={run.status}/>{activeStatuses.has(run.status.toLowerCase()) && <button className="button danger-outline" disabled={!!busy} onClick={() => void cancel()}><Icon name="stop" size={15}/>{busy === 'cancel' ? 'Requesting stop…' : 'Stop run'}</button>}</div></div>
+      {(() => {
+        const percent = total ? Math.min(100, Math.round(completed / total * 100)) : 0;
+        const live = activeStatuses.has(run.status.toLowerCase());
+        const remaining = live ? estimateRemaining(run, completed, total) : null;
+        const apps = appProgress(run);
+        return <section className="run-overview"><div className="panel progress-card"><span className="stat-label">Case progress</span>
+          <strong><span>{percent}<small>%</small></span><span className="progress-count" dir="ltr">{completed} / {total}</span></strong>
+          <div className={`progress-track${live ? ' live' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={total || 1} aria-valuenow={Math.min(completed,total)}><div style={{width: `${percent}%`}}/></div>
+          <span className="field-hint">{live ? (remaining != null ? `Estimated time remaining: ${duration(remaining)}` : 'Running; an estimate appears after the first result.') : run.finishedAt ? `Ready · ${date(run.finishedAt)}` : 'Run finished.'}</span>
+          {apps.length > 0 && <div className="app-progress">{apps.map(([ns, done]) => <span key={ns} className="app-progress-chip"><span className="namespace" dir="ltr">{ns}</span>{done}</span>)}</div>}
+          <span className="field-hint">A finished run alone does not confirm a defense.</span></div>
+        <div className="panel run-stat"><span className="stat-label">Pipeline / model</span><strong>{run.mode === 'parallel' ? 'Parallel' : 'Serial'}</strong><code>{run.model}</code></div>
+        <div className="panel run-stat"><span className="stat-label">Retained version</span><strong dir="ltr">{versionLabel(run.version)}</strong><span className="field-hint">{run.finishedAt ? `Finished: ${date(run.finishedAt)}` : 'Waiting for the run to finish'}</span></div></section>;
+      })()}
+      <div className="results-toolbar"><div><h2>Attacks and retained decisions</h2><p>Actuator selection, actuation and confirmed effect are retained separately.</p></div>{grafanaUrl && <a className="button secondary" href={grafanaUrl} target="_blank" rel="noopener noreferrer"><Icon name="external" size={16}/>View in Grafana</a>}</div><section className="panel"><CaseTable cases={run.cases || []}/></section>
+      <div className="run-bottom-grid"><section className="panel artifacts-panel"><div className="panel-heading"><Icon name="download"/><div><h2>Benchmark files</h2><p>Download exports in the raw Excel templates</p></div></div>{visibleArtifacts.length ? visibleArtifacts.map((artifact, index) => { const name = typeof artifact === 'string' ? artifact : artifact.name; return <a key={`${name}/${index}`} className="artifact-link" href={`/api/runs/${encodeURIComponent(run.id)}/artifacts/${encodeURIComponent(name)}`}><span className="file-icon"><Icon name="file"/></span><span><strong>{typeof artifact === 'string' ? artifact : artifact.label || artifact.filename || name}</strong><small>Export from this run</small></span><Icon name="download" size={18}/></a>; }) : <div className="empty-inline">Files become available after evidence is retained and processed.</div>}</section>
+        <section className="panel events-panel"><div className="panel-heading"><Icon name="layers"/><div><h2>Run events</h2><p>Latest retained updates</p></div></div><div className="event-list">{events.length ? events.map((event,index) => <div className={`event-row ${event.level}`} key={`${event.time}/${index}`}><time>{date(event.time)}</time><span dir="auto">{event.message}</span></div>) : <div className="empty-inline">Waiting for events…</div>}</div></section></div>
+      {(run.errors || []).length > 0 && <section className="notice warning"><strong>Retained limitations and errors</strong><ul>{run.errors?.map((item,index) => <li key={index} dir="auto">{display(item)}</li>)}</ul></section>}
+    </> : <div className="empty-state"><span className="spinner"/><p>Loading run details…</p></div>)}
+    <footer className="page-footer"><span dir="ltr">PHORVEX BENCHMARK LAB</span><span>{updatedAt ? `Last status update: ${date(updatedAt)}` : 'Loading service status'}</span></footer>
     </main></div></div>;
 }
