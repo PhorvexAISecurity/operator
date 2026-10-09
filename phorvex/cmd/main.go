@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,6 +55,8 @@ import (
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
+	"github.com/phorvex/phorvex/internal/mathlab"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/physics"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -184,6 +187,10 @@ func main() {
 		migExclusiveMaintenance          bool
 		maxRetainedQuarantines           int
 		scopedOutcomeConfig              string
+		mathLabCapturePolicies           string
+		mathLabCaptureDir                string
+		mathLabCaptureMaxBytes           int64
+		mathLabMaxSnapshotBytes          int
 	)
 	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
 	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
@@ -275,6 +282,10 @@ func main() {
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
 	flag.IntVar(&maxRetainedQuarantines, "max-retained-quarantines-per-namespace", 1, fmt.Sprintf("Hard namespace-wide bound on retained or pending Phorvex quarantines (0 disables new quarantine, maximum %d).", actuator.MaxRetainedQuarantinesUpperBound))
 	flag.StringVar(&scopedOutcomeConfig, "scoped-outcome-config", "", "Absolute path to one strict, preregistered synthetic-session observer configuration. Empty keeps qualified live persistence outcomes unavailable.")
+	flag.StringVar(&mathLabCapturePolicies, "math-lab-capture-policies", "", "Comma-separated namespace/name PhorvexPolicies whose decision ticks are recorded as replayable Math Lab snapshots. Empty (default) records nothing. Recording never changes a decision.")
+	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
+	flag.Int64Var(&mathLabCaptureMaxBytes, "math-lab-capture-max-bytes", 1<<30, "[math-lab-capture-policies] byte bound of the snapshot store; the oldest snapshots are evicted first.")
+	flag.IntVar(&mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot; larger ticks are dropped and counted.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -660,10 +671,43 @@ func main() {
 			setupLog.Info("audit JSON sink", "path", auditJSON, "capBytes", auditMaxBytes, "backups", auditMaxBackups)
 		}
 	}
+	// Math Lab capture is observation-only. Any configuration problem disables it with an
+	// error log; it never stops the operator or alters a decision.
+	var mathLabSource audittransport.MathLabSnapshotSource
+	if strings.TrimSpace(mathLabCapturePolicies) != "" {
+		processConfig := map[string]string{
+			"engine": engineName, "base-interval": baseInterval.String(), "gpu-envelope-max": strconv.FormatFloat(gpuEnvelopeMax, 'g', -1, 64),
+			"pcie-class-table": pcieClassTableRaw, "serving-security-mode": servingSecurityMode,
+			"max-retained-quarantines-per-namespace": strconv.Itoa(maxRetainedQuarantines),
+			"trusted-detectors":                      strings.Join(detectors.List(), ","), "actions-supported-debounce": strconv.Itoa(supportDebounce),
+			"prometheus-configured": strconv.FormatBool(promURL != ""), "epss-cache": epssCachePath, "epss-authoritative": strconv.FormatBool(epssAuthoritative),
+			"flow-residual-classes": flowClasses, "scoped-outcome-config": scopedOutcomeConfig, "calibration-shadow": strconv.FormatBool(calibrationShadow),
+			"lora-clean-sources-file": loraCleanSourcesFile, "mig-profiles-file": migProfilesFile, "global-kill-switch": strconv.FormatBool(killSwitch),
+			"voice-mcp-approved-image": voiceMCPApprovedImage, "endpoint-lease-approved-source-sha256": endpointLeaseApprovedSource,
+			"endpoint-lease-approved-proxy-image": endpointLeaseApprovedProxyImage, "endpoint-lease-approved-engine-image": endpointLeaseApprovedEngineImage,
+		}
+		store, storeErr := mathlab.OpenStore(mathLabCaptureDir, mathLabCaptureMaxBytes, 4, func(st mathlab.StoreStats) {
+			metrics.RecordMathLabStore(st.Files, st.Bytes, st.Evicted, st.Failed)
+		})
+		if storeErr != nil {
+			setupLog.Error(storeErr, "math-lab capture disabled: snapshot store unavailable")
+		} else if recorder, recErr := mathlab.NewRecorder(mathlab.Config{Policies: strings.Split(mathLabCapturePolicies, ","),
+			MaxSnapshotBytes: mathLabMaxSnapshotBytes, ProcessConfig: processConfig, GPUEnvelopeMax: gpuEnvelopeMax},
+			store, metrics.RecordMathLabCapture); recErr != nil {
+			setupLog.Error(recErr, "math-lab capture disabled: invalid configuration")
+		} else if addErr := mgr.Add(ctrlmanager.RunnableFunc(func(ctx context.Context) error { store.Run(ctx); return nil })); addErr != nil {
+			setupLog.Error(addErr, "math-lab capture disabled: cannot register the snapshot writer")
+		} else {
+			rmgr.MathLab = recorder
+			mathLabSource = store
+			setupLog.Info("math-lab decision capture enabled", "policies", mathLabCapturePolicies, "dir", mathLabCaptureDir,
+				"maxBytes", mathLabCaptureMaxBytes, "processConfigHash", mathlab.ProcessConfigHash(processConfig))
+		}
+	}
 	if auditSourceAddr != "" {
 		server, sourceErr := (audittransport.ServerConfig{Addr: auditSourceAddr, AuditPath: auditJSON, VClusterAuditPath: auditSourceVClusterPath,
 			CertFile: auditSourceCert, KeyFile: auditSourceKey, CAFile: auditSourceCA,
-			ClientDNSName: auditSourceClientDNS, MaxBackups: auditMaxBackups}).Start()
+			ClientDNSName: auditSourceClientDNS, MaxBackups: auditMaxBackups, MathLab: mathLabSource}).Start()
 		if sourceErr != nil {
 			setupLog.Error(sourceErr, "audit source unavailable; manager reconciliation continues and remote console audit reads fail closed")
 		} else {

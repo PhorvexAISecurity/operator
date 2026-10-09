@@ -88,6 +88,10 @@ func (s *Server) apiRoutes() []route {
 		// ── tenant-attributable data (filtered to the granted tenants in the handler) ──────
 		read("/api/metrics", s.metricsScrape, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/cost-timeseries", s.costTimeseries, routeSpec{fixedTarget: defaultTargetID}),
+		// Math Lab: read-only relay of recorded decision snapshots, one granted namespace at a
+		// time. The bytes are immutable and content-addressed; the console stores nothing.
+		read("/api/math-lab/snapshots", s.mathLabSnapshots, routeSpec{tenantQ: []string{"namespace"}, fixedTarget: defaultTargetID}),
+		read("/api/math-lab/snapshot", s.mathLabSnapshot, routeSpec{tenantQ: []string{"namespace"}, fixedTarget: defaultTargetID}),
 		read("/api/attack-results", s.attackResults, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/diagnostics", s.diagnostics, routeSpec{fixedTarget: defaultTargetID}),
