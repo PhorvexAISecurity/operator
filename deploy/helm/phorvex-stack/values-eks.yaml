@@ -128,6 +128,15 @@ phorvex:
         storageClass: gp2-csi
         size: 5Gi
 
+    # Math Lab: record vllm-defense decision ticks for offline parameter replay. Capture is
+    # observation-only and bounded (1 GiB on the 5Gi audit volume, oldest evicted first); the
+    # audit trail keeps its own 256 MiB x 5 budget. Snapshots leave the pod only through the
+    # console's read-only, namespace-scoped relay.
+    mathLab:
+      capturePolicies: ["vllm/vllm-defense"]
+      captureDir: /audit/math-lab
+      captureMaxBytes: 1073741824
+
     # ── console, identity-isolated ────────────────────────────────────────────
     # Runs in its own Pod and ServiceAccount. It reads the manager-owned audit file only
     # through the mutually authenticated transport below. Before the first rollout,
