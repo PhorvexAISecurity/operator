@@ -48,6 +48,7 @@ import (
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
+	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -290,8 +291,10 @@ type Manager struct {
 	// Decision trace is observational. Build identity is resolved once at
 	// startup; disabling the trace is used only for non-interference tests.
 	DecisionTraceEnabled bool
-	BrainImage           string
-	GitSHA               string
+	// MathLab records allowlisted policy ticks as replayable snapshots. nil = off.
+	MathLab    *mathlab.Recorder
+	BrainImage string
+	GitSHA     string
 
 	mu sync.RWMutex
 	// emits is the per-policy ledger of ENACTED-move timestamps that feeds the rolling
@@ -2164,7 +2167,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 	}
 
+	// Math Lab: an allowlisted policy's tick is recorded for offline replay. The capture
+	// copies inputs before the engine runs and the raw decisions right after; it never
+	// changes a decision and drops its own snapshot rather than delaying the tick.
+	var capture *mathlab.TickCapture
+	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+		capture = m.MathLab.Begin(ce, e.spec, views, pol, snap.Now)
+	}
+	defer capture.Close()
 	decisions, err := decideTick(m.Optimizer, views, pol)
+	capture.Decided(decisions, err)
 	if ctx.Err() != nil {
 		return
 	}
@@ -2319,6 +2331,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			infeasible++
 		}
 	}
+	capture.Finalize(decisions)
 	for i := range m.fallbackDecisions {
 		m.fallbackDecisions[i].Claim = &claim
 		if m.fallbackDecisions[i].Trace != nil {

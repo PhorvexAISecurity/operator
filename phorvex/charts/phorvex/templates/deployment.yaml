@@ -214,6 +214,19 @@ spec:
         - --audit-source-vcluster-path={{ .Values.phorvex.console.auditTransport.vclusterPath }}
         {{- end }}
         {{- end }}
+        {{- with .Values.phorvex.mathLab.capturePolicies }}
+        {{- range . }}
+        {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-.a-z0-9]*[a-z0-9])?$" .) }}
+        {{- fail (printf "phorvex.mathLab.capturePolicies entry %q must be namespace/name" .) }}
+        {{- end }}
+        {{- end }}
+        {{- if not (hasPrefix (dir $.Values.phorvex.audit.path) $.Values.phorvex.mathLab.captureDir) }}
+        {{- fail "phorvex.mathLab.captureDir must live on the audit volume" }}
+        {{- end }}
+        - --math-lab-capture-policies={{ join "," . }}
+        - --math-lab-capture-dir={{ $.Values.phorvex.mathLab.captureDir }}
+        - --math-lab-capture-max-bytes={{ $.Values.phorvex.mathLab.captureMaxBytes | int64 }}
+        {{- end }}
         {{- end }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true

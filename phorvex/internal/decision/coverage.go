@@ -722,6 +722,7 @@ func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Poli
 			if ex.EligibilityKind != "" {
 				metrics.RecordCandidateExcluded(pol.Tenant, string(ex.Action), ex.EligibilityKind)
 			}
+			metrics.RecordCandidateGated(pol.Tenant, string(ex.Action), ex.Gate)
 		}
 		for _, cand := range as.Candidates {
 			if cand.RBACUnknown {

@@ -110,6 +110,9 @@ func (s ActionSet) CollisionError() error {
 
 // Exclusion is one pruned move and the structural or hard-constraint reason.
 type Exclusion struct {
+	// Gate is the candidate gate that produced this first veto (Gate* constants). It is
+	// structural evidence for Math Lab gate attribution and is never parsed from Reason.
+	Gate           string
 	GenerationRank int
 	Key            string
 	Action         model.Action
@@ -274,7 +277,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			// and the NaN metric counts it. No weight, marginal or gain ever sees the non-number.
 			out.FactsAbsent[key] = af.AbsentReason
 			for _, action := range enabledActions(pol) {
-				out.Excluded = append(out.Excluded, Exclusion{
+				out.Excluded = append(out.Excluded, Exclusion{Gate: GateReconAbsent,
 					Key: key, Action: action, Reason: cost.UnactionableNaNCategory + ": recon " + af.AbsentReason,
 					Category: cost.UnactionableNaNCategory, Detail: "recon " + af.AbsentReason,
 				})
@@ -316,7 +319,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.OutputPolicyObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "sensitive-output-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -326,7 +329,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.VoiceMemoryObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "voice-memory-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -336,7 +339,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.VoiceRefundObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "voice-refund-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -346,7 +349,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.VoiceMCPObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "voice-mcp-tool-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -356,7 +359,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.VoiceOutputObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "voice-output-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -366,7 +369,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.VoiceAdmissionObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "voice-session-admission-policy: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -376,7 +379,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.LiteLLMClientObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "litellm-client-revoke: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -386,7 +389,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.CRMRefundObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "crm-refund-revoke: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -396,7 +399,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				o := v.Pod.EndpointLeaseObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
 					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
-					out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key,
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
 						Action: action, Reason: "endpoint-lease-revoke: event policy identity/epoch differs from selecting policy",
 						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
 					continue
@@ -405,6 +408,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			if action == model.ActionIdentityRotate {
 				out.Excluded = append(out.Excluded, Exclusion{
 					GenerationRank: generationRank, Key: key, Action: action,
+					Gate:            GateUnsupportedAction,
 					Reason:          model.IdentityRotateUnsupportedReason,
 					EligibilityKind: "capability-unsupported",
 					CoverKeys:       append([]string(nil), coverKeys...),
@@ -423,6 +427,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					}
 					out.Excluded = append(out.Excluded, Exclusion{
 						GenerationRank: generationRank, Key: key, Action: action,
+						Gate:           GateQuarantineCapacity,
 						Reason:         "quarantine-capacity-inventory-unknown: " + detail,
 						StructuralKind: model.ExclusionResourceCapacity,
 						CoverKeys:      append([]string(nil), coverKeys...),
@@ -432,6 +437,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				if pol.QuarantineCapacityUsed >= pol.QuarantineCapacityLimit {
 					out.Excluded = append(out.Excluded, Exclusion{
 						GenerationRank: generationRank, Key: key, Action: action,
+						Gate:           GateQuarantineCapacity,
 						Reason:         fmt.Sprintf("quarantine-capacity-exhausted: used=%d limit=%d", pol.QuarantineCapacityUsed, pol.QuarantineCapacityLimit),
 						StructuralKind: model.ExclusionResourceCapacity,
 						CoverKeys:      append([]string(nil), coverKeys...),
@@ -448,7 +454,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				if e := d.Eligible(v, action, coverKeys); e != nil {
 					if e.Excluded {
 						out.Excluded = append(out.Excluded, Exclusion{
-							GenerationRank: generationRank, Key: key, Action: action, Reason: e.Detail, EligibilityKind: e.Kind,
+							Gate: GateCapability, GenerationRank: generationRank, Key: key, Action: action, Reason: e.Detail, EligibilityKind: e.Kind,
 							CoverKeys: append([]string(nil), coverKeys...),
 						})
 						continue
@@ -461,7 +467,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					reason = model.GuardrailBypassNoCoverReason
 				}
 				out.Excluded = append(out.Excluded, Exclusion{
-					GenerationRank: generationRank, Key: key, Action: action, Reason: reason,
+					Gate: GateCapability, GenerationRank: generationRank, Key: key, Action: action, Reason: reason,
 				})
 				continue
 			}
@@ -470,6 +476,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			if resourceReason != "" {
 				out.Excluded = append(out.Excluded, Exclusion{
 					GenerationRank: generationRank, Key: key, Action: action,
+					Gate:           GateSharedResources,
 					Reason:         "resource-capacity: " + resourceReason,
 					StructuralKind: model.ExclusionResourceCapacity,
 					CoverKeys:      append([]string(nil), coverKeys...),
@@ -486,7 +493,7 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 			}
 			if !verdict.Feasible {
 				out.Excluded = append(out.Excluded, Exclusion{
-					GenerationRank: generationRank, Key: key, Action: action, Reason: verdict.Reason,
+					Gate: GateFeasibility, GenerationRank: generationRank, Key: key, Action: action, Reason: verdict.Reason,
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true,
 				})
 				continue
@@ -506,14 +513,14 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					reason += ": " + detail
 				}
 				out.Excluded = append(out.Excluded, Exclusion{
-					GenerationRank: generationRank, Key: key, Action: action, Reason: reason, Category: category, Detail: detail,
+					Gate: GateCostNaN, GenerationRank: generationRank, Key: key, Action: action, Reason: reason, Category: category, Detail: detail,
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true, Feasible: true,
 				})
 				continue
 			}
 			// (4) Conformal SLO-cost gate (worst-case disruption must fit the budget).
 			if d.CostCeiling > 0 && chi > d.CostCeiling {
-				out.Excluded = append(out.Excluded, Exclusion{GenerationRank: generationRank, Key: key, Action: action,
+				out.Excluded = append(out.Excluded, Exclusion{Gate: GateCHiCeiling, GenerationRank: generationRank, Key: key, Action: action,
 					Reason:    "conformal-slo: worst-case cost " + ftoa(chi) + " > ceiling " + ftoa(d.CostCeiling),
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true, Feasible: true,
 					CostEvaluated: true, ECost: ecost, CHi: chi})
