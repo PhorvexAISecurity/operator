@@ -400,6 +400,14 @@ phorvex:
       storageClass: ""
       size: 5Gi
 
+  # Math Lab decision capture (observation-only). Allowlisted policies' decision ticks are
+  # recorded as replayable snapshots on the audit volume and relayed read-only through the
+  # console for offline parameter replay. Empty records nothing. Requires audit.enabled.
+  mathLab:
+    capturePolicies: []      # e.g. ["vllm/vllm-defense"]
+    captureDir: /audit/math-lab
+    captureMaxBytes: 1073741824
+
   # Run the console as a second container in this pod.
   #
   # They are co-located because the console reads the audit as a local file and the

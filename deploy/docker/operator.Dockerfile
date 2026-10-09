@@ -53,7 +53,13 @@ RUN HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
       if [ -f "/tmp/phorvex-git/${REF_PATH}" ]; then GIT_SHA="$(cat "/tmp/phorvex-git/${REF_PATH}")"; else GIT_SHA="notAvailable"; fi; \
     else GIT_SHA="$HEAD_VALUE"; fi && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /manager ./cmd
+    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /manager ./cmd && \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /brain-replay ./cmd/brain-replay
+
+# /brain-replay is the offline Math Lab replay of recorded decision snapshots. It is built
+# in the same step with the same source identity as /manager, so a replay can prove it runs
+# the exact decision code that recorded the snapshot. It is never the entrypoint.
 
 # Administrative recovery is a separate, explicit invocation. The image entrypoint
 # remains the manager; operators must override it to run this bounded CLI.
@@ -81,5 +87,6 @@ COPY --from=builder /phorvex-recovery .
 COPY --from=builder /phorvex-mig-allocation-helper .
 COPY --from=builder /loss-observer .
 COPY --from=builder /current-inventory-observer .
+COPY --from=builder /brain-replay .
 USER 65532:65532
 ENTRYPOINT ["/manager"]

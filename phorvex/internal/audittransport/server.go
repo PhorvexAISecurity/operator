@@ -40,6 +40,8 @@ type ServerConfig struct {
 	Addr, AuditPath, CertFile, KeyFile, CAFile, ClientDNSName string
 	VClusterAuditPath                                         string
 	MaxBackups                                                int
+	// MathLab is the optional read-only Math Lab snapshot store. nil serves 404.
+	MathLab MathLabSnapshotSource
 }
 
 func certPool(path string) (*x509.CertPool, error) {
@@ -369,6 +371,7 @@ func (c ServerConfig) Handler() http.Handler {
 		w.Header().Set("X-Audit-Generation", q.Segment.Generation)
 		_ = json.NewEncoder(w).Encode(commitment)
 	})
+	c.mathLabHandlers(mux)
 	mux.HandleFunc("GET /v1/parameter-material/{kind}/{digest}", func(w http.ResponseWriter, r *http.Request) {
 		kind, digest := r.PathValue("kind"), r.PathValue("digest")
 		if kind != audit.ParameterMaterialManifest && kind != audit.ParameterMaterialPolicyOverrides {

@@ -38,9 +38,9 @@ phorvex:
       # The phorvex subchart has no global-registry helper (unlike the dashboard), so the
       # registry has to be spelled out in the repository here.
       repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex
-      tag: "0.4.216"    # ci:phorvex-tag
-      releaseDigest: "sha256:08364fc17a0092d0abdd9041b8df0bb08444c67597782c2087f62de3b1312ccc" # ci:phorvex-digest
-      releaseSourceSHA: "085a9fae1c2cc480e17b48fd009ff9d5dd406031" # ci:phorvex-source
+      tag: "0.4.217"    # ci:phorvex-tag
+      releaseDigest: "sha256:efad46a75433e35864fb0e76a8e8a673969e447fb5264d7e5f827e675b8d837b" # ci:phorvex-digest
+      releaseSourceSHA: "3051797426ce51265bf2757561bffded3bb69268" # ci:phorvex-source
       pullPolicy: IfNotPresent
     baseInterval: 10s
     leaderElect: true
@@ -127,6 +127,15 @@ phorvex:
         enabled: true
         storageClass: gp2-csi
         size: 5Gi
+
+    # Math Lab: record vllm-defense decision ticks for offline parameter replay. Capture is
+    # observation-only and bounded (1 GiB on the 5Gi audit volume, oldest evicted first); the
+    # audit trail keeps its own 256 MiB x 5 budget. Snapshots leave the pod only through the
+    # console's read-only, namespace-scoped relay.
+    mathLab:
+      capturePolicies: ["vllm/vllm-defense"]
+      captureDir: /audit/math-lab
+      captureMaxBytes: 1073741824
 
     # ── console, identity-isolated ────────────────────────────────────────────
     # Runs in its own Pod and ServiceAccount. It reads the manager-owned audit file only
@@ -342,9 +351,9 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.216" # ci:console-tag
-        releaseDigest: "sha256:e11aed5dcc0ae1dd6e565ebef6b8273812859c6c9d733160b147e493626123bc" # ci:console-digest
-        releaseSourceSHA: "085a9fae1c2cc480e17b48fd009ff9d5dd406031" # ci:console-source
+        tag: "0.4.217" # ci:console-tag
+        releaseDigest: "sha256:b8e2fec1a039d12bf77ae055dfa3e06d5a1df1df58a8da4f417c32303386ca88" # ci:console-digest
+        releaseSourceSHA: "3051797426ce51265bf2757561bffded3bb69268" # ci:console-source
         pullPolicy: IfNotPresent
       port: 8090
       # Retention is activated atomically with the compatible console image at release time.

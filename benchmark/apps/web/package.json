@@ -6,18 +6,26 @@
     "dev": "next dev --hostname 127.0.0.1 --port 4100",
     "build": "next build --webpack",
     "start": "next start --hostname 127.0.0.1 --port 4100",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:ux": "playwright test"
   },
   "dependencies": {
+    "katex": "0.16.47",
     "next": "16.4.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "rehype-katex": "7.0.1",
+    "remark-math": "6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "22.10.2",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "typescript": "5.9.3"
   },
-  "engines": { "node": ">=20.9.0" }
+  "engines": {
+    "node": ">=20.9.0"
+  }
 }
