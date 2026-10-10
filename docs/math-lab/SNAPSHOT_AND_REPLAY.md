@@ -59,6 +59,7 @@ brain-replay -snapshots DIR -arms arms.json -out results.jsonl [-summary summary
 |---|---|---|---|
 | `P-OBJ-003` | `disruptionAversion` (β) | `[0,10]` or `unset` | `unset` keeps the policy's own mode (legacy runtime λ live today). A value on a `costPreferences` policy is an `INVALID_ARM`, because the two are mutually exclusive. |
 | `P-FEA-006` | `costCeiling` (c̄, gate G9) | `(0,1000]` | Hypothetical; replay only. |
+| `P-FEA-005` | `spec.budget.proactiveFloor` (T_cad), in whole seconds | `[1,604800]` | Coupled: the operator derives both the hygiene cadence (G6 `proactive-cadence`) and the exposure-pressure horizon (T_exp: context exposure, recon belief, hazard pressure) from this one spec field, so the arm sets both. A recorded policy whose horizon differs from its floor is an `INVALID_ARM`. Moves backed by a fresh trusted event bypass the cadence law. |
 
 NaN, ±Inf, out-of-domain values, unknown parameters and duplicates are refused before anything runs.
 
@@ -100,6 +101,8 @@ These are the per-candidate gates, in generator order. Every exclusion names exa
 
 The actual statuses follow the generator's short-circuit exactly. A gate before the first veto actually **passed**. Gates after it are `NOT_EVALUATED`. A pure diagnostic is `counterfactual_only` and is never an actual pass.
 
+Per-law G6 rows are evaluated on the view as the generator read it, carrying the tick's event-evidence stamp. On the raw recorded view an event-backed move would show a `proactive-cadence` failure the generator never applied, and a later law's real veto would lose its attribution.
+
 ## What replay can and cannot claim
 
 - It establishes **immediate decision sensitivity** on recorded states: which candidates are admitted, what is selected, and the estimated objective. It does **not** establish realized defense, SLO impact or future-state effects. After an arm diverges, the recorded next state no longer follows from that arm. Those claims need paired sandbox episodes (ticket F, later phase).
@@ -121,6 +124,9 @@ All tests are in-tree and run in CI. They map to the shared acceptance matrix as
 | `mathlab.TestEarlierVetoNeverCountsAsG9` | G-02, G-03 |
 | `mathlab.TestUnusableTelemetryIsNotAPass` | G-04 |
 | `mathlab.TestInvalidArmsAreRefused` | V-04 |
+| `mathlab.TestBucketCreationTickReproduces` (first tick after a start, on an advancing clock) | R-01 |
+| `mathlab.TestProactiveFloorArmMovesCadenceAndExposureHorizon` (coupled roles; event-backed bypass; decoupled policy refused) | R-05, R-07 |
+| `decision.TestShadowAssemblyAfterRestoreMatchesProductionCandidates` (owner state untouched; gate views carry the production evidence stamp) | D gate attribution |
 | `runner.TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick` (audited decisions byte-identical with capture on and off; the runner tick replays exactly) | C "no selection changes", D "no production decisions change" |
 | `cmd/brain-replay.TestReplayCommandReproducesAndRefusesForeignRevisions` | V-01 (version mismatch), inspection |
 | `audittransport.TestMathLabEndpointsAreReadOnlyBoundedAndContentAddressed` | read-only transport |

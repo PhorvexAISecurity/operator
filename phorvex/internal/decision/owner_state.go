@@ -90,13 +90,28 @@ func (e *CoverageEngine) RestoreOwnerState(s OwnerState) error {
 // AssembleSetShadow generates the action set exactly as a shadow evaluation would: it reads
 // the existing owner state, creates none, folds no clock and writes no view. The Math Lab
 // replay uses it to attribute every candidate's first veto gate.
-func (e *CoverageEngine) AssembleSetShadow(views []*model.WorkloadView, pol model.Policy) (actionset.ActionSet, error) {
+//
+// It also returns, per asset key, a copy of the view as the generator read it: carrying the
+// event-evidence stamp the proactive-cadence law consults. A per-law diagnostic evaluated on
+// the caller's unstamped view would report a cadence veto the generator never applied.
+func (e *CoverageEngine) AssembleSetShadow(views []*model.WorkloadView, pol model.Policy) (actionset.ActionSet, map[string]*model.WorkloadView, error) {
 	if e.ownerAbsent(pol.Owner()) {
-		return actionset.ActionSet{}, ErrOwnerRetired
+		return actionset.ActionSet{}, nil, ErrOwnerRetired
 	}
 	tcost := e.costForMode(pol.Owner(), killchain.EvalShadow, pol.Lambda)
-	set, _, err := e.assembleSet(views, pol, tcost, killchain.EvalShadow)
-	return set, err
+	set, ctxByKey, err := e.assembleSet(views, pol, tcost, killchain.EvalShadow)
+	gated := make(map[string]*model.WorkloadView, len(views))
+	for _, v := range views {
+		key := v.Pod.Namespace + "/" + v.Pod.Name
+		ac, ok := ctxByKey[key]
+		if !ok {
+			continue
+		}
+		local := *v
+		local.HasEventEvidence = ac.assess.HasEventEvidence
+		gated[key] = &local
+	}
+	return set, gated, err
 }
 
 // CostForShadow returns the bucket a shadow evaluation would price against without

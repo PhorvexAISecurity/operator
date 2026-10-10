@@ -76,13 +76,20 @@ func capabilityGate(v *model.WorkloadView, a model.Action, _ []string) *actionse
 // snapshot bytes.
 func recordTick(t *testing.T, dir string) []byte {
 	t.Helper()
+	return recordTickWith(t, dir, 3, false)
+}
+
+// recordTickWith records the tick after warmup earlier ticks. With advancingClock every clock
+// read returns a later instant, as a real wall clock does within one tick.
+func recordTickWith(t *testing.T, dir string, warmup int, advancingClock bool) []byte {
+	t.Helper()
 	recon.Registry.SetDefault("ucw-recon")
 	prod := decision.NewCoverageEngine()
 	prod.Capability, prod.ShadowCapability = capabilityGate, capabilityGate
 	prod.FailureExclusion = func(*model.WorkloadView, model.Action) (string, bool) { return "", false }
 	pol, spec := fixturePolicy()
 	base := time.Date(2026, 10, 9, 9, 0, 0, 0, time.UTC)
-	for i := 0; i < 3; i++ {
+	for i := 0; i < warmup; i++ {
 		now := base.Add(time.Duration(i) * 10 * time.Second)
 		prod.Now = func() time.Time { return now }
 		if _, err := prod.DecideChecked(fleet(), pol); err != nil {
@@ -92,6 +99,10 @@ func recordTick(t *testing.T, dir string) []byte {
 	}
 	decidedAt := base.Add(40 * time.Second)
 	prod.Now = func() time.Time { return decidedAt }
+	if advancingClock {
+		next := decidedAt
+		prod.Now = func() time.Time { n := next; next = next.Add(time.Microsecond); return n }
+	}
 
 	sink := &memorySink{}
 	r, err := NewRecorder(Config{Policies: []string{"vllm/vllm-defense"}, GPUEnvelopeMax: cost.GPUEnvelopeMax(),
@@ -194,6 +205,81 @@ func TestBaselineReplayReproducesProductionExactlyAndDeterministically(t *testin
 	b, _ := json.Marshal(second)
 	if string(a) != string(b) {
 		t.Fatal("identical snapshot replayed to different output")
+	}
+}
+
+// The tick that creates the owner's cost bucket (the first one after an operator start)
+// reproduces exactly: the bucket is stamped with the decision's own time, not with a
+// second, later clock read that a replay pinned to the decision time cannot see.
+func TestBucketCreationTickReproduces(t *testing.T) {
+	raw := recordTickWith(t, t.TempDir(), 0, true)
+	snap, err := Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Inputs.Engine.HasBucket || snap.Inputs.Engine.HasMeta {
+		t.Fatal("fixture should record the tick that creates the bucket")
+	}
+	base := byArm(replayArms(t, raw))["baseline"]
+	if base.Status != StatusOK || base.Baseline == nil || !base.Baseline.Reproduced {
+		t.Fatalf("bucket-creation tick not reproduced: status=%s reasons=%v check=%+v", base.Status, base.Reasons, base.Baseline)
+	}
+}
+
+// The proactive floor arm moves both roles buildPolicy derives from spec.budget.proactiveFloor
+// and changes the cadence gate only for moves without event evidence.
+func TestProactiveFloorArmMovesCadenceAndExposureHorizon(t *testing.T) {
+	raw := recordTick(t, t.TempDir())
+	// The fixture pods were last reset 3h ago: a 4h floor caps hygiene, a 1m floor does not.
+	rs := byArm(replayArms(t, raw,
+		Arm{ID: "floor-4h", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(4 * 3600)}}},
+		Arm{ID: "floor-1m", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(60)}}}))
+	base, high, low := rs["baseline"], rs["floor-4h"], rs["floor-1m"]
+	for id, r := range rs {
+		if r.Status != StatusOK {
+			t.Fatalf("%s: %s %v", id, r.Status, r.Reasons)
+		}
+	}
+	if len(high.PolicyDiff) != 1 || high.PolicyDiff[0].After != "proactiveFloor=4h0m0s exposurePressureScale=4h0m0s" {
+		t.Fatalf("arm must move both coupled roles: %+v", high.PolicyDiff)
+	}
+	cadence := func(r ArmResult, asset, action string) *GateRow {
+		return gate(r, asset, action, actionset.GateFeasibility, "proactive-cadence")
+	}
+	if g := cadence(base, "vllm/unmeasured", "rotate"); g == nil || g.ActualStatus != GatePass {
+		t.Fatalf("baseline cadence should pass at 15m: %+v", g)
+	}
+	if g := cadence(high, "vllm/unmeasured", "rotate"); g == nil || g.ActualStatus != GateFail {
+		t.Fatalf("a 4h floor should cap a hygiene move 3h after the last reset: %+v", g)
+	}
+	if g := cadence(high, "vllm/hot", "rotate"); g == nil || g.ActualStatus != GatePass {
+		t.Fatalf("event-backed moves bypass the cadence law: %+v", g)
+	}
+	if g := cadence(low, "vllm/unmeasured", "rotate"); g == nil || g.ActualStatus != GatePass {
+		t.Fatalf("a 1m floor should not cap: %+v", g)
+	}
+	if c := candidate(high, "vllm/unmeasured", "rotate"); c == nil || c.FirstVetoGate != actionset.GateFeasibility {
+		t.Fatalf("under a 4h floor the cadence law should veto before the ceiling: %+v", c)
+	}
+	if high.Funnel.Admitted > base.Funnel.Admitted {
+		t.Fatalf("raising the floor admitted more: %d -> %d", base.Funnel.Admitted, high.Funnel.Admitted)
+	}
+	if high.ArmPolicyOverrides == base.ArmPolicyOverrides {
+		t.Fatal("the floor must change the arm overrides hash")
+	}
+
+	snap, err := Decode(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.Inputs.Policy.ExposurePressureScale = 2 * time.Hour
+	decoupled, err := Replay(snap, ReplayOptions{Arms: []Arm{{ID: "baseline"},
+		{ID: "floor", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(600)}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoupled[1].Status != StatusInvalidArm {
+		t.Fatalf("a recorded horizon set apart from the floor must refuse the coupled override, got %s", decoupled[1].Status)
 	}
 }
 
@@ -301,6 +387,10 @@ func TestInvalidArmsAreRefused(t *testing.T) {
 		{ID: "nan", Overrides: []Override{{ParamID: ParamDisruptionAversion, Value: f(nan())}}},
 		{ID: "neg", Overrides: []Override{{ParamID: ParamDisruptionAversion, Value: f(-1)}}},
 		{ID: "ceil0", Overrides: []Override{{ParamID: ParamCostCeiling, Value: f(0)}}},
+		{ID: "floor0", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(0)}}},
+		{ID: "floor-frac", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(1.5)}}},
+		{ID: "floor-huge", Overrides: []Override{{ParamID: ParamProactiveFloor, Value: f(MaxReplayProactiveFloorSeconds + 1)}}},
+		{ID: "floor-unset", Overrides: []Override{{ParamID: ParamProactiveFloor, Unset: true}}},
 		{ID: "unknown", Overrides: []Override{{ParamID: "P-FEA-001", Value: f(0)}}},
 		{ID: "dup", Overrides: []Override{{ParamID: ParamCostCeiling, Value: f(1)}, {ParamID: ParamCostCeiling, Value: f(2)}}},
 	}
