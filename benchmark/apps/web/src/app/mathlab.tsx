@@ -186,6 +186,7 @@ function Builder({ Icon, header, registry, policy, param, setParam, onError, onC
   const [title, setTitle] = useState('');
   const [hypothesis, setHypothesis] = useState('');
   const [maxSnapshots, setMaxSnapshots] = useState(500);
+  const [spacing, setSpacing] = useState<'even' | 'latest'>('even');
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [busy, setBusy] = useState('');
   const stamp = useRef('');
@@ -193,10 +194,10 @@ function Builder({ Icon, header, registry, policy, param, setParam, onError, onC
   const body = useMemo(() => ({
     title: title || `${param} sweep`, mode: 'REPLAY', parameter_id: param, policy,
     arms: [{ arm_id: 'control', value_source: 'RECORDED_EFFECTIVE' }, ...values.map(v => v === 'UNSET' ? { arm_id: 'unset', unset: true } : { arm_id: `v${String(v).replace('.', '_')}`, value: v })],
-    cohort: { max_snapshots: maxSnapshots }, hypothesis: hypothesis || undefined,
+    cohort: { max_snapshots: maxSnapshots, spacing }, hypothesis: hypothesis || undefined,
     primary_metric_id: param === 'P-FEA-006' ? 'M-P04' : 'M-P21', secondary_metric_ids: ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
     safety_metric_ids: ['M-D02', 'M-D05', 'M-D06', 'M-D07'],
-  }), [title, param, policy, values, maxSnapshots, hypothesis]);
+  }), [title, param, policy, values, maxSnapshots, spacing, hypothesis]);
   const key = JSON.stringify(body);
   const domain = knob?.replay_override?.domain;
   function addValue() {
@@ -240,7 +241,9 @@ function Builder({ Icon, header, registry, policy, param, setParam, onError, onC
         <div className="ml-values"><span className="app-chip checked">control · recorded</span>{values.map(v => <button type="button" key={String(v)} className="app-chip" onClick={() => setValues(values.filter(x => x !== v))} title="Remove">{String(v)} ×</button>)}</div>
         <div className="ml-add"><input inputMode="decimal" placeholder="Add a value" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addValue(); } }}/>
           <button type="button" className="button secondary" onClick={addValue}>Add</button>{knob?.replay_override?.unset_allowed && !values.includes('UNSET') && <button type="button" className="button secondary" onClick={() => setValues(['UNSET', ...values])}>Add UNSET</button>}</div>
-        <label htmlFor="ml-max">Most recent recorded ticks to replay</label><input id="ml-max" type="number" min={1} max={5000} value={maxSnapshots} onChange={e => setMaxSnapshots(Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}/>
+        <label htmlFor="ml-max">Recorded ticks to replay</label><input id="ml-max" type="number" min={1} max={5000} value={maxSnapshots} onChange={e => setMaxSnapshots(Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}/>
+        <label htmlFor="ml-spacing">Tick selection</label><select id="ml-spacing" value={spacing} onChange={e => setSpacing(e.target.value as 'even' | 'latest')}>
+          <option value="even">Evenly spaced across all recorded ticks (recommended)</option><option value="latest">Most recent ticks</option></select>
         <p className="field-hint">Primary metric: <code>{body.primary_metric_id}</code> · guardrails M-D02/05/06/07 are reported UNAVAILABLE in replay, never as zero.</p>
       </section>
     </div>

@@ -49,8 +49,14 @@ def select_cohort(data_dir, request):
         if until and captured and captured >= until:
             continue
         out.append(e)
-    limit = int(cohort.get('max_snapshots') or MAX_SNAPSHOTS)
-    return out[-min(limit, MAX_SNAPSHOTS):]
+    limit = min(int(cohort.get('max_snapshots') or MAX_SNAPSHOTS), MAX_SNAPSHOTS)
+    if cohort.get('spacing') == 'even' and len(out) > limit:
+        # Evenly spaced across the selected window: consecutive 10 s ticks are strongly
+        # autocorrelated, so spreading the cohort makes per-tick intervals less optimistic.
+        if limit == 1:
+            return [out[-1]]
+        return [out[round(i * (len(out) - 1) / (limit - 1))] for i in range(limit)]
+    return out[-limit:]
 
 
 def arm_values(request, knob, inspection):
@@ -233,7 +239,7 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
         cmd.append('-allow-cross-version')
     binary.run_isolated(cmd, timeout=3600)
     _status(root, 'analysis', 'computing metrics')
-    lines = [json.loads(l) for l in open(root / 'replay.jsonl') if l.strip()]
+    lines = exports.stream_replay(root, experiment_id, root / 'replay.jsonl')
     cross = any(l.get('cross_version') for l in lines)
     observational = cross or binary_identity.get('local') or len((manifest['cohort']['summary'].get('git_sha') or {})) > 1
     ctx = {'experiment_id': experiment_id, 'arms': [a['arm_id'] for a in arms], 'control': arms[0]['arm_id'],
@@ -247,7 +253,7 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
     write_json(root / 'plots.json', plots)
     write_json(root / 'result.json', result)
     _status(root, 'export', 'writing evidence')
-    exports.write_all(root, manifest, lines, rows, plots, result)
+    exports.write_all(root, manifest, rows, plots, result)
     matched_trials = [population['matched_by_arm'].get(a['arm_id'], 0) for a in arms[1:]]
     state = 'COMPLETE' if population['control_eligible'] and all(matched_trials) and population['control_eligible'] == len(cohort) else ('PARTIAL' if population['control_eligible'] else 'INVALID')
     _status(root, 'done', 'finished', len(cohort), len(cohort), state=state)
