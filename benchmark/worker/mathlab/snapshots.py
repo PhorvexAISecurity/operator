@@ -4,6 +4,7 @@ Snapshots are immutable and content-addressed: a file is accepted only when its 
 to the digest it was listed under and its header names the requested namespace/policy.
 Nothing here can write to the cluster.
 """
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -87,35 +88,45 @@ def sync(data_dir, namespace, policy, console, since=None, limit=5000, progress=
     record = {'schema_version': 'math-lab.sync.v1', 'started_at': utc(), 'namespace': namespace, 'policy': policy,
               'since': since, 'listed': len(entries), 'already_held': 0, 'downloaded': 0, 'rejected': [],
               'more_available': len(entries) >= limit}
-    for i, entry in enumerate(entries):
+    def fetch(entry):
         digest = entry.get('digest', '')
         if not DIGEST.match(digest):
-            record['rejected'].append({'digest': digest, 'reason': 'invalid digest'})
-            continue
-        if digest in held:
-            record['already_held'] += 1
-            continue
+            return digest, None, 'invalid digest'
         path = '/api/math-lab/snapshot?' + urllib.parse.urlencode({'namespace': namespace, 'digest': digest})
         with console.open(path, timeout=60) as response:
             raw = response.read(MAX_SNAPSHOT_BYTES + 1)
         if len(raw) > MAX_SNAPSHOT_BYTES or hashlib.sha256(raw).hexdigest() != digest:
-            record['rejected'].append({'digest': digest, 'reason': 'content-address check failed'})
-            continue
+            return digest, None, 'content-address check failed'
         try:
             header = read_header(raw)
         except ValueError as error:
-            record['rejected'].append({'digest': digest, 'reason': str(error)})
-            continue
+            return digest, None, str(error)
         if header.get('namespace') != namespace or header.get('policyName') != policy:
-            record['rejected'].append({'digest': digest, 'reason': 'snapshot belongs to another policy'})
-            continue
-        fd, tmp = tempfile.mkstemp(dir=target, prefix='.tmp-')
-        with os.fdopen(fd, 'wb') as f:
-            f.write(raw)
-        os.replace(tmp, target / (digest + '.pxms'))
-        record['downloaded'] += 1
-        if progress:
-            progress(i + 1, len(entries))
+            return digest, None, 'snapshot belongs to another policy'
+        return digest, raw, None
+
+    pending = []
+    for entry in entries:
+        if entry.get('digest') in held:
+            record['already_held'] += 1
+        else:
+            pending.append(entry)
+    done = 0
+    # A few concurrent reads keep the relay busy without exceeding the operator listener's
+    # four-reader bound (the console's own audit cursor also uses it).
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        for digest, raw, reason in pool.map(fetch, pending):
+            done += 1
+            if raw is None:
+                record['rejected'].append({'digest': digest, 'reason': reason})
+            else:
+                fd, tmp = tempfile.mkstemp(dir=target, prefix='.tmp-')
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(raw)
+                os.replace(tmp, target / (digest + '.pxms'))
+                record['downloaded'] += 1
+            if progress and (done % 10 == 0 or done == len(pending)):
+                progress(done, len(pending))
     record['finished_at'] = utc()
     record['corpus'] = corpus_summary(local_index(data_dir, namespace, policy))
     write_json(target / 'last-sync.json', record)
