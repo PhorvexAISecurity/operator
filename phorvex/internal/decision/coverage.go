@@ -382,6 +382,14 @@ func (e *CoverageEngine) ForgetOwner(owner string) {
 // costFor resolves the per-owner cost bucket. An optional lambda seed is consumed only
 // when the bucket is first created; later calls preserve the legacy runtime state.
 func (e *CoverageEngine) costFor(owner string, lambdaSeed ...float64) *cost.P1Cost {
+	return e.costForAt(owner, e.now(), lambdaSeed...)
+}
+
+// costForAt is costFor with the creation time supplied by the caller. A decision passes its
+// own tick time, so a bucket created by that tick is stamped with the instant the tick
+// decided at rather than with a second, later clock read (which a replay pinned to the
+// decision time could never reproduce).
+func (e *CoverageEngine) costForAt(owner string, now time.Time, lambdaSeed ...float64) *cost.P1Cost {
 	if e.costByOwner == nil {
 		e.costByOwner = map[string]*cost.P1Cost{}
 	}
@@ -417,7 +425,7 @@ func (e *CoverageEngine) costFor(owner string, lambdaSeed ...float64) *cost.P1Co
 	e.creationEvent++
 	e.bucketMeta[owner] = BucketMeta{
 		OwnerKey: owner, KeyKind: model.OwnerKindOf(owner), LambdaSeedConsumed: seed,
-		BucketCreatedAt: e.now(), CreationEvent: e.creationEvent,
+		BucketCreatedAt: now, CreationEvent: e.creationEvent,
 	}
 	return c
 }
@@ -437,8 +445,13 @@ func (e *CoverageEngine) costFor(owner string, lambdaSeed ...float64) *cost.P1Co
 // unclaimed, no BucketMeta is minted and creationEvent does not move, so the first real
 // production tick still creates that owner's bucket itself.
 func (e *CoverageEngine) costForMode(owner string, mode killchain.EvalMode, lambdaSeed ...float64) *cost.P1Cost {
+	return e.costForModeAt(owner, mode, e.now(), lambdaSeed...)
+}
+
+// costForModeAt is costForMode with the production creation time supplied by the caller.
+func (e *CoverageEngine) costForModeAt(owner string, mode killchain.EvalMode, now time.Time, lambdaSeed ...float64) *cost.P1Cost {
 	if mode.Commits() {
-		return e.costFor(owner, lambdaSeed...)
+		return e.costForAt(owner, now, lambdaSeed...)
 	}
 	if c := e.costByOwner[owner]; c != nil {
 		return c // existing learned state, read as-is
@@ -784,7 +797,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	}
 	persist := mode.Commits()
 	now := e.now()
-	tcost := e.costForMode(pol.Owner(), mode, pol.Lambda)
+	tcost := e.costForModeAt(pol.Owner(), mode, now, pol.Lambda)
 	if tcost == nil {
 		return nil, ErrOwnerRetired
 	}

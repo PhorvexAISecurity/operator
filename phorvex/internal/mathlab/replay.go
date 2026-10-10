@@ -32,12 +32,22 @@ const (
 	// Parameter identifiers the replay can override. They are registry param_ids.
 	ParamDisruptionAversion = "P-OBJ-003"
 	ParamCostCeiling        = "P-FEA-006"
+	ParamProactiveFloor     = "P-FEA-005"
 
 	// MaxReplayCostCeiling bounds a hypothetical ceiling; the CRD has no upper bound.
 	MaxReplayCostCeiling = 1000.0
 
+	// The proactive floor is replayed in whole seconds within [1s, 7d]; the CRD only
+	// requires a positive duration.
+	MinReplayProactiveFloorSeconds = 1.0
+	MaxReplayProactiveFloorSeconds = 7 * 24 * 3600.0
+
 	unrecordedKind = "math-lab-unrecorded-verdict"
 )
+
+// OverridableParameters lists every parameter ValidateArm accepts, so a caller can tell
+// before scheduling whether this build can replay a sweep.
+var OverridableParameters = []string{ParamCostCeiling, ParamProactiveFloor, ParamDisruptionAversion}
 
 // Override sets one registry parameter for an arm. Unset is only meaningful for
 // disruption aversion, where it selects the policy's own economics mode.
@@ -87,6 +97,17 @@ func ValidateArm(a Arm) error {
 			if v := *o.Value; math.IsNaN(v) || math.IsInf(v, 0) || v <= 0 || v > MaxReplayCostCeiling {
 				return fmt.Errorf("%s: value %v outside (0,%v]", o.ParamID, v, MaxReplayCostCeiling)
 			}
+		case ParamProactiveFloor:
+			if o.Unset || o.Value == nil {
+				return fmt.Errorf("%s: an explicit value in seconds is required", o.ParamID)
+			}
+			v := *o.Value
+			if math.IsNaN(v) || math.IsInf(v, 0) || v < MinReplayProactiveFloorSeconds || v > MaxReplayProactiveFloorSeconds {
+				return fmt.Errorf("%s: value %v outside [%v,%v] seconds", o.ParamID, v, MinReplayProactiveFloorSeconds, MaxReplayProactiveFloorSeconds)
+			}
+			if v != math.Trunc(v) {
+				return fmt.Errorf("%s: value %v is not a whole number of seconds", o.ParamID, v)
+			}
 		default:
 			return fmt.Errorf("parameter %q is not replay-overridable", o.ParamID)
 		}
@@ -121,6 +142,20 @@ func applyArm(pol *model.Policy, a Arm) ([]FieldDiff, error) {
 			before := fmt.Sprintf("%v", cost.EffectiveCostCeiling(*pol))
 			pol.CostCeiling = *o.Value
 			diffs = append(diffs, FieldDiff{Field: "policy.costCeiling", Before: before, After: fmt.Sprintf("%v", *o.Value)})
+		case ParamProactiveFloor:
+			// spec.budget.proactiveFloor has coupled roles: buildPolicy sets both the hygiene
+			// cadence (T_cad) and the exposure-pressure horizon (T_exp) from it. The arm models
+			// that spec change, so it moves both, and refuses a recorded policy whose horizon was
+			// set independently (that policy was not produced by the coupling being modelled).
+			if pol.ExposurePressureScale != 0 && pol.ExposurePressureScale != pol.ProactiveFloor {
+				return nil, fmt.Errorf("recorded exposure pressure scale %v is decoupled from the proactive floor %v",
+					pol.ExposurePressureScale, pol.ProactiveFloor)
+			}
+			before := fmt.Sprintf("proactiveFloor=%v exposurePressureScale=%v", pol.ProactiveFloor, pol.ExposurePressureScale)
+			floor := time.Duration(*o.Value) * time.Second
+			pol.ProactiveFloor, pol.ExposurePressureScale = floor, floor
+			diffs = append(diffs, FieldDiff{Field: "policy.proactiveFloor", Before: before,
+				After: fmt.Sprintf("proactiveFloor=%v exposurePressureScale=%v", floor, floor)})
 		}
 	}
 	return diffs, nil
@@ -251,6 +286,10 @@ type evaluation struct {
 	err       error
 	missed    []string
 	seconds   float64
+
+	// gateViews are the views as the generator read them (event-evidence stamped), keyed by
+	// asset; per-law rows are evaluated on these.
+	gateViews map[string]*model.WorkloadView
 }
 
 func evaluate(s *Snapshot, pol model.Policy) (evaluation, error) {
@@ -289,9 +328,9 @@ func evaluate(s *Snapshot, pol model.Policy) (evaluation, error) {
 		return out, err
 	}
 	start := time.Now()
-	set, setErr := engine.AssembleSetShadow(diagViews, pol)
+	set, gateViews, setErr := engine.AssembleSetShadow(diagViews, pol)
 	if setErr == nil {
-		out.set = set
+		out.set, out.gateViews = set, gateViews
 	}
 	out.decisions, out.err = engine.DecideChecked(decideViews, pol)
 	out.seconds = time.Since(start).Seconds()

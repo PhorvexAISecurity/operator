@@ -114,7 +114,8 @@ func TestShadowAssemblyAfterRestoreMatchesProductionCandidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := replay.ExportOwnerState(pol.Owner())
-	set, err := replay.AssembleSetShadow(historyFleet(3), pol)
+	shadowViews := historyFleet(3)
+	set, gated, err := replay.AssembleSetShadow(shadowViews, pol)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,6 +127,29 @@ func TestShadowAssemblyAfterRestoreMatchesProductionCandidates(t *testing.T) {
 	b2, _ := json.Marshal(after)
 	if !bytes.Equal(b1, b2) {
 		t.Fatal("shadow assembly changed owner state")
+	}
+	// The returned gate views carry the evidence stamp a production pass writes; the caller's
+	// views are left as they were.
+	prodViews := historyFleet(3)
+	if _, err := replay.DecideChecked(prodViews, pol); err != nil {
+		t.Fatal(err)
+	}
+	stamped := 0
+	for i, v := range prodViews {
+		key := v.Pod.Namespace + "/" + v.Pod.Name
+		g := gated[key]
+		if g == nil || g.HasEventEvidence != v.HasEventEvidence {
+			t.Fatalf("%s: gate view %+v, production stamp %v", key, g, v.HasEventEvidence)
+		}
+		if shadowViews[i].HasEventEvidence {
+			t.Fatalf("%s: shadow assembly wrote the caller's view", key)
+		}
+		if v.HasEventEvidence {
+			stamped++
+		}
+	}
+	if stamped == 0 {
+		t.Fatal("fixture has no event-backed asset; the stamp comparison proves nothing")
 	}
 }
 

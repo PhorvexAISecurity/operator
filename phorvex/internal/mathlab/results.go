@@ -434,7 +434,11 @@ func (c *armContext) fill(res *ArmResult, commonWeights map[string]float64) {
 			if firstGate != "" {
 				res.Funnel.FirstVetoByGate[firstGate]++
 			}
-			gates, law, g9 := gateRows(v, action, pol, firstGate, ex, isCand, cand, tcost, ceiling)
+			gv := v
+			if stamped, ok := ev.gateViews[key]; ok {
+				gv = stamped
+			}
+			gates, law, g9 := gateRows(gv, action, pol, firstGate, ex, isCand, cand, tcost, ceiling)
 			row.FeasibilityLaw, row.G9Category = law, g9
 			res.Funnel.G9Categories[g9]++
 			for _, g := range gates {
