@@ -42,6 +42,12 @@ test('registry is served, unknown policies are refused, and preflight runs the r
     assert.equal(registry.schema_version, 'math-lab.parameters.v1');
     assert.ok(registry.items.length >= 198);
     assert.deepEqual(registry.items.filter((i: any) => i.control === 'EXPERIMENT_KNOB').map((i: any) => i.param_id).sort(), ['P-FEA-005', 'P-FEA-006', 'P-OBJ-003']);
+    const overlayDir = join(directory, 'mathlab', 'registry-effective');
+    mkdirSync(overlayDir, { recursive: true });
+    writeFileSync(join(overlayDir, 'vllm--vllm-defense.json'), JSON.stringify({ ...registry, registry_version: 'older', items: [], inspection: { available: true } }));
+    assert.equal((service.registry('vllm/vllm-defense') as any).registry_version, registry.registry_version, 'an overlay from an older registry is not served');
+    writeFileSync(join(overlayDir, 'vllm--vllm-defense.json'), JSON.stringify({ ...registry, inspection: { available: true } }));
+    assert.deepEqual((service.registry('vllm/vllm-defense') as any).inspection, { available: true });
     assert.throws(() => service.registry('other/policy'));
     assert.throws(() => service.sync({ policy: 'other/policy' }));
     await assert.rejects(() => service.create({ ...valid, policy: 'other/policy' }));
