@@ -212,3 +212,18 @@ class StreamingAndSyncTest(unittest.TestCase):
             record = snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
             self.assertIn('since=2026-10-09T00%3A00%3A00Z', console.paths[0])
             self.assertEqual((record['already_held'], record['downloaded']), (1, 0))
+
+
+class CohortSpacingTest(unittest.TestCase):
+    def test_even_spacing_spans_the_window(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / 'mathlab' / 'snapshots' / 'vllm' / 'vllm-defense'
+            corpus.mkdir(parents=True)
+            for i in range(10):
+                header = json.dumps({'schema': 'math-lab.snapshot.v1', 'capturedAt': '2026-10-09T00:00:%02dZ' % i, 'namespace': 'vllm', 'policyName': 'vllm-defense'}).encode()
+                (corpus / ('%064x' % (i + 1) + '.pxms')).write_bytes(b'PXMLSNP1' + struct.pack('>I', len(header)) + header)
+            req = {'namespace': 'vllm', 'policy': 'vllm-defense', 'cohort': {'max_snapshots': 4, 'spacing': 'even'}}
+            got = [e['header']['capturedAt'][-3:-1] for e in experiment.select_cohort(tmp, req)]
+            self.assertEqual(got, ['00', '03', '06', '09'])
+            req['cohort']['spacing'] = 'latest'
+            self.assertEqual([e['header']['capturedAt'][-3:-1] for e in experiment.select_cohort(tmp, req)], ['06', '07', '08', '09'])

@@ -49,8 +49,14 @@ def select_cohort(data_dir, request):
         if until and captured and captured >= until:
             continue
         out.append(e)
-    limit = int(cohort.get('max_snapshots') or MAX_SNAPSHOTS)
-    return out[-min(limit, MAX_SNAPSHOTS):]
+    limit = min(int(cohort.get('max_snapshots') or MAX_SNAPSHOTS), MAX_SNAPSHOTS)
+    if cohort.get('spacing') == 'even' and len(out) > limit:
+        # Evenly spaced across the selected window: consecutive 10 s ticks are strongly
+        # autocorrelated, so spreading the cohort makes per-tick intervals less optimistic.
+        if limit == 1:
+            return [out[-1]]
+        return [out[round(i * (len(out) - 1) / (limit - 1))] for i in range(limit)]
+    return out[-limit:]
 
 
 def arm_values(request, knob, inspection):

@@ -33,6 +33,7 @@ export const EXPERIMENT_INPUT = z.object({
     since: z.string().datetime({ offset: true }).optional(),
     until: z.string().datetime({ offset: true }).optional(),
     max_snapshots: z.number().int().min(1).max(5000).optional(),
+    spacing: z.enum(['latest', 'even']).optional(),
   }).strict().optional(),
   hypothesis: z.string().max(2000).optional(),
   primary_metric_id: METRIC,
