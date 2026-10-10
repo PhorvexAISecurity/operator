@@ -63,23 +63,44 @@ CANDIDATE_HEADERS = ['experiment_id', 'snapshot_digest', 'captured_at', 'arm_id'
                      'eligibility_kind', 'feasibility_law', 'admitted', 'scored', 'net_gain', 'selected', 'g9_category', 'expected_cost', 'c_hi']
 
 
-def _flatten(lines, eid, key, extra=None):
-    for line in lines:
-        ident = _ident(line)
-        for row in line.get(key) or []:
-            out = {'experiment_id': eid, **ident, **row}
-            if extra:
-                out.update(extra(line, row))
-            yield out
+
+HEAVY = ('gates', 'costs', 'candidates')
+ROW_FILES = (('candidate_gate_trace.csv', GATE_HEADERS, 'gates'), ('decision_funnel.csv', FUNNEL_HEADERS, 'decisions'),
+             ('cost_truth.csv', COST_HEADERS, 'costs'), ('candidates.csv', CANDIDATE_HEADERS, 'candidates'))
 
 
-def write_csvs(root, manifest, lines, rows):
-    eid = manifest['experiment_id']
+def stream_replay(root, experiment_id, replay_path):
+    """Read replay.jsonl once, line by line: write every per-row CSV as it goes and return
+    compact lines (without per-gate/cost/candidate rows) for the analysis. Memory stays
+    proportional to the per-tick summaries, not to the raw replay output."""
+    root = Path(root)
+    handles = {name: open(root / name, 'w', newline='') for name, _, _ in ROW_FILES}
+    writers = {name: csv.writer(handles[name]) for name in handles}
+    for name, headers, _ in ROW_FILES:
+        writers[name].writerow(headers)
+    compact = []
+    try:
+        with open(replay_path) as f:
+            for raw in f:
+                if not raw.strip():
+                    continue
+                line = json.loads(raw)
+                ident = {'experiment_id': experiment_id, **_ident(line)}
+                for name, headers, key in ROW_FILES:
+                    for row in line.get(key) or []:
+                        merged = {**ident, **row}
+                        writers[name].writerow([safe(merged.get(h)) for h in headers])
+                for key in HEAVY:
+                    line.pop(key, None)
+                compact.append(line)
+    finally:
+        for h in handles.values():
+            h.close()
+    return compact
+
+
+def write_csvs(root, manifest, rows):
     write_csv(root / 'sweep_results.csv', METRIC_HEADERS, rows)
-    write_csv(root / 'candidate_gate_trace.csv', GATE_HEADERS, _flatten(lines, eid, 'gates'))
-    write_csv(root / 'decision_funnel.csv', FUNNEL_HEADERS, _flatten(lines, eid, 'decisions'))
-    write_csv(root / 'cost_truth.csv', COST_HEADERS, _flatten(lines, eid, 'costs'))
-    write_csv(root / 'candidates.csv', CANDIDATE_HEADERS, _flatten(lines, eid, 'candidates'))
 
 
 def write_workbook(root, manifest, rows):
@@ -193,9 +214,11 @@ def write_report(root, manifest, rows, result):
     (root / 'report.md').write_text('\n'.join(lines) + '\n')
 
 
-def write_all(root, manifest, lines, rows, plots, result):
+def write_all(root, manifest, rows, plots, result):
+    """Write the metric CSV, workbook, plots, report and ZIP. The per-row CSVs were already
+    written by stream_replay."""
     root = Path(root)
-    write_csvs(root, manifest, lines, rows)
+    write_csvs(root, manifest, rows)
     workbook = write_workbook(root, manifest, rows)
     plot_files = write_plots(root, manifest, plots, result)
     write_report(root, manifest, rows, result)

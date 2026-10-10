@@ -72,6 +72,12 @@ def corpus_summary(entries):
 def sync(data_dir, namespace, policy, console, since=None, limit=5000, progress=None):
     """Download every listed snapshot not held locally. Returns a sync record."""
     target = corpus_dir(data_dir, namespace, policy)
+    if not since:
+        # Incremental: the operator index is in capture order and bounded, so resume from the
+        # newest tick already held instead of re-listing the oldest ones forever.
+        held_entries = local_index(data_dir, namespace, policy)
+        if held_entries:
+            since = held_entries[-1]['header'].get('capturedAt')
     query = {'namespace': namespace, 'policy': policy, 'limit': str(limit)}
     if since:
         query['since'] = since
@@ -79,7 +85,8 @@ def sync(data_dir, namespace, policy, console, since=None, limit=5000, progress=
     entries = listing.get('entries') or []
     held = {p.stem for p in target.glob('*.pxms')}
     record = {'schema_version': 'math-lab.sync.v1', 'started_at': utc(), 'namespace': namespace, 'policy': policy,
-              'listed': len(entries), 'already_held': 0, 'downloaded': 0, 'rejected': []}
+              'since': since, 'listed': len(entries), 'already_held': 0, 'downloaded': 0, 'rejected': [],
+              'more_available': len(entries) >= limit}
     for i, entry in enumerate(entries):
         digest = entry.get('digest', '')
         if not DIGEST.match(digest):

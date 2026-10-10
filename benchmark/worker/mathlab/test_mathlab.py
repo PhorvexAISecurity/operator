@@ -178,3 +178,37 @@ class ExportSafetyTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StreamingAndSyncTest(unittest.TestCase):
+    def test_stream_replay_writes_rows_and_returns_compact_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw = line(DIGEST_A, 'control', ['vllm/a:rotate'])
+            raw['gates'] = [{'asset': 'vllm/a', 'action': 'rotate', 'gate_id': 'G9-chi-ceiling', 'actual_status': 'PASS'}] * 3
+            raw['costs'] = [{'asset': 'vllm/a', 'action': 'rotate', 'c_hi': 1.1}]
+            raw['candidates'] = [{'asset': 'vllm/a', 'action': '=cmd()'}]
+            (root / 'replay.jsonl').write_text(json.dumps(raw) + '\n\n')
+            compact = exports.stream_replay(root, 'e', root / 'replay.jsonl')
+            self.assertEqual(len(compact), 1)
+            self.assertFalse(any(k in compact[0] for k in ('gates', 'costs', 'candidates')))
+            self.assertIn('decisions', compact[0])
+            self.assertEqual(len((root / 'candidate_gate_trace.csv').read_text().strip().splitlines()), 4)
+            self.assertIn("'=cmd()", (root / 'candidates.csv').read_text())
+
+    def test_sync_resumes_after_the_newest_held_tick(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            corpus = Path(tmp) / 'mathlab' / 'snapshots' / 'vllm' / 'vllm-defense'
+            corpus.mkdir(parents=True)
+            write_fake_snapshot(corpus, DIGEST_A)
+
+            class FakeConsole:
+                def __init__(self): self.paths = []
+                def request(self, path):
+                    self.paths.append(path)
+                    return {'entries': [{'digest': DIGEST_A}]}
+            console = FakeConsole()
+            from mathlab import snapshots
+            record = snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
+            self.assertIn('since=2026-10-09T00%3A00%3A00Z', console.paths[0])
+            self.assertEqual((record['already_held'], record['downloaded']), (1, 0))
