@@ -57,7 +57,8 @@ func main() {
 	flag.Parse()
 	id := buildinfo.Current()
 	if printVersion {
-		_ = json.NewEncoder(os.Stdout).Encode(map[string]string{"gitSHA": id.GitSHA, "brainImage": id.BrainImage, "snapshotSchema": mathlab.SnapshotSchema, "replaySchema": mathlab.ReplaySchema})
+		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"gitSHA": id.GitSHA, "brainImage": id.BrainImage, "snapshotSchema": mathlab.SnapshotSchema,
+			"replaySchema": mathlab.ReplaySchema, "overridableParameters": mathlab.OverridableParameters})
 		return
 	}
 	if inspect {

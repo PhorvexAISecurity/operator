@@ -401,6 +401,23 @@ func TestInvalidArmsAreRefused(t *testing.T) {
 	}
 }
 
+// The advertised list (brain-replay -version) is exactly what ValidateArm accepts.
+func TestOverridableParametersMatchValidation(t *testing.T) {
+	valid := map[string]float64{ParamDisruptionAversion: 1, ParamCostCeiling: 1.5, ParamProactiveFloor: 600}
+	if len(OverridableParameters) != len(valid) {
+		t.Fatalf("advertised %v", OverridableParameters)
+	}
+	for _, id := range OverridableParameters {
+		v, ok := valid[id]
+		if !ok {
+			t.Fatalf("%s advertised without a validation case", id)
+		}
+		if err := ValidateArm(Arm{ID: "a", Overrides: []Override{{ParamID: id, Value: f(v)}}}); err != nil {
+			t.Fatalf("%s advertised but refused: %v", id, err)
+		}
+	}
+}
+
 // R-02: a snapshot missing replay-critical state is UNREPLAYABLE, never approximated.
 func TestIncompleteSnapshotIsUnreplayable(t *testing.T) {
 	raw := recordTick(t, t.TempDir())

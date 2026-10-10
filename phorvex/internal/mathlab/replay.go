@@ -45,6 +45,10 @@ const (
 	unrecordedKind = "math-lab-unrecorded-verdict"
 )
 
+// OverridableParameters lists every parameter ValidateArm accepts, so a caller can tell
+// before scheduling whether this build can replay a sweep.
+var OverridableParameters = []string{ParamCostCeiling, ParamProactiveFloor, ParamDisruptionAversion}
+
 // Override sets one registry parameter for an arm. Unset is only meaningful for
 // disruption aversion, where it selects the policy's own economics mode.
 type Override struct {
@@ -277,14 +281,15 @@ func cloneViews(in []*model.WorkloadView) ([]*model.WorkloadView, error) {
 type evaluation struct {
 	policy    model.Policy
 	set       actionset.ActionSet
-	// gateViews are the views as the generator read them (event-evidence stamped), keyed by
-	// asset; per-law rows are evaluated on these.
-	gateViews map[string]*model.WorkloadView
 	decisions []model.Decision
 	cost      *cost.P1Cost
 	err       error
 	missed    []string
 	seconds   float64
+
+	// gateViews are the views as the generator read them (event-evidence stamped), keyed by
+	// asset; per-law rows are evaluated on these.
+	gateViews map[string]*model.WorkloadView
 }
 
 func evaluate(s *Snapshot, pol model.Policy) (evaluation, error) {

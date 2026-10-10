@@ -61,7 +61,7 @@ brain-replay -snapshots DIR -arms arms.json -out results.jsonl [-summary summary
 | `P-FEA-006` | `costCeiling` (c̄, gate G9) | `(0,1000]` | Hypothetical; replay only. |
 | `P-FEA-005` | `spec.budget.proactiveFloor` (T_cad), in whole seconds | `[1,604800]` | Coupled: the operator derives both the hygiene cadence (G6 `proactive-cadence`) and the exposure-pressure horizon (T_exp: context exposure, recon belief, hazard pressure) from this one spec field, so the arm sets both. A recorded policy whose horizon differs from its floor is an `INVALID_ARM`. Moves backed by a fresh trusted event bypass the cadence law. |
 
-NaN, ±Inf, out-of-domain values, unknown parameters and duplicates are refused before anything runs.
+NaN, ±Inf, out-of-domain values, unknown parameters and duplicates are refused before anything runs. `brain-replay -version` lists the parameters the build can override (`overridableParameters`), so a caller can refuse a sweep the deployed build cannot run; a build without that field supports only `P-OBJ-003` and `P-FEA-006`.
 
 **Per (snapshot, arm) result statuses:**
 
