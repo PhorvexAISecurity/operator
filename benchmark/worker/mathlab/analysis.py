@@ -34,6 +34,7 @@ METRIC_CATALOG = {
     'M-P27': ('Feasible candidates per asset-tick', 'PROCESS', 'candidates per asset-tick', 'candidates admitted past every gate per asset-tick', True),
     'M-P28': ('Estimated disruption cost of selected moves', 'ESTIMATED_MODEL', 'normalized cost per tick', 'sum of expected weighted cost (ECost) of selected moves per tick; model estimate, not measured disruption', True),
     'M-P29': ('Replay decision compute time', 'PROCESS', 'seconds per tick', 'wall time of one replayed decision (offline; not production tick latency M-P10)', True),
+    'M-P30': ('First-veto feasibility-law share', 'PROCESS', 'proportion', 'enabled pairs whose FIRST veto is G6 hard law l / enabled pairs', True),
     'M-P24': ('Recorded production dispatch funnel', 'OBSERVATIONAL', 'count', 'control-arm production evidence: selected -> dry-run/kill-switch suppressed -> dispatch outcome', False),
     'M-S01': ('Episode defense rate', 'VERIFIED_SECURITY_OUTCOME', 'proportion', '(DEFENDED + PROTECTION_REVALIDATED) / determinate episodes', False),
     'M-D02': ('p99 latency delta', 'OBSERVED_DISRUPTION', 'ms', 'action-window p99 minus matched pre-window p99', False),
@@ -150,6 +151,10 @@ def analyze(lines, ctx):
     rows = []
     plots = {'dose_response': defaultdict(list), 'funnel': {}, 'paired': defaultdict(list), 'g9': {}, 'noop': {}, 'action_mix': {}}
     control_ticks = {d: per_tick(by_snapshot[d][control]) for d in matched[control]}
+    # One law axis for every arm, so a law that vetoes nothing in one arm reads as 0 there.
+    g6_laws = sorted({law for d in matched[control] for a in arms if a in by_snapshot[d]
+                      for law in (by_snapshot[d][a].get('first_veto_by_law') or {})})
+    plots['g6_laws'] = {}
     for arm in arms:
         digests = matched[arm]
         results = [by_snapshot[d][arm] for d in digests]
@@ -173,6 +178,15 @@ def analyze(lines, ctx):
         for gate in GATE_ORDER:
             rows.append(_ratio(ctx, arm, 'M-P03', veto.get(gate, 0), pairs, 'enabled (asset, action) pairs',
                                [((f.get('first_veto_by_gate') or {}).get(gate, 0), f.get('enabled_pairs', 0)) for f in funnels], dimension=gate, ci='cluster'))
+        if all('first_veto_by_law' in r for r in results):
+            law_veto = Counter()
+            for r in results:
+                law_veto.update(r['first_veto_by_law'])
+            for law in g6_laws:
+                rows.append(_ratio(ctx, arm, 'M-P30', law_veto.get(law, 0), pairs, 'enabled (asset, action) pairs',
+                                   [(r['first_veto_by_law'].get(law, 0), f.get('enabled_pairs', 0)) for r, f in zip(results, funnels)],
+                                   dimension=law, ci='cluster'))
+            plots['g6_laws'][arm] = {law: law_veto.get(law, 0) for law in g6_laws}
         admitted = sum(f.get('admitted', 0) for f in funnels)
         rows.append(_ratio(ctx, arm, 'M-P04', veto.get('G9-chi-ceiling', 0), veto.get('G9-chi-ceiling', 0) + admitted, 'pairs that reached G9'))
         decisions = [d for r in results for d in (r.get('decisions') or [])]

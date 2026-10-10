@@ -7,6 +7,7 @@ identity and every hash are written to an immutable manifest before anything run
 import json
 import math
 import os
+import re
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,20 +60,58 @@ def select_cohort(data_dir, request):
     return out[-limit:]
 
 
+GO_DURATION_PART = re.compile(r'(\d+(?:\.\d*)?|\.\d+)(ns|us|\u00b5s|ms|s|m|h)')
+GO_DURATION_UNIT = {'ns': 1e-9, 'us': 1e-6, '\u00b5s': 1e-6, 'ms': 1e-3, 's': 1.0, 'm': 60.0, 'h': 3600.0}
+
+
+def duration_seconds(value):
+    """Seconds for a Go duration string such as "15m0s"; numbers pass through; else None."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str) or not value:
+        return None
+    if value == '0':
+        return 0.0
+    total, pos = 0.0, 0
+    for m in GO_DURATION_PART.finditer(value):
+        if m.start() != pos:
+            return None
+        total += float(m.group(1)) * GO_DURATION_UNIT[m.group(2)]
+        pos = m.end()
+    return total if pos == len(value) else None
+
+
+def format_seconds(seconds):
+    """Compact duration label: 90 -> "1m30s", 900 -> "15m", 3600 -> "1h"."""
+    rest = int(round(seconds))
+    out = ''
+    for unit, size in (('d', 86400), ('h', 3600), ('m', 60)):
+        if rest >= size:
+            out += '%d%s' % (rest // size, unit)
+            rest %= size
+    return out + ('%ds' % rest if rest or not out else '')
+
+
 def arm_values(request, knob, inspection):
     """x-axis value and label per arm; the control is the recorded effective value."""
     out = {}
     recorded = None
     if inspection:
         recorded = (inspection.get('effective') or {}).get(knob.get('config_key'))
+    seconds = knob.get('units') == 'seconds'
+    if seconds and recorded is not None:
+        recorded = duration_seconds(recorded)
+    show = format_seconds if seconds else repr
     for arm in request['arms']:
         if arm.get('value_source') == 'RECORDED_EFFECTIVE' or arm is request['arms'][0]:
-            label = 'recorded ' + ('UNSET (' + str((inspection or {}).get('learned', {}).get('economicsMode', 'policy mode')) + ')' if recorded is None else repr(recorded))
+            label = 'recorded ' + ('UNSET (' + str((inspection or {}).get('learned', {}).get('economicsMode', 'policy mode')) + ')' if recorded is None else show(recorded))
             out[arm['arm_id']] = {'value': recorded, 'label': label}
         elif arm.get('unset'):
             out[arm['arm_id']] = {'value': None, 'label': 'UNSET'}
         else:
-            out[arm['arm_id']] = {'value': arm.get('value'), 'label': repr(arm.get('value'))}
+            out[arm['arm_id']] = {'value': arm.get('value'), 'label': show(arm.get('value'))}
     return out
 
 
@@ -120,6 +159,8 @@ def preflight(data_dir, request, binary_identity=None, registry_doc=None):
                 errors.append(_err('OUT_OF_DOMAIN', 'arms[%d].value' % i, 'below the replay domain minimum %s' % lo))
             if hi is not None and (v > hi or (v == hi and not domain.get('max_inclusive', True))):
                 errors.append(_err('OUT_OF_DOMAIN', 'arms[%d].value' % i, 'above the replay domain maximum %s' % hi))
+            if domain.get('integer') and v != int(v):
+                errors.append(_err('OUT_OF_DOMAIN', 'arms[%d].value' % i, 'must be a whole number of %s' % ((knob or {}).get('units') or 'units')))
             key = float(v)
         if key in seen_values:
             errors.append(_err('DUPLICATE_VALUE', 'arms[%d]' % i, 'two arms test the same value'))
@@ -152,6 +193,12 @@ def preflight(data_dir, request, binary_identity=None, registry_doc=None):
                 errors.append(_err('VERSION_MISMATCH', 'cohort', 'snapshots recorded by %s but the replay binary is %s' % (mismatch, binary_identity.get('git_sha')), binary_identity.get('image_digest')))
             _check(checks, 'VERSION_PIN', 'PASS' if not mismatch else ('WARN' if request.get('allow_cross_version') else 'FAIL'),
                    'replay binary %s from image %s' % (binary_identity.get('git_sha'), binary_identity.get('image_digest')), {'binary_sha256': binary_identity.get('binary_sha256')})
+            if knob and knob['param_id'] not in binary.overridable(binary_identity):
+                errors.append(_err('KNOB_UNSUPPORTED_BY_REPLAY_BINARY', 'parameter_id',
+                                   'the replay binary %s cannot override %s; it needs %s, and a cohort recorded by that release'
+                                   % (binary_identity.get('git_sha'), knob['param_id'],
+                                      ((knob.get('replay_override') or {}).get('requires') or 'a newer operator release')),
+                                   sorted(binary.overridable(binary_identity))))
             if binary_identity.get('local'):
                 _check(checks, 'BINARY_PROVENANCE', 'WARN', 'locally supplied binary: results are OBSERVATIONAL (not the deployed image)')
         modes = set((summary.get('economics_mode') or {}).keys())

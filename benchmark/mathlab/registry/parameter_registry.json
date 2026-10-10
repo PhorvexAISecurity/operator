@@ -1,6 +1,6 @@
 {
   "schema_version": "math-lab.parameters.v1",
-  "registry_version": "2026-10-09.1",
+  "registry_version": "2026-10-10.1",
   "source": {
     "source_sha": "085a9fae1c2cc480e17b48fd009ff9d5dd406031",
     "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.216",
@@ -36,8 +36,8 @@
       "MISSED_BY_AUDIT": 34
     },
     "control": {
-      "EXPERIMENT_KNOB": 2,
-      "READ_ONLY": 185,
+      "EXPERIMENT_KNOB": 3,
+      "READ_ONLY": 184,
       "NO_LIVE_EFFECT": 59
     }
   },
@@ -3955,9 +3955,22 @@
       "safe_direction": null,
       "requires_approval_to_loosen": false,
       "active_status": "ACTIVE",
-      "control": "READ_ONLY",
-      "experiment_modes": [],
-      "replay_override": null,
+      "control": "EXPERIMENT_KNOB",
+      "experiment_modes": [
+        "REPLAY"
+      ],
+      "replay_override": {
+        "target": "policy.proactiveFloor + policy.exposurePressureScale",
+        "domain": {
+          "min": 1,
+          "max": 604800,
+          "min_inclusive": true,
+          "max_inclusive": true,
+          "integer": true
+        },
+        "unset_allowed": false,
+        "requires": "an operator release with PR #452 (brain-replay -version lists P-FEA-005)"
+      },
       "experimental_range": null,
       "experimental_range_status": "UNVALIDATED",
       "effective_resolver": {
@@ -3996,7 +4009,12 @@
       "changed_since_audit": "YES",
       "delta_summary": "Scope extended via shared ExposureVarFor (feasibility/defaults.go:123): crm-refund-revoke now cadence-capped on the pod-identity clock when it has no event evidence. Lines moved: api 187-192 -> 216-221; coverage.go 841-855 -> 854-868; manager.go 3551 -> 3569.",
       "warnings": [
-        "coupled roles: cadence, provenance ramp, exposure pressure"
+        "coupled roles: cadence, provenance ramp, exposure pressure",
+        "experiment knob: REPLAY only; no production write path from the dashboard",
+        "coupled override: the arm sets both T_cad (the G6 proactive-cadence law) and T_exp (exposure pressure in context, recon belief and hazard), because buildPolicy derives both from this one field",
+        "moves backed by a fresh trusted event bypass the cadence law; the floor caps hygiene moves only",
+        "a lower floor admitting more hygiene moves is decision sensitivity only, not evidence of better defense or acceptable disruption",
+        "values are whole seconds; live vllm-defense runs 15m (900 s)"
       ],
       "notes": "recon: Practical effect likely nil because crm-refund-revoke needs a fresh trusted event (HasEventEvidence) - inference, NOT_VERIFIED at runtime. HasEventEvidence is written onto the shared view by assembleSet (coverage.go:658) before generation. git policies: 15m.",
       "origin": "AUDIT_84aabf0"

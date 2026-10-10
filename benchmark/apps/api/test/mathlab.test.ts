@@ -41,7 +41,7 @@ test('registry is served, unknown policies are refused, and preflight runs the r
     const registry: any = service.registry();
     assert.equal(registry.schema_version, 'math-lab.parameters.v1');
     assert.ok(registry.items.length >= 198);
-    assert.deepEqual(registry.items.filter((i: any) => i.control === 'EXPERIMENT_KNOB').map((i: any) => i.param_id).sort(), ['P-FEA-006', 'P-OBJ-003']);
+    assert.deepEqual(registry.items.filter((i: any) => i.control === 'EXPERIMENT_KNOB').map((i: any) => i.param_id).sort(), ['P-FEA-005', 'P-FEA-006', 'P-OBJ-003']);
     assert.throws(() => service.registry('other/policy'));
     assert.throws(() => service.sync({ policy: 'other/policy' }));
     await assert.rejects(() => service.create({ ...valid, policy: 'other/policy' }));

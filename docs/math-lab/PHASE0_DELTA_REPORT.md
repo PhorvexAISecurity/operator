@@ -136,7 +136,7 @@ The active-status columns apply one mapping to the audit `status` text and the r
 | Field | Values |
 |---|---|
 | Origin | AUDIT_84aabf0 198; NEW_SINCE_84aabf0 14; MISSED_BY_AUDIT 34 |
-| Control | EXPERIMENT_KNOB 2 (P-OBJ-003, P-FEA-006); READ_ONLY 185; NO_LIVE_EFFECT 59 |
+| Control | EXPERIMENT_KNOB 2 (P-OBJ-003, P-FEA-006); READ_ONLY 185; NO_LIVE_EFFECT 59. Registry `2026-10-10.1` promotes P-FEA-005 (proactive floor) to a replay knob: 3 / 184 / 59. |
 
 **Reclassifications.** These follow the recon files; the audit value is kept in `notes` as "audit said …".
 

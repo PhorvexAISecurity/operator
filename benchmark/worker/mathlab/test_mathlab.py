@@ -90,6 +90,21 @@ class AnalysisTest(unittest.TestCase):
         stages = {s['stage']: s['count'] for s in plots['funnel']['control']}
         self.assertEqual(vetoed + stages['admitted'], stages['enabled pairs'])
 
+    def test_feasibility_law_shares_use_one_axis_across_arms(self):
+        control, trial = line(DIGEST_A, 'control', ['vllm/a:rotate']), line(DIGEST_A, 'trial', ['vllm/a:rotate'])
+        control['first_veto_by_law'], trial['first_veto_by_law'] = {'proactive-cadence': 2, 'anti-over-rotation': 1}, {'anti-over-rotation': 1}
+        rows, plots, _ = analysis.analyze([control, trial], ctx())
+        p30 = {(r['arm_id'], r['dimension']): r for r in rows if r['metric_id'] == 'M-P30'}
+        self.assertEqual((p30[('control', 'proactive-cadence')]['numerator'], p30[('control', 'proactive-cadence')]['denominator']), (2, 4))
+        self.assertEqual(p30[('trial', 'proactive-cadence')]['numerator'], 0)
+        self.assertEqual(plots['g6_laws']['trial'], {'anti-over-rotation': 1, 'proactive-cadence': 0})
+
+    def test_feasibility_law_shares_are_absent_without_law_evidence(self):
+        lines = [line(DIGEST_A, 'control', ['vllm/a:rotate']), line(DIGEST_A, 'trial', ['vllm/a:rotate'])]
+        rows, plots, _ = analysis.analyze(lines, ctx())
+        self.assertFalse([r for r in rows if r['metric_id'] == 'M-P30'])
+        self.assertEqual(plots['g6_laws'], {})
+
     def test_dispatch_funnel_is_production_record_of_control_only(self):
         lines = [line(DIGEST_A, 'control', ['vllm/a:rotate']), line(DIGEST_A, 'trial', ['vllm/a:rotate'])]
         rows, _, _ = analysis.analyze(lines, ctx())
@@ -145,6 +160,41 @@ class PreflightTest(unittest.TestCase):
         self.assertIn('VERSION_MISMATCH', self.codes(self.request()))
         self.assertIn('REPLAY_BINARY_UNAVAILABLE', self.codes(self.request(), binary=False))
 
+    def floor_request(self, value=300):
+        return self.request(parameter_id='P-FEA-005', arms=[{'arm_id': 'control', 'value_source': 'RECORDED_EFFECTIVE'}, {'arm_id': 't', 'value': value}])
+
+    def test_floor_knob_needs_a_replay_binary_that_lists_it(self):
+        # A binary whose -version predates overridableParameters supports only the first two knobs.
+        self.assertIn('KNOB_UNSUPPORTED_BY_REPLAY_BINARY', self.codes(self.floor_request()))
+        self.assertNotIn('KNOB_UNSUPPORTED_BY_REPLAY_BINARY', self.codes(self.request()))
+        self.binary['overridable_parameters'] = ['P-FEA-006', 'P-FEA-005', 'P-OBJ-003']
+        pf = experiment.preflight(self.data, self.floor_request(), self.binary)
+        self.assertEqual(pf['status'], 'PASS', pf['errors'])
+        self.binary['overridable_parameters'] = ['P-FEA-006']
+        self.assertIn('KNOB_UNSUPPORTED_BY_REPLAY_BINARY', self.codes(self.request(parameter_id='P-OBJ-003', arms=[{'arm_id': 'control', 'value_source': 'RECORDED_EFFECTIVE'}, {'arm_id': 't', 'value': 0.5}])))
+
+    def test_floor_values_are_whole_seconds_in_domain(self):
+        self.binary['overridable_parameters'] = ['P-FEA-005']
+        self.assertIn('OUT_OF_DOMAIN', self.codes(self.floor_request(1.5)))
+        self.assertIn('OUT_OF_DOMAIN', self.codes(self.floor_request(0)))
+        self.assertIn('OUT_OF_DOMAIN', self.codes(self.floor_request(604801)))
+        self.assertNotIn('OUT_OF_DOMAIN', self.codes(self.floor_request(604800)))
+
+    def test_floor_arm_values_are_seconds_with_duration_labels(self):
+        knob = registry.knob(registry.load_registry(), 'P-FEA-005')
+        values = experiment.arm_values(self.floor_request(), knob, {'effective': {'spec.budget.proactiveFloor': '15m0s'}})
+        self.assertEqual(values['control'], {'value': 900.0, 'label': 'recorded 15m'})
+        self.assertEqual(values['t'], {'value': 300, 'label': '5m'})
+        ceiling = experiment.arm_values(self.request(), registry.knob(registry.load_registry(), 'P-FEA-006'), {'effective': {'spec.slo.costCeiling': 1.2}})
+        self.assertEqual((ceiling['control']['label'], ceiling['t']['label']), ('recorded 1.2', '1.5'))
+
+    def test_go_durations(self):
+        for text, seconds in (('15m0s', 900), ('1h0m0s', 3600), ('1h30m', 5400), ('1.5s', 1.5), ('300ms', .3), ('0', 0), (42, 42)):
+            self.assertAlmostEqual(experiment.duration_seconds(text), seconds)
+        for bad in ('', 'bogus', '15m junk', '5x', True, None):
+            self.assertIsNone(experiment.duration_seconds(bad))
+        self.assertEqual([experiment.format_seconds(s) for s in (1, 60, 90, 900, 3600, 5400, 604800)], ['1s', '1m', '1m30s', '15m', '1h', '1h30m', '7d'])
+
     def test_beta_on_cost_preferences_policy_is_a_mode_conflict(self):
         corpus = Path(self.data) / 'mathlab' / 'snapshots' / 'vllm' / 'vllm-defense'
         write_fake_snapshot(corpus, DIGEST_B, mode='independent-cost-preferences-v1')
@@ -162,7 +212,8 @@ class RegistryOverlayTest(unittest.TestCase):
         floor = merged['P-FEA-001']
         self.assertEqual((floor['configured_value'], floor['effective_value'], floor['effective_status']), (0, 1, 'OBSERVED'))
         knobs = [i for i in reg['items'] if i['control'] == registry.EXPERIMENT_KNOB]
-        self.assertEqual(sorted(i['param_id'] for i in knobs), ['P-FEA-006', 'P-OBJ-003'])
+        self.assertEqual(sorted(i['param_id'] for i in knobs), ['P-FEA-005', 'P-FEA-006', 'P-OBJ-003'])
+        self.assertEqual(reg['counts']['control'][registry.EXPERIMENT_KNOB], len(knobs))
         for item in reg['items']:
             if item['class'] in ('LEARNED_STATE', 'OBSERVED_INPUT', 'INTERNAL_CONSTANT', 'DERIVED_RUNTIME', 'REPORT_ONLY'):
                 self.assertNotEqual(item['control'], registry.EXPERIMENT_KNOB, item['param_id'])
@@ -187,10 +238,15 @@ class StreamingAndSyncTest(unittest.TestCase):
             raw = line(DIGEST_A, 'control', ['vllm/a:rotate'])
             raw['gates'] = [{'asset': 'vllm/a', 'action': 'rotate', 'gate_id': 'G9-chi-ceiling', 'actual_status': 'PASS'}] * 3
             raw['costs'] = [{'asset': 'vllm/a', 'action': 'rotate', 'c_hi': 1.1}]
-            raw['candidates'] = [{'asset': 'vllm/a', 'action': '=cmd()'}]
+            raw['candidates'] = [{'asset': 'vllm/a', 'action': '=cmd()'},
+                                 {'asset': 'vllm/a', 'action': 'kv-reset', 'first_veto_gate': 'G6-feasibility', 'feasibility_law': 'proactive-cadence'},
+                                 {'asset': 'vllm/b', 'action': 'kv-reset', 'first_veto_gate': 'G6-feasibility', 'feasibility_law': 'proactive-cadence'},
+                                 {'asset': 'vllm/b', 'action': 'rotate', 'first_veto_gate': 'G6-feasibility'},
+                                 {'asset': 'vllm/b', 'action': 'quarantine', 'first_veto_gate': 'G4-capability'}]
             (root / 'replay.jsonl').write_text(json.dumps(raw) + '\n\n')
             compact = exports.stream_replay(root, 'e', root / 'replay.jsonl')
             self.assertEqual(len(compact), 1)
+            self.assertEqual(compact[0]['first_veto_by_law'], {'proactive-cadence': 2, 'UNATTRIBUTED': 1})
             self.assertFalse(any(k in compact[0] for k in ('gates', 'costs', 'candidates')))
             self.assertIn('decisions', compact[0])
             self.assertEqual(len((root / 'candidate_gate_trace.csv').read_text().strip().splitlines()), 4)
