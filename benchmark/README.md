@@ -40,6 +40,10 @@ current Live catalogue remains the execution scope.
   passed. Selection, emission, actuation, behavioral effect and mitigation are
   distinct. Inspect original outcome and evidence scope, not just action names.
 
+## Math/OR Benchmark Lab
+
+The **Math Lab** sidebar section (Parameters, New experiment, Experiments) replays recorded production decision ticks offline with one Brain parameter changed. It plots each parameter against its metrics and exports raw evidence. It is replay-only and has no production write path. See [`mathlab/README.md`](mathlab/README.md). It needs the operator release that ships `brain-replay` and decision capture.
+
 ## Local verification
 
 Requires Node 22.12+ and Python 3.10+ (deployment/CI use 22.23.3 / Python 3.12).
