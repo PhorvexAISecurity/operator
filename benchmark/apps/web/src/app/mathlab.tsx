@@ -46,7 +46,7 @@ const CLASS_LABEL: Record<string, string> = {
 const PRESETS: Record<string, { values: (number | 'UNSET')[]; hint: string }> = {
   'P-OBJ-003': { values: ['UNSET', 0, 0.25, 0.5, 1, 2], hint: 'UNSET keeps the policy\'s own economics (legacy runtime λ live today). A number switches to fixed-β mode.' },
   'P-FEA-006': { values: [0.8, 1.0, 1.4, 1.8, 2.5], hint: 'Hypothetical CHi ceilings for replay only. A higher ceiling admitting more candidates is not evidence that it is safe.' },
-  'P-FEA-005': { values: [60, 300, 600, 1800, 3600], hint: 'Proactive floor in whole seconds (type 5m, 1h or 300). It sets the hygiene cadence and the exposure horizon together, as the operator does; moves backed by a fresh trusted event are never capped. More admitted hygiene moves is not evidence of better defense.' },
+  'P-FEA-005': { values: [60, 300, 600, 1800, 3600], hint: 'Whole seconds; type 5m, 1h or 300. Event-backed moves are never capped.' },
 };
 const DESIGN: Record<string, { title: string; primary: string; secondary: string[]; hypothesis: string }> = {
   'P-OBJ-003': { title: 'Disruption-aversion (β) pricing sweep', primary: 'M-P21', secondary: ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
