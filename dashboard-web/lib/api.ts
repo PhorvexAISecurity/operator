@@ -408,7 +408,7 @@ export interface RuntimeParamStatus { key: string; configured: OptionalValue; ob
 export interface RuntimeBrain {
   decisionTime: string; decisionId?: string; action: string; pod?: string; generation: number; economicsMode: string; economicsVersion?: string;
   effectiveCostCoefficient: number; costCoefficientSource?: string; lambdaRuntime: number; lambdaSeedConsumed: number;
-  policyOverridesHash?: string; values: Record<string, OptionalValue>;
+  policyOverridesHash?: string; values: Record<string, OptionalValue>; remembered?: boolean;
 }
 export interface RuntimePolicy {
   namespace: string; name: string; uid: string; tenant: string; mode: string; generation: number; economicsMode: EconomicsMode;
