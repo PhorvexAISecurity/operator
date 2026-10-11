@@ -23,6 +23,7 @@ import uuid
 import zipfile
 from datetime import datetime, timezone
 
+import parameters
 from exporter import COST_FILE, GATES_FILE, export_workbooks, typed_links, template_paths
 
 APPLICATIONS = ('vllm', 'voice', 'litellm', 'crm')
@@ -655,6 +656,10 @@ class Campaign:
         self.event('info', 'Capturing deployed identities and current Live catalogue')
         before = snapshot(self.console)
         dump(self.out / 'raw' / 'snapshot-before.json', before)
+        # Which runtime optimizer parameters the brain was deciding with, per app, verified from its
+        # own decision traces by the Console (read-only; an older Console without it is recorded).
+        params_before = parameters.capture(self.console)
+        dump(self.out / 'raw' / 'brain-parameters-before.json', params_before)
         current = catalogue(self.console, self.request['applications'])
         dump(self.out / 'raw' / 'catalogue.json', current)
         self.version = before
@@ -690,6 +695,9 @@ class Campaign:
         except (TransportError, ValueError):
             after = {'apiVersion': {}, 'errors': ['Final deployed identity snapshot failed'], 'deployments': [], 'pods': [], 'namespaces': [], 'policies': []}
         dump(self.out / 'raw' / 'snapshot-after.json', after)
+        params_after = parameters.capture(self.console)
+        dump(self.out / 'raw' / 'brain-parameters-after.json', params_after)
+        parameters.write_csv(self.out / parameters.CSV_FILE, params_before, params_after)
         changed = drift(before, after)
         if changed: self.errors.append('Deployment/configuration drift: ' + ', '.join(changed))
         self.errors.extend(after['errors'])
@@ -716,6 +724,7 @@ class Campaign:
                                     'templateSHA256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in template_paths()},
                                     'requestedSource': os.environ.get('BENCHMARK_SOURCE_SHA', ''),
                                     'model': self.request.get('model'), 'policyPins': before['policies']}
+        manifest['brainParameters'] = parameters.summary(params_before, params_after)
         self.event('info', 'Exporting RAW templates from retained original decision traces')
         validation = export_workbooks(self.out, self.request, manifest)
         manifest['exportValidation'] = validation
@@ -728,6 +737,7 @@ class Campaign:
             manifest['status'] = 'incomplete'; manifest['errors'].append('Exporter found conflicting identities or expected-cost discrepancies')
         manifest['artifacts'] = [{'name': COST_FILE, 'label': 'Expected vs measured costs'},
                                  {'name': GATES_FILE, 'label': 'Tick action gates'},
+                                 {'name': parameters.CSV_FILE, 'label': 'Brain-verified runtime parameters (start and end)'},
                                  {'name': 'evidence.zip', 'label': 'Original evidence and reproducibility'}]
         dump(self.out / 'manifest.json', manifest)
         self.progress(manifest['status'])
@@ -743,7 +753,8 @@ class Campaign:
                 relative = str(path.relative_to(self.out))
                 hashes[relative] = file_hash(path)
                 bundle.write(path, relative)
-            for path in [Path(__file__), Path(__file__).with_name('exporter.py'), Path(__file__).with_name('requirements.txt'), *template_paths()]:
+            for path in [Path(__file__), Path(__file__).with_name('exporter.py'), Path(__file__).with_name('parameters.py'),
+                         Path(__file__).with_name('requirements.txt'), *template_paths()]:
                 name = 'reproduction/' + ('templates/' if path.suffix == '.xlsx' else '') + path.name
                 hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest(); bundle.write(path, name)
             bundle.writestr('SHA256SUMS', ''.join(value + '  ' + name + '\n' for name, value in hashes.items()))

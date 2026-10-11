@@ -47,11 +47,14 @@ test('offline authenticated create-plan -> spawn production worker -> exact rows
     assert.equal(run.cases.length,12);assert.equal(run.cases.filter((c:any)=>c.status==='blocked').length,8);
     assert.ok(run.cases.filter((c:any)=>c.status==='completed').every((c:any)=>c.outcome==='UNKNOWN' && c.actuated===false && c.resultId));
     assert.ok(run.cases.filter((c:any)=>c.status==='blocked').every((c:any)=>c.reason && !c.resultId && !c.outcome));
-    assert.equal(run.artifacts.length,3);
+    assert.equal(run.artifacts.length,4);
     for(const artifact of run.artifacts) {
       const response=await fetch(base+artifact.url,{headers});assert.equal(response.status,200);
       assert.match(response.headers.get('content-disposition')!,/attachment/);
-      const bytes=Buffer.from(await response.arrayBuffer());assert.equal(bytes.subarray(0,2).toString(),'PK');assert.ok(bytes.length>100);
+      const bytes=Buffer.from(await response.arrayBuffer());
+      // The brain-parameter table is a CSV (headers only when the Console predates the endpoint).
+      if(artifact.name==='Brain_Parameters.csv') { assert.match(bytes.toString('utf8'),/^namespace,policy,parameter,/); continue; }
+      assert.equal(bytes.subarray(0,2).toString(),'PK');assert.ok(bytes.length>100);
     }
     const duplicate=await fetch(base+'/api/runs',{method:'POST',headers,body:JSON.stringify({planId:plan.id})});
     assert.equal(duplicate.status,409);const conflict=await duplicate.json() as any;assert.equal(conflict.code,'PLAN_ALREADY_HAS_RUN');assert.equal(conflict.runId,run.id);assert.equal(conflict.runStatus,'completed');

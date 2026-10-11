@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { MathLab, type MathView } from './mathlab';
+import { BrainParameters } from './brainparams';
 import BenchmarkRequestDetails from '@/components/BenchmarkRequestDetails';
 import VersionDetails from '@/components/VersionDetails';
 import ObjectiveDetails from '@/components/ObjectiveDetails';
@@ -130,7 +131,7 @@ export default function Dashboard() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [run, setRun] = useState<Run | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
-  const [view, setView] = useState<'new' | 'history' | 'run' | MathView>('new');
+  const [view, setView] = useState<'new' | 'history' | 'run' | 'brain-params' | MathView>('new');
   const [mode, setMode] = useState<Mode>('serial');
   const [model, setModel] = useState('');
   const [request, setRequest] = useState('');
@@ -252,18 +253,20 @@ export default function Dashboard() {
 
   return <div className="app-shell"><aside className="sidebar"><a className="brand" href="/" dir="ltr"><span className="brand-mark"><Icon name="lab" size={24}/></span><span>Phorvex<small>BENCHMARK LAB</small></span></a>
     <nav aria-label="Main navigation"><span className="nav-label">Laboratory</span><button className={view === 'new' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('new'); setError(''); }}><Icon name="lab"/>New benchmark</button><button className={view === 'history' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('history'); setError(''); }}><Icon name="history"/>Run history<span className="nav-count">{runs.length}</span></button>{runId.current && <button className={view === 'run' ? 'nav-item selected' : 'nav-item'} onClick={() => setView('run')}><Icon name="layers"/>Selected run</button>}
+      <button className={view === 'brain-params' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('brain-params'); setError(''); }}><Icon name="chart"/>Brain parameters</button>
       <span className="nav-label">Math Lab</span>
       <button className={view === 'math-params' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('math-params'); setError(''); }}><Icon name="chart"/>Parameters</button>
       <button className={view === 'math-new' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('math-new'); setError(''); }}><Icon name="shield"/>New experiment</button>
       <button className={view === 'math-runs' || view === 'math-run' ? 'nav-item selected' : 'nav-item'} onClick={() => { setView('math-runs'); setError(''); }}><Icon name="layers"/>Experiments</button></nav>
     <div className="sidebar-bottom"><div className="scope-note"><Icon name="shield"/><div>Connected cluster<small>Live catalogue · raw evidence</small></div></div><button className="nav-item logout" disabled={!!busy} onClick={logout}><Icon name="logout"/>Sign out</button></div>
-  </aside><div className="workspace"><header className="topbar"><div className="breadcrumb"><span>Laboratory</span><span className="slash">/</span><strong>{{ new: 'New benchmark', history: 'Run history', run: 'Run details', 'math-params': 'Math Lab · Parameters', 'math-new': 'Math Lab · New experiment', 'math-runs': 'Math Lab · Experiments', 'math-run': 'Math Lab · Experiment' }[view]}</strong></div><div className="topbar-right"><span className="version-pill"><span className="dot"/>Current version <code>{versionLabel(meta?.version)}</code></span><button className="icon-button" title="Refresh status" aria-label="Refresh status" onClick={() => { setError(''); void refresh().catch(handleError); }}><Icon name="refresh" size={17}/></button></div></header>
+  </aside><div className="workspace"><header className="topbar"><div className="breadcrumb"><span>Laboratory</span><span className="slash">/</span><strong>{{ new: 'New benchmark', history: 'Run history', run: 'Run details', 'brain-params': 'Brain parameters', 'math-params': 'Math Lab · Parameters', 'math-new': 'Math Lab · New experiment', 'math-runs': 'Math Lab · Experiments', 'math-run': 'Math Lab · Experiment' }[view]}</strong></div><div className="topbar-right"><span className="version-pill"><span className="dot"/>Current version <code>{versionLabel(meta?.version)}</code></span><button className="icon-button" title="Refresh status" aria-label="Refresh status" onClick={() => { setError(''); void refresh().catch(handleError); }}><Icon name="refresh" size={17}/></button></div></header>
     <main className="main-content">{error && <div className="notice error" role="alert"><strong>Needs attention</strong><span dir="ltr">{error}</span><button aria-label="Dismiss message" onClick={() => setError('')}>×</button></div>}
     {meta?.executionBlockedReason && <div className="notice info execution-notice" role="status" id="execution-pause">
       <strong>New runs are paused</strong><p>New runs are paused while an operator reconciles results — history, plans and exports remain available.</p><p dir="ltr"><strong>Operator reason:</strong> {meta.executionBlockedReason}</p>
     </div>}
     {(meta?.errors || []).length > 0 && <div className="notice warning"><strong>Connection and catalogue status</strong><ul>{meta?.errors?.map((item,index) => <li key={index} dir="ltr">{display(item)}</li>)}</ul></div>}
     {view.startsWith('math-') && <MathLab view={view as MathView} setView={setView} Icon={Icon} onError={handleError}/>}
+    {view === 'brain-params' && <BrainParameters Icon={Icon} onError={handleError}/>}
     {view === 'new' && <><div className="page-heading"><div><span className="eyebrow">LIVE SECURITY BENCHMARKS</span><h1>Test with evidence.</h1><p>Run attacks and inspect defense decisions, cost and original outcomes.</p></div><span className="heading-symbol"><Icon name="lab" size={34}/></span></div>
       {active && <div className="notice info"><span><Badge status={active.status}/> A benchmark is active on this cluster.</span><button className="text-button" onClick={() => void selectRun(active.id)}>View run <Icon name="arrow" size={15}/></button></div>}
       <div className="configure-grid"><form className="panel configure-panel" onSubmit={makePlan}><div className="panel-heading"><span className="step-number">1</span><div><h2>Define benchmark</h2><p>Describe the goal and context of your test.</p></div></div><fieldset className="form-fields" disabled={busy === 'plan' || busy === 'launch'}>

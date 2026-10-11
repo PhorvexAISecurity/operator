@@ -4,7 +4,7 @@ export const APPLICATIONS = ['vllm', 'voice', 'litellm', 'crm'] as const;
 export const REQUEST_MAX_CHARACTERS = 32_000;
 export const ARTIFACT_NAMES = new Set([
   'Phorvex_Cost_Measured_vs_Expected.xlsx',
-  'Phorvex_Tick_Action_Gates.xlsx', 'evidence.zip',
+  'Phorvex_Tick_Action_Gates.xlsx', 'Brain_Parameters.csv', 'evidence.zip',
 ]);
 
 export class Config {
