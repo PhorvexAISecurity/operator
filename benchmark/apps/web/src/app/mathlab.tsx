@@ -15,7 +15,7 @@ interface RegistryItem {
   param_id: string; name: string; symbol?: string; group?: string; role?: string; impact?: string; class: string; scope?: string;
   config_key?: string | null; units?: string; default_value?: string; admission_domain?: string; validation?: string;
   apply_mechanism?: string; effect_latency?: string; protected: boolean; safe_direction?: string | null; active_status: string;
-  control: string; experiment_modes: string[]; replay_override?: { domain?: { min?: number; max?: number }; unset_allowed?: boolean; unset_semantics?: string } | null;
+  control: string; experiment_modes: string[]; replay_override?: { domain?: { min?: number; max?: number; integer?: boolean }; unset_allowed?: boolean; unset_semantics?: string; requires?: string } | null;
   experimental_range_status?: string; couplings?: string[]; metric_ids?: { primary?: string | null; secondary?: string[]; guardrails?: string[] };
   source_locations?: string[]; source_verified_at_sha?: string; verification?: string; recon_status?: string; changed_since_audit?: string;
   delta_summary?: string; warnings?: string[]; notes?: string; origin?: string;
@@ -34,7 +34,8 @@ interface MetricRow { arm_id: string; metric_id: string; metric_name: string; me
   ci_method: string | null; comparison: string; comparison_status: string; data_status: string; reason: string | null; effective_value_label: string; population: string | null; definition: string }
 interface Plots { dose_response?: Record<string, { arm_id: string; x_label: string; is_control: boolean; value: number | null; ci_low: number | null; ci_high: number | null; n: number | null }[]>;
   paired?: Record<string, { arm_id: string; x_label: string; value: number | null; ci_low: number | null; ci_high: number | null; n: number | null }[]>;
-  funnel?: Record<string, { stage: string; count: number }[]>; g9?: Record<string, Record<string, number>>; noop?: Record<string, Record<string, number>> }
+  funnel?: Record<string, { stage: string; count: number }[]>; g9?: Record<string, Record<string, number>>; noop?: Record<string, Record<string, number>>;
+  g6_laws?: Record<string, Record<string, number>> }
 interface Detail extends Experiment { request: Record<string, any>; preflight?: Preflight; message?: string; result?: any; manifest?: any; artifacts: string[] }
 
 const CLASS_LABEL: Record<string, string> = {
@@ -45,7 +46,30 @@ const CLASS_LABEL: Record<string, string> = {
 const PRESETS: Record<string, { values: (number | 'UNSET')[]; hint: string }> = {
   'P-OBJ-003': { values: ['UNSET', 0, 0.25, 0.5, 1, 2], hint: 'UNSET keeps the policy\'s own economics (legacy runtime λ live today). A number switches to fixed-β mode.' },
   'P-FEA-006': { values: [0.8, 1.0, 1.4, 1.8, 2.5], hint: 'Hypothetical CHi ceilings for replay only. A higher ceiling admitting more candidates is not evidence that it is safe.' },
+  'P-FEA-005': { values: [60, 300, 600, 1800, 3600], hint: 'Whole seconds; type 5m, 1h or 300. Event-backed moves are never capped.' },
 };
+const DESIGN: Record<string, { title: string; primary: string; secondary: string[]; hypothesis: string }> = {
+  'P-OBJ-003': { title: 'Disruption-aversion (β) pricing sweep', primary: 'M-P21', secondary: ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
+    hypothesis: 'A fixed disruption price changes which moves are selected.' },
+  'P-FEA-006': { title: 'Cost-ceiling (G9) binding sweep', primary: 'M-P04', secondary: ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
+    hypothesis: 'The CHi ceiling is the sole binding gate for useful candidates on vLLM.' },
+  'P-FEA-005': { title: 'Proactive-floor (G6 cadence) sweep', primary: 'M-P26', secondary: ['M-P30', 'M-P03', 'M-P21', 'M-P28', 'M-P25'],
+    hypothesis: 'The proactive floor is the first veto for most vLLM hygiene moves; a shorter floor selects more of them at a higher estimated disruption cost.' },
+};
+/** "1h30m" for 5400; plain numbers for knobs that are not durations. */
+function fmtSeconds(v: number): string {
+  let rest = Math.round(v); let out = '';
+  for (const [unit, size] of [['d', 86400], ['h', 3600], ['m', 60]] as const) if (rest >= size) { out += `${Math.floor(rest / size)}${unit}`; rest %= size; }
+  return out + (rest || !out ? `${rest}s` : '');
+}
+/** Seconds from "90", "90s", "5m", "1h30m" or "1d"; NaN otherwise. */
+function parseSeconds(text: string): number {
+  const t = text.trim();
+  if (/^\d+(\.\d+)?$/.test(t)) return Number(t);
+  const m = /^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(t);
+  if (!m || !m.slice(1).some(Boolean)) return NaN;
+  return (Number(m[1] || 0) * 86400) + (Number(m[2] || 0) * 3600) + (Number(m[3] || 0) * 60) + Number(m[4] || 0);
+}
 const KIND_LABEL: Record<string, string> = { PROCESS: 'Decision mechanism', ESTIMATED_MODEL: 'Model estimate', OBSERVATIONAL: 'Production record',
   VERIFIED_SECURITY_OUTCOME: 'Verified security outcome', OBSERVED_DISRUPTION: 'Observed disruption' };
 const RUNNING = new Set(['QUEUED', 'RUNNING']);
@@ -190,20 +214,23 @@ function Builder({ Icon, header, registry, policy, param, setParam, onError, onC
   const [preflight, setPreflight] = useState<Preflight | null>(null);
   const [busy, setBusy] = useState('');
   const stamp = useRef('');
-  useEffect(() => { setValues(PRESETS[param]?.values || []); setPreflight(null); setTitle(param === 'P-FEA-006' ? 'Cost-ceiling (G9) binding sweep' : param === 'P-OBJ-003' ? 'Disruption-aversion (β) pricing sweep' : ''); }, [param]);
+  useEffect(() => { setValues(PRESETS[param]?.values || []); setPreflight(null); setTitle(DESIGN[param]?.title || ''); }, [param]);
+  const seconds = knob?.units === 'seconds';
+  const showValue = (v: number | 'UNSET') => (v === 'UNSET' ? 'UNSET' : seconds ? fmtSeconds(v) : String(v));
   const body = useMemo(() => ({
     title: title || `${param} sweep`, mode: 'REPLAY', parameter_id: param, policy,
     arms: [{ arm_id: 'control', value_source: 'RECORDED_EFFECTIVE' }, ...values.map(v => v === 'UNSET' ? { arm_id: 'unset', unset: true } : { arm_id: `v${String(v).replace('.', '_')}`, value: v })],
     cohort: { max_snapshots: maxSnapshots, spacing }, hypothesis: hypothesis || undefined,
-    primary_metric_id: param === 'P-FEA-006' ? 'M-P04' : 'M-P21', secondary_metric_ids: ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
+    primary_metric_id: DESIGN[param]?.primary || 'M-P21', secondary_metric_ids: DESIGN[param]?.secondary || ['M-P21', 'M-P22', 'M-P23', 'M-P25', 'M-P26'],
     safety_metric_ids: ['M-D02', 'M-D05', 'M-D06', 'M-D07'],
   }), [title, param, policy, values, maxSnapshots, spacing, hypothesis]);
   const key = JSON.stringify(body);
   const domain = knob?.replay_override?.domain;
   function addValue() {
-    const v = Number(draft);
-    if (!draft.trim() || !isFinite(v)) return;
+    const v = seconds ? parseSeconds(draft) : Number(draft);
+    if (!draft.trim() || !isFinite(v)) { if (draft.trim()) onError(new Error(seconds ? 'Enter a duration such as 300, 5m or 1h30m' : 'Enter a number')); return; }
     if (domain && ((domain.min !== undefined && v < domain.min) || (domain.max !== undefined && v > domain.max))) { onError(new Error(`Value outside the replay domain [${domain.min}, ${domain.max}]`)); return; }
+    if (domain?.integer && !Number.isInteger(v)) { onError(new Error('Use a whole number of seconds')); return; }
     if (!values.includes(v)) setValues([...values, v].sort((a, b) => (a === 'UNSET' ? -1 : b === 'UNSET' ? 1 : (a as number) - (b as number))));
     setDraft('');
   }
@@ -228,18 +255,18 @@ function Builder({ Icon, header, registry, policy, param, setParam, onError, onC
         <label>Parameter</label>
         <div className="ml-knobs">{knobs.map(k => <button type="button" key={k.param_id} className={`app-chip ${k.param_id === param ? 'checked' : ''}`} role="radio" aria-checked={k.param_id === param} onClick={() => setParam(k.param_id)}>
           <code>{k.param_id}</code> {k.name}</button>)}</div>
-        {knob && <div className="ml-knob-facts"><span>Recorded effective: <strong>{show(knob.effective_value)}</strong></span><span>Replay domain: <strong>[{domain?.min ?? '—'}, {domain?.max ?? '—'}]</strong></span>
+        {knob && <div className="ml-knob-facts"><span>Recorded effective: <strong>{show(knob.effective_value)}</strong></span><span>Replay domain: <strong>[{domain?.min === undefined ? '—' : seconds ? fmtSeconds(domain.min) : domain.min}, {domain?.max === undefined ? '—' : seconds ? fmtSeconds(domain.max) : domain.max}]</strong></span>
           <span>Experimental range: <strong>{(knob.experimental_range_status || 'UNVALIDATED').toLowerCase()}</strong></span>{knob.protected && <span className="badge warning">protected</span>}</div>}
         {knob && (knob.warnings || []).map((w, i) => <p key={i} className="field-hint">⚠ {w}</p>)}
         <label htmlFor="ml-title">Title</label><input id="ml-title" maxLength={200} value={title} onChange={e => setTitle(e.target.value)}/>
         <label htmlFor="ml-hyp">Hypothesis</label><textarea id="ml-hyp" rows={3} maxLength={2000} value={hypothesis} onChange={e => setHypothesis(e.target.value)}
-          placeholder={param === 'P-FEA-006' ? 'The CHi ceiling is the sole binding gate for useful candidates on vLLM.' : 'A fixed disruption price changes which moves are selected.'}/>
+          placeholder={DESIGN[param]?.hypothesis || ''}/>
       </section>
       <section className="panel configure-panel">
         <div className="panel-heading"><span className="step-number">2</span><div><h2>Arms and cohort</h2><p>{PRESETS[param]?.hint}</p></div></div>
         <label>Values (control is the recorded effective value)</label>
-        <div className="ml-values"><span className="app-chip checked">control · recorded</span>{values.map(v => <button type="button" key={String(v)} className="app-chip" onClick={() => setValues(values.filter(x => x !== v))} title="Remove">{String(v)} ×</button>)}</div>
-        <div className="ml-add"><input inputMode="decimal" placeholder="Add a value" value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addValue(); } }}/>
+        <div className="ml-values"><span className="app-chip checked">control · recorded</span>{values.map(v => <button type="button" key={String(v)} className="app-chip" onClick={() => setValues(values.filter(x => x !== v))} title="Remove">{showValue(v)} ×</button>)}</div>
+        <div className="ml-add"><input inputMode={seconds ? 'text' : 'decimal'} placeholder={seconds ? 'Add a duration (e.g. 5m)' : 'Add a value'} value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addValue(); } }}/>
           <button type="button" className="button secondary" onClick={addValue}>Add</button>{knob?.replay_override?.unset_allowed && !values.includes('UNSET') && <button type="button" className="button secondary" onClick={() => setValues(['UNSET', ...values])}>Add UNSET</button>}</div>
         <label htmlFor="ml-max">Recorded ticks to replay</label><input id="ml-max" type="number" min={1} max={5000} value={maxSnapshots} onChange={e => setMaxSnapshots(Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}/>
         <label htmlFor="ml-spacing">Tick selection</label><select id="ml-spacing" value={spacing} onChange={e => setSpacing(e.target.value as 'even' | 'latest')}>
@@ -298,6 +325,9 @@ function ExperimentView({ Icon, id, onError, back }: { Icon: IconType; id: strin
   const funnelRows = (plots.funnel?.[control] || []).map((s, i) => ({ label: s.stage, values: [s.count, plots.funnel?.[arm]?.[i]?.count ?? 0] })).filter(r => r.values.some(v => v > 0) || r.label === 'selected');
   const g9Cats = ['G9_SOLE_VETO_VERIFIED', 'G9_MULTI_VETO_VERIFIED', 'G9_WOULD_PASS_AFTER_EARLIER_VETO', 'G9_PASS', 'G9_UNKNOWN_OTHER_GATES'];
   const noopCats = [...new Set(Object.values(plots.noop || {}).flatMap(o => Object.keys(o)))].sort().slice(0, 5);
+  const lawTotals = new Map<string, number>();
+  for (const counts of Object.values(plots.g6_laws || {})) for (const [law, n] of Object.entries(counts)) lawTotals.set(law, (lawTotals.get(law) || 0) + n);
+  const g6Laws = [...lawTotals].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([law]) => law);
   const tableMetric = metric;
   const headline = metrics.filter(m => m.dimension === null && m.comparison !== 'PRODUCTION_RECORD' && m.data_status === 'OBSERVED' && (!tableMetric || m.metric_id === tableMetric));
   const unavailable = [...new Map(metrics.filter(m => m.data_status === 'UNAVAILABLE' && m.dimension === null).map(m => [m.metric_id, m])).values()];
@@ -330,6 +360,8 @@ function ExperimentView({ Icon, id, onError, back }: { Icon: IconType; id: strin
     </section>}
     {detail.request?.parameter_id === 'P-FEA-006' && plots.g9 && <section className="panel ml-pad"><h2>G9 attribution</h2><p className="field-hint">Sole-veto verified = the actual first veto was the CHi ceiling, so every earlier gate actually passed. Earlier-veto categories use a labeled counterfactual diagnostic only.</p>
       <StackedShares rows={arms.map(a => ({ label: armLabel(a), counts: plots.g9?.[a] || {} }))} categories={g9Cats}/></section>}
+    {g6Laws.length > 0 && <section className="panel ml-pad"><h2>G6 hard-law attribution</h2><p className="field-hint">Which feasibility law issued each G6 first veto. The proactive floor acts only through <code>proactive-cadence</code>.</p>
+      <StackedShares rows={arms.map(a => ({ label: armLabel(a), counts: plots.g6_laws?.[a] || {} }))} categories={g6Laws}/></section>}
     {noopCats.length > 0 && <section className="panel ml-pad"><h2>No-op reasons</h2><p className="field-hint">Why an asset-tick ended without a selected move.</p>
       <StackedShares rows={arms.map(a => ({ label: armLabel(a), counts: plots.noop?.[a] || {} }))} categories={noopCats}/></section>}
     {metrics.length > 0 && <section className="panel ml-table-panel"><h2>Table view · {catalog(tableMetric)?.metric_name || 'all metrics'}</h2>

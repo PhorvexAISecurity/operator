@@ -21,6 +21,8 @@ ECR_IMAGE = re.compile(r'^(?P<registry>(?P<account>\d{12})\.dkr\.ecr\.(?P<region
 INDEX_TYPES = ('application/vnd.oci.image.index.v1+json', 'application/vnd.docker.distribution.manifest.list.v2+json')
 MANIFEST_TYPES = ('application/vnd.oci.image.manifest.v1+json', 'application/vnd.docker.distribution.manifest.v2+json')
 BINARY = 'brain-replay'
+# A build whose -version predates overridableParameters supports exactly the first two knobs.
+LEGACY_OVERRIDABLE = ('P-FEA-006', 'P-OBJ-003')
 MAX_LAYER_BYTES = 512 << 20
 
 
@@ -127,7 +129,8 @@ def ensure_binary(data_dir, image=None, platform=('linux', 'amd64')):
             identity = {'schema_version': 'math-lab.replay-binary.v1', 'path': str(path), 'image': image['image'],
                         'image_digest': image['digest'], 'platform_manifest_digest': platform_digest, 'layer_digest': layer['digest'],
                         'binary_sha256': sha256_file(path), 'git_sha': version.get('gitSHA'), 'brain_image': version.get('brainImage'),
-                        'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'), 'extracted_at': utc()}
+                        'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'),
+                        'overridable_parameters': version.get('overridableParameters'), 'extracted_at': utc()}
             write_json(identity_path, identity)
             return identity
     raise BinaryError('brain-replay is not present in this image (the deployed release predates the Math Lab)')
@@ -148,4 +151,11 @@ def local_identity(path):
     version = json.loads(run_isolated([str(path), '-version'], timeout=30))
     return {'schema_version': 'math-lab.replay-binary.v1', 'path': str(path), 'image': None, 'image_digest': None,
             'binary_sha256': sha256_file(path), 'git_sha': version.get('gitSHA'), 'brain_image': version.get('brainImage'),
-            'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'), 'local': True}
+            'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'),
+            'overridable_parameters': version.get('overridableParameters'), 'local': True}
+
+
+def overridable(identity):
+    """Parameters this replay build accepts as arm overrides."""
+    listed = (identity or {}).get('overridable_parameters')
+    return set(listed) if listed is not None else set(LEGACY_OVERRIDABLE)

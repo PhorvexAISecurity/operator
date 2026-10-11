@@ -83,14 +83,15 @@ export class MathLabService implements OnModuleInit, OnModuleDestroy {
   // ── read models ────────────────────────────────────────────────────────────────────
   registry(policy?: string) {
     if (policy !== undefined && !this.policies.includes(policy)) throw new BadRequestException('Unknown capture policy');
+    const base = this.readJson(join(this.config.root, 'mathlab', 'registry', 'parameter_registry.json')) as { registry_version?: string } | undefined;
+    if (!base) throw new ServiceUnavailableException('Parameter registry is missing from this release');
     if (policy) {
       const [ns, name] = policy.split('/');
-      const overlay = this.readJson(join(this.root, 'registry-effective', `${ns}--${name}.json`));
-      if (overlay) return overlay;
+      // The overlay is written at sync time; after a release ships a new registry it is stale until the next sync.
+      const overlay = this.readJson(join(this.root, 'registry-effective', `${ns}--${name}.json`)) as { registry_version?: string } | undefined;
+      if (overlay && overlay.registry_version === base.registry_version) return overlay;
     }
-    const base = this.readJson(join(this.config.root, 'mathlab', 'registry', 'parameter_registry.json'));
-    if (!base) throw new ServiceUnavailableException('Parameter registry is missing from this release');
-    return { ...(base as object), inspection: null };
+    return { ...base, inspection: null };
   }
   policyStatus() {
     const binary = this.readJson(join(this.root, 'bin', 'current.json'));

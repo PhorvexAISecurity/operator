@@ -90,6 +90,13 @@ def stream_replay(root, experiment_id, replay_path):
                     for row in line.get(key) or []:
                         merged = {**ident, **row}
                         writers[name].writerow([safe(merged.get(h)) for h in headers])
+                # Per-law attribution of G6 first vetoes survives the compaction (M-P30).
+                laws = {}
+                for c in line.get('candidates') or []:
+                    if c.get('first_veto_gate') == 'G6-feasibility':
+                        law = c.get('feasibility_law') or 'UNATTRIBUTED'
+                        laws[law] = laws.get(law, 0) + 1
+                line['first_veto_by_law'] = laws
                 for key in HEAVY:
                     line.pop(key, None)
                 compact.append(line)

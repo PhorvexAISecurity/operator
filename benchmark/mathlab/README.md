@@ -42,12 +42,16 @@ All routes require a dashboard session. None can write to the cluster.
   "secondary_metric_ids": ["M-P21"], "safety_metric_ids": ["M-D06"] }
 ```
 
-- **Knobs:** only registry `EXPERIMENT_KNOB` parameters can be varied. Today these are `P-OBJ-003` (β, with `{"unset": true}` allowed) and `P-FEA-006` (cost ceiling).
+- **Knobs:** only registry `EXPERIMENT_KNOB` parameters can be varied. Today these are:
+  - `P-OBJ-003` (β, with `{"unset": true}` allowed);
+  - `P-FEA-006` (cost ceiling);
+  - `P-FEA-005` (proactive floor, in whole seconds). It sets the hygiene cadence and the exposure horizon together, as the operator derives both from `spec.budget.proactiveFloor`. It needs an operator release whose `brain-replay -version` lists it (PR #452) and a cohort recorded by that release.
 - **Rejected values:** non-finite, out-of-domain and duplicate values, unknown fields, `SANDBOX` mode, and β on a `costPreferences` policy.
 
 ### Preflight checks
 
 - the replay-binary source SHA must equal the source SHA of every snapshot in the cohort (`VERSION_PIN`);
+- the replay binary must list the knob in `overridableParameters` (`KNOB_UNSUPPORTED_BY_REPLAY_BINARY`); a build without that list supports only `P-OBJ-003` and `P-FEA-006`;
 - the cohort must be non-empty and every snapshot must be complete;
 - the cohort must be uniform: source, policy UID, process config, parameter manifest, policy overrides, economics mode;
 - protected-parameter warning;
@@ -93,9 +97,9 @@ The catalogue is in `worker/mathlab/analysis.py`, `METRIC_CATALOG`.
 | M-P02 | Budget saturation | PROCESS |
 | M-P18 | Estimated objective | ESTIMATED_MODEL |
 | M-P24 | Recorded production dispatch funnel (control only) | OBSERVATIONAL |
-| M-P25 … M-P29 | Proposed IDs; definitions in the catalogue | — |
+| M-P25 … M-P30 | Proposed IDs; definitions in the catalogue | — |
 
-M-P25 … M-P29 are flagged `metric_proposed`. They cover common-weight predicted coverage, selected moves, feasible candidates per asset-tick, estimated disruption cost of selected moves, and replay compute time.
+M-P25 … M-P30 are flagged `metric_proposed`. They cover common-weight predicted coverage, selected moves, feasible candidates per asset-tick, estimated disruption cost of selected moves, replay compute time, and the share of enabled pairs first-vetoed by each G6 hard law (M-P30, one row per law, with a 0 for a law that vetoes nothing in that arm).
 
 ## Evidence (per experiment, also in `evidence.zip`)
 
