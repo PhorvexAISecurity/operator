@@ -154,6 +154,9 @@ func (s *Server) apiRoutes() []route {
 		// policy, verified against the brain's own decision records, and their change log.
 		read("/api/optimizer/runtime", s.optimizerRuntime, routeSpec{fixedTarget: defaultTargetID}),
 		read("/api/optimizer/parameter-log", s.optimizerParameterLog, routeSpec{fixedTarget: defaultTargetID}),
+		// The write side: an audited merge patch of those knobs on one policy (operator role; the
+		// body's namespace must be in the grant), or a restore of a previous change's values.
+		control(optimizerApplyRoute, s.optimizerApply, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS}),
 		control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/voice/agency/live/fire", s.voiceAgencyLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
