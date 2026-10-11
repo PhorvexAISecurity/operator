@@ -49,9 +49,13 @@ type Server struct {
 	liveReadSlots   chan struct{}
 	liveWriteBudget time.Duration
 	liveReadBudget  time.Duration
-	runs            *RunManager
-	history         *historyStore
-	historyInitErr  string
+	// One shared reader per remote audit path for every /api/live subscriber (live_tail.go).
+	liveTailMu     sync.Mutex
+	liveTailers    map[string]*liveTailer
+	liveTailDone   chan struct{}
+	runs           *RunManager
+	history        *historyStore
+	historyInitErr string
 	// Runtime optimizer parameters (optimizer_runtime.go); nil uses the cluster and the audit tail.
 	optimizerClient  optimizerPolicyClient
 	optimizerRecords func(context.Context) ([]audit.Record, error)
@@ -117,6 +121,7 @@ func NewServer(cfg Config) *Server {
 
 // Close flushes and closes console-owned durable stores. It is safe to call more than once.
 func (s *Server) Close() error {
+	s.stopLiveTailers()
 	if s.history != nil {
 		return s.history.Close()
 	}

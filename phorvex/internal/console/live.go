@@ -15,7 +15,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -25,7 +24,6 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audit"
-	"github.com/phorvex/phorvex/internal/audittransport"
 )
 
 // isVClusterContext reports whether a kubeconfig context names a vCluster (vs the EKS host). The ONE
@@ -229,131 +227,7 @@ func (s *Server) live(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) remoteLive(r *http.Request, path string, tail int, visible func(audit.Record) bool, emitScoped func(context.Context, audit.Record), noticeScoped func(context.Context, string)) {
-	ctx := r.Context()
-	source := s.cfg.AuditSource
-	id := strings.TrimPrefix(path, "audit://")
-	find := func(m audittransport.Manifest, id string) (audittransport.Segment, bool) {
-		for _, seg := range m.Segments {
-			if seg.ID == id {
-				return seg, true
-			}
-		}
-		return audittransport.Segment{}, false
-	}
-	var live audittransport.Segment
-	var offset int64
-	var anchor string
-	skipping := false
-	if err := s.withLiveAuditRead(ctx, func(readCtx context.Context) error {
-		emit := func(rec audit.Record) { emitScoped(readCtx, rec) }
-		notice := func(message string) { noticeScoped(readCtx, message) }
-		m, e := source.Manifest(readCtx)
-		if e != nil {
-			notice("Live audit source unavailable: " + e.Error())
-			return errors.New("live audit replay unavailable")
-		}
-		var ok bool
-		live, ok = find(m, id)
-		if !ok {
-			notice("Configured provider audit source unavailable.")
-			return errors.New("live audit replay unavailable")
-		}
-		f := source.Open(readCtx, live)
-		if tail <= 0 {
-			offset, anchor = streamAuditFile(f, 0, &skipping, emit, notice)
-		} else {
-			offset, anchor = replayAuditFile(f, tail, visible, emit, notice)
-		}
-		if e = f.Verify(); e != nil {
-			notice("Live audit replay changed; reconnect to recover history.")
-			return errors.New("live audit replay unavailable")
-		}
-		return nil
-	}); err != nil {
-		return
-	}
-
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-		if err := s.withLiveAuditRead(ctx, func(readCtx context.Context) error {
-			emit := func(rec audit.Record) { emitScoped(readCtx, rec) }
-			notice := func(message string) { noticeScoped(readCtx, message) }
-			m, e := source.Manifest(readCtx)
-			if e != nil {
-				notice("Live audit source unavailable; reconnect after recovery.")
-				return errors.New("live audit poll unavailable")
-			}
-			newLive, found := find(m, id)
-			if !found {
-				notice("Configured provider audit source unavailable.")
-				return errors.New("live audit poll unavailable")
-			}
-			if newLive.Generation != live.Generation {
-				// Finish any records committed just before rotation from the retained
-				// copy, then start the new live file at zero. A missing old segment is
-				// a visible retention gap, never an empty verified replay.
-				old, retained := audittransport.Segment{}, false
-				for _, seg := range m.Segments {
-					if seg.Generation == live.Generation && strings.HasPrefix(seg.ID, strings.TrimSuffix(id, "live")+"backup-") {
-						old = seg
-						retained = true
-						break
-					}
-				}
-				if !retained {
-					notice("Audit generation lost before reconnect; refresh retained history.")
-					return errors.New("live audit poll unavailable")
-				}
-				if old.ID != strings.TrimSuffix(id, "live")+"backup-1" {
-					notice("More than one audit rotation occurred between live polls; refresh paged retained history to recover intervening decisions.")
-					return errors.New("live audit poll unavailable")
-				}
-				oldReader := source.Open(readCtx, old)
-				if offset > old.Size {
-					notice("Audit generation truncated during rotation.")
-					return errors.New("live audit poll unavailable")
-				}
-				offset, _ = streamAuditFile(oldReader, offset, &skipping, emit, notice)
-				if e = oldReader.Verify(); e != nil {
-					notice("Retained audit generation changed during rotation.")
-					return errors.New("live audit poll unavailable")
-				}
-				live = newLive
-				offset = 0
-				anchor = ""
-				skipping = false
-			} else if newLive.Size < offset {
-				notice("Audit truncated; reconnect and refresh history.")
-				return errors.New("live audit poll unavailable")
-			} else {
-				live = newLive
-			}
-			reader := source.Open(readCtx, live)
-			if offset > 0 {
-				current, ae := auditAnchor(reader, offset)
-				if ae != nil || current != anchor {
-					notice("Audit append boundary changed; reconnect and refresh history.")
-					return errors.New("live audit poll unavailable")
-				}
-			}
-			offset, anchor = streamAuditFile(reader, offset, &skipping, emit, notice)
-			if e = reader.Verify(); e != nil {
-				notice("Live audit generation changed during read; reconnect.")
-				return errors.New("live audit poll unavailable")
-			}
-			return nil
-		}); err != nil {
-			return
-		}
-	}
-}
+// remoteLive (the shared-reader path for a remote audit source) is in live_tail.go.
 
 // tailReplay emits only the last n phorvex.decision records from the audit and returns the byte
 // offset at end-of-file so the caller can tail from there. It reads ONLY the tail chunk of the
@@ -481,6 +355,12 @@ func streamAudit(path string, offset int64, skipping *bool, emit func(audit.Reco
 }
 
 func streamAuditFile(f auditHandle, offset int64, skipping *bool, emit func(audit.Record), notice func(string)) (int64, string) {
+	return streamAuditFileAt(f, offset, skipping, func(rec audit.Record, _, _ int64) { emit(rec) }, notice)
+}
+
+// streamAuditFileAt is streamAuditFile reporting each emitted record's byte range [start, end)
+// in the file, so a shared reader's consumers can tell what they already hold.
+func streamAuditFileAt(f auditHandle, offset int64, skipping *bool, emit func(rec audit.Record, start, end int64), notice func(string)) (int64, string) {
 	if st, e := f.Stat(); e == nil && st.Size() < offset {
 		offset = 0
 		*skipping = false
@@ -506,12 +386,13 @@ func streamAuditFile(f auditHandle, offset int64, skipping *bool, emit func(audi
 			}
 		}
 		if e == nil {
+			start := committed
 			committed = offset + read
 			committedAnchor, _ = auditAnchor(f, committed)
 			if !*skipping {
 				var rec audit.Record
 				if json.Unmarshal(line, &rec) == nil {
-					emit(rec)
+					emit(rec, start, committed)
 					if current, e := auditAnchor(f, committed); e != nil || current != committedAnchor {
 						return committed, committedAnchor
 					}
