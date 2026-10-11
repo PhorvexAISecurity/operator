@@ -288,7 +288,7 @@ func (s *Server) armsWorker(op experimentEvent, deploy string) {
 			return
 		}
 		receipts = append(receipts, experimentStimulusReceipt{Pod: target.Pod, PodUID: target.UID, PodRV: target.ResourceVersion, Deploy: target.Deploy, Event: event, Token: op.Operation})
-		receipt, err := s.executePreparedResettableSignal(op.Actor, ns, event, target, op.Operation, windowStart, windowEnd)
+		receipt, err := s.executePreparedResettableSignal(op.Actor, ns, event, target, op.Operation, windowStart, windowEnd, false)
 		if receipt.Event != "" {
 			receipts[len(receipts)-1] = receipt
 		}

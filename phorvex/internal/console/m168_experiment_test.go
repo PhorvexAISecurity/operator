@@ -432,6 +432,9 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 			record.ProducerRoute != "/api/workload/attack" || record.ResultSchema != "synthetic-detector-signal-v2" {
 			t.Fatalf("voice attack record dropped typed event identity: %+v", record)
 		}
+		if record.LiveFire {
+			t.Fatalf("a comparison arm must not join the Live observation view: %+v", record.ID)
+		}
 	}
 	if run.Arms[0].Outcome != "" || run.Arms[0].ResponseObserved || !run.Arms[1].ResponseObserved || !run.Arms[2].ResponseObserved || run.Arms[1].DefendedPod != run.Arms[1].TargetPod || run.Arms[2].DefendedPod != run.Arms[2].TargetPod {
 		t.Fatalf("unexpected identity-bound responses: %+v", run.Arms)

@@ -69,6 +69,10 @@ type attackRecord struct {
 	Expected     string            `json:"expectedActuator"`
 	Stateful     bool              `json:"stateful"`
 	EvidenceKind string            `json:"evidenceKind,omitempty"`
+	// LiveFire marks a record created by a Live control (the Fire button or a benchmark launch),
+	// as opposed to a pre-registered experiment arm that reuses the same producer. Only the Live
+	// firing's exact result is part of the opt-in observation view its caller polls.
+	LiveFire bool `json:"liveFire,omitempty"`
 	// StimulusEvidence and EffectEvidence keep setup, controller effect and attacker outcome
 	// separate. A selector or guardrail-state transition is useful operational evidence, but it
 	// does not by itself establish that an attack was executed or mitigated.
@@ -272,6 +276,7 @@ type defenseBaseline struct {
 	outcomeClass  string
 	producerRoute string
 	resultSchema  string
+	liveFire      bool
 	// uptime is the workload availability read BEFORE the attack is applied. It must be captured
 	// here for the same reason as the quarantine/NP baselines: the operator is event-driven and
 	// reacts in ~1s, faster than startAttackRecord runs, so reading it afterwards recorded the
@@ -499,8 +504,13 @@ func visibleAttackRecord(rec *attackRecord, observations bool) bool {
 		return true
 	case "vllm-in-place-effect", "vllm-unsupported-stimulus", "catalogue-signal",
 		"vllm-endpoint-lease-live", "vllm-drain-owned-observation", "voice-output-live",
-		"litellm-live-client-policy", "litellm-real-provider-output":
+		"litellm-live-client-policy", "litellm-real-provider-output", "crm-refund-live":
 		return observations
+	case "synthetic-detector-signal":
+		// One producer serves the Live foothold control and the M-168 comparison arms. A Live
+		// firing is a catalogue observation like catalogue-signal, and whoever fired it polls its
+		// exact result here; experiment arms stay in their own report.
+		return observations && rec.LiveFire
 	default:
 		return false
 	}
@@ -703,6 +713,7 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 		OutcomeClass:     base.outcomeClass,
 		ProducerRoute:    base.producerRoute,
 		ResultSchema:     base.resultSchema,
+		LiveFire:         base.liveFire,
 		ObservationStart: started.UTC().Format(time.RFC3339Nano),
 		ObservationEnd:   deadline.UTC().Format(time.RFC3339Nano),
 		Status:           "running",

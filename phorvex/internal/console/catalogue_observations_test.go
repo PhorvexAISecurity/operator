@@ -104,3 +104,41 @@ func TestCompletionRefusalDoesNotInventGuardrailEvidence(t *testing.T) {
 		}
 	}
 }
+
+// A Live foothold and a CRM refund are read back through the exact-result API the Fire control and
+// the benchmark poll; an experiment arm from the same producer stays out, and the default report
+// is unchanged.
+func TestLiveFootholdAndCRMResultsAreExactObservations(t *testing.T) {
+	attackMu.Lock()
+	saved := attackList
+	attackList = []*attackRecord{
+		{ID: "arm", Namespace: "acme", EvidenceKind: "synthetic-detector-signal"},
+		{ID: "foothold", Namespace: "acme", EvidenceKind: "synthetic-detector-signal", LiveFire: true},
+		{ID: "refund", Namespace: "acme", EvidenceKind: "crm-refund-live"},
+	}
+	attackMu.Unlock()
+	t.Cleanup(func() { attackMu.Lock(); attackList = saved; attackMu.Unlock() })
+	p := testOperatorPrincipal("acme")
+	if got := realAttackSnapshots(p); len(got) != 0 {
+		t.Fatalf("observations entered the default report: %+v", got)
+	}
+	got := realAttackSnapshots(p, true)
+	ids := []string{}
+	for _, r := range got {
+		ids = append(ids, r.ID)
+	}
+	if strings.Join(ids, ",") != "refund,foothold" {
+		t.Fatalf("observation view = %v", ids)
+	}
+	for _, id := range []string{"foothold", "refund"} {
+		req := httptest.NewRequest("GET", "/api/attack-results?limit=1", nil)
+		pg, err := collectionPagingFromRequest(req, "/api/attack-results", p, map[string]string{"includeObservations": "true"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, page, err := pagedRealAttackSnapshots("/api/attack-results", p, pg, "", id, true)
+		if err != nil || len(rows) != 1 || rows[0].ID != id || page.Total != 1 {
+			t.Fatalf("exact %s: rows=%+v page=%+v err=%v", id, rows, page, err)
+		}
+	}
+}
