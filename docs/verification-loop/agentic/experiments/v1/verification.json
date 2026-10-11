@@ -1,0 +1,623 @@
+{
+  "schema": "phorvex.agentic-handoff.v1",
+  "run_id": "v1-pilot",
+  "role": "verification_engineer",
+  "status": "ready",
+  "started_at": "2026-10-10T10:50:11.486566+00:00",
+  "finished_at": "2026-10-10T10:58:59.127848+00:00",
+  "timing_provenance": "Preparation starts at first retained source-pin command; episode timestamps measure subprocess invocation through exit. Build finish records later observed successful binary availability, not precise process exit.",
+  "input_refs": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "f80cf49f483d15a15c9241fc26914b132c619a3c5f58cacb682d88dda7762744"
+    },
+    {
+      "path": "workflow/AGENTS.md",
+      "sha256": "d8378ffdb686862f8088e110d599e6f0658a63d82234ac93aea7e3b9c674b1b7"
+    },
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V1.md",
+      "sha256": "6a22ae0223fd0d5db4ecb11c0b1a6cb73c920c3df7628fe2a2d4d14250c2d243"
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V1.md",
+      "sha256": "2feb6b2c4d6fcbc8cf04076ad61377ee2202caf7e6532d37748f6e4b94ee2910"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/CASE.json",
+      "sha256": "6419e8adf51e6c0e231605e52ffad70fc6d44486742fc22ab630ef9a5ceb0fa8"
+    },
+    {
+      "path": "docs/verification-loop/README.md",
+      "sha256": "a89bc4430aa6af1e8300f26ea6d32021b73d773f546da960074c5df46f57ca22"
+    },
+    {
+      "path": "docs/verification-loop/ONE-CASE-PLAN.md",
+      "sha256": "dfc2c0e3424036963c0c3325d7071db01b045b9f65405df3dc5fecd279dd8f9b"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/inventory.json",
+      "sha256": "f492bc95d9ab18643a4d688617e38a832904f53fc23f51855c57857c325e8a5e"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/inventory.md",
+      "sha256": "7eb637a411003d04bc1cb7ee535c575c64c2d180d0e4177a816033ea5b20b303"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/attack.json",
+      "sha256": "52d6ac2eede909f1d31fb77121b1070a3091ac850ef53fade522ad341c51a62f"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/attack.md",
+      "sha256": "7320b69df798ce25fed67bcf66a4bf7da66c1dbaf1e352614f847d2a3ca25503"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/defense.json",
+      "sha256": "48db7b2427b8790d8261927645cd8c614202e9777e3dcf260a4481862aa34f3e"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/defense.md",
+      "sha256": "fe48717dcd91d8742dd2ed71e0001c06562e49fac6939b05ac520a011413aa65"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/preflight.json",
+      "sha256": "06702f75a7fcde121e30baac2077cb474cd143fa2c28bd54dd51679cde2c5220"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/preflight.md",
+      "sha256": "ac1da92d78d20072763072df911cb7a08819dd2738dabc260cb1798be5e2bca9"
+    }
+  ],
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "binary_sha256": "17f86a5307ef5c7395085af1b03e58c2bd39e596330bc68c93e4da3fa3cee0a6",
+  "findings": [
+    {
+      "id": "V1-POSITIVE-CHAIN",
+      "kind": "measured",
+      "detail": "Positive passed full frozen contract; 2.277s hold, exact denial/zero attacker effect, successful overlapping B controls and replay."
+    },
+    {
+      "id": "V1-WITHHELD-DISPATCH",
+      "kind": "expected_negative",
+      "detail": "Real selection alone left A landed; dispatch withheld and API state unchanged."
+    },
+    {
+      "id": "V1-AUTHORITY-OUTAGE",
+      "kind": "expected_negative",
+      "detail": "503 lease_unavailable correctly remained incomplete with threat UNKNOWN."
+    },
+    {
+      "id": "V1-CONTROL-STATUS",
+      "kind": "protocol_ambiguity",
+      "detail": "Architecture dimensions lack control-task success; explicit control_task_passed separates expected negative completion from INCOMPLETE defense acceptance."
+    },
+    {
+      "id": "V1-REATTACK-LIFETIME",
+      "kind": "tool_gap",
+      "detail": "Only in-episode nonce-varied capability checks executed; no separate adaptive post-run reattack against destroyed state."
+    },
+    {
+      "id": "V1-LEASE-TRANSFER",
+      "kind": "protocol_ambiguity",
+      "detail": "Original exclusive verifier runtime ownership needs explicit transfer to independent reproducer; lease released after cleanup."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/verification.md",
+      "sha256": "d3a3092c15358a40bb58e46b1d630cbca3e93fdb560498bdce5297c518fdf265"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+      "sha256": "17f86a5307ef5c7395085af1b03e58c2bd39e596330bc68c93e4da3fa3cee0a6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/tools/validate-v1-report.py",
+      "sha256": "09943dba99fbcdaf87ea34263c4ba091d89b689793c921d8414a67c894cbb2d3"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/cleanup-after.json",
+      "sha256": "8fb384f82cd7acb6a2e47c9b126884b1e0f1f4b237794e55bfb4e6a9d902d74e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/cleanup-before.json",
+      "sha256": "48d1aa086d1c1a20b9455c5941e7fd38578b2832523494ead74ae25458506743"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/cleanup-confirmation.json",
+      "sha256": "8d45b784903a3be6bcbb7498444af274427824fae845f99dccb763507b6eddef"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/journal-final.json",
+      "sha256": "7570877d7ace891a87197de133003b746834656d37c157b744c56bc4a13f3c55"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/journal-initial.json",
+      "sha256": "7fe2a601062674d08d412a6f9cbef243980012c3fd2dd98936ba1e2382372f5d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/pod-fixture.json",
+      "sha256": "ba6872e6e41e316dac4427a226c25a101f7ebdc04a30aff8461b6ba600409b18"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/policy-final.json",
+      "sha256": "a57f006de6301e43e4e1b9bf43e95f1ce4429ac0c9ece2512b34e1872b385442"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/policy-initial.json",
+      "sha256": "c7076321919844d627e33b6642f1f27043aa5cfe9b8f351cd5f5e2ad6003168c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/replay-input.gob",
+      "sha256": "1738a89d7cc5f7aee81974be13a83100402dae372656b8b849ab01faa80fe1bd"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/report.json",
+      "sha256": "28d3bd669a7c10050eea2b078455b2dc277470fe4eed70c8c705255c6c2eb7f0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/resolved-model-input.json",
+      "sha256": "dca6ef2363b0dad5d773569777b40dafd4245b80ad8c1b07707dc0713b2494d1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/runtime.log",
+      "sha256": "53b16410b7b4879bab0842a4d2c7a3404b35bc3d7edf22954c4efb5cedc6c51c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/security-event.json",
+      "sha256": "37b1a56a14ae94dc130b016aa2158e845fa6574acc1ee9d71929ce705c6f4807"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/selecting-policy.json",
+      "sha256": "70631fde7f646a5f8debfae02238eb1e4a771272b10c5d23eea95aad41bf4872"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/selection-traces.json",
+      "sha256": "e78514f5d6c1d617566bbab66cdc776e9cbdffb29a7312a0825161750d836c62"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/stale-security-event.json",
+      "sha256": "14c4c7dbc56c016ed72c84921b54d120dffce61abad476fbd0892a8adec1b647"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive-command.json",
+      "sha256": "0a66ca7c7852fe788082688e84f39e0e427c1cbd363022c88eb39b3dff3a94b1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive-stdout.log",
+      "sha256": "ae9f063ee084402bb2d69f26ce89569bd71f9f6a9c8442a1fc57228283a7ec10"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/preparation.json",
+      "sha256": "f67960d791938f230a9bbe9d04d515b3808593ef97b9c3e582f35a0edfbbbd7c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/report-validation.json",
+      "sha256": "3543eca1253cf48a56fc31d2f601f60f2bda7a5836f3158d17759516ed7aacbc"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/journal-final.json",
+      "sha256": "3651e992cc4f24d296c95597612d56d544b9dbc2a6c2b95efaaf36238748b5ff"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/journal-initial.json",
+      "sha256": "fdcf613c7af35265c0a023540e6a66e3a6035ac18deb85aca4ad48a749e271e0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/pod-fixture.json",
+      "sha256": "cdf4b4682bd70900ecba5a48ecb6c15e2d606b02b8a78891ccfc3a29e65a13e1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/policy-final.json",
+      "sha256": "0cd866c98d50d3051d595837764dae8075a01fd78452aa271e9758d5eb21bf12"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/policy-initial.json",
+      "sha256": "16ea01a2a2b1fce0f4cdfb7c056b7cc419e577af0117d5046329c777771c1db1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/replay-input.gob",
+      "sha256": "09c709927408dd1d2a5aaebd56977d74a3ebe328610de72a3742ec7650468d6e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/report.json",
+      "sha256": "5fa0d43bc509834333bc344dd129d705abd091b6e8f9a7497cfaa992815665d7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/resolved-model-input.json",
+      "sha256": "fe50b5cc067c948eff544af7d9febda9a99c828881c62a9da8772eb5251f9108"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/runtime.log",
+      "sha256": "044723fd0762ad93cec442678f4c9b38825cd7afade64c74091ef024238f81c3"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/security-event.json",
+      "sha256": "bdbbcde35424ceba916f10df0aa6fbe8d01d5565840f39bed725d196da1bbacb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/selecting-policy.json",
+      "sha256": "46f9f0c9113545dd77766f86da1da93b5cfa1c8bc0add3bd605c7703a0465a54"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/selection-traces.json",
+      "sha256": "6f85056013849e27955e8d18e29c25e633f0e45d570dc274bda56a23606cfa1d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive/stale-security-event.json",
+      "sha256": "99ece3bee3264dbdeb444edc9ced355fbeaee7d542ae894b52ef3cdc721e257e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive-command.json",
+      "sha256": "a77646a28f3bd525bbd3e36d167b39dde7ec2d1dcfd9b2c7b3e23eb876bf642e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/reviewer-positive-stdout.log",
+      "sha256": "7dc1ba42406fa3baec7298d8fd3780c88df8b13b4c7e07930a8c8207f1b124e4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/journal-final.json",
+      "sha256": "0a9b6c6bb7256a28fc619a3f5c71f4a785cdfd8a5b13c1c28bd4cfe62e001aba"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/journal-initial.json",
+      "sha256": "0a9b6c6bb7256a28fc619a3f5c71f4a785cdfd8a5b13c1c28bd4cfe62e001aba"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/pod-fixture.json",
+      "sha256": "7424d6c293be2fdaa0cdba2a5a56b3a487653b376032594594016c9cad8b1548"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/policy-final.json",
+      "sha256": "fe10d18778e9d88d41144e2ec10b82d68e6b1a4e91c21031760c8dbd48fc9ad7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/policy-initial.json",
+      "sha256": "fe10d18778e9d88d41144e2ec10b82d68e6b1a4e91c21031760c8dbd48fc9ad7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/replay-input.gob",
+      "sha256": "dc179f12d277927893d916e47128f2ad5239183d678e289ba71260070d55cca2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/report.json",
+      "sha256": "489f4d25042fd3fddf7dcf09fd7fba4904db13bbaf4ce0fe9bff3174bfb8dcc0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/resolved-model-input.json",
+      "sha256": "44814b965db5c63ecc2a5d9ad82a56f64bb65a326c18c71c99a81408b64c1cab"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/runtime.log",
+      "sha256": "69b3b0dfef8b211f3a64c71569f6e1d43ee6fede55d883ba36b6a1a4c5e55ef0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/security-event.json",
+      "sha256": "0f6c8bcd7198755f2e073e18c2286ac2b7313d733b1b0e1f37c052cb25a9cb59"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/selecting-policy.json",
+      "sha256": "27671ada9034c83e0845222dd210e051d6f3e16c09e5f1adb6f462bd5ccbd566"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/selection-traces.json",
+      "sha256": "f750e50f3a7f170ef08a804b22947d0c2fef034a5beafd0ad181402483c5615f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/stale-security-event.json",
+      "sha256": "c33188d89288dc3efd31c1fb19c87f7f87546c31460bf043fb50d5cc1761b2f0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch-command.json",
+      "sha256": "31b6b5adce3a2e206afd846f390eaa1ea0aa3b0f313cea9894452717e01a33af"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch-stderr.log",
+      "sha256": "fcd4cc34ff328ca09f72ec0fa6de97df478fd51b3c847312ab24ba622009b68b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch-stdout.log",
+      "sha256": "f28fc1efded63ef6220dbf31d89974928e5d339214dfea0307e71a1420fd024b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/journal-final.json",
+      "sha256": "dddfba284c508cab38a5d4f3ac115c8692166cdd7749aa9f0ce00ae59c228190"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/journal-initial.json",
+      "sha256": "d219b0ab00394d1e14ff9c3795f5db84e024906cc2b5df7fb43f45c88ae84cc3"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/pod-fixture.json",
+      "sha256": "726fba371f7523fa745278dde0dbe7c063dc70b67ff21ebed6b26282a4ca0dcb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/policy-final.json",
+      "sha256": "005e23c65d76113c0b4f1d93c2e3d55c1235f5638cee3f6be01d809c3067d77d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/policy-initial.json",
+      "sha256": "2a120f93c1d432a498c570329ddbb8b1ba5bf5380548f04b295c18f961b3af04"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/replay-input.gob",
+      "sha256": "1a70d4636bac9bdea59f1bdbdee33a438a9a1f88abdf9019157f7d6807a1baa1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/report.json",
+      "sha256": "d577998d52cbb6101cae07629924fa6ccfe292817826a3c73a7d35da5b21a584"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/resolved-model-input.json",
+      "sha256": "853efe01a50ec9b040c949059e02d6ed2c7a9b639dd3cafa8143c43c08e3e5c9"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/runtime.log",
+      "sha256": "5abbe88961a94ae49699804113da908f2a84e1d96f88f8e9aecca2ffd71b8e30"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/security-event.json",
+      "sha256": "5c5a90946a123d7af57185356cfea82a72b9cafe0d242cf37356415445d0adf0"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/selecting-policy.json",
+      "sha256": "b4ffd27ac51f37967ea2ec2e0e046e552619d8167f512a461e3c1921e084d95c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/selection-traces.json",
+      "sha256": "3bbf270b7339ad21e29f82e7d6b160aeac40a7d1a0e66d6a65c823dec60c10b1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/stale-security-event.json",
+      "sha256": "63ad78bb4b0e368aed337056b340eb9a67c4a30314804a2a45960ce4dd5f24d5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority-command.json",
+      "sha256": "867d96718114e10ab4de10f7bc0e716d3bc9ebe53e366ef76af64d4930d62758"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority-stderr.log",
+      "sha256": "9e5e61eb77e12cb3ec2c9fea712d926c2c8fc8b1737b1b98c0a133228b7b0329"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority-stdout.log",
+      "sha256": "5a4ae457bcc4de407eb968e7b78759576fe112468d70dbd6fdb14a0cfda803e5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/validated-dependencies.json",
+      "sha256": "6927133e7b5fea8086c13ea6499613669ae6d331cb61a5824abfa27c9551cb6d"
+    }
+  ],
+  "episodes": [
+    {
+      "episode": "positive",
+      "threat_outcome": "BLOCKED",
+      "brain_attribution": "PROVEN",
+      "acceptance": "LOCAL_ACCEPTED",
+      "driver_verdict": "LOCAL_RUNTIME_DEFENDED",
+      "first_incomplete_stage": null,
+      "next_owner": "independent_reviewer",
+      "routing": "Independent reproduction required",
+      "control_task_passed": true,
+      "exit_code": 0,
+      "started_at": "2026-10-10T10:56:30.928439+00:00",
+      "finished_at": "2026-10-10T10:56:42.744635+00:00",
+      "wall_time_seconds": 11.816215622238815,
+      "command": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=15s",
+        "240s",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+        "-repo-root",
+        "/home/mehrdad/operator",
+        "-python",
+        "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+        "-assets",
+        "/home/mehrdad/.cache/phorvex-verification-loop/envtest/controller-tools/envtest",
+        "-git-sha",
+        "f73d04cd6aac9f5945da1515e2dac76554869920",
+        "-timeout",
+        "3m",
+        "-hold",
+        "2s",
+        "-hold-interval",
+        "250ms",
+        "-max-legitimate-latency",
+        "2s",
+        "-out",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/v1/positive"
+      ],
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/positive/report.json",
+        "sha256": "28d3bd669a7c10050eea2b078455b2dc277470fe4eed70c8c705255c6c2eb7f0"
+      },
+      "clean_control_passed": true,
+      "stale_control_passed": true,
+      "exact_replay": true,
+      "shadow_owner_unchanged": true,
+      "legitimate_samples": 12,
+      "legitimate_max_latency_ms": 18.316454,
+      "legitimate_dispatch_overlaps": 2,
+      "hold_elapsed_ms": 2276.977089,
+      "baseline_to_confirmed_denial_ms": 565.251074,
+      "formal_slo_status": "unknown",
+      "error": null,
+      "validator": {
+        "episode": "positive",
+        "checks": 217,
+        "passed": true,
+        "errors": [],
+        "report_sha256": "28d3bd669a7c10050eea2b078455b2dc277470fe4eed70c8c705255c6c2eb7f0"
+      }
+    },
+    {
+      "episode": "skip-dispatch",
+      "threat_outcome": "LANDED",
+      "brain_attribution": "NOT_PROVEN",
+      "acceptance": "INCOMPLETE",
+      "driver_verdict": "LANDED",
+      "first_incomplete_stage": "dispatch-withheld-negative-control",
+      "next_owner": "orchestrator",
+      "routing": "Expected configured negative; retain evidence, no repair or retry",
+      "control_task_passed": true,
+      "exit_code": 1,
+      "started_at": "2026-10-10T10:56:42.746088+00:00",
+      "finished_at": "2026-10-10T10:56:53.064289+00:00",
+      "wall_time_seconds": 10.31821589404717,
+      "command": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=15s",
+        "240s",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+        "-repo-root",
+        "/home/mehrdad/operator",
+        "-python",
+        "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+        "-assets",
+        "/home/mehrdad/.cache/phorvex-verification-loop/envtest/controller-tools/envtest",
+        "-git-sha",
+        "f73d04cd6aac9f5945da1515e2dac76554869920",
+        "-timeout",
+        "3m",
+        "-hold",
+        "2s",
+        "-hold-interval",
+        "250ms",
+        "-max-legitimate-latency",
+        "2s",
+        "-skip-dispatch",
+        "-out",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch"
+      ],
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/skip-dispatch/report.json",
+        "sha256": "489f4d25042fd3fddf7dcf09fd7fba4904db13bbaf4ce0fe9bff3174bfb8dcc0"
+      },
+      "clean_control_passed": true,
+      "stale_control_passed": true,
+      "exact_replay": true,
+      "shadow_owner_unchanged": true,
+      "legitimate_samples": 3,
+      "legitimate_max_latency_ms": 16.881843,
+      "legitimate_dispatch_overlaps": 0,
+      "hold_elapsed_ms": 0,
+      "baseline_to_confirmed_denial_ms": 0,
+      "formal_slo_status": "unknown",
+      "error": "negative control: selected defense without dispatch leaves attack landed",
+      "validator": {
+        "episode": "skip-dispatch",
+        "checks": 104,
+        "passed": true,
+        "errors": [],
+        "report_sha256": "489f4d25042fd3fddf7dcf09fd7fba4904db13bbaf4ce0fe9bff3174bfb8dcc0"
+      }
+    },
+    {
+      "episode": "unavailable-authority",
+      "threat_outcome": "UNKNOWN",
+      "brain_attribution": "NOT_PROVEN",
+      "acceptance": "INCOMPLETE",
+      "driver_verdict": "INCOMPLETE",
+      "first_incomplete_stage": "unavailable-authority-negative-control",
+      "next_owner": "orchestrator",
+      "routing": "Expected configured negative; retain evidence, no repair or retry",
+      "control_task_passed": true,
+      "exit_code": 1,
+      "started_at": "2026-10-10T10:56:53.066674+00:00",
+      "finished_at": "2026-10-10T10:57:02.383232+00:00",
+      "wall_time_seconds": 9.316562996711582,
+      "command": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=15s",
+        "240s",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+        "-repo-root",
+        "/home/mehrdad/operator",
+        "-python",
+        "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+        "-assets",
+        "/home/mehrdad/.cache/phorvex-verification-loop/envtest/controller-tools/envtest",
+        "-git-sha",
+        "f73d04cd6aac9f5945da1515e2dac76554869920",
+        "-timeout",
+        "3m",
+        "-hold",
+        "2s",
+        "-hold-interval",
+        "250ms",
+        "-max-legitimate-latency",
+        "2s",
+        "-unavailable-authority",
+        "-out",
+        "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority"
+      ],
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v1/unavailable-authority/report.json",
+        "sha256": "d577998d52cbb6101cae07629924fa6ccfe292817826a3c73a7d35da5b21a584"
+      },
+      "clean_control_passed": true,
+      "stale_control_passed": true,
+      "exact_replay": true,
+      "shadow_owner_unchanged": true,
+      "legitimate_samples": 4,
+      "legitimate_max_latency_ms": 17.037048,
+      "legitimate_dispatch_overlaps": 2,
+      "hold_elapsed_ms": 0,
+      "baseline_to_confirmed_denial_ms": 0,
+      "formal_slo_status": "unknown",
+      "error": "negative control: 503 lease_unavailable cannot establish a defended verdict",
+      "validator": {
+        "episode": "unavailable-authority",
+        "checks": 113,
+        "passed": true,
+        "errors": [],
+        "report_sha256": "d577998d52cbb6101cae07629924fa6ccfe292817826a3c73a7d35da5b21a584"
+      }
+    }
+  ],
+  "counts": {
+    "builds": 1,
+    "runtime_commands": 3,
+    "runtime_episodes": 3,
+    "retained_report_validation_commands": 1,
+    "unexpected_failed_episodes": 0,
+    "targeted_rework_rounds": 0,
+    "reruns": 0,
+    "model_token_cost": "unknown"
+  },
+  "cleanup": {
+    "at": "2026-10-10T10:57:32.316127+00:00",
+    "remaining_case_processes": [],
+    "new_private_temp_directories": [],
+    "new_envtest_directories": [],
+    "passed": true,
+    "runtime_lease": "released"
+  },
+  "threat_outcome": "BLOCKED",
+  "brain_attribution": "PROVEN",
+  "acceptance": "INCOMPLETE",
+  "acceptance_detail": "Positive local frozen contract accepted by verifier; workflow acceptance awaits independent reproduction/reviewer and architecture disposition.",
+  "limitations": [
+    "Formal SLO unknown",
+    "Synthetic downstream",
+    "TEST_INJECTED observation and trust identity",
+    "Fixture Pod readiness, owner/image metadata and endpoint membership",
+    "Local envtest mTLS adapter and explicit model.Policy; no full manager policy-resolution execution",
+    "No GPU, real detector, deployed console, customer workload or shared cluster",
+    "Only repeated nonce-varied credential checks; no separate adaptive bypass coverage",
+    "Provider-failed red-team task replaced by explicitly reviewed orchestrator fallback"
+  ],
+  "next_owner": "independent_reviewer",
+  "next_action": "Reproduce positive chain in a new private environment under orchestrator-transferred runtime lease; inspect all hashes, negatives and limitations; orchestrator decides architecture acceptance."
+}

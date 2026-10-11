@@ -1,0 +1,97 @@
+{
+  "schema": "phorvex.agentic-case.v2",
+  "case_id": "credential-reuse-local",
+  "run_id": "v2-pilot",
+  "contract_revision": 2,
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "observation_mode": "TEST_INJECTED",
+  "scope": "private-real-apiserver-and-local-credential-admission-with-synthetic-downstream",
+  "baseline": {
+    "attacker": "owned credential A returns 200 and performs downstream operation",
+    "legitimate": "owned credential B returns 200 and performs downstream operation"
+  },
+  "defense_probe": "same credential A receives 401 unauthorized with zero downstream operation after native dispatch",
+  "legitimate_control": "B performs downstream operations during/after dispatch; each request <=2000 ms",
+  "hold_duration_ms": 2000,
+  "hold_interval_ms": 250,
+  "formal_slo_requirement": "report unknown honestly; local acceptance does not grant production SLO approval",
+  "recon_profile": "ucw-recon",
+  "runtime_mutation_owner": "verification_engineer",
+  "independent_reproduction_owner": "independent_reviewer",
+  "negative_controls": [
+    "skip-dispatch",
+    "unavailable-authority",
+    "clean",
+    "stale",
+    "exact-replay"
+  ],
+  "product_changes_allowed": false,
+  "shared_cluster_allowed": false,
+  "max_rework_rounds": 2,
+  "limitations": [
+    "synthetic downstream",
+    "injected event identity",
+    "explicit engine policy",
+    "no full manager controller",
+    "no deployed console",
+    "no real detector",
+    "formal SLO unknown"
+  ],
+  "supported_action": "endpoint-lease-revoke",
+  "max_legitimate_latency_ms": 2000,
+  "runtime_lifecycle": "self_contained_episode",
+  "reattack_mode": "in_episode_nonce_varied_same_capability",
+  "full_detector_chain_required": false,
+  "execution_pins": {
+    "executable_sha256": "17f86a5307ef5c7395085af1b03e58c2bd39e596330bc68c93e4da3fa3cee0a6",
+    "brain_files_sha256": {
+      "phorvex/internal/decision/ablation.go": "c3ebef4cde4821eb7018b9d47f5a00a802c41e8d91030958e4eff02f979275d1",
+      "phorvex/internal/decision/coverage.go": "30585637b526f2ea1c6431a73f2fbb5fc18e13788be70d7917cee41d36f5c1a5",
+      "phorvex/internal/decision/existential.go": "c8a84a480cb5f9eb38027e78e9734df2215ed4fdd964faabb0ec8b03d47f5719",
+      "phorvex/internal/decision/localsearch.go": "fd73846b2ef243bd9fc9363ce478738eabeca3e114c6d28376d3104a87eff8cb",
+      "phorvex/internal/decision/optimality.go": "7b8ca387d2ef2460da26561e311d6456f25b8e2378f37fb57d2b8eb053185f5d",
+      "phorvex/internal/decision/optimizer.go": "c2526adabe2b859481f7ea811bee9b274d91c062b00a632c759c54403d2897a5",
+      "phorvex/internal/decision/owner_state.go": "1abe9cc5abeac713571b52511a6406c00fc86f9b2d4f8436443e7a5d29c3641f",
+      "phorvex/internal/decision/parameter_manifest.go": "d4b396104674f0f8a01dbd0439612092cc9a37be902958fd395ca0038b7dfbc7",
+      "phorvex/internal/decision/persistence_observation.go": "7a93075f142b5479872e22d46fb6e5fa7bf6860c37460e1e8356fa572a9deafa",
+      "phorvex/internal/decision/resources.go": "97e1bde09eedd68374078bb5ff88d2cb41b387e0bc4788e271c52426c7e81226",
+      "phorvex/internal/decision/select.go": "44c228b9e8a42b0f0eebc4d94c33ccceb0f18bf8bfe7f1fa7d4fc68abccf4b38",
+      "phorvex/internal/decision/sensitivity.go": "47c17490fe1beb22752ff256eaa83098443c8e8fd83a8bedba13790ea991a562"
+    },
+    "fixture_files_sha256": {
+      "build/test-harness/fixtures/verification-loop/runtime_fixture.py": "30ea5593aaebd7208ac6563f9f645c37ecb6af9fc1e21b0b1327d1fd8e418194",
+      "build/test-harness/fixtures/verification-loop/test_runtime_fixture.py": "8113cce0e0e1bdc432d095f5ee4bf583b5dc83646bd9c813f22eef75e2e0e9dd",
+      "phorvex/cmd/verification-loop/main.go": "dc0932fc7f306216f4b49e4f760deb5c4db3eb979c5651de4fa464c37641ffb3",
+      "phorvex/go.mod": "bd35ce734262578442552555e770ad1189e24a2fb37a8733e4f473befca352f3",
+      "phorvex/go.sum": "c2535bd48709b0f7e3affe598bc421558428cd3893c9fdb392286e49314649b0",
+      "phorvex/internal/verificationloop/evidence.go": "6198dca5758cb8eb5dbbb41c8829404520fe89c12d873b422d6a0d01888ef428",
+      "phorvex/internal/verificationloop/evidence_test.go": "2358990f09d8ef2342e10a36fb44fb77729ac2ea158b638fd41b6c7292078507",
+      "phorvex/internal/verificationloop/fixture.go": "408c6c716f250785d1c3cf8a24528427dbcbff9fce8c96ee9e9b61489547db0a",
+      "phorvex/internal/verificationloop/run.go": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2",
+      "phorvex/internal/verificationloop/run_test.go": "91eac0c667ea01ea4d25f64a5b7203420a458c6fe1ed5b36ef82988205475d24"
+    },
+    "tool_files_sha256": {
+      "etcd": "6409d0af883a8a098083c1622c011ee0586e1914c3857d2731c27d0df6933d52",
+      "kube-apiserver": "48da54d0563302fa81101d18f048ce123ca1fb7ef5e429d4245c428594a056df"
+    }
+  },
+  "runtime_options": {
+    "timeout_seconds": 180,
+    "hold_duration_ms": 2000,
+    "hold_interval_ms": 250,
+    "max_legitimate_latency_ms": 2000,
+    "existing_cluster": false
+  },
+  "case_requirements": {
+    "physical_positive": true,
+    "negative_controls": [
+      "skip-dispatch",
+      "unavailable-authority"
+    ],
+    "independent_reproduction": true,
+    "cleanup": true,
+    "replay_exact": true,
+    "legitimate_dispatch_overlap_min": 1,
+    "formal_slo": "unknown_disclosed_not_full_G2_pass"
+  }
+}

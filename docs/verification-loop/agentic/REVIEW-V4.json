@@ -1,0 +1,266 @@
+{
+  "schema_version": 1,
+  "review_id": "v4-independent-design-1",
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "authors_reviewed": [
+    "/root",
+    "/root/source_requirements_v4"
+  ],
+  "independent_of_authors": true,
+  "review_completed_at": "2026-10-10T20:08:34.885838Z",
+  "source_revision": "cbc89e440b4bb6948346d4b75cecfad1571e9945",
+  "specification_disposition": "SPECIFICATION_ACCEPTED",
+  "implementation_disposition": "IMPLEMENTATION_NOT_READY",
+  "empirical_full_workflow_acceptance": "NOT_ESTABLISHED",
+  "execution_authority": "NONE",
+  "scope": "Complete original seven Markdown workstreams plus entire DOCX; final stationary V4 architecture, prompts and source-requirements documentation. No runtime/source/cluster mutation.",
+  "inputs": [
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V4.md",
+      "sha256": "e3e6f81177b8a1e310ec007c6bac98351e7025b80c5b57c58ccff3f5da25d4e8",
+      "bytes": 40618,
+      "kind": "reviewed_specification"
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V4.md",
+      "sha256": "224a495db591dc6364e66ffc9804122694477327cba06b581a426d314c6aaae8",
+      "bytes": 34401,
+      "kind": "reviewed_specification"
+    },
+    {
+      "path": "docs/verification-loop/agentic/SOURCE-REQUIREMENTS-V4.md",
+      "sha256": "cf53746eb8b0dce62fee11baec1424e4ba950138f0ebcf70196d4aaddcf7a704",
+      "bytes": 48985,
+      "kind": "reviewed_specification"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/Phorvex-Verification-Loop-Architecture.docx",
+      "sha256": "0212b45c2ed5bcecdb24b0bb198a837bd8dd7ce74629a8fd0858694b311225ff",
+      "bytes": 53137,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-1-scan-sizing.md",
+      "sha256": "1314a430fc0526818e94886526320b2c70b66f925a2e5d49a9fa16d02b69c9f6",
+      "bytes": 14060,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-2-generator.md",
+      "sha256": "10d90f671788d27cc36ed13858b5cd6ce859c14d1d763ee852472388272496f3",
+      "bytes": 29304,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-3-validator-rubric.md",
+      "sha256": "aec19fcc62fc525cc034dcb801d5dd171df5947c7866825b78f9b0c4108b31b1",
+      "bytes": 25262,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-4-consensus.md",
+      "sha256": "5f6bbe9f92f03cde552a375d62c2882b82427ac2badc7097f6cb48b7ee9634d9",
+      "bytes": 25782,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-5-brain-in-loop.md",
+      "sha256": "4bcc0ea708ac9ed05a82365ed4b758c31e9ea9ada5e5263e86704404987ea21c",
+      "bytes": 22620,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-6-rl-hook.md",
+      "sha256": "681222c19b018fae27b6458e3e66c9695fff7b523d3c53676b877b40445189f6",
+      "bytes": 16359,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "/home/mehrdad/verification-loop/WS-7-external-sota.md",
+      "sha256": "38b3f7f47aaf67ba46b02ed9d7313b60caabf8513b5c16d9d5c568d3406a5c90",
+      "bytes": 13256,
+      "kind": "original_requirement_source"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "f80cf49f483d15a15c9241fc26914b132c619a3c5f58cacb682d88dda7762744",
+      "bytes": 549,
+      "kind": "repository_instruction"
+    },
+    {
+      "path": "workflow/AGENTS.md",
+      "sha256": "d8378ffdb686862f8088e110d599e6f0658a63d82234ac93aea7e3b9c674b1b7",
+      "bytes": 2892,
+      "kind": "repository_instruction"
+    }
+  ],
+  "original_read_method": {
+    "all_markdown_read_in_full": true,
+    "docx_member": "word/document.xml",
+    "paragraph_count": 545,
+    "table_count": 10,
+    "all_nested_paragraphs_and_tables_read": true,
+    "other_prose_parts": []
+  },
+  "checks": [
+    {
+      "name": "stationary_specification_sha256",
+      "result": "PASS",
+      "files": 3
+    },
+    {
+      "name": "original_input_hashes_match_source_inventory",
+      "result": "PASS",
+      "files": 8
+    },
+    {
+      "name": "requirements_unique_contiguous",
+      "result": "PASS",
+      "ids": "R01..R46"
+    },
+    {
+      "name": "relative_markdown_links_resolve",
+      "result": "PASS",
+      "checked": 6
+    },
+    {
+      "name": "independent_source_precedence_and_control_flow_review",
+      "result": "PASS",
+      "meaning": "Specification coherence, not adapter execution"
+    }
+  ],
+  "findings": [
+    {
+      "id": "V4-PF-01",
+      "title": "Re-attack skipped qualification",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a74; PROMPTS-V4 \u00a714",
+      "resolution": "Every new hypothesis returns to current-round C1\u2013C6 and an independently confirmed baseline before response testing."
+    },
+    {
+      "id": "V4-PF-02",
+      "title": "Shadow selection was conflated with native execution",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a74; PROMPTS-V4 \u00a7\u00a710\u201311",
+      "resolution": "Read-only shadow selection and authorized exact-action twin execution are separate; live-manager reference mode cannot inherit shadow guarantees."
+    },
+    {
+      "id": "V4-PF-03",
+      "title": "Evidence-bearing minority could starve behind an early winner",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a7\u00a74,9; PROMPTS-V4 \u00a7\u00a77,14",
+      "resolution": "Protected test slots and explicit deferred coverage prevent an untested minority or missing worker from yielding STABLE."
+    },
+    {
+      "id": "V4-PF-04",
+      "title": "Timed verdict was conflated with completed competition",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a71; SOURCE-REQUIREMENTS-V4 \u00a75",
+      "resolution": "Separate winning verdict, complete adaptive Phase1 competition, Phase2 and publication milestones retain full-round, regression and fresh reproduction prerequisites."
+    },
+    {
+      "id": "V4-PF-05",
+      "title": "Clean control could use defended post-state",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a74; PROMPTS-V4 \u00a710",
+      "resolution": "Control forks from the same pre-decision state/policy/clock/capabilities/winner configuration with only documented attack-caused inputs removed."
+    },
+    {
+      "id": "V4-PF-06",
+      "title": "Canonical replay identity was conflated with physical twin identity",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a74; PROMPTS-V4 \u00a710",
+      "resolution": "Identical-input replay and separately reviewed production-to-twin topology/identity mapping have distinct fidelity results."
+    },
+    {
+      "id": "V4-PF-07",
+      "title": "Phase priorities postponed required implementation or confirmation",
+      "status": "RESOLVED",
+      "references": "SOURCE-REQUIREMENTS-V4 R17,R37,R38,R42 and \u00a74 conditional-priority paragraph",
+      "resolution": "Blocking tool/response engineering is conditional Phase1; applicable battery and fresh reproduction are Phase1; proven records include all seven fields; actual required adapters/descriptors are admission-critical."
+    },
+    {
+      "id": "V4-PF-08",
+      "title": "Decision-repair continuation needed an explicit causal boundary",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a7\u00a72,8; PROMPTS-V4 \u00a7\u00a72,9,13",
+      "resolution": "Evidence-only diagnosis retains NOT_ESTABLISHED and legitimate constraints; established defects require separately authorized general correction, independent replay assessment and new normal-choice E2E/fresh confirmation. No forced winner or in-competition tuning."
+    },
+    {
+      "id": "V4-PF-09",
+      "title": "Proposal-to-baseline executable adapter ownership was missing",
+      "status": "RESOLVED",
+      "references": "ARCHITECTURE-V4 \u00a73; PROMPTS-V4 \u00a79 conditional specialization",
+      "resolution": "Assigned tool-engineer specialization owns bounded missing fixture/stimulus/oracle/detector/measurement code; REVIEW accepts exact bytes and a distinct executor runs it before S4/S7."
+    }
+  ],
+  "unresolved_specification_blockers": [],
+  "implementation_blockers": [
+    {
+      "id": "V4-IR-01",
+      "owner": "ORCH + SCAN + tool engineer",
+      "prerequisite": "Bind actual authenticated scan/recon/graph/C1\u2013C6 and typed tool/assignment/lease adapters to current source/API descriptors. Validate statuses, stale inputs, actor separation and recovery; logical names are not implemented capabilities."
+    },
+    {
+      "id": "V4-IR-02",
+      "owner": "TWIN + REVIEW",
+      "prerequisite": "Provision and independently prove a persistent isolated competition twin, affected/co-tenant census, accepted-winner lineage, candidate/control branches, exact cleanup and reviewed production-to-twin identity/topology/runtime mapping."
+    },
+    {
+      "id": "V4-IR-03",
+      "owner": "brain integration engineer + independent EXECUTOR/REVIEW",
+      "prerequisite": "Implement exact input/owner-state/learned-state/policy/capability/frozen-clock capture and canonical replay. Prove shadow no-write boundaries and source/runtime fidelity; source Git labels cannot prove the whole binary or effective process."
+    },
+    {
+      "id": "V4-IR-04",
+      "owner": "METRICS + gate engineers + independent EXECUTOR",
+      "prerequisite": "Implement actual G1 capability/graph-edge proof, formal G2 certified bound/headroom/disruption ledger/all-affected co-tenant streams, matched pre-decision G3, and measured physical S1. UNKNOWN bound cannot pass Phase1 from sampled traffic."
+    },
+    {
+      "id": "V4-IR-05",
+      "owner": "METRICS + ORCH",
+      "prerequisite": "Implement seven-field cards, original joins, uncertainty and strict dwell-first ranking. Phase2 additionally needs complete measured collateral/durability and declared actual-versus-predicted/matched-rotation cost; unknown scores cannot become favorable zeros."
+    },
+    {
+      "id": "V4-IR-06",
+      "owner": "ATTACK/REATTACK + ORCH + REVIEW",
+      "prerequisite": "Execute registered winner-conditioned adaptive rounds, protected minority tests, applicable regression battery and complete final-round coverage; obtain fresh independent same-profile reproduction. Repeated wording on a denied route is not adaptive discovery."
+    },
+    {
+      "id": "V4-IR-07",
+      "owner": "ACTUATOR + independent REVIEW/EXECUTOR",
+      "prerequisite": "Exercise a genuinely missing-response branch through implementation/interface/API/cover/policy/capability/registration review, deployed pins, normal eligible selection, actual effect and availability. Generic decision-repair remains separately authorized and unexercised."
+    },
+    {
+      "id": "V4-IR-08",
+      "owner": "LEARNING + ORCH + PUBLISH",
+      "prerequisite": "Implement proven customer-scoped seven-field record ingestion/replay/export with incomplete outcomes excluded from positive labels and human-only reversible promotion. Benchmark scale, unique coverage, fairness and resource/evidence parity before any 100-item or speed claim."
+    }
+  ],
+  "historical_result_boundary": {
+    "physical_episodes": 7,
+    "historical_bounded_passes": 1,
+    "fresh_paired_current_profile_pass": false,
+    "continuation_failures_retained": 2,
+    "re_adjudicated_by_this_design_review": false,
+    "cleanup_not_defense_credit": true,
+    "owner_stop_preserved": true
+  },
+  "limits": [
+    "No whole-binary/effective-process runtime attestation established by this review.",
+    "No formal G2 bound/ledger/co-tenant proof established by sampled traffic.",
+    "No implemented generic V4 service or full persistent-twin/adaptive/new-actuator/decision-repair/learning/scale acceptance.",
+    "Phase1 card may retain unknown secondary scores; full seven-metric boss verdict remains unestablished.",
+    "No physical run, runtime tests, source edits, commit or execution authorization in this review."
+  ],
+  "output_refs": [
+    {
+      "path": "docs/verification-loop/agentic/REVIEW-V4.md",
+      "sha256": "7c98cfd07ac6b9cb28da7e0a6f2b363fb3275cbc241dd60a731fbc9f430b7a5b",
+      "bytes": 11884
+    }
+  ],
+  "next_owner": "ORCH",
+  "next_action": "Compile the exact accepted design and produce an independently reviewed source-to-adapter readiness matrix and mandatory Phase1 evidence plan before any separately authorized restart."
+}

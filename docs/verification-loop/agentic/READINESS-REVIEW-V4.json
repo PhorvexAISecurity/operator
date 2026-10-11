@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "review_id": "v4-readiness-independent-1",
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "author_reviewed": "/root/agentic_defense",
+  "independent_of_author": true,
+  "completed_at": "2026-10-10T20:17:14.058784Z",
+  "source_revision": "aabd753d768904bdfa3a5e051e54821e45278406",
+  "readiness_map_disposition": "ACCEPTED_SOURCE_MAPPING",
+  "phase1_execution_disposition": "NOT_READY",
+  "empirical_full_workflow_acceptance": "NOT_ESTABLISHED",
+  "execution_authority": "NONE",
+  "inputs": [
+    {
+      "path": "docs/verification-loop/agentic/IMPLEMENTATION-READINESS-V4.md",
+      "sha256": "45e297f03298324f7a2976cb99e065b8e8df87585753f5b0e3ce63da57aa816f",
+      "bytes": 30589
+    },
+    {
+      "path": "docs/verification-loop/agentic/REVIEW-V4.json",
+      "sha256": "f40cb9d413e3ad6485626d065bf97aeef873eb02305f6842fac4c7b4ca43a1c5",
+      "bytes": 12561
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V4.md",
+      "sha256": "224a495db591dc6364e66ffc9804122694477327cba06b581a426d314c6aaae8",
+      "bytes": 34401
+    },
+    {
+      "path": "phorvex/internal/slo/bound.go",
+      "sha256": "24ccfd122519d62fdef25866e03a034ed89b4f3d6889e88c503ccea10ea50d56",
+      "bytes": 11047
+    },
+    {
+      "path": "phorvex/internal/slo/contract.go",
+      "sha256": "aa0a241fc50083ac182030c97ccdbf349a60b8fb1227f834b3fc1bce9b7d7cbc",
+      "bytes": 7363
+    },
+    {
+      "path": "phorvex/internal/slo/ledger.go",
+      "sha256": "7efb94719915d0e8aad3ccb6365d072e9f2675bea11f910514f61c9b3a9ff530",
+      "bytes": 11949
+    },
+    {
+      "path": "phorvex/internal/slo/bound_test.go",
+      "sha256": "bb2f7e350ff4272b9a27d59432331139bac4770866c191e8bd4524aaa3e3aea6",
+      "bytes": 5417
+    },
+    {
+      "path": "phorvex/internal/feasibility/defaults.go",
+      "sha256": "fe577e7aa8f732b709b1b2b1d58c6155c45c771be0da630874ad2249369af468",
+      "bytes": 10910
+    },
+    {
+      "path": "phorvex/internal/feasibility/constraint.go",
+      "sha256": "0866b40cc32ae0945c1e3747d7297b14b1f82d1ebeeba8f5d8719b6174c7ec18",
+      "bytes": 3366
+    },
+    {
+      "path": "phorvex/internal/decision/coverage.go",
+      "sha256": "f0553c2c4fa719fb23aa81d1b334b78cdc3095b9f1fd0c663d6363846ddf7194",
+      "bytes": 97003
+    },
+    {
+      "path": "phorvex/internal/decision/optimizer.go",
+      "sha256": "c2526adabe2b859481f7ea811bee9b274d91c062b00a632c759c54403d2897a5",
+      "bytes": 3131
+    },
+    {
+      "path": "phorvex/internal/decision/owner_state.go",
+      "sha256": "a8a7aa1a90e4a2793d1f6b439168eb5c1d6b5ce845e8b0c01beac9ecf5139148",
+      "bytes": 4582
+    },
+    {
+      "path": "phorvex/internal/capability/gate.go",
+      "sha256": "0848c74239ce650ca3f77f145e86403dd78dd2d1145d95f4a71d59e3f2ccdbb9",
+      "bytes": 29438
+    },
+    {
+      "path": "phorvex/internal/mathlab/replay.go",
+      "sha256": "11910847f7a62515ee62029be3abb6fcc1108fab4cbf0c08bda140b541a68ec1",
+      "bytes": 14424
+    },
+    {
+      "path": "phorvex/internal/mathlab/results.go",
+      "sha256": "c3252b47ae936fad75a4a764f70a8eca2cb32b389e1c3d41828daddf4adf8c4f",
+      "bytes": 28766
+    },
+    {
+      "path": "phorvex/internal/mathlab/recorder.go",
+      "sha256": "b3a10fdc5f6866c5b0e058e0cf557fdc57e40da1147d5fdcff1d91454d20617d",
+      "bytes": 9373
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run.go",
+      "sha256": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2",
+      "bytes": 36973
+    },
+    {
+      "path": "phorvex/internal/ingest/kube.go",
+      "sha256": "7310e81746c64b28dcdcb9e4615c211990dfa53df8f4f161e640ca9a38b7dc4c",
+      "bytes": 44513
+    },
+    {
+      "path": "phorvex/internal/platform/platform.go",
+      "sha256": "bfdbc1a749f8c60defcdfd312f8f9d9eb66669008353192ffe176bbff27b559b",
+      "bytes": 12340
+    },
+    {
+      "path": "phorvex/internal/actionset/generator.go",
+      "sha256": "4e5649e9f6b7ac13191748ae3dd276a8a7a94de4d34469999b35c5d406ded6b4",
+      "bytes": 29164
+    },
+    {
+      "path": "phorvex/internal/actuator/actuator.go",
+      "sha256": "143efa19e59a2e19dc2bfba42f8524e4bc62207b9f0639e7dac3174aa85e02b2",
+      "bytes": 12575
+    },
+    {
+      "path": "phorvex/internal/actuator/native.go",
+      "sha256": "b1d43d787afd062522d13152c247291884d9b145526d3c8b49b5ef9f2f6f6980",
+      "bytes": 18892
+    },
+    {
+      "path": "phorvex/internal/cataloguev1/types.go",
+      "sha256": "37ae21c45e20f482f9b8869a5f605fa09cca9ba97b597cf385c0a13f54d90538",
+      "bytes": 16105
+    },
+    {
+      "path": "phorvex/internal/cataloguev1/runner.go",
+      "sha256": "96114a24f374f951f1050dd7396c0d00884264342d4b457fcbf7a2af75caf663",
+      "bytes": 24781
+    },
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V4.md",
+      "sha256": "e3e6f81177b8a1e310ec007c6bac98351e7025b80c5b57c58ccff3f5da25d4e8",
+      "bytes": 40618
+    },
+    {
+      "path": "docs/verification-loop/agentic/SOURCE-REQUIREMENTS-V4.md",
+      "sha256": "cf53746eb8b0dce62fee11baec1424e4ba950138f0ebcf70196d4aaddcf7a704",
+      "bytes": 48985
+    },
+    {
+      "path": "build/test-harness/verification-workflow/protocol.py",
+      "sha256": "d767c656c6b31782b6b2d77f64458bf46b1c58125890864838ef1008b4fe07b2",
+      "bytes": 27051
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "37865214e87e3566ba9822a31c36f98cbba56b4b0d498c2c0fcd8881e0612861",
+      "bytes": 129699
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/gate.py",
+      "sha256": "666efbc18ff1c3ef157354b7be0d70bf26b09ddcae35e6bc8f1a3b76a379a1f8",
+      "bytes": 55663
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/observer.py",
+      "sha256": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98",
+      "bytes": 17208
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_harness_repair.py",
+      "sha256": "42c3fd4e2c09e3bb80e2147c8b6a6561381bea2b8f4b46dbd78b72bdb72ed2c7",
+      "bytes": 13386
+    },
+    {
+      "path": "phorvex/cmd/brain-replay/main.go",
+      "sha256": "418b6761849c6804f865a9f0cad74b97807c266fc33d9634b503a9a58b202db7",
+      "bytes": 7613
+    },
+    {
+      "path": "phorvex/internal/decision/owner_state_test.go",
+      "sha256": "17ba4e5c9e415b3232f94d54ddd5238b516a78717bee53ae84937c4a92b186f8",
+      "bytes": 5273
+    },
+    {
+      "path": "phorvex/internal/mathlab/mathlab_test.go",
+      "sha256": "8a3dcb97671f3447f8961f1c5cffa1a2d4fe61f510fd5febad101515b96b83bf",
+      "bytes": 20811
+    }
+  ],
+  "historical_snapshot": {
+    "source_revision": "cbc89e440b4bb6948346d4b75cecfad1571e9945",
+    "source_tree_sha256": "42964d2e23c59b419d81d7ff3f8014ada834ef960fea36a0614e51c88747e630",
+    "independently_recomputed_before_merge": true
+  },
+  "current_source_snapshot": {
+    "source_revision": "aabd753d768904bdfa3a5e051e54821e45278406",
+    "source_tree_sha256": "b75454dc45d76fa0e1a986066cd5778792460f5fc271d7692b0c64e65cc66575",
+    "tracked_present_files": 1486,
+    "manifest_algorithm": "SHA256 UTF-8 concatenation of lexically sorted present git ls-files phorvex paths: path+NUL+SHA256(actual bytes)+LF",
+    "changed_source_files_reviewed": [
+      "phorvex/cmd/brain-replay/main.go",
+      "phorvex/internal/decision/coverage.go",
+      "phorvex/internal/decision/owner_state.go",
+      "phorvex/internal/decision/owner_state_test.go",
+      "phorvex/internal/mathlab/mathlab_test.go",
+      "phorvex/internal/mathlab/replay.go",
+      "phorvex/internal/mathlab/results.go"
+    ],
+    "central_G2_capability_ledger_unchanged": true,
+    "runtime_attestation": false
+  },
+  "checks": [
+    {
+      "name": "seven_listed_file_pins",
+      "result": "MATCH_BOTH_SNAPSHOTS"
+    },
+    {
+      "name": "source_tree_closures",
+      "result": "MATCH_HISTORICAL_AND_CURRENT_SEPARATELY"
+    },
+    {
+      "name": "critical_contract_and_replay_source_review",
+      "result": "ACCEPTED_SOURCE_MAPPING"
+    },
+    {
+      "name": "current_merge_source_compatibility",
+      "result": "SOURCE_REVIEW_ONLY",
+      "actual_shadow_assembly_signature": "(set, stampedViews, error)"
+    },
+    {
+      "name": "proposed_Go_envelopes",
+      "result": "DECLARATIONS_NOT_FOUND",
+      "names": [
+        "ScenarioFragment",
+        "SendQueue",
+        "SevenMetricCard",
+        "TwinRef"
+      ],
+      "limit": "Absence alone does not prove no equivalent implementation."
+    }
+  ],
+  "findings": [
+    {
+      "id": "V4-RD-01",
+      "severity": "BLOCKS_PHASE1",
+      "status": "OPEN_IMPLEMENTATION",
+      "title": "No certified meaningful action bound",
+      "source_refs": [
+        "phorvex/internal/slo/bound.go",
+        "phorvex/internal/capability/gate.go",
+        "phorvex/internal/actuator/native.go"
+      ],
+      "finding": "BoundFor rejects UNKNOWN. Useful serving defenses are UNKNOWN. ZERO entries are noop, declared-not-implemented disable and metadata identity rotation; the latter is capability-excluded. These do not establish an actual G1 winner.",
+      "next_owner": "ORCH + native-contract/actuator engineer + independent REVIEW",
+      "next_action": "Review complete native success/failure/deadline/rollback enforcement and safe recovery for a baseline-relevant candidate; implement missing native contract under separately recorded bounded engineering scope before new source/runtime admission."
+    },
+    {
+      "id": "V4-RD-02",
+      "severity": "BLOCKS_PHASE1",
+      "status": "OPEN_IMPLEMENTATION",
+      "title": "Service Ready floor and incomplete history cannot replace G2",
+      "source_refs": [
+        "phorvex/internal/slo/bound.go",
+        "phorvex/internal/slo/ledger.go",
+        "phorvex/internal/feasibility/defaults.go"
+      ],
+      "finding": "AvailabilityFor can return ZERO despite UNKNOWN action recovery when maximum declared loss preserves the Ready floor. Feasibility can be neutral on missing owner/telemetry. Ledger is in-memory and total-service history is not collected. Neither an empty ledger nor successful traffic samples establishes the mandatory gate.",
+      "next_owner": "availability/ledger engineer + METRICS + independent EXECUTOR",
+      "next_action": "Implement source-valid complete scoped history/window coverage, measured affected and cotenant census/streams, all failed requests and formal bound/headroom proof. Never promote observed maxima or narrower service-floor status."
+    },
+    {
+      "id": "V4-RD-03",
+      "severity": "BLOCKS_PHASE1",
+      "status": "OPEN_IMPLEMENTATION",
+      "title": "Dedicated strict shadow/control adapter is missing",
+      "source_refs": [
+        "phorvex/internal/mathlab/replay.go",
+        "phorvex/internal/mathlab/results.go",
+        "phorvex/internal/decision/coverage.go",
+        "phorvex/internal/verificationloop/run.go",
+        "phorvex/internal/capability/gate.go"
+      ],
+      "finding": "MathLab restores owner state then calls DecideChecked offline and omits ScopedOutcomes from baseline comparison. True shadow and local canonical replay primitives exist but not the full V4 profile/global/witness capture, matched predecision G3 branch and no-write validation adapter. EligibleObserved retains explicit authorization-UNKNOWN fail-open diagnostics.",
+      "next_owner": "brain capture/replay engineer + independent REVIEW/EXECUTOR",
+      "next_action": "Build exact-state/clock/profile/globals capability-witness capture and DecideShadowChecked wrapper; require positively observed authorization and independently validate pre/post state plus the clean branch input difference."
+    },
+    {
+      "id": "V4-RD-04",
+      "severity": "BLOCKS_FULL_COMPETITION",
+      "status": "OPEN_IMPLEMENTATION",
+      "title": "Generic V4 lifecycle remains unimplemented",
+      "source_refs": [
+        "docs/verification-loop/agentic/IMPLEMENTATION-READINESS-V4.md",
+        "phorvex/internal/cataloguev1/types.go",
+        "phorvex/internal/cataloguev1/runner.go"
+      ],
+      "finding": "Case executables and fixed-suite functional metrics/reconciliation are narrower than authenticated admission/scan/C1\u2013C6/minority queue, persistent physical twin, exact selected-action execution, external cards, adaptive round/reproduction and proven-record publication. Searches found no Go declarations for the proposed ScenarioFragment,SendQueue,SevenMetricCard,TwinRef; this alone is not proof no equivalent implementation exists.",
+      "next_owner": "ORCH + bounded adapter engineers + independent REVIEW",
+      "next_action": "Follow the map dependency order and bind actual typed interfaces/authority/source descriptors and required outputs; missing mandatory tools block full competition admission."
+    }
+  ],
+  "unresolved_readiness_document_corrections": [],
+  "conditional_engineering_scope": {
+    "owner": "ORCH",
+    "work": "Bounded native contract/enforcement/recovery and proof registry/registration changes as needed by a real pilot; independently reviewed deployed/profile admission.",
+    "prohibited_substitutions": [
+      "observed maxima as formal bound",
+      "Ready-floor ZERO as action proof",
+      "metadata-only proof promotion",
+      "forced winner",
+      "protection disablement",
+      "author self-certification"
+    ]
+  },
+  "minimal_build_order_accepted": true,
+  "runtime_tests_executed": false,
+  "cluster_or_source_mutations": false,
+  "historical_outcomes_modified": false,
+  "output_refs": [
+    {
+      "path": "docs/verification-loop/agentic/READINESS-REVIEW-V4.md",
+      "sha256": "a7c100f9fb87b45e9bfcf98d297d42294aa0161b346369b163c8a36acc1306fe",
+      "bytes": 9397
+    }
+  ],
+  "next_owner": "ORCH",
+  "next_action": "Compile preserved map plus current-source addendum; assign and independently review actual mandatory adapters and native G2 proof before any separately authorized full Phase1 admission."
+}

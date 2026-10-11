@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "actor": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "reviewed_at": "2026-10-10T19:25:52.053915+00:00",
+  "review_id": "completion-harness-repair-1",
+  "disposition": "ACCEPT_PRIVATE_SOURCE_FOR_EXACT_PUBLIC_MAPPING",
+  "execution_authority": false,
+  "runtime_profile_pair_requirement": "Both future full successes must use this exact newly reviewed common tool profile after verified public mapping/freeze; failed original episode remains charged and cannot form the pair.",
+  "reviewed_inputs": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/run_episode.py",
+      "sha256": "18372560ec11f90e3b8c7ec57dac1de5b3d13cbbed4c886f32c2b1d787cbf838",
+      "bytes": 129587
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/gate.py",
+      "sha256": "666efbc18ff1c3ef157354b7be0d70bf26b09ddcae35e6bc8f1a3b76a379a1f8",
+      "bytes": 55663
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/test_harness_repair.py",
+      "sha256": "b7c3217ea5edffa48edcf1ecaf6e5d27e279a525bd39a09e7f958bc31463aaea",
+      "bytes": 10631
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/test_gate_receipt.py",
+      "sha256": "2bc0c394c0962a90968972560bc080473ed410f09d2685d9c53eb2f63d4ff42b",
+      "bytes": 6950
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/actual-native-original.json",
+      "sha256": "0879b626f7d360ea72c297b58fe9e5a93d5860b4b54b4bb8580b21501d6c50fc",
+      "bytes": 298705
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/harness-repair/actual-failed-B-transcript.json",
+      "sha256": "49d6f274260d60c11a5b4ad320eb8aca148e6db3a19a4a24e4a94ff1d8741487",
+      "bytes": 25150
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/harness-repair/LOCAL-TEST-RECEIPT.json",
+      "sha256": "2ddc9eccc3d58eab7d91a66b7b228413ec03d4e0b21cb6a1a54130df316d2137",
+      "bytes": 692
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/harness-repair/local-tests.log",
+      "sha256": "b7bcf35740f6e31bbb0c8f10bda69f9c96f4c0771aea236468e5665ca1225707",
+      "bytes": 5666
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/completion/SCOPE.md",
+      "sha256": "3b5e15eb6417e607aa86010dca756cc2d3264013ab98e115b238210da0b4369b",
+      "bytes": 6414
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/first-reconciliation/SAFE-RECOVERY-SEAL.json",
+      "sha256": "03221bbc9b4e9ed4633181115295d010504a0cc47def4e7b297acf9e48567bc9",
+      "bytes": 5841
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/first-cause/CAUSE-REVIEW.json",
+      "sha256": "c464bc8b8434cc81e2a973c17ea34927263e6e365d813945e44f61ddb3a23b03",
+      "bytes": 2898
+    }
+  ],
+  "findings": [
+    {
+      "id": "COMP-REPAIR-001",
+      "status": "CORRECTED_PROSPECTIVELY",
+      "detail": "Only typed secure v8 receipt permits omitted servingLegacy as literal false. Explicit true/null/numeric/string legacy, wrong receipt types and remaining authority identity/digest drift reject. Raw receipt remains unchanged."
+    },
+    {
+      "id": "COMP-REPAIR-002",
+      "status": "CORRECTED_PROSPECTIVELY",
+      "detail": "Actual adverse B exit2 may prove closed failed transport only when the original nonce/fixed plans/markers/all started/completed response identities/raw bytes/per-stream prefixes conserve every issued request, terminal drains to zero, process exit2 is actually recorded and no trailing output exists. HTTP500 still fails the physical availability outcome."
+    },
+    {
+      "id": "COMP-REPAIR-003",
+      "status": "CORRECTED_PROSPECTIVELY_WITH_LIMIT",
+      "detail": "Exact owned watcher UID/full-label quiescence wait stays inside original cleanup60s budget; fresh pins/native guards follow wait before any cleanup effect. If remaining observer lifetime plus subsequent cleanup cannot fit, cleanup still fails closed and requires separate scoped reconciliation; this patch does not guarantee every failed case cleans within60s."
+    },
+    {
+      "id": "COMP-CAUSE-001",
+      "status": "UNRESOLVED_MEASUREMENT_FAILURE",
+      "detail": "Actual two failed B request IDs were canceled during native request-drain760. Harness repairs do not correct or establish a decision defect in that installed action; selecting policy/decision trigger requires independent native/audit join. No protection disablement, forced choice or quiet-window success claimed."
+    }
+  ],
+  "validation": {
+    "independent_new_adverse_methods_passed": 9,
+    "combined_offline_methods_passed": 34,
+    "combined_elapsed_seconds": 1.687,
+    "retained_real_failed_transcript_conservation": true,
+    "real_omitted_false_receipt_full_clean_predicate": true,
+    "valid_synthetic_positive_reaches_PRE_CLEANUP_PASS": true,
+    "no_live_operations": true
+  },
+  "scope_unchanged": [
+    "Fixed19:03\u201320:03 window",
+    "Max4 new/lifetime9; failed first new case charged",
+    "All original request/token/native/full-bracket/availability/clean/hold gates",
+    "Original180s measurement plus60s cleanup",
+    "No native action/policy/scoring forcing or journal deletion"
+  ],
+  "next_owner": "/root",
+  "next_action": "Preserve old public bytes, map these exact reviewed runner/gate into public tools, bind portable regressions and independent public mapping review, then fresh current readiness/freeze with separate root lease. No new effects from this review."
+}

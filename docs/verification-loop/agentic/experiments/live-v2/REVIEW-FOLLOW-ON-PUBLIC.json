@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "run_id": "live-follow-on-design",
+  "episode_id": "public-source-admission",
+  "attempt_id": "live-review-follow-on-public-1",
+  "reviewed_at": "2026-10-10T17:04:14.869494+00:00",
+  "disposition": "ACCEPT_EXACT_PUBLIC_SOURCE_FOR_FRESH_RUNTIME_ADMISSION",
+  "refs": [
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "575f010ed2ba2db67b39576e6b360f0623d672534960f71d74f1109edfaedbb4"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/observer.py",
+      "sha256": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/gate.py",
+      "sha256": "5a6eabfeb5b416f0ccde826631a97c0fe00016702e4c11ecc05e7171d62ac97d"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_clean_control.py",
+      "sha256": "110e7e432710dcf641ff2d02090651c8e9cdeeeb2f65716b00286f7622bb400b"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_live_adapter.py",
+      "sha256": "2cfe7cf951ad21e18c2e6bc958e829c7f317eedf5c9af77ffc81ffb209f678bb"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_live_helpers.py",
+      "sha256": "1f81d0530785813853af79740efb0d6ad2311b2e45d9ff0bbd6c24b37a52d503"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/securityevent-api-fixture.json",
+      "sha256": "164348256d9a945dc150fb89ce21aaed657498e78bbe317ba2c847fd5871a7db"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/README.md",
+      "sha256": "6da6b6e35a4f7897d4cddc5d24eb0d1088e55d617ecf572a06903a3a867b7ac5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/public-joined-unittest.json",
+      "sha256": "de2a6815fa1056e4a7a3958b9b0c6d054a867d0053915d9e56b9a861fab72539"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/REVIEW-FOLLOW-ON-SOURCE-2.json",
+      "sha256": "59a047f2177205809176fec2f6aca001775d8c6d6960d44816ee765cc160724c"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/REVIEW-FOLLOW-ON-TIME.json",
+      "sha256": "0b12976cb87a510a94a808c606ca31b4a40690933af0238f86b5a747ce510033"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/public-follow-on-mapping-2.json",
+      "sha256": "e902f217b2e5ec311c14efb772f9f2dd98a948b25f04208e89cdb15092ea3188"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/public-before-follow-on/MANIFEST.json",
+      "sha256": "ae6bc5d8061c68d9b9e8fd5b9b287a7aa4973d677170a01b6cf137dd2a679090"
+    },
+    {
+      "path": "docs/verification-loop/agentic/RUNBOOK.md",
+      "sha256": "2fcbc80dbdb955d6e483646034e95e25ff361f4ce2d9c20db29aeb2a769673e4"
+    },
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V3.md",
+      "sha256": "c00bbe72dae1b9dfb50ed4fc8e482352d99d076d1d442af52e9616c2a4bfffa4"
+    },
+    {
+      "path": "docs/verification-loop/agentic/README.md",
+      "sha256": "ff04986aa3b9a035cddd5a1c2b01ecfb78f10eb1d72f1c90008b1443dd368da6"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/LIVE-TRIAL-REPORT.md",
+      "sha256": "d3a9b64e21d3dd9ccaec50ecfb860daff31aa77d1d1cf1ddc7dab1b27ab7ef55"
+    }
+  ],
+  "public_mapping_checks": [
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "575f010ed2ba2db67b39576e6b360f0623d672534960f71d74f1109edfaedbb4"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/README.md",
+      "sha256": "6da6b6e35a4f7897d4cddc5d24eb0d1088e55d617ecf572a06903a3a867b7ac5"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/observer.py",
+      "sha256": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/gate.py",
+      "sha256": "5a6eabfeb5b416f0ccde826631a97c0fe00016702e4c11ecc05e7171d62ac97d"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_clean_control.py",
+      "sha256": "110e7e432710dcf641ff2d02090651c8e9cdeeeb2f65716b00286f7622bb400b"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_live_adapter.py",
+      "sha256": "2cfe7cf951ad21e18c2e6bc958e829c7f317eedf5c9af77ffc81ffb209f678bb"
+    }
+  ],
+  "source_pins": {
+    "run_episode.py": "575f010ed2ba2db67b39576e6b360f0623d672534960f71d74f1109edfaedbb4",
+    "observer.py": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98",
+    "gate.py": "5a6eabfeb5b416f0ccde826631a97c0fe00016702e4c11ecc05e7171d62ac97d",
+    "test_clean_control.py": "110e7e432710dcf641ff2d02090651c8e9cdeeeb2f65716b00286f7622bb400b",
+    "test_live_adapter.py": "2cfe7cf951ad21e18c2e6bc958e829c7f317eedf5c9af77ffc81ffb209f678bb",
+    "test_live_helpers.py": "1f81d0530785813853af79740efb0d6ad2311b2e45d9ff0bbd6c24b37a52d503",
+    "securityevent-api-fixture.json": "164348256d9a945dc150fb89ce21aaed657498e78bbe317ba2c847fd5871a7db",
+    "README.md": "6da6b6e35a4f7897d4cddc5d24eb0d1088e55d617ecf572a06903a3a867b7ac5"
+  },
+  "independent_checks": {
+    "public_unittest_methods": 27,
+    "pass_": true,
+    "actual_runtime_test_schema_hashes_unchanged_during_and_after_tests": true,
+    "README_changed_after_tests_only": true,
+    "README_final_hash": "6da6b6e35a4f7897d4cddc5d24eb0d1088e55d617ecf572a06903a3a867b7ac5",
+    "README_full_local_read": true,
+    "no_runtime_repeat_for_doc_only_change": true
+  },
+  "documentation": {
+    "portable_runbook": "ACCEPT_SPECIFICATION_ONLY",
+    "architecture_semantics": "ACCEPT_DOCUMENTED_BOUNDARIES_AND_STAGE_CONTRACTS",
+    "trial_report": "FOUR_COMPLETED; ONE_NARROW_PASS_THREE_INCOMPLETE; NO_SUCCESSFUL_PAIR_OR_DEPLOYED_CLEAN_CONTROL",
+    "current_time_scope": "Expired15:50 retained; prospective17:30 separately reviewed; no effects inferred",
+    "portable_public_test_imports": "Neighboring modules only, no private author paths",
+    "current_adapter_limit": "Credential and live-LoRA adapters are case specific; new actions/detectors/full framework require separate contracts/tools",
+    "runtime_architecture_confidence": "NOT_ESTABLISHED_BEYOND_EXERCISED_PASSING_PATH"
+  },
+  "scope": "Actual public575f runner/01fd observer/5a6e gate and portable2cfe/110e tests match reviewed private source. Final6da6 README has CLI/modes/clean/full overlap/independent-seal/cleanup/current-input contracts and local links, source review does not grant execution.",
+  "preconditions": [
+    "Current original independently measured protected/runtime/clock/audit authority and exact support/name/budget admission.",
+    "Root supplies separate frozen CASE/SUP/expected pins and exclusive lease before any physical effect.",
+    "Aggregate6 only4consumed+2remaining; deadline17:30 and all positive/control/effect/availability/hold/cleanup criteria unchanged.",
+    "An actual failed clean/control/measurement remains failed and requires safe cleanup before any subsequent episode.",
+    "Episode6 current protected state must be read independently after5safe release; no assumed retired journal or old historical runtime."
+  ],
+  "next_owner": "orchestrator and independent verifier",
+  "next_action": "Review exact current episode5 candidate/readiness; separately freeze and grant one serial lease if all conditions hold."
+}

@@ -1,0 +1,264 @@
+{
+  "schema": "phorvex.agentic-handoff.v1",
+  "run_id": "v1-pilot",
+  "role": "stack_analyst",
+  "status": "ready",
+  "started_at": "2026-10-10T10:50:10Z",
+  "finished_at": "2026-10-10T10:53:18Z",
+  "timestamp_provenance": "started_at is first recorded worker timestamp; spawn start and preceding read interval not independently measured",
+  "input_refs": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "f80cf49f483d15a15c9241fc26914b132c619a3c5f58cacb682d88dda7762744"
+    },
+    {
+      "path": "workflow/AGENTS.md",
+      "sha256": "d8378ffdb686862f8088e110d599e6f0658a63d82234ac93aea7e3b9c674b1b7"
+    },
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V1.md",
+      "sha256": "6a22ae0223fd0d5db4ecb11c0b1a6cb73c920c3df7628fe2a2d4d14250c2d243"
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V1.md",
+      "sha256": "2feb6b2c4d6fcbc8cf04076ad61377ee2202caf7e6532d37748f6e4b94ee2910"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/CASE.json",
+      "sha256": "6419e8adf51e6c0e231605e52ffad70fc6d44486742fc22ab630ef9a5ceb0fa8"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/fixture.go",
+      "sha256": "408c6c716f250785d1c3cf8a24528427dbcbff9fce8c96ee9e9b61489547db0a"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run.go",
+      "sha256": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/evidence.go",
+      "sha256": "6198dca5758cb8eb5dbbb41c8829404520fe89c12d873b422d6a0d01888ef428"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run_test.go",
+      "sha256": "91eac0c667ea01ea4d25f64a5b7203420a458c6fe1ed5b36ef82988205475d24"
+    },
+    {
+      "path": "phorvex/cmd/verification-loop/main.go",
+      "sha256": "dc0932fc7f306216f4b49e4f760deb5c4db3eb979c5651de4fa464c37641ffb3"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/README.md",
+      "sha256": "a7c511b6eff552ea4bc7ddb434bfcf4ed4fb290cfbac4d909f286e85d9153eb8"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/runtime_fixture.py",
+      "sha256": "30ea5593aaebd7208ac6563f9f645c37ecb6af9fc1e21b0b1327d1fd8e418194"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/requirements.txt",
+      "sha256": "bb9d26a9fafa57be7069c2acbb014911f34bfff93055f0d103fa9e25c9f74323"
+    },
+    {
+      "path": "phorvex/internal/endpointlease/contract.go",
+      "sha256": "485bcc90ee7f7b595b5eaacf869d89188f909f5369b649e742f0e50f3c46d5d9"
+    },
+    {
+      "path": "phorvex/internal/endpointlease/live.go",
+      "sha256": "c6dff8a3c1e964e7f70f7b992d11cf981f0b128406f2efd6c2216999efe02757"
+    },
+    {
+      "path": "phorvex/internal/ingest/endpoint_lease.go",
+      "sha256": "37be165776b486260b8bc85effb7ca4eb6a448da9e5dcd3ba8ae9f7b7c4a0c96"
+    },
+    {
+      "path": "phorvex/internal/ingest/endpoint_lease_source.go",
+      "sha256": "6d65228be14d2342aef1b21ac7981f669023572d869b35644aae854298531ff3"
+    },
+    {
+      "path": "phorvex/internal/actuator/endpoint_lease_revoke.go",
+      "sha256": "45ef15b00f15d76e1a03ca79012a21cbca5a4c1ff5f5dd2793a35ba7b4e7e208"
+    },
+    {
+      "path": "phorvex/internal/actuator/endpoint_lease_journal.go",
+      "sha256": "aa164d89f3bfddbe0607b1a528876eaa0c46c3819c7843aaa10c5abb6cdfb8b4"
+    },
+    {
+      "path": "phorvex/internal/actuator/endpoint_lease_recovery.go",
+      "sha256": "f2289dbe8807789aeed2bc33910fe808e5f117fb951bb4ed54a06b320982f694"
+    },
+    {
+      "path": "phorvex/internal/actuator/native.go",
+      "sha256": "b1d43d787afd062522d13152c247291884d9b145526d3c8b49b5ef9f2f6f6980"
+    },
+    {
+      "path": "phorvex/internal/actionset/generator.go",
+      "sha256": "4e5649e9f6b7ac13191748ae3dd276a8a7a94de4d34469999b35c5d406ded6b4"
+    },
+    {
+      "path": "phorvex/internal/recon/ucw.go",
+      "sha256": "ec4762c9581d8ccff363ad572de7888fa78a0b84e92a6e49dd08f1166d4d1702"
+    },
+    {
+      "path": "phorvex/internal/cost/p1cost.go",
+      "sha256": "54ed4c868cca41c38b8fa2f552fb643772bd5c71a092a3f4e0ccca657c899863"
+    },
+    {
+      "path": "phorvex/internal/cost/action_flow.go",
+      "sha256": "ba7da439e58672734f3bed0674bf5ae8647182df03baf1f4b9ce6f2c0fe013af"
+    },
+    {
+      "path": "phorvex/internal/slo/bound.go",
+      "sha256": "24ccfd122519d62fdef25866e03a034ed89b4f3d6889e88c503ccea10ea50d56"
+    },
+    {
+      "path": "phorvex/go.mod",
+      "sha256": "bd35ce734262578442552555e770ad1189e24a2fb37a8733e4f473befca352f3"
+    },
+    {
+      "path": "phorvex/go.sum",
+      "sha256": "c2535bd48709b0f7e3affe598bc421558428cd3893c9fdb392286e49314649b0"
+    },
+    {
+      "path": "build/test-harness/guardrail/guardrail_proxy.py",
+      "sha256": "835f1e6cdb700f64f53e567353469991b865b83f8a995b19bb572e06ecf53e65"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/dual_server.py",
+      "sha256": "3206ff9a49d0ed04cbd185ccf9877cf69c74ac7acf5e44babd579bea626a30af"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/endpoint_lease.py",
+      "sha256": "3719b66e347f5022b11a8b33408122f9903d7630671638dd032389e3309ba8ab"
+    },
+    {
+      "path": "build/test-harness/guardrail/drain_v11.py",
+      "sha256": "4ffe402960d3c368d95b137e313a69818b9b33a162fcb76d09585b4d75b9c397"
+    },
+    {
+      "path": "build/test-harness/guardrail/drain_v11_init.py",
+      "sha256": "4e1a7a00550e8ce980b95114305027729dd5e3dddfdcbb2bca3026cb16b5dd5d"
+    }
+  ],
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "findings": [
+    {
+      "id": "inventory-real-and-fixture-boundaries",
+      "kind": "source_fact",
+      "summary": "Real private API identities, shipped admission, native CAS/journal/readback; workload readiness/image/routing metadata are fixtures and downstream is synthetic.",
+      "evidence": [
+        "phorvex/internal/verificationloop/fixture.go",
+        "phorvex/internal/verificationloop/run.go",
+        "build/test-harness/fixtures/verification-loop/runtime_fixture.py"
+      ]
+    },
+    {
+      "id": "injected-observation-bound-authority",
+      "kind": "source_fact",
+      "summary": "Only TEST_INJECTED observations, trusted asserted creator, <60s age, current policy/source/service/Secret/revision/Pod bindings; authenticated capability status required separately.",
+      "evidence": [
+        "phorvex/internal/ingest/endpoint_lease.go",
+        "phorvex/internal/endpointlease/contract.go",
+        "phorvex/internal/actuator/endpoint_lease_revoke.go"
+      ]
+    },
+    {
+      "id": "native-candidate-exists",
+      "kind": "source_fact",
+      "summary": "Existing endpoint-lease-revoke removes A while retaining B; competing enabled rotations lack coverage for this UCW fact. No product repair indicated by inventory.",
+      "evidence": [
+        "phorvex/internal/recon/ucw.go",
+        "phorvex/internal/actuator/endpoint_lease_revoke.go"
+      ]
+    },
+    {
+      "id": "tool-prerequisites",
+      "kind": "observed_read_only",
+      "summary": "Default PATH lacks Go and default Python lacks httpx; explicit Go1.26.1, Python with pinned httpx/uvicorn and envtest executables available. No compile or episode claimed.",
+      "evidence": [
+        "phorvex/go.mod",
+        "build/test-harness/fixtures/verification-loop/requirements.txt"
+      ],
+      "explicit_paths": {
+        "go": "/home/mehrdad/.local/share/phorvex-tools/go1.26.1/go/bin/go",
+        "python": "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+        "assets": "/home/mehrdad/.cache/phorvex-verification-loop/envtest/controller-tools/envtest"
+      }
+    },
+    {
+      "id": "unknown-formal-slo",
+      "kind": "source_fact",
+      "summary": "Modeled normalized configuration cost 0.25 is distinct from sampled request latency; formal endpoint lease SLO bound unknown.",
+      "evidence": [
+        "phorvex/internal/cost/p1cost.go",
+        "phorvex/internal/slo/bound.go"
+      ]
+    },
+    {
+      "id": "reviewer-runtime-ownership",
+      "kind": "architecture_ambiguity",
+      "summary": "Verifier-exclusive runtime tool/mutation statements conflict with independent reviewer reproduction requirement; orchestrator stated it will explicitly delegate serialized reviewer runtime after verifier completion and preserve defect for V2.",
+      "evidence": [
+        "docs/verification-loop/agentic/ARCHITECTURE-V1.md",
+        "docs/verification-loop/agentic/PROMPTS-V1.md",
+        "docs/verification-loop/agentic/experiments/v1/CASE.json"
+      ],
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "defended-state-reattack-integration",
+      "kind": "integration_requirement",
+      "summary": "Run tears down private state on return and has no CLI bypass hook; verifier-owned reviewed adapter/overlay must run bounded public probes before cleanup.",
+      "evidence": [
+        "phorvex/internal/verificationloop/run.go",
+        "phorvex/cmd/verification-loop/main.go"
+      ],
+      "next_owner": "verification_engineer"
+    },
+    {
+      "id": "candidate-specific-runner-expectation",
+      "kind": "contract_mismatch",
+      "summary": "CASE required_action null contrasts with runner rejecting selections other than endpoint-lease-revoke; no forced selection, but candidate-specific success expectation must be disclosed.",
+      "evidence": [
+        "docs/verification-loop/agentic/experiments/v1/CASE.json",
+        "phorvex/internal/verificationloop/run.go"
+      ],
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "verdict-adapter-required",
+      "kind": "integration_requirement",
+      "summary": "Map runner single verdict and stage evidence to separate architecture threat, attribution and acceptance dimensions; local success label alone is insufficient.",
+      "evidence": [
+        "phorvex/internal/verificationloop/evidence.go",
+        "phorvex/internal/verificationloop/run.go",
+        "docs/verification-loop/agentic/ARCHITECTURE-V1.md"
+      ],
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "no-accidental-duplicated-runtime-work-observed",
+      "kind": "architecture_observation",
+      "summary": "Analyst performed source and prerequisite inspection only. Defense overlap on capability sources is deliberate distinct-responsibility reading; no duplicated implementation or episode by analyst observed.",
+      "evidence": [
+        "docs/verification-loop/agentic/PROMPTS-V1.md"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/inventory.md",
+      "sha256": "7eb637a411003d04bc1cb7ee535c575c64c2d180d0e4177a816033ea5b20b303"
+    }
+  ],
+  "limitations": [
+    "Source inspection and read-only prerequisite discovery only; no executed episodes, tests or enforcement certification.",
+    "No detector, deployed console/full manager, kubelet/CNI/GPU/real inference, deployed-image/production-service claim.",
+    "Injected creator identity and explicit resolved engine policy; envtest admin mTLS does not prove deployed service-account authorization.",
+    "Formal SLO unknown; local modeled cost and sampled availability are separate.",
+    "Single metadata-fixture backend; multi-backend/restart/resume not measured.",
+    "No actual worker spawn timestamp or model token cost independently observed."
+  ],
+  "next_owner": "orchestrator",
+  "next_action": "Verify handoff source/input/output hashes; route inventory to defense/verifier with explicit reviewer runtime delegation, candidate expectation disclosure and verifier-owned defended-state bypass adapter."
+}

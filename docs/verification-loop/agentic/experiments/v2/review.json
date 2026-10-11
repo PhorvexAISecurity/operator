@@ -1,0 +1,1063 @@
+{
+  "schema_version": 2,
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "run_id": "v2-pilot",
+  "case_id": "credential-reuse-local",
+  "attempt_id": "v2-review-final-1",
+  "episode_id": "reviewer-positive",
+  "contract_sha256": "d8f00fdf3cdce1553456ed80279d8dc08b352e319174c2715621d8f6181023ed",
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "status": "READY",
+  "started_at": "2026-10-10T11:25:54.315425Z",
+  "finished_at": "2026-10-10T11:31:32.426194Z",
+  "timestamp_provenance": "started_at is the first reviewer runtime-lease sample; preliminary final-review reads and pin checks preceded it. Exact physical invocation and report intervals are recorded separately. Completion sampled while finalizing review and prose check.",
+  "input_refs": [
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V2.md",
+      "sha256": "40de4fd58e37ce2def96770f7346b56a734904bad3fd0529ab71ea2b48928b27"
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V2.md",
+      "sha256": "41ac6527d329ac808ee7611a882e1c8311aeff15f3be7f36fb4122afa3bf33f2"
+    },
+    {
+      "path": "docs/verification-loop/agentic/HANDOFF-SCHEMA.json",
+      "sha256": "36003685850740333988e64bc83e1d9eb7a4ad156829945d773763dc149f2ee7"
+    },
+    {
+      "path": "docs/verification-loop/agentic/LANGGRAPH-HANDOFF.md",
+      "sha256": "48c228b8db6a34bccc3ec3ee3bb981c4505f3e0216aa0680c56b7b1e80761664"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/CASE.json",
+      "sha256": "d8f00fdf3cdce1553456ed80279d8dc08b352e319174c2715621d8f6181023ed"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/case.json",
+      "sha256": "762b23fa715627b9393caba427ade50a22afe7e4a248ef214eec53b493107524"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/case.md",
+      "sha256": "97f729d9bdd3c1c69b2dbf601beb1a2d8d41df1e4cc5c47a765771f2cb2bfc84"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/review-preflight.json",
+      "sha256": "8eafcbc6adae247a2997e8c33ee257ab9f568085c9d48b318de6f96fc6eed0ed"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/review-preflight.md",
+      "sha256": "c09fe474087026fa01971e2d50f649838fb95a1ed5e43bd555d7aa4e3cfed225"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/protocol.py",
+      "sha256": "d767c656c6b31782b6b2d77f64458bf46b1c58125890864838ef1008b4fe07b2"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/test_protocol.py",
+      "sha256": "b47b6dd0fbab0f14f73cffd25ec41c025c2e0205a48d6f8f7f0abce42b2460c6"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/README.md",
+      "sha256": "a1534354888aac3d88d8c7d5fa385d9068991f5cb6a0327acdda73de32990ff2"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/FREEZE.json",
+      "sha256": "39911c57d9c653c6ad8b81db36b4880e4afd00d6dd55c5ee61f573b6d8b69720"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/verification.json",
+      "sha256": "3c9321c2b32551acb8acc40e0528cd6d0670c8b944c53314f27f353e89bf8ef1"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/verification.md",
+      "sha256": "0b1a9829433509a7f47b0096bdab75e80f9588f1a556279f547df99023a86c2c"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/CASE-draft1.json",
+      "sha256": "590f09b4adee7028fe023544f17ac01db668667348eae40ac021480212f90005"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/case-draft1.json",
+      "sha256": "0a8ad123bb2457804cc454b332501483bb62d49f1a2ff6b6ab39437ef94d06df"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/stale-handoff-check.json",
+      "sha256": "0924ee6c66c1e817a2eaa29c64197e5107b98df7c86ff36296a7bcc965abb581"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/preparation.json",
+      "sha256": "2c56817e6d32a27f4ddbf2c89fb1968c846f8bd2389328846b214e366f7eb353"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/joined-measurements.json",
+      "sha256": "441e909864800676d06f649db445bf2a34822794ef5b2e31db824151ff82e188"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/run-ledger.jsonl",
+      "sha256": "c4dcff35d8ea243f3c3f46db77ebed35b87399755cab3c5fd835ef33188efb35"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/operation-ledger.sqlite3",
+      "sha256": "90404c19dea614f59018d23ce99397c29089e43a5e411b338ea3f71c7ff6003c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/operation-states.json",
+      "sha256": "1a16ba7109a8021e7d46288621bea73f0113b8b0fdacf7ebb776818a0c309e6b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/supervisor-assignment.json",
+      "sha256": "83ee1cc9c96ef2cb324fc3a279e272fe8b178a2be8c9d69e69dc9fb74feef7b6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/runtime-handshake.json",
+      "sha256": "2b8811b87c174f8497f3ee504b8f9a3e9e18e4bef209916be2c8884c71186eaa"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/preflight-routing.json",
+      "sha256": "77f1fa87e9c1f12a695bf7382df4e541a9f5483c53b454f97241aa5c0b79a5bd"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/runtime-lease.json",
+      "sha256": "44fb4ec13fddaa83bc367cfb89f6b7386a3bd4ab14bfd7a0eea25ac2bf5b60c5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/cleanup-before.json",
+      "sha256": "0355a6a27c4d66c7931cfb5af27044d477fe8d1fd8a2b875a73c61f1355a8bcc"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/cleanup-confirmation.json",
+      "sha256": "fc3f513099e51f1d3761eace046430f5c2e64e7fdb0bb2892808eda69d83e8b8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/ambiguous-operation.json",
+      "sha256": "0b12dc2e2bea7d0fbeb75d63dfe7b11533230d609568246a145a759f33af75e6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/elapsed-comparison.json",
+      "sha256": "eee0ffec8ead5d143c3d2e7d556366a07d4a23cd5e21a38cb1e309b2453bba4f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/full-chain-claim-rejection.json",
+      "sha256": "ee88945ae79f522190bd623d9686485383abd56939007c36282599f0640ac6db"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/report.json",
+      "sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-command.json",
+      "sha256": "c17b68e37cb2762d05f1332cf7940cca5461f28daaeb00e3def2ffc3e717662c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-execution-binding.json",
+      "sha256": "faa3d5699e37d274180f8347a2cf2fcb7f115c4d39e0f311e146cfb66569f8f8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-measurement.json",
+      "sha256": "908a2b620be18ee1961772f692d71660b9d72f4fae6525e13a301dc1e4c91b1f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-terminal-cache.json",
+      "sha256": "2ca29e491aac970ee9d3fdfc2b7ff53178fb88292d35d7353939d173d4a07cf2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-stdout.log",
+      "sha256": "c480da601db3574af0c4b9818fc9251ef8a3657493bf5e935c838c028fde257b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/report.json",
+      "sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-command.json",
+      "sha256": "f7b898881836f1001c437ed6026d6cf48d9d485ade02508b701e2c2e81c8bd7b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-execution-binding.json",
+      "sha256": "816afd5af0a573510a84b951325aac905bb25eeb31e6714d6f23fb934f432320"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-measurement.json",
+      "sha256": "7925d91f340645b851a893f910b05d64772fd0c5c530c03fed3a6bd18be3db6f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-terminal-cache.json",
+      "sha256": "9779d6953945be14cd605e3f37cd9ac200fa74dab67cd4112a1c4bff272a0ceb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-stdout.log",
+      "sha256": "1a37ee36a8702b0ae0379ae83621baa81fb47037d42248da3459ce41b2fe4319"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-stderr.log",
+      "sha256": "fcd4cc34ff328ca09f72ec0fa6de97df478fd51b3c847312ab24ba622009b68b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/report.json",
+      "sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-command.json",
+      "sha256": "7893c0433065390fcf7dd7f702f87aa54bdafe990828ed726d6d071175334147"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-execution-binding.json",
+      "sha256": "c2100d05ae52d9fa2401826c936fb6c274717a73aa0d2d5ae7ff0f21ff9e3dcf"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-measurement.json",
+      "sha256": "5ff013d633c0604a0293f027c878826ab82848345391ad98eba2f9325c8b1940"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-terminal-cache.json",
+      "sha256": "217a1a0e395682360d90264311cdc06794ab1910fe0deb83241eddcc7399c693"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-stdout.log",
+      "sha256": "5b4bf7ad7b7b3a49e91f466a6aa7d3b41dcba7bf0c0ebd70fc78f3f56a60c6c7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-stderr.log",
+      "sha256": "9e5e61eb77e12cb3ec2c9fea712d926c2c8fc8b1737b1b98c0a133228b7b0329"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/execution-wrapper.py",
+      "sha256": "5519773b5bc76367106f71f13d02cb0c449139be8fa8d2523e54a664941f37b6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/execution-wrapper-provenance.json",
+      "sha256": "0679610e67f9eed55bd964354eb689a8494a1a9f502ec5f03b3a0c0d6081fbd4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/journal-final.json",
+      "sha256": "21ef22c830327891f2b88d56b7274f5faba414b9041561374ac91a6941fa2038"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/journal-initial.json",
+      "sha256": "694b5ac6d3a7d987085c72e4733fecfc4827befa06e938c2a6daf1c041d6e0bb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/pod-fixture.json",
+      "sha256": "09c2d039b5eac5c0da9b534cc345e358809a0aadf3c696a0fd800bfe903f11e2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/policy-final.json",
+      "sha256": "560148b78c49063585dc57ad9db0e4cef3a89a36b97614044b239a15f9bbb08d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/policy-initial.json",
+      "sha256": "ab4921985c25011fbfc77fa736c260006e30e13b401a994b00cb5387bd5c297b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/replay-input.gob",
+      "sha256": "297099938ce9a22758deff0ea2afaa56cdd7eb61e05ca0d18b34f3c0a905366e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/resolved-model-input.json",
+      "sha256": "86e362598143c7d692ecef9085c2aff03392b99f6ff2e452c892fba2f91ee1c6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/security-event.json",
+      "sha256": "d5f92e7806e2ea843df4d1529e416e89c4b41a25c2f23b21d62e842f55274a4b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/selecting-policy.json",
+      "sha256": "dc064a91d2d298ea2e9bc487121febbba3197c412dba631d8d46b993b21d3775"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/selection-traces.json",
+      "sha256": "7dcc4b131c07edd23f236713f9e51b4a71be3454af43e981c956ef6cc53d1711"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/stale-security-event.json",
+      "sha256": "ced4e85c9d12b5333c8078b2e04e1847c3a533a59dbfb19882dec5693394d43b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/journal-final.json",
+      "sha256": "fe8259193846a6a4741cf25beba607acc86be95bc566f4e81737ce5e48cdac72"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/journal-initial.json",
+      "sha256": "fe8259193846a6a4741cf25beba607acc86be95bc566f4e81737ce5e48cdac72"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/pod-fixture.json",
+      "sha256": "295782f707f60cd8ccb050061d8d025b8a41705de6b54545dbf5c6836994ac80"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/policy-final.json",
+      "sha256": "1ebc3549900908bf094efb3c4e28b4ed407fabc3a753a1034c7a5c768b217962"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/policy-initial.json",
+      "sha256": "1ebc3549900908bf094efb3c4e28b4ed407fabc3a753a1034c7a5c768b217962"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/replay-input.gob",
+      "sha256": "057d72fd442862d18f8c8253b20033363eb0c8431bbc0bdfc1bf1ecc6081b618"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/resolved-model-input.json",
+      "sha256": "d8675c59176424cacdd36c0728f2d0558c50a8afd131096a68eda7f961b28270"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/security-event.json",
+      "sha256": "87fb64fda9b319834ee9d3efc6fdd828cd5264897f3bd493b3b90648a45f779e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/selecting-policy.json",
+      "sha256": "17649abae8bb5765924a428b95659e1403cd93282128b6f342fa5bc7f3295a8a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/selection-traces.json",
+      "sha256": "8bf504ffec00ba3d61f77e63d9d7f89a17ca0da9cffb6db110a359fa073174ec"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/stale-security-event.json",
+      "sha256": "d7fcdc86d016917cc530a58611dac2fea630cb3cb6f6b2fbdda3d613ad0f3f9c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/journal-final.json",
+      "sha256": "1d23d72f09f24f6fc48f1cdb6fcf31e00086596ce583427a458fca2d8133e05e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/journal-initial.json",
+      "sha256": "557e0621677171bf64e57691a4ea5c973d85c403d777ee492591db0ec5f4a5af"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/pod-fixture.json",
+      "sha256": "a7cc93c25608375b485e6d13e03ecbd2bb827a43d4242ddc72d8a4233866aa90"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/policy-final.json",
+      "sha256": "005e23c65d76113c0b4f1d93c2e3d55c1235f5638cee3f6be01d809c3067d77d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/policy-initial.json",
+      "sha256": "bb9de7e4f40fe77b4ebf326df31393c42ca63c6ffa85f57c311bd0267e4aa8a8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/replay-input.gob",
+      "sha256": "2c50ad4ab619ebc8ddcf647947e7a9280490f6e5c938df4ae4cc6583d4695d07"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/resolved-model-input.json",
+      "sha256": "5eea9ccf8fd3335f1c080b6fb3c1098a94080ea4ac0e052d5acbc985d3fe1ae2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/security-event.json",
+      "sha256": "d5e4db72f68054854a68cab88fcb3832cf94c7457c73f3169dc0845bc83e9b92"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/selecting-policy.json",
+      "sha256": "1bfd6b7dfe237d2d9176a50eb7998b49364477bcaa4382b1893ac454fa67996c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/selection-traces.json",
+      "sha256": "d23798e43763066336cbf0881811543034b826e268261bfbef8f87c221d46e22"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/stale-security-event.json",
+      "sha256": "9d0001182553cbc58f5b203dfe60a4c62825c88ced9114cda0e97b43f3f8e564"
+    },
+    {
+      "path": "phorvex/internal/decision/ablation.go",
+      "sha256": "c3ebef4cde4821eb7018b9d47f5a00a802c41e8d91030958e4eff02f979275d1"
+    },
+    {
+      "path": "phorvex/internal/decision/coverage.go",
+      "sha256": "30585637b526f2ea1c6431a73f2fbb5fc18e13788be70d7917cee41d36f5c1a5"
+    },
+    {
+      "path": "phorvex/internal/decision/existential.go",
+      "sha256": "c8a84a480cb5f9eb38027e78e9734df2215ed4fdd964faabb0ec8b03d47f5719"
+    },
+    {
+      "path": "phorvex/internal/decision/localsearch.go",
+      "sha256": "fd73846b2ef243bd9fc9363ce478738eabeca3e114c6d28376d3104a87eff8cb"
+    },
+    {
+      "path": "phorvex/internal/decision/optimality.go",
+      "sha256": "7b8ca387d2ef2460da26561e311d6456f25b8e2378f37fb57d2b8eb053185f5d"
+    },
+    {
+      "path": "phorvex/internal/decision/optimizer.go",
+      "sha256": "c2526adabe2b859481f7ea811bee9b274d91c062b00a632c759c54403d2897a5"
+    },
+    {
+      "path": "phorvex/internal/decision/owner_state.go",
+      "sha256": "1abe9cc5abeac713571b52511a6406c00fc86f9b2d4f8436443e7a5d29c3641f"
+    },
+    {
+      "path": "phorvex/internal/decision/parameter_manifest.go",
+      "sha256": "d4b396104674f0f8a01dbd0439612092cc9a37be902958fd395ca0038b7dfbc7"
+    },
+    {
+      "path": "phorvex/internal/decision/persistence_observation.go",
+      "sha256": "7a93075f142b5479872e22d46fb6e5fa7bf6860c37460e1e8356fa572a9deafa"
+    },
+    {
+      "path": "phorvex/internal/decision/resources.go",
+      "sha256": "97e1bde09eedd68374078bb5ff88d2cb41b387e0bc4788e271c52426c7e81226"
+    },
+    {
+      "path": "phorvex/internal/decision/select.go",
+      "sha256": "44c228b9e8a42b0f0eebc4d94c33ccceb0f18bf8bfe7f1fa7d4fc68abccf4b38"
+    },
+    {
+      "path": "phorvex/internal/decision/sensitivity.go",
+      "sha256": "47c17490fe1beb22752ff256eaa83098443c8e8fd83a8bedba13790ea991a562"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/runtime_fixture.py",
+      "sha256": "30ea5593aaebd7208ac6563f9f645c37ecb6af9fc1e21b0b1327d1fd8e418194"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/test_runtime_fixture.py",
+      "sha256": "8113cce0e0e1bdc432d095f5ee4bf583b5dc83646bd9c813f22eef75e2e0e9dd"
+    },
+    {
+      "path": "phorvex/cmd/verification-loop/main.go",
+      "sha256": "dc0932fc7f306216f4b49e4f760deb5c4db3eb979c5651de4fa464c37641ffb3"
+    },
+    {
+      "path": "phorvex/go.mod",
+      "sha256": "bd35ce734262578442552555e770ad1189e24a2fb37a8733e4f473befca352f3"
+    },
+    {
+      "path": "phorvex/go.sum",
+      "sha256": "c2535bd48709b0f7e3affe598bc421558428cd3893c9fdb392286e49314649b0"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/evidence.go",
+      "sha256": "6198dca5758cb8eb5dbbb41c8829404520fe89c12d873b422d6a0d01888ef428"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/evidence_test.go",
+      "sha256": "2358990f09d8ef2342e10a36fb44fb77729ac2ea158b638fd41b6c7292078507"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/fixture.go",
+      "sha256": "408c6c716f250785d1c3cf8a24528427dbcbff9fce8c96ee9e9b61489547db0a"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run.go",
+      "sha256": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run_test.go",
+      "sha256": "91eac0c667ea01ea4d25f64a5b7203420a458c6fe1ed5b36ef82988205475d24"
+    },
+    {
+      "path": "build/test-harness/guardrail/guardrail_proxy.py",
+      "sha256": "835f1e6cdb700f64f53e567353469991b865b83f8a995b19bb572e06ecf53e65"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/dual_server.py",
+      "sha256": "3206ff9a49d0ed04cbd185ccf9877cf69c74ac7acf5e44babd579bea626a30af"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/endpoint_lease.py",
+      "sha256": "3719b66e347f5022b11a8b33408122f9903d7630671638dd032389e3309ba8ab"
+    },
+    {
+      "path": "build/test-harness/guardrail/drain_v11.py",
+      "sha256": "4ffe402960d3c368d95b137e313a69818b9b33a162fcb76d09585b4d75b9c397"
+    },
+    {
+      "path": "build/test-harness/guardrail/drain_v11_init.py",
+      "sha256": "4e1a7a00550e8ce980b95114305027729dd5e3dddfdcbb2bca3026cb16b5dd5d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+      "sha256": "17f86a5307ef5c7395085af1b03e58c2bd39e596330bc68c93e4da3fa3cee0a6"
+    },
+    {
+      "path": "docs/verification-loop/agentic/RESULTS.md",
+      "sha256": "2cbfd724696d52958add8e24ea68f7fa12cfb5540d561e88df424b6248227161"
+    },
+    {
+      "path": "docs/verification-loop/agentic/README.md",
+      "sha256": "3b9a7760d637ccddfd700b92ac9cd1ecbb5da12cd23c3cf6085bbc62a17ad5e6"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/report.json",
+      "sha256": "a6b53f0735116030c5f00eebc23a69389536e800d1023e838b79795aab7bd459"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/journal-final.json",
+      "sha256": "24b91d38ebb708dbeac729d970d9602583d82e510d98d7cd1257243f68684b28"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/journal-initial.json",
+      "sha256": "206a031c7d980431de9a364e8ca4480520775a0e3e67405dba9684a18255dadb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/pod-fixture.json",
+      "sha256": "1b86682f84918646bd4e005e0db3e51db098693df9204faecb5839610763067a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/policy-final.json",
+      "sha256": "60f42c23ca4e91f3273ba55b9f3c9cde5ab1c66310948c50ecb03110656ee6c4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/policy-initial.json",
+      "sha256": "da8f7c7c13de9681a26fb65b3ee2fc577af2280e7d150043ba8bcf952c087400"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/replay-input.gob",
+      "sha256": "5269bd7c81655844f8cc482972fe74d0dbd53708b91f4bfe05b9c8d3bd50c6fd"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/resolved-model-input.json",
+      "sha256": "399b27cfecf9d166a8cd023b7cb098129fb74b8140aa4e6cdf9176c58ffba994"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/security-event.json",
+      "sha256": "878f50d47004dc9e614a67b2f6941bdb20d44fc33dc5f5a2e768fe846c49c756"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/selecting-policy.json",
+      "sha256": "692575b079542fe23863a4bea3477ecc6d14cd94762e970619ef146a453485a2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/selection-traces.json",
+      "sha256": "bdc77fe6f89ceb4ac483d0d417ec8e66ac8aa67fa78028372896da9e981a8ba1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive/stale-security-event.json",
+      "sha256": "897d3f767e78303ed48a17e7564f413dd2168fec991cd279f9597d5df97f72ab"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-execute.py",
+      "sha256": "fb57e1c0bb84ec35470df353f995efc3fdc97f5f7ae86f6ce399e9c9f5f55925"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-validate.py",
+      "sha256": "941d3b33b99cc62fb7ab7e4c0815626ab53b74dd9f3d7f28abeb83cb34c12493"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-validation.json",
+      "sha256": "b6785bac748e951c746480deeb69e3f33322cba5b1c016815bbfc0ccb6a26f5c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive-command.json",
+      "sha256": "eda2d5c6ae694ba6d0fa952b308473168c73a2d66c8bcfbc9dc31fe01830bbde"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive-measurement.json",
+      "sha256": "91776b9e2b67d61774146544afaf9a32eebe346e4fb79b03b6ae2be5d7c9036e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive-execution-binding.json",
+      "sha256": "cf0de6dd7e261c67da24dbe000da276e70a226fa3aa819cc3088d5adac982a08"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive-stdout.log",
+      "sha256": "0cdb34dbec253f83b83b7ae185457be352a0f57ceb29a3ea9a4a0e2d757c24ab"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-cleanup-before.json",
+      "sha256": "5e6645eb24eebf8b90a65717ec66415bd8c1c7cf8eef8857396883dbb78d6edd"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-cleanup-confirmation.json",
+      "sha256": "862cc5521d30faec4e59da1b52ab0634a5c050acca54d26dfd11760a7241400a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-runtime-lease.json",
+      "sha256": "f1f314541b36d12ad7f5231d433b99e0666e2ebc719de5158928d961617ee0d6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-operation-ledger.sqlite3",
+      "sha256": "688c67734a351f379697813c5fccc84c90368614f1d0612e5e4f8cde864c50b2"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/review.md",
+      "sha256": "a88154a809a03a25f48cb9637ac97f5e791a0226a279f8efb9b162fd7470a221"
+    }
+  ],
+  "findings": [
+    {
+      "id": "V2-RF-001",
+      "status": "ACCEPTED",
+      "detail": "Frozen local case join passes: fresh verifier positive, measured expected negatives, fresh independent positive, bound artifacts and cleanup.",
+      "next_owner": "orchestrator",
+      "next_action": "Validate final independent handoff and record scoped LOCAL_PILOT_ACCEPTED."
+    },
+    {
+      "id": "V2-RF-002",
+      "status": "ACCEPTED_WITH_DECLARED_LIMITS",
+      "detail": "All three verifier command hashes independently recomputed; read-only SQLite terminal/cached results and no-runtime ambiguity agree with records. Actual wrapper derives pins from CASE and checks frozen dependencies. Role/lease and physical reconciliation remain supervised local responsibilities.",
+      "next_owner": "orchestrator",
+      "next_action": "Keep admission separate from physical proof; future service adapters must implement authentication, permissions, cross-host leases and reconciliation before broader operation."
+    },
+    {
+      "id": "V2-RF-003",
+      "status": "NOT_TESTED_OUTSIDE_SCOPE",
+      "detail": "Full detector/manager/console, persistent twin, post-return adaptive bypass, new actuator and production availability branches were not exercised; stronger claim contract is rejected.",
+      "next_owner": "orchestrator",
+      "next_action": "Require implementation and new case review before accepting a broader branch; no speculative V3 needed to close this fixed pilot."
+    },
+    {
+      "id": "V2-RF-004",
+      "status": "PERFORMANCE_NOT_ESTABLISHED",
+      "detail": "Single-set verifier command totals V1 31.450994513s vs V2 32.247484528s, plus V2 measurement gates 1.382459898s; token cost unknown.",
+      "next_owner": "orchestrator",
+      "next_action": "Report ownership/evidence improvements without throughput or token savings claims."
+    },
+    {
+      "id": "V2-RF-005",
+      "status": "DOCUMENTATION_ACCEPTED",
+      "detail": "Current RESULTS.md and README.md accurately state eight physical episodes, routine vs conditional roles, raw metrics, limits and implementation status.",
+      "next_owner": "orchestrator",
+      "next_action": "Preserve self-contained measured report and navigator; changed prose invalidates this bounded file review."
+    }
+  ],
+  "limitations": [
+    "Scoped LOCAL_PILOT_ACCEPTED is not universal optimum, production defense acceptance or full G2/SLO proof; formal SLO remains unknown.",
+    "Negative runtime episodes were inspected independently but not physically rerun; independent reviewer physically reproduced the full positive once.",
+    "Exact replay ran within the pinned driver; reviewer inspected fresh shadow-engine/canonical-trace implementation and retained replay bytes, without another standalone replay execution.",
+    "Remote identity, permissions and cross-host lease enforcement are not delivered by the local gate or role instructions; reviewer ownership was explicitly supervised.",
+    "RUNNING/AMBIGUOUS control is a no-runtime simulator; no physical interruption/recovery or automatic retry was tested.",
+    "Verifier wrapper was retained from actual stdin transcript after execution and has explicit provenance; it was not a separately pre-hashed executed source artifact.",
+    "Private raw evidence and operation stores are referenced by hash and remain outside Git; public report explains observations without those files.",
+    "Injected observation/creator identity, explicit policy, synthetic downstream and fixture workload metadata; no actual autonomous detector/full manager/customer stack proof.",
+    "No persistent twin, adaptive post-return attack, new actuator, GPU serving or runnable LangGraph service implemented or accepted.",
+    "Model token usage and performance superiority unknown.",
+    "Reviewer raw validator's first read-only invocation used an incorrect withheld-probe name and exited before completing; corrected to actual recorded A-selected-but-dispatch-withheld and reran read-only successfully. No runtime episode was repeated."
+  ],
+  "next_owner": "orchestrator",
+  "next_action": "Validate assigned independent handoff against frozen contract and required source/dependency refs, join accepted verifier controls and reviewer reproduction, and record LOCAL_PILOT_ACCEPTED for the supervised local prototype. No new physical runtime or V3 is required for this scope.",
+  "reviewed_authors": [
+    "/root",
+    "/root/agentic_defense",
+    "/root/agentic_stack_v1",
+    "/root/agentic_verifier"
+  ],
+  "architecture_disposition": "LOCAL_PILOT_ACCEPTED",
+  "local_case_acceptance": "ACCEPTED",
+  "formal_slo": "unknown",
+  "broader_capability_acceptance": "NOT_TESTED",
+  "reviewer_physical_episode_count": 1,
+  "total_v2_physical_episode_count": 4,
+  "total_v1_plus_v2_physical_episode_count": 8,
+  "model_token_cost": "unknown",
+  "product_changes": 0,
+  "physical_reruns": 0,
+  "freeze_sha256": "39911c57d9c653c6ad8b81db36b4880e4afd00d6dd55c5ee61f573b6d8b69720",
+  "source_closure_sha256": "870c8709a5da026d01449be737939fa35420ebd1bda341ea2371c6081926fda4",
+  "source_and_frozen_dependencies_checked_at": "2026-10-10T11:29:03.984872Z",
+  "episodes": [
+    {
+      "episode_id": "positive",
+      "report_sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "LOCAL_RUNTIME_DEFENDED",
+        "threat": "BLOCKED",
+        "attribution": "PROVEN_LOCAL_RESPONSE",
+        "task_disposition": "POSITIVE_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "exit_code": 0,
+      "command_started_at": "2026-10-10T11:23:08.083188+00:00",
+      "command_finished_at": "2026-10-10T11:23:19.998737+00:00",
+      "report_started_at": "2026-10-10T11:23:08.101653169Z",
+      "report_finished_at": "2026-10-10T11:23:19.945738844Z",
+      "legitimate_samples": 12,
+      "legitimate_max_latency_ms": 17.621774,
+      "legitimate_dispatch_overlaps": 2,
+      "A_request_start_hold_ms": 2167.019,
+      "reported_hold_ms": 2279.042019,
+      "baseline_to_denial_ms": 562.881794,
+      "pod_uid": "99e3e1e1-de10-4eb8-9f3f-84febb45ea97"
+    },
+    {
+      "episode_id": "skip-dispatch",
+      "report_sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "LANDED",
+        "threat": "LANDED",
+        "attribution": "SELECTION_ONLY",
+        "task_disposition": "CONTROL_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "exit_code": 1,
+      "command_started_at": "2026-10-10T11:23:20.684046+00:00",
+      "command_finished_at": "2026-10-10T11:23:30.899865+00:00",
+      "report_started_at": "2026-10-10T11:23:20.702445182Z",
+      "report_finished_at": "2026-10-10T11:23:30.835994239Z",
+      "legitimate_samples": 3,
+      "legitimate_max_latency_ms": 18.246738,
+      "legitimate_dispatch_overlaps": 0,
+      "A_request_start_hold_ms": null,
+      "reported_hold_ms": 0,
+      "baseline_to_denial_ms": 0,
+      "pod_uid": "ca0b0074-5b5b-447f-94d0-7b9775a678d0"
+    },
+    {
+      "episode_id": "unavailable-authority",
+      "report_sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "INCOMPLETE",
+        "threat": "UNKNOWN",
+        "attribution": "NOT_PROVEN",
+        "task_disposition": "CONTROL_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "exit_code": 1,
+      "command_started_at": "2026-10-10T11:23:31.609375+00:00",
+      "command_finished_at": "2026-10-10T11:23:41.725398+00:00",
+      "report_started_at": "2026-10-10T11:23:31.627899314Z",
+      "report_finished_at": "2026-10-10T11:23:41.658639492Z",
+      "legitimate_samples": 4,
+      "legitimate_max_latency_ms": 19.03039,
+      "legitimate_dispatch_overlaps": 2,
+      "A_request_start_hold_ms": null,
+      "reported_hold_ms": 0,
+      "baseline_to_denial_ms": 0,
+      "pod_uid": "18f55189-8a95-4270-b5d8-a45714e5e1af"
+    },
+    {
+      "episode_id": "reviewer-positive",
+      "report_sha256": "a6b53f0735116030c5f00eebc23a69389536e800d1023e838b79795aab7bd459",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "LOCAL_RUNTIME_DEFENDED",
+        "threat": "BLOCKED",
+        "attribution": "PROVEN_LOCAL_RESPONSE",
+        "task_disposition": "POSITIVE_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "exit_code": 0,
+      "command_started_at": "2026-10-10T11:25:54.327006Z",
+      "command_finished_at": "2026-10-10T11:26:07.245980Z",
+      "report_started_at": "2026-10-10T11:25:54.346200481Z",
+      "report_finished_at": "2026-10-10T11:26:07.150949159Z",
+      "legitimate_samples": 12,
+      "legitimate_max_latency_ms": 21.397229,
+      "legitimate_dispatch_overlaps": 2,
+      "A_request_start_hold_ms": 2183.518,
+      "reported_hold_ms": 2293.009405,
+      "baseline_to_denial_ms": 586.475638,
+      "pod_uid": "eca22d1a-809f-48b8-b114-f4e7737d0bf4"
+    }
+  ],
+  "reviewer_command": {
+    "actor_id": "/root/agentic_reviewer",
+    "role": "independent_reviewer",
+    "run_id": "v2-pilot",
+    "case_id": "credential-reuse-local",
+    "attempt_id": "v2-review-final-1",
+    "episode_id": "reviewer-positive",
+    "contract_sha256": "d8f00fdf3cdce1553456ed80279d8dc08b352e319174c2715621d8f6181023ed",
+    "freeze_sha256": "39911c57d9c653c6ad8b81db36b4880e4afd00d6dd55c5ee61f573b6d8b69720",
+    "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+    "protocol_sha256": "d767c656c6b31782b6b2d77f64458bf46b1c58125890864838ef1008b4fe07b2",
+    "execution_pins": {
+      "executable_sha256": "17f86a5307ef5c7395085af1b03e58c2bd39e596330bc68c93e4da3fa3cee0a6",
+      "brain_files_sha256": {
+        "phorvex/internal/decision/ablation.go": "c3ebef4cde4821eb7018b9d47f5a00a802c41e8d91030958e4eff02f979275d1",
+        "phorvex/internal/decision/coverage.go": "30585637b526f2ea1c6431a73f2fbb5fc18e13788be70d7917cee41d36f5c1a5",
+        "phorvex/internal/decision/existential.go": "c8a84a480cb5f9eb38027e78e9734df2215ed4fdd964faabb0ec8b03d47f5719",
+        "phorvex/internal/decision/localsearch.go": "fd73846b2ef243bd9fc9363ce478738eabeca3e114c6d28376d3104a87eff8cb",
+        "phorvex/internal/decision/optimality.go": "7b8ca387d2ef2460da26561e311d6456f25b8e2378f37fb57d2b8eb053185f5d",
+        "phorvex/internal/decision/optimizer.go": "c2526adabe2b859481f7ea811bee9b274d91c062b00a632c759c54403d2897a5",
+        "phorvex/internal/decision/owner_state.go": "1abe9cc5abeac713571b52511a6406c00fc86f9b2d4f8436443e7a5d29c3641f",
+        "phorvex/internal/decision/parameter_manifest.go": "d4b396104674f0f8a01dbd0439612092cc9a37be902958fd395ca0038b7dfbc7",
+        "phorvex/internal/decision/persistence_observation.go": "7a93075f142b5479872e22d46fb6e5fa7bf6860c37460e1e8356fa572a9deafa",
+        "phorvex/internal/decision/resources.go": "97e1bde09eedd68374078bb5ff88d2cb41b387e0bc4788e271c52426c7e81226",
+        "phorvex/internal/decision/select.go": "44c228b9e8a42b0f0eebc4d94c33ccceb0f18bf8bfe7f1fa7d4fc68abccf4b38",
+        "phorvex/internal/decision/sensitivity.go": "47c17490fe1beb22752ff256eaa83098443c8e8fd83a8bedba13790ea991a562"
+      },
+      "fixture_files_sha256": {
+        "build/test-harness/fixtures/verification-loop/runtime_fixture.py": "30ea5593aaebd7208ac6563f9f645c37ecb6af9fc1e21b0b1327d1fd8e418194",
+        "build/test-harness/fixtures/verification-loop/test_runtime_fixture.py": "8113cce0e0e1bdc432d095f5ee4bf583b5dc83646bd9c813f22eef75e2e0e9dd",
+        "phorvex/cmd/verification-loop/main.go": "dc0932fc7f306216f4b49e4f760deb5c4db3eb979c5651de4fa464c37641ffb3",
+        "phorvex/go.mod": "bd35ce734262578442552555e770ad1189e24a2fb37a8733e4f473befca352f3",
+        "phorvex/go.sum": "c2535bd48709b0f7e3affe598bc421558428cd3893c9fdb392286e49314649b0",
+        "phorvex/internal/verificationloop/evidence.go": "6198dca5758cb8eb5dbbb41c8829404520fe89c12d873b422d6a0d01888ef428",
+        "phorvex/internal/verificationloop/evidence_test.go": "2358990f09d8ef2342e10a36fb44fb77729ac2ea158b638fd41b6c7292078507",
+        "phorvex/internal/verificationloop/fixture.go": "408c6c716f250785d1c3cf8a24528427dbcbff9fce8c96ee9e9b61489547db0a",
+        "phorvex/internal/verificationloop/run.go": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2",
+        "phorvex/internal/verificationloop/run_test.go": "91eac0c667ea01ea4d25f64a5b7203420a458c6fe1ed5b36ef82988205475d24"
+      },
+      "tool_files_sha256": {
+        "etcd": "6409d0af883a8a098083c1622c011ee0586e1914c3857d2731c27d0df6933d52",
+        "kube-apiserver": "48da54d0563302fa81101d18f048ce123ca1fb7ef5e429d4245c428594a056df"
+      },
+      "source_sha256": "870c8709a5da026d01449be737939fa35420ebd1bda341ea2371c6081926fda4",
+      "runtime_source_files_sha256": {
+        "build/test-harness/guardrail/guardrail_proxy.py": "835f1e6cdb700f64f53e567353469991b865b83f8a995b19bb572e06ecf53e65",
+        "build/integrations/vllm-live-runtime/dual_server.py": "3206ff9a49d0ed04cbd185ccf9877cf69c74ac7acf5e44babd579bea626a30af",
+        "build/integrations/vllm-live-runtime/endpoint_lease.py": "3719b66e347f5022b11a8b33408122f9903d7630671638dd032389e3309ba8ab",
+        "build/test-harness/guardrail/drain_v11.py": "4ffe402960d3c368d95b137e313a69818b9b33a162fcb76d09585b4d75b9c397",
+        "build/test-harness/guardrail/drain_v11_init.py": "4e1a7a00550e8ce980b95114305027729dd5e3dddfdcbb2bca3026cb16b5dd5d"
+      }
+    },
+    "command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=15s",
+      "240s",
+      "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/tools/verification-loop-v1",
+      "-repo-root",
+      "/home/mehrdad/operator",
+      "-python",
+      "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+      "-assets",
+      "/home/mehrdad/.cache/phorvex-verification-loop/envtest/controller-tools/envtest",
+      "-git-sha",
+      "f73d04cd6aac9f5945da1515e2dac76554869920",
+      "-timeout",
+      "3m",
+      "-hold",
+      "2s",
+      "-hold-interval",
+      "250ms",
+      "-max-legitimate-latency",
+      "2s",
+      "-out",
+      "/home/mehrdad/operator/.git/phorvex-workflow/agentic-loop-20261010/v2/reviewer-positive"
+    ],
+    "cwd": "/home/mehrdad/operator",
+    "operation_id": "v2-pilot:credential-reuse-local:v2-review-final-1:reviewer-positive",
+    "input_hash": "e06964797ace3f18b312e82fde9c9a25d4423d8aed1a8d395e4be10bd26a3811",
+    "admission": {
+      "state": "PREPARED",
+      "execute": true,
+      "cached": false,
+      "result": null
+    },
+    "started_at": "2026-10-10T11:25:54.327006Z",
+    "finished_at": "2026-10-10T11:26:07.245980Z",
+    "wall_time_seconds": 12.91889665974304,
+    "exit_code": 0
+  },
+  "reviewer_cleanup": {
+    "at": "2026-10-10T11:26:07.501341Z",
+    "remaining_case_processes": [],
+    "new_private_temp_directories": [],
+    "report_cleanup_error": null,
+    "source_pins_unchanged": true,
+    "passed": true
+  },
+  "reviewer_runtime_lease": {
+    "actor_id": "/root/agentic_reviewer",
+    "role": "independent_reviewer",
+    "run_id": "v2-pilot",
+    "acquired_at": "2026-10-10T11:25:54.315425Z",
+    "status": "RELEASED",
+    "parent_transfer_after_verifier_released_at": "2026-10-10T11:23:42.193477Z",
+    "episode_id": "reviewer-positive",
+    "released_at": "2026-10-10T11:26:07.513097Z"
+  },
+  "independent_raw_assertions": 431,
+  "verifier_operation_inputs_independently_recomputed": true,
+  "verifier_operation_rows": [
+    {
+      "id": "v2-pilot:credential-reuse-local:v2-verification-1:positive",
+      "input_hash": "e8a48b57d5a58d59182c1b985d175bd27645d2052445dbdbb1bc81c064f01c94",
+      "state": "SUCCEEDED",
+      "result": {
+        "episode_id": "positive",
+        "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:positive",
+        "input_hash": "e8a48b57d5a58d59182c1b985d175bd27645d2052445dbdbb1bc81c064f01c94",
+        "file_gate_passed": true,
+        "classification": {
+          "raw_verdict": "LOCAL_RUNTIME_DEFENDED",
+          "threat": "BLOCKED",
+          "attribution": "PROVEN_LOCAL_RESPONSE",
+          "task_disposition": "POSITIVE_PASS",
+          "first_failed_stage": null,
+          "formal_slo": {
+            "Action": "endpoint-lease-revoke",
+            "Status": "unknown",
+            "MaxUnavailableReplicas": -1,
+            "MaxUnavailableDuration": 0,
+            "MaxReplicaSeconds": 0,
+            "Evidence": "",
+            "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+            "ObservedMaxRecovery": 0,
+            "ObservedEvidence": ""
+          }
+        },
+        "task_passed": true,
+        "route": null,
+        "report_sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5",
+        "exit_code": 0,
+        "command_wall_time_seconds": 11.915574857965112,
+        "gate_started_at": "2026-10-10T11:23:20.001108+00:00",
+        "gate_finished_at": "2026-10-10T11:23:20.455304+00:00",
+        "gate_wall_time_seconds": 0.4542149417102337,
+        "fresh_physical_measurement": true
+      }
+    },
+    {
+      "id": "v2-pilot:credential-reuse-local:v2-verification-1:skip-dispatch",
+      "input_hash": "d69e983eeefe2e440efeb8afa1d8a6ca7d49cf4ce4d543617c0820c33ec130b3",
+      "state": "SUCCEEDED",
+      "result": {
+        "episode_id": "skip-dispatch",
+        "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:skip-dispatch",
+        "input_hash": "d69e983eeefe2e440efeb8afa1d8a6ca7d49cf4ce4d543617c0820c33ec130b3",
+        "file_gate_passed": true,
+        "classification": {
+          "raw_verdict": "LANDED",
+          "threat": "LANDED",
+          "attribution": "SELECTION_ONLY",
+          "task_disposition": "CONTROL_PASS",
+          "first_failed_stage": null,
+          "formal_slo": {
+            "Action": "endpoint-lease-revoke",
+            "Status": "unknown",
+            "MaxUnavailableReplicas": -1,
+            "MaxUnavailableDuration": 0,
+            "MaxReplicaSeconds": 0,
+            "Evidence": "",
+            "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+            "ObservedMaxRecovery": 0,
+            "ObservedEvidence": ""
+          }
+        },
+        "task_passed": true,
+        "route": {
+          "owner": "orchestrator",
+          "action": "record expected control; no defense credit"
+        },
+        "report_sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6",
+        "exit_code": 1,
+        "command_wall_time_seconds": 10.215853314846754,
+        "gate_started_at": "2026-10-10T11:23:30.901882+00:00",
+        "gate_finished_at": "2026-10-10T11:23:31.374101+00:00",
+        "gate_wall_time_seconds": 0.4722436279989779,
+        "fresh_physical_measurement": true
+      }
+    },
+    {
+      "id": "v2-pilot:credential-reuse-local:v2-verification-1:unavailable-authority",
+      "input_hash": "a169e8382170d73fb609f4741caf0ef50172bc3ac67101e2d21a388aaeec85a4",
+      "state": "SUCCEEDED",
+      "result": {
+        "episode_id": "unavailable-authority",
+        "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:unavailable-authority",
+        "input_hash": "a169e8382170d73fb609f4741caf0ef50172bc3ac67101e2d21a388aaeec85a4",
+        "file_gate_passed": true,
+        "classification": {
+          "raw_verdict": "INCOMPLETE",
+          "threat": "UNKNOWN",
+          "attribution": "NOT_PROVEN",
+          "task_disposition": "CONTROL_PASS",
+          "first_failed_stage": null,
+          "formal_slo": {
+            "Action": "endpoint-lease-revoke",
+            "Status": "unknown",
+            "MaxUnavailableReplicas": -1,
+            "MaxUnavailableDuration": 0,
+            "MaxReplicaSeconds": 0,
+            "Evidence": "",
+            "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+            "ObservedMaxRecovery": 0,
+            "ObservedEvidence": ""
+          }
+        },
+        "task_passed": true,
+        "route": {
+          "owner": "orchestrator",
+          "action": "record expected control; no defense credit"
+        },
+        "report_sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6",
+        "exit_code": 1,
+        "command_wall_time_seconds": 10.11605635471642,
+        "gate_started_at": "2026-10-10T11:23:41.726967+00:00",
+        "gate_finished_at": "2026-10-10T11:23:42.182946+00:00",
+        "gate_wall_time_seconds": 0.45600132830441,
+        "fresh_physical_measurement": true
+      }
+    },
+    {
+      "id": "v2-pilot:simulated-interrupted-adapter",
+      "input_hash": "4e440f54d76c1cff333bc80c0f1a675eb67059da4664a01a6ea78e5f0f8d3f8d",
+      "state": "AMBIGUOUS",
+      "result": null
+    }
+  ],
+  "stronger_claim_rejected_on_all_verifier_reports": true,
+  "verifier_handoff_sha256": "3c9321c2b32551acb8acc40e0528cd6d0670c8b944c53314f27f353e89bf8ef1",
+  "independent_negative_physical_reruns": false,
+  "physical_recovery_tested": false,
+  "final_documentation_review": {
+    "refs": [
+      {
+        "path": "docs/verification-loop/agentic/RESULTS.md",
+        "sha256": "2cbfd724696d52958add8e24ea68f7fa12cfb5540d561e88df424b6248227161"
+      },
+      {
+        "path": "docs/verification-loop/agentic/README.md",
+        "sha256": "3b9a7760d637ccddfd700b92ac9cd1ecbb5da12cd23c3cf6085bbc62a17ad5e6"
+      }
+    ],
+    "disposition": "ACCEPTED_NO_MATERIAL_ERRORS",
+    "reviewer_authored_report": false
+  },
+  "prefreeze_independent_tests_preserved_in": "docs/verification-loop/agentic/experiments/v2/review-preflight.json"
+}
+

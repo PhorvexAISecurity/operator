@@ -1,0 +1,477 @@
+{
+  "actor_id": "/root/agentic_verifier",
+  "role": "verifier",
+  "run_id": "v2-pilot",
+  "case_id": "credential-reuse-local",
+  "attempt_id": "v2-verification-1",
+  "episode_id": "joined-controls",
+  "contract_sha256": "d8f00fdf3cdce1553456ed80279d8dc08b352e319174c2715621d8f6181023ed",
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "schema_version": 2,
+  "status": "READY",
+  "started_at": "2026-10-10T11:23:07.398827+00:00",
+  "finished_at": "2026-10-10T11:27:47.042113+00:00",
+  "timestamp_provenance": "Runtime phase sampled immediately before frozen-dependency validation; episode records measure invocation through subprocess exit. Earlier preparation timings remain archived.",
+  "input_refs": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/FREEZE.json",
+      "sha256": "39911c57d9c653c6ad8b81db36b4880e4afd00d6dd55c5ee61f573b6d8b69720"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/CASE.json",
+      "sha256": "d8f00fdf3cdce1553456ed80279d8dc08b352e319174c2715621d8f6181023ed"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/case.json",
+      "sha256": "762b23fa715627b9393caba427ade50a22afe7e4a248ef214eec53b493107524"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/review-preflight.json",
+      "sha256": "8eafcbc6adae247a2997e8c33ee257ab9f568085c9d48b318de6f96fc6eed0ed"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/protocol.py",
+      "sha256": "d767c656c6b31782b6b2d77f64458bf46b1c58125890864838ef1008b4fe07b2"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/v2/verification.md",
+      "sha256": "0b1a9829433509a7f47b0096bdab75e80f9588f1a556279f547df99023a86c2c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/joined-measurements.json",
+      "sha256": "441e909864800676d06f649db445bf2a34822794ef5b2e31db824151ff82e188"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/run-ledger.jsonl",
+      "sha256": "c4dcff35d8ea243f3c3f46db77ebed35b87399755cab3c5fd835ef33188efb35"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/operation-ledger.sqlite3",
+      "sha256": "90404c19dea614f59018d23ce99397c29089e43a5e411b338ea3f71c7ff6003c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/operation-states.json",
+      "sha256": "1a16ba7109a8021e7d46288621bea73f0113b8b0fdacf7ebb776818a0c309e6b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/supervisor-assignment.json",
+      "sha256": "83ee1cc9c96ef2cb324fc3a279e272fe8b178a2be8c9d69e69dc9fb74feef7b6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/runtime-handshake.json",
+      "sha256": "2b8811b87c174f8497f3ee504b8f9a3e9e18e4bef209916be2c8884c71186eaa"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/preflight-routing.json",
+      "sha256": "77f1fa87e9c1f12a695bf7382df4e541a9f5483c53b454f97241aa5c0b79a5bd"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/runtime-lease.json",
+      "sha256": "44fb4ec13fddaa83bc367cfb89f6b7386a3bd4ab14bfd7a0eea25ac2bf5b60c5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/cleanup-before.json",
+      "sha256": "0355a6a27c4d66c7931cfb5af27044d477fe8d1fd8a2b875a73c61f1355a8bcc"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/cleanup-confirmation.json",
+      "sha256": "fc3f513099e51f1d3761eace046430f5c2e64e7fdb0bb2892808eda69d83e8b8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/ambiguous-operation.json",
+      "sha256": "0b12dc2e2bea7d0fbeb75d63dfe7b11533230d609568246a145a759f33af75e6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/elapsed-comparison.json",
+      "sha256": "eee0ffec8ead5d143c3d2e7d556366a07d4a23cd5e21a38cb1e309b2453bba4f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/full-chain-claim-rejection.json",
+      "sha256": "ee88945ae79f522190bd623d9686485383abd56939007c36282599f0640ac6db"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/report.json",
+      "sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-command.json",
+      "sha256": "c17b68e37cb2762d05f1332cf7940cca5461f28daaeb00e3def2ffc3e717662c"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-execution-binding.json",
+      "sha256": "faa3d5699e37d274180f8347a2cf2fcb7f115c4d39e0f311e146cfb66569f8f8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-measurement.json",
+      "sha256": "908a2b620be18ee1961772f692d71660b9d72f4fae6525e13a301dc1e4c91b1f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-terminal-cache.json",
+      "sha256": "2ca29e491aac970ee9d3fdfc2b7ff53178fb88292d35d7353939d173d4a07cf2"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-stdout.log",
+      "sha256": "c480da601db3574af0c4b9818fc9251ef8a3657493bf5e935c838c028fde257b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/report.json",
+      "sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-command.json",
+      "sha256": "f7b898881836f1001c437ed6026d6cf48d9d485ade02508b701e2c2e81c8bd7b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-execution-binding.json",
+      "sha256": "816afd5af0a573510a84b951325aac905bb25eeb31e6714d6f23fb934f432320"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-measurement.json",
+      "sha256": "7925d91f340645b851a893f910b05d64772fd0c5c530c03fed3a6bd18be3db6f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-terminal-cache.json",
+      "sha256": "9779d6953945be14cd605e3f37cd9ac200fa74dab67cd4112a1c4bff272a0ceb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-stdout.log",
+      "sha256": "1a37ee36a8702b0ae0379ae83621baa81fb47037d42248da3459ce41b2fe4319"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-stderr.log",
+      "sha256": "fcd4cc34ff328ca09f72ec0fa6de97df478fd51b3c847312ab24ba622009b68b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/report.json",
+      "sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-command.json",
+      "sha256": "7893c0433065390fcf7dd7f702f87aa54bdafe990828ed726d6d071175334147"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-execution-binding.json",
+      "sha256": "c2100d05ae52d9fa2401826c936fb6c274717a73aa0d2d5ae7ff0f21ff9e3dcf"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-measurement.json",
+      "sha256": "5ff013d633c0604a0293f027c878826ab82848345391ad98eba2f9325c8b1940"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-terminal-cache.json",
+      "sha256": "217a1a0e395682360d90264311cdc06794ab1910fe0deb83241eddcc7399c693"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-stdout.log",
+      "sha256": "5b4bf7ad7b7b3a49e91f466a6aa7d3b41dcba7bf0c0ebd70fc78f3f56a60c6c7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-stderr.log",
+      "sha256": "9e5e61eb77e12cb3ec2c9fea712d926c2c8fc8b1737b1b98c0a133228b7b0329"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/execution-wrapper.py",
+      "sha256": "5519773b5bc76367106f71f13d02cb0c449139be8fa8d2523e54a664941f37b6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/execution-wrapper-provenance.json",
+      "sha256": "0679610e67f9eed55bd964354eb689a8494a1a9f502ec5f03b3a0c0d6081fbd4"
+    }
+  ],
+  "findings": [
+    {
+      "id": "fresh-positive-measured",
+      "detail": "Full frozen local response chain passed including exact denial, successful legitimate dispatch overlap, 2.279s hold, replay and source-bound durable effects."
+    },
+    {
+      "id": "negative-controls-measured",
+      "detail": "Both configured negatives are CONTROL_PASS without defense credit; dimensions derived by pinned protocol."
+    },
+    {
+      "id": "missing-prerequisite-first-failure-routing",
+      "detail": "Preflight environment failure preserved, routed to verifier, corrected by a distinct attempt with existing pinned assets before any subprocess."
+    },
+    {
+      "id": "durable-redelivery-and-ambiguity",
+      "detail": "All physical operations terminal-cache without rerun; separately labeled RUNNING/AMBIGUOUS simulator admissions suppress execution and preserve reconciliation obligation."
+    },
+    {
+      "id": "stronger-claim-rejected",
+      "detail": "Same response-only report fails a full-detector contract; no criteria relaxed."
+    },
+    {
+      "id": "cleanup-and-lease-transfer",
+      "detail": "No case process/temp residue; verifier lease released before independent reproducer."
+    }
+  ],
+  "limitations": [
+    "Formal action SLO unknown; no production/full G2 availability acceptance",
+    "TEST_INJECTED event and creator trust; no actual detector or full manager policy-resolution path",
+    "Synthetic downstream and fixture workload/image/readiness/endpoint metadata",
+    "Only in-episode nonce-varied same-capability retests; no adaptive bypass or persistent twin",
+    "Operation ambiguity demonstrated with no-runtime simulator, not actual interruption/recovery",
+    "Identity supplied by supervisor in local protocol; no remote actor authentication or enforced service capabilities",
+    "Model token cost unknown; one timing set per version cannot establish speed superiority"
+  ],
+  "next_action": "Orchestrator validates this assigned handoff and transfers a distinct independent episode to reviewer; reviewer reproduces positive chain and challenges all measured claims before final architecture disposition.",
+  "episodes": [
+    {
+      "episode_id": "positive",
+      "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:positive",
+      "input_hash": "e8a48b57d5a58d59182c1b985d175bd27645d2052445dbdbb1bc81c064f01c94",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "LOCAL_RUNTIME_DEFENDED",
+        "threat": "BLOCKED",
+        "attribution": "PROVEN_LOCAL_RESPONSE",
+        "task_disposition": "POSITIVE_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "task_passed": true,
+      "route": null,
+      "report_sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5",
+      "exit_code": 0,
+      "command_wall_time_seconds": 11.915574857965112,
+      "gate_started_at": "2026-10-10T11:23:20.001108+00:00",
+      "gate_finished_at": "2026-10-10T11:23:20.455304+00:00",
+      "gate_wall_time_seconds": 0.4542149417102337,
+      "fresh_physical_measurement": true,
+      "started_at": "2026-10-10T11:23:08.083188+00:00",
+      "finished_at": "2026-10-10T11:23:19.998737+00:00",
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive/report.json",
+        "sha256": "30af758063e2f52d1cca07e810d560e5bfa6731b9d1998bcef6a5d05a55a70a5"
+      },
+      "command_record": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-command.json",
+        "sha256": "c17b68e37cb2762d05f1332cf7940cca5461f28daaeb00e3def2ffc3e717662c"
+      },
+      "execution_binding": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/positive-execution-binding.json",
+        "sha256": "faa3d5699e37d274180f8347a2cf2fcb7f115c4d39e0f311e146cfb66569f8f8"
+      },
+      "probe_summary": {
+        "legitimate_samples": 12,
+        "legitimate_max_latency_ms": 17.621774,
+        "legitimate_dispatch_overlaps": 2,
+        "hold_elapsed_ms": 2279.042019,
+        "baseline_to_confirmed_denial_ms": 562.881794,
+        "replay_exact": true,
+        "shadow_state_unchanged": true
+      },
+      "a_hold_samples": 7
+    },
+    {
+      "episode_id": "skip-dispatch",
+      "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:skip-dispatch",
+      "input_hash": "d69e983eeefe2e440efeb8afa1d8a6ca7d49cf4ce4d543617c0820c33ec130b3",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "LANDED",
+        "threat": "LANDED",
+        "attribution": "SELECTION_ONLY",
+        "task_disposition": "CONTROL_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "task_passed": true,
+      "route": {
+        "owner": "orchestrator",
+        "action": "record expected control; no defense credit"
+      },
+      "report_sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6",
+      "exit_code": 1,
+      "command_wall_time_seconds": 10.215853314846754,
+      "gate_started_at": "2026-10-10T11:23:30.901882+00:00",
+      "gate_finished_at": "2026-10-10T11:23:31.374101+00:00",
+      "gate_wall_time_seconds": 0.4722436279989779,
+      "fresh_physical_measurement": true,
+      "started_at": "2026-10-10T11:23:20.684046+00:00",
+      "finished_at": "2026-10-10T11:23:30.899865+00:00",
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch/report.json",
+        "sha256": "038e83256d35f458b0970fa722eb8672d29c3e6ff0b314be03362f2b5545c8f6"
+      },
+      "command_record": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-command.json",
+        "sha256": "f7b898881836f1001c437ed6026d6cf48d9d485ade02508b701e2c2e81c8bd7b"
+      },
+      "execution_binding": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/skip-dispatch-execution-binding.json",
+        "sha256": "816afd5af0a573510a84b951325aac905bb25eeb31e6714d6f23fb934f432320"
+      },
+      "probe_summary": {
+        "legitimate_samples": 3,
+        "legitimate_max_latency_ms": 18.246738,
+        "legitimate_dispatch_overlaps": 0,
+        "hold_elapsed_ms": 0,
+        "baseline_to_confirmed_denial_ms": 0,
+        "replay_exact": true,
+        "shadow_state_unchanged": true
+      },
+      "a_hold_samples": 0
+    },
+    {
+      "episode_id": "unavailable-authority",
+      "operation_id": "v2-pilot:credential-reuse-local:v2-verification-1:unavailable-authority",
+      "input_hash": "a169e8382170d73fb609f4741caf0ef50172bc3ac67101e2d21a388aaeec85a4",
+      "file_gate_passed": true,
+      "classification": {
+        "raw_verdict": "INCOMPLETE",
+        "threat": "UNKNOWN",
+        "attribution": "NOT_PROVEN",
+        "task_disposition": "CONTROL_PASS",
+        "first_failed_stage": null,
+        "formal_slo": {
+          "Action": "endpoint-lease-revoke",
+          "Status": "unknown",
+          "MaxUnavailableReplicas": -1,
+          "MaxUnavailableDuration": 0,
+          "MaxReplicaSeconds": 0,
+          "Evidence": "",
+          "MissingBound": "endpoint lease revocation and proxy readback have no calibrated safe-return deadline",
+          "ObservedMaxRecovery": 0,
+          "ObservedEvidence": ""
+        }
+      },
+      "task_passed": true,
+      "route": {
+        "owner": "orchestrator",
+        "action": "record expected control; no defense credit"
+      },
+      "report_sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6",
+      "exit_code": 1,
+      "command_wall_time_seconds": 10.11605635471642,
+      "gate_started_at": "2026-10-10T11:23:41.726967+00:00",
+      "gate_finished_at": "2026-10-10T11:23:42.182946+00:00",
+      "gate_wall_time_seconds": 0.45600132830441,
+      "fresh_physical_measurement": true,
+      "started_at": "2026-10-10T11:23:31.609375+00:00",
+      "finished_at": "2026-10-10T11:23:41.725398+00:00",
+      "report": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority/report.json",
+        "sha256": "4bc7e3af9915473e50438ad570700fd24ad96943651096a0f9b2df32726c12c6"
+      },
+      "command_record": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-command.json",
+        "sha256": "7893c0433065390fcf7dd7f702f87aa54bdafe990828ed726d6d071175334147"
+      },
+      "execution_binding": {
+        "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/unavailable-authority-execution-binding.json",
+        "sha256": "c2100d05ae52d9fa2401826c936fb6c274717a73aa0d2d5ae7ff0f21ff9e3dcf"
+      },
+      "probe_summary": {
+        "legitimate_samples": 4,
+        "legitimate_max_latency_ms": 19.03039,
+        "legitimate_dispatch_overlaps": 2,
+        "hold_elapsed_ms": 0,
+        "baseline_to_confirmed_denial_ms": 0,
+        "replay_exact": true,
+        "shadow_state_unchanged": true
+      },
+      "a_hold_samples": 0
+    }
+  ],
+  "counts": {
+    "fresh_physical_commands": 3,
+    "product_repairs": 0,
+    "reruns": 0,
+    "preflight_attempts": 2,
+    "preflight_failures": 1,
+    "corrected_preflight_attempts": 1,
+    "terminal_cached_deliveries": 3,
+    "simulated_ambiguous_operations": 1,
+    "extra_physical_commands_for_cache_or_ambiguity": 0
+  },
+  "cleanup": {
+    "at": "2026-10-10T11:23:42.193378+00:00",
+    "remaining_case_processes": [],
+    "new_private_temp_directories": [],
+    "new_envtest_directories": [],
+    "passed": true
+  },
+  "runtime_lease": {
+    "actor_id": "/root/agentic_verifier",
+    "run_id": "v2-pilot",
+    "acquired_at": "2026-10-10T11:23:07.633764+00:00",
+    "status": "RELEASED",
+    "scope": "Private verifier episodes; reviewer does not run until release",
+    "released_at": "2026-10-10T11:23:42.193477+00:00"
+  },
+  "elapsed_comparison": {
+    "episodes": [
+      {
+        "episode": "positive",
+        "v1_command_wall_time_seconds": 11.816215622238815,
+        "v2_command_wall_time_seconds": 11.915574857965112,
+        "difference_seconds": 0.0993592357262969
+      },
+      {
+        "episode": "skip-dispatch",
+        "v1_command_wall_time_seconds": 10.31821589404717,
+        "v2_command_wall_time_seconds": 10.215853314846754,
+        "difference_seconds": -0.1023625792004168
+      },
+      {
+        "episode": "unavailable-authority",
+        "v1_command_wall_time_seconds": 9.316562996711582,
+        "v2_command_wall_time_seconds": 10.11605635471642,
+        "difference_seconds": 0.7994933580048382
+      }
+    ],
+    "v1_total_command_wall_time_seconds": 31.450994512997568,
+    "v2_total_command_wall_time_seconds": 32.247484527528286,
+    "v2_total_measurement_gate_wall_time_seconds": 1.3824598980136216,
+    "interpretation": "One measured set per version; timings do not establish workflow speed superiority or token cost. V2 includes separately timed deterministic gates."
+  },
+  "case_acceptance": "INCOMPLETE",
+  "acceptance_reason": "Required fresh verifier positive and controls passed; independent reproduction and final reviewer/orchestrator acceptance remain pending.",
+  "formal_slo": "unknown",
+  "model_token_cost": "unknown",
+  "execution_wrapper_provenance": {
+    "source": {
+      "path": ".git/phorvex-workflow/agentic-loop-20261010/v2/execution-wrapper.py",
+      "sha256": "5519773b5bc76367106f71f13d02cb0c449139be8fa8d2523e54a664941f37b6"
+    },
+    "preserved_at": "2026-10-10T11:27:47.041392+00:00",
+    "provenance": "Exact Python stdin body exported from the successful execution tool-call transcript after runtime completion; this saved file was not itself executed or pre-hashed before execution. Independent reviewer requested source retention.",
+    "original_outer_argv": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=15s",
+      "780s",
+      "/home/mehrdad/.cache/phorvex-verification-loop/venv/bin/python",
+      "-u",
+      "-"
+    ],
+    "additional_physical_commands": 0,
+    "authority_boundary": "Wrapper checks fixed supervisor FREEZE digest and all frozen file hashes before importing pinned protocol; physical pins derive from CASE, expected report hash is measured after subprocess exit. Preparation supplies argv only, not trusted protocol identity."
+  }
+}
