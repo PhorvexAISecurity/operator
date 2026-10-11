@@ -4,6 +4,7 @@ import { ClaimScopeNote } from "@/components/claim-scope";
 import { api, Lens, BenchConfigInput, BenchResult, BenchConfigResult, BenchTemporal, OptimizerProbe, OptimizerProbeArm } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { csvDownload } from "@/components/ui/more";
+import { RuntimeParameters } from "@/components/steps/runtime-params";
 import { cn } from "@/lib/utils";
 import { Sliders, Play, Loader2, ShieldCheck, ShieldAlert, Copy, Trash2, Plus, Download, FlaskConical, Skull, Timer, Clock } from "lucide-react";
 
@@ -66,6 +67,11 @@ export function BenchStep({ lens }: { lens: Lens }) {
           parameter doesn't change the decision, you'll see identical results.
         </p>
       </div>
+
+      {/* live: the same economics on every app's real policy, verified from the brain's decisions */}
+      <RuntimeParameters lens={lens} />
+
+      <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground/80">In-process simulation · fixed scenario, no live write</div>
 
       {/* scenario */}
       <div>

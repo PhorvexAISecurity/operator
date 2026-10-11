@@ -357,6 +357,11 @@ export const api = {
   // cluster write, gated to the operator lens behind the console's Cognito auth.
   policyEdit: (body: PolicyEdit, lens: Lens, context?: string) =>
     post<{ ok: boolean; namespace: string; name: string; patched: Record<string, unknown>; result: string }>("/api/policy/edit", body, lens, context),
+  // Runtime optimizer parameters: every app's knobs with the brain's verification, the audited
+  // change log, and an apply (a real, audited cluster write) or restore of one change.
+  optimizerRuntime: (lens: Lens, signal?: AbortSignal) => get<OptimizerRuntime>("/api/optimizer/runtime", lens, signal),
+  parameterLog: (lens: Lens, signal?: AbortSignal) => get<{ entries: ParameterLogEntry[]; note?: string }>("/api/optimizer/parameter-log?limit=200", lens, signal),
+  optimizerApply: (body: OptimizerApply, lens: Lens) => post<OptimizerApplyResult>("/api/optimizer/runtime/apply", body, lens),
   handlers: (lens: Lens, signal?: AbortSignal) => get<RegistryView>("/api/handlers", lens, signal),
   matrix: (lens: Lens, signal?: AbortSignal) => get<MatrixResult>("/api/matrix", lens, signal),
   aiSurface: (lens: Lens, signal?: AbortSignal) => get<AISurface>("/api/ai-surface", lens, signal),
@@ -390,6 +395,44 @@ export interface ScanResult { platform: string; nodes: number; pods: number; nod
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 // A partial live edit to one PhorvexPolicy — only the present fields are patched.
 export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; enabledActions?: string[] }
+// Runtime optimizer parameters (optimizer_runtime.go): the economic knobs of every visible app
+// policy, the values the brain's newest decision trace carries, and the audited change log.
+export type EconomicsMode = "legacy" | "fixed" | "independent";
+export interface OptionalValue { present: boolean; value: number }
+export interface RuntimeParamDef {
+  key: string; label: string; symbol: string; specPath: string; unit?: string; min: number; max: number;
+  minExclusive?: boolean; integer?: boolean; protected?: boolean; safeDirection?: "lower" | "higher"; effect: string;
+}
+export type RuntimeParamVerdict = "VERIFIED" | "PENDING" | "MISMATCH" | "NO_RECENT_DECISION" | "NOT_APPLICABLE";
+export interface RuntimeParamStatus { key: string; configured: OptionalValue; observed?: OptionalValue; status: RuntimeParamVerdict; note?: string }
+export interface RuntimeBrain {
+  decisionTime: string; decisionId?: string; action: string; pod?: string; generation: number; economicsMode: string; economicsVersion?: string;
+  effectiveCostCoefficient: number; costCoefficientSource?: string; lambdaRuntime: number; lambdaSeedConsumed: number;
+  policyOverridesHash?: string; values: Record<string, OptionalValue>;
+}
+export interface RuntimePolicy {
+  namespace: string; name: string; uid: string; tenant: string; mode: string; generation: number; economicsMode: EconomicsMode;
+  configured: { economicsMode: EconomicsMode; values: Record<string, OptionalValue> }; brain?: RuntimeBrain;
+  parameters: RuntimeParamStatus[]; economicsModeMatches?: boolean; error?: string;
+}
+export interface OptimizerRuntime {
+  schemaVersion: string; generatedAt: string; catalogue: RuntimeParamDef[]; policies: RuntimePolicy[];
+  decisionRecordsScanned: number; decisionAuditError?: string;
+}
+export interface ParameterChange { key: string; specPath: string; before: OptionalValue; after: OptionalValue }
+export interface ParameterLogEntry {
+  time: string; actor: string; namespace: string; policy: string; verdict: string; message?: string; patch?: string;
+  changeId?: string; policyUid?: string; previousGeneration?: number; generation?: number;
+  economicsModeBefore?: EconomicsMode; economicsModeAfter?: EconomicsMode; parameters?: ParameterChange[]; note?: string; restoreOf?: string;
+}
+export interface OptimizerApply {
+  namespace: string; name: string; expectedGeneration?: number; set?: Record<string, number>; economicsMode?: EconomicsMode;
+  confirmProtected?: boolean; restoreChangeId?: string; note?: string;
+}
+export interface OptimizerApplyResult {
+  ok: boolean; unchanged?: boolean; changeId?: string; namespace?: string; name?: string; previousGeneration?: number; generation: number;
+  economicsMode?: EconomicsMode; changes?: ParameterChange[];
+}
 export interface ClusterTarget { id: string; context: string; label: string; provider: string; runnable: boolean; note: string; defaultMutationTarget?: boolean }
 // Live workloads (P-DASHBOARD-LIVE): the real controllers running on the selected cluster.
 export interface Workload { kind: string; name: string; replicas: number; ready: number; images: string[]; selector: Record<string, string> }

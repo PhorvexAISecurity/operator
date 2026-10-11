@@ -29,6 +29,19 @@ type consoleMutation struct {
 	Patch     string `json:"patch,omitempty"` // the merge patch as sent
 	Verdict   string `json:"verdict"`         // applied | rejected-by-apiserver | rejected-tenant-key-write
 	Message   string `json:"message,omitempty"`
+
+	// Runtime optimizer parameter changes (/api/optimizer/runtime/apply) also carry the change
+	// identity, the policy generations around the write and each knob's before/after, so the
+	// change can be matched to the brain's first decision at the new generation and undone.
+	ChangeID           string            `json:"changeId,omitempty"`
+	PolicyUID          string            `json:"policyUid,omitempty"`
+	PreviousGeneration int64             `json:"previousGeneration,omitempty"`
+	Generation         int64             `json:"generation,omitempty"`
+	BeforeMode         string            `json:"economicsModeBefore,omitempty"`
+	AfterMode          string            `json:"economicsModeAfter,omitempty"`
+	Parameters         []parameterChange `json:"parameters,omitempty"`
+	Note               string            `json:"note,omitempty"`
+	RestoreOf          string            `json:"restoreOf,omitempty"`
 }
 
 // mutationAuditPath never derives from the manager-owned decision audit.

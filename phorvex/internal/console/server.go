@@ -52,6 +52,9 @@ type Server struct {
 	runs            *RunManager
 	history         *historyStore
 	historyInitErr  string
+	// Runtime optimizer parameters (optimizer_runtime.go); nil uses the cluster and the audit tail.
+	optimizerClient  optimizerPolicyClient
+	optimizerRecords func(context.Context) ([]audit.Record, error)
 	// auth is the identity/authorization boundary. Nil means the console has NO trust boundary,
 	// and in that state every API route answers 503 rather than serving anything.
 	auth *Authenticator

@@ -8,10 +8,12 @@ import { Store } from './store';
 import { Auth } from './auth';
 import { CampaignService } from './campaign';
 import { MathLabService } from './mathlab';
+import { ParametersService } from './parameters';
 
 @Controller()
 class ApiController {
-  constructor(private readonly campaigns:CampaignService,private readonly auth:Auth,private readonly math:MathLabService) {}
+  constructor(private readonly campaigns:CampaignService,private readonly auth:Auth,private readonly math:MathLabService,private readonly parameters:ParametersService) {}
+  @Get('api/parameters') brainParameters(@Req() request:Request,@Query('fresh') fresh?:string) { this.auth.require(request);return this.parameters.snapshot(fresh==='1'); }
   @Get('health') health() { return {status:'ok',service:'phorvex-benchmark'}; }
   @Post('api/auth/login') @HttpCode(200) login(@Body() body:any,@Req() request:Request,@Res({passthrough:true}) response:Response) { return this.auth.login(body?.password,request,response); }
   @Post('api/auth/logout') @HttpCode(200) logout(@Req() request:Request,@Res({passthrough:true}) response:Response) { return this.auth.logout(request,response); }
@@ -46,6 +48,7 @@ class ApiController {
   {provide:Auth,inject:[Config,Store],useFactory:(config:Config,store:Store)=>new Auth(config,store)},
   {provide:CampaignService,inject:[Config,Store],useFactory:(config:Config,store:Store)=>new CampaignService(config,store)},
   {provide:MathLabService,inject:[Config,Store],useFactory:(config:Config,store:Store)=>new MathLabService(config,store)},
+  {provide:ParametersService,inject:[Config],useFactory:(config:Config)=>new ParametersService(config)},
 ]})
 export class AppModule {}
 

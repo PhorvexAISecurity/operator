@@ -150,6 +150,10 @@ func (s *Server) apiRoutes() []route {
 
 		// ── controls: live cluster writes ─────────────────────────────────────────────────
 		control("/api/policy/edit", s.policyEdit, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
+		// Runtime optimizer parameters (read-only): the economic knobs of every visible app
+		// policy, verified against the brain's own decision records, and their change log.
+		read("/api/optimizer/runtime", s.optimizerRuntime, routeSpec{fixedTarget: defaultTargetID}),
+		read("/api/optimizer/parameter-log", s.optimizerParameterLog, routeSpec{fixedTarget: defaultTargetID}),
 		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS}),
 		control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
 		control("/api/voice/agency/live/fire", s.voiceAgencyLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
