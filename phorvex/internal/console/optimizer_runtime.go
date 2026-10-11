@@ -40,6 +40,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -273,6 +274,9 @@ type brainObservation struct {
 	LambdaSeedConsumed       float64                  `json:"lambdaSeedConsumed"`
 	PolicyOverridesHash      string                   `json:"policyOverridesHash,omitempty"`
 	Values                   map[string]optionalValue `json:"values"`
+	// Remembered marks a decision seen by an earlier request that is no longer in the newest audit
+	// window; it is still the newest decision of this policy the console has seen.
+	Remembered bool `json:"remembered,omitempty"`
 }
 
 func economicsModeOf(version string) string {
@@ -366,6 +370,42 @@ func newestObservations(records []audit.Record) map[string]brainObservation {
 	return out
 }
 
+// observationMemo keeps each policy's newest observed decision across requests. One request reads
+// only the newest ~16 MB of the audit, which busy tenants with large traces fill in seconds, so a
+// quieter policy's last decision can fall out of it between ticks. A remembered decision is held
+// to the same rule as a fresh one: it verifies a value only if it was made at the policy's current
+// generation, so an older remembered decision can read PENDING but never VERIFIED.
+type observationMemo struct {
+	mu    sync.Mutex
+	byUID map[string]brainObservation
+}
+
+func (m *observationMemo) merge(fresh map[string]brainObservation) map[string]brainObservation {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.byUID == nil {
+		m.byUID = map[string]brainObservation{}
+	}
+	for uid, obs := range fresh {
+		if prior, ok := m.byUID[uid]; !ok || !decisionTime(prior).After(decisionTime(obs)) {
+			m.byUID[uid] = obs
+		}
+	}
+	out := make(map[string]brainObservation, len(m.byUID))
+	for uid, obs := range m.byUID {
+		if _, inWindow := fresh[uid]; !inWindow {
+			obs.Remembered = true
+		}
+		out[uid] = obs
+	}
+	return out
+}
+
+func decisionTime(o brainObservation) time.Time {
+	t, _ := time.Parse(time.RFC3339Nano, o.DecisionTime)
+	return t
+}
+
 func sameValue(a, b optionalValue) bool {
 	if a.Present != b.Present {
 		return false
@@ -404,7 +444,7 @@ func verdicts(configured runtimeValues, generation int64, obs *brainObservation)
 		switch {
 		case obs == nil:
 			st.Status = paramNoRecentDecision
-			st.Note = "no decision of this policy in the newest audit window"
+			st.Note = "no decision of this policy seen since the console started"
 		default:
 			v := obs.Values[p.Key]
 			st.Observed = &v
@@ -460,7 +500,7 @@ func (s *Server) optimizerRuntime(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	records, recErr := s.optimizerDecisionRecords(ctx)
-	observations := newestObservations(records)
+	observations := s.optimizerSeen.merge(newestObservations(records))
 	p := principalOf(r)
 	views := []runtimePolicyView{}
 	for i := range policies {

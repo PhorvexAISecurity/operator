@@ -384,3 +384,41 @@ func TestApplyRefusesStaleProtectedAndFixtureWrites(t *testing.T) {
 		t.Fatalf("apiserver rejection: %d", w.Code)
 	}
 }
+
+// A quiet policy's last decision can drop out of the newest audit window between ticks. The
+// console remembers it, but it still verifies a value only at the policy's current generation.
+func TestRememberedDecisionStillNeedsTheCurrentGeneration(t *testing.T) {
+	client := newFakePolicies(policyFixture(t, "vllm", "vllm-defense", "u1", 8, legacySpec))
+	s := optimizerServer(t, client, []audit.Record{traceRecord(time.Now(), "u1", 8, nil)})
+	read := func() runtimePolicyView {
+		w := httptest.NewRecorder()
+		s.optimizerRuntime(w, operatorRequest(http.MethodGet, "/api/optimizer/runtime", nil, "vllm"))
+		var rt struct {
+			Policies []runtimePolicyView `json:"policies"`
+		}
+		decodeBody(t, w, &rt)
+		if len(rt.Policies) != 1 {
+			t.Fatalf("policies: %s", w.Body.String())
+		}
+		return rt.Policies[0]
+	}
+	status := func(v runtimePolicyView, key string) string {
+		for _, p := range v.Parameters {
+			if p.Key == key {
+				return p.Status
+			}
+		}
+		return ""
+	}
+	if v := read(); status(v, "normWeight") != paramVerified || v.Brain == nil || v.Brain.Remembered {
+		t.Fatalf("fresh decision: %+v", v)
+	}
+	s.optimizerRecords = func(context.Context) ([]audit.Record, error) { return nil, nil } // window has no vllm decision
+	if v := read(); status(v, "normWeight") != paramVerified || v.Brain == nil || !v.Brain.Remembered {
+		t.Fatalf("remembered decision at the current generation should still verify: %+v", v.Brain)
+	}
+	client.items["vllm/vllm-defense"].Generation = 9 // the policy changed; no decision at 9 yet
+	if v := read(); status(v, "normWeight") != paramPending {
+		t.Fatalf("a remembered older-generation decision must read PENDING, got %s", status(v, "normWeight"))
+	}
+}

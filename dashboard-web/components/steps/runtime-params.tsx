@@ -132,7 +132,7 @@ export function RuntimeParameters({ lens }: { lens: Lens }) {
                       ))}
                       <td className="px-2 py-2 text-[10px] text-muted-foreground">
                         {p.brain ? <>
-                          <div>{when(p.brain.decisionTime)}</div>
+                          <div>{when(p.brain.decisionTime)}{p.brain.remembered ? " · earlier" : ""}</div>
                           <div>gen {p.brain.generation} · coeff {+p.brain.effectiveCostCoefficient.toPrecision(4)} · λ {+p.brain.lambdaRuntime.toPrecision(4)}</div>
                         </> : "no recent decision"}
                       </td>
