@@ -30,6 +30,27 @@ type Options struct {
 	MaxLegitimateLatency time.Duration
 	SkipDispatch         bool // Explicit negative control: selection alone must never pass.
 	UnavailableAuthority bool // Delete the private lease policy after dispatch to test outage honesty.
+	// Arm selects a Security Gain validation branch after the brain's decision. "" and
+	// "intervention" keep the reviewed defended path. "baseline" withholds every action;
+	// "cf-rotate" and "cf-endpoint-rotate" dispatch that competing action instead of the
+	// selected one. Study arms record probes without asserting an outcome.
+	Arm string
+}
+
+// Study arms. Counterfactual actions run only in this private environment.
+const (
+	ArmIntervention     = "intervention"
+	ArmBaseline         = "baseline"
+	ArmCFRotate         = "cf-rotate"
+	ArmCFEndpointRotate = "cf-endpoint-rotate"
+)
+
+func ValidArm(arm string) bool {
+	switch arm {
+	case "", ArmIntervention, ArmBaseline, ArmCFRotate, ArmCFEndpointRotate:
+		return true
+	}
+	return false
 }
 
 type Probe struct {
@@ -83,11 +104,19 @@ type Report struct {
 	ReplayExact                 bool              `json:"replay_exact"`
 	ShadowStateUnchanged        bool              `json:"shadow_state_unchanged"`
 	HoldElapsedMS               float64           `json:"hold_elapsed_ms"`
-	FormalSLO                   slo.Bound         `json:"formal_slo"`
-	Artifacts                   map[string]string `json:"artifacts"`
-	Limitations                 []string          `json:"limitations"`
-	Error                       string            `json:"error,omitempty"`
-	CleanupErrors               []string          `json:"cleanup_errors,omitempty"`
+	// Security Gain validation: the branch this episode ran, the competing action dispatched
+	// instead of the selected one, and the brain's re-observation of the same pod after the
+	// branch (which facts it still mints, and what it would now select).
+	Arm                  string            `json:"arm,omitempty"`
+	CounterfactualAction string            `json:"counterfactual_action,omitempty"`
+	PostDecisionClock    time.Time         `json:"post_decision_clock,omitempty"`
+	PostDecisions        []model.Decision  `json:"post_decisions,omitempty"`
+	PostObservationError string            `json:"post_observation_error,omitempty"`
+	FormalSLO            slo.Bound         `json:"formal_slo"`
+	Artifacts            map[string]string `json:"artifacts"`
+	Limitations          []string          `json:"limitations"`
+	Error                string            `json:"error,omitempty"`
+	CleanupErrors        []string          `json:"cleanup_errors,omitempty"`
 }
 
 func SHA256(raw []byte) string { h := sha256.Sum256(raw); return hex.EncodeToString(h[:]) }
