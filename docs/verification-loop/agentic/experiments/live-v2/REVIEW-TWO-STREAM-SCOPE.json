@@ -1,0 +1,66 @@
+{
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "reviewed_at": "2026-10-10T14:14:11.102472+00:00",
+  "disposition": "PROSPECTIVE_SCOPE_ACCEPTED_SOURCE_AND_EXECUTION_NOT_ACCEPTED",
+  "refs": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-2/report-before-cleanup.json",
+      "sha256": "c2186614c2d8a377a2dc66395d19c26db060108a485b5eef6c2704fe1eace79f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/postcapture-verifier-2/gate-precleanup.json",
+      "sha256": "dd614fb87ba923d8c4cc66d424766766c126a80d9752a0324935e2a53fd9537e"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/MEASUREMENT-REVISION-2.md",
+      "sha256": "eb8b665a36826e2b42d3387760daa151a2983b5fb0e95432475adf64cd43b2da"
+    }
+  ],
+  "observed_episode_2": {
+    "outcome": "INCOMPLETE",
+    "failed_stage": "availability",
+    "B128_durations_ms": [
+      4184.6,
+      4093.9,
+      4157.7,
+      4246.1,
+      4163.9,
+      4181.4
+    ],
+    "widened_bracket": [
+      "2026-10-10T14:06:31.407474+00:00",
+      "2026-10-10T14:06:32.563631+00:00"
+    ],
+    "full_containment_count": 0
+  },
+  "prospective_profile": {
+    "streams": 2,
+    "plans_per_stream": 11,
+    "aggregate_max_requests": 22,
+    "tokens_per_request": 128,
+    "B_token_reservation": 2816,
+    "overall_token_ceiling": 2928,
+    "maximum_concurrency": 2,
+    "second_stream_offset_ms": 2000,
+    "offset_authority": "first actual remote HTTP monotonic start on same node clock",
+    "episode_limit_total": 4,
+    "remaining_episode_order": [
+      "reviewer-3",
+      "verifier-4"
+    ],
+    "deadline_utc": "2026-10-10T15:11:00Z"
+  },
+  "required_checks": [
+    "Explicit concurrency increase preregistered before effects",
+    "Fixed profile and immutable plans; no adaptive phase choice",
+    "Per-stream unique nonce/request identity and original actual starts/finishes",
+    "Aggregate count, output caps, and maximum-two interval sweep",
+    "Validate all responses; any error stops and drains both; unfinished effects ambiguous",
+    "Same full single-flight containment with frozen 200ms widening, 10s latency and minimum8 generated tokens",
+    "Preserve failed episodes1/2; no retrospective pass",
+    "Separate accepted prior cleanup/release, frozen current bytes, and exclusive lease before effects"
+  ],
+  "next_owner": "orchestrator",
+  "next_action": "Preregister final profile; obtain narrow runner/gate source, independent adverse review, and prior safe release before new freeze/lease"
+}

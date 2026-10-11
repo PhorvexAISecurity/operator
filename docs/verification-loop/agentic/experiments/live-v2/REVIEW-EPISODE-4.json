@@ -1,0 +1,184 @@
+{
+  "schema_version": 2,
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "run_id": "live-v3-verifier-4",
+  "case_id": "owned-adapter-route-live",
+  "attempt_id": "live-review-fourth-final-1",
+  "episode_id": "live-v3-verifier-4",
+  "issued_at": "2026-10-10T15:09:26.686297+00:00",
+  "source_revision": "ca69456b17299aa742c5ea9275fb5e6ae9cccfa4",
+  "contract_sha256": "e3b6eb06dcf3b990ee43cc600728f274f6ea2dba9b0dc12243573dad530f3d4a",
+  "status": "REVIEWED",
+  "case_verdict": {
+    "threat": "BLOCKED",
+    "attribution": "PROVEN_DEPLOYED_RESPONSE",
+    "task_disposition": "LIVE_CASE_PASS",
+    "first_failed_stage": null,
+    "formal_slo": "unknown",
+    "scope": "owned-adapter-route; observational test detector",
+    "dispatch_timing": "conservative-outer-bracket; exact endpoints unmeasured",
+    "cleanup": "VERIFIED"
+  },
+  "four_episode_study": {
+    "total_physical_episodes": 4,
+    "passed": 1,
+    "incomplete": 3,
+    "successful_independent_pair": false,
+    "whole_architecture_confidence": "NOT_ESTABLISHED_BY_THIS_STUDY",
+    "next_campaign": "Requires separate prospective contract, source review, budget and root lease; no authority from this handoff"
+  },
+  "measured": {
+    "probes_all_match_unique_original_reply": 31,
+    "B128_count": 11,
+    "B128_latencies_ms": [
+      4130.706133,
+      4224.429172,
+      4220.273531,
+      4246.822827,
+      4309.765882,
+      4285.401852,
+      4282.320087,
+      4280.879644,
+      4236.915058,
+      4278.720495,
+      4135.418461
+    ],
+    "full_widened_bracket_containing_plans": [
+      "B-2-05"
+    ],
+    "widened_bracket": [
+      "2026-10-10T15:01:25.006683+00:00",
+      "2026-10-10T15:01:25.951496+00:00"
+    ],
+    "A_hold_seconds": 10.025588,
+    "A_retest_count": 6,
+    "B_retest_count": 6,
+    "request_counts": {
+      "A": 10,
+      "B1": 10,
+      "B128": 11,
+      "requested_tokens": 1428
+    },
+    "request_intent_counts": {
+      "A": 10,
+      "B1": 10,
+      "B128": 22,
+      "requested_tokens": 2836
+    },
+    "clock_keys": [
+      "api",
+      "exact_native_endpoints_measured",
+      "independent_B",
+      "node"
+    ]
+  },
+  "cleanup": {
+    "seconds": 37.911751,
+    "no_operator_cleanup_unload": true,
+    "six_owned_resources_plus_event_absent": true,
+    "fixture_absent": true,
+    "lease_released": true
+  },
+  "causal_chain": {
+    "event_uid": "1670f878-9c7d-4eef-a1b5-82c4435d307f",
+    "adapter_name": "phorvex-probe-1f585ec71b1eb6c8",
+    "native_receipt_version": 8,
+    "native_phase": "completed",
+    "decision_id": "70f3f3d8c0a99b3236eaaf0b4ae76d13",
+    "normal_installed_brain_selection": true,
+    "actual_observer_inventory_and_created_event": true,
+    "selected_decision_exact_authenticated_audit_original": true,
+    "specific_route404_and_base_continuity": true
+  },
+  "findings": [
+    {
+      "id": "LIVE-FINAL-001",
+      "severity": "acceptance_limit",
+      "finding": "One positive final episode does not establish a successful independent physical reproduction pair. Earlier failures remain incomplete.",
+      "next_owner": "orchestrator",
+      "action": "Keep architecture result bounded; any further pair requires preregistered new authorization and exact source/case freezes."
+    },
+    {
+      "id": "LIVE-FINAL-002",
+      "severity": "measurement_gap",
+      "finding": "Failed third runner branch retains report/verdict but omits individual field files and persistence timestamp; original report contains12/14 required fields. Derivative copies explicitly bind them and still reject missing inventory_after/post_hold.",
+      "next_owner": "conditional_tool_engineer",
+      "action": "In future source revisions retain partial original capture bindings/persistence timestamp without filling missing physical measurements."
+    },
+    {
+      "id": "LIVE-FINAL-003",
+      "severity": "scope_limit",
+      "finding": "The delayed observation interval with loaded owned route is not a full deployed clean no-threat control. Formal SLO, production detector and full binary/effective-process attestation remain unknown.",
+      "next_owner": "case_engineer",
+      "action": "Preregister an actual clean absent-route observation plus class-scoped event/native/audit negative evidence before claiming that control."
+    },
+    {
+      "id": "LIVE-FINAL-004",
+      "severity": "interference_limit",
+      "finding": "Third HTTP0 transport failure overlaps a separate native drain; exact request-level causality and deterministic recurrence are unknown. Trial lease does not suspend autonomous manager actions.",
+      "next_owner": "verification_engineer",
+      "action": "Retain competing native actions in future runs, keep failures adverse, and never force policy/brain to manufacture success."
+    }
+  ],
+  "independence": {
+    "reviewed_authors": [
+      "/root/agentic_stack_v1",
+      "/root/agentic_defense",
+      "/root"
+    ],
+    "fourth_executor": "/root/agentic_verifier",
+    "reviewer_authored_runtime_tools": false,
+    "third_executor_was_reviewer": true,
+    "third_independent_cleanup_owner": "/root/agentic_verifier",
+    "executor_self_check_not_independent_credit": true
+  },
+  "inputs": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-4/CASE.json",
+      "sha256": "e3b6eb06dcf3b990ee43cc600728f274f6ea2dba9b0dc12243573dad530f3d4a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-4/SUPERVISOR.json",
+      "sha256": "9bf567e11e52ae0f65f2acd27f848ad25a61c015466bcb08432b50dea8b87b20"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-fourth-capture/PRE-CLEANUP-SEAL.json",
+      "sha256": "eaf1fe1a871e34f03efe6ae96dd4ec11fa609067bb99be9fa854f5a0bfc04dae"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-fourth-capture/FINAL-SEAL.json",
+      "sha256": "96c49f151650870e8eae352e543ba9c9aa493c472f06ddc03cbe8eed97db9ba7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-fourth-capture/CAUSAL-ORIGINALS-CHECK.json",
+      "sha256": "f3f3f485e4d5c2d9aeaba36d7e2aee80827470076de89ae1f20613d87db01aca"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-4/ROOT-RELEASE.json",
+      "sha256": "5e1b34b9441df645a810d3873629a0956f6318d98701da8e47c10a2400b9c7f1"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/postcapture-reviewer-3/CAPTURE-CLARIFICATION.json",
+      "sha256": "a711072ee552d34f70cc4b48c6de9918ad50fb20b68bc77a01d6468c8feaeb80"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/postcapture-reviewer-3/FAILED-OUTCOME-CLEANUP-EXECUTOR-CHECK.json",
+      "sha256": "934c561e7a0b0100fb98eb331322d8ea161fa6835ee64dd8e169ba9e6a573a02"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-reviewer-3/ROOT-RELEASE.json",
+      "sha256": "fe23afbf4cb01f583ca51861982dea3d00908cb0444863818fb659eecc3cf0f4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/diagnosis-reviewer-3/diagnosis.json",
+      "sha256": "a38dccc0afe91e41168c6ca65ba3888ed6973e8f63878a8d693a784d87c8746f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-fourth-readiness/READINESS-REVIEW.json",
+      "sha256": "d7b88894029ddbf78e2fcee8e4ac60582a8b17ff4b8087b21f41055773a1051f"
+    }
+  ],
+  "next_owner": "/root",
+  "next_action": "Preserve original case and cleanup verdicts, update portable report/guide to four actual outcomes, and request bounded final documentation review after stable bytes."
+}

@@ -1,0 +1,197 @@
+{
+  "schema": "phorvex.agentic-handoff.v1",
+  "run_id": "v1-pilot",
+  "role": "defense_engineer",
+  "status": "ready",
+  "started_at": "2026-10-10T10:52:56Z",
+  "finished_at": "2026-10-10T10:55:09.980130+00:00",
+  "timing_provenance": "started_at is first recorded worker UTC timestamp; initial source-read interval and actual spawn start were not independently measured",
+  "input_refs": [
+    {
+      "path": "docs/verification-loop/agentic/ARCHITECTURE-V1.md",
+      "sha256": "6a22ae0223fd0d5db4ecb11c0b1a6cb73c920c3df7628fe2a2d4d14250c2d243"
+    },
+    {
+      "path": "docs/verification-loop/agentic/PROMPTS-V1.md",
+      "sha256": "2feb6b2c4d6fcbc8cf04076ad61377ee2202caf7e6532d37748f6e4b94ee2910"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/CASE.json",
+      "sha256": "6419e8adf51e6c0e231605e52ffad70fc6d44486742fc22ab630ef9a5ceb0fa8"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/attack.md",
+      "sha256": "7320b69df798ce25fed67bcf66a4bf7da66c1dbaf1e352614f847d2a3ca25503"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/attack.json",
+      "sha256": "52d6ac2eede909f1d31fb77121b1070a3091ac850ef53fade522ad341c51a62f"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/inventory.md",
+      "sha256": "7eb637a411003d04bc1cb7ee535c575c64c2d180d0e4177a816033ea5b20b303"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/inventory.json",
+      "sha256": "f492bc95d9ab18643a4d688617e38a832904f53fc23f51855c57857c325e8a5e"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/run.go",
+      "sha256": "9505801c5f1d311ee2795f5d8081da10829139521bfc79b68532ace886fef1a2"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/fixture.go",
+      "sha256": "408c6c716f250785d1c3cf8a24528427dbcbff9fce8c96ee9e9b61489547db0a"
+    },
+    {
+      "path": "phorvex/internal/verificationloop/evidence.go",
+      "sha256": "6198dca5758cb8eb5dbbb41c8829404520fe89c12d873b422d6a0d01888ef428"
+    },
+    {
+      "path": "phorvex/internal/recon/ucw.go",
+      "sha256": "ec4762c9581d8ccff363ad572de7888fa78a0b84e92a6e49dd08f1166d4d1702"
+    },
+    {
+      "path": "phorvex/internal/ingest/endpoint_lease.go",
+      "sha256": "37be165776b486260b8bc85effb7ca4eb6a448da9e5dcd3ba8ae9f7b7c4a0c96"
+    },
+    {
+      "path": "phorvex/internal/model/types.go",
+      "sha256": "450780e00d33782301cfd7fcb83dbbcdbd33e439e3fcf5699f10935a7ceb1eb7"
+    },
+    {
+      "path": "phorvex/internal/actionset/generator.go",
+      "sha256": "4e5649e9f6b7ac13191748ae3dd276a8a7a94de4d34469999b35c5d406ded6b4"
+    },
+    {
+      "path": "phorvex/internal/capability/gate.go",
+      "sha256": "0848c74239ce650ca3f77f145e86403dd78dd2d1145d95f4a71d59e3f2ccdbb9"
+    },
+    {
+      "path": "phorvex/internal/decision/endpoint_lease_test.go",
+      "sha256": "bbd6cbd03a0914960b55c9a8662b536d45c5d3ca65418e0ab14e5ac5c6d29379"
+    },
+    {
+      "path": "phorvex/internal/feasibility/defaults.go",
+      "sha256": "fe577e7aa8f732b709b1b2b1d58c6155c45c771be0da630874ad2249369af468"
+    },
+    {
+      "path": "phorvex/internal/feasibility/actions_native.go",
+      "sha256": "03cd4bc44069ab0a1f487b8ac3054961c6e05bb0497549beaf7268e14564dc9e"
+    },
+    {
+      "path": "phorvex/internal/cost/p1cost.go",
+      "sha256": "54ed4c868cca41c38b8fa2f552fb643772bd5c71a092a3f4e0ccca657c899863"
+    },
+    {
+      "path": "phorvex/internal/cost/action_flow.go",
+      "sha256": "ba7da439e58672734f3bed0674bf5ae8647182df03baf1f4b9ce6f2c0fe013af"
+    },
+    {
+      "path": "phorvex/internal/slo/bound.go",
+      "sha256": "24ccfd122519d62fdef25866e03a034ed89b4f3d6889e88c503ccea10ea50d56"
+    },
+    {
+      "path": "phorvex/internal/endpointlease/contract.go",
+      "sha256": "485bcc90ee7f7b595b5eaacf869d89188f909f5369b649e742f0e50f3c46d5d9"
+    },
+    {
+      "path": "phorvex/internal/actuator/native.go",
+      "sha256": "b1d43d787afd062522d13152c247291884d9b145526d3c8b49b5ef9f2f6f6980"
+    },
+    {
+      "path": "phorvex/internal/actuator/verbs.go",
+      "sha256": "b43679e2e7f078e64fc024a5f65871c83a985cc44bbdca3eae1cbbd36536edcf"
+    },
+    {
+      "path": "phorvex/internal/actuator/endpoint_lease_revoke.go",
+      "sha256": "45ef15b00f15d76e1a03ca79012a21cbca5a4c1ff5f5dd2793a35ba7b4e7e208"
+    },
+    {
+      "path": "phorvex/internal/actuator/endpoint_lease_recovery.go",
+      "sha256": "f2289dbe8807789aeed2bc33910fe808e5f117fb951bb4ed54a06b320982f694"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/endpoint_lease.py",
+      "sha256": "3719b66e347f5022b11a8b33408122f9903d7630671638dd032389e3309ba8ab"
+    },
+    {
+      "path": "build/integrations/vllm-live-runtime/dual_server.py",
+      "sha256": "3206ff9a49d0ed04cbd185ccf9877cf69c74ac7acf5e44babd579bea626a30af"
+    },
+    {
+      "path": "build/test-harness/fixtures/verification-loop/runtime_fixture.py",
+      "sha256": "30ea5593aaebd7208ac6563f9f645c37ecb6af9fc1e21b0b1327d1fd8e418194"
+    }
+  ],
+  "source_revision": "f73d04cd6aac9f5945da1515e2dac76554869920",
+  "existing_response": "endpoint-lease-revoke",
+  "new_actuator_needed": false,
+  "product_repair_indicated": false,
+  "analysis_basis": "Source inspection and hash verification only; fresh execution required",
+  "findings": [
+    {
+      "id": "existing-response-suitable",
+      "kind": "source_fit",
+      "detail": "Existing native endpoint-lease-revoke removes A while retaining B; no source-indicated actuator repair or implementation needed.",
+      "next_owner": "verification_engineer"
+    },
+    {
+      "id": "ordinary-engine-local-input",
+      "kind": "claim_boundary",
+      "detail": "Unchanged checked shadow scoring with explicit local policy and native capability snapshot; full manager/controller path is not exercised.",
+      "next_owner": "independent_reviewer"
+    },
+    {
+      "id": "test-injected-trust",
+      "kind": "claim_boundary",
+      "detail": "Observation binds current live authority; asserted creator and envtest admin transport do not prove autonomous detection or deployed RBAC.",
+      "next_owner": "verification_engineer"
+    },
+    {
+      "id": "candidate-specific-oracle",
+      "kind": "contract_mismatch",
+      "detail": "Case required_action null versus runner post-selection expected revoke; preserve actual traces and disclose candidate-specific acceptance.",
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "reattack-runtime-lifetime",
+      "kind": "integration_gap",
+      "detail": "Separate post-return reattack cannot address destroyed defended state; existing hold probes are bounded persistence coverage only.",
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "verdict-adapter",
+      "kind": "integration_gap",
+      "detail": "Map single runner verdict using evidence to separate threat, brain attribution and architecture acceptance; intentional skip and outage controls do not need actuator repair.",
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "reviewer-runtime-ownership",
+      "kind": "prompt_tool_ambiguity",
+      "detail": "Verifier-exclusive runtime tool conflicts with reviewer reproduction; explicit serialized delegation is needed, as inventory records.",
+      "next_owner": "orchestrator"
+    },
+    {
+      "id": "formal-slo-unknown",
+      "kind": "source_limit",
+      "detail": "Formal revoke SLO remains unknown; modeled configuration cost 0.25 and sampled B latency cannot certify a production bound.",
+      "next_owner": "independent_reviewer"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/v1/defense.md",
+      "sha256": "fe48717dcd91d8742dd2ed71e0001c06562e49fac6939b05ac520a011413aa65"
+    }
+  ],
+  "limitations": [
+    "No runtime episode or test executed by defense engineer; no enforcement certification.",
+    "Synthetic downstream and one metadata-fixture backend; no GPU inference, deployed console, autonomous detector or full manager.",
+    "Modeled cost, unknown formal SLO and sampled availability are distinct.",
+    "Separate post-run reattack and broader variations remain integration debt; current bounded hold probes must not be overstated.",
+    "Recovery is source-inspected, not executed in this frozen case."
+  ],
+  "next_owner": "orchestrator",
+  "next_action": "Verify handoff hashes; route independent plan/oracle review and existing native response to verifier, preserving candidate expectation, shadow-selection scope and unresolved reattack lifecycle."
+}

@@ -1,0 +1,19 @@
+# Prospective harness correction after the first continuation episode
+
+Recorded on 10 October 2026 after root independently released the first continuation episode at 19:24:51 UTC, before any further physical admission. This adds an exact reviewed measurement profile to SCOPE.md; the original scope and first failed episode remain immutable.
+
+The first continuation episode failed ordinary service: two real base-model requests returned HTTP500 after a native abort-and-quiesce request-drain. The selecting brain decision preceded the observer’s trusted adapter event. The later adapter-rotate removed the owned route, but the driver had already stopped; missing hold/availability evidence cannot become a defense success. Original result and original unresolved cleanup/transport flags remain unchanged. Separate independently checked recovery safely removed owned resources and released the lease.
+
+## Source correction, without changing the oracle
+
+Three general harness defects were independently reproduced and repaired. Native version8 receipts omit false boolean fields; absent servingLegacy is accepted as typed false, while true or malformed values remain rejected. A resident B helper whose real failed requests are completely accounted for can be closed with its actual adverse exit2; the failed responses stay failed. Cleanup waits for the exact owned producer to become terminal within the original60second cleanup deadline instead of stopping at its first transient Running status. A timed-out producer or ambiguous ownership still blocks cleanup.
+
+The newly accepted executable profile is runner SHA256 18372560ec11f90e3b8c7ec57dac1de5b3d13cbbed4c886f32c2b1d787cbf838; gate 666efbc18ff1c3ef157354b7be0d70bf26b09ddcae35e6bc8f1a3b76a379a1f8; observer unchanged 01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98. Independent source review and public-byte mapping are recorded in REVIEW-HARNESS-REPAIR-1 and REVIEW-HARNESS-PUBLIC-MAPPING-1. The full public standard-library suite passed36tests in12.016seconds. The exported native test fixture is an explicitly labeled nonsecret projection, not the full private original; its source provenance is retained. The failed B wire excerpt preserves its actual failed responses.
+
+## Unchanged physical criteria and bounds
+
+The hard deadline remains20:03UTC on10October2026. Five historical physical episodes and the first continuation physical episode are charged: six started episodes total, at mostthree more remain within the existing lifetime ceilingnine. No counter reset, time extension or recovery credit is introduced. Each admission must reserve180seconds measurement plus60seconds cleanup. Both required fresh successes must use this new exact executable profile, the same verified current runtime and behavioral criteria, and different executors. The old historical success and the first continuation failure cannot substitute.
+
+All original service, request/token, clock, clean-control, full native-bracket containment, ten-second varied retest, immutable evidence and independent cleanup criteria remain mandatory. The existing protected completed native journal must be freshly pinned by exact CM UID/resourceVersion/full receipt hash, target/policy/native authority and older event identity. Reuse its exact owned adapter name with fresh event/request/run identities; first verify the route is absent. Never delete the journal or manufacture absence.
+
+No installed policy, scorer, manager protection or workload deployment changes are authorized by this addendum. The real competing drain failure remains a system finding. Do not suppress protection, schedule around it to manufacture a pass, retry an ambiguous effect, force an actuator or reclassify a failed legitimate request. A bounded passing pair would establish two supported case executions, not eliminate the observed availability risk or prove global reliability.

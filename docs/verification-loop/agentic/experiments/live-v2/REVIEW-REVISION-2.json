@@ -1,0 +1,174 @@
+{
+  "schema": "phorvex.independent-live-preflight.v1",
+  "schema_version": 1,
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "run_id": "live-v2",
+  "case_id": "live-vllm-owned-adapter-route-removal",
+  "attempt_id": "live-revision2-review-1",
+  "episode_id": "planning",
+  "recorded_at": "2026-10-10T14:03:09.338893+00:00",
+  "source_revision": "ca69456b17299aa742c5ea9275fb5e6ae9cccfa4",
+  "contract_sha256": null,
+  "contract_status": "NEW_EXECUTION_FREEZE_PENDING",
+  "verdict": "FINAL_READY_FOR_PROSPECTIVE_REVISION2_FREEZE",
+  "reviewed_authors": [
+    "/root",
+    "/root/agentic_stack_v1",
+    "/root/agentic_defense"
+  ],
+  "reviewed_refs": [
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "662326f1ce7fa526441de240d08ac06fdb16dd8869b469e200e3f3a34d7db64e"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/README.md",
+      "sha256": "f7a2e4ded7135aec8e04c0bc23b930f19aa2204dc30156b88407e4171e72288c"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/observer.py",
+      "sha256": "d529718a498b341cd5c38b1670b40112cdbefe5c303f681ab81bba97edef2eaa"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/gate.py",
+      "sha256": "0808e591c38d8ca6225a7bbf033b49a26cb455dc4b4354e893d25dc9bd7f068b"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_live_adapter.py",
+      "sha256": "f09169b8cdfc10c69ca231cfda8ef2b6ece3fece2ac4f6613f7cd86fa1f75b75"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/securityevent-api-fixture.json",
+      "sha256": "164348256d9a945dc150fb89ce21aaed657498e78bbe317ba2c847fd5871a7db"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/MEASUREMENT-REVISION-2.md",
+      "sha256": "eb8b665a36826e2b42d3387760daa151a2983b5fb0e95432475adf64cd43b2da"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/SCOPE.md",
+      "sha256": "61b7378cdf0ebbe0f4a3b0253b1138058e7027da30d97f9526f1c3e1247220db"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/LIVE-TRIAL-REPORT.md",
+      "sha256": "29c2916e969fb3628a513b6f69ed9f0e9836e1849217f96527681a4e9a8e2c6a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-1/report-before-cleanup.json",
+      "sha256": "93127375c297b61594e1cd4eb1a8ded946ad1e060eb436c04d06c8167b24e952"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-1/verdict-before-cleanup.json",
+      "sha256": "8da135a48afb7b6ea4e0086758e544b36c802ec866a00b6149d3ab66c2a1f66b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-1/operations.jsonl",
+      "sha256": "5932ee9f0a9d36282368a0b5e97a9c4fd51f209edb8502047c32a9c3381661bb"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-1/owned-resources.json",
+      "sha256": "a6c8cb7281e353674f339c0758bcd7b276c3b74a319beab80eb159b04b5b9b28"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reconciliation-verifier-1/RECONCILIATION-SEAL.json",
+      "sha256": "d0f46fdf7ec5121cd99d92302e1d746b3dda6c65f1946f49f0fbdece07d94bf6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reconciliation-verifier-1/DELETE-COMPLETION.json",
+      "sha256": "96c6ac8989c0e78b362b6f982f6290beff42ad1da046f548c86565d50fbb7326"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reconciliation-verifier-1/ROOT-RECONCILIATION.json",
+      "sha256": "5eb95dbcb98ec2ab7f77ac596593eb5c5a248b7db7bae634fddbb1d910cf6918"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reconciliation-verifier-1/fresh-guard-api.original.json",
+      "sha256": "e3ddb2aceb303a6e1abb24701004eb77ff711e9fdea87970290f3fb06f4c9623"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reconciliation-verifier-1/fresh-guard-artifact-inventory.original.json",
+      "sha256": "e5565b0f916fa26aa89ab245bcb7b2a0901a46618d9f159f178bfa257b392703"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-1/ROOT-RELEASE.json",
+      "sha256": "b4de2f1303607a32dfaa256169beee9e0ed6f59e3b261ecea3bf53acadaa572f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-resident-preflight/reconciliation-check.json",
+      "sha256": "8e51cd3a378f20ca0084c2c2aaa076668149e9684dbe479eadb2866071cdf172"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-resident-preflight/unittest-revision2.json",
+      "sha256": "073b30b9d8c73b1393a3011c7d86de9119c7985fd23fd934c16964463765cae8"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-resident-preflight/helper_control_matrix.revision2.py",
+      "sha256": "f10661401aac0ccc9bbd91dbc592fcea5e1b5b3321affdacf893aa419df26955"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-resident-preflight/helper-control-matrix.revision2.json",
+      "sha256": "74f862e98b5c30ac762b4ba514aa7dc697f3205416179ea04c42252a943c1ede"
+    }
+  ],
+  "accepted_source_refs": [
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "662326f1ce7fa526441de240d08ac06fdb16dd8869b469e200e3f3a34d7db64e"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/README.md",
+      "sha256": "f7a2e4ded7135aec8e04c0bc23b930f19aa2204dc30156b88407e4171e72288c"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/observer.py",
+      "sha256": "d529718a498b341cd5c38b1670b40112cdbefe5c303f681ab81bba97edef2eaa"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/gate.py",
+      "sha256": "0808e591c38d8ca6225a7bbf033b49a26cb455dc4b4354e893d25dc9bd7f068b"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_live_adapter.py",
+      "sha256": "f09169b8cdfc10c69ca231cfda8ef2b6ece3fece2ac4f6613f7cd86fa1f75b75"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/securityevent-api-fixture.json",
+      "sha256": "164348256d9a945dc150fb89ce21aaed657498e78bbe317ba2c847fd5871a7db"
+    }
+  ],
+  "review_ref": {
+    "path": "docs/verification-loop/agentic/experiments/live-v2/REVIEW-REVISION-2.md",
+    "sha256": "a42a299b321cbb3e383322f9e6c9b4a4b305c08b7bb786920da0c56dd1dab5d6"
+  },
+  "physical_execution_authorized": false,
+  "first_episode_disposition": "INCOMPLETE_RETAINED",
+  "first_episode_overlap": "NO_FULL_WIDENED_BRACKET_CONTAINMENT",
+  "point_model_absence": "SUPPORTED_BY_EXACT_SPECIFIC_HTTP404",
+  "later_hold_retests": "NOT_RUN",
+  "first_cleanup_disposition": "SAFE_FAILED_OUTCOME_RELEASE_SUPPORTED",
+  "positive_defense": false,
+  "formal_slo": "UNKNOWN",
+  "architecture_acceptance": "NOT_ESTABLISHED",
+  "prospective_profile": {
+    "overlap_max_tokens": 128,
+    "max_overlap_requests": 22,
+    "max_overlap_reserved_output_tokens": 2816,
+    "total_requested_output_ceiling": 2928,
+    "max_latency_ms": 10000,
+    "min_actual_tokens": 8,
+    "entire_bracket_required": true,
+    "combined_uncertainty_ms": 200,
+    "max_total_physical_episodes": 4,
+    "failed_first_included": true,
+    "planning_deadline": "2026-10-10T15:11:00+00:00"
+  },
+  "validation": {
+    "unittest_methods": 13,
+    "exit_code": 0,
+    "source_hashes_unchanged": true,
+    "offline_helper_control_cases": 6
+  },
+  "next_owner": "orchestrator",
+  "next_action": "Freeze prospective exact case/source/runtime dependencies; issue explicit new verifier lease. Independent reproduction requires separate transfer after cleanup."
+}

@@ -1,0 +1,71 @@
+{
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "issued_at": "2026-10-10T15:14:31.707563+00:00",
+  "status": "SCOPE_AND_BUDGET_ACCEPTED; EXECUTABLE_SOURCE_AND_EXECUTION_PENDING",
+  "run_id": "live-follow-on-review",
+  "attempt_id": "follow-on-budget-review-1",
+  "inputs": [
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/FOLLOW-ON-PREREGISTRATION.md",
+      "sha256": "59fdbab3552975459dbf68f27ad7f29eba82c2a2495c075fc46c5546a201b8a6"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-4/ROOT-RELEASE.json",
+      "sha256": "5e1b34b9441df645a810d3873629a0956f6318d98701da8e47c10a2400b9c7f1"
+    }
+  ],
+  "bounds": {
+    "aggregate_total_physical_episodes": 6,
+    "earlier_incomplete": 3,
+    "earlier_bounded_positive": 1,
+    "additional_exactly": 2,
+    "assignments": [
+      "verifier_episode5",
+      "reviewer_episode6"
+    ],
+    "deadline": "2026-10-10T15:50:00+00:00",
+    "measurement_seconds": 180,
+    "guarded_cleanup_seconds": 60,
+    "max_A": 24,
+    "max_B1": 24,
+    "max_B128": 22,
+    "max_requested_tokens": 2928,
+    "max_audit_bytes": 67108864,
+    "max_owned_observer_pairs": 4,
+    "clean_window_seconds": [
+      2,
+      10
+    ],
+    "same_positive_criteria": true
+  },
+  "accepted_semantics": [
+    "Every prior attempt remains counted with original verdict unchanged.",
+    "Clean control proves active observer evaluation against an absent owned route, sampled class-target event absence, and no new target/policy adapter response over a complete actual authenticated audit window. It does not prove global quiet or continuous event absence between snapshots.",
+    "A preexisting completed receipt is admissible only as independently pinned unchanged state, with original UID/resourceVersion/receipt hash/time and current authority, not as absence. Native adapter name restrictions may require explicit same-owned-name/fresh-episode restaging after proven absence.",
+    "Transport diagnostics may retain a bounded class without arbitrary messages/credentials; HTTP0 stays adverse.",
+    "Existing positive criteria, per-request bounds, source/policy preservation, outcome-before-cleanup and safe independent release remain mandatory."
+  ],
+  "executable_conditions": [
+    {
+      "id": "FOLLOW-PF-001",
+      "status": "OPEN_AUTHOR_REPAIR",
+      "requirement": "Audit cursor captures must outer-bracket the entire declared clean observer/B window, with complete newline-delimited original byte coverage and bounded charged retrieval.",
+      "observed_draft_defect": "Private draft placed both manifests inside window, omitting edge decisions."
+    },
+    {
+      "id": "FOLLOW-PF-002",
+      "status": "OPEN_AUTHOR_REPAIR",
+      "requirement": "Prior-completed alternative requires independent original ref and actual pre/post same CM UID/RV/receipt digest and original authority/time, not receipt JSON equality only."
+    },
+    {
+      "id": "FOLLOW-PF-003",
+      "status": "OPEN_SOURCE_REVIEW",
+      "requirement": "Complete class event list including pagination, actual observer node/clock originals, counted additional clean requests/resources, active unexpected-route rejection, current native ambiguity stop, and safe once-only cleanup must be executable and adverse-tested."
+    }
+  ],
+  "execution_authority": false,
+  "source_acceptance": false,
+  "next_owner": "/root",
+  "next_action": "Accept only exact stationary tools after independent executable review; issue separately frozen current expected inputs and serial lease, never use this budget handoff as permission."
+}

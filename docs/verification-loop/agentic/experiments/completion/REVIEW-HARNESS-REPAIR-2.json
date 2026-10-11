@@ -1,0 +1,50 @@
+{
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "sealed_at": "2026-10-10T19:49:36.298468+00:00",
+  "status": "NARROW_SOURCE_ACCEPTED_LOCAL_ONLY",
+  "runner_sha256": "37865214e87e3566ba9822a31c36f98cbba56b4b0d498c2c0fcd8881e0612861",
+  "tests_passed": 6,
+  "actual_mutating_callback_regression": true,
+  "old_alias_sensitivity": "EXPECTED_FAILURE_CONSERVATION",
+  "source_transform": "in-memory candidate copy.deepcopy(result) replaced with result only; synthetic regression with retained original frames; not historical runtime",
+  "original500s_remain_adverse": true,
+  "existing_physical2_outcome": "INCOMPLETE unchanged",
+  "execution_authority": false,
+  "refs": [
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/run_episode.py",
+      "sha256": "37865214e87e3566ba9822a31c36f98cbba56b4b0d498c2c0fcd8881e0612861"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/test_harness_repair.py",
+      "sha256": "42c3fd4e2c09e3bb80e2147c8b6a6561381bea2b8f4b46dbd78b72bdb72ed2c7"
+    },
+    {
+      "path": "build/test-harness/verification-workflow/live_adapter/fixtures/actual-failed-B-transcript.json",
+      "sha256": "49d6f274260d60c11a5b4ad320eb8aca148e6db3a19a4a24e4a94ff1d8741487"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/second-capture/check_callback_repair.py",
+      "sha256": "85b54dee55fc75f865844246eb364f8f5767d009d7377116579bd9f36c016013"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/second-capture/callback-repair-test.log",
+      "sha256": "648188223e2768bb460ede83b02718666704642a786b5642a8732a8ac3c79a5e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/second-capture/callback-repair-sensitivity.log",
+      "sha256": "f3fc533e3d67a580288915459b1c411317422c021374f274860c32758b409ed3"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-completion-20261010/reviewer/second-capture/SAFE-CLEANUP-SEAL.json",
+      "sha256": "6a1b86c4f988767fa571e4542d642cfe4f5268658f208297c9750dc2a92ce6b9"
+    }
+  ],
+  "review_id": "completion-harness-repair-2",
+  "finding_id": "COMPLETION-PF-RAW-ALIAS",
+  "source_disposition": "ACCEPTED_NARROW_CALLBACK_REPAIR",
+  "scope": "General measurement evidence isolation; original physical2 remains INCOMPLETE; no repair of native drain/realHTTP500 availability",
+  "next_owner": "/root",
+  "next_action": "Separate prospective scope/source freeze and current admission; no execution authority from this review"
+}

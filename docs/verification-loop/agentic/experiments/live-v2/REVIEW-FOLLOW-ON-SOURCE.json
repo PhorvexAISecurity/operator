@@ -1,0 +1,174 @@
+{
+  "schema_version": 2,
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "run_id": "live-follow-on-design",
+  "episode_id": "design-follow-on-source",
+  "attempt_id": "live-review-follow-on-source-1",
+  "reviewed_at": "2026-10-10T15:36:37.547935+00:00",
+  "disposition": "NOT_READY_FOR_EXECUTION_FREEZE",
+  "physical_outcome": "NO_FOLLOW_ON_EPISODE_EXECUTED",
+  "execution_contract_sha256": null,
+  "preregistration_sha256": "59fdbab3552975459dbf68f27ad7f29eba82c2a2495c075fc46c5546a201b8a6",
+  "source_pins": {
+    "run_episode.proposed.py": "c316a16971c3cd6ffdcd39cc6efa4e970645089a6634cd372410caa9bf12e49b",
+    "README.md": "542474f0894145f067bb83e5a74118f93a8bfaf2f720d5518964e4f62697f95f",
+    "test_private_proposal.py": "a1bf943b40c0615231493070bdb283a23f6dc968ad8ae9f8520a665365e3009e",
+    "manifest.json": "4ac924f64f699ee12f3371aeabf49b2090108b2991a2bcfe1260c741a8cd8884",
+    "run_episode.patch": "7023727daf6513ed1157f659c8e612444e35cedff3485cbf0f473a0a91b339fe",
+    "run_episode.base.py": "75a6ccc7ac9a4282c528973b8c2c081873f54b4b0830dbcf61dfe96c7066d09a",
+    "observer.py": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98",
+    "gate.py": "fcd7715179554670afefaa8784e4c1eb2e671c035d4f29e06bbbe638c83c3458",
+    "test_clean_control.py": "4d1aa0d9a661c0fd5fcca57b307b0d9c65ea7d01ed9c5845d456a046e8f3adf7"
+  },
+  "refs": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/run_episode.proposed.py",
+      "sha256": "c316a16971c3cd6ffdcd39cc6efa4e970645089a6634cd372410caa9bf12e49b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/README.md",
+      "sha256": "542474f0894145f067bb83e5a74118f93a8bfaf2f720d5518964e4f62697f95f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/test_private_proposal.py",
+      "sha256": "a1bf943b40c0615231493070bdb283a23f6dc968ad8ae9f8520a665365e3009e"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/manifest.json",
+      "sha256": "4ac924f64f699ee12f3371aeabf49b2090108b2991a2bcfe1260c741a8cd8884"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/run_episode.patch",
+      "sha256": "7023727daf6513ed1157f659c8e612444e35cedff3485cbf0f473a0a91b339fe"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-critical-path/run_episode.base.py",
+      "sha256": "75a6ccc7ac9a4282c528973b8c2c081873f54b4b0830dbcf61dfe96c7066d09a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-clean-control/observer.py",
+      "sha256": "01fd35f6476107da9979e4db6259afd96644c2053a321836b2098647b866bf98"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-clean-control/gate.py",
+      "sha256": "fcd7715179554670afefaa8784e4c1eb2e671c035d4f29e06bbbe638c83c3458"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/prospective-clean-control/test_clean_control.py",
+      "sha256": "4d1aa0d9a661c0fd5fcca57b307b0d9c65ea7d01ed9c5845d456a046e8f3adf7"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/joined-runner-final-unittest.json",
+      "sha256": "76ce624510611983f79eec26fbc826189346a9f2edea74922f7cff140f8113a4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/clean-components-unittest.json",
+      "sha256": "9bb013d38557414db88456e5b3dceee9af49c64cdc5bcdb47a8dafb14af0f89b"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/affected-syntax.json",
+      "sha256": "46a3d4fd120faa56994dcb8940c563ef137d6cff3a9ada2289ba5e6f961853b4"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/clean-late-retrieval-falseaccept.json",
+      "sha256": "c198a247a5f55a7fd1011891569f2f13489ffaec14468afe521cb7cba67f3767"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/check_affected_clean.py",
+      "sha256": "ae7af6d7eae435355c25217229b9a4fe351a8e819695f37b6090ca3998c4240d"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/unfixed-gate-adverse-recheck.json",
+      "sha256": "2c6537fb7e825dd3d9129f5cb8fca82a1943e992779e120c93cb1bb865ac9a76"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/candidate-reviewer-6/PROCEDURE.md",
+      "sha256": "a7b573e40830284eb9ab0575a8105b440d184ccb95372caf70164a544d2b665f"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/FOLLOW-ON-PREREGISTRATION.md",
+      "sha256": "59fdbab3552975459dbf68f27ad7f29eba82c2a2495c075fc46c5546a201b8a6"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/REVIEW-FOLLOW-ON-BUDGET.json",
+      "sha256": "6d8952d13ac85deaa04f4e925c3f9e1325b681ef9d42032eb35acc97d7c57729"
+    },
+    {
+      "path": "docs/verification-loop/agentic/experiments/live-v2/REVIEW-EPISODE-4.json",
+      "sha256": "b8309a1f72707e7f6ef9e4499be7dd35f9271c63e4fac50871348ad540dc3150"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-4/ROOT-RELEASE.json",
+      "sha256": "5e1b34b9441df645a810d3873629a0956f6318d98701da8e47c10a2400b9c7f1"
+    }
+  ],
+  "independent_checks": {
+    "joined_runner_methods": 5,
+    "joined_runner_pass": true,
+    "clean_component_methods": 7,
+    "clean_component_pass": true,
+    "actual_embedded_helpers_AST_pass": true,
+    "late_chunk_adverse_recheck": "FAIL_FALSE_ACCEPT_RETAINED",
+    "source_unchanged_during_recorded_final_checks": true,
+    "no_remote_transport_or_effects": true
+  },
+  "accepted_implementation_details": [
+    "Critical behavior and six hold pairs follow actual Bstop/drain before expensive bulk/log attribution; provenance still precedes verdict/cleanup.",
+    "Actual clean baseline/poll_once with GET-only negative transport, separate actual five-nonce clock/PodUID/node/SA, B pair, class-target boundaries and exact audit suffix are implemented prospectively.",
+    "Final runner validates embedded prior original equality to safe hashbound required ref before effects, plus current UID/RV/full receipt authority. Five methods independently passed.",
+    "Sleep-only clean standby reuses baseline resources; exact six owned resources, one additional B1 and one GET-only resident remain charged existing limits. Closed exec and actual UID/full returned labels/single source command/no init or ephemeral containers precede standby deletion."
+  ],
+  "findings": [
+    {
+      "id": "FOLLOW-SOURCE-001",
+      "severity": "BLOCKING",
+      "owner": "conditional_integration_engineer",
+      "problem": "Authenticated audit segment timing is not bounded by actual capture_finished_at, the ten-second retrieval reservation or physical LOAD start.",
+      "evidence_ref": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/clean-late-retrieval-falseaccept.json",
+      "independent_recheck_ref": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-follow-on-preflight/unfixed-gate-adverse-recheck.json",
+      "demonstration": "Existing valid local control accepted the same hashed segment GET at5.00..5.01s although declared capture finished3.06s and LOAD began4s. Current fcd gate still false accepts.",
+      "required_action": "Bound all original retrieval intervals and matching control/window capture completion within the declared reservation and before actual LOAD. Reject this exact mutant; preserve valid full coverage."
+    },
+    {
+      "id": "FOLLOW-SOURCE-002",
+      "severity": "BLOCKING",
+      "owner": "conditional_integration_engineer",
+      "problem": "No valid integrated new-contract specimen proves that clean-control admission reaches original positive/native/overlap/ownership gates.",
+      "evidence": "Existing fifteen-method specimen has no clean_control contract/report/binding; seven new component methods test separate functions. Unchanged old specimens would reject before their intended adverse stage.",
+      "required_action": "Supply one valid joined new-contract specimen reaching PRE_CLEANUP_PASS and meaningful rehashed adverse mutations at the intended original/new stages. Independently rerun only affected checks with stable before/after hashes."
+    },
+    {
+      "id": "FOLLOW-SOURCE-003",
+      "severity": "BLOCKING_CONTRACT_DECISION",
+      "owner": "orchestrator",
+      "problem": "Preregistration says absence of adapter-rotate for frozen target; runner and gate currently also reject any action for the same policy on another target.",
+      "evidence": "Both current private sources use assetUID==target OR policyUID==policy. Final private README explicitly marks this unresolved.",
+      "required_action": "Declare one exact target or target/policy scope prospectively and align runner, gate and valid/other-target fixtures. Do not silently reinterpret absence or discard unrelated actions."
+    }
+  ],
+  "workflow_state": {
+    "root_agent_status_observed": "TERMINAL_PROVIDER_SAFETY_FLAG",
+    "observation_source": "collaboration.list_agents during this review",
+    "root_execution_authority_inferred": false,
+    "engineering_orchestration_complete": false,
+    "active_physical_lease": "NONE_KNOWN; all four completed episodes independently safely released",
+    "handling": "Preserve review and all earlier outcomes; do not treat lost coordinator as approval, retry a physical task, promote source or issue a lease."
+  },
+  "study_result": {
+    "completed_physical_episodes": 4,
+    "incomplete": 3,
+    "bounded_pass": 1,
+    "successful_fresh_independent_pair": false,
+    "deployed_clean_control": false,
+    "formal_slo": "UNKNOWN",
+    "earlier_outcomes_reclassified": false
+  },
+  "next_owner": "orchestrator",
+  "next_action": "Recover the coordinator through an explicit supervised continuation; assign narrow authorized gate/fixture/scope repairs, refresh exact prospective source review, then separately decide promotion/freeze/lease within the preregistered deadline. Expiry is not automatic extension.",
+  "limitations": [
+    "Private candidate local checks do not prove actual clean-window timing, source/runtime availability or a future episode.",
+    "No driver-injected detector, whole binary/effective in-memory attestation, formal SLO, broad-stack coverage, universal optimality or LangGraph service is claimed.",
+    "Executor6 procedure exists without CASE/SUP/lease; current postepisode5 protected state must be independently captured after safe release."
+  ]
+}

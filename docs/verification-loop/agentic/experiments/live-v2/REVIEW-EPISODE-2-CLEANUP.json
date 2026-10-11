@@ -1,0 +1,97 @@
+{
+  "actor_id": "/root/agentic_reviewer",
+  "role": "independent_reviewer",
+  "checked_at": "2026-10-10T14:16:18.991191+00:00",
+  "status": "SAFE_CLEANUP_RELEASE_RECOMMENDED",
+  "defense_credit": false,
+  "episode_id": "live-v3-verifier-2",
+  "seal_sha256": "c117a79e885dae2760e76a901a975d309b9a6cbab8e65595023f2a6f97490fae",
+  "validated_seal_refs": 13,
+  "resources": [
+    {
+      "uid": "db13bfc5-7900-4341-95f5-a1aacff04ef5",
+      "path": "/api/v1/namespaces/vllm/configmaps/adapter-observe-ff9592cd4536d7dee0f2",
+      "pre_read_sequence": 1017,
+      "intent_sequence": 1018,
+      "delete_sequence": 1021,
+      "absence_sequence": 1025
+    },
+    {
+      "uid": "47383e3f-af24-42c1-8be9-0b18c58c4f75",
+      "path": "/api/v1/namespaces/vllm/pods/adapter-observe-ff9592cd4536d7dee0f2",
+      "pre_read_sequence": 1006,
+      "intent_sequence": 1007,
+      "delete_sequence": 1010,
+      "absence_sequence": 1014
+    },
+    {
+      "uid": "747d80b6-2305-4658-9756-d7011ab73743",
+      "path": "/api/v1/namespaces/vllm/configmaps/adapter-observe-18722abd28613327c9ac",
+      "pre_read_sequence": 995,
+      "intent_sequence": 996,
+      "delete_sequence": 999,
+      "absence_sequence": 1003
+    },
+    {
+      "uid": "764fc5ac-bb26-4f6e-8988-ebc7f78a646f",
+      "path": "/api/v1/namespaces/vllm/pods/adapter-observe-18722abd28613327c9ac",
+      "pre_read_sequence": 984,
+      "intent_sequence": 985,
+      "delete_sequence": 988,
+      "absence_sequence": 992
+    },
+    {
+      "uid": "40111322-05bc-4aba-949d-c4866c9d1bc1",
+      "path": "/api/v1/namespaces/vllm/configmaps/adapter-observe-acb426af6b763763d55b",
+      "pre_read_sequence": 973,
+      "intent_sequence": 974,
+      "delete_sequence": 977,
+      "absence_sequence": 981
+    },
+    {
+      "uid": "4ec51bb2-7219-4f3b-b9c7-77a1736e1c7c",
+      "path": "/api/v1/namespaces/vllm/pods/adapter-observe-acb426af6b763763d55b",
+      "pre_read_sequence": 962,
+      "intent_sequence": 963,
+      "delete_sequence": 966,
+      "absence_sequence": 970
+    }
+  ],
+  "checks": [
+    "Original CREATE full labels/UID/owner and ConfigMap content match immediately preceding GET",
+    "One UID-bound deletion intent and actual DELETE200 for each of six resources, followed by original exact-name404",
+    "Observer original event cleanup receipt equals report; actual exact event404",
+    "Original artifact owner bytes/hash, exact removal marker and absence receipt",
+    "Unchanged frozen runtime, cleanup after durable outcome and within60s",
+    "Three resident exits0 and audit-forward closed"
+  ],
+  "outcome": "availability INCOMPLETE; zero full-flight containment",
+  "limitations": [
+    "UID DELETE options established by frozen runner source and UID-bound intent; API response does not echo request options",
+    "Safe release does not imply defense pass or formal SLO certification"
+  ],
+  "refs": [
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/reviewer-second-capture/cleanup-independent.json",
+      "sha256": "cbecf749c63453a1d0d0b3883e275fd4aa287a599fb55b3e584a1ba6cdab774a"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/postcapture-verifier-2/FAILED-OUTCOME-CLEANUP-SEAL.json",
+      "sha256": "c117a79e885dae2760e76a901a975d309b9a6cbab8e65595023f2a6f97490fae"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/execution-verifier-2/ROOT-RELEASE.json",
+      "sha256": "ed3705c9ec5fdfd59ef577d477a2373d06f516b96f8282a87f7fd84d46d91fbf"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-2/report-before-cleanup.json",
+      "sha256": "c2186614c2d8a377a2dc66395d19c26db060108a485b5eef6c2704fe1eace79f"
+    },
+    {
+      "path": ".git/phorvex-workflow/agentic-loop-live-v2/episode-verifier-2/operations.jsonl",
+      "sha256": "b833b9b29a3e7d05460286c73edd17ff3681c64a9e893fca936233e6f54b700e"
+    }
+  ],
+  "next_owner": "orchestrator",
+  "next_action": "Retain failed outcome and release record; no subsequent physical action before accepted revised source, freeze and exclusive lease."
+}
