@@ -39,10 +39,12 @@ func (s *Server) executeResettableFoothold(actor, ns, event string) (experimentS
 		window = 95 * time.Second
 	}
 	start := s.cfg.now()
-	return s.executePreparedResettableSignal(actor, ns, event, target, "", start, start.Add(window))
+	return s.executePreparedResettableSignal(actor, ns, event, target, "", start, start.Add(window), true)
 }
 
-func (s *Server) executePreparedResettableSignal(actor, ns, event string, target resettableTargetInfo, token string, windowStart, windowEnd time.Time) (experimentStimulusReceipt, error) {
+// executePreparedResettableSignal is shared by the Live foothold control (liveFire) and the
+// pre-registered comparison arms; only a Live firing's record joins the opt-in observation view.
+func (s *Server) executePreparedResettableSignal(actor, ns, event string, target resettableTargetInfo, token string, windowStart, windowEnd time.Time, liveFire bool) (experimentStimulusReceipt, error) {
 	if ns != "voice" {
 		return experimentStimulusReceipt{}, fmt.Errorf("three-arm comparison unsupported for %s: no verified reset contract", ns)
 	}
@@ -90,6 +92,7 @@ func (s *Server) executePreparedResettableSignal(actor, ns, event string, target
 	base.outcomeClass = "behavioral-oracle-unsupported"
 	base.producerRoute = "/api/workload/attack"
 	base.resultSchema = "synthetic-detector-signal-v2"
+	base.liveFire = liveFire
 	id := s.startAttackRecordAtKind("", ns, ns, pod, "Synthetic detector signal", "foothold", "T1611", "rotate", false, base, windowStart, windowEnd, "synthetic-detector-signal", acceptedAt)
 	receipt.AttackID = id
 	return receipt, nil

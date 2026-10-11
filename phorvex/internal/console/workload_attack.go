@@ -241,6 +241,7 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	base.outcomeClass = "behavioral-oracle-unsupported"
 	base.producerRoute = "/api/workload/attack"
 	base.resultSchema = "synthetic-detector-signal-v2"
+	base.liveFire = true
 	window := s.cfg.AttackWatchDuration
 	if window <= 0 {
 		window = 95 * time.Second
