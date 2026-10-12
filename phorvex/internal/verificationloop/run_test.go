@@ -100,6 +100,9 @@ func TestStudyArmsAreCheckedBeforeAnyEnvironmentStarts(t *testing.T) {
 		"unknown arm":                 {Arm: "cf-quarantine"},
 		"baseline with skip-dispatch": {Arm: ArmBaseline, SkipDispatch: true},
 		"counterfactual with outage":  {Arm: ArmCFRotate, UnavailableAuthority: true},
+		"unknown scenario":            {Arm: ArmBaseline, Scenario: "kv"},
+		"token defended path":         {Scenario: ScenarioToken},
+		"combined intervention":       {Arm: ArmIntervention, Scenario: ScenarioCombined},
 	} {
 		o.GitSHA, o.Timeout, o.HoldDuration, o.HoldInterval, o.MaxLegitimateLatency = base.GitSHA, base.Timeout, base.HoldDuration, base.HoldInterval, base.MaxLegitimateLatency
 		o.OutputDir = filepath.Join(t.TempDir(), "evidence")
@@ -158,6 +161,49 @@ func TestStudyArmsRecordOutcomesWithoutAsserting(t *testing.T) {
 		case ArmCFRotate:
 			if r.Dispatch == nil || !r.Dispatch.Emitted || r.Dispatch.Handler != string(model.ActionRotate) || !strings.HasPrefix(r.PostTarget, "harness-simulated ReplicaSet replacement") || lease {
 				t.Fatalf("cf-rotate: dispatch=%+v target=%q leaseFact=%v", r.Dispatch, r.PostTarget, lease)
+			}
+		}
+	}
+}
+
+// The stolen Pod-bound bearer authenticates until rotate retires its Pod, then the private
+// API server rejects it (after its authentication cache expires) while the replica serves.
+func TestTokenScenarioRotateRetiresTheStolenBearer(t *testing.T) {
+	if os.Getenv("VERIFICATION_LOOP_INTEGRATION") != "1" {
+		t.Skip("requires explicitly enabled isolated API/runtime integration")
+	}
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := Options{RepoRoot: root, OutputDir: filepath.Join(t.TempDir(), "token"), Python: os.Getenv("VERIFICATION_LOOP_PYTHON"), Assets: os.Getenv("KUBEBUILDER_ASSETS"), GitSHA: "integration-source-label", Timeout: 3 * time.Minute, HoldDuration: 14 * time.Second, HoldInterval: 500 * time.Millisecond, MaxLegitimateLatency: 2 * time.Second, Arm: ArmCFRotate, Scenario: ScenarioToken}
+	r, err := Run(t.Context(), o)
+	if err != nil || r.Verdict != "STUDY_ARM_RECORDED" || r.Scenario != ScenarioToken || r.Dispatch == nil || !r.Dispatch.Emitted {
+		t.Fatalf("verdict=%s err=%v dispatch=%+v", r.Verdict, err, r.Dispatch)
+	}
+	var baseline, last *Probe
+	legit := 0
+	for i := range r.Probes {
+		p := &r.Probes[i]
+		switch {
+		case p.Name == "attack-baseline-T":
+			baseline = p
+		case p.Capability == CapabilityPodBoundToken:
+			last = p
+		case strings.HasPrefix(p.Name, "B-") && p.Replica == "b":
+			if err := ValidateProbe(*p, true, o.MaxLegitimateLatency); err != nil {
+				t.Fatalf("surviving replica refused a legitimate caller: %v", err)
+			}
+			legit++
+		}
+	}
+	if baseline == nil || baseline.Status != 201 || last == nil || last.Status != 401 || legit == 0 {
+		t.Fatalf("baseline=%+v last=%+v legit=%d", baseline, last, legit)
+	}
+	for _, d := range r.PostDecisions {
+		for _, f := range d.Trace.Facts {
+			if strings.HasSuffix(f.FactKey, "|podBoundKubeAPIAuthPotential") && f.SteeredBy != nil {
+				t.Fatalf("replacement still carries the attributed token fact: %s", f.FactKey)
 			}
 		}
 	}

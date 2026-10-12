@@ -41,13 +41,20 @@ const creator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 const opns = "phorvex-system"
 const tlsName = "lease.verification.local"
 
-// Fictional private PodIP is API fixture metadata, mapped to local TLS only.
-const fixturePodIP = "10.240.0.10"
+// Fictional private PodIPs are API fixture metadata, mapped to local TLS only.
+const (
+	fixturePodIP  = "10.240.0.10"
+	fixturePeerIP = "10.240.0.11"
+	tokenVolume   = "kube-api-access-fixture"
+)
 
 type fixture struct {
 	client                client.Client
+	scenario              string
 	policy                *v1alpha1.PhorvexPolicy
 	pod                   *corev1.Pod
+	peer                  *corev1.Pod // second replica, token and combined scenarios only
+	peerConfig            map[string]any
 	state                 *corev1.ConfigMap
 	journal               *corev1.ConfigMap
 	source                string
@@ -83,6 +90,10 @@ func token() (string, error) {
 }
 func boolPtr(b bool) *bool { return &b }
 
+func (f *fixture) twoReplicas() bool {
+	return f.scenario == ScenarioToken || f.scenario == ScenarioCombined
+}
+
 // replaceEvictedPod stands in for the ReplicaSet controller and kubelet, which envtest does
 // not run: one Ready pod from the owning ReplicaSet's template, with the same images and
 // address. The replacement mounts the same lease Secret and policy ConfigMap, exactly as a
@@ -100,7 +111,12 @@ func replaceEvictedPod(ctx context.Context, f *fixture) (*corev1.Pod, error) {
 	if err := f.client.Create(ctx, pod); err != nil {
 		return nil, err
 	}
-	pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, PodIP: fixturePodIP, StartTime: &metav1.Time{Time: time.Now().UTC()}, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: f.pod.Status.ContainerStatuses}
+	pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, PodIP: fixturePodIP, StartTime: &metav1.Time{Time: time.Now().UTC()}, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: append([]corev1.ContainerStatus(nil), f.pod.Status.ContainerStatuses...)}
+	for i := range pod.Status.ContainerStatuses {
+		if pod.Status.ContainerStatuses[i].State.Running != nil {
+			pod.Status.ContainerStatuses[i].State.Running = &corev1.ContainerStateRunning{StartedAt: *pod.Status.StartTime}
+		}
+	}
 	if err := f.client.Status().Update(ctx, pod); err != nil {
 		return nil, err
 	}
@@ -140,8 +156,8 @@ func tlsFiles(dir string) (certPath, keyPath string, ca []byte, err error) {
 	return certPath, keyPath, ca, err
 }
 
-func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp string) (*fixture, error) {
-	f := &fixture{client: c, proxyImage: "fixture.invalid/lease-proxy@sha256:" + SHA256([]byte("unexecuted-container-image-fixture-proxy")), engineImage: "fixture.invalid/engine@sha256:" + SHA256([]byte("unexecuted-container-image-fixture-engine"))}
+func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp, scenario string) (*fixture, error) {
+	f := &fixture{client: c, scenario: scenario, proxyImage: "fixture.invalid/lease-proxy@sha256:" + SHA256([]byte("unexecuted-container-image-fixture-proxy")), engineImage: "fixture.invalid/engine@sha256:" + SHA256([]byte("unexecuted-container-image-fixture-engine"))}
 	var err error
 	for _, out := range []*string{&f.a, &f.b, &f.admin, &f.upstream} {
 		*out, err = token()
@@ -161,7 +177,8 @@ func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp
 			return nil, err
 		}
 	}
-	if err = create(&corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "lease-proxy", Namespace: endpointlease.Namespace}}); err != nil {
+	sa := &corev1.ServiceAccount{ObjectMeta: metav1.ObjectMeta{Name: "lease-proxy", Namespace: endpointlease.Namespace}}
+	if err = create(sa); err != nil {
 		return nil, err
 	}
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: endpointlease.ServiceName, Namespace: endpointlease.Namespace}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "vllm"}, Ports: []corev1.ServicePort{{Port: 8000, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt32(8000)}}}}
@@ -218,6 +235,22 @@ func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp
 	}
 	spec := corev1.PodSpec{ServiceAccountName: "lease-proxy", Volumes: []corev1.Volume{{Name: "lease-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: endpointlease.SourceConfigMapName}}}}, {Name: "lease-keys", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: endpointlease.SecretName}}}}, Containers: []corev1.Container{{Name: "vllm", Image: f.engineImage, Args: []string{"--model", "fixture", "--host", "127.0.0.1", "--port", "8001"}, Env: []corev1.EnvVar{{Name: "VLLM_API_KEY", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "vllm-control"}, Key: "api-key"}}}}}, {Name: endpointlease.ProxyContainerName, Image: f.proxyImage, Command: []string{"python3", "-B", "/src/dual_server.py"}, Env: envs, VolumeMounts: mounts}}}
 	replicas := int32(1)
+	if f.twoReplicas() {
+		// The default projected API token, as ServiceAccount admission would mount it.
+		expiry := int64(3607)
+		spec.Volumes = append(spec.Volumes, corev1.Volume{Name: tokenVolume, VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{Sources: []corev1.VolumeProjection{{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token", ExpirationSeconds: &expiry}}}}}})
+		for i := range spec.Containers {
+			spec.Containers[i].VolumeMounts = append(spec.Containers[i].VolumeMounts, corev1.VolumeMount{Name: tokenVolume, MountPath: "/var/run/secrets/kubernetes.io/serviceaccount", ReadOnly: true})
+		}
+		replicas = 2
+		// Ingestion accepts the projection only from a ServiceAccount created strictly
+		// before the Pod; creation timestamps have one-second resolution.
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Until(sa.CreationTimestamp.Add(time.Second + 50*time.Millisecond))):
+		}
+	}
 	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: endpointlease.ServiceName, Namespace: endpointlease.Namespace}, Spec: appsv1.DeploymentSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "vllm"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "vllm"}, Annotations: ann}, Spec: spec}}}
 	if err = create(dep); err != nil {
 		return nil, err
@@ -226,16 +259,32 @@ func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp
 	if err = create(rs); err != nil {
 		return nil, err
 	}
-	f.pod = &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "vllm-a", Namespace: endpointlease.Namespace, Labels: map[string]string{"app": "vllm"}, Annotations: ann, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: rs.Name, UID: rs.UID, Controller: boolPtr(true)}}}, Spec: spec}
-	if err = create(f.pod); err != nil {
-		return nil, err
+	newPod := func(name, ip, process string) (*corev1.Pod, error) {
+		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: endpointlease.Namespace, Labels: map[string]string{"app": "vllm"}, Annotations: ann, OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "ReplicaSet", Name: rs.Name, UID: rs.UID, Controller: boolPtr(true)}}}, Spec: spec}
+		if err := create(pod); err != nil {
+			return nil, err
+		}
+		pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, PodIP: ip, StartTime: &metav1.Time{Time: time.Now().UTC()}, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "vllm", Ready: true, ContainerID: "fixture://engine-" + process, ImageID: f.engineImage}, {Name: endpointlease.ProxyContainerName, Ready: true, ContainerID: "fixture://python-" + process, ImageID: f.proxyImage}}}
+		if f.twoReplicas() {
+			for i := range pod.Status.ContainerStatuses {
+				pod.Status.ContainerStatuses[i].Started = boolPtr(true)
+				pod.Status.ContainerStatuses[i].State.Running = &corev1.ContainerStateRunning{StartedAt: *pod.Status.StartTime}
+			}
+		}
+		return pod, c.Status().Update(ctx, pod)
 	}
-	f.pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, PodIP: fixturePodIP, StartTime: &metav1.Time{Time: time.Now().UTC()}, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: []corev1.ContainerStatus{{Name: "vllm", Ready: true, ContainerID: "fixture://engine-process", ImageID: f.engineImage}, {Name: endpointlease.ProxyContainerName, Ready: true, ContainerID: "fixture://python-process", ImageID: f.proxyImage}}}
-	if err = c.Status().Update(ctx, f.pod); err != nil {
+	if f.pod, err = newPod("vllm-a", fixturePodIP, "process"); err != nil {
 		return nil, err
 	}
 	port, protocol := int32(8000), corev1.ProtocolTCP
-	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "vllm-slice", Namespace: endpointlease.Namespace, Labels: map[string]string{discoveryv1.LabelServiceName: svc.Name}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID, Controller: boolPtr(true)}}}, AddressType: discoveryv1.AddressTypeIPv4, Ports: []discoveryv1.EndpointPort{{Port: &port, Protocol: &protocol}}, Endpoints: []discoveryv1.Endpoint{{Addresses: []string{fixturePodIP}, Conditions: discoveryv1.EndpointConditions{Ready: boolPtr(true)}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: f.pod.Namespace, Name: f.pod.Name, UID: f.pod.UID}}}}
+	endpoints := []discoveryv1.Endpoint{{Addresses: []string{fixturePodIP}, Conditions: discoveryv1.EndpointConditions{Ready: boolPtr(true)}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: f.pod.Namespace, Name: f.pod.Name, UID: f.pod.UID}}}
+	if f.twoReplicas() {
+		if f.peer, err = newPod("vllm-b", fixturePeerIP, "process-b"); err != nil {
+			return nil, err
+		}
+		endpoints = append(endpoints, discoveryv1.Endpoint{Addresses: []string{fixturePeerIP}, Conditions: discoveryv1.EndpointConditions{Ready: boolPtr(true)}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Namespace: f.peer.Namespace, Name: f.peer.Name, UID: f.peer.UID}})
+	}
+	slice := &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "vllm-slice", Namespace: endpointlease.Namespace, Labels: map[string]string{discoveryv1.LabelServiceName: svc.Name}, OwnerReferences: []metav1.OwnerReference{{APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID, Controller: boolPtr(true)}}}, AddressType: discoveryv1.AddressTypeIPv4, Ports: []discoveryv1.EndpointPort{{Port: &port, Protocol: &protocol}}, Endpoints: endpoints}
 	if err = create(slice); err != nil {
 		return nil, err
 	}
@@ -290,6 +339,16 @@ func provision(ctx context.Context, c client.Client, cfg *rest.Config, root, tmp
 	f.config = map[string]any{"repo_root": root, "host": "127.0.0.1", "api_url": cfg.Host, "api_ca_file": apiCA, "api_client_cert_file": apiCert, "api_client_key_file": apiKey, "pod_uid": string(f.pod.UID), "service_uid": string(svc.UID), "policy_configmap_uid": string(f.state.UID), "secret_uid": string(f.secret.UID), "source_sha256": f.source, "secret_dir": secretDir, "admin_token": f.admin, "tls_cert_file": certPath, "tls_key_file": keyPath, "upstream_key": f.upstream, "ready_file": filepath.Join(tmp, "ready.json")}
 	if f.pod.UID == "" || f.state.ResourceVersion == "" {
 		return nil, fmt.Errorf("API generated identity unavailable")
+	}
+	if f.peer != nil {
+		// The second replica runs its own instance of the shipped admission runtime,
+		// reporting its own Pod UID and reading the same lease policy.
+		f.peerConfig = map[string]any{}
+		for k, v := range f.config {
+			f.peerConfig[k] = v
+		}
+		f.peerConfig["pod_uid"] = string(f.peer.UID)
+		f.peerConfig["ready_file"] = filepath.Join(tmp, "ready-b.json")
 	}
 	return f, nil
 }
