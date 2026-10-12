@@ -490,8 +490,21 @@ func Run(parent context.Context, o Options) (report *Report, runErr error) {
 	// reobserve asks the unchanged brain what it sees on the same pod after a branch: which facts
 	// it still mints (claimed invalidation) and what it would select now.
 	reobserve := func() {
+		uid := string(f.pod.UID)
+		report.PostTarget = "same pod " + f.pod.Namespace + "/" + f.pod.Name + " uid=" + uid
+		if report.CounterfactualAction == string(model.ActionRotate) && report.Dispatch != nil && report.Dispatch.Emitted {
+			// The evicted pod is gone; observe the workload where production would: its replacement.
+			replacement, err := replaceEvictedPod(ctx, f)
+			if err != nil {
+				report.PostObservationError = "replacement: " + err.Error()
+				return
+			}
+			uid = string(replacement.UID)
+			report.PostTarget = "harness-simulated ReplicaSet replacement " + replacement.Namespace + "/" + replacement.Name + " uid=" + uid
+			report.Probes = append(report.Probes, performProbe(ctx, rt, f.admin, "A-after-replacement", f.a), performProbe(ctx, rt, f.admin, "B-after-replacement", f.b))
+		}
 		report.PostDecisionClock = time.Now().UTC()
-		postViews, err := collectView(ctx, f, report.PostDecisionClock)
+		postViews, err := collectViewOf(ctx, f, uid, report.PostDecisionClock)
 		if err != nil {
 			report.PostObservationError = err.Error()
 			return
@@ -780,6 +793,10 @@ func performProbe(ctx context.Context, rt ready, admin, name, credential string)
 }
 
 func collectView(ctx context.Context, f *fixture, clock time.Time) ([]*model.WorkloadView, error) {
+	return collectViewOf(ctx, f, string(f.pod.UID), clock)
+}
+
+func collectViewOf(ctx context.Context, f *fixture, uid string, clock time.Time) ([]*model.WorkloadView, error) {
 	snap, err := ingest.CollectSnapshot(ctx, f.client, clock, nil, f.client)
 	if err != nil {
 		return nil, err
@@ -788,7 +805,7 @@ func collectView(ctx context.Context, f *fixture, clock time.Time) ([]*model.Wor
 		return nil, errors.New("real event inventory incomplete")
 	}
 	for _, p := range snap.Pods {
-		if p.UID == string(f.pod.UID) {
+		if p.UID == uid {
 			return []*model.WorkloadView{{Pod: p, Phase: model.PhaseWarm, Events: ingest.EvidenceEvents(snap.EventByPod[p.Namespace+"/"+p.Name]), OutcomeEvents: snap.EventByPod[p.Namespace+"/"+p.Name], ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: clock.Sub(p.StartedAt), model.VarSession: clock.Sub(p.StartedAt)}}}, nil
 		}
 	}

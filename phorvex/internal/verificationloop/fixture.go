@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -21,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -59,9 +61,12 @@ type fixture struct {
 	config                map[string]any
 }
 
+// policy/v1 is registered like the manager's client-go scheme: without it, a native
+// rotate's protobuf Eviction response (a Status) is decoded into the Eviction type and
+// fails after the API server has already accepted the eviction.
 func newScheme() (*runtime.Scheme, error) {
 	s := runtime.NewScheme()
-	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, networkingv1.AddToScheme, rbacv1.AddToScheme, v1alpha1.AddToScheme, amtdv1beta1.AddToScheme} {
+	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, networkingv1.AddToScheme, policyv1.AddToScheme, rbacv1.AddToScheme, v1alpha1.AddToScheme, amtdv1beta1.AddToScheme} {
 		if err := add(s); err != nil {
 			return nil, err
 		}
@@ -77,6 +82,30 @@ func token() (string, error) {
 	return hex.EncodeToString(raw), nil
 }
 func boolPtr(b bool) *bool { return &b }
+
+// replaceEvictedPod stands in for the ReplicaSet controller and kubelet, which envtest does
+// not run: one Ready pod from the owning ReplicaSet's template, with the same images and
+// address. The replacement mounts the same lease Secret and policy ConfigMap, exactly as a
+// controller-made replacement would.
+func replaceEvictedPod(ctx context.Context, f *fixture) (*corev1.Pod, error) {
+	owner := metav1.GetControllerOf(f.pod)
+	if owner == nil || owner.Kind != "ReplicaSet" {
+		return nil, errors.New("evicted pod has no ReplicaSet controller")
+	}
+	rs := &appsv1.ReplicaSet{}
+	if err := f.client.Get(ctx, client.ObjectKey{Namespace: f.pod.Namespace, Name: owner.Name}, rs); err != nil {
+		return nil, err
+	}
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: f.pod.Name + "-replacement", Namespace: f.pod.Namespace, Labels: rs.Spec.Template.Labels, Annotations: rs.Spec.Template.Annotations, OwnerReferences: []metav1.OwnerReference{*owner}}, Spec: rs.Spec.Template.Spec}
+	if err := f.client.Create(ctx, pod); err != nil {
+		return nil, err
+	}
+	pod.Status = corev1.PodStatus{Phase: corev1.PodRunning, PodIP: fixturePodIP, StartTime: &metav1.Time{Time: time.Now().UTC()}, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}, ContainerStatuses: f.pod.Status.ContainerStatuses}
+	if err := f.client.Status().Update(ctx, pod); err != nil {
+		return nil, err
+	}
+	return pod, nil
+}
 func hmacID(seed []byte, value string) string {
 	h := hmac.New(sha256.New, seed)
 	_, _ = h.Write([]byte(value))

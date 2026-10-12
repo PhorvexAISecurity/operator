@@ -109,6 +109,7 @@ type Report struct {
 	// branch (which facts it still mints, and what it would now select).
 	Arm                  string            `json:"arm,omitempty"`
 	CounterfactualAction string            `json:"counterfactual_action,omitempty"`
+	PostTarget           string            `json:"post_target,omitempty"`
 	PostDecisionClock    time.Time         `json:"post_decision_clock,omitempty"`
 	PostDecisions        []model.Decision  `json:"post_decisions,omitempty"`
 	PostObservationError string            `json:"post_observation_error,omitempty"`
