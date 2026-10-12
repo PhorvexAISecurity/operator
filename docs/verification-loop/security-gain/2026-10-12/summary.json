@@ -1,0 +1,664 @@
+{
+  "scenario_id": "elr-stolen-inference-credential-envtest-v1",
+  "measured_capability": "endpointLeaseReuse",
+  "baseline": {
+    "p": 1.0,
+    "k": 10,
+    "n": 10
+  },
+  "actions": {
+    "noop": {
+      "arm": "baseline",
+      "episodes": 10,
+      "episodes_with_probes": 10,
+      "verdicts": [
+        "STUDY_ARM_RECORDED"
+      ],
+      "dispatch_emitted": [
+        "None"
+      ],
+      "dispatch_notes": [
+        ""
+      ],
+      "feasible_in_decision_state": [
+        "True"
+      ],
+      "blocking_gate": [],
+      "predicted_security_gain": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "predicted_weight_on_measured_capability": 0.0,
+      "attack_reached_downstream_episode": {
+        "k": 10,
+        "n": 10,
+        "wilson": [
+          1.0,
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      },
+      "attack_probe_success": {
+        "k": 521,
+        "n": 521,
+        "wilson": [
+          1.0,
+          0.9926807252816386,
+          0.9999999999999999
+        ],
+        "note": "probes cluster within episodes; treat as descriptive"
+      },
+      "risk_reduction_vs_baseline": {
+        "estimate": 0.0,
+        "newcombe95": [
+          -0.27753279986288926,
+          0.27753279986288926
+        ]
+      },
+      "time_horizons": [
+        {
+          "from_s": 0.0,
+          "to_s": 5.0,
+          "success": 131,
+          "n": 131,
+          "wilson": [
+            1.0,
+            0.9715112929340055,
+            1.0
+          ]
+        },
+        {
+          "from_s": 5.0,
+          "to_s": 10.0,
+          "success": 127,
+          "n": 127,
+          "wilson": [
+            1.0,
+            0.9706403547062367,
+            1.0
+          ]
+        },
+        {
+          "from_s": 10.0,
+          "to_s": 20.0,
+          "success": 255,
+          "n": 255,
+          "wilson": [
+            1.0,
+            0.985159028085392,
+            1.0
+          ]
+        },
+        {
+          "from_s": 20.0,
+          "to_s": null,
+          "success": 8,
+          "n": 8,
+          "wilson": [
+            1.0,
+            0.6755924351161198,
+            1.0
+          ]
+        }
+      ],
+      "fact_invalidation": {
+        "post_observed": 10,
+        "measured_kind_cleared_and_capability_removed": 0,
+        "measured_kind_cleared_but_capability_usable": 0,
+        "measured_kind_persisting": 10,
+        "unmeasured_kinds_cleared": [],
+        "kinds_reminted_on_new_identity": [],
+        "post_weights_by_kind": {
+          "endpointLeaseReuse": 1.0654696963157442,
+          "inMemory": 0.35515656543858143,
+          "inflightRequests": 0.35515656543858143,
+          "networkIdentity": 0.28412525235086517,
+          "podIdentity": 0.35515656543858143,
+          "session": 0.21309393926314885
+        },
+        "pre_weights_by_kind": {
+          "endpointLeaseReuse": 1.061424763217218,
+          "inMemory": 0.3538082544057394,
+          "inflightRequests": 0.3538082544057394,
+          "networkIdentity": 0.2830466035245915,
+          "podIdentity": 0.3538082544057394,
+          "session": 0.2122849526434436
+        },
+        "post_selected_actions": [
+          "endpoint-lease-revoke"
+        ],
+        "post_targets": [
+          "same pod vllm/vllm-a"
+        ],
+        "post_errors": []
+      },
+      "after_replacement_attack": [],
+      "legit_failures": 0,
+      "legit_samples": 521,
+      "disruption_representative": true,
+      "legit_p95_ms_max": 80.140042,
+      "reacquisition": "not-applicable",
+      "min_censoring_window_s": 20.042672676
+    },
+    "endpoint-rotate": {
+      "arm": "cf-endpoint-rotate",
+      "episodes": 10,
+      "episodes_with_probes": 10,
+      "verdicts": [
+        "STUDY_ARM_RECORDED"
+      ],
+      "dispatch_emitted": [
+        "False"
+      ],
+      "dispatch_notes": [
+        "endpoint-rotate not performed: target declares no phorvex.ai/route-service"
+      ],
+      "feasible_in_decision_state": [
+        "True"
+      ],
+      "blocking_gate": [],
+      "predicted_security_gain": {
+        "mean": 0.0,
+        "min": 0,
+        "max": 0
+      },
+      "predicted_weight_on_measured_capability": 0.0,
+      "attack_reached_downstream_episode": {
+        "k": 10,
+        "n": 10,
+        "wilson": [
+          1.0,
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      },
+      "attack_probe_success": {
+        "k": 519,
+        "n": 519,
+        "wilson": [
+          1.0,
+          0.9926527272160881,
+          1.0
+        ],
+        "note": "probes cluster within episodes; treat as descriptive"
+      },
+      "risk_reduction_vs_baseline": {
+        "estimate": 0.0,
+        "newcombe95": [
+          -0.27753279986288926,
+          0.27753279986288926
+        ]
+      },
+      "time_horizons": [
+        {
+          "from_s": 0.0,
+          "to_s": 5.0,
+          "success": 130,
+          "n": 130,
+          "wilson": [
+            1.0,
+            0.9712984388055687,
+            1.0
+          ]
+        },
+        {
+          "from_s": 5.0,
+          "to_s": 10.0,
+          "success": 129,
+          "n": 129,
+          "wilson": [
+            1.0,
+            0.9710823800431216,
+            1.0
+          ]
+        },
+        {
+          "from_s": 10.0,
+          "to_s": 20.0,
+          "success": 255,
+          "n": 255,
+          "wilson": [
+            1.0,
+            0.985159028085392,
+            1.0
+          ]
+        },
+        {
+          "from_s": 20.0,
+          "to_s": null,
+          "success": 5,
+          "n": 5,
+          "wilson": [
+            1.0,
+            0.5655175352168251,
+            1.0
+          ]
+        }
+      ],
+      "fact_invalidation": {
+        "post_observed": 10,
+        "measured_kind_cleared_and_capability_removed": 0,
+        "measured_kind_cleared_but_capability_usable": 0,
+        "measured_kind_persisting": 10,
+        "unmeasured_kinds_cleared": [],
+        "kinds_reminted_on_new_identity": [],
+        "post_weights_by_kind": {
+          "endpointLeaseReuse": 1.065469564920175,
+          "inMemory": 0.35515652164005834,
+          "inflightRequests": 0.35515652164005834,
+          "networkIdentity": 0.28412521731204665,
+          "podIdentity": 0.35515652164005834,
+          "session": 0.21309391298403502
+        },
+        "pre_weights_by_kind": {
+          "endpointLeaseReuse": 1.0614412825696875,
+          "inMemory": 0.35381376085656246,
+          "inflightRequests": 0.35381376085656246,
+          "networkIdentity": 0.28305100868525,
+          "podIdentity": 0.35381376085656246,
+          "session": 0.2122882565139375
+        },
+        "post_selected_actions": [
+          "endpoint-lease-revoke"
+        ],
+        "post_targets": [
+          "same pod vllm/vllm-a"
+        ],
+        "post_errors": []
+      },
+      "after_replacement_attack": [],
+      "legit_failures": 0,
+      "legit_samples": 519,
+      "disruption_representative": true,
+      "legit_p95_ms_max": 106.997625,
+      "reacquisition": "not-applicable",
+      "min_censoring_window_s": 20.048049175
+    },
+    "rotate": {
+      "arm": "cf-rotate",
+      "episodes": 10,
+      "episodes_with_probes": 10,
+      "verdicts": [
+        "STUDY_ARM_RECORDED"
+      ],
+      "dispatch_emitted": [
+        "True"
+      ],
+      "dispatch_notes": [
+        "Pod Eviction admission accepted with policy grace cap 30s and effective grace 30s; old-process termination and replacement unconfirmed"
+      ],
+      "feasible_in_decision_state": [
+        "False"
+      ],
+      "blocking_gate": [
+        "availability: ready=1-1 < minAvailable=1"
+      ],
+      "predicted_security_gain": {
+        "mean": 0.9198730999723885,
+        "min": 0.919564805678383,
+        "max": 0.9203022964722007
+      },
+      "predicted_weight_on_measured_capability": 0.0,
+      "attack_reached_downstream_episode": {
+        "k": 10,
+        "n": 10,
+        "wilson": [
+          1.0,
+          0.7224672001371107,
+          0.9999999999999999
+        ]
+      },
+      "attack_probe_success": {
+        "k": 523,
+        "n": 523,
+        "wilson": [
+          1.0,
+          0.9927085107742034,
+          1.0
+        ],
+        "note": "probes cluster within episodes; treat as descriptive"
+      },
+      "risk_reduction_vs_baseline": {
+        "estimate": 0.0,
+        "newcombe95": [
+          -0.27753279986288926,
+          0.27753279986288926
+        ]
+      },
+      "time_horizons": [
+        {
+          "from_s": 0.0,
+          "to_s": 5.0,
+          "success": 131,
+          "n": 131,
+          "wilson": [
+            1.0,
+            0.9715112929340055,
+            1.0
+          ]
+        },
+        {
+          "from_s": 5.0,
+          "to_s": 10.0,
+          "success": 129,
+          "n": 129,
+          "wilson": [
+            1.0,
+            0.9710823800431216,
+            1.0
+          ]
+        },
+        {
+          "from_s": 10.0,
+          "to_s": 20.0,
+          "success": 256,
+          "n": 256,
+          "wilson": [
+            1.0,
+            0.9852161435741286,
+            0.9999999999999999
+          ]
+        },
+        {
+          "from_s": 20.0,
+          "to_s": null,
+          "success": 7,
+          "n": 7,
+          "wilson": [
+            1.0,
+            0.6456695649333126,
+            1.0
+          ]
+        }
+      ],
+      "fact_invalidation": {
+        "post_observed": 10,
+        "measured_kind_cleared_and_capability_removed": 0,
+        "measured_kind_cleared_but_capability_usable": 10,
+        "measured_kind_persisting": 0,
+        "unmeasured_kinds_cleared": [],
+        "kinds_reminted_on_new_identity": [
+          "inMemory",
+          "inflightRequests",
+          "networkIdentity",
+          "podIdentity",
+          "session"
+        ],
+        "post_weights_by_kind": {
+          "inMemory": 6.959409469234192e-05,
+          "inflightRequests": 6.959409469234192e-05,
+          "networkIdentity": 5.5675275753873537e-05,
+          "podIdentity": 6.959409469234192e-05,
+          "session": 4.175645681540515e-05
+        },
+        "pre_weights_by_kind": {
+          "endpointLeaseReuse": 1.061392038429679,
+          "inMemory": 0.35379734614322633,
+          "inflightRequests": 0.35379734614322633,
+          "networkIdentity": 0.28303787691458104,
+          "podIdentity": 0.35379734614322633,
+          "session": 0.2122784076859358
+        },
+        "post_selected_actions": [
+          "noop"
+        ],
+        "post_targets": [
+          "harness-simulated ReplicaSet replacement vllm/vllm-a-replacement"
+        ],
+        "post_errors": []
+      },
+      "after_replacement_attack": [
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "success",
+        "success"
+      ],
+      "legit_failures": 0,
+      "legit_samples": 523,
+      "disruption_representative": false,
+      "legit_p95_ms_max": 101.276625,
+      "reacquisition": "not-applicable",
+      "min_censoring_window_s": 20.04570051
+    },
+    "endpoint-lease-revoke": {
+      "arm": "intervention",
+      "episodes": 10,
+      "episodes_with_probes": 10,
+      "verdicts": [
+        "LOCAL_RUNTIME_DEFENDED"
+      ],
+      "dispatch_emitted": [
+        "True"
+      ],
+      "dispatch_notes": [
+        "exact caller lease revoked after durable policy CAS and all original/current proxy drain readback"
+      ],
+      "feasible_in_decision_state": [
+        "True"
+      ],
+      "blocking_gate": [],
+      "predicted_security_gain": {
+        "mean": 1.061604436933634,
+        "min": 1.061304533525197,
+        "max": 1.0618502284506648
+      },
+      "predicted_weight_on_measured_capability": 1.061604436933634,
+      "attack_reached_downstream_episode": {
+        "k": 0,
+        "n": 10,
+        "wilson": [
+          0.0,
+          0.0,
+          0.2775327998628892
+        ]
+      },
+      "attack_probe_success": {
+        "k": 0,
+        "n": 532,
+        "wilson": [
+          0.0,
+          0.0,
+          0.007169021279444473
+        ],
+        "note": "probes cluster within episodes; treat as descriptive"
+      },
+      "risk_reduction_vs_baseline": {
+        "estimate": 1.0,
+        "newcombe95": [
+          0.6075093504305242,
+          1.0
+        ]
+      },
+      "time_horizons": [
+        {
+          "from_s": 0.0,
+          "to_s": 5.0,
+          "success": 0,
+          "n": 138,
+          "wilson": [
+            0.0,
+            1.734723475976807e-18,
+            0.027082764465572957
+          ]
+        },
+        {
+          "from_s": 5.0,
+          "to_s": 10.0,
+          "success": 0,
+          "n": 128,
+          "wilson": [
+            0.0,
+            0.0,
+            0.029136956273508416
+          ]
+        },
+        {
+          "from_s": 10.0,
+          "to_s": 20.0,
+          "success": 0,
+          "n": 255,
+          "wilson": [
+            0.0,
+            8.673617379884035e-19,
+            0.014840971914608158
+          ]
+        },
+        {
+          "from_s": 20.0,
+          "to_s": null,
+          "success": 0,
+          "n": 11,
+          "wilson": [
+            0.0,
+            0.0,
+            0.2588329669680317
+          ]
+        }
+      ],
+      "fact_invalidation": {
+        "post_observed": 10,
+        "measured_kind_cleared_and_capability_removed": 10,
+        "measured_kind_cleared_but_capability_usable": 0,
+        "measured_kind_persisting": 0,
+        "unmeasured_kinds_cleared": [],
+        "kinds_reminted_on_new_identity": [],
+        "post_weights_by_kind": {
+          "inMemory": 0.35525316076945057,
+          "inflightRequests": 0.35525316076945057,
+          "networkIdentity": 0.28420252861556045,
+          "podIdentity": 0.35525316076945057,
+          "session": 0.21315189646167032
+        },
+        "pre_weights_by_kind": {
+          "endpointLeaseReuse": 1.061604436933634,
+          "inMemory": 0.35386814564454466,
+          "inflightRequests": 0.35386814564454466,
+          "networkIdentity": 0.2830945165156357,
+          "podIdentity": 0.35386814564454466,
+          "session": 0.21232088738672678
+        },
+        "post_selected_actions": [
+          "noop"
+        ],
+        "post_targets": [
+          "same pod vllm/vllm-a"
+        ],
+        "post_errors": []
+      },
+      "after_replacement_attack": [],
+      "legit_failures": 0,
+      "legit_samples": 532,
+      "disruption_representative": true,
+      "legit_p95_ms_max": 92.070958,
+      "reacquisition": "censored",
+      "min_censoring_window_s": 20.046272926
+    }
+  },
+  "ranking": {
+    "actions": [
+      "endpoint-lease-revoke",
+      "rotate",
+      "endpoint-rotate",
+      "noop"
+    ],
+    "predicted_security_gain": [
+      1.061604436933634,
+      0.9198730999723885,
+      0.0,
+      0.0
+    ],
+    "measured_risk_reduction": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "kendall_tau_b": 0.7745966692414834,
+    "spearman": 0.8164965809277261,
+    "sufficient_data": false,
+    "note": "One scenario and 4 actions; a rank coefficient over so few points is descriptive only. Statistical rank agreement: NOT VALIDATED.",
+    "feasible_only": {
+      "actions": [
+        "endpoint-lease-revoke",
+        "endpoint-rotate",
+        "noop"
+      ],
+      "predicted_security_gain": [
+        1.061604436933634,
+        0.0,
+        0.0
+      ],
+      "measured_risk_reduction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "kendall_tau_b": 1.0,
+      "spearman": 1.0000000000000002
+    },
+    "pairs": [
+      {
+        "predicted_higher": "endpoint-lease-revoke",
+        "predicted_lower": "rotate",
+        "measured_rr_higher": 1.0,
+        "measured_rr_lower": 0.0,
+        "both_feasible": false,
+        "verdict": "agree"
+      },
+      {
+        "predicted_higher": "endpoint-lease-revoke",
+        "predicted_lower": "endpoint-rotate",
+        "measured_rr_higher": 1.0,
+        "measured_rr_lower": 0.0,
+        "both_feasible": true,
+        "verdict": "agree"
+      },
+      {
+        "predicted_higher": "endpoint-lease-revoke",
+        "predicted_lower": "noop",
+        "measured_rr_higher": 1.0,
+        "measured_rr_lower": 0.0,
+        "both_feasible": true,
+        "verdict": "agree"
+      },
+      {
+        "predicted_higher": "rotate",
+        "predicted_lower": "endpoint-rotate",
+        "measured_rr_higher": 0.0,
+        "measured_rr_lower": 0.0,
+        "both_feasible": false,
+        "verdict": "tie-in-outcome"
+      },
+      {
+        "predicted_higher": "rotate",
+        "predicted_lower": "noop",
+        "measured_rr_higher": 0.0,
+        "measured_rr_lower": 0.0,
+        "both_feasible": false,
+        "verdict": "tie-in-outcome"
+      }
+    ]
+  },
+  "regret": {
+    "selected": [
+      "endpoint-lease-revoke"
+    ],
+    "best_tested_feasible": "endpoint-lease-revoke",
+    "feasible_tested": [
+      "endpoint-lease-revoke",
+      "endpoint-rotate",
+      "noop"
+    ],
+    "regret_risk_reduction": 0.0
+  },
+  "episodes_total": 40,
+  "episodes_usable": 40,
+  "unusable": []
+}

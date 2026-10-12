@@ -28,6 +28,7 @@ func main() {
 	flag.DurationVar(&o.HoldInterval, "hold-interval", 250*time.Millisecond, "Interval between hold probes")
 	flag.DurationVar(&o.MaxLegitimateLatency, "max-legitimate-latency", 2*time.Second, "Local legitimate probe latency ceiling")
 	flag.BoolVar(&o.SkipDispatch, "skip-dispatch", false, "Negative control: verify attack remains landed when native dispatch is withheld (exits nonzero)")
+	flag.StringVar(&o.Arm, "arm", "", "Security Gain validation branch after the decision: intervention (default path), baseline, cf-rotate or cf-endpoint-rotate")
 	flag.BoolVar(&o.UnavailableAuthority, "unavailable-authority", false, "Negative control: remove private policy before effect probes; a 503 outage must fail (exits nonzero)")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

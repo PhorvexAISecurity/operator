@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -90,5 +91,74 @@ func TestPrivateAPIAndRuntimeIntegration(t *testing.T) {
 	same, err := ReplayFile(filepath.Join(o.OutputDir, "replay-input.gob"), r.Decisions)
 	if err != nil || !same {
 		t.Fatalf("persisted snapshot replay: %v %v", same, err)
+	}
+}
+
+func TestStudyArmsAreCheckedBeforeAnyEnvironmentStarts(t *testing.T) {
+	base := Options{GitSHA: "label", Timeout: time.Second, HoldDuration: time.Second, HoldInterval: time.Second, MaxLegitimateLatency: time.Second}
+	for name, o := range map[string]Options{
+		"unknown arm":                 {Arm: "cf-quarantine"},
+		"baseline with skip-dispatch": {Arm: ArmBaseline, SkipDispatch: true},
+		"counterfactual with outage":  {Arm: ArmCFRotate, UnavailableAuthority: true},
+	} {
+		o.GitSHA, o.Timeout, o.HoldDuration, o.HoldInterval, o.MaxLegitimateLatency = base.GitSHA, base.Timeout, base.HoldDuration, base.HoldInterval, base.MaxLegitimateLatency
+		o.OutputDir = filepath.Join(t.TempDir(), "evidence")
+		if _, err := Run(t.Context(), o); err == nil {
+			t.Fatalf("%s: accepted", name)
+		}
+		if _, err := os.Stat(o.OutputDir); !os.IsNotExist(err) {
+			t.Fatalf("%s: evidence directory created before validation", name)
+		}
+	}
+}
+
+// A rotate counterfactual evicts the pod, but credential A lives in the lease Secret and policy,
+// not the pod: it stays usable, while the brain's view of the replacement no longer mints the
+// lease-reuse fact. Gated like the integration test above.
+func TestStudyArmsRecordOutcomesWithoutAsserting(t *testing.T) {
+	if os.Getenv("VERIFICATION_LOOP_INTEGRATION") != "1" {
+		t.Skip("requires explicitly enabled isolated API/runtime integration")
+	}
+	root, err := filepath.Abs("../../..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, arm := range []string{ArmBaseline, ArmCFRotate} {
+		o := Options{RepoRoot: root, OutputDir: filepath.Join(t.TempDir(), arm), Python: os.Getenv("VERIFICATION_LOOP_PYTHON"), Assets: os.Getenv("KUBEBUILDER_ASSETS"), GitSHA: "integration-source-label", Timeout: 2 * time.Minute, HoldDuration: 300 * time.Millisecond, HoldInterval: 100 * time.Millisecond, MaxLegitimateLatency: 2 * time.Second, Arm: arm}
+		r, err := Run(t.Context(), o)
+		if err != nil || r.Verdict != "STUDY_ARM_RECORDED" || r.Arm != arm || len(r.PostDecisions) == 0 {
+			t.Fatalf("%s: verdict=%s err=%v post=%d %s", arm, r.Verdict, err, len(r.PostDecisions), r.PostObservationError)
+		}
+		attacks := 0
+		for _, p := range r.Probes {
+			if p.Name == "A-study-hold" || p.Name == "A-after-replacement" {
+				attacks++
+				if err := ValidateProbe(p, true, o.MaxLegitimateLatency); err != nil {
+					t.Fatalf("%s: credential A should stay usable: %v", arm, err)
+				}
+			}
+		}
+		if attacks == 0 {
+			t.Fatalf("%s: no attack probes recorded", arm)
+		}
+		var lease bool
+		for _, d := range r.PostDecisions {
+			if d.Trace == nil {
+				continue
+			}
+			for _, f := range d.Trace.Facts {
+				lease = lease || strings.HasSuffix(f.FactKey, "|endpointLeaseReuse")
+			}
+		}
+		switch arm {
+		case ArmBaseline:
+			if r.Dispatch != nil || !lease {
+				t.Fatalf("baseline: dispatch=%+v leaseFact=%v", r.Dispatch, lease)
+			}
+		case ArmCFRotate:
+			if r.Dispatch == nil || !r.Dispatch.Emitted || r.Dispatch.Handler != string(model.ActionRotate) || !strings.HasPrefix(r.PostTarget, "harness-simulated ReplicaSet replacement") || lease {
+				t.Fatalf("cf-rotate: dispatch=%+v target=%q leaseFact=%v", r.Dispatch, r.PostTarget, lease)
+			}
+		}
 	}
 }

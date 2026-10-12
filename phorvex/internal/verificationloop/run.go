@@ -85,6 +85,12 @@ func Run(parent context.Context, o Options) (report *Report, runErr error) {
 	if o.Timeout <= 0 || o.HoldDuration <= 0 || o.HoldInterval <= 0 || o.MaxLegitimateLatency <= 0 {
 		return report, errors.New("timeouts and hold durations must be positive")
 	}
+	if !ValidArm(o.Arm) {
+		return report, fmt.Errorf("unknown arm %q", o.Arm)
+	}
+	if o.Arm != "" && o.Arm != ArmIntervention && (o.SkipDispatch || o.UnavailableAuthority) {
+		return report, errors.New("a study arm cannot be combined with a negative control")
+	}
 	if err := os.MkdirAll(o.OutputDir, 0750); err != nil {
 		return report, err
 	}
@@ -481,6 +487,94 @@ func Run(parent context.Context, o Options) (report *Report, runErr error) {
 	if viewObs.EventUID != string(event.UID) {
 		return report, errors.New("selected observation event identity differs")
 	}
+	// reobserve asks the unchanged brain what it sees on the same pod after a branch: which facts
+	// it still mints (claimed invalidation) and what it would select now.
+	reobserve := func() {
+		uid := string(f.pod.UID)
+		report.PostTarget = "same pod " + f.pod.Namespace + "/" + f.pod.Name + " uid=" + uid
+		if report.CounterfactualAction == string(model.ActionRotate) && report.Dispatch != nil && report.Dispatch.Emitted {
+			// The evicted pod is gone; observe the workload where production would: its replacement.
+			replacement, err := replaceEvictedPod(ctx, f)
+			if err != nil {
+				report.PostObservationError = "replacement: " + err.Error()
+				return
+			}
+			uid = string(replacement.UID)
+			report.PostTarget = "harness-simulated ReplicaSet replacement " + replacement.Namespace + "/" + replacement.Name + " uid=" + uid
+			report.Probes = append(report.Probes, performProbe(ctx, rt, f.admin, "A-after-replacement", f.a), performProbe(ctx, rt, f.admin, "B-after-replacement", f.b))
+		}
+		report.PostDecisionClock = time.Now().UTC()
+		postViews, err := collectViewOf(ctx, f, uid, report.PostDecisionClock)
+		if err != nil {
+			report.PostObservationError = err.Error()
+			return
+		}
+		if len(postViews) == 0 {
+			report.PostObservationError = "no view of the target pod after the branch"
+			return
+		}
+		post, _, _, err := choose(ctx, native, postViews, pol, report.PostDecisionClock)
+		if err != nil {
+			report.PostObservationError = err.Error()
+			return
+		}
+		report.PostDecisions = post
+	}
+	if o.Arm == ArmBaseline || o.Arm == ArmCFRotate || o.Arm == ArmCFEndpointRotate {
+		// Security Gain validation branch: the same fresh episode up to the brain's decision,
+		// then a different (or no) action. Probes are recorded, never asserted.
+		report.Arm = o.Arm
+		record := func(name, credential string) {
+			report.Probes = append(report.Probes, performProbe(ctx, rt, f.admin, name, credential))
+		}
+		if o.Arm == ArmBaseline {
+			stage("study-baseline-no-dispatch", true, "The brain selected "+string(chosen.Action)+"; this branch withholds every action")
+		} else {
+			action := model.ActionRotate
+			if o.Arm == ArmCFEndpointRotate {
+				action = model.ActionEndpointRotate
+			}
+			report.CounterfactualAction = string(action)
+			cf := req
+			cf.Action = action
+			cf.OperationID = req.OperationID + "-counterfactual-" + string(action)
+			cf.Reason = "Security Gain validation counterfactual: " + string(action) + " instead of the selected " + string(chosen.Action)
+			// The selected action carries no rotate grace cap; a native rotate requires the
+			// selecting policy's own effective cap, exactly as the manager would resolve it.
+			if graceCap, capErr := f.policy.Spec.EffectiveMaxGracePeriodSeconds(); capErr == nil {
+				cf.MaxGracePeriodSeconds = graceCap
+			}
+			report.DispatchStartedAt = time.Now().UTC()
+			result, dispatchErr := native.Actuate(ctx, cf)
+			report.DispatchFinishedAt = time.Now().UTC()
+			report.Dispatch = &result
+			detail := fmt.Sprintf("emitted=%v handler=%s", result.Emitted, result.Handler)
+			if dispatchErr != nil {
+				detail += "; " + dispatchErr.Error()
+			}
+			stage("study-counterfactual-dispatch", dispatchErr == nil && result.Emitted, detail)
+		}
+		holdStart := time.Now()
+		for {
+			record("A-study-hold", f.a)
+			record("B-study-hold", f.b)
+			if time.Since(holdStart) >= o.HoldDuration {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return report, ctx.Err()
+			case <-time.After(o.HoldInterval):
+			}
+		}
+		report.HoldElapsedMS = float64(time.Since(holdStart)) / float64(time.Millisecond)
+		reobserve()
+		if err = writeAPIArtifacts(ctx, f, report, o.OutputDir); err != nil {
+			return report, err
+		}
+		report.Verdict = "STUDY_ARM_RECORDED"
+		return report, nil
+	}
 	if o.SkipDispatch {
 		if _, err = probe("A-selected-but-dispatch-withheld", f.a, true); err != nil {
 			return report, err
@@ -592,6 +686,10 @@ func Run(parent context.Context, o Options) (report *Report, runErr error) {
 		}
 	}
 	report.HoldElapsedMS = float64(time.Since(holdStart)) / float64(time.Millisecond)
+	if o.Arm == ArmIntervention {
+		report.Arm = ArmIntervention
+	}
+	reobserve()
 	stage("behavioral-denial-and-local-legitimate-hold", true, fmt.Sprintf("A gets exact 401 unauthorized with no downstream operation; B succeeds within %.0f ms; actual hold %.0f ms", float64(o.MaxLegitimateLatency)/float64(time.Millisecond), report.HoldElapsedMS))
 	if err = writeAPIArtifacts(ctx, f, report, o.OutputDir); err != nil {
 		return report, err
@@ -695,6 +793,10 @@ func performProbe(ctx context.Context, rt ready, admin, name, credential string)
 }
 
 func collectView(ctx context.Context, f *fixture, clock time.Time) ([]*model.WorkloadView, error) {
+	return collectViewOf(ctx, f, string(f.pod.UID), clock)
+}
+
+func collectViewOf(ctx context.Context, f *fixture, uid string, clock time.Time) ([]*model.WorkloadView, error) {
 	snap, err := ingest.CollectSnapshot(ctx, f.client, clock, nil, f.client)
 	if err != nil {
 		return nil, err
@@ -703,7 +805,7 @@ func collectView(ctx context.Context, f *fixture, clock time.Time) ([]*model.Wor
 		return nil, errors.New("real event inventory incomplete")
 	}
 	for _, p := range snap.Pods {
-		if p.UID == string(f.pod.UID) {
+		if p.UID == uid {
 			return []*model.WorkloadView{{Pod: p, Phase: model.PhaseWarm, Events: ingest.EvidenceEvents(snap.EventByPod[p.Namespace+"/"+p.Name]), OutcomeEvents: snap.EventByPod[p.Namespace+"/"+p.Name], ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: clock.Sub(p.StartedAt), model.VarSession: clock.Sub(p.StartedAt)}}}, nil
 		}
 	}
