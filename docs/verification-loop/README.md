@@ -141,3 +141,7 @@ deployment behavior.
 This is the first vertical slice of the proposed verification-loop architecture.
 Customer scanning, attack generation, iterative adaptation, new actuator design,
 learning proposals and production promotion remain separate work.
+
+The [Security Gain validation study](security-gain/README.md) reuses this case with
+`-arm` branches (baseline, counterfactual `rotate` and `endpoint-rotate`) to compare
+the brain's predicted Security Gain with measured outcomes.
