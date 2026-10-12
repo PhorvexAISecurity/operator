@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import openpyxl
 
 from exporter import COST_FILE, GATES_FILE, optional, source_rows, export_workbooks, typed_links, template_paths
-from runner import Campaign, Capture, Console, HTTPFailure, TransportError, dependency_locks, launch_body, drift, controller_pods, readiness_error, error_details, catalogue, selection, main, execution_blocked_reason
+from runner import Campaign, CaptureHub, LAG_NOTICE, Console, HTTPFailure, TransportError, dependency_locks, launch_body, drift, controller_pods, readiness_error, error_details, catalogue, selection, main, execution_blocked_reason
 
 
 def fixture():
@@ -286,17 +286,58 @@ class RunnerTests(unittest.TestCase):
             logged = [json.loads(line) for line in (out / 'failures.jsonl').read_text().splitlines()]
             self.assertTrue(any(entry['caseId'] == 'foothold' for entry in logged))
 
+    def stream(self, body, namespaces=('voice',), env=None):
+        directory = tempfile.mkdtemp(); out = Path(directory); (out / 'raw').mkdir()
+        self.addCleanup(lambda: __import__('shutil').rmtree(directory, ignore_errors=True))
+        class Response(io.BytesIO):
+            headers = {'Content-Type': 'text/event-stream'}
+        class Fake:
+            def open(self, path, **kwargs):
+                Fake.path = path; return Response(body)
+        with patch.dict('os.environ', env or {}):
+            hub = CaptureHub(Fake(), list(namespaces), out, lambda *_: None); hub.run()
+        return hub, out, Fake.path
+
+    @staticmethod
+    def event(value, kind=None):
+        return ((b'event: ' + kind.encode() + b'\n') if kind else b'') + b'data: ' + json.dumps(value).encode() + b'\n\n'
+
     def test_sse_cap_is_explicit_gap(self):
-        with tempfile.TemporaryDirectory() as directory:
-            out = Path(directory); (out / 'raw').mkdir()
-            class Response(io.BytesIO):
-                headers = {'Content-Type': 'text/event-stream'}
-            class Fake:
-                def open(self, path, **kwargs): return Response(b': connected\n\ndata: {}\n\n')
-            with patch.dict('os.environ', {'BENCHMARK_CAPTURE_MAX_BYTES': '10'}):
-                capture = Capture(Fake(), 'voice', out, lambda *_: None); capture.run()
-            self.assertEqual(capture.result['records'], 0)
-            self.assertTrue(any('byte cap' in gap['reason'] for gap in capture.result['gaps']))
+        hub, _, _ = self.stream(b': connected\n\n' + self.event({'namespace': 'voice', 'tenant': 'voice', 'kind': 'phorvex.decision'}),
+                                env={'BENCHMARK_CAPTURE_MAX_BYTES': '10'})
+        capture = hub.captures['voice']
+        self.assertEqual(capture.result['records'], 0)
+        self.assertTrue(any('byte cap' in gap['reason'] for gap in capture.result['gaps']))
+
+    def test_one_stream_is_split_by_namespace_and_other_tenants_are_ignored(self):
+        body = b': connected\n\n' + b''.join(self.event({'namespace': ns, 'tenant': ns, 'kind': 'phorvex.decision', 'decisionTrace': {}})
+                                              for ns in ('vllm', 'voice', 'mcp', 'vllm'))
+        hub, out, path = self.stream(body, namespaces=('vllm', 'voice'))
+        self.assertEqual(path, '/api/live?tail=1')  # one stream for the whole campaign
+        self.assertEqual((hub.captures['vllm'].result['records'], hub.captures['voice'].result['records']), (2, 1))
+        self.assertEqual(hub.captures['vllm'].result['fullTraceRecords'], 2)
+        self.assertEqual(hub.result['otherTenantRecords'], 1)
+        self.assertEqual(len((out / 'raw' / 'audit-vllm.jsonl').read_text().splitlines()), 2)
+        self.assertNotIn(b'"mcp"', (out / 'raw' / 'sse-all.txt').read_bytes())
+        # The stream's end is still a gap for every application: no silent reconnection.
+        self.assertTrue(all(any('Unexpected stream end' in g['reason'] for g in c.result['gaps']) for c in hub.captures.values()))
+        self.assertTrue(all(c.ready.is_set() for c in hub.captures.values()))
+
+    def test_scan_budget_notice_is_lag_but_other_notices_are_gaps(self):
+        lag = self.event({'message': LAG_NOTICE}, kind='notice')
+        hub, _, _ = self.stream(b': connected\n\n' + lag + lag + self.event({'namespace': 'voice', 'tenant': 'voice'}), namespaces=('voice', 'vllm'))
+        voice = hub.captures['voice']
+        self.assertEqual((hub.result['lagNotices'], voice.result['lagNotices'], voice.result['records']), (2, 2, 1))
+        self.assertFalse(any('Server SSE notice' in g['reason'] for g in voice.result['gaps']))
+        hub, _, _ = self.stream(b': connected\n\n' + self.event({'message': 'Audit generation lost before reconnect; refresh retained history.'}, kind='notice'),
+                                namespaces=('voice', 'vllm'))
+        for capture in hub.captures.values():
+            self.assertTrue(any('Audit generation lost' in g['reason'] for g in capture.result['gaps']))
+
+    def test_mismatched_tenant_is_a_gap_for_that_application(self):
+        hub, _, _ = self.stream(b': connected\n\n' + self.event({'namespace': 'voice', 'tenant': 'litellm'}), namespaces=('voice',))
+        self.assertTrue(any('disagree' in g['reason'] for g in hub.captures['voice'].result['gaps']))
+        self.assertEqual(hub.captures['voice'].result['records'], 0)
 
     def test_exact_identity_does_not_take_latest(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -392,16 +433,20 @@ class RunnerTests(unittest.TestCase):
             pin = {'apiVersion': {}, 'operator': 'fixture-1', 'console': 'fixture-1', 'deployments': [],
                    'pods': [], 'namespaces': [], 'policies': [], 'errors': []}
             class FakeCapture:
-                def __init__(self, *_):
+                def __init__(self):
                     self.result = {'gaps': [], 'records': 0, 'bytes': 0}
                     self.ready = threading.Event(); self.ready.set()
+            class FakeHub:
+                def __init__(self, console, namespaces, *_):
+                    self.captures = {ns: FakeCapture() for ns in namespaces}
+                    self.result = {'bytes': 0}
                     self.thread = SimpleNamespace(start=lambda: None)
                 def close(self): pass
             request = {'id': 'run', 'applications': ['voice'], 'mode': 'serial', 'cases': list(reversed(rows[:2]))}
             campaign = Campaign(request, out, SimpleNamespace(request=lambda *_: self.fail('Preflight blocks all launches')))
             with patch('runner.snapshot', return_value=pin), \
                  patch('runner.catalogue', return_value={'applications': [{'namespace': 'voice', 'live': rows}], 'errors': []}), \
-                 patch('runner.Capture', FakeCapture):
+                 patch('runner.CaptureHub', FakeHub):
                 manifest = campaign.run()
             self.assertEqual([c['endpoint'] for c in campaign.cases], ['/api/fixture-b', '/api/fixture-a', '/api/fixture-c'])
             self.assertEqual((manifest['total'], manifest['completed']), (3, 3))
@@ -419,13 +464,17 @@ class RunnerTests(unittest.TestCase):
             pin = {'apiVersion': {}, 'operator': '0.4.216', 'console': '0.4.216', 'deployments': [],
                    'pods': [], 'namespaces': [], 'policies': [], 'errors': []}
             class FakeCapture:
-                def __init__(self, *_):
+                def __init__(self):
                     self.result = {'gaps': [], 'records': 0, 'bytes': 0}
                     self.ready = threading.Event(); self.ready.set()
+            class FakeHub:
+                def __init__(self, console, namespaces, *_):
+                    self.captures = {ns: FakeCapture() for ns in namespaces}
+                    self.result = {'bytes': 0}
                     self.thread = SimpleNamespace(start=lambda: None)
                 def close(self): pass
             campaign = Campaign({'id': 'run', 'applications': ['voice'], 'mode': 'serial'}, out, None)
-            with patch('runner.snapshot', return_value=pin), patch('runner.catalogue', return_value={'applications': [{'live': [case]}], 'errors': []}), patch('runner.Capture', FakeCapture):
+            with patch('runner.snapshot', return_value=pin), patch('runner.catalogue', return_value={'applications': [{'live': [case]}], 'errors': []}), patch('runner.CaptureHub', FakeHub):
                 manifest = campaign.run()
             self.assertEqual(manifest['status'], 'incomplete')
             self.assertFalse(manifest['preflight']['passed'])

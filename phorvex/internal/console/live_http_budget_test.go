@@ -27,6 +27,7 @@ type liveHTTPFixture struct {
 	workPeak      atomic.Int32
 	writeFailures atomic.Int32
 	workServer    atomic.Pointer[Server]
+	manifests     atomic.Int32 // producer manifest reads: one per source poll
 }
 
 func newLiveHTTPFixture(t *testing.T) *liveHTTPFixture {
@@ -51,6 +52,9 @@ func newLiveHTTPFixture(t *testing.T) *liveHTTPFixture {
 					break
 				}
 			}
+		}
+		if r.URL.Path == "/v1/manifest" {
+			f.manifests.Add(1)
 		}
 		active := f.sourceActive.Add(1)
 		defer f.sourceActive.Add(-1)

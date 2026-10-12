@@ -407,59 +407,114 @@ def drift(before, after):
     return changes
 
 
+# The Console sends this notice when one poll reaches its scan budget, and resumes from the
+# committed offset on the next poll (console live.go streamAuditFile): records arrive late, none
+# are skipped. It is recorded as lag, not as a capture gap.
+LAG_NOTICE = 'Stream scan budget reached; continuing on the next tick.'
+
+
 class Capture:
-    def __init__(self, console, ns, out, event):
-        self.console, self.ns, self.out, self.event = console, ns, Path(out), event
-        self.ready, self.stop = threading.Event(), threading.Event()
-        self.max_bytes = int(os.environ.get('BENCHMARK_CAPTURE_MAX_BYTES', str(256 * 1024 * 1024)))
-        self.result = {'startedAt': utc(), 'bytes': 0, 'records': 0, 'fullTraceRecords': 0, 'gaps': []}
-        self.response = None
-        self.thread = threading.Thread(target=self.run, daemon=True)
+    """One application's share of the campaign audit stream: its records file, readiness and gaps."""
+    def __init__(self, ns, out, event, max_bytes):
+        self.ns, self.out, self.event, self.max_bytes = ns, Path(out), event, max_bytes
+        self.ready = threading.Event()
+        self.result = {'startedAt': utc(), 'bytes': 0, 'records': 0, 'fullTraceRecords': 0, 'lagNotices': 0, 'gaps': []}
+        self.capped = False
 
     def gap(self, reason):
         self.result['gaps'].append({'time': utc(), 'reason': reason})
         self.event('warn', self.ns + ': capture gap: ' + reason)
 
+
+class CaptureHub:
+    """ONE Console audit stream for every selected application, split locally by namespace.
+
+    The Console scans the whole audit (every tenant) for each open stream, serves at most two stream
+    reads at a time, and ends a stream whose read waits past its budget without a notice. One stream
+    per application multiplied that scanning and starved streams ("Unexpected stream end" with zero
+    records). A single stream scans each byte once. A stream-level gap is a gap for every
+    application, because none of their records can then be shown complete."""
+
+    def __init__(self, console, namespaces, out, event):
+        self.console, self.out, self.event = console, Path(out), event
+        max_bytes = int(os.environ.get('BENCHMARK_CAPTURE_MAX_BYTES', str(256 * 1024 * 1024)))
+        self.captures = {ns: Capture(ns, out, event, max_bytes) for ns in namespaces}
+        self.stop = threading.Event()
+        self.result = {'startedAt': utc(), 'bytes': 0, 'otherTenantRecords': 0, 'lagNotices': 0}
+        self.response = None
+        self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def gap(self, reason):
+        for capture in self.captures.values(): capture.gap(reason)
+
+    def deliver(self, kind, value, event_bytes, raw, files):
+        if kind and kind != 'message':
+            if isinstance(value, dict) and value.get('message') == LAG_NOTICE:
+                self.result['lagNotices'] += 1
+                for capture in self.captures.values(): capture.result['lagNotices'] += 1
+            else:
+                self.gap('Server SSE notice: ' + json.dumps(value, ensure_ascii=False))
+            raw.write(event_bytes)
+            return
+        capture = self.captures.get(value.get('namespace')) if isinstance(value, dict) else None
+        if capture is None:
+            self.result['otherTenantRecords'] += 1  # another tenant the identity may read; not this campaign's
+            return
+        if value.get('tenant') != capture.ns:
+            capture.gap('Record namespace and tenant disagree')
+            return
+        if capture.capped:
+            return
+        capture.result['bytes'] += len(event_bytes)
+        if capture.result['bytes'] > capture.max_bytes:
+            capture.capped = True
+            capture.gap('Capture byte cap reached')
+            return
+        raw.write(event_bytes)
+        files[capture.ns].write(json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n')
+        files[capture.ns].flush(); capture.result['records'] += 1
+        if isinstance(value.get('decisionTrace'), dict): capture.result['fullTraceRecords'] += 1
+
     def run(self):
+        files = {}
         try:
-            self.response = self.console.open('/api/live?tenant=' + self.ns + '&namespace=' + self.ns + '&tail=1', timeout=60)
+            self.response = self.console.open('/api/live?tail=1', timeout=60)
             if 'text/event-stream' not in self.response.headers.get('Content-Type', ''):
                 raise TransportError('Console did not return SSE')
-            data, kind = [], ''
-            with (self.out / 'raw' / ('audit-' + self.ns + '.jsonl')).open('w') as records, \
-                 (self.out / 'raw' / ('sse-' + self.ns + '.txt')).open('wb') as raw:
+            for ns in self.captures:
+                files[ns] = (self.out / 'raw' / ('audit-' + ns + '.jsonl')).open('w')
+            data, kind, event_bytes = [], '', b''
+            with (self.out / 'raw' / 'sse-all.txt').open('wb') as raw:
                 while not self.stop.is_set():
                     line = self.response.readline(8 * 1024 * 1024 + 1)
                     if not line:
                         if not self.stop.is_set(): self.gap('Unexpected stream end; no silent reconnection')
                         break
                     self.result['bytes'] += len(line)
-                    if self.result['bytes'] > self.max_bytes:
-                        self.gap('Capture byte cap reached'); break
                     if len(line) > 8 * 1024 * 1024:
                         self.gap('SSE line limit reached'); break
-                    raw.write(line)
-                    if not self.ready.is_set(): self.result['readyAt'] = utc()
-                    self.ready.set()
-                    line = line.decode('utf-8').rstrip('\r\n')
-                    if line.startswith('event:'): kind = line[6:].strip()
-                    elif line.startswith('data:'): data.append(line[5:].lstrip())
-                    elif not line:
+                    if not self.result.get('readyAt'):
+                        self.result['readyAt'] = utc()
+                        for capture in self.captures.values():
+                            capture.result['readyAt'] = self.result['readyAt']; capture.ready.set()
+                    event_bytes += line
+                    text = line.decode('utf-8').rstrip('\r\n')
+                    if text.startswith('event:'): kind = text[6:].strip()
+                    elif text.startswith('data:'): data.append(text[5:].lstrip())
+                    elif not text:
                         if data:
                             try:
-                                value = json.loads('\n'.join(data))
-                                if kind and kind != 'message': self.gap('Server SSE notice: ' + json.dumps(value, ensure_ascii=False))
-                                elif value.get('namespace') != self.ns or value.get('tenant') != self.ns: self.gap('Scoped stream returned another namespace/tenant')
-                                else:
-                                    records.write(json.dumps(value, ensure_ascii=False, separators=(',', ':')) + '\n')
-                                    records.flush(); self.result['records'] += 1
-                                    if isinstance(value.get('decisionTrace'), dict): self.result['fullTraceRecords'] += 1
+                                self.deliver(kind, json.loads('\n'.join(data)), event_bytes, raw, files)
                             except (ValueError, UnicodeError, AttributeError): self.gap('SSE event parse failed')
-                        data, kind = [], ''
+                        elif event_bytes.strip():
+                            raw.write(event_bytes)  # comments such as ": connected"
+                        data, kind, event_bytes = [], '', b''
         except (TransportError, OSError, ValueError) as error:
             if not self.stop.is_set(): self.gap(str(error))
         finally:
+            for handle in files.values(): handle.close()
             self.result['finishedAt'] = utc()
+            for capture in self.captures.values(): capture.result['finishedAt'] = self.result['finishedAt']
 
     def close(self):
         self.stop.set()
@@ -680,11 +735,11 @@ class Campaign:
             self.errors.append('Preflight rejected: ' + preflight_error)
             self.event('error', self.errors[-1])
         self.progress()
-        for ns in self.request['applications']:
-            capture = self.captures[ns] = Capture(self.console, ns, self.out, self.event)
-            capture.thread.start()
+        hub = CaptureHub(self.console, self.request['applications'], self.out, self.event)
+        self.captures = hub.captures
+        hub.thread.start()
         for capture in self.captures.values(): capture.ready.wait(timeout=20)
-        self.event('info', 'Observation streams started; running ' + self.request['mode'] + ' catalogue with shared producer locks')
+        self.event('info', 'Observation stream started; running ' + self.request['mode'] + ' catalogue with shared producer locks')
         if self.request['mode'] == 'serial':
             self.app_group(all_cases)
         else:
@@ -705,7 +760,7 @@ class Campaign:
             self.errors.append('Scheduling stopped: ' + self.global_failure)
         if self.poisoned:
             self.errors.append('Quarantined shared producers (campaign continued; see failures/): ' + ', '.join(sorted(self.poisoned)))
-        for capture in self.captures.values(): capture.close()
+        hub.close()
         gaps = [dict(namespace=ns, **gap) for ns, c in self.captures.items() for gap in c.result['gaps']]
         incomplete = bool(self.global_failure or self.errors or gaps or any(c['status'] == 'incomplete' for c in self.cases))
         status = 'cancelled' if self.stopping() else 'incomplete' if incomplete else 'completed'
@@ -713,7 +768,7 @@ class Campaign:
                     'startedAt': self.started, 'finishedAt': utc(), 'total': self.total, 'completed': self.completed, 'selection': self.selection,
                     'version': before, 'versionAfter': after, 'versionDrift': changed,
                     'preflight': {'passed': not preflight_error, 'error': preflight_error or None},
-                    'capture': {ns: capture.result for ns, capture in self.captures.items()}, 'captureGaps': gaps,
+                    'capture': {ns: capture.result for ns, capture in self.captures.items()}, 'captureStream': hub.result, 'captureGaps': gaps,
                     'errors': self.errors, 'artifacts': [],
                     'limitations': ['Only original typed producer outcomes support their declared scopes.',
                                     'Realized CNorm/CFlow unavailable without compatible measurement definition and window.',
