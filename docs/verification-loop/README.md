@@ -143,5 +143,6 @@ Customer scanning, attack generation, iterative adaptation, new actuator design,
 learning proposals and production promotion remain separate work.
 
 The [Security Gain validation study](security-gain/README.md) reuses this case with
-`-arm` branches (baseline, counterfactual `rotate` and `endpoint-rotate`) to compare
-the brain's predicted Security Gain with measured outcomes.
+`-arm` branches (baseline, the brain's selection, and counterfactual actions) and adds
+`-scenario token` and `combined`, where the attacker also holds the target Pod's bound API
+token. It compares the brain's predicted Security Gain with measured outcomes.

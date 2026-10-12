@@ -1,0 +1,415 @@
+{
+  "seed": 20261012,
+  "blocks": 10,
+  "hold": "20s",
+  "git_sha": "2f7a14ec",
+  "scenario": "combined",
+  "arms": [
+    "baseline",
+    "selected",
+    "cf-rotate",
+    "cf-endpoint-rotate"
+  ],
+  "episodes": [
+    {
+      "order": 1,
+      "block": 1,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "001-b01-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.1
+    },
+    {
+      "order": 2,
+      "block": 1,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "002-b01-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.0
+    },
+    {
+      "order": 3,
+      "block": 1,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "003-b01-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.3
+    },
+    {
+      "order": 4,
+      "block": 1,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "004-b01-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.7
+    },
+    {
+      "order": 5,
+      "block": 2,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "005-b02-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.5
+    },
+    {
+      "order": 6,
+      "block": 2,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "006-b02-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.6
+    },
+    {
+      "order": 7,
+      "block": 2,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "007-b02-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.0
+    },
+    {
+      "order": 8,
+      "block": 2,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "008-b02-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.2
+    },
+    {
+      "order": 9,
+      "block": 3,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "009-b03-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 35.0
+    },
+    {
+      "order": 10,
+      "block": 3,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "010-b03-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.0
+    },
+    {
+      "order": 11,
+      "block": 3,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "011-b03-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.3
+    },
+    {
+      "order": 12,
+      "block": 3,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "012-b03-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.8
+    },
+    {
+      "order": 13,
+      "block": 4,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "013-b04-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.8
+    },
+    {
+      "order": 14,
+      "block": 4,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "014-b04-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.8
+    },
+    {
+      "order": 15,
+      "block": 4,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "015-b04-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.9
+    },
+    {
+      "order": 16,
+      "block": 4,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "016-b04-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.4
+    },
+    {
+      "order": 17,
+      "block": 5,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "017-b05-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.7
+    },
+    {
+      "order": 18,
+      "block": 5,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "018-b05-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 35.5
+    },
+    {
+      "order": 19,
+      "block": 5,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "019-b05-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.7
+    },
+    {
+      "order": 20,
+      "block": 5,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "020-b05-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.3
+    },
+    {
+      "order": 21,
+      "block": 6,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "021-b06-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.8
+    },
+    {
+      "order": 22,
+      "block": 6,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "022-b06-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.3
+    },
+    {
+      "order": 23,
+      "block": 6,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "023-b06-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.6
+    },
+    {
+      "order": 24,
+      "block": 6,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "024-b06-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.9
+    },
+    {
+      "order": 25,
+      "block": 7,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "025-b07-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.1
+    },
+    {
+      "order": 26,
+      "block": 7,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "026-b07-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.9
+    },
+    {
+      "order": 27,
+      "block": 7,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "027-b07-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 31.9
+    },
+    {
+      "order": 28,
+      "block": 7,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "028-b07-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.3
+    },
+    {
+      "order": 29,
+      "block": 8,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "029-b08-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.8
+    },
+    {
+      "order": 30,
+      "block": 8,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "030-b08-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.2
+    },
+    {
+      "order": 31,
+      "block": 8,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "031-b08-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 32.7
+    },
+    {
+      "order": 32,
+      "block": 8,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "032-b08-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.6
+    },
+    {
+      "order": 33,
+      "block": 9,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "033-b09-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.5
+    },
+    {
+      "order": 34,
+      "block": 9,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "034-b09-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 35.0
+    },
+    {
+      "order": 35,
+      "block": 9,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "035-b09-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 35.1
+    },
+    {
+      "order": 36,
+      "block": 9,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "036-b09-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.1
+    },
+    {
+      "order": 37,
+      "block": 10,
+      "scenario": "combined",
+      "arm": "cf-endpoint-rotate",
+      "dir": "037-b10-combined-cf-endpoint-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.1
+    },
+    {
+      "order": 38,
+      "block": 10,
+      "scenario": "combined",
+      "arm": "cf-rotate",
+      "dir": "038-b10-combined-cf-rotate",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.2
+    },
+    {
+      "order": 39,
+      "block": 10,
+      "scenario": "combined",
+      "arm": "selected",
+      "dir": "039-b10-combined-selected",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 34.8
+    },
+    {
+      "order": 40,
+      "block": 10,
+      "scenario": "combined",
+      "arm": "baseline",
+      "dir": "040-b10-combined-baseline",
+      "exit_code": 0,
+      "verdict": "STUDY_ARM_RECORDED",
+      "wall_seconds": 33.7
+    }
+  ]
+}

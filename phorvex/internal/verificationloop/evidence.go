@@ -32,22 +32,51 @@ type Options struct {
 	UnavailableAuthority bool // Delete the private lease policy after dispatch to test outage honesty.
 	// Arm selects a Security Gain validation branch after the brain's decision. "" and
 	// "intervention" keep the reviewed defended path. "baseline" withholds every action;
-	// "cf-rotate" and "cf-endpoint-rotate" dispatch that competing action instead of the
-	// selected one. Study arms record probes without asserting an outcome.
+	// "selected" dispatches whatever the brain selected; the "cf-" arms dispatch that
+	// competing action instead. Study arms record probes without asserting an outcome.
 	Arm string
+	// Scenario selects the attacker's stolen capabilities. "" and "lease" keep the reviewed
+	// one-replica credential case. "token" steals the target Pod's bound API token and
+	// "combined" steals both; these run two replicas, so rotate passes the availability floor,
+	// and accept only study arms.
+	Scenario string
 }
 
 // Study arms. Counterfactual actions run only in this private environment.
 const (
-	ArmIntervention     = "intervention"
-	ArmBaseline         = "baseline"
-	ArmCFRotate         = "cf-rotate"
-	ArmCFEndpointRotate = "cf-endpoint-rotate"
+	ArmIntervention          = "intervention"
+	ArmBaseline              = "baseline"
+	ArmSelected              = "selected"
+	ArmCFRotate              = "cf-rotate"
+	ArmCFEndpointRotate      = "cf-endpoint-rotate"
+	ArmCFEndpointLeaseRevoke = "cf-endpoint-lease-revoke"
 )
 
+const (
+	ScenarioLease    = "lease"
+	ScenarioToken    = "token"
+	ScenarioCombined = "combined"
+)
+
+// CapabilityPodBoundToken marks a probe that replays the stolen Pod-bound bearer at the
+// private API server. Probes without a capability exercise the lease admission runtime.
+const CapabilityPodBoundToken = "pod-bound-token"
+
 func ValidArm(arm string) bool {
+	return arm == "" || arm == ArmIntervention || studyArm(arm)
+}
+
+func studyArm(arm string) bool {
 	switch arm {
-	case "", ArmIntervention, ArmBaseline, ArmCFRotate, ArmCFEndpointRotate:
+	case ArmBaseline, ArmSelected, ArmCFRotate, ArmCFEndpointRotate, ArmCFEndpointLeaseRevoke:
+		return true
+	}
+	return false
+}
+
+func ValidScenario(scenario string) bool {
+	switch scenario {
+	case "", ScenarioLease, ScenarioToken, ScenarioCombined:
 		return true
 	}
 	return false
@@ -67,6 +96,9 @@ type Probe struct {
 	BeforeCalls       int             `json:"before_calls"`
 	AfterCalls        int             `json:"after_calls"`
 	Error             string          `json:"error,omitempty"`
+	// Capability is empty for lease-runtime probes; Replica names the runtime that served them.
+	Capability string `json:"capability,omitempty"`
+	Replica    string `json:"replica,omitempty"`
 }
 
 type Stage struct {
@@ -108,6 +140,8 @@ type Report struct {
 	// instead of the selected one, and the brain's re-observation of the same pod after the
 	// branch (which facts it still mints, and what it would now select).
 	Arm                  string            `json:"arm,omitempty"`
+	Scenario             string            `json:"scenario,omitempty"`
+	StudyAction          string            `json:"study_action,omitempty"`
 	CounterfactualAction string            `json:"counterfactual_action,omitempty"`
 	PostTarget           string            `json:"post_target,omitempty"`
 	PostDecisionClock    time.Time         `json:"post_decision_clock,omitempty"`
