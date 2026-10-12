@@ -1,301 +1,321 @@
-# Security Gain validation: endpoint-lease credential reuse (2026-10-12)
+# Security Gain validation: endpoint-lease and pod-rotation families (2026-10-12)
 
 ## Verdict
 
-**Overall: NOT VALIDATED.** Only one scenario and one workload were measured, with one
-instantiated attacker capability. This is not enough evidence to validate Security Gain
-as a general proxy for defensive effect.
+**Overall: NOT VALIDATED as a general proxy.** We measured three scenarios on one workload,
+two action families, and two attacker capabilities that we actually stole and replayed:
 
-Within the scenario that was measured:
+- an inference lease credential;
+- a Pod-bound API token.
 
-- **Credential reuse: consistent.** The score credits endpoint-lease-revoke for the
-  stolen-credential fact. Revoking removed that capability in 10 of 10 episodes. The brain
-  selected the only tested feasible action that reduced risk, so regret was 0.
-- **Measured defect: false fact invalidation.** After a pod `rotate`, the brain stops
-  minting the credential-reuse fact in 10 of 10 episodes. The stolen credential still
-  works in every probe. On the replacement pod, the attacker-hold estimate also resets to
-  about 0.
-- **Rotate's credit: unvalidated.** Rotate's predicted gain of 0.92 comes entirely from
-  facts that this fixture does not instantiate as attacker capabilities. It is neither
-  confirmed nor refuted.
+That is not enough to validate Security Gain in general. Within the measured scenarios we found:
 
-Formula, cover map, λ/β and gates were unchanged. No production actuation. Evidence:
-[2026-10-12/](2026-10-12/) ([candidates.csv](2026-10-12/candidates.csv),
-[summary.md](2026-10-12/summary.md), [summary.json](2026-10-12/summary.json)). Method:
-[README.md](README.md).
+| Finding | Status | Evidence |
+|---|---|---|
+| Revoking the endpoint lease removes the lease capability and clears its fact | **Consistent** | 20/20 episodes |
+| Rotating the Pod removes the stolen token and clears its fact | **Consistent, but delayed** | 20/20 episodes; the token kept working for a median of 10 s after the eviction |
+| Rotating the Pod clears the lease fact while the lease still works | **False fact invalidation** | 20/20 episodes |
+| Ranking among the actions the brain is allowed to select | **Consistent** | regret 0 in every scenario |
+| Ranking between rotate and endpoint-lease-revoke on raw predicted gain | **Not supported** | rotate's predicted gain is 1.9× higher; measured effect is a tie (one capability each) |
+| Response to the stolen token when it is the only stolen capability | **Brain does nothing** | rotate is blocked by the cost ceiling; gate regret 1.0 |
+| Residual access after the selected action | **Not addressed** | the token stays usable 10/10; the brain still sees it and selects noop |
+
+The formula, cover map, λ/β and gates were unchanged. No production actuation.
+
+- Evidence: [2026-10-12/](2026-10-12/): [candidates.csv](2026-10-12/candidates.csv)
+  (440 rows), [summary.md](2026-10-12/summary.md), [summary.json](2026-10-12/summary.json).
+- Method: [README.md](README.md).
 
 ## What was tested
 
-| Item | Value |
-|---|---|
-| Scenario | `elr-stolen-inference-credential-envtest-v1`: a stolen inference credential A is reused against a single-replica vLLM-shaped workload. Legitimate credential B is also live. |
-| Environment | Private envtest API server (real API identities), unchanged `ucw-recon` brain, native actuator, shipped Python admission boundary, synthetic downstream with a call counter. No kubelet or containers. Single-tick shadow decision. |
-| Attack evidence | `TEST_INJECTED` SecurityEvent, fixture-declared trusted creator |
-| Arms (10 episodes each, interleaved, seed 20261012) | intervention (`endpoint-lease-revoke`), baseline (no action), cf-rotate, cf-endpoint-rotate |
-| Hold window | 20.0–20.4 s per episode, about 52 probes each for credentials A and B |
-| Source / binary | commit `2bbd8e91`; binary sha256 `d906691e…4076bb`; raw bundle sha256 `927c0be9…9b26cd`, held outside the repository. Per-artifact hashes are in [episode-artifacts.sha256](2026-10-12/episode-artifacts.sha256). |
-| Economics | Fixture policy: `legacy-runtime-lambda-v1`, λ = 0.6. It enters only the net gain, not the Security Gain under test. Production now runs independent β. |
+| | lease | token | combined |
+|---|---|---|---|
+| Stolen capability | Lease credential A | Target Pod's bound API token | Both |
+| Replicas | 1 | 2 | 2 |
+| Arms (10 episodes each, interleaved, seed 20261012) | intervention, baseline, cf-rotate, cf-endpoint-rotate | baseline, cf-rotate, cf-endpoint-rotate | baseline, selected, cf-rotate, cf-endpoint-rotate |
+| Episodes / source commit | 40 / `2bbd8e91` | 30 / `2f7a14ec` | 40 / `2f7a14ec` |
 
-**Which outcome counts.** Attack success means the protected downstream operation
-actually ran: HTTP 200 and the call counter advanced. Attack denial means an exact 401
-with zero downstream effect. No probe in this study was indeterminate.
+**Environment.**
+- Private envtest API server, with real API identities and real bound-token validation.
+- The unchanged `ucw-recon` brain makes one shadow decision on a single tick.
+- The native actuator dispatches the action.
+- The shipped Python admission runtime runs once per replica, in front of a synthetic
+  downstream with a call counter.
+- No kubelet or containers. Hold window 20.0–20.6 s.
+- The binaries and raw bundles are held outside the repository. Per-artifact hashes are in
+  [episode-artifacts.sha256](2026-10-12/episode-artifacts.sha256).
 
-## The decision state
+**What counts as a capability being usable.**
 
-The state was identical in all 40 episodes, apart from clock jitter.
-
-| Input | Value |
-|---|---|
-| asset_value | 1.6 |
-| pHold | 0.3336–0.3339 |
-| stage urgency | 0.3250 |
-| dispersion | 1 |
-| provenance | 1 |
-
-**Facts.** Each weight is `AssetValue × pHold × (0.5 + 0.5·urgency) × m_kind`, with an
-extra ×3 for the observation-bound fact
-([ucw.go:79-86](../../../phorvex/internal/recon/ucw.go#L79-L86),
-[ucw.go:256](../../../phorvex/internal/recon/ucw.go#L256)):
-
-| Fact kind | Weight | Covered by |
+| Capability | Usable | Denied |
 |---|---|---|
-| endpointLeaseReuse | 1.0614 (×3) | endpoint-lease-revoke |
-| inMemory | 0.3538 | rotate |
-| podIdentity | 0.3538 | rotate |
-| session | 0.2123 | rotate, kv-reset*, kv-migrate-invalidate* |
-| inflightRequests | 0.3538 | request-drain* |
-| networkIdentity | 0.2830 | quarantine* |
+| Lease | HTTP 200 and the downstream counter advanced | Exact 401 with no downstream call |
+| Token | The API server authenticated the replayed bearer (201) | Its 401 |
 
-\* Not enabled in the fixture policy, so not candidates.
+- A capability is usable at the end if any probe in the last 3 s succeeded.
+- 0 of 17,889 probes were indeterminate.
+- Every episode's own pre-decision probe confirmed the stolen material worked (110/110).
 
-**Candidates:**
+**Economics and gates.**
+- The fixture policy uses `legacy-runtime-lambda-v1` with λ = 0.6. That affects only the net
+  gain, not the Security Gain under test.
+- The cost ceiling (C_hi) is 1.2, the same as in all nine production policies.
 
-| Action | Feasible | Cover | Predicted SG (gross) | Net | Selected |
-|---|---|---|---|---|---|
-| endpoint-lease-revoke | yes | endpointLeaseReuse | 1.0616 | 0.98 | 40/40 |
-| rotate | **no**: availability, ready=1-1 < minAvailable=1 | inMemory, podIdentity, session | 0.9199 | — | 0 |
-| endpoint-rotate | yes | none | 0 | −0.06 | 0 |
-| noop | yes | — | 0 | 0 | 0 |
+## Decision states
+
+Each scenario's state is identical across its episodes apart from clock jitter. Asset value
+is 1.6, stage urgency 0.325 and dispersion 1 everywhere.
+
+pHold:
+
+| Scenario | pHold |
+|---|---|
+| lease | 0.334 |
+| token | 0.500 |
+| combined | 0.556 |
+
+Fact weights. Attack-attributed facts carry the ×3 multiplier, marked †.
+
+| Fact kind | Covered by | lease | token | combined |
+|---|---|---|---|---|
+| endpointLeaseReuse † | endpoint-lease-revoke | 1.061 | — | 1.768 |
+| podBoundKubeAPIAuthPotential † | rotate | — | 1.591 | 1.768 |
+| inMemory, podIdentity | rotate | 0.354 each | 0.530 each | 0.589 each |
+| session | rotate, kv-reset* | 0.212 | 0.318 | 0.354 |
+| inflightRequests / networkIdentity | request-drain* / quarantine* | 0.354 / 0.283 | 0.530 / 0.424 | 0.589 / 0.471 |
+
+\* Not enabled in the fixture policy.
+
+Candidates:
+
+| Scenario | endpoint-lease-revoke | rotate | endpoint-rotate | Brain selected |
+|---|---|---|---|---|
+| lease | SG 1.06, net 0.98, selectable | SG 0.92, **blocked: availability** (1 replica) | SG 0, net −0.06 | endpoint-lease-revoke, 40/40 |
+| token | blocked: no lease observation | SG 2.97, **blocked: C_hi** (1.60 > 1.20) | SG 0, net −0.06 | **noop**, 30/30 |
+| combined | SG 1.77, net 1.69, selectable | SG 3.30, **blocked: C_hi** (1.60 > 1.20) | SG 0, net −0.06 | endpoint-lease-revoke, 40/40 |
+
+Rotate's cost inputs are C_norm 1.0 and C_flow 0.7, so E[cost] is 0.82 and its worst-case
+cost C_hi is 1.60. endpoint-lease-revoke costs 0.13.
 
 ## Results
 
-### Outcomes by action
+Each cell gives the number of episodes in which the capability was still usable at the end of
+the window, then the risk reduction against the scenario's baseline with a Newcombe 95% CI.
+Removal time is measured from the end of dispatch.
 
-This measures whether credential A reached the protected downstream after the branch.
+| Scenario | Action | Lease capability | Token capability | Total risk reduction |
+|---|---|---|---|---|
+| lease | endpoint-lease-revoke | 0/10 → **1.000** [0.608, 1]; removed at 0.0 s | — | 1.0 |
+| lease | rotate (cf) | 10/10 → 0.000 | — | 0.0 |
+| lease | endpoint-rotate (cf, refused: no route-service) | 10/10 → 0.000 | — | 0.0 |
+| token | rotate (cf) | — | 0/10 → **1.000** [0.608, 1]; removed at **9.9 / 10.1 / 10.2 s** (min / median / max) | 1.0 |
+| token | endpoint-rotate (cf, refused) | — | 10/10 → 0.000 | 0.0 |
+| token | noop (= brain's choice) | — | 10/10 → 0.000 | 0.0 |
+| combined | **endpoint-lease-revoke (selected)** | 0/10 → **1.000**; removed at 0.0 s | **10/10 → 0.000** | 1.0 |
+| combined | rotate (cf) | **10/10 → 0.000** | 0/10 → **1.000**; removed at 9.6 / 9.8 / 10.0 s | 1.0 |
+| combined | endpoint-rotate (cf, refused) | 10/10 → 0.000 | 10/10 → 0.000 | 0.0 |
 
-| Action (arm) | Episodes where the attack still reached downstream | Attack probes that succeeded | Risk reduction vs baseline, Newcombe 95% | Legitimate B failures | Reacquisition / effect duration |
-|---|---|---|---|---|---|
-| none (baseline) | 10/10 [0.72, 1] | 521/521 | — | 0/521 | n/a |
-| endpoint-lease-revoke | **0/10 [0, 0.28]** | **0/532 [0, 0.007]** | **1.000 [0.608, 1.000]** | 0/532 in hold, 34/34 during dispatch | none observed: censored at ≥ 20.0 s in all 10 |
-| rotate (counterfactual) | 10/10 | 523/523, and 10/10 after the replacement | 0.000 [−0.278, 0.278] | UNAVAILABLE (no kubelet) | n/a: capability never removed |
-| endpoint-rotate (counterfactual) | 10/10 | 519/519 | 0.000 [−0.278, 0.278] | 0/519 | n/a: the actuator refused (no `phorvex.ai/route-service`) |
+**The ~10 s token lag.** After rotate evicts the Pod, the API server keeps accepting the stolen
+bearer until its authentication cache expires:
+- token: 130/130 accepted in 0–5 s and 129/131 in 5–10 s, then 0/278 from 10 s on;
+- combined: 131/131, then 119/129, then 0/276.
 
-**endpoint-lease-revoke timing:**
+No removed capability came back within the window: reacquisition is censored at ≥ 19.9 s for the
+lease and ≥ 10.1 s for the token.
 
-| Measure | Min | Median | Max |
-|---|---|---|---|
-| Native dispatch | 211 ms | 363 ms | 600 ms |
-| From the attack-landed probe to the first confirmed denial | 661 ms | 977 ms | 2,076 ms |
-
-Legitimate p95 latency was 64.5 ms with ELR and 59.9 ms in the baseline, measured locally
-from a single worker.
-
-**Time horizon.** The attack was denied at every horizon after ELR: 0/138 in 0–5 s,
-0/128 in 5–10 s, 0/255 in 10–20 s and 0/11 at 20 s or later. Every other arm succeeded at
-every horizon. Horizons beyond about 20 s and multi-tick behaviour were not measured.
+**Legitimate traffic.** Credential B had 0 failures in every arm, on every serving replica.
+- Under rotate, only the surviving replica was measured.
+- The single-replica rotate outage is **UNAVAILABLE**, because there is no kubelet.
 
 ### Fact invalidation vs capability
 
-This compares the brain's re-observation after the branch with the probes.
+This compares the brain's re-observation after the branch with the oracle. It is judged on
+attack-attributed facts.
 
-| Branch | endpointLeaseReuse after the branch | Credential A | Classification | Brain would select next |
-|---|---|---|---|---|
-| endpoint-lease-revoke | not minted, 10/10 | denied | **true invalidation**, 10/10 | noop |
-| rotate, observed on the replacement pod | not minted, 10/10 | usable | **false invalidation**, 10/10 | noop |
-| endpoint-rotate (refused) | minted (1.07) | usable | consistent | endpoint-lease-revoke |
-| baseline | minted (1.07) | usable | consistent | endpoint-lease-revoke |
+| Scenario / action | Lease | Token | Brain selects next |
+|---|---|---|---|
+| lease / endpoint-lease-revoke | true invalidation 10/10 | — | noop |
+| lease / rotate | **false invalidation 10/10** | — | noop |
+| token / rotate | — | true invalidation 10/10 (the capability lags the fact by ~10 s) | noop |
+| combined / endpoint-lease-revoke | true 10/10 | **fact persists, capability usable, 10/10** | **noop** |
+| combined / rotate | **false 10/10** | true 10/10 | noop |
+| any / noop or endpoint-rotate | persists, consistent | persists, consistent | endpoint-lease-revoke if the lease fact is present, else noop |
 
-The mechanism is visible in the code:
+There were no uncredited removals: no capability was removed while its fact persisted.
 
-- **Why ELR's invalidation is sound.** It is grounded in the same state that enforces
-  admission. The ingester binds the reuse observation only while both observed credential
-  HMACs are still in the live lease allowlist
-  ([endpoint_lease.go:66-73](../../../phorvex/internal/ingest/endpoint_lease.go#L66-L73)).
-  The revoke removes A from that allowlist, and the Python boundary enforces the same
-  allowlist.
-- **Why rotate clears the fact falsely.** The observation binds to the target **pod UID**
-  ([endpoint_lease.go:39-47](../../../phorvex/internal/ingest/endpoint_lease.go#L39-L47)).
-  The fact key is `scope|ns/pod|kind`
-  ([facts.go:169-174](../../../phorvex/internal/recon/facts.go#L169-L174)). The capability
-  itself lives in the namespace-wide lease Secret and policy. The replacement pod gets a
-  new UID and name, so the fact disappears while credential A remains allowed.
-- **Why the replacement's weights reset.** On the replacement pod the brain re-mints
-  inMemory, podIdentity, session, networkIdentity and inflightRequests, but at weight
-  about 0.0001. pHold is damped by `1 − exp(−exposure / RecoverScale)`, where exposure is
-  the pod's age ([hazard.go:523-525](../../../phorvex/internal/killchain/hazard.go#L523-L525)).
-  A rotation therefore resets the model's attacker-hold estimate to zero, whatever happened
-  to capabilities held outside the pod.
+**Why the invalidations come out as they do:**
+
+- **Lease, after endpoint-lease-revoke (true).** The lease fact binds only while both observed
+  HMACs are in the live allowlist
+  ([endpoint_lease.go:66-73](../../../phorvex/internal/ingest/endpoint_lease.go#L66-L73)). The
+  revoke removes A from that same allowlist.
+- **Token, after rotate (true).** The token fact needs a trusted event targeting the Pod's UID
+  ([pod_bound_api_auth_event.go:13-27](../../../phorvex/internal/model/pod_bound_api_auth_event.go#L13-L27)).
+  The bearer itself is bound to that UID.
+- **Lease, after rotate (false).** The observation binds to the Pod's UID
+  ([endpoint_lease.go:39-47](../../../phorvex/internal/ingest/endpoint_lease.go#L39-L47)),
+  while the capability lives in the namespace-wide Secret and policy.
+- **Structural facts after rotate.** The replacement Pod re-mints them at weight about
+  0.0001. pHold restarts with Pod age
+  ([hazard.go:523-525](../../../phorvex/internal/killchain/hazard.go#L523-L525)).
 
 ### Ranking and regret
 
-These are matched comparisons from the same initial state, not a simultaneous measurement
-of the four branches.
+These compare matched episodes from the same initial state per scenario, not a single
+simultaneous decision.
 
-| Comparison | Result |
-|---|---|
-| All four actions | Kendall τ-b 0.775, Spearman ρ 0.816. Descriptive only (n = 4 actions, one scenario). |
-| Feasible actions only (ELR, endpoint-rotate, noop) | τ-b 1.0, ρ 1.0 |
-| Pairwise reversals | None. Rotate vs endpoint-rotate and rotate vs noop are predicted strict (0.92 vs 0) but tie in measured outcome. |
-| Regret against the best tested feasible action | 0.000 |
+| Scenario | Predicted SG order | Measured order | Selectable-only Kendall τ-b | Regret vs best selectable | Gate regret vs best tested |
+|---|---|---|---|---|---|
+| lease | ELR 1.06 > rotate 0.92 > ER = noop 0 | ELR 1 > rotate = ER = noop 0 | 1.0 | 0 | 0 |
+| token | rotate 2.97 > ER = noop 0 | rotate 1 > ER = noop 0 | — (no variance) | 0 | **1.0** |
+| combined | **rotate 3.30 > ELR 1.77** > ER = noop 0 | **rotate 1 = ELR 1** > ER = noop 0 | 1.0 | 0 | 0 |
 
-**How weak this test is.** Both feasible alternatives had a predicted gain of exactly 0.
-Any score that gives endpoint-lease-revoke a positive value would rank this state
-correctly.
+ELR = endpoint-lease-revoke, ER = endpoint-rotate. There were no strict pairwise reversals.
+The rotate > ELR pair in the combined scenario is a predicted strict order that measures as a
+tie. All rank coefficients are descriptive (3–4 actions per scenario).
+
+**If the C_hi gate were lifted (estimate, not measured).** In the combined state, rotate's net
+under the fixture economics would be 3.30 − 0.6·0.82 = 2.81, against endpoint-lease-revoke's
+1.69. The brain would then pick rotate. Rotate leaves the lease usable, and the brain's next
+observation would no longer see it.
 
 ## Answers to the Math/OR questions
 
 ### 1. Does the current score accurately represent actual fact invalidation?
 
-**Partly.** It is accurate only for the observation-bound fact.
+**For attack-attributed facts, mostly. With two exceptions it does not.**
 
-- **Confirmed true invalidation.** For `endpointLeaseReuse`, the cover map's claim
-  (endpoint-lease-revoke invalidates it) matched the measurements in 10/10 episodes. The
-  fact is grounded in the same allowlist that the admission boundary enforces.
-- **False invalidations.** The score's fact state also produces false invalidations. Any
-  action that changes pod identity clears every pod-keyed fact, including capabilities
-  that do not live in the pod.
-- **False-positive rate.** For rotate it was 10/10 on the measured capability. No
-  claimed-but-usable case occurred for an action's *own* cover keys on the measured
-  capability, because rotate does not claim this key.
-- **False negatives.** No action measurably disrupted credential A without being credited.
-- **Unmeasured cover keys.** Rotate's claimed invalidation of inMemory, podIdentity and
-  session could not be checked. This fixture has no in-memory implant, token theft or
-  session hijack to remove.
+- **True invalidations (40/40).** Whenever the action removed the capability, the brain
+  stopped minting that fact:
+  - endpoint-lease-revoke on the lease: 20/20;
+  - rotate on the token: 20/20.
+- **Exception 1: false invalidation.** Rotate changes the Pod's identity, and that alone clears
+  the lease fact, while the lease works on every replica (20/20).
+- **Exception 2: timing.** The score treats rotate's effect on the token as immediate, but the
+  capability survives about 10 s.
+- **Structural facts.** inMemory, podIdentity, session and the others remain unmeasured. The
+  fixture has no implant or session to remove. They are re-minted on the replacement Pod at
+  near-zero weight.
 
 ### 2. Does invalidating more weighted facts lead to greater attack disruption?
 
-**Not in this scenario, and not validated in general.**
+**No, not in these scenarios. Not validated in general.**
 
-| Action | Facts covered | Weighted coverage | Measured disruption of the attack path |
+| Scenario | rotate | endpoint-lease-revoke | Measured |
 |---|---|---|---|
-| rotate | 3 | 0.92 | 0 |
-| endpoint-lease-revoke | 1 | 1.06 | complete |
+| combined | covers 4 facts, SG 3.30 | covers 1 fact, SG 1.77 | each removes exactly one capability |
+| lease | covers 3 facts, SG 0.92 | — | rotate removes nothing |
 
-A sum of weights treats facts as interchangeable units of value. Attack disruption here
-depends on whether the specific capability on the attack path is removed.
-
-ELR ranked first only because of the hand-set ×3 dominance multiplier on
-observation-bound facts. The margin is 3·w₀ − 2.6·w₀ = 0.4·w₀ ≈ 0.14. A rotate-covered
-fact worth 0.4·w₀ or more, or a lower multiplier, would reverse the predicted ranking.
-That would happen once rotate is feasible, for example with two or more replicas. The
-measured effect of rotate on this attack path would still be zero.
+- Rotate's extra predicted value (1.53 of its 3.30) comes from structural facts that carry no
+  measured attacker capability.
+- Disruption follows whether the covered fact is a capability the attacker actually holds, not
+  how much summed weight is covered.
+- The ×3 attribution multiplier is what keeps the lease-scenario ranking right. Its margin
+  there is 0.4·w₀ ≈ 0.14.
 
 ### 3. Which action families show the largest mismatch?
 
-- **Pod identity (`rotate`):**
-  - predicted 0.92, which is 87% of ELR's gain;
-  - measured risk reduction 0.000 [−0.28, 0.28] on the instantiated capability;
-  - it also corrupts the brain's fact state (false invalidation and a pHold reset).
+**Pod rotation (`rotate`).**
+- In the lease scenario it is predicted at 87% of endpoint-lease-revoke's gain but measured at
+  0, and it falsely clears the lease fact.
+- In the combined scenario it is predicted at 1.87× endpoint-lease-revoke but measured equal,
+  with a ~10 s effect lag that is not modelled.
 
-  Because rotate's credit is for different facts, this is unvalidated credit plus a
-  measured side effect, not a demonstrated reversal on the same capability.
-- **Endpoint route (`endpoint-rotate`):** predicted 0, measured 0. Consistent; the native
-  handler also refuses this target.
-- **Endpoint lease (`endpoint-lease-revoke`):** predicted 1.06, measured complete
-  interruption. Consistent.
-- **Not tested:** kv-reset, request-drain, quarantine, guardrail-rotate,
-  crm-refund-revoke and the GPU and model families. These are **NOT VALIDATED**.
+**Consistent families.** Endpoint lease (endpoint-lease-revoke): predicted and measured agree
+in both scenarios. Endpoint route (endpoint-rotate): predicted 0, measured 0; the actuator
+refused it for lack of a route Service.
+
+**Not tested:** kv-reset, request-drain, quarantine, guardrail-rotate, crm-refund-revoke, the
+GPU and model families. These are **NOT VALIDATED**.
 
 ### 4. Does the score account for residual attacker access and reacquisition?
 
 **No.**
 
-- **Residual access is not modelled:**
-  - After ELR, credential B stays valid by design.
-  - The lease Secret, which holds `client-a`, `client-b` and the seed, is mounted in the
-    serving pod.
-  - The brain still mints `inMemory` (0.355) on that pod after ELR, so the model itself
-    says an in-pod foothold may exist. Yet the score has no term for "capability
-    reachable through another path".
-  - That path is also structurally undefendable by a second revoke. Revocation needs two
-    allowed leases ([endpoint_lease_revoke.go:107](../../../phorvex/internal/actuator/endpoint_lease_revoke.go#L107)),
-    and the observation binder needs both a revoked and a retained allowed HMAC. A stolen
-    B would therefore not even be scored. This was not measured: no B-theft emulation was
-    run.
-- **Reacquisition:**
-  - No reacquisition of A was observed (censored at ≥ 20 s in 10/10 episodes).
-  - The lease contract has no re-issue path: it offers only `Revoke`, so A cannot return.
-  - The score's only time dimension (pHold driven by pod exposure) models reacquisition
-    as recovery after a pod restart. That is wrong for credential capabilities: after a
-    rotate it reports a hold of about 0 while A is fully usable.
-  - Fact keys carry pod identity, not credential, epoch or issuance identity.
+- **Residual access is not acted on.** In the combined scenario the selected
+  endpoint-lease-revoke leaves the stolen token usable (10/10, for the whole window).
+  - The brain's next observation still mints the attributed token fact (1.77), but it selects
+    noop: the only covering action, rotate, fails C_hi.
+  - With `MaxMovesPerTick = 1` and no residual term, one tick handles one capability, and the
+    gate stops the rest.
+- **Residual access becomes invisible.** After a rotate, the lease fact disappears (false
+  invalidation) and pHold resets. The brain believes the attacker holds nothing while the lease
+  still works.
+- **Reacquisition.**
+  - None was observed.
+  - Lease revocation is permanent by design (no re-issue path).
+  - The token is bound to the retired UID; a new token would need access to the new Pod, which
+    was NOT TESTED. Nor was theft of credential B from the Pod's mounted Secret.
+  - The score's only time dimension is pHold recovering with Pod age. That models in-Pod
+    footholds, not credentials.
 
-### 5. Does the formula select the most effective safe action among the alternatives?
+### 5. Does the current formula select the most effective safe action?
 
-**In this decision state, yes.** It selected endpoint-lease-revoke in 40/40 episodes.
-That was the only tested feasible action that reduced risk: regret 0 and feasible-set
-τ-b = 1.
+**Among selectable actions, yes: regret 0 in all three scenarios.** But the gates decide more
+than the score does.
 
-Three things limit this answer:
+- **Token.** The only effective action, rotate (risk reduction 1.0), is excluded by C_hi, so
+  the brain does nothing against a working stolen API credential. Gate regret is 1.0.
+- **Combined.** The brain picks endpoint-lease-revoke, which ties the gated rotate on measured
+  effect. If the gate were lifted, the score would prefer rotate (estimated net 2.81 vs 1.69):
+  equal measured effect, plus a false invalidation and a 10 s lag.
 
-- The test has little discriminating power (see "How weak this test is" above).
-- The correct choice rests on a constant multiplier (question 2).
-- One structurally relevant alternative did not exist. There was no action able to remove
-  the residual B path or the in-pod foothold together with A.
+So the correct selections here come from the gates masking a score that over-credits rotate,
+not from the score alone.
+
+The tests discriminate weakly. Alternatives were often predicted at exactly 0, and there are
+3–4 actions per scenario.
 
 ### 6. Which missing measurements prevent validation?
 
-1. **Instantiated capabilities for structural facts.** In-memory implant, pod-identity
-   token use, session hijack, in-flight request abuse and network identity are needed to
-   measure rotate, kv-reset, request-drain and quarantine against their own claims.
-2. **Real kubelet and containers.** These are needed to measure rotate's disruption
-   (single-replica outage, time to Ready) and the attacker's loss of access during the
-   outage, which is currently an uncredited false negative.
-3. **Detector behaviour after an identity change.** Whether and when a production
-   detector re-raises lease reuse against the replacement pod sets how long the false
-   invalidation lasts. This is outside the fixture. The endpoint-lease observation path is
-   `TEST_INJECTED`-only by contract
-   ([types.go:688-701](../../../phorvex/internal/model/types.go#L688-L701)).
-4. **Residual-path emulation.** Theft of credential B from the pod's Secret mount after
-   ELR.
-5. **More scenarios, workloads and replica counts.** These include a feasible rotate (two
-   or more replicas), production's 5-minute anti-over-rotation window (the fixture uses
-   1 s), multi-tick horizons beyond 20 s, and the voice, LiteLLM, MCP, CRM and NATS
-   stacks. They are needed for any statistical rank agreement.
-6. **Defensible consequence values.** Without them, expected avoided loss is
-   **UNAVAILABLE**.
+1. **Instantiated capabilities for structural facts.** In-memory implant, session hijack,
+   in-flight abuse and network identity. These are needed to test rotate's 0.9–1.5 of
+   structural credit, and kv-reset, request-drain and quarantine at all.
+2. **Real kubelet and containers.** Needed for rotate's outage and capacity loss, its
+   replacement time, and the attacker's loss of access during that outage.
+3. **Detector behaviour after an identity change.** Whether and when the lease or token
+   observation is re-raised against the replacement Pod. That decides how long a false
+   invalidation lasts.
+4. **Multi-tick episodes.** Does a later tick address the residual token? With the gate as
+   configured, the next observation says no; this was not run across ticks. Also production's
+   5-minute anti-over-rotation window, against 1 s here.
+5. **Residual-path emulation.** Credential B theft from the Secret mount, and token theft from
+   the replacement Pod.
+6. **Other families, workloads and stacks.** Voice, LiteLLM, MCP, CRM and NATS. These are
+   needed for any statistical rank agreement.
+7. **C_hi provenance.** Whether rotate's 1.60 is representative of production workloads, and
+   defensible consequence values for expected avoided loss (**UNAVAILABLE**).
 
 ## Limitations
 
-- **Narrow scope.** One scenario, one workload and one tick. The system is deterministic,
-  so the Wilson and Newcombe intervals reflect the number of repeat episodes from a fixed
-  state, not uncertainty across scenarios.
-- **Synthetic components.** The downstream, the attack event (`TEST_INJECTED`), pod
-  readiness, image IDs and the replacement pod are fixture or harness-simulated. Admission
-  is the real shipped Python code. envtest has no kubelet.
-- **Counterfactual rotate ran despite a production gate.** The cf-rotate arm executed an
-  action that the decision layer's availability gate marks infeasible. It ran only on a
-  private API server, to measure what the score credits. The native actuator's own
-  eligibility and policy gates still applied. No production gate was relaxed.
-- **Separate episodes per branch.** "No action" and "with action" come from separate
-  episodes with the same initial state and fresh credentials, not from forking one
-  process. Each episode's own pre-decision probe confirms the attack had landed:
-  40/40 episodes.
-- **Local latency.** Legitimate latency is local and single-worker. It is not a
-  production SLO measurement. Rotate's disruption is **UNAVAILABLE**.
-- **Fixture economics.** The fixture uses legacy λ (0.6). The Security Gain under test
-  does not depend on it, but net gains would differ under production's independent β.
+- **Narrow scope.** Three scenarios, one workload, one tick. The system is deterministic, so
+  the Wilson and Newcombe intervals reflect repeat counts from a fixed state, not uncertainty
+  across scenarios.
+- **Synthetic components.** The downstream, the `TEST_INJECTED` lease observation and the
+  trusted token event are synthetic, as are the fixture-declared creators, Pod readiness,
+  image IDs and the harness-simulated replacement Pod. No kubelet.
+- **What is real.** The admission runtime, the bound-token validation and the API server's
+  authentication cache, which uses its production default.
+- **Counterfactuals bypass decision-layer gates.** The counterfactual rotate ran despite the
+  decision layer's availability (lease) or C_hi (token, combined) gate, only on the private API
+  server, to measure what the score credits. The native actuator's own gates still applied. No
+  production gate was relaxed.
+- **Separate episodes per arm.** "With" and "without" outcomes come from separate episodes
+  with the same initial state and fresh credentials, not from forking one process.
+- **Local legitimate latency.** It is measured locally on one worker, not as a production SLO.
+- **Fixture economics.** Legacy λ (0.6). Production runs independent β, which changes net
+  gains but not Security Gain.
 
 ## Constraint compliance
 
-- Objective function, Security Gain formula and action-to-fact map: unchanged.
-- λ/β: not tuned.
-- Existential and SLO priorities: unchanged.
-- No production gate relaxed.
-- No action of any kind ran in production. The counterfactuals ran only on the private
-  API server.
-- Same declared initial state for every branch.
-- Measured values, estimates, censored values and unavailable values are separated by
-  status columns. Nothing unavailable is reported as zero.
-- Each CSV row belongs to exactly one episode's single-tick decision state. Records from
-  different ticks are never merged into one decision.
+- **Unchanged:** the objective function, the Security Gain formula and the action-to-fact map;
+  existential and SLO priorities.
+- **Not tuned:** λ/β.
+- **Gates:** no production gate relaxed, and the C_hi ceiling is the production value.
+- **No production actuation.** Counterfactual actions ran only on the private API server.
+- **Matched starts:** the same declared initial state per scenario.
+- **Status columns, never zero:** measured values, estimates (including the "gate lifted"
+  computation above), censored, partial and unavailable values are separated. Nothing
+  unavailable is reported as zero.
+- **One decision state per row:** each CSV row belongs to exactly one episode's single-tick
+  decision state.
