@@ -362,9 +362,18 @@ phorvex:
       # through the Kubernetes API or generates registry credentials.
       registryAuth:
         enabled: false
+        # Existing caller-provisioned Secret mode remains the default.
+        mode: secret
         secretName: ""
         secretKey: config.json
         registries: []
+        # Explicit opt-in only after IAM apply and merged helper publication.
+        # No active role/image pin is supplied by this support-only change.
+        irsaInit:
+          enabled: false
+          image: ""  # full existing-repository image@sha256 digest
+          roleARN: ""
+          region: us-east-2
       scanTimeout: 10m
       activeDeadlineSeconds: 3600
       serviceAccount:

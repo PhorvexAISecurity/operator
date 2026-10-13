@@ -1,0 +1,22 @@
+{
+  "schema": "phorvex.epss-ecr-auth-runtime.v1",
+  "builderImage": "docker.io/library/golang:1.26.1-bookworm@sha256:ab3d6955bbc813a0f3fdf220c1d817dd89c0b3f283777db8ece4a32fe7858edd",
+  "runtimeImage": "gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab",
+  "goVersion": "1.26.1",
+  "platform": "linux/amd64",
+  "user": "65532:65532",
+  "entrypoint": ["/epss-ecr-auth"],
+  "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex",
+  "tagPrefix": "epss-ecr-auth-",
+  "roleARN": "arn:aws:iam::753556437180:role/phorvex-dev-epss-feed",
+  "region": "us-east-2",
+  "registryHosts": [
+    "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+    "602401143452.dkr.ecr.us-east-2.amazonaws.com"
+  ],
+  "tokenFile": "/var/run/secrets/eks.amazonaws.com/serviceaccount/token",
+  "outputFile": "/var/run/secrets/phorvex-epss-registry-auth/config.json",
+  "outputMode": "0400",
+  "minimumValiditySeconds": 4200,
+  "publishedImageDigest": null
+}
