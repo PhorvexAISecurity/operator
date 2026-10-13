@@ -1,0 +1,511 @@
+# Dummy series only; CI renders the manual object to rules.yaml alongside this fixture.
+rule_files:
+- rules.yaml
+evaluation_interval: 30s
+tests:
+- name: healthy deployments and excluded apps
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: 1x20
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: 1x20
+  - series: kube_deployment_spec_replicas{namespace="voice",deployment="voice-bot"}
+    values: 3x20
+  - series: kube_deployment_status_replicas_available{namespace="voice",deployment="voice-bot"}
+    values: 3x20
+  - series: kube_deployment_spec_replicas{namespace="mcp",deployment="mcp-server"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="mcp",deployment="mcp-server"}
+    values: 1x20
+  - series: kube_deployment_spec_replicas{namespace="crm",deployment="crm"}
+    values: 3x20
+  - series: kube_deployment_status_replicas_available{namespace="crm",deployment="crm"}
+    values: '0x20'
+  - series: container_spec_memory_limit_bytes{namespace="phorvex-system",container="manager"}
+    values: '0x20'
+  - series: container_memory_working_set_bytes{namespace="phorvex-system",container="manager"}
+    values: 1000000x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts: &id001 []
+- name: replica deficit
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: '0x20'
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: '0x20'
+  - series: kube_deployment_spec_replicas{namespace="voice",deployment="voice-bot"}
+    values: 3x20
+  - series: kube_deployment_status_replicas_available{namespace="voice",deployment="voice-bot"}
+    values: '0x20'
+  - series: kube_deployment_spec_replicas{namespace="mcp",deployment="mcp-server"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="mcp",deployment="mcp-server"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts: *id001
+  - eval_time: 6m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        deployment: phorvex-phorvex
+        severity: warning
+      exp_annotations: &id002
+        summary: Expected application deployment has a replica deficit
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        deployment: phorvex-phorvex-console
+        severity: warning
+      exp_annotations: *id002
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: voice
+        deployment: voice-bot
+        severity: warning
+      exp_annotations: *id002
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: mcp
+        deployment: mcp-server
+        severity: warning
+      exp_annotations: *id002
+- name: replica recovery
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex"}
+    values: 0x6 1x15
+  - series: kube_deployment_spec_replicas{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="phorvex-system",deployment="phorvex-phorvex-console"}
+    values: 0x6 1x15
+  - series: kube_deployment_spec_replicas{namespace="voice",deployment="voice-bot"}
+    values: 3x20
+  - series: kube_deployment_status_replicas_available{namespace="voice",deployment="voice-bot"}
+    values: 0x6 3x15
+  - series: kube_deployment_spec_replicas{namespace="mcp",deployment="mcp-server"}
+    values: 1x20
+  - series: kube_deployment_status_replicas_available{namespace="mcp",deployment="mcp-server"}
+    values: 0x6 1x15
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        deployment: phorvex-phorvex
+        severity: warning
+      exp_annotations: *id002
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        deployment: phorvex-phorvex-console
+        severity: warning
+      exp_annotations: *id002
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: voice
+        deployment: voice-bot
+        severity: warning
+      exp_annotations: *id002
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: mcp
+        deployment: mcp-server
+        severity: warning
+      exp_annotations: *id002
+  - eval_time: 8m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts: *id001
+- name: intentional zero replicas
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kube_deployment_spec_replicas{namespace="voice",deployment="voice-bot"}
+    values: '0x20'
+  - series: kube_deployment_status_replicas_available{namespace="voice",deployment="voice-bot"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: PhorvexDeploymentReplicasUnavailable
+    exp_alerts: *id001
+- name: engine down
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts: *id001
+  - eval_time: 6m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: critical
+      exp_annotations: &id003
+        summary: Expected engine metrics target is down or absent
+  - eval_time: 12m
+    alertname: PhorvexMathLabStoreMetricsMissing
+    exp_alerts: *id001
+- name: engine absent
+  interval: 1m
+  input_series: []
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: critical
+      exp_annotations: *id003
+  - eval_time: 12m
+    alertname: PhorvexMathLabStoreMetricsMissing
+    exp_alerts: *id001
+- name: engine rollout with healthy target
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-old-engine"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts: *id001
+- name: engine recovery
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 0x6 1x15
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x21'
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: critical
+      exp_annotations: *id003
+  - eval_time: 8m
+    alertname: PhorvexEngineScrapeUnavailable
+    exp_alerts: *id001
+- name: healthy engine missing store gauge
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 9m
+    alertname: PhorvexMathLabStoreMetricsMissing
+    exp_alerts: *id001
+  - eval_time: 11m
+    alertname: PhorvexMathLabStoreMetricsMissing
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: warning
+        coverage: mathlab
+      exp_annotations:
+        summary: Healthy engine scrape is missing its expected Math Lab store gauge
+- name: zero store gauge is present
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexMathLabStoreMetricsMissing
+    exp_alerts: *id001
+- name: PVC warning
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 190x20
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 9m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts: *id001
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: warning
+      exp_annotations: &id004
+        summary: Prometheus PVC has less than 20 percent free space
+- name: PVC critical
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 90x20
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: warning
+      exp_annotations: *id004
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: critical
+      exp_annotations: &id005
+        summary: Prometheus PVC has less than 10 percent free space
+- name: PVC threshold boundary
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 200x20
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts: *id001
+- name: PVC critical threshold boundary
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 100x20
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: warning
+      exp_annotations: *id004
+- name: PVC zero capacity
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: '0x20'
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: '0x20'
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts: *id001
+- name: PVC recovered
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 90x11 500x10
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: warning
+      exp_annotations: *id004
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: monitoring
+        persistentvolumeclaim: prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0
+        severity: critical
+      exp_annotations: *id005
+  - eval_time: 13m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts: *id001
+- name: unrelated PVC excluded
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="dummy-grafana"}
+    values: '0x20'
+  - series: kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="dummy-grafana"}
+    values: 1000x20
+  alert_rule_test:
+  - eval_time: 11m
+    alertname: PhorvexPrometheusPVCFreeSpaceLow
+    exp_alerts: *id001
+- name: store budget above threshold
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1000000000x20
+  alert_rule_test:
+  - eval_time: 4m
+    alertname: PhorvexMathLabBudgetHigh
+    exp_alerts: *id001
+  - eval_time: 6m
+    alertname: PhorvexMathLabBudgetHigh
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: warning
+      exp_annotations:
+        summary: Math Lab snapshot store exceeds 90 percent of its one GiB budget
+- name: store budget below threshold
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 966367641x20
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexMathLabBudgetHigh
+    exp_alerts: *id001
+- name: snapshot eviction
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: phorvex_mathlab_store_evicted_total{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 0x4 1x80
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexMathLabSnapshotsEvicted
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: critical
+      exp_annotations:
+        summary: Math Lab evicted original snapshots within the last hour
+  - eval_time: 70m
+    alertname: PhorvexMathLabSnapshotsEvicted
+    exp_alerts: *id001
+- name: snapshot write failure
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: phorvex_mathlab_store_write_failures_total{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 0x4 1x80
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexMathLabSnapshotWriteFailures
+    exp_alerts:
+    - exp_labels:
+        phorvex_cluster: dev
+        namespace: phorvex-system
+        monitor: engine
+        severity: critical
+      exp_annotations:
+        summary: Math Lab snapshot writes failed within the last 15 minutes
+  - eval_time: 25m
+    alertname: PhorvexMathLabSnapshotWriteFailures
+    exp_alerts: *id001
+- name: counter reset without new failures
+  interval: 1m
+  input_series:
+  - series: up{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 1x90
+  - series: phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: '0x90'
+  - series: phorvex_mathlab_store_write_failures_total{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 5x4 0x20
+  - series: phorvex_mathlab_store_evicted_total{namespace="phorvex-system",job="monitoring/phorvex-operator",pod="dummy-engine"}
+    values: 5x4 0x80
+  alert_rule_test:
+  - eval_time: 6m
+    alertname: PhorvexMathLabSnapshotWriteFailures
+    exp_alerts: *id001
+  - eval_time: 6m
+    alertname: PhorvexMathLabSnapshotsEvicted
+    exp_alerts: *id001

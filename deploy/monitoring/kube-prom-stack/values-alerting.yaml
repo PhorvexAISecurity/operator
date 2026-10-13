@@ -1,0 +1,80 @@
+# Chart: prometheus-community/kube-prometheus-stack 88.5.3 (Alertmanager v0.34.0).
+# Standalone A1 overlay. Use --reuse-values only after Hami's retention release.
+# Refresh alertmanager.config with: python3 deploy/monitoring/render-values.py
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    templates: []
+    route:
+      receiver: 'null'
+      group_by:
+      - phorvex_cluster
+      - alertname
+      - namespace
+      group_wait: 60s
+      group_interval: 10m
+      repeat_interval: 6h
+      routes:
+      - receiver: 'null'
+        matchers:
+        - alertname=~"Watchdog|InfoInhibitor"
+      - receiver: milad-telegram
+        matchers:
+        - phorvex_cluster="dev"
+        - severity=~"warning|critical"
+    inhibit_rules:
+    - source_matchers:
+      - phorvex_cluster="dev"
+      - severity="critical"
+      target_matchers:
+      - phorvex_cluster="dev"
+      - severity="warning"
+      equal:
+      - phorvex_cluster
+      - namespace
+      - alertname
+    - source_matchers:
+      - phorvex_cluster="dev"
+      - alertname="PhorvexEngineScrapeUnavailable"
+      target_matchers:
+      - phorvex_cluster="dev"
+      - coverage="mathlab"
+      equal:
+      - phorvex_cluster
+      - namespace
+      - monitor
+    receivers:
+    - name: 'null'
+    - name: milad-telegram
+      telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/phorvex-telegram-alerts/TELEGRAM_BOT_TOKEN
+        chat_id_file: /etc/alertmanager/secrets/phorvex-telegram-alerts/TELEGRAM_CHAT_ID
+        parse_mode: ''
+        send_resolved: true
+        message: |-
+          Phorvex dev: {{ .Status | toUpper }}
+          Alert: {{ printf "%.80s" .CommonLabels.alertname }}
+          Namespace: {{ printf "%.80s" .CommonLabels.namespace }}
+          {{ range $i, $alert := .Alerts }}{{ if lt $i 5 }}
+          - {{ printf "%.20s" $alert.Status }} {{ printf "%.80s" $alert.Labels.deployment }}{{ printf "%.120s" $alert.Labels.persistentvolumeclaim }}{{ printf "%.40s" $alert.Labels.monitor }} ({{ printf "%.20s" $alert.Labels.severity }})
+          {{ end }}{{ end }}
+          Objects in this group: {{ len .Alerts }}. Showing at most five.
+  alertmanagerSpec:
+    secrets:
+    - phorvex-telegram-alerts
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 256Mi
+  service:
+    enabled: true
+    type: ClusterIP
+    externalIPs: []
+    loadBalancerIP: ''
+  ingress:
+    enabled: false
