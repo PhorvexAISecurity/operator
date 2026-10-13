@@ -19,11 +19,11 @@ import (
 const ReviewedAdmissionSourceSHA256 = "5a4d59555a37b6990cb6e78c03d2768445c0809ca797bb50fdbdc1d8d61b2d23"
 
 // ReviewedAdmissionImage is the immutable reviewed SDK overlay image reference.
-const ReviewedAdmissionImage = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:7a20c69d1ab15b56afac6a74c42a3de605e8a99e8db26c6e803bd80feb2f6f26"
+const ReviewedAdmissionImage = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:86bef13d0f20d123aaaf2f0fb322290a2033f839dc16b2e912480827cd89b2a2"
 
 // ReviewedAdmissionPlatformSHA256 is accepted only when its relation to the
 // published index was independently verified; empty adds no alternate digest.
-const ReviewedAdmissionPlatformSHA256 = "66547aea8c753e683fd57f3340fa0e1e42c73fe406a0fe34a7c0521d00975d31"
+const ReviewedAdmissionPlatformSHA256 = "2497e236dbab31461c23e118aeddc6d102b36789d064e235458ab57c7ada1d70"
 
 const ReviewedLegacyBundleSHA256 = "e3cfcb87456b299f2b021bce70fb565e699f81b39d3b7bc3bd985b0f56f1f899"
 
