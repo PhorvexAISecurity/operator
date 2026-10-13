@@ -1,0 +1,52 @@
+name: Self-hosted runner disk cleanup
+
+# Large image builds (the vLLM engine and lease proxy need 30 GiB free) fail when buildx
+# builders and their cache volumes accumulate on the single self-hosted runner. This job
+# runs alone on that runner, so nothing it removes is in use by another build.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-disk-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - name: Disk before
+        run: |
+          df -h . /var/lib/docker 2>/dev/null || df -h .
+          docker system df || true
+
+      - name: Remove inactive buildx builders and their cache volumes
+        run: |
+          set -uo pipefail
+          for builder in $(docker ps -a --format '{{.Names}}' | grep '^buildx_buildkit_' || true); do
+            if [ "$(docker inspect -f '{{.State.Running}}' "$builder" 2>/dev/null)" != "true" ]; then
+              docker rm -f "$builder" || true
+            fi
+          done
+          docker buildx prune --all --force || true
+          for volume in $(docker volume ls -q | grep '_state$' || true); do
+            docker volume rm "$volume" 2>/dev/null || true
+          done
+
+      - name: Prune build cache, stopped containers and unused images
+        run: |
+          set -uo pipefail
+          docker builder prune --all --force || true
+          docker container prune --force || true
+          docker image prune --all --force || true
+
+      - name: Remove runner temp files
+        run: rm -rf "${RUNNER_TEMP:?}"/* 2>/dev/null || true
+
+      - name: Disk after
+        run: |
+          df -h . /var/lib/docker 2>/dev/null || df -h .
+          docker system df || true
