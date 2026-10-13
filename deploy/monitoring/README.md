@@ -8,6 +8,18 @@ Argo CD, and until 2026-09-29 these two pieces existed only on the cluster.
 | `additional-scrape-configs.yaml` | Secret `monitoring/kube-prom-stack-kube-prome-prometheus-scrape-confg`, key `additional-scrape-configs.yaml` (the release's `prometheus.prometheusSpec.additionalScrapeConfigs`) |
 | `phorvex-apps-dashboard.json` | ConfigMap `monitoring/phorvex-apps-dashboard`, key `phorvex-apps.json`, label `grafana_dashboard=1` |
 
+## LiteLLM gateway metrics preparation
+
+The M1a candidate adds opt-in LiteLLM admission counters/histograms with a
+separate GET-only port 4003, private Service/ServiceMonitor and narrow monitoring
+NetworkPolicy. Active deployment pins and values stay unchanged. The source
+runtime reuses the existing published Python image with a new immutable source
+ConfigMap after its merged runtime verification passes. Activation belongs to
+M1b, after Hami's vLLM merge and fresh owner/network checks. The
+[application metrics coverage record](APP-METRICS-COVERAGE.md) defines the
+populations, fixed labels, renderer and acceptance gates, remaining app gaps,
+vLLM-only bridge scope, ALB follow-up and 14d/15GB sizing recommendation.
+
 ## Applying
 
 Run from a directory holding both files, with cluster-admin `kubectl`:
@@ -60,15 +72,3 @@ label and the Grafana sidecar stops loading the dashboard (this happened once on
   defense panels add the brain's selected decisions and the actuation attempts by outcome. Token
   throughput reads `vllm:generation_tokens_total` and `vllm:prompt_tokens_total`; `nim_tokens_total`
   never existed on this cluster.
-
-## LiteLLM gateway metrics preparation
-
-The M1a candidate adds opt-in LiteLLM admission counters/histograms with a
-separate GET-only port 4003, private Service/ServiceMonitor and narrow monitoring
-NetworkPolicy. Active deployment pins and values stay unchanged. The source
-runtime reuses the existing published Python image with a new immutable source
-ConfigMap after its merged runtime verification passes. Activation belongs to
-M1b, after Hami's vLLM merge and fresh owner/network checks. The
-[application metrics coverage record](APP-METRICS-COVERAGE.md) defines the
-populations, fixed labels, renderer and acceptance gates, remaining app gaps,
-vLLM-only bridge scope, ALB follow-up and 14d/15GB sizing recommendation.
