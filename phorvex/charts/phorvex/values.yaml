@@ -371,8 +371,8 @@ phorvex:
         annotations: {}
       imagePullSecrets: []
       extraEnv: []
+      # No CPU/memory limits: phorvex-system pods run unthrottled (2026-10-13).
       resources:
-        limits: { cpu: "2", memory: 2Gi }
         requests: { cpu: 100m, memory: 256Mi }
       nodeSelector: {}
       tolerations: []
@@ -709,9 +709,9 @@ phorvex:
         retainOnDelete: true
       # Explicit development opt-out. State is lost on Pod replacement.
       allowEphemeral: false
+    # No CPU/memory limits: phorvex-system pods run unthrottled (2026-10-13).
     resources:
-      limits: { cpu: 500m, memory: 256Mi }
-      requests: { cpu: 10m, memory: 64Mi }
+      requests: { cpu: 10m, memory: 256Mi }
     # ── identity and authorization (M-136) ────────────────────────────────────
     # The console REFUSES TO START unless at least one credential path below is configured. There
     # is no demo-trust mode: the previous build treated "no IdP" and "IdP failed to load" as
@@ -787,13 +787,12 @@ phorvex:
   # hand-patched out from under Helm again.
   extraArgs: []
   extraEnv: []
+  # No CPU/memory limits: a 256Mi limit OOM-killed the manager once the Math Lab snapshot
+  # index grew (2026-10-12). Requests reflect the observed working set.
   resources:
-    limits:
-      cpu: 500m
-      memory: 256Mi
     requests:
-      cpu: 10m
-      memory: 64Mi
+      cpu: 50m
+      memory: 256Mi
   nodeSelector: {}
   tolerations: []
   affinity: {}
