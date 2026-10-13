@@ -143,8 +143,8 @@ phorvex:
     # provision these exact identities with deploy/eks/provision-audit-mtls.sh.
     console:
       # DEV live audit/probe workloads: preserve CPU and avoid observed 256Mi OOMs.
+      # No CPU/memory limits in phorvex-system.
       resources:
-        limits: { cpu: 500m, memory: 1Gi }
         requests: { cpu: 10m, memory: 256Mi }
       # Retired Live attacks (verified 2026-10-04): no actuator fires end to end.
       #   foothold on served apps  -> brain NOOPs (vllm PDB on 1 replica; voice/litellm SLO gate)
@@ -526,10 +526,10 @@ phorvex:
             "cvss": 7.5
           }
         }
-    # 256Mi OOM-killed the manager once the Math Lab snapshot index grew (2026-10-12).
+    # No CPU/memory limits in phorvex-system (2026-10-13): a 256Mi limit OOM-killed the
+    # manager once the Math Lab snapshot index grew. Requests reflect the observed working set.
     resources:
-      limits: { cpu: 500m, memory: 512Mi }
-      requests: { cpu: 10m, memory: 64Mi }
+      requests: { cpu: 50m, memory: 256Mi }
     # Keep the shared RWO audit writer/console on the system pool. Tolerating
     # CriticalAddonsOnly alone does not prevent placement onto database nodes.
     nodeSelector:

@@ -38,9 +38,9 @@ phorvex:
     leaderElect: true            # HA-safe default for a real cluster
     globalKillSwitch: false      # start actuating; flip on for a dry-run install
     prometheusUrl: ""            # e.g. http://prometheus-server.monitoring.svc:80
+    # No CPU/memory limits: phorvex-system pods run unthrottled (2026-10-13).
     resources:
-      limits: { cpu: 500m, memory: 256Mi }
-      requests: { cpu: 10m, memory: 64Mi }
+      requests: { cpu: 50m, memory: 256Mi }
 
 # ── Dashboard / console (read-only) ──────────────────────────────────────────
 dashboard:
@@ -55,8 +55,8 @@ dashboard:
     pullPolicy: IfNotPresent
   replicas: 1
   port: 8090
+  # No CPU/memory limits: phorvex-system pods run unthrottled (2026-10-13).
   resources:
-    limits: { cpu: 500m, memory: 256Mi }
     requests: { cpu: 10m, memory: 64Mi }
   service:
     type: ClusterIP            # set LoadBalancer for a quick external IP on EKS
