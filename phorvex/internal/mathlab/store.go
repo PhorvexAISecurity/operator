@@ -47,6 +47,13 @@ type Store struct {
 	mu      sync.RWMutex
 	entries []StoreEntry // sorted by CapturedAt, then digest
 	total   int64
+
+	// The index holds one header per snapshot for the life of the process, up to tens of
+	// thousands. Headers of one process repeat the same ProcessConfig and identity strings;
+	// sharing them keeps the index small enough for the manager's memory limit. Unbounded
+	// per-entry copies grew with the store until the manager was OOM-killed.
+	configs map[string][]map[string]string // by ProcessConfigHash; contents decide sharing
+	strs    map[string]string
 }
 
 // OpenStore indexes an existing directory (creating it if needed). Unreadable or foreign
@@ -67,7 +74,8 @@ func OpenStore(dir string, maxBytes int64, queueSize int, observe func(StoreStat
 	if observe == nil {
 		observe = func(StoreStats) {}
 	}
-	s := &Store{dir: dir, maxBytes: maxBytes, queue: make(chan Pending, queueSize), observe: observe}
+	s := &Store{dir: dir, maxBytes: maxBytes, queue: make(chan Pending, queueSize), observe: observe,
+		configs: map[string][]map[string]string{}, strs: map[string]string{}}
 	names, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -88,11 +96,68 @@ func OpenStore(dir string, maxBytes int64, queueSize int, observe func(StoreStat
 		if herr != nil || serr != nil {
 			continue
 		}
-		s.entries = append(s.entries, StoreEntry{Digest: strings.TrimSuffix(name, snapshotExt), Size: info.Size(), Header: h})
+		s.entries = append(s.entries, StoreEntry{Digest: strings.TrimSuffix(name, snapshotExt), Size: info.Size(), Header: s.compactLocked(h)})
 		s.total += info.Size()
 	}
 	s.sortLocked()
 	return s, nil
+}
+
+// compactLocked returns h with its ProcessConfig and repeated strings shared with earlier
+// index entries. The values are unchanged, so listings serialize identically. A config is
+// shared only when its contents match, never on the hash alone.
+func (s *Store) compactLocked(h Header) Header {
+	if h.ProcessConfig != nil {
+		key, shared := h.ProcessConfigHash, map[string]string(nil)
+		for _, known := range s.configs[key] {
+			if sameConfig(known, h.ProcessConfig) {
+				shared = known
+				break
+			}
+		}
+		if shared == nil {
+			shared = make(map[string]string, len(h.ProcessConfig))
+			for k, v := range h.ProcessConfig {
+				shared[s.intern(k)] = s.intern(v)
+			}
+			s.configs[key] = append(s.configs[key], shared)
+		}
+		h.ProcessConfig = shared
+	}
+	for _, f := range []*string{&h.Schema, &h.GitSHA, &h.BrainImage, &h.Tenant, &h.Namespace, &h.PolicyName, &h.PolicyUID,
+		&h.Owner, &h.ParameterSetID, &h.ParameterManifestHash, &h.PolicyOverridesHash, &h.ProcessConfigHash,
+		&h.ReconProfile, &h.ContextProvider, &h.EconomicsMode, &h.ProductionError} {
+		*f = s.intern(*f)
+	}
+	for _, list := range [][]string{h.Assets, h.Selected, h.UnreplayableFields} {
+		for i := range list {
+			list[i] = s.intern(list[i])
+		}
+	}
+	return h
+}
+
+func (s *Store) intern(v string) string {
+	if v == "" {
+		return v
+	}
+	if shared, ok := s.strs[v]; ok {
+		return shared
+	}
+	s.strs[v] = v
+	return v
+}
+
+func sameConfig(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if w, ok := b[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Store) sortLocked() {
@@ -176,7 +241,7 @@ func (s *Store) write(p Pending) {
 		s.observe(StoreStats{Failed: true, Evicted: evicted})
 		return
 	}
-	s.entries = append(s.entries, StoreEntry{Digest: digest, Size: int64(len(file)), Header: p.Header})
+	s.entries = append(s.entries, StoreEntry{Digest: digest, Size: int64(len(file)), Header: s.compactLocked(p.Header)})
 	s.total += int64(len(file))
 	s.sortLocked()
 	s.observe(StoreStats{Files: len(s.entries), Bytes: s.total, Evicted: evicted, Written: int64(len(file))})
