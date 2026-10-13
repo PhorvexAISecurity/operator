@@ -2,6 +2,16 @@
 
 Source preparation only. No command below was executed in stage 1. M1a leaves active pins and metrics disabled. M1b records the exact merged candidate and baseline before any write. The reserved isolated AWS executor is not provisioned/verified by this PR.
 
+
+## Engine/Console contract gate for M1b
+
+M1a preserves the installed `gateway.py` bytes and its native Go source-hash tests. The metrics program is versioned as `gateway_metrics.py`, verified separately, and becomes the projected `gateway.py` key only in a later reviewed activation. The active engine contract still accepts the installed hash `4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1`; the metrics candidate hash is `f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1` and is **not approved by that engine yet**.
+
+Before any candidate source/profile/Deployment activation, M1b must ship a reviewed engine/Console contract release that supports the candidate while preserving the installed version throughout transition. Inventory and update every source hash, content-named ConfigMap, runtime/profile and observation check: `internal/litellmclient/{contract.go,live.go}`, `internal/actuator/{litellm_client_revoke.go,litellm_client_journal.go}`, Console/campaign consumers and all source-bound profile validation. Updating just one hash or a profile is insufficient. `SourceConfigMapName`, the source-volume match, the observation hash and gateway image checks must agree with the new closure. The renderer marks `engineContract.status=activation-required`; its output is not proof of engine approval.
+
+That Go change needs the shared engine/Console release window with Hami, exact-source image publication, `go-unit` and `go-envtest` on approved isolated AWS/CI, existing admission/revoke/redaction regressions and old-installed/new-candidate positive controls. Do not run those suites on the VPS. Keep the gateway on the installed source until the compatible engine/Console release is verified. After both gateway replicas converge and rollback compatibility is proved, a separate cleanup PR may remove the old approval. No Go contract or active approval is widened by M1a.
+
+
 ## Stage 2 / M1b commands — prepared only, not executed
 
 Preconditions: lead publication/review and green exact-head CI; Hami's merged
@@ -103,4 +113,3 @@ webhooks/defaulting make it stale, freshly compare and review a new patch;
 never remove guards. Restore all prior profile/source bindings; retain old and
 new immutable ConfigMaps, Secret references, TSDB/history, PVCs and Hami's
 vLLM release. Keep old pods/source uninstrumented after rollback; no data delete.
-

@@ -42,7 +42,7 @@ jobs:
       - name: Verify source, pinned recipe and local protocol
         run: |
           set -euo pipefail
-          test "$(sha256sum build/test-harness/fixtures/litellm-live/gateway.py | cut -d' ' -f1)" = "$EXPECTED_SOURCE_SHA"
+          test "$(sha256sum build/test-harness/fixtures/litellm-live/gateway_metrics.py | cut -d' ' -f1)" = "$EXPECTED_SOURCE_SHA"
           python3 build/integrations/litellm-gateway-runtime/verify_reuse.py
           python3 -m unittest discover -s build/test-harness/fixtures/litellm-live -p 'test_*gateway.py' -v
           python3 -B build/integrations/litellm-gateway-runtime/test_entrypoint.py -v
@@ -98,6 +98,8 @@ jobs:
                      'githubRunAttempt': os.environ['RUN_ATTEMPT'],
                      'imageByDigest': os.environ['IMAGE'],
                      'gatewaySourceSHA256': os.environ['EXPECTED_SOURCE_SHA'],
+                     'gatewaySourcePath': contract['gatewaySourcePath'],
+                     'legacyGatewaySourceSHA256': contract['legacyGatewaySourceSHA256'],
                      'contractSHA256': hashlib.sha256(contract_path.read_bytes()).hexdigest(),
                      'publishedProxyReceiptSHA256': contract['publishedReceiptSHA256'],
                      'result': 'pass-local-and-published-image-protocol'}

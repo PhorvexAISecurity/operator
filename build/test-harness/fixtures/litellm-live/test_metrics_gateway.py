@@ -11,9 +11,11 @@ from unittest import mock
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import test_gateway as baseline
+import gateway_metrics as gateway
+from pathlib import Path
 
 
-gateway = baseline.gateway
+CANDIDATE_SOURCE = Path(__file__).with_name("gateway_metrics.py")
 
 
 class ObservedMetrics(gateway.RequestMetrics):
@@ -34,6 +36,9 @@ class QuietServer(ThreadingHTTPServer):
 class MetricsGatewayTests(baseline.GatewayTests):
     # The admission/policy/auth/large-response controls also run with metrics enabled.
     def setUp(self):
+        legacy_fixture = mock.patch.multiple(baseline, gateway=gateway, SOURCE=CANDIDATE_SOURCE)
+        legacy_fixture.start()
+        self.addCleanup(legacy_fixture.stop)
         super().setUp()
         self.metrics = ObservedMetrics()
         self.g.metrics = self.metrics

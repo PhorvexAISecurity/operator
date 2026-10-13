@@ -31,7 +31,7 @@ fails, stop; this contract does not authorize substituting another tag.
 
 ## Opt-in gateway metrics candidate (M1a)
 
-The candidate source now includes terminal request counters and latency
+The versioned `gateway_metrics.py` candidate now includes terminal request counters and latency
 histograms on a separate GET-only listener, port 4003. Metrics are disabled by
 default; enabling them requires actual namespace/pod name fields from the
 Downward API. No extra Python packages or new image are needed. The candidate
@@ -57,3 +57,5 @@ Never reuse the legacy install/switch path as an upgrade, reset a live output
 trial, change active values, or enable this monitor against old gateway source.
 
 The actual-image verification job requires the reserved `phorvex-isolated-aws` executor label; stage 1 does not verify or provision that executor. The owner must provide approved isolated AWS capacity before dispatch. Never register the shared gateway/CI runner with that label. Hosted source/protocol checks remain separate and do not replace the merged-source image receipt.
+
+M1a preserves the installed `gateway.py` file and every active Go approval. Its candidate source path is explicit in the v2 reuse contract. M1b must first release the compatible engine/Console hash/ConfigMap/observation/runtime contract, including actuator and journal checks, before projecting candidate bytes under the installed `gateway.py` key. See the [engine contract release gate](../../../deploy/monitoring/LITELLM-METRICS-RELEASE.md). Source-free runtime reuse alone cannot establish that approval.

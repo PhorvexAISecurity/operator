@@ -22,14 +22,23 @@ def verify():
         "schema", "imageByDigest", "publishedImageSourceCommit", "publishedRunID",
         "publishedReceiptSHA256", "dockerfileSHA256", "baseImage", "platform",
         "python", "user", "gatewaySourceSHA256", "gatewayCommand",
-    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v1":
+        "gatewaySourcePath", "legacyGatewaySourceSHA256",
+    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v2":
         raise ValueError("gateway image reuse contract differs")
     if not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", contract["imageByDigest"]):
         raise ValueError("published image is not an immutable digest reference")
     for field in ("publishedReceiptSHA256", "dockerfileSHA256", "gatewaySourceSHA256"):
         if not re.fullmatch(r"[0-9a-f]{64}", contract[field]):
             raise ValueError(field + " is not SHA-256")
-    source = (ROOT / "build/test-harness/fixtures/litellm-live/gateway.py").read_bytes()
+    if contract["gatewaySourcePath"] != "build/test-harness/fixtures/litellm-live/gateway_metrics.py":
+        raise ValueError("candidate path differs")
+    legacy = (ROOT / "build/test-harness/fixtures/litellm-live/gateway.py").read_bytes()
+    active_contract = (ROOT / "phorvex/internal/litellmclient/contract.go").read_text()
+    active_sha = re.search(r'ApprovedSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
+    if (active_sha is None or hashlib.sha256(legacy).hexdigest() != active_sha[1] or
+            active_sha[1] != contract["legacyGatewaySourceSHA256"]):
+        raise ValueError("installed source or engine approval moved during M1a")
+    source = (ROOT / contract["gatewaySourcePath"]).read_bytes()
     if hashlib.sha256(source).hexdigest() != contract["gatewaySourceSHA256"]:
         raise ValueError("merged gateway source moved without a new image/source review")
     workflow = (ROOT / ".github/workflows/verify-litellm-gateway-runtime.yml").read_text()

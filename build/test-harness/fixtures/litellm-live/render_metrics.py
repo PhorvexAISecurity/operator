@@ -12,7 +12,9 @@ import json
 from pathlib import Path
 import re
 
-from render import GATEWAY_SOURCE, canonical
+from render import canonical
+
+GATEWAY_SOURCE = Path(__file__).with_name("gateway_metrics.py")
 
 
 NAMESPACE = "litellm"
@@ -167,6 +169,8 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
     source_sha = hashlib.sha256(source.encode()).hexdigest()
     if source_sha != contract["gatewaySourceSHA256"]:
         raise ValueError("candidate source is outside the reviewed runtime contract")
+    if old_sha != contract["legacyGatewaySourceSHA256"]:
+        raise ValueError("installed source is outside the preserved engine contract")
     source_name = "phorvex-litellm-admission-gateway-" + source_sha[:12]
     objects["gateway-metrics-source-configmap.json"] = {
         "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
@@ -230,7 +234,12 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
     objects["metrics-closure.json"] = {"schema": "phorvex-litellm-metrics-candidate-v1",
         "gatewaySourceSHA256": source_sha, "previousGatewaySourceSHA256": old_sha,
         "gatewayImageByDigest": gateway["image"], "sourceConfigMapName": source_name,
-        "profiles": bindings, "activation": "M1b only after merged runtime verification"}
+        "profiles": bindings,
+        "engineContract": {"status": "activation-required",
+                           "installedSourceSHA256": old_sha,
+                           "candidateSourceSHA256": source_sha,
+                           "candidateSourceConfigMapName": source_name},
+        "activation": "M1b only after engine/Console contract release and merged runtime verification"}
     return objects
 
 

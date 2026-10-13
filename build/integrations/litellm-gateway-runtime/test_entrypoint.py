@@ -17,7 +17,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-SOURCE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live/gateway.py"
+SOURCE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live/gateway_metrics.py"
 
 
 class LocalModel(BaseHTTPRequestHandler):

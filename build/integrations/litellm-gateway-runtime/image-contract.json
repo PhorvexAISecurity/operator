@@ -1,5 +1,5 @@
 {
-  "schema": "phorvex-litellm-gateway-image-reuse-v1",
+  "schema": "phorvex-litellm-gateway-image-reuse-v2",
   "imageByDigest": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32",
   "publishedImageSourceCommit": "440da58d6e965d7f885cd35e44faa510d383cfc8",
   "publishedRunID": "36319597825",
@@ -14,5 +14,7 @@
     "python3",
     "-B",
     "/opt/phorvex/gateway.py"
-  ]
+  ],
+  "gatewaySourcePath": "build/test-harness/fixtures/litellm-live/gateway_metrics.py",
+  "legacyGatewaySourceSHA256": "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1"
 }

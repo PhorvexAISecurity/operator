@@ -82,22 +82,13 @@ class OutputGatewayTests(unittest.TestCase):
         threading.Thread(target=self.model.serve_forever, daemon=True).start()
         self.addCleanup(self.model.server_close)
         self.addCleanup(self.model.shutdown)
-        self.accounted = threading.Event()
-        accounted = self.accounted
-        class OutputMetrics(gateway.RequestMetrics):
-            def observe(self, *args):
-                super().observe(*args)
-                with self.lock:
-                    if sum(value[0] for value in self.series.values()) == 4:
-                        accounted.set()
         self.g = gateway.Gateway(clients, self.client_policy, trial_file,
                                  "sk-real-master-in-test", "pod-uid", "client-cm-uid",
                                  gateway.sha(SOURCE.read_bytes()), "private-status-bearer-32-chars-0001",
                                  upstream_port=self.model.server_address[1],
                                  output_policy_file=self.output_policy,
                                  output_sources=self.sources, service_uid="service-uid",
-                                 deployment_uid="deploy-uid", output_config_map_uid="output-cm-uid",
-                                 metrics=OutputMetrics("litellm", "litellm-output-fixture"))
+                                 deployment_uid="deploy-uid", output_config_map_uid="output-cm-uid")
         handler = type("OutputPublic", (gateway.PublicHandler,), {"gateway": self.g})
         self.public = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         threading.Thread(target=self.public.serve_forever, daemon=True).start()
@@ -166,11 +157,6 @@ class OutputGatewayTests(unittest.TestCase):
             self.assertEqual((state["active"], state["operationId"], state["counters"]["redactions"]),
                              (True, "selected-" + role, 1))
         self.assertEqual(len(Model.requests), 4)
-        self.assertTrue(self.accounted.wait(3))
-        self.assertEqual(sum(value[0] for value in self.g.metrics.series.values()), 4)
-        text = self.g.metrics.exposition().decode()
-        for private in ("PHX-DOC-", "PHX-PROMPT-", "selected-d", "selected-p", self.g.master_key):
-            self.assertNotIn(private, text)
 
     def test_rollback_or_wrong_secret_refuses_without_forwarding(self):
         nonce = "c" * 32

@@ -97,6 +97,9 @@ class MetricsRenderTests(unittest.TestCase):
         closure = objects["metrics-closure.json"]
         digest = hashlib.sha256(module.GATEWAY_SOURCE.read_bytes()).hexdigest()
         self.assertEqual(closure["gatewaySourceSHA256"], digest)
+        self.assertEqual(closure["engineContract"]["status"], "activation-required")
+        self.assertEqual(closure["engineContract"]["installedSourceSHA256"], OLD_SHA)
+        self.assertEqual(closure["engineContract"]["candidateSourceSHA256"], digest)
         self.assertEqual(closure["gatewayImageByDigest"], d["spec"]["template"]["spec"]["containers"][1]["image"])
         self.assertEqual(closure["sourceConfigMapName"], "phorvex-litellm-admission-gateway-" + digest[:12])
         result = patched(d, objects["deployment-metrics-json-patch.json"])
