@@ -6,15 +6,19 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actionset"
+	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
@@ -474,6 +478,74 @@ func TestStoreEvictsOldestAndVerifiesContent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	store.Run(ctx)
+}
+
+// The index keeps one header per snapshot for the life of the manager. Repeated process
+// configuration and identity strings must be shared, not copied per entry: per-entry copies
+// grew with the store (about 6 KB per snapshot) until the manager hit its memory limit.
+func TestStoreIndexSharesRepeatedHeaderDataWithoutChangingIt(t *testing.T) {
+	dir := t.TempDir()
+	raw := recordTick(t, dir)
+	snap, _ := Decode(raw)
+	store, err := OpenStore(dir, 64<<20, 2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 20; i++ {
+		h := snap.Header
+		h.CapturedAt = h.CapturedAt.Add(time.Duration(i) * time.Minute)
+		h.TickID = fmt.Sprintf("tick-%d", i)
+		h.Namespace = strings.Clone(snap.Header.Namespace)
+		h.ProcessConfig = map[string]string{}
+		for k, v := range snap.Header.ProcessConfig {
+			h.ProcessConfig[strings.Clone(k)] = strings.Clone(v)
+		}
+		store.write(Pending{Header: h, Stream: payloadOf(t, raw)})
+	}
+	// Same hash, different contents: never shared, never altered.
+	odd := snap.Header
+	odd.CapturedAt = odd.CapturedAt.Add(time.Hour)
+	odd.ProcessConfig = map[string]string{"engine": "different"}
+	store.write(Pending{Header: odd, Stream: payloadOf(t, raw)})
+	before, err := store.IndexJSON(audittransport.MathLabSnapshotQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := OpenStore(dir, 64<<20, 2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := reopened.IndexJSON(audittransport.MathLabSnapshotQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatal("reopened index serializes differently")
+	}
+	for _, s := range []*Store{store, reopened} {
+		list := s.List(ListFilter{})
+		if len(list) != 22 {
+			t.Fatalf("indexed %d snapshots, want 22", len(list))
+		}
+		var shared uintptr
+		for _, e := range list {
+			if e.Header.ProcessConfig["engine"] == "different" {
+				if len(e.Header.ProcessConfig) != 1 {
+					t.Fatal("a mismatching config was merged into the shared one")
+				}
+				continue
+			}
+			p := reflect.ValueOf(e.Header.ProcessConfig).Pointer()
+			if shared == 0 {
+				shared = p
+			} else if p != shared {
+				t.Fatal("identical ProcessConfig maps are held as separate copies")
+			}
+			if unsafe.StringData(e.Header.Namespace) != unsafe.StringData(list[0].Header.Namespace) {
+				t.Fatal("repeated identity strings are not interned")
+			}
+		}
+	}
 }
 
 func nan() float64 { var z float64; return z / z }

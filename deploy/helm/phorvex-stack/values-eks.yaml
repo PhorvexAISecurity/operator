@@ -526,8 +526,9 @@ phorvex:
             "cvss": 7.5
           }
         }
+    # 256Mi OOM-killed the manager once the Math Lab snapshot index grew (2026-10-12).
     resources:
-      limits: { cpu: 500m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 512Mi }
       requests: { cpu: 10m, memory: 64Mi }
     # Keep the shared RWO audit writer/console on the system pool. Tolerating
     # CriticalAddonsOnly alone does not prevent placement onto database nodes.
