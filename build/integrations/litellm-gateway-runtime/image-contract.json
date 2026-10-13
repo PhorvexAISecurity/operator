@@ -9,6 +9,10 @@
   "platform": "linux/amd64",
   "python": "3.11",
   "user": "10001:10001",
-  "gatewaySourceSHA256": "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1",
-  "gatewayCommand": ["python3", "-B", "/opt/phorvex/gateway.py"]
+  "gatewaySourceSHA256": "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1",
+  "gatewayCommand": [
+    "python3",
+    "-B",
+    "/opt/phorvex/gateway.py"
+  ]
 }

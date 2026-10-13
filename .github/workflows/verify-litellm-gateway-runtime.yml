@@ -13,12 +13,14 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: self-hosted
+    # Actual-image checks require owner-provisioned isolated AWS capacity.
+    # Never dispatch Docker workloads on the shared gateway/CI runner.
+    runs-on: [self-hosted, linux, x64, phorvex-isolated-aws]
     timeout-minutes: 45
     env:
       AWS_REGION: us-east-2
       IMAGE: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32
-      EXPECTED_SOURCE_SHA: 4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1
+      EXPECTED_SOURCE_SHA: f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1
     steps:
       - name: Require reviewed main
         env:

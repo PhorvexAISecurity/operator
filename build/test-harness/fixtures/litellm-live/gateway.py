@@ -4,6 +4,7 @@ The Service must select this sidecar's port 4001 in each *existing* LiteLLM Pod.
 Accepted requests go to that Pod's real LiteLLM process on loopback:4000. The
 authenticated status listener binds Pod port 4002 for exact-Pod readback; it
 never returns credentials or response text and is not exposed by the Service.
+An independently enabled metrics-only listener binds 4003 with fixed labels.
 Deployment is opt-in and requires a reviewed owner rollout.
 """
 
@@ -17,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import threading
+import time
 from urllib.parse import parse_qs, urlsplit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -44,6 +46,78 @@ OUTPUT_ENTRY_KEYS = {"objectiveId", "runNonce", "ruleSHA256", "protectedSHA256",
 MAX_OUTPUT_ENTRIES = 32
 MAX_OUTPUT_POLICY_BYTES = 65536
 OUTPUT_RESPONSE_BOUND = 131072
+
+# Only process configuration and fixed HTTP categories enter this registry.
+METRIC_METHODS = ("GET", "POST", "HEAD", "PUT", "PATCH", "DELETE", "OPTIONS", "other")
+METRIC_ROUTES = ("/v1/chat/completions", "/v1/completions", "/v1/embeddings", "/v1/models", "other")
+METRIC_OUTCOMES = ("completed", "upstream_error", "timeout", "disconnect", "internal_error")
+METRIC_STATUS_CLASSES = ("1xx", "2xx", "3xx", "4xx", "5xx", "none")
+METRIC_BUCKETS = (.005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600)
+METRIC_TARGET = "litellm"  # This gateway's Service, never a serving-pod attribution.
+DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+
+
+class RequestMetrics:
+    def __init__(self, namespace: str, pod: str):
+        if (not DNS_LABEL.fullmatch(namespace) or len(pod) > 253 or
+                any(not DNS_LABEL.fullmatch(part) for part in pod.split("."))):
+            raise ValueError("metrics require actual gateway namespace and pod name")
+        self.namespace, self.pod = namespace, pod
+        self.lock = threading.Lock()
+        self.series = {}
+
+    @staticmethod
+    def route(path: str):
+        path = path.partition("?")[0]
+        if (path == "/metrics" or path == "/health" or path.startswith("/health/") or
+                path in ("/v1/admission/state", "/v1/output-policy/state")):
+            return None
+        return path if path in METRIC_ROUTES else "other"
+
+    def observe(self, method: str, path: str, status: int | None, outcome: str, elapsed: float):
+        route = self.route(path)
+        if route is None:
+            return
+        method = method if method in METRIC_METHODS else "other"
+        status_class = str(status // 100) + "xx" if status is not None else "none"
+        if status_class not in METRIC_STATUS_CLASSES:
+            status_class = "none"
+        outcome = outcome if outcome in METRIC_OUTCOMES else "internal_error"
+        key = (method, route, status_class, outcome)
+        with self.lock:
+            count, total, buckets = self.series.setdefault(key, [0, 0.0, [0] * len(METRIC_BUCKETS)])
+            self.series[key][0] = count + 1
+            self.series[key][1] = total + elapsed
+            for i, bound in enumerate(METRIC_BUCKETS):
+                if elapsed <= bound:
+                    buckets[i] += 1
+
+    def exposition(self) -> bytes:
+        with self.lock:
+            snapshot = [(key, count, total, tuple(buckets))
+                        for key, (count, total, buckets) in sorted(self.series.items())]
+        lines = ["# HELP http_requests_total Terminal LiteLLM gateway requests.",
+                 "# TYPE http_requests_total counter",
+                 "# HELP http_request_duration_seconds Gateway arrival to terminal response in seconds.",
+                 "# TYPE http_request_duration_seconds histogram"]
+        for (method, route, status, outcome), count, total, buckets in snapshot:
+            labels = (f'namespace="{self.namespace}",pod="{self.pod}",target="{METRIC_TARGET}",'
+                      f'method="{method}",route="{route}",status_class="{status}",outcome="{outcome}"')
+            lines.append(f"http_requests_total{{{labels}}} {count}")
+            for bound, population in zip(METRIC_BUCKETS, buckets):
+                lines.append(f'http_request_duration_seconds_bucket{{{labels},le="{bound:g}"}} {population}')
+            lines.extend([f'http_request_duration_seconds_bucket{{{labels},le="+Inf"}} {count}',
+                          f"http_request_duration_seconds_count{{{labels}}} {count}",
+                          f"http_request_duration_seconds_sum{{{labels}}} {total:.9f}"])
+        return ("\n".join(lines) + "\n").encode("ascii")
+
+
+def configured_metrics(environ):
+    enabled = environ.get("PHORVEX_LITELLM_METRICS_ENABLED", "0")
+    if enabled not in ("0", "1"):
+        raise ValueError("metrics opt-in must be 0 or 1")
+    return (RequestMetrics(environ.get("POD_NAMESPACE", ""), environ.get("POD_NAME", ""))
+            if enabled == "1" else None)
 
 
 def strict_json(raw: bytes):
@@ -83,7 +157,7 @@ class Gateway:
                  output_policy_file: Path | None = None,
                  output_sources: dict | None = None,
                  service_uid: str = "", deployment_uid: str = "",
-                 output_config_map_uid: str = ""):
+                 output_config_map_uid: str = "", metrics: RequestMetrics | None = None):
         source = Path(__file__).read_bytes()
         if not HEX.fullmatch(source_sha256) or sha(source) != source_sha256:
             raise ValueError("gateway source digest differs")
@@ -95,6 +169,7 @@ class Gateway:
         self.master_key, self.pod_uid = master_key, pod_uid
         self.config_map_uid, self.source_sha256 = config_map_uid, source_sha256
         self.status_token = status_token
+        self.metrics = metrics
         if not 1 <= upstream_port <= 65535:
             raise ValueError("upstream port invalid")
         self.upstream_port = upstream_port
@@ -355,8 +430,57 @@ class Gateway:
 class PublicHandler(BaseHTTPRequestHandler):
     gateway: Gateway
 
+    def handle_one_request(self):
+        # BaseHTTP includes response flush. One finally covers every method,
+        # admission branch, parse rejection, passthrough and full stream lifetime.
+        started = time.monotonic()
+        self._response_status = None
+        self._pending_status = None
+        self._outcome = "completed"
+        self.command = None
+        self.path = ""
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            self._outcome = "disconnect"
+            raise
+        except TimeoutError:
+            self._outcome = "timeout"
+            raise
+        except Exception:
+            self._outcome = "internal_error"
+            raise
+        finally:
+            if self.gateway.metrics is not None and self.command is not None:
+                self.gateway.metrics.observe(self.command, self.path, self._response_status,
+                                             self._outcome, time.monotonic() - started)
+
+    def send_response(self, code, message=None):
+        self._pending_status = code
+        super().send_response(code, message)
+
+    def end_headers(self):
+        super().end_headers()
+        if self._response_status is None and self._pending_status is not None:
+            self._response_status = self._pending_status
+
+    def upstream_failure(self, error):
+        self._outcome = ("timeout" if isinstance(error, TimeoutError) else
+                         "disconnect" if isinstance(error, (BrokenPipeError, ConnectionResetError,
+                                                             ConnectionAbortedError)) and
+                         self._response_status is not None else "upstream_error")
+        # A failure after delivered headers cannot become a delivered 502.
+        if self._response_status is None:
+            self.respond(502, b'{"error":{"code":"upstream_unavailable"}}')
+        self.close_connection = True
+
     def log_message(self, *_):
         pass  # No key, prompt, or response bytes in process logs.
+
+    def log_error(self, format, *args):
+        # BaseHTTP catches read timeouts internally before returning to finally.
+        if format == "Request timed out: %r":
+            self._outcome = "timeout"
 
     def respond(self, status: int, body: bytes, content_type="application/json"):
         self.send_response(status)
@@ -478,7 +602,6 @@ class PublicHandler(BaseHTTPRequestHandler):
     def passthrough(self, method: str, request_length: int | None):
         """Preserve existing master-key clients, including streaming completions."""
         conn = http.client.HTTPConnection("127.0.0.1", self.gateway.upstream_port, timeout=35)
-        started = False
         try:
             hop = {"host", "connection", "content-length", "transfer-encoding", "keep-alive",
                    "proxy-authorization", "proxy-authenticate", "upgrade"}
@@ -497,17 +620,16 @@ class PublicHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.send_header("Connection", "close")
             self.end_headers()
-            started = True
             while True:
                 chunk = upstream.read(8192)
                 if not chunk:
+                    if upstream.length:
+                        self._outcome = "upstream_error"  # Truncated Content-Length after headers.
                     break
                 self.wfile.write(chunk)
             self.close_connection = True
-        except (OSError, TimeoutError, http.client.HTTPException):
-            if not started:
-                self.respond(502, b'{"error":{"code":"upstream_unavailable"}}')
-            self.close_connection = True
+        except (OSError, TimeoutError, http.client.HTTPException) as error:
+            self.upstream_failure(error)
         finally:
             conn.close()
 
@@ -575,8 +697,8 @@ class PublicHandler(BaseHTTPRequestHandler):
                 self.respond(502, b'{"error":{"code":"output_header_invalid"}}')
                 return
             self.respond(upstream.status, body, content_type)
-        except (OSError, TimeoutError, http.client.HTTPException):
-            self.respond(502, b'{"error":{"code":"upstream_unavailable"}}')
+        except (OSError, TimeoutError, http.client.HTTPException) as error:
+            self.upstream_failure(error)
         finally:
             conn.close()
 
@@ -590,6 +712,52 @@ class PublicHandler(BaseHTTPRequestHandler):
             return any(protected in str(key) or PublicHandler.contains_output_string(x, protected)
                        for key, x in value.items())
         return False
+
+
+class MetricsHandler(BaseHTTPRequestHandler):
+    metrics: RequestMetrics
+    timeout = 5
+
+    def parse_request(self):
+        if not super().parse_request():
+            return False
+        if len(self.raw_requestline) > 256:
+            self.send_error(414)
+            return False
+        if len(self.headers) > 32 or sum(len(k) + len(v) for k, v in self.headers.items()) > 4096:
+            self.send_error(431)
+            return False
+        return True
+
+    def log_message(self, *_):
+        pass
+
+    def send_error(self, code, message=None, explain=None):
+        self.send_response(code)
+        self.send_header("Content-Length", "0")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+
+    def do_GET(self):
+        # Exact raw target: no API/status paths, absolute URLs, query/path variants
+        # or request bodies. No authorization or upstream state is consulted.
+        if self.path != "/metrics" or self.requestline.split()[1] != "/metrics":
+            self.send_error(404)
+            return
+        lengths = self.headers.get_all("Content-Length", [])
+        if lengths not in ([], ["0"]) or self.headers.get("Transfer-Encoding"):
+            self.send_error(400)
+            return
+        body = self.metrics.exposition()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(body)
+        self.close_connection = True
 
 
 class StatusHandler(BaseHTTPRequestHandler):
@@ -640,6 +808,7 @@ class StatusHandler(BaseHTTPRequestHandler):
 
 
 def serve():
+    metrics = configured_metrics(os.environ)
     status_token = Path(os.environ["PHORVEX_LITELLM_STATUS_TOKEN_FILE"]).read_text().strip()
     gateway = Gateway(Path(os.environ["PHORVEX_LITELLM_CLIENTS_FILE"]),
                       Path(os.environ["PHORVEX_LITELLM_POLICY_FILE"]),
@@ -656,16 +825,29 @@ def serve():
                                       if os.environ.get("PHORVEX_LITELLM_OUTPUT_POLICY_FILE") else None),
                       service_uid=os.environ.get("PHORVEX_LITELLM_OUTPUT_SERVICE_UID", ""),
                       deployment_uid=os.environ.get("PHORVEX_LITELLM_OUTPUT_DEPLOYMENT_UID", ""),
-                      output_config_map_uid=os.environ.get("PHORVEX_LITELLM_OUTPUT_POLICY_CONFIGMAP_UID", ""))
+                      output_config_map_uid=os.environ.get("PHORVEX_LITELLM_OUTPUT_POLICY_CONFIGMAP_UID", ""),
+                      metrics=metrics)
     public = type("BoundPublicHandler", (PublicHandler,), {"gateway": gateway})
     status = type("BoundStatusHandler", (StatusHandler,), {"gateway": gateway})
-    admin = ThreadingHTTPServer(("0.0.0.0", 4002), status)
-    thread = threading.Thread(target=admin.serve_forever, daemon=True)
-    thread.start()
+    listeners = [ThreadingHTTPServer(("0.0.0.0", 4002), status)]
     try:
-        ThreadingHTTPServer(("0.0.0.0", 4001), public).serve_forever()
+        if metrics is not None:
+            bound = type("BoundMetricsHandler", (MetricsHandler,), {"metrics": metrics})
+            listeners.append(ThreadingHTTPServer(("0.0.0.0", 4003), bound))
+        public_server = ThreadingHTTPServer(("0.0.0.0", 4001), public)
+    except Exception:
+        for listener in listeners:
+            listener.server_close()
+        raise
+    for listener in listeners:
+        threading.Thread(target=listener.serve_forever, daemon=True).start()
+    try:
+        public_server.serve_forever()
     finally:
-        admin.shutdown()
+        public_server.server_close()
+        for listener in listeners:
+            listener.shutdown()
+            listener.server_close()
 
 
 if __name__ == "__main__":

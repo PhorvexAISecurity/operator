@@ -1,0 +1,43 @@
+name: LiteLLM gateway metrics source checks
+
+on:
+  pull_request:
+    paths:
+      - 'build/test-harness/fixtures/litellm-live/**'
+      - 'build/integrations/litellm-gateway-runtime/**'
+      - '.github/workflows/litellm-gateway-metrics.yml'
+      - '.github/workflows/verify-litellm-gateway-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'build/test-harness/fixtures/litellm-live/**'
+      - 'build/integrations/litellm-gateway-runtime/**'
+      - '.github/workflows/litellm-gateway-metrics.yml'
+      - '.github/workflows/verify-litellm-gateway-runtime.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: litellm-metrics-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-protocol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Standard-library source and runtime recipe contract
+        run: python3 -B build/integrations/litellm-gateway-runtime/verify_reuse.py
+      - name: Gateway terminal accounting, enforcement and opt-in rendering
+        run: python3 -B -m unittest discover -s build/test-harness/fixtures/litellm-live -p 'test_*.py' -v
+      - name: Actual gateway process default-off and metrics opt-in
+        run: python3 -B build/integrations/litellm-gateway-runtime/test_entrypoint.py -v
+      - name: Check source inputs stayed unchanged
+        run: git diff --exit-code
