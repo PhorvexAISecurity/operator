@@ -8,6 +8,8 @@ import tempfile
 import threading
 import json
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request
 import unittest
 from unittest.mock import Mock, patch
 import generate_metrics_token as generate
@@ -147,6 +149,34 @@ class TokenHelpers(unittest.TestCase):
         with self.assertRaises(generate.SafeFailure):
             api.metadata("litellm", self.pair, True)
         self.assertEqual(len(captured), 2)
+
+    def test_helper_logs_negotiate_api_json_before_plain_text_stream(self):
+        # Real cluster NOOP control: text/plain produced 406 NotAcceptable;
+        # application/json produced 200 with this same plain-text JSON line.
+        api = provision.ProxyAPI()
+        payload = b'{"diagnostic":"ok"}\n'
+        class Response(io.BytesIO):
+            headers = {"Content-Type": "text/plain"}
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+        def negotiated(request, timeout):
+            self.assertEqual(timeout, 10)
+            if request.get_header("Accept") not in ("application/json", "*/*"):
+                raise HTTPError(request.full_url, 406, "NotAcceptable", {}, None)
+            return Response(payload)
+        api.opener.open = Mock(side_effect=negotiated)
+        output = api.logs("litellm", "reviewed-helper-pod")
+        self.assertEqual(output, payload.decode("ascii"))
+        self.assertEqual(json.loads(output), {"diagnostic": "ok"})
+        request = api.opener.open.call_args.args[0]
+        self.assertEqual(request.get_header("Accept"), "application/json")
+        self.assertEqual(request.full_url,
+                         "http://127.0.0.1:18081/api/v1/namespaces/litellm/pods/reviewed-helper-pod/log?limitBytes=65536")
+        # The former header is a discriminating negative control, rather than
+        # accepting every mock request and concealing negotiation failures.
+        with self.assertRaises(HTTPError) as rejected:
+            negotiated(Request(request.full_url, headers={"Accept": "text/plain"}), 10)
+        self.assertEqual(rejected.exception.code, 406)
 
     def test_metadata_uid_rv_provenance_last_applied_and_freshness_fail(self):
         good = make_metadata_fixture()
