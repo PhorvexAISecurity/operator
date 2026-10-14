@@ -4,6 +4,7 @@ After=local-fs.target
 Before=actions.runner.PhorvexSecurity.phorvex.service actions.runner.PhorvexSecurity.phorvex-1.service docker.service containerd.service
 
 [Service]
+Slice=phvxci.slice
 Type=oneshot
 ExecStart=/usr/local/libexec/phvx-runner-capacity --boot
 RemainAfterExit=yes

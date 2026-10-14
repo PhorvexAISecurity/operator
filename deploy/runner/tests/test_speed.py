@@ -135,6 +135,7 @@ class Capacity(unittest.TestCase):
             self.assertIn('Requires=phvx-runner-capacity.service', data)
             self.assertIn('After=phvx-runner-capacity.service', data)
             self.assertIn('EnvironmentFile=/run/phvx-runner-capacity.env', data)
+        self.assertIn('Slice=phvxci.slice', (OWN / 'phvx-runner-capacity.service').read_text())
         data = (OWN / 'daemon-capacity.conf').read_text()
         self.assertIn('Wants=phvx-runner-capacity.service', data)
         self.assertNotIn('Requires=', data)
