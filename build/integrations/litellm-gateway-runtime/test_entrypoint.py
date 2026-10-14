@@ -6,6 +6,7 @@ import http.client
 import json
 import os
 from pathlib import Path
+import re
 import socket
 import subprocess
 import sys
@@ -16,7 +17,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-SOURCE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live/gateway.py"
+SOURCE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live/gateway_metrics.py"
 
 
 class LocalModel(BaseHTTPRequestHandler):
@@ -43,6 +44,12 @@ class LocalModel(BaseHTTPRequestHandler):
 
 class EntrypointTests(unittest.TestCase):
     def test_source_mounted_entrypoint_status_revoke_and_control(self):
+        self.entrypoint_protocol(metrics_enabled=False)
+
+    def test_opt_in_metrics_entrypoint_is_private_and_counts_terminal_requests(self):
+        self.entrypoint_protocol(metrics_enabled=True)
+
+    def entrypoint_protocol(self, metrics_enabled):
         source_sha = hashlib.sha256(SOURCE.read_bytes()).hexdigest()
         seed = b"synthetic-local-trial-seed-32-bytes-0001"
         nonce = "a" * 32
@@ -74,6 +81,9 @@ class EntrypointTests(unittest.TestCase):
                    "LITELLM_MASTER_KEY": "sk-synthetic-master", "POD_UID": "fixture-pod",
                    "PHORVEX_LITELLM_POLICY_CONFIGMAP_UID": "fixture-policy-cm",
                    "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256": source_sha}
+            if metrics_enabled:
+                env.update({"PHORVEX_LITELLM_METRICS_ENABLED": "1", "POD_NAMESPACE": "litellm",
+                            "POD_NAME": "litellm-runtime-fixture"})
             proc = subprocess.Popen([sys.executable, "-B", str(SOURCE)], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
@@ -122,6 +132,28 @@ class EntrypointTests(unittest.TestCase):
                 self.assertEqual(json.loads(denied_body)["error"]["code"], "PHORVEX_CLIENT_REVOKED")
                 self.assertEqual(request(4001, "POST", "/v1/chat/completions", control, body)[0], 200)
                 self.assertEqual(LocalModel.calls, 3)
+                if metrics_enabled:
+                    deadline = time.monotonic() + 3
+                    while True:
+                        status, raw = request(4003, "GET", "/metrics", "")
+                        self.assertEqual(status, 200)
+                        counters = dict(re.findall(rb'^http_requests_total\{(.*)\} (\d+)$', raw, re.M))
+                        if sum(int(value) for value in counters.values()) == 4:
+                            break
+                        if time.monotonic() >= deadline:
+                            self.fail("terminal runtime accounting did not catch up")
+                        time.sleep(.01)
+                    self.assertIn(b'namespace="litellm",pod="litellm-runtime-fixture",target="litellm"', raw)
+                    histograms = dict(re.findall(rb'^http_request_duration_seconds_count\{(.*)\} (\d+)$', raw, re.M))
+                    self.assertEqual(counters, histograms)
+                    self.assertEqual(sum(int(value) for value in counters.values()), 4)
+                    self.assertEqual(request(4003, "GET", "/metrics?x=y", "")[0], 404)
+                    self.assertEqual(request(4003, "GET", path, "synthetic-private-status-token-32-bytes")[0], 404)
+                    self.assertEqual(request(4003, "POST", "/v1/chat/completions", old, body)[0], 501)
+                    self.assertEqual(LocalModel.calls, 3)
+                else:
+                    with self.assertRaises(OSError):
+                        socket.create_connection(("127.0.0.1", 4003), timeout=0.2)
             finally:
                 proc.terminate()
                 try:

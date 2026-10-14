@@ -1,0 +1,265 @@
+"""Prepare opt-in metrics and source/profile migration; never calls Kubernetes.
+
+Inputs are reviewed nonsecret owner snapshots. Existing ingress policies must
+preserve serving/status access and must not already admit the new metrics port.
+M1b owns GitOps binding activation and the subsequent owner rollout.
+"""
+
+import argparse
+import copy
+import hashlib
+import json
+from pathlib import Path
+import re
+
+from render import canonical
+
+GATEWAY_SOURCE = Path(__file__).with_name("gateway_metrics.py")
+
+
+NAMESPACE = "litellm"
+NAME = "phorvex-litellm-gateway-metrics"
+LABEL = "phorvex.ai/litellm-gateway-metrics"
+CONTAINER = "litellm-admission-gateway"
+SOURCE_ENV = "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256"
+SOURCE_ANNOTATION = "phorvex.ai/litellm-gateway-source-sha256"
+IMAGE = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
+HEX = re.compile(r"[0-9a-f]{64}\Z")
+
+
+def selected(selector, labels):
+    if selector.get("matchExpressions"):
+        raise ValueError("review NetworkPolicy matchExpressions before activation")
+    return all(labels.get(key) == value for key, value in selector.get("matchLabels", {}).items())
+
+
+def validate_network(policies, labels, containers):
+    ports = {port["name"]: port["containerPort"] for container in containers
+             for port in container.get("ports", []) if "name" in port}
+    allowed = set()
+    selected_policies = 0
+    for policy in policies:
+        if policy.get("kind") != "NetworkPolicy" or policy.get("metadata", {}).get("namespace") != NAMESPACE:
+            raise ValueError("only reviewed LiteLLM NetworkPolicy snapshots are accepted")
+        spec = policy["spec"]
+        if not selected(spec.get("podSelector", {}), labels):
+            continue
+        if "Ingress" not in spec.get("policyTypes", ["Ingress"]):
+            continue
+        selected_policies += 1
+        for rule in spec.get("ingress", []):
+            if not rule.get("ports"):
+                raise ValueError("existing ingress permits all ports including metrics")
+            for port in rule["ports"]:
+                if port.get("protocol", "TCP") != "TCP":
+                    continue
+                number = port.get("port")
+                if isinstance(number, str):
+                    if number not in ports:
+                        raise ValueError("unresolved named ingress port requires owner review")
+                    number = ports[number]
+                if type(number) is not int:
+                    raise ValueError("unbounded ingress port requires owner review")
+                end = port.get("endPort", number)
+                if number <= 4003 <= end:
+                    raise ValueError("existing ingress already permits metrics port")
+                for required in (4001, 4002):
+                    if number <= required <= end:
+                        allowed.add(required)
+    if not selected_policies or allowed != {4001, 4002}:
+        raise ValueError("reviewed ingress must preserve admission and protected status access")
+
+
+def monitoring_objects(prometheus_labels):
+    if (not isinstance(prometheus_labels, dict) or not prometheus_labels or
+            any(not isinstance(k, str) or not isinstance(v, str) or not k or not v
+                for k, v in prometheus_labels.items())):
+        raise ValueError("verified Prometheus pod labels required")
+    service_labels = {"app.kubernetes.io/name": NAME}
+    return {
+        "metrics-service.json": {
+            "apiVersion": "v1", "kind": "Service",
+            "metadata": {"name": NAME, "namespace": NAMESPACE, "labels": service_labels},
+            "spec": {"type": "ClusterIP", "selector": {"app": "litellm", LABEL: "enabled"},
+                     "ports": [{"name": "gateway-metrics", "port": 4003,
+                                "targetPort": "gateway-metrics", "protocol": "TCP"}]}},
+        "metrics-servicemonitor.json": {
+            "apiVersion": "monitoring.coreos.com/v1", "kind": "ServiceMonitor",
+            "metadata": {"name": NAME, "namespace": "monitoring", "labels": {"release": "kube-prom-stack"}},
+            "spec": {"selector": {"matchLabels": service_labels},
+                     "namespaceSelector": {"matchNames": [NAMESPACE]},
+                     "endpoints": [{"port": "gateway-metrics", "path": "/metrics", "scheme": "http",
+                                    "interval": "30s", "scrapeTimeout": "5s", "honorLabels": False,
+                                    "relabelings": [
+                                        {"sourceLabels": ["__meta_kubernetes_namespace"], "targetLabel": "namespace"},
+                                        {"sourceLabels": ["__meta_kubernetes_pod_name"], "targetLabel": "pod"},
+                                        {"targetLabel": "target", "replacement": "litellm"}]}]}},
+        "metrics-networkpolicy.json": {
+            "apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+            "metadata": {"name": NAME, "namespace": NAMESPACE},
+            "spec": {"podSelector": {"matchLabels": {"app": "litellm", LABEL: "enabled"}},
+                     "policyTypes": ["Ingress"], "ingress": [{
+                         "from": [{"namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}},
+                                   "podSelector": {"matchLabels": prometheus_labels}}],
+                         "ports": [{"port": 4003, "protocol": "TCP"}]}]}},
+    }
+
+
+def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labels=None,
+           output_policy=None, *, enabled=False):
+    if not enabled:
+        return {}  # No opt-in objects, ports, env, source or profile changes by default.
+    metadata = deployment.get("metadata", {})
+    if (deployment.get("kind") != "Deployment" or metadata.get("namespace") != NAMESPACE or
+            metadata.get("name") != "litellm" or not metadata.get("uid") or not metadata.get("resourceVersion")):
+        raise ValueError("exact installed gateway Deployment snapshot required")
+    template = deployment["spec"]["template"]
+    labels = template["metadata"].get("labels", {})
+    annotations = template["metadata"].get("annotations", {})
+    old_sha = annotations.get(SOURCE_ANNOTATION, "")
+    if labels.get("app") != "litellm" or not HEX.fullmatch(old_sha):
+        raise ValueError("installed gateway source authority differs")
+    if LABEL in labels:
+        raise ValueError("metrics already configured; review the owner closure")
+    containers = template["spec"]["containers"]
+    indices = [i for i, c in enumerate(containers) if c.get("name") == CONTAINER]
+    if len(indices) != 1:
+        raise ValueError("one installed gateway sidecar required")
+    i = indices[0]
+    gateway = containers[i]
+    if (not IMAGE.fullmatch(gateway.get("image", "")) or
+            gateway.get("command") != ["python3", "-B", "/opt/phorvex/gateway.py"]):
+        raise ValueError("reviewed source-free runtime digest and command required")
+    contract_path = Path(__file__).resolve().parents[4] / "build/integrations/litellm-gateway-runtime/image-contract.json"
+    contract = json.loads(contract_path.read_text())
+    if gateway["image"] != contract["imageByDigest"]:
+        raise ValueError("installed image needs separate verified runtime convergence")
+    if {p.get("containerPort") for p in gateway.get("ports", [])} != {4001, 4002}:
+        raise ValueError("installed admission/status port declarations differ")
+    if any(p.get("containerPort") == 4003 or p.get("name") == "gateway-metrics"
+           for c in containers for p in c.get("ports", [])):
+        raise ValueError("metrics port conflicts with existing container")
+    env = gateway.get("env", [])
+    source_env = [j for j, e in enumerate(env) if e.get("name") == SOURCE_ENV and e.get("value") == old_sha]
+    if len(source_env) != 1 or any(e.get("name") in ("PHORVEX_LITELLM_METRICS_ENABLED", "POD_NAMESPACE", "POD_NAME") for e in env):
+        raise ValueError("gateway source/metrics env differs")
+    for container in containers:
+        for entry in container.get("env", []):
+            name, value = entry.get("name", ""), entry.get("value")
+            if not value or not any(word in name for word in ("KEY", "TOKEN", "PASSWORD")):
+                continue
+            # This literal is the installed Secret mount path, never token bytes.
+            # Match its exact container, env name and path; all other literals fail.
+            if (container.get("name") == CONTAINER and
+                    name == "PHORVEX_LITELLM_STATUS_TOKEN_FILE" and
+                    value == "/etc/phorvex-litellm-status/token"):
+                continue
+            raise ValueError("owner snapshot must contain Secret references only")
+    if any(e.get("name") == "PHORVEX_LITELLM_OUTPUT_POLICY_FILE" for e in env):
+        if (not isinstance(output_policy, dict) or output_policy != {"version": 2, "revision": 0, "entries": []}):
+            raise ValueError("output policy must be quiescent before source migration")
+    volumes = template["spec"].get("volumes", [])
+    source_volume = [j for j, v in enumerate(volumes) if v.get("name") == "litellm-live-gateway-source"]
+    if len(source_volume) != 1 or "configMap" not in volumes[source_volume[0]]:
+        raise ValueError("installed source volume differs")
+    opted_labels = {**labels, LABEL: "enabled"}
+    validate_network(networkpolicies or [], opted_labels, containers)
+    objects = monitoring_objects(prometheus_labels)
+    source = GATEWAY_SOURCE.read_text()
+    source_sha = hashlib.sha256(source.encode()).hexdigest()
+    if source_sha != contract["gatewaySourceSHA256"]:
+        raise ValueError("candidate source is outside the reviewed runtime contract")
+    if old_sha != contract["legacyGatewaySourceSHA256"]:
+        raise ValueError("installed source is outside the preserved engine contract")
+    source_name = "phorvex-litellm-admission-gateway-" + source_sha[:12]
+    objects["gateway-metrics-source-configmap.json"] = {
+        "apiVersion": "v1", "kind": "ConfigMap", "immutable": True,
+        "metadata": {"namespace": NAMESPACE, "name": source_name}, "data": {"gateway.py": source}}
+    bindings = []
+    if not profiles:
+        raise ValueError("all enabled source-bound catalogue profiles must be supplied")
+    for profile in profiles:
+        meta = profile.get("metadata", {})
+        if (profile.get("kind") != "ConfigMap" or profile.get("immutable") is not True or
+                meta.get("namespace") != "phorvex-system" or not meta.get("name") or
+                set(profile.get("data", {})) != {"profile.json"}):
+            raise ValueError("immutable catalogue profile snapshot required")
+        value = json.loads(profile["data"]["profile.json"])
+        if value.get("sourceSHA256") != old_sha:
+            raise ValueError("catalogue profile source differs")
+        if (profile["data"]["profile.json"] != canonical(value) or
+                not meta["name"].endswith(hashlib.sha256(profile["data"]["profile.json"].encode()).hexdigest()[:12]) or
+                value.get("gatewayImage", gateway["image"]) != gateway["image"]):
+            raise ValueError("catalogue profile hash/runtime differs")
+        value["sourceSHA256"] = source_sha
+        raw = canonical(value)
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        # The owner records these derived bindings in M1b, never in M1a values.
+        name = meta["name"].rsplit("-", 1)[0] + "-" + digest[:12]
+        candidate = copy.deepcopy(profile)
+        candidate["metadata"] = {"namespace": "phorvex-system", "name": name}
+        candidate["data"]["profile.json"] = raw
+        objects[f"{name}.json"] = candidate
+        bindings.append({"previousConfigMapName": meta["name"], "configMapName": name,
+                         "profileSHA256": digest, "sourceConfigMapName": source_name})
+    patch = [
+        {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+        {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+        {"op": "test", "path": "/spec/template", "value": template},
+        {"op": "replace", "path": "/spec/template/metadata/annotations/" + SOURCE_ANNOTATION.replace("/", "~1"), "value": source_sha},
+        {"op": "add", "path": "/spec/template/metadata/labels/" + LABEL.replace("/", "~1"), "value": "enabled"},
+        {"op": "replace", "path": f"/spec/template/spec/volumes/{source_volume[0]}/configMap/name", "value": source_name},
+        {"op": "replace", "path": f"/spec/template/spec/containers/{i}/env/{source_env[0]}/value", "value": source_sha},
+        {"op": "add", "path": f"/spec/template/spec/containers/{i}/ports/-",
+         "value": {"name": "gateway-metrics", "containerPort": 4003, "protocol": "TCP"}},
+    ]
+    for name, value in (("PHORVEX_LITELLM_METRICS_ENABLED", "1"), ("POD_NAMESPACE", "metadata.namespace"), ("POD_NAME", "metadata.name")):
+        entry = {"name": name, "value": value} if name == "PHORVEX_LITELLM_METRICS_ENABLED" else {
+            "name": name, "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": value}}}
+        patch.append({"op": "add", "path": f"/spec/template/spec/containers/{i}/env/-", "value": entry})
+    objects["deployment-metrics-json-patch.json"] = patch
+    candidate_template = copy.deepcopy(template)
+    candidate_template["metadata"]["annotations"][SOURCE_ANNOTATION] = source_sha
+    candidate_template["metadata"]["labels"][LABEL] = "enabled"
+    candidate_template["spec"]["volumes"][source_volume[0]]["configMap"]["name"] = source_name
+    candidate_gateway = candidate_template["spec"]["containers"][i]
+    candidate_gateway["env"][source_env[0]]["value"] = source_sha
+    candidate_gateway["ports"].append(copy.deepcopy(patch[7]["value"]))
+    candidate_gateway["env"].extend(copy.deepcopy(op["value"]) for op in patch[8:])
+    objects["deployment-metrics-rollback-json-patch.json"] = [
+        {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+        {"op": "test", "path": "/spec/template", "value": candidate_template},
+        {"op": "replace", "path": "/spec/template", "value": template},
+    ]
+    objects["metrics-closure.json"] = {"schema": "phorvex-litellm-metrics-candidate-v1",
+        "gatewaySourceSHA256": source_sha, "previousGatewaySourceSHA256": old_sha,
+        "gatewayImageByDigest": gateway["image"], "sourceConfigMapName": source_name,
+        "profiles": bindings,
+        "engineContract": {"status": "activation-required",
+                           "installedSourceSHA256": old_sha,
+                           "candidateSourceSHA256": source_sha,
+                           "candidateSourceConfigMapName": source_name},
+        "activation": "M1b only after engine/Console contract release and merged runtime verification"}
+    return objects
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--enable-metrics", action="store_true")
+    for name in ("deployment-original", "profiles-original", "networkpolicies-original", "prometheus-pod-labels", "output-policy-original"):
+        parser.add_argument("--" + name, type=Path)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args()
+    def read(path):
+        return json.loads(path.read_text()) if path else None
+    objects = render(read(args.deployment_original), read(args.profiles_original),
+                     read(args.networkpolicies_original), read(args.prometheus_pod_labels),
+                     read(args.output_policy_original), enabled=args.enable_metrics)
+    args.output.mkdir(parents=True, exist_ok=False, mode=0o700)
+    for name, value in objects.items():
+        (args.output / name).write_text(canonical(value) + "\n")
+    print("rendered", ",".join(sorted(objects)) or "disabled")
+
+
+if __name__ == "__main__":
+    main()

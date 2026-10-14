@@ -28,3 +28,34 @@ capabilities, and UID 10001. Review its uploaded
 to the separate owner installation. This workflow does not build or publish an
 image, alter the cluster, or inject credentials. If the actual-image check
 fails, stop; this contract does not authorize substituting another tag.
+
+## Opt-in gateway metrics candidate (M1a)
+
+The versioned `gateway_metrics.py` candidate now includes terminal request counters and latency
+histograms on a separate GET-only listener, port 4003. Metrics are disabled by
+default; enabling them requires actual namespace/pod name fields from the
+Downward API. No extra Python packages or new image are needed. The candidate
+source hash in the contract and manual verification workflow move together;
+the previously published source-free runtime digest and provenance stay fixed.
+This source contract is not an active deployment/source/profile binding.
+
+The new `litellm-gateway-metrics.yml` PR workflow runs the source contract,
+localhost enforcement/metrics tests and opt-in renderer tests on Python 3.11.
+It also runs the gateway entrypoint in a fresh CI environment with metrics off
+and on. The existing manual published-image verification must pass on merged
+main before M1b. No workflow is dispatched by source preparation.
+
+Prepare the installed-owner migration with
+`build/test-harness/fixtures/litellm-live/render_metrics.py --enable-metrics`.
+Its inputs are reviewed nonsecret Deployment/profile/NetworkPolicy snapshots,
+verified Prometheus pod labels and a quiescent output policy when applicable.
+It generates immutable source/profile candidates and a guarded patch, without
+activation. Network policy inventory/enforcement and both gateway replicas'
+source/runtime convergence must be proved in the later owner window. See
+[coverage and release gates](../../../deploy/monitoring/APP-METRICS-COVERAGE.md).
+Never reuse the legacy install/switch path as an upgrade, reset a live output
+trial, change active values, or enable this monitor against old gateway source.
+
+The actual-image verification job requires the reserved `phorvex-isolated-aws` executor label; stage 1 does not verify or provision that executor. The owner must provide approved isolated AWS capacity before dispatch. Never register the shared gateway/CI runner with that label. Hosted source/protocol checks remain separate and do not replace the merged-source image receipt.
+
+M1a preserves the installed `gateway.py` file and every active Go approval. Its candidate source path is explicit in the v2 reuse contract. M1b must first release the compatible engine/Console hash/ConfigMap/observation/runtime contract, including actuator and journal checks, before projecting candidate bytes under the installed `gateway.py` key. See the [engine contract release gate](../../../deploy/monitoring/LITELLM-METRICS-RELEASE.md). Source-free runtime reuse alone cannot establish that approval.
