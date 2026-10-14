@@ -352,9 +352,9 @@ phorvex:
         clientDNSName: phorvex-stack-phorvex-console.phorvex-system.svc
       image:
         repository: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex-console
-        tag: "0.4.232" # ci:console-tag
-        releaseDigest: "sha256:328b62650136a3e5d01501e42c117b1899b549a488820bb50017cd34f0feebb9" # ci:console-digest
-        releaseSourceSHA: "7b8dd72413cb33accc621ec5e2ae1481d3034bea" # ci:console-source
+        tag: "0.4.233" # ci:console-tag
+        releaseDigest: "sha256:c9590043b1dddcbeabc4d6c800547e4bca2b6e16e78144c53a87cfd269013d8d" # ci:console-digest
+        releaseSourceSHA: "f5e1604e4245e9caca1249f5b7be6db0e02f4e0c" # ci:console-source
         pullPolicy: IfNotPresent
       port: 8090
       # Retention is activated atomically with the compatible console image at release time.
