@@ -3,11 +3,43 @@
 {{- if or (and .Values.phorvex.epss.feed.scopeNamespaces (empty .Values.phorvex.epss.feed.scopeDigests)) (and .Values.phorvex.epss.feed.scopeDigests (empty .Values.phorvex.epss.feed.scopeNamespaces)) }}
 {{- fail "scoped EPSS feed requires both scopeNamespaces and scopeDigests" }}
 {{- end }}
-{{- if and .Values.phorvex.epss.feed.registryAuth.enabled (or (empty .Values.phorvex.epss.feed.registryAuth.secretName) (empty .Values.phorvex.epss.feed.registryAuth.secretKey) (empty .Values.phorvex.epss.feed.registryAuth.registries)) }}
+{{- $auth := .Values.phorvex.epss.feed.registryAuth }}
+{{- $mode := default "secret" $auth.mode }}
+{{- $irsa := $auth.irsaInit }}
+{{- if not (has $mode (list "secret" "irsaInit")) }}
+{{- fail "EPSS registry authentication mode must be secret or irsaInit" }}
+{{- end }}
+{{- if and $irsa.enabled (or (not $auth.enabled) (ne $mode "irsaInit")) }}
+{{- fail "EPSS registry authentication irsaInit requires enabled=true and mode=irsaInit" }}
+{{- end }}
+{{- if and $auth.enabled (eq $mode "secret") (or (empty $auth.secretName) (empty $auth.secretKey) (empty $auth.registries)) }}
 {{- fail "EPSS registry authentication requires secretName, secretKey, and exact registries" }}
 {{- end }}
-{{- if and (not .Values.phorvex.epss.feed.registryAuth.enabled) (or .Values.phorvex.epss.feed.registryAuth.secretName .Values.phorvex.epss.feed.registryAuth.registries) }}
+{{- if and (not $auth.enabled) (or $auth.secretName $auth.registries) }}
 {{- fail "EPSS registry authentication values require registryAuth.enabled=true" }}
+{{- end }}
+{{- $useIRSA := and $auth.enabled (eq $mode "irsaInit") }}
+{{- if $useIRSA }}
+{{- if or (not $irsa.enabled) $auth.secretName (ne $auth.secretKey "config.json") }}
+{{- fail "EPSS registry authentication Secret and irsaInit modes are mutually exclusive" }}
+{{- end }}
+{{- if or (ne .Release.Namespace "phorvex-system") (ne $name "phorvex-phorvex-epss-feed") }}
+{{- fail "EPSS registry authentication irsaInit requires the exact trusted ServiceAccount subject" }}
+{{- end }}
+{{- $role := "arn:aws:iam::753556437180:role/phorvex-dev-epss-feed" }}
+{{- $hosts := list "753556437180.dkr.ecr.us-east-2.amazonaws.com" "602401143452.dkr.ecr.us-east-2.amazonaws.com" }}
+{{- if or (ne $irsa.roleARN $role) (ne $irsa.region "us-east-2") (ne (default "" (index .Values.phorvex.epss.feed.serviceAccount.annotations "eks.amazonaws.com/role-arn")) $role) }}
+{{- fail "EPSS registry authentication irsaInit requires the expected role annotation and region" }}
+{{- end }}
+{{- if or (ne (len $auth.registries) 2) (ne (join "," (sortAlpha $auth.registries)) (join "," (sortAlpha $hosts))) }}
+{{- fail "EPSS registry authentication irsaInit requires exactly the two approved hosts" }}
+{{- end }}
+{{- if not (regexMatch "^753556437180[.]dkr[.]ecr[.]us-east-2[.]amazonaws[.]com/phorvex@sha256:[0-9a-f]{64}$" $irsa.image) }}
+{{- fail "EPSS registry authentication irsaInit requires a published helper image digest" }}
+{{- end }}
+{{- if or (le (int .Values.phorvex.epss.feed.activeDeadlineSeconds) 0) (gt (int .Values.phorvex.epss.feed.activeDeadlineSeconds) 3600) (ne .Values.phorvex.epss.feed.scanTimeout "10m") }}
+{{- fail "EPSS registry authentication irsaInit supports deadline <=3600s and scanTimeout=10m" }}
+{{- end }}
 {{- end }}
 apiVersion: v1
 kind: ServiceAccount
@@ -158,6 +190,36 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           initContainers:
+          {{- if $useIRSA }}
+          - name: ecr-auth
+            image: {{ $irsa.image | quote }}
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: AWS_ROLE_ARN
+              value: {{ $irsa.roleARN | quote }}
+            - name: AWS_REGION
+              value: {{ $irsa.region | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ $irsa.region | quote }}
+            - name: AWS_WEB_IDENTITY_TOKEN_FILE
+              value: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            securityContext:
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities:
+                drop: ["ALL"]
+            resources:
+              requests: { cpu: 10m, memory: 32Mi }
+              limits: { cpu: 100m, memory: 64Mi }
+            volumeMounts:
+            - name: registry-auth
+              mountPath: /var/run/secrets/phorvex-epss-registry-auth
+            - name: epss-web-identity
+              mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+              readOnly: true
+          {{- end }}
           - name: trivy
             image: "{{ .Values.phorvex.epss.feed.trivy.image.repository }}:{{ .Values.phorvex.epss.feed.trivy.image.tag }}"
             imagePullPolicy: {{ .Values.phorvex.epss.feed.trivy.image.pullPolicy }}
@@ -230,12 +292,26 @@ spec:
             emptyDir: {}
           {{- if .Values.phorvex.epss.feed.registryAuth.enabled }}
           - name: registry-auth
+            {{- if $useIRSA }}
+            emptyDir:
+              medium: Memory
+              sizeLimit: 1Mi
+          - name: epss-web-identity
+            projected:
+              defaultMode: 0440
+              sources:
+              - serviceAccountToken:
+                  audience: sts.amazonaws.com
+                  expirationSeconds: 3600
+                  path: token
+            {{- else }}
             secret:
               secretName: {{ .Values.phorvex.epss.feed.registryAuth.secretName | quote }}
               defaultMode: 0440
               items:
               - key: {{ .Values.phorvex.epss.feed.registryAuth.secretKey | quote }}
                 path: config.json
+            {{- end }}
           {{- end }}
           {{- with .Values.phorvex.epss.feed.nodeSelector }}
           nodeSelector:
