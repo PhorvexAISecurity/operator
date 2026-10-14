@@ -191,5 +191,5 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 # Stage6 parent provenance (committed bytes; re-derive if parent changes).
-PARENT_PROVENANCE = {'branch': 'fix/cfx-stage5-auth-metrics', 'commit': 'ea70951ccf871b58bd60f71202f52228b70c83bc', 'path': 'build/test-harness/fixtures/litellm-live/generate_metrics_token.py', 'blob': 'c3b3e80ae3ddc9af7106714280d1aae8d2834a81', 'sha256': '1b28e7752f073eb75517f128457fb6815a4a4034ed6030dc0ea939d705289c4c'}
+PARENT_PROVENANCE = {'branch': 'fix/cfx-stage5-helper-log-negotiation', 'commit': '66868c3b485035f1ebae1d558b92d3decd768679', 'path': 'build/test-harness/fixtures/litellm-live/generate_metrics_token.py', 'blob': 'c3b3e80ae3ddc9af7106714280d1aae8d2834a81', 'sha256': '1b28e7752f073eb75517f128457fb6815a4a4034ed6030dc0ea939d705289c4c'}
 # End Stage6 parent provenance.

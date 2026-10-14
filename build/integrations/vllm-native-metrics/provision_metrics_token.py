@@ -129,7 +129,7 @@ class ProxyAPI:
     def logs(self, namespace, pod):
         # Only these reviewed bounded helpers' nonsecret logs are allowed.
         request = Request(self.base + f"/api/v1/namespaces/{namespace}/pods/{pod}/log?limitBytes=65536",
-                          headers={"Accept": "text/plain"})
+                          headers={"Accept": "application/json"})
         try:
             with self.opener.open(request, timeout=10) as response:
                 raw = response.read(65537)
@@ -485,5 +485,5 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 # Stage6 parent provenance (committed bytes; re-derive if parent changes).
-PARENT_PROVENANCE = {'branch': 'fix/cfx-stage5-auth-metrics', 'commit': 'ea70951ccf871b58bd60f71202f52228b70c83bc', 'path': 'build/test-harness/fixtures/litellm-live/provision_metrics_token.py', 'blob': '108fed95cd58179fcf2e60aab97e76d439426fa9', 'sha256': '017ce3e68aa86b6e440d94e098c7efa81da0f2d8f1138986d2aa6dfc3fa8eed1'}
+PARENT_PROVENANCE = {'branch': 'fix/cfx-stage5-helper-log-negotiation', 'commit': '66868c3b485035f1ebae1d558b92d3decd768679', 'path': 'build/test-harness/fixtures/litellm-live/provision_metrics_token.py', 'blob': '53b496e345ae9b0d02e260fa78cb30c33c9378e1', 'sha256': '666f4ee9edc61791f62b5c6a1410cd20ef29b6d3f62ec1e00ac7657b1ba7279b'}
 # End Stage6 parent provenance.

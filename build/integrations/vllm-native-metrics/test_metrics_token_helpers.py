@@ -6,6 +6,8 @@ import io
 import json
 import unittest
 from unittest.mock import Mock, patch
+from urllib.error import HTTPError
+from urllib.request import Request
 import generate_metrics_token as generate
 import provision_metrics_token as provision
 
@@ -276,7 +278,7 @@ class TokenHelpers(unittest.TestCase):
             self.assertEqual(hashlib.sha256(raw).hexdigest(), module.PARENT_PROVENANCE["sha256"])
             self.assertEqual(hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest(),
                              module.PARENT_PROVENANCE["blob"])
-            self.assertEqual(module.PARENT_PROVENANCE["commit"], "ea70951ccf871b58bd60f71202f52228b70c83bc")
+            self.assertEqual(module.PARENT_PROVENANCE["commit"], "66868c3b485035f1ebae1d558b92d3decd768679")
 
     def test_consumers_cover_native_init_projected_env_and_monitor_refs(self):
         references = [
@@ -352,6 +354,35 @@ class TokenHelpers(unittest.TestCase):
         self.assertEqual(len(state["slots"]), 2)
         self.assertNotIn("report", state)
         self.assertTrue(all(value["kind"] == "Secret" and value["data"] == {} for value in inventory.values()))
+
+    def test_helper_logs_negotiate_api_json_before_plain_text_stream(self):
+        # Real cluster NOOP control: text/plain produced 406 NotAcceptable;
+        # application/json produced 200 with this same plain-text JSON line.
+        api = provision.ProxyAPI()
+        payload = b'{"diagnostic":"ok"}\n'
+        class Response(io.BytesIO):
+            headers = {"Content-Type": "text/plain"}
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+        def negotiated(request, timeout):
+            self.assertEqual(timeout, 10)
+            if request.get_header("Accept") not in ("application/json", "*/*"):
+                raise HTTPError(request.full_url, 406, "NotAcceptable", {}, None)
+            return Response(payload)
+        api.opener.open = Mock(side_effect=negotiated)
+        output = api.logs("vllm", "reviewed-helper-pod")
+        self.assertEqual(output, payload.decode("ascii"))
+        self.assertEqual(json.loads(output), {"diagnostic": "ok"})
+        request = api.opener.open.call_args.args[0]
+        self.assertEqual(request.get_header("Accept"), "application/json")
+        self.assertEqual(request.full_url,
+                         "http://127.0.0.1:18081/api/v1/namespaces/vllm/pods/reviewed-helper-pod/log?limitBytes=65536")
+        # The former header is a discriminating negative control, rather than
+        # accepting every mock request and concealing negotiation failures.
+        with self.assertRaises(HTTPError) as rejected:
+            negotiated(Request(request.full_url, headers={"Accept": "text/plain"}), 10)
+        self.assertEqual(rejected.exception.code, 406)
+
 
 
 if __name__ == "__main__":
