@@ -128,8 +128,8 @@ class MetricsRenderTests(unittest.TestCase):
             "items": [{"key": "token", "path": "token", "mode": 288}]}})
         self.assertEqual(closure["schema"], "phorvex-litellm-metrics-candidate-v2")
         self.assertEqual(closure["metricsProtection"], module.protection("bearerToken", module.SECRET_NAME, "token", digest))
-        self.assertEqual(closure["nativeDecision"], "B")
-        self.assertEqual(closure["nativeVLLMPolicy"], "hardGate")
+        self.assertEqual(closure["nativeDecision"], "A")
+        self.assertEqual(closure["nativeVLLMPolicy"], "separateAcceptance")
         for name, value in objects.items():
             if name != "metrics-closure.json":
                 self.assertEqual(closure["artifactsSHA256"][name], module.object_hash(value))

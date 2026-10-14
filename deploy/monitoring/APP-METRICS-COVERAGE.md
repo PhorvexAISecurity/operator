@@ -3,8 +3,9 @@
 Stage 5 adds authenticated LiteLLM admission metrics support. Active EKS values
 remain disabled and retain the legacy Console source/profile. Prospective m5
 artifacts and isolated checks establish candidate support, not live collection.
-Default decision B keeps native vLLM a hard activation gate; its 2026-10-14
-DOWN/empty observations block provisioning/S5b until independently repaired.
+The explicit 2026-10-14 supervisor correction selects decision A: native vLLM
+acceptance is separate Stage 6 work. Fresh DOWN/empty observations are reported
+without blocking valid authenticated gateway provisioning/S5b/activation.
 No vLLM scrape/query/rule, CNI, retention, account, tenant or NATS changes are made.
 
 ## Source and release contract
@@ -22,7 +23,8 @@ S5a support ships the shared compatible engine/Console contract with production
 metrics off. Its v4 image contract and actual-image v2 receipt separate historical
 publication from the exact newly tested mounted source commit/hash. S5b follows
 only after real compatible release identities, idle/journal gates, source/runtime
-integrity, real auth witness and native acceptance. The externally owned gateway
+integrity and real auth witness; fresh native readbacks report separate acceptance.
+The externally owned gateway
 rolls out through UID/resourceVersion/full-spec-tested forward and inverse patches.
 The wrapper owns only immutable source/profile, exact-name ConfigMap read grants,
 Service/ServiceMonitor/NetworkPolicy. Existing serving ownership remains unchanged.
@@ -108,7 +110,10 @@ no scrape/auth/reload failures and ten minutes after final convergence. Raw gate
 up ranges need ≥19 samples per target at 30s, every value 1 and no adjacent/window
 edge gap above 45s. Native has independent sustained-health and exact finite,
 nonnegative engine ReqRate for its current serving Pod. Zero observed rate is
-valid; empty vectors fail. Default B requires native acceptance before activation.
+valid; empty vectors leave native acceptance unmet. Explicit decision A permits
+bearer gateway activation on its own checks with fresh DOWN/empty evidence,
+recording the Stage 6 dependency. Missing/stale/malformed native readbacks still
+fail evidence integrity. Legacy network mode retains its native hard gate.
 
 Require nonempty counter/bucket/count/sum populations, per-label accounting
 agreement and ordinary authorized traffic increments. Exact engine LiteLLM ReqRate
@@ -116,7 +121,8 @@ uses namespace litellm; native query uses namespace vllm. Gateway traffic cannot
 fill an empty native vector. Preserve the generic bridge and source queries.
 Insufficient histogram observations cannot establish p99. No seven-day history,
 all-rotate-veto removal or fleet-wide coverage is claimed by candidate support.
-Stage 5 completes only when gateway and native acceptance both pass.
+Complete gateway activation/acceptance on its own checks and record native
+acceptance separately. A native-only gap does not roll back healthy gateway metrics.
 
 Rollback first restores the reviewed preceding legacy template (removing 4003,
 metrics env/label/token projection), then disables/restores exact metrics/auth and
@@ -130,8 +136,8 @@ No rotation mode or opt-in-0 auth-source compatibility state is introduced.
 
 | Source | Remaining work |
 | --- | --- |
-| LiteLLM gateway | Default-off authenticated support; native dependency and real release/provisioning/live acceptance remain separate gates. |
-| vLLM | Native-target owner must restore scrape/completion population; no source or query repair is in Stage 5. |
+| LiteLLM gateway | Default-off authenticated support; real release/provisioning/gateway live acceptance remain required. Native health is separate acceptance. |
+| vLLM | Parallel Stage 6 restores native scrape/completion population; fresh DOWN/empty is reported without blocking gateway activation. |
 | ALB target groups | Future outside-Pod source for console, voice-bot-public, ci-reports, grafana, argocd; CloudWatch exporter and separate read-only IAM. Averages do not establish histogram p99. |
 | Voice / MCP / CRM | Caller-facing request/session/tool/refund populations need owner instrumentation and bounded labels. |
 | Chroma / ci-reports / Mongo | Health/database metrics alone do not establish caller HTTP p99. |

@@ -1,7 +1,8 @@
 """Fail closed on nonsecret activation evidence; never accesses Kubernetes.
 
 V1 is explicitly the historical network-enforced branch. V2 is bearer auth;
-valid auth proves protection with disabled CNI, while native vLLM remains a hard gate.
+valid auth proves protection with disabled CNI. Native vLLM acceptance is separate
+for bearer mode, as explicitly selected in the Stage5 supervisor correction.
 """
 import argparse
 from datetime import datetime, timezone
@@ -59,49 +60,90 @@ def verify_network(base, network_config, network_proof):
 
 
 def verify_native(prometheus, *, authenticated=False):
+    if authenticated:
+        return verify_native_acceptance(prometheus)
+    # Preserve the historical network branch's native hard gate.
     checked_recent(prometheus['utc'])
-    names = NATIVE_QUERIES if authenticated else ('vllm-up', 'vllm-native', 'vllm-ReqRate')
-    observed = {}
-    for name in names:
-        query = prometheus.get('queries', {}).get(name, {})
-        if authenticated and query.get('query') != NATIVE_QUERIES[name]:
-            raise ValueError('exact native vLLM source/bridge query required: ' + name)
-        result = query.get('result', {})
+    for name in ('vllm-up', 'vllm-native', 'vllm-ReqRate'):
+        result = prometheus.get('queries', {}).get(name, {}).get('result', {})
         samples = result.get('data', {}).get('result', [])
         if result.get('status') != 'success' or not samples:
             raise ValueError('native vLLM source/bridge prerequisite unavailable: ' + name)
-        observed[name] = set()
         for row in samples:
             try:
                 value = float(row['value'][1])
             except (KeyError, IndexError, TypeError, ValueError):
                 raise ValueError('native vLLM source/bridge prerequisite invalid: ' + name) from None
-            if not math.isfinite(value) or value < 0 or (name in ('vllm-up', 'vllm-up10m') and value != 1):
+            if not math.isfinite(value) or value < 0 or (name == 'vllm-up' and value != 1):
                 raise ValueError('native vLLM source/bridge prerequisite invalid: ' + name)
-            if authenticated:
-                pod = row.get('metric', {}).get('pod')
-                if not pod or (name != 'vllm-ReqRate' and row['metric'].get('namespace') != 'vllm'):
-                    raise ValueError('actual native vLLM serving-pod labels required: ' + name)
-                checked_recent(datetime.fromtimestamp(float(row['value'][0]), timezone.utc).isoformat())
-                observed[name].add(pod)
-    if authenticated:
-        pods = observed['vllm-up']
-        if any(observed[name] != pods for name in NATIVE_QUERIES):
+    return {'status': 'pass', 'reasons': [], 'dependency': None}
+
+
+def verify_native_acceptance(prometheus):
+    """Validate fresh native readbacks; observed gaps belong to Stage6, not activation."""
+    if not isinstance(prometheus, dict):
+        raise ValueError('fresh native vLLM source/bridge evidence required')
+    checked_recent(prometheus.get('utc'))
+    observed = {}
+    reasons = []
+    for name, expected_query in NATIVE_QUERIES.items():
+        query = prometheus.get('queries', {}).get(name, {})
+        if query.get('query') != expected_query:
+            raise ValueError('exact native vLLM source/bridge query required: ' + name)
+        result = query.get('result', {})
+        data = result.get('data', {})
+        samples = data.get('result')
+        if result.get('status') != 'success' or data.get('resultType') != 'vector' or not isinstance(samples, list):
+            raise ValueError('successful native vLLM vector readback required: ' + name)
+        observed[name] = set()
+        if not samples:
+            reasons.append('empty vector: ' + name)
+        for row in samples:
+            try:
+                timestamp, raw = row['value']
+                value = float(raw)
+                checked_recent(datetime.fromtimestamp(float(timestamp), timezone.utc).isoformat())
+            except (KeyError, TypeError, ValueError, OverflowError):
+                raise ValueError('fresh valid native vLLM sample required: ' + name) from None
+            if not math.isfinite(value) or value < 0 or (name in ('vllm-up', 'vllm-up10m') and value not in (0, 1)):
+                raise ValueError('native vLLM sample invalid: ' + name)
+            pod = row.get('metric', {}).get('pod')
+            if not pod or (name != 'vllm-ReqRate' and row['metric'].get('namespace') != 'vllm'):
+                raise ValueError('actual native vLLM serving-pod labels required: ' + name)
+            observed[name].add(pod)
+            if name in ('vllm-up', 'vllm-up10m') and value == 0:
+                reasons.append('observed DOWN: ' + name)
+    if not isinstance(prometheus.get('targets'), list):
+        raise ValueError('fresh current native vLLM target readback required')
+    targets = [target for target in prometheus['targets'] if target.get('labels', {}).get('job') == 'vllm']
+    target_pods = set()
+    for target in targets:
+        labels = target.get('labels', {})
+        if (labels.get('namespace') != 'vllm' or not labels.get('pod') or
+                target.get('health') not in ('up', 'down', 'unknown')):
+            raise ValueError('valid current native vLLM target identity required')
+        target_pods.add(labels['pod'])
+        if target['health'] != 'up' or target.get('lastError'):
+            reasons.append('native target unhealthy')
+    if not targets:
+        reasons.append('native target absent')
+    for name, pods in observed.items():
+        if not pods.issubset(target_pods):
             raise ValueError('native vLLM query populations differ from current serving targets')
-        targets = [target for target in prometheus.get('targets', [])
-                   if target.get('labels', {}).get('job') == 'vllm']
-        if (not targets or {target.get('labels', {}).get('pod') for target in targets} != pods or
-                any(target.get('health') != 'up' or target.get('lastError') or
-                    target.get('labels', {}).get('namespace') != 'vllm' for target in targets)):
-            raise ValueError('healthy current native vLLM targets required')
-        groups = [group for group in prometheus.get('bridgeRules', []) if group.get('name') == 'phorvex.physics.bridge']
-        if len(groups) != 1:
-            raise ValueError('existing healthy native vLLM bridge evidence required')
-        bridge = next((rule for rule in groups[0].get('rules', []) if rule.get('name') == 'http_requests_total'), {})
-        if (bridge.get('query') != 'sum by (namespace, pod, container, node) (vllm:request_success_total)' or
-                bridge.get('health') != 'ok'):
-            raise ValueError('existing healthy native vLLM bridge evidence required')
-        checked_recent(bridge.get('lastEvaluation'))
+        if pods != target_pods:
+            reasons.append('native target population incomplete: ' + name)
+    groups = [group for group in prometheus.get('bridgeRules', []) if group.get('name') == 'phorvex.physics.bridge']
+    if len(groups) != 1:
+        raise ValueError('existing native vLLM bridge readback required')
+    bridge = next((rule for rule in groups[0].get('rules', []) if rule.get('name') == 'http_requests_total'), {})
+    if (bridge.get('query') != 'sum by (namespace, pod, container, node) (vllm:request_success_total)' or
+            bridge.get('health') not in ('ok', 'err', 'unknown')):
+        raise ValueError('existing native vLLM bridge evidence invalid')
+    checked_recent(bridge.get('lastEvaluation'))
+    if bridge['health'] != 'ok':
+        reasons.append('native bridge unhealthy')
+    return {'status': 'unmet' if reasons else 'pass', 'reasons': sorted(set(reasons)),
+            'dependency': 'stage6' if reasons else None}
 
 
 def verify_artifacts(closure, inputs, artifacts):
@@ -134,7 +176,7 @@ def verify_artifacts(closure, inputs, artifacts):
         metrics_secret_name=auth['secretName'], metrics_secret_key=auth['secretKey'])
     for key in ('metricsProtection', 'gatewaySourceSHA256', 'previousGatewaySourceSHA256',
                 'gatewayImageByDigest', 'previousGatewayImageByDigest', 'profiles',
-                'candidateTemplateSHA256', 'monitoringSpecsSHA256', 'networkAudit'):
+                'candidateTemplateSHA256', 'monitoringSpecsSHA256', 'networkAudit', 'nativeDecision', 'nativeVLLMPolicy'):
         if closure.get(key) != derived['metrics-closure.json'].get(key):
             raise ValueError('reviewed candidate closure differs: ' + key)
     for name, value in derived.items():
@@ -156,8 +198,8 @@ def check(closure, inputs, runtime_receipt, network_config=None, network_proof=N
         mode = closure.get('metricsProtection', {}).get('mode')
         if mode != 'bearerToken':
             raise ValueError('v2 closure requires explicit bearerToken protection')
-        if closure.get('nativeDecision') != 'B' or closure.get('nativeVLLMPolicy') != 'hardGate':
-            raise ValueError('reviewed default B native-vLLM hard gate required')
+        if closure.get('nativeDecision') != 'A' or closure.get('nativeVLLMPolicy') != 'separateAcceptance':
+            raise ValueError('reviewed explicit A native-vLLM separate acceptance required')
     else:
         raise ValueError('explicit reviewed metrics protection closure schema required')
     def read(name):
@@ -227,10 +269,14 @@ def check(closure, inputs, runtime_receipt, network_config=None, network_proof=N
         raise ValueError('installed output policy must remain quiescent; never reset it')
     if prometheus is None:
         raise ValueError('fresh native vLLM source/bridge evidence required')
-    verify_native(prometheus, authenticated=mode == 'bearerToken')
-    print(mode + ' source/runtime/protection/native-source guards PASS; release and idle/journal gates still required')
-    return {'protectionMode': mode, 'protection': 'pass', 'nativeVLLM': 'pass',
-            'nativeDecision': 'B', 'releaseAndIdleJournalGates': 'still-required'}
+    native = verify_native(prometheus, authenticated=mode == 'bearerToken')
+    if mode == 'bearerToken':
+        print('native vLLM acceptance ' + native['status'].upper() +
+              ('; stage6 dependency, gateway activation may proceed' if native['status'] == 'unmet' else ''))
+    print(mode + ' source/runtime/protection guards PASS; release and idle/journal gates still required')
+    return {'protectionMode': mode, 'protection': 'pass', 'nativeVLLM': native['status'],
+            'nativeVLLMDetails': native, 'nativeDecision': 'A' if mode == 'bearerToken' else 'B',
+            'releaseAndIdleJournalGates': 'still-required'}
 
 
 def main():

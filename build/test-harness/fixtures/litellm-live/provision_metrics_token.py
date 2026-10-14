@@ -119,7 +119,7 @@ class ProxyAPI:
 
     def delete(self, path, uid, version, secret=False):
         body = {"apiVersion": "v1", "kind": "DeleteOptions", "preconditions":
-                {"uid": uid, "resourceVersion": version}, "propagationPolicy": "Foreground"}
+                {"uid": uid, "resourceVersion": version}, "propagationPolicy": "Background" if secret else "Foreground"}
         result = self.request("DELETE", path, body, accept=PARTIAL_ACCEPT if secret else "application/json")
         if result.get("status") == "Failure":
             raise SafeFailure("guarded deletion refused")

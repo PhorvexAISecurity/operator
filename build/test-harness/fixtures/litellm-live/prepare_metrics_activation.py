@@ -106,7 +106,7 @@ def prepare(inputs, values_path, baseline_bindings=None, *, protection_mode=None
     closure['gates'] = ['compatible engine and Console released', 'published image exact mounted-source proof',
         'fresh UID/spec/source/client guards', 'idle catalogue and no prepared client/output operations',
         'quiescent installed output policy', 'real cross-namespace bearer-auth proof and metadata-only Secret UID/RV binding',
-        'Hami native vLLM scrape healthy for ten minutes and existing generic bridge/query available']
+        'fresh native vLLM source/bridge/query readbacks; acceptance reported separately for stage6']
     return bind_artifacts(objects)
 
 

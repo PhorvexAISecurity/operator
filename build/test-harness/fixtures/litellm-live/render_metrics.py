@@ -319,7 +319,7 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
         {"op": "test", "path": "/spec", "value": candidate_spec},
         {"op": "replace", "path": "/spec/template", "value": template}]
     objects["metrics-closure.json"] = {"schema": "phorvex-litellm-metrics-candidate-v2",
-        "metricsProtection": metrics_protection, "nativeVLLMPolicy": "hardGate", "nativeDecision": "B",
+        "metricsProtection": metrics_protection, "nativeVLLMPolicy": "separateAcceptance", "nativeDecision": "A",
         "candidateTemplateSHA256": hashlib.sha256(canonical(candidate_template).encode()).hexdigest(),
         "networkAudit": {"existingMetricsIngress": network_audit, "enforcement": "not inferred from policies"},
         "gatewaySourceSHA256": source_sha, "previousGatewaySourceSHA256": old_sha,
@@ -330,7 +330,7 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
                            "installedSourceSHA256": old_sha,
                            "candidateSourceSHA256": source_sha,
                            "candidateSourceConfigMapName": source_name},
-        "activation": "S5b only after compatible release, actual-image/auth/idle proof and healthy native vLLM"}
+        "activation": "S5b after compatible release and actual-image/auth/idle proof; native vLLM reported separately for stage6"}
     for obj in objects.values():
         if isinstance(obj, dict) and obj.get("kind") in ("ConfigMap", "Service", "ServiceMonitor", "NetworkPolicy"):
             obj["metadata"].setdefault("annotations", {})["helm.sh/resource-policy"] = "keep"

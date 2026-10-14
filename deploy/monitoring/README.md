@@ -19,10 +19,11 @@ and selectors, and verified later only by sanitized generator records plus
 PartialObjectMetadata UID/resourceVersion readbacks.
 
 The [release runbook](LITELLM-METRICS-RELEASE.md) requires a real cross-namespace
-auth witness, the compatible release, actual-image/source proof and native-vLLM
-health before activation. Valid auth passes protection with CNI disabled, without
-claiming network enforcement. Default B retains native-vLLM as a hard gate; its
-DOWN/empty dependency defers provisioning and active values. The
+auth witness, the compatible release, actual-image/source proof and fresh native
+readbacks. Valid auth passes protection with CNI disabled, without claiming
+network enforcement. The explicit supervisor correction selects A: fresh native
+DOWN/empty reports separate Stage 6 acceptance and permits gateway activation
+when its own checks pass. Legacy network mode keeps its native hard gate. The
 [coverage record](APP-METRICS-COVERAGE.md) defines populations, fixed labels,
 acceptance limits and remaining app gaps. Existing Stage 4 alerting, 14d/15GB,
 PVCs and unrelated monitoring configuration are preserved.

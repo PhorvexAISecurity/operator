@@ -658,7 +658,7 @@ catalogueProfiles:
 
 # Stage 5 prepares immutable source/profile and authenticated scrape objects.
 # The manually owned gateway is activated after the compatible engine/Console
-# release, actual-image/auth proof and healthy native vLLM. See
+# release and actual-image/auth proof; native acceptance is separate Stage 6 work. See
 # deploy/monitoring/LITELLM-METRICS-RELEASE.md; no Helm adoption of Deployment/litellm.
 litellmGatewayMetrics:
   enabled: false

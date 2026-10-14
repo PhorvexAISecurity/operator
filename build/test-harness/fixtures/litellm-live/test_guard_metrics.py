@@ -118,23 +118,31 @@ class AuthGuardTests(unittest.TestCase):
             'args':['--enable-network-policy=false']}],'networkPolicyEnv':[{'name':'NETWORK_POLICY_ENFORCING_MODE','value':'standard'}]},None,prom]
         return args,{'auth_proof':proof,'secret_metadata':metadata,'artifacts':artifacts}
 
-    def test_disabled_cni_with_valid_auth_passes_protection_and_native_hard_gate(self):
+    def test_disabled_cni_with_valid_auth_passes_with_separate_native_acceptance(self):
         with tempfile.TemporaryDirectory() as tmp:
             args,kwargs=self.fixture(Path(tmp))
             output=io.StringIO()
             with contextlib.redirect_stdout(output):result=check(*args,**kwargs)
             self.assertEqual(result['protectionMode'],'bearerToken')
-            self.assertEqual(result['nativeDecision'],'B')
+            self.assertEqual(result['nativeDecision'],'A')
+            self.assertEqual(result['nativeVLLM'],'pass')
             self.assertIn('PROTECTION PASS',output.getvalue())
             args[5]['queries']['vllm-up']['result']['data']['result'][0]['value'][1]='0'
-            output=io.StringIO()
-            with contextlib.redirect_stdout(output),self.assertRaisesRegex(ValueError,'native vLLM.*invalid'):
-                check(*args,**kwargs)
-            self.assertIn('PROTECTION PASS',output.getvalue())
-            args[5]['queries']['vllm-up']['result']['data']['result'][0]['value'][1]='1'
+            args[5]['queries']['vllm-up10m']['result']['data']['result'][0]['value'][1]='0'
+            args[5]['queries']['vllm-native']['result']['data']['result']=[]
             args[5]['queries']['vllm-ReqRate']['result']['data']['result']=[]
-            with self.assertRaisesRegex(ValueError,'prerequisite unavailable'):
-                check(*args,**kwargs)
+            args[5]['targets'][0].update(health='down',lastError='connection refused')
+            output=io.StringIO()
+            with contextlib.redirect_stdout(output):result=check(*args,**kwargs)
+            self.assertEqual(result['protection'],'pass')
+            self.assertEqual(result['nativeVLLM'],'unmet')
+            self.assertEqual(result['nativeVLLMDetails']['dependency'],'stage6')
+            self.assertIn('PROTECTION PASS',output.getvalue())
+            self.assertIn('stage6 dependency, gateway activation may proceed',output.getvalue())
+            # Fresh successful empty vectors/target absence remain an honest observed gap.
+            for query in args[5]['queries'].values():query['result']['data']['result']=[]
+            args[5]['targets']=[]
+            self.assertEqual(check(*args,**kwargs)['nativeVLLM'],'unmet')
 
     def test_missing_stale_future_and_wrong_source_or_receipt_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -153,7 +161,8 @@ class AuthGuardTests(unittest.TestCase):
                 lambda a:a[0].update(gatewaySourceSHA256='f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1'),
                 lambda a:a[2].update(schema='phorvex-litellm-gateway-runtime-reuse-receipt-v1'),
                 lambda a:a[2].update(mountedSourceCommit='b'*40),
-                lambda a:a[0].update(nativeDecision='A'),
+                lambda a:a[0].update(nativeDecision='B'),
+                lambda a:a[0].update(nativeVLLMPolicy='hardGate'),
             ):
                 current=copy.deepcopy(args);mutate(current)
                 with self.assertRaises(ValueError):check(*current,**kwargs)
@@ -188,18 +197,36 @@ class AuthGuardTests(unittest.TestCase):
                     check(*current,**kwargs)
                 path.write_text(original)
 
-    def test_native_query_or_identity_or_ten_minute_health_drift_fails(self):
+    def test_native_missing_stale_malformed_query_or_identity_evidence_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            for mutate in (
+                lambda p:p['queries'].pop('vllm-up10m'),
+                lambda p:p['queries']['vllm-ReqRate'].update(query='sum(http_requests_total)'),
+                lambda p:p['queries']['vllm-native']['result']['data']['result'][0]['metric'].update(pod='foreign-pod'),
+                lambda p:p['queries']['vllm-native']['result'].update(status='error'),
+                lambda p:p['queries']['vllm-ReqRate']['result']['data'].update(result=None),
+                lambda p:p.pop('targets'),
+                lambda p:p['bridgeRules'][0]['rules'][0].update(query='sum(http_requests_total)'),
+                lambda p:p.update(utc=(datetime.now(timezone.utc)-timedelta(seconds=1801)).isoformat()),
+                lambda p:p.update(utc=(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat()),
+            ):
+                current=copy.deepcopy(args);mutate(current[5])
+                with self.assertRaises(ValueError):check(*current,**kwargs)
+
+    def test_fresh_native_health_gaps_are_reported_without_blocking_auth(self):
         with tempfile.TemporaryDirectory() as tmp:
             args,kwargs=self.fixture(Path(tmp))
             for mutate in (
                 lambda p:p['queries']['vllm-up10m']['result']['data']['result'][0]['value'].__setitem__(1,'0'),
-                lambda p:p['queries']['vllm-ReqRate'].update(query='sum(http_requests_total)'),
-                lambda p:p['queries']['vllm-native']['result']['data']['result'][0]['metric'].update(pod='foreign-pod'),
                 lambda p:p['targets'][0].update(health='down'),
                 lambda p:p['bridgeRules'][0]['rules'][0].update(health='err'),
             ):
                 current=copy.deepcopy(args);mutate(current[5])
-                with self.assertRaises(ValueError):check(*current,**kwargs)
+                result=check(*current,**kwargs)
+                self.assertEqual(result['protection'],'pass')
+                self.assertEqual(result['nativeVLLM'],'unmet')
+                self.assertEqual(result['nativeVLLMDetails']['dependency'],'stage6')
 
 
 if __name__=='__main__':unittest.main()
