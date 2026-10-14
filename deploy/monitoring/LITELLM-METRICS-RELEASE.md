@@ -19,8 +19,11 @@ Console read Role. Its JSON inputs are in `files/litellm-m1b/`. No dependency
 chart changes or repackaging are necessary; the current EPSS package stays intact.
 `values-eks.yaml` switches the complete active Console closure. Generic values
 remain disabled. New source/profile and metrics objects carry
-`helm.sh/resource-policy: keep`, so a rollback retains their identities for
-explicit guarded cleanup. Do not blanket-sync/prune existing Argo drift.
+`helm.sh/resource-policy: keep` and explicit Argo
+`argocd.argoproj.io/sync-options: Prune=false,Delete=false`. This preserves
+their identities during rollback for explicit guarded cleanup.
+[Argo sync options](https://argo-cd.readthedocs.io/en/stable/user-guide/sync-options/#no-prune-resources)
+document the resource-level pruning control. Do not blanket-sync/prune existing Argo drift.
 
 `deploy/monitoring/litellm-m1b/metrics-closure.json` is the authoritative prepared
 closure: full source/runtime/profile hashes, baseline UIDs/spec hash and input
@@ -249,7 +252,8 @@ blanket live Helm rollback. Restore `previous-console-bindings.json` and disable
 read authority. Do not
 roll back the engine/Console binaries merely to undo gateway telemetry. The
 compatible release supports the legacy profile after restoration. Immutable
-source/profile CMs and metrics objects are retained by the keep annotation.
+source/profile CMs and metrics objects are retained by the explicit pruning
+and deletion controls.
 After Git/Helm ownership converges to disabled metrics and no later writer exists,
 remove only the three recorded metrics objects, with API UID/resourceVersion
 preconditions and exact spec/metadata comparisons:

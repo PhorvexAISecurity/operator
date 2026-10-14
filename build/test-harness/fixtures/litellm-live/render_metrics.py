@@ -251,6 +251,7 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
     for obj in objects.values():
         if isinstance(obj, dict) and obj.get("kind") in ("ConfigMap", "Service", "ServiceMonitor", "NetworkPolicy"):
             obj["metadata"].setdefault("annotations", {})["helm.sh/resource-policy"] = "keep"
+            obj["metadata"]["annotations"]["argocd.argoproj.io/sync-options"] = "Prune=false,Delete=false"
     return objects
 
 
