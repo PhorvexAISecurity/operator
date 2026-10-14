@@ -239,24 +239,29 @@ Check both Ready legacy Pods and serving endpoints. If admission/defaulting
 changed the candidate spec, freshly compare it and review a new exact rollback
 patch rather than dropping guards. New and old sources remain approved.
 
-The lead prepares a reviewed Git revert of the exact M1b activation commit
-from fresh main, preserving subsequent release pins, EPSS and Hami's changes.
-The offline starting point is the exact recorded activation commit, leaving
-legacy compatibility available:
+Prepare a rollback PR from an isolated fresh-main worktree after the gateway
+has converged on the legacy source. Restore only the three preceding profile
+bindings and disable the metrics flag, keeping compatibility code and all later
+release pins. The preparer refuses changed source/profile authority, writes a
+new file exclusively, preserves formatting, and verifies no other YAML value
+changed:
 
 ```sh
-git revert --no-commit "$M1B_ACTIVATION_COMMIT"
+python3 -B build/test-harness/fixtures/litellm-live/prepare_metrics_rollback.py \
+  --values deploy/helm/phorvex-stack/values-eks.yaml \
+  --closure deploy/monitoring/litellm-m1b/metrics-closure.json \
+  --previous deploy/monitoring/litellm-m1b/previous-console-bindings.json \
+  --output "$M1B_EVIDENCE/values-eks-rollback.yaml"
+cp "$M1B_EVIDENCE/values-eks-rollback.yaml" deploy/helm/phorvex-stack/values-eks.yaml
+git diff --check
+git diff -- deploy/helm/phorvex-stack/values-eks.yaml
 ```
 
-Before committing that revert, preserve subsequent manager/Console release
-pins and independently review its file delta; it is not permission for a
-blanket live Helm rollback. Restore `previous-console-bindings.json` and disable
-`litellmGatewayMetrics`; verify the full preceding profile hash/mount and source
-read authority. Do not
-roll back the engine/Console binaries merely to undo gateway telemetry. The
-compatible release supports the legacy profile after restoration. Immutable
-source/profile CMs and metrics objects are retained by the explicit pruning
-and deletion controls.
+Review and merge that values-only PR. Do not revert the whole M1b merge or use a
+blanket Helm rollback: those would also undo the compatibility contract or later
+owner changes. The compatible engine/Console release recognizes the legacy
+profile after restoration. Immutable sources/profiles and metrics objects are
+retained by explicit pruning/deletion controls.
 After Git/Helm ownership converges to disabled metrics and no later writer exists,
 remove only the three recorded metrics objects, with API UID/resourceVersion
 preconditions and exact spec/metadata comparisons:
