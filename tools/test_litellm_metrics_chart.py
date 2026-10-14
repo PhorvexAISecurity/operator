@@ -87,17 +87,20 @@ class MetricsChartTests(unittest.TestCase):
         items=[o for o in yaml.safe_load_all(result.stdout) if o]
         self.assertFalse(any(o['metadata']['name']=='phorvex-litellm-gateway-metrics' for o in items))
 
-    def test_committed_eks_stays_disabled_with_legacy_console_bindings(self):
-        values=yaml.safe_load(VALUES.read_text())
-        self.assertIs(values['litellmGatewayMetrics']['enabled'],False)
+    def test_disabled_overlay_preserves_legacy_console_bindings(self):
         legacy={
             'configMapName':'phorvex-litellm-live-profile-7ca969928785',
             'profileSHA256':'7ca969928785e68e4959b99605b34d5666e34f239ce300a031fe438b619553cc',
             'sourceConfigMapName':'phorvex-litellm-admission-gateway-4bf046ce690c',
         }
-        live=values['phorvex']['phorvex']['console']['litellmLive']
-        self.assertEqual({field:live[field] for field in legacy},legacy)
-        result=render();self.assertEqual(result.returncode,0,result.stderr)
+        disabled_values={
+            'litellmGatewayMetrics':{'enabled':False},
+            'phorvex':{'phorvex':{'console':{
+                'litellmLive':{'enabled':True,**legacy},
+                'litellmOutput':{'enabled':False},
+            }}},
+        }
+        result=render(disabled_values);self.assertEqual(result.returncode,0,result.stderr)
         items=[o for o in yaml.safe_load_all(result.stdout) if o]
         metrics_owned={CM,CLOSURE['sourceConfigMapName'],'phorvex-litellm-admission-gateway-f550b9890b20',
             'phorvex-litellm-gateway-metrics','phorvex-console-litellm-metrics-source'}
@@ -109,6 +112,8 @@ class MetricsChartTests(unittest.TestCase):
         self.assertEqual(env['PHORVEX_CONSOLE_LITELLM_OUTPUT_ENABLED']['value'],'false')
         volume=next(v for v in console['volumes'] if v['name']=='litellm-live-reviewed-inputs')
         self.assertEqual(volume['projected']['sources'][0]['configMap']['name'],legacy['configMapName'])
+        source_role=by['Role','litellm','phorvex-phorvex-console-litellm-live-source']
+        self.assertEqual(source_role['rules'][0]['resourceNames'][0],legacy['sourceConfigMapName'])
         self.assertNotIn(('Deployment','litellm','litellm'),by)
 
     def test_invalid_profile_and_source_pins_fail_closed(self):
