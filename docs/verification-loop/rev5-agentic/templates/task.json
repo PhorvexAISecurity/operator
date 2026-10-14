@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "task_id": "task-001",
+  "campaign_id": "campaign-001",
+  "case_id": "C-001",
+  "role": "CASE_BINDER",
+  "actor_id": null,
+  "harness_job_id": null,
+  "parent_task_id": null,
+  "model": null,
+  "objective": "Bind the reviewed candidate to observed parameters and approved fixture contracts.",
+  "expected_case_revision": 1,
+  "inputs": [],
+  "allowed_tools": [
+    "library.query",
+    "evidence.read",
+    "case.submit"
+  ],
+  "dependencies": [],
+  "acceptance_conditions": [
+    "Every parameter is sourced",
+    "Fixture, observation, probe, control and cleanup are concrete",
+    "Independent critique is requested"
+  ],
+  "budget": {
+    "max_seconds": 600,
+    "max_tokens": 12000
+  },
+  "output_ref": null,
+  "work_state": "QUEUED",
+  "started_at": null,
+  "last_heartbeat_at": null,
+  "ended_at": null,
+  "round_id": "round-001",
+  "attempt_id": null,
+  "epoch": null,
+  "pins": {},
+  "return_schema_ref": "schemas/return.schema.json",
+  "payload_contract": "BoundCaseContract",
+  "nested_spawning_allowed": false
+}

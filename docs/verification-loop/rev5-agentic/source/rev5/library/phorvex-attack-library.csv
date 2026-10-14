@@ -1,0 +1,701 @@
+framework,id,parent,name,tactics,platforms,bucket,surface,actuator,actuator_status,preconditions,attacker_end_state,confirmation_probe,scope_reason
+ATLAS,AML.T0000,,Search Open Technical Databases,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0001,,Search Open AI Vulnerability Analysis,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0002,,Acquire Public AI Artifacts,Resource Development,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0003,,Search Victim-Owned Websites,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0004,,Search Application Repositories,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0005,,Create Proxy AI Model,AI Attack Adaptation,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0006,,Active Scanning,Reconnaissance,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0007,,Discover AI Artifacts,Discovery,"Predictive AI,Generative AI,Agentic AI",1,k8s,identity-rotate,partial(label-only M-33),workload-present,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0008,,Acquire Infrastructure,Resource Development,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0010,,AI Supply Chain Compromise,Initial Access,"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0011,,User Execution,Execution,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,social/lure; foothold (if any) covered by initial-access entries
+ATLAS,AML.T0012,,Valid Accounts,"Initial Access,Lateral Movement,Privilege Escalation",Enterprise,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token|plaintext-secret,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0013,,Discover AI Model Ontology,Discovery,Predictive AI,4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0014,,Discover AI Model Family,Discovery,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0015,,Evade AI Model,"Defense Evasion,Impact,Initial Access",Predictive AI,4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0016,,Obtain Capabilities,Resource Development,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0017,,Develop Capabilities,Resource Development,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0018,,Manipulate AI Model,"AI Attack Adaptation,Persistence","Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0020,,Training Data Poisoning,Persistence,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,training-time; resulting model covered by the model-rollback entries
+ATLAS,AML.T0021,,Establish Accounts,Resource Development,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0024,,Exfiltration via AI Inference API,Exfiltration,"Predictive AI,Generative AI,Agentic AI",3,serving,key-rotate,needs-build,serves-model,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS,AML.T0025,,Exfiltration via Cyber Means,Exfiltration,Enterprise,1,cni,cut egress,exists,no-networkpolicy,attacker exfil channel open,egress edge removed (already-sent data out of scope),
+ATLAS,AML.T0029,,Denial of AI Service,Impact,"Predictive AI,Generative AI,Agentic AI",1,serving,quarantine,exists,serves-model,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0031,,Erode AI Model Integrity,Impact,"Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0034,,Cost Harvesting,Impact,"Predictive AI,Generative AI,Agentic AI",1,serving,throttle,needs-build,serves-model,attacker driving runaway cost/load,driving path capped; rate at baseline,
+ATLAS,AML.T0035,,AI Artifact Collection,Collection,"Predictive AI,Generative AI,Agentic AI",1,k8s,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+ATLAS,AML.T0036,,Data from Information Repositories,Collection,Enterprise,4,-,-,-,,,,host-level data; see the node entries
+ATLAS,AML.T0037,,Data from Local System,Collection,Enterprise,4,-,-,-,,,,host-level data; see the node entries
+ATLAS,AML.T0040,,AI Model Inference API Access,AI Model Access,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0041,,Physical Environment Access,AI Model Access,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0042,,Verify Attack,AI Attack Adaptation,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0043,,Craft Adversarial Data,AI Attack Adaptation,Predictive AI,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0044,,Full AI Model Access,AI Model Access,"Predictive AI,Generative AI,Agentic AI",1,serving,network-quarantine,exists,serves-model,attacker has access on the serving pod,serving pod isolated; edge removed,
+ATLAS,AML.T0046,,Spamming AI System with Chaff Data,Impact,"Predictive AI,Generative AI,Agentic AI",1,serving,quarantine,exists,serves-model,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0047,,AI-Enabled Product or Service,AI Model Access,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0048,,External Harms,Impact,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0049,,Exploit Public-Facing Application,Initial Access,Enterprise,1,k8s,quarantine,exists,public-exposure,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0050,,Command and Scripting Interpreter,Execution,Enterprise,1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0051,,LLM Prompt Injection,Execution,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0052,,Phishing,"Initial Access,Lateral Movement",Enterprise,4,-,-,-,,,,social/lure; foothold (if any) covered by initial-access entries
+ATLAS,AML.T0053,,AI Agent Tool Invocation,"Execution,Lateral Movement,Privilege Escalation",Agentic AI,3,agent,constrain-agent-scope,needs-build,has-agent,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+ATLAS,AML.T0054,,LLM Jailbreak,"Defense Evasion,Privilege Escalation","Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0055,,Unsecured Credentials,Credential Access,Enterprise,2,identity,key-rotate,needs-build,plaintext-secret,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS,AML.T0056,,Extract LLM System Prompt,Exfiltration,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0057,,LLM Data Leakage,Exfiltration,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0059,,Erode Dataset Integrity,Impact,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,training-time; resulting model covered by the model-rollback entries
+ATLAS,AML.T0060,,Publish Hallucinated Entities,Resource Development,"Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0061,,LLM Prompt Self-Replication,Persistence,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0062,,Discover LLM Hallucinations,Discovery,"Generative AI,Agentic AI",4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0063,,Discover AI Model Outputs,Discovery,"Predictive AI,Generative AI,Agentic AI",1,serving,endpoint-rotate,partial(conditional M-35),serves-model,attacker learned the model endpoint,endpoint route epoch rotated,
+ATLAS,AML.T0064,,Gather RAG-Indexed Targets,Reconnaissance,"Generative AI,Agentic AI",4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0065,,LLM Prompt Crafting,AI Attack Adaptation,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0066,,Retrieval Content Crafting,AI Attack Adaptation,"Generative AI,Agentic AI",4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0067,,LLM Trusted Output Components Manipulation,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0068,,LLM Prompt Obfuscation,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0069,,Discover LLM System Information,Discovery,"Generative AI,Agentic AI",1,serving,endpoint-rotate,partial(conditional M-35),serves-model,attacker learned the model endpoint,endpoint route epoch rotated,
+ATLAS,AML.T0070,,RAG Poisoning,Persistence,"Generative AI,Agentic AI",2,serving,rag-restore,needs-build,uses-rag,poisoned index/model/tool-data persisted,store hash == trusted snapshot,
+ATLAS,AML.T0071,,False RAG Entry Injection,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0072,,Cyber Communication Channel,Command and Control,Enterprise,4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0073,,Impersonation,Defense Evasion,Enterprise,2,identity,identity-rotate,partial(label-only M-33),workload-present,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0074,,Masquerading,Defense Evasion,Enterprise,1,k8s,evict,exists,workload-present,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATLAS,AML.T0075,,Enterprise Resource Discovery,Discovery,Enterprise,4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0076,,Corrupt AI Model,Defense Evasion,"Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0077,,LLM Response Rendering,Exfiltration,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0078,,Drive-by Compromise,Initial Access,Enterprise,4,-,-,-,,,,social/lure; foothold (if any) covered by initial-access entries
+ATLAS,AML.T0079,,Stage Capabilities,Resource Development,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0080,,AI Agent Context Poisoning,Persistence,"Generative AI,Agentic AI",2,serving,context-reset,needs-build,has-agent,poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+ATLAS,AML.T0081,,Modify AI Agent Configuration,"Defense Evasion,Persistence",Agentic AI,2,agent,context-reset,needs-build,has-agent,poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+ATLAS,AML.T0082,,RAG Credential Harvesting,Credential Access,"Generative AI,Agentic AI",2,identity,key-rotate,needs-build,uses-rag,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS,AML.T0083,,Credentials from AI Agent Configuration,Credential Access,Agentic AI,2,identity,key-rotate,needs-build,has-agent,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS,AML.T0084,,Discover AI Agent Configuration,Discovery,Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0085,,Data from AI Services,Collection,"Generative AI,Agentic AI",1,k8s,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+ATLAS,AML.T0086,,Exfiltration via AI Agent Tool Invocation,Exfiltration,Agentic AI,3,agent,constrain-agent-scope,needs-build,has-agent,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+ATLAS,AML.T0087,,Gather Victim Identity Information,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0088,,Generate Deepfakes,AI Attack Adaptation,"Predictive AI,Enterprise",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0089,,Enterprise Environment Discovery,Discovery,Enterprise,4,-,-,-,,,,"attacker knowledge, not movable infra"
+ATLAS,AML.T0090,,OS Credential Dumping,Credential Access,Enterprise,4,-,-,-,,,,host-level data; see the node entries
+ATLAS,AML.T0091,,Use Alternate Authentication Material,Lateral Movement,Enterprise,4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0092,,Manipulate User LLM Chat History,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0093,,Prompt Infiltration via Public-Facing Application,"Initial Access,Persistence","Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0094,,Delay Execution of LLM Instructions,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0095,,Search Open Websites/Domains,Reconnaissance,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0096,,AI Service API,Command and Control,"Predictive AI,Generative AI,Agentic AI",1,cni,cut the network,exists,no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+ATLAS,AML.T0097,,Virtualization/Sandbox Evasion,Defense Evasion,Enterprise,4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0098,,AI Agent Tool Credential Harvesting,Credential Access,Agentic AI,2,identity,key-rotate,needs-build,has-mcp-tools,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS,AML.T0099,,AI Agent Tool Data Poisoning,Persistence,Agentic AI,2,serving,rag-restore,needs-build,has-mcp-tools,poisoned index/model/tool-data persisted,store hash == trusted snapshot,
+ATLAS,AML.T0100,,AI Agent Clickbait,Execution,Agentic AI,4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0101,,Data Destruction via AI Agent Tool Invocation,Impact,Agentic AI,1,agent,constrain-agent-scope,needs-build,has-agent,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+ATLAS,AML.T0102,,Generate Malicious Commands,AI Attack Adaptation,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0103,,Deploy AI Agent,Execution,Agentic AI,1,k8s,evict,exists,has-agent,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATLAS,AML.T0105,,Escape to Host,Privilege Escalation,Enterprise,1,node,node-cordon-drain-replace,needs-build,privileged-pod|hostpath-mount|host-namespace,attacker on the host/node,workload off node; node cordoned/replaced,
+ATLAS,AML.T0106,,Exploitation for Credential Access,Credential Access,Enterprise,4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0107,,Exploitation for Defense Evasion,Defense Evasion,Enterprise,4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0108,,AI Agent,Command and Control,Agentic AI,1,cni,cut the network,exists,has-agent;no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+ATLAS,AML.T0109,,AI Supply Chain Rug Pull,Defense Evasion,"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0110,,AI Agent Tool Poisoning,Persistence,Agentic AI,2,serving,tool-repin,needs-build,has-mcp-tools,poisoned MCP tool descriptor loaded,descriptor hash == trusted,
+ATLAS,AML.T0111,,AI Supply Chain Reputation Inflation,Defense Evasion,"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0112,,Machine Compromise,Impact,"Predictive AI,Generative AI,Agentic AI",1,node,node-cordon-drain-replace,needs-build,privileged-pod|hostpath-mount|host-namespace,attacker on the host/node,workload off node; node cordoned/replaced,
+ATLAS,AML.T0113,,Steal Web Session Cookie,Credential Access,Enterprise,2,identity,identity-rotate,partial(label-only M-33),workload-present,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0114,,AI Service Web Interface,Command and Control,Enterprise,1,cni,cut the route,exists,public-exposure,attacker reaches the service route,route removed,
+ATLAS,AML.T0115,,Publish Poisoned AI Artifacts,Resource Development,"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS,AML.T0116,,Autonomous Reconnaissance,Reconnaissance,"Predictive AI,Generative AI,Agentic AI,Enterprise",1,k8s,quarantine,exists,has-agent,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0117,,Autonomous Attack-Path Adaptation,AI Attack Adaptation,"Predictive AI,Generative AI,Agentic AI,Enterprise",1,agent,evict,exists,has-agent,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATLAS,AML.T0118,,Autonomous AI Agent Communication,AI Attack Adaptation,"Agentic AI,Enterprise",4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0119,,Exploit Automated Artifact Processing Pipeline,Initial Access,Enterprise,1,k8s,quarantine,exists,automated-pipeline,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATLAS,AML.T0120,,AI Artifact Repository,Command and Control,"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0121,,AI Agent Environment Reconstruction,Persistence,Enterprise,1,k8s,identity-rotate,partial(label-only M-33),workload-present,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0122,,Exploitation of Remote Services,Lateral Movement,Enterprise,1,cni,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+ATLAS,AML.T0123,,Obfuscated Files or Information,Defense Evasion,"Predictive AI,Enterprise",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0124,,Autonomous Attack Orchestration,AI Attack Adaptation,"Predictive AI,Generative AI,Agentic AI,Enterprise",1,agent,evict,exists,has-agent,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATLAS,AML.T0125,,Create Account,Persistence,Enterprise,4,-,-,-,,,,infra effect covered by another entry
+ATLAS,AML.T0126,,Automated Collection,Collection,Enterprise,4,-,-,-,,,,host-level data; see the node entries
+ATLAS,AML.T0127,,Data Staged,Collection,Enterprise,4,-,-,-,,,,host-level data; see the node entries
+ATLAS,AML.T0128,,Compromise Infrastructure,Resource Development,Enterprise,4,-,-,-,,,,off-system OSINT / attacker-side (not on customer infra)
+ATLAS,AML.T0129,,Triggers in Multimodal Inputs,Defense Evasion,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0130,,AI Agent Response Biasing,Impact,"Generative AI,Agentic AI",4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS,AML.T0131,,Crafted AI Assistant Links,Initial Access,"Generative AI,Agentic AI",4,-,-,-,,,,social/lure; foothold (if any) covered by initial-access entries
+ATLAS,AML.T0132,,Misconfigured or Publicly Exposed AI Services,Initial Access,"Predictive AI,Generative AI,Agentic AI",1,cni,route-rotate,partial(label-only M-33),public-exposure,attacker learned/reaches the route,route epoch rotated,
+ATLAS,AML.T0133,,Discover AI Agent Runtime Capabilities,Discovery,Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS,AML.T0134,,AI Targeted Cloaking,Defense Evasion,Agentic AI,4,-,-,-,,,,in-request attack; no persisted infra state -> inline filter / partner
+ATLAS-sub,AML.T0000.000,AML.T0000,Journals and Conference Proceedings,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0000
+ATLAS-sub,AML.T0000.001,AML.T0000,Pre-Print Repositories,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0000
+ATLAS-sub,AML.T0000.002,AML.T0000,Technical Blogs,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0000
+ATLAS-sub,AML.T0000.003,AML.T0000,Scan Databases,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0000
+ATLAS-sub,AML.T0002.000,AML.T0002,Datasets,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0002
+ATLAS-sub,AML.T0002.001,AML.T0002,Models,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0002
+ATLAS-sub,AML.T0002.002,AML.T0002,AI Agent Configuration,(inherits parent),Agentic AI,4,-,-,-,,,,inherits parent AML.T0002
+ATLAS-sub,AML.T0005.000,AML.T0005,Train Proxy via Gathered AI Artifacts,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0005
+ATLAS-sub,AML.T0005.001,AML.T0005,Train Proxy via Replication,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0005
+ATLAS-sub,AML.T0005.002,AML.T0005,Use Pre-Trained Model,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0005
+ATLAS-sub,AML.T0006.000,AML.T0006,Enumerate Hosted AI Resources,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0006
+ATLAS-sub,AML.T0006.001,AML.T0006,Query Platform Metadata APIs,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0006
+ATLAS-sub,AML.T0006.002,AML.T0006,Scan for Exposed AI Infrastructure,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0006
+ATLAS-sub,AML.T0006.003,AML.T0006,Probe AI Agent Trigger Channels,(inherits parent),"Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0006
+ATLAS-sub,AML.T0008.000,AML.T0008,AI Development Workspaces,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0008.001,AML.T0008,Consumer Hardware,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0008.002,AML.T0008,Domains,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0008.003,AML.T0008,Physical Countermeasures,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0008.004,AML.T0008,Serverless,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0008.005,AML.T0008,AI Service Proxies,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0008
+ATLAS-sub,AML.T0010.000,AML.T0010,Hardware,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0010.001,AML.T0010,AI Software,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0010.002,AML.T0010,Data,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0010.003,AML.T0010,Model,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0010.004,AML.T0010,Container Registry,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0010.005,AML.T0010,AI Agent Tool,(inherits parent),Agentic AI,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0010) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0011.000,AML.T0011,Unsafe AI Artifacts,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0011
+ATLAS-sub,AML.T0011.001,AML.T0011,Malicious Package,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0011
+ATLAS-sub,AML.T0011.002,AML.T0011,Poisoned AI Agent Tool,(inherits parent),Agentic AI,4,-,-,-,,,,inherits parent AML.T0011
+ATLAS-sub,AML.T0011.003,AML.T0011,Malicious Link,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0011
+ATLAS-sub,AML.T0016.000,AML.T0016,Adversarial AI Attack Implementations,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0016
+ATLAS-sub,AML.T0016.001,AML.T0016,Software Tools,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0016
+ATLAS-sub,AML.T0016.002,AML.T0016,Generative AI,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0016
+ATLAS-sub,AML.T0016.003,AML.T0016,Exploits,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0016
+ATLAS-sub,AML.T0016.004,AML.T0016,AI Agent Tools,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0016
+ATLAS-sub,AML.T0017.000,AML.T0017,Adversarial AI Attacks,(inherits parent),"Predictive AI,Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0017
+ATLAS-sub,AML.T0017.001,AML.T0017,Autonomous Exploit Development,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0017
+ATLAS-sub,AML.T0017.002,AML.T0017,AI Agent Tools,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0017
+ATLAS-sub,AML.T0018.000,AML.T0018,Poison AI Model,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,(sub of AML.T0018) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0018.001,AML.T0018,Modify AI Model Architecture,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,(sub of AML.T0018) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0018.002,AML.T0018,Embed Malware,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,(sub of AML.T0018) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0018.003,AML.T0018,Modify Prompt Construction Logic,(inherits parent),"Generative AI,Agentic AI",2,serving,registry-rollback,needs-build,serves-model,(sub of AML.T0018) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0024.000,AML.T0024,Infer Training Data Membership,(inherits parent),"Predictive AI,Generative AI,Agentic AI",3,serving,key-rotate,needs-build,serves-model,(sub of AML.T0024) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS-sub,AML.T0024.001,AML.T0024,Invert AI Model,(inherits parent),"Predictive AI,Generative AI,Agentic AI",3,serving,key-rotate,needs-build,serves-model,(sub of AML.T0024) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS-sub,AML.T0024.002,AML.T0024,Extract AI Model,(inherits parent),"Predictive AI,Generative AI,Agentic AI",3,serving,key-rotate,needs-build,serves-model,(sub of AML.T0024) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATLAS-sub,AML.T0034.000,AML.T0034,Excessive Queries,(inherits parent),"Predictive AI,Generative AI,Agentic AI",1,serving,throttle,needs-build,serves-model,(sub of AML.T0034) attacker driving runaway cost/load,driving path capped; rate at baseline,
+ATLAS-sub,AML.T0034.001,AML.T0034,Resource-Intensive Queries,(inherits parent),"Predictive AI,Generative AI,Agentic AI",1,serving,throttle,needs-build,serves-model,(sub of AML.T0034) attacker driving runaway cost/load,driving path capped; rate at baseline,
+ATLAS-sub,AML.T0034.002,AML.T0034,Agentic Resource Consumption,(inherits parent),Agentic AI,1,serving,throttle,needs-build,serves-model,(sub of AML.T0034) attacker driving runaway cost/load,driving path capped; rate at baseline,
+ATLAS-sub,AML.T0043.000,AML.T0043,White-Box Optimization,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0043
+ATLAS-sub,AML.T0043.001,AML.T0043,Black-Box Optimization,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0043
+ATLAS-sub,AML.T0043.002,AML.T0043,Black-Box Transfer,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0043
+ATLAS-sub,AML.T0043.003,AML.T0043,Manual Modification,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0043
+ATLAS-sub,AML.T0043.004,AML.T0043,Insert Backdoor Trigger,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0043
+ATLAS-sub,AML.T0048.000,AML.T0048,Financial Harm,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0048
+ATLAS-sub,AML.T0048.001,AML.T0048,Reputational Harm,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0048
+ATLAS-sub,AML.T0048.002,AML.T0048,Societal Harm,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0048
+ATLAS-sub,AML.T0048.003,AML.T0048,User Harm,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0048
+ATLAS-sub,AML.T0048.004,AML.T0048,AI Intellectual Property Theft,(inherits parent),"Predictive AI,Generative AI,Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0048
+ATLAS-sub,AML.T0051.000,AML.T0051,Direct,(inherits parent),"Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0051
+ATLAS-sub,AML.T0051.001,AML.T0051,Indirect,(inherits parent),"Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0051
+ATLAS-sub,AML.T0051.002,AML.T0051,Triggered,(inherits parent),Agentic AI,4,-,-,-,,,,inherits parent AML.T0051
+ATLAS-sub,AML.T0052.000,AML.T0052,Spearphishing via Social Engineering LLM,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0052
+ATLAS-sub,AML.T0052.001,AML.T0052,Deepfake-Assisted Phishing,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0052
+ATLAS-sub,AML.T0067.000,AML.T0067,Citations,(inherits parent),"Generative AI,Agentic AI",4,-,-,-,,,,inherits parent AML.T0067
+ATLAS-sub,AML.T0069.000,AML.T0069,Special Character Sets,(inherits parent),"Generative AI,Agentic AI",1,serving,endpoint-rotate,partial(conditional M-35),serves-model,(sub of AML.T0069) attacker learned the model endpoint,endpoint route epoch rotated,
+ATLAS-sub,AML.T0069.001,AML.T0069,System Instruction Keywords,(inherits parent),"Generative AI,Agentic AI",1,serving,endpoint-rotate,partial(conditional M-35),serves-model,(sub of AML.T0069) attacker learned the model endpoint,endpoint route epoch rotated,
+ATLAS-sub,AML.T0069.002,AML.T0069,System Prompt,(inherits parent),"Generative AI,Agentic AI",1,serving,endpoint-rotate,partial(conditional M-35),serves-model,(sub of AML.T0069) attacker learned the model endpoint,endpoint route epoch rotated,
+ATLAS-sub,AML.T0080.000,AML.T0080,Memory,(inherits parent),"Generative AI,Agentic AI",2,serving,context-reset,needs-build,has-agent,(sub of AML.T0080) poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+ATLAS-sub,AML.T0080.001,AML.T0080,Thread,(inherits parent),"Generative AI,Agentic AI",2,serving,context-reset,needs-build,has-agent,(sub of AML.T0080) poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+ATLAS-sub,AML.T0084.000,AML.T0084,Embedded Knowledge,(inherits parent),Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,(sub of AML.T0084) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS-sub,AML.T0084.001,AML.T0084,Tool Definitions,(inherits parent),Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,(sub of AML.T0084) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS-sub,AML.T0084.002,AML.T0084,Activation Triggers,(inherits parent),Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,(sub of AML.T0084) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS-sub,AML.T0084.003,AML.T0084,Call Chains,(inherits parent),Agentic AI,1,agent,identity-rotate,partial(label-only M-33),has-agent,(sub of AML.T0084) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATLAS-sub,AML.T0085.000,AML.T0085,RAG Databases,(inherits parent),"Generative AI,Agentic AI",1,k8s,cut reachability,exists,no-networkpolicy,(sub of AML.T0085) attacker can reach the target over the pod network,foothold->target edge removed,
+ATLAS-sub,AML.T0085.001,AML.T0085,AI Agent Tools,(inherits parent),Agentic AI,1,k8s,cut reachability,exists,no-networkpolicy,(sub of AML.T0085) attacker can reach the target over the pod network,foothold->target edge removed,
+ATLAS-sub,AML.T0091.000,AML.T0091,Application Access Token,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0091
+ATLAS-sub,AML.T0091.001,AML.T0091,Web Session Cookie,(inherits parent),Predictive AI,4,-,-,-,,,,inherits parent AML.T0091
+ATLAS-sub,AML.T0095.000,AML.T0095,Code Repositories,(inherits parent),Enterprise,4,-,-,-,,,,inherits parent AML.T0095
+ATLAS-sub,AML.T0110.000,AML.T0110,Definition and Instructions,(inherits parent),Agentic AI,2,serving,tool-repin,needs-build,has-mcp-tools,(sub of AML.T0110) poisoned MCP tool descriptor loaded,descriptor hash == trusted,
+ATLAS-sub,AML.T0110.001,AML.T0110,Implementation,(inherits parent),Agentic AI,2,serving,tool-repin,needs-build,has-mcp-tools,(sub of AML.T0110) poisoned MCP tool descriptor loaded,descriptor hash == trusted,
+ATLAS-sub,AML.T0110.002,AML.T0110,Runtime Response,(inherits parent),Agentic AI,2,serving,tool-repin,needs-build,has-mcp-tools,(sub of AML.T0110) poisoned MCP tool descriptor loaded,descriptor hash == trusted,
+ATLAS-sub,AML.T0112.000,AML.T0112,Local AI Agent,(inherits parent),Agentic AI,1,node,node-cordon-drain-replace,needs-build,privileged-pod|hostpath-mount|host-namespace,(sub of AML.T0112) attacker on the host/node,workload off node; node cordoned/replaced,
+ATLAS-sub,AML.T0112.001,AML.T0112,AI Artifacts,(inherits parent),"Predictive AI,Generative AI,Agentic AI",1,node,node-cordon-drain-replace,needs-build,privileged-pod|hostpath-mount|host-namespace,(sub of AML.T0112) attacker on the host/node,workload off node; node cordoned/replaced,
+ATLAS-sub,AML.T0115.000,AML.T0115,Datasets,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0115) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0115.001,AML.T0115,Models,(inherits parent),"Predictive AI,Generative AI,Agentic AI",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0115) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0115.002,AML.T0115,AI Agent Tools,(inherits parent),Agentic AI,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,(sub of AML.T0115) poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATLAS-sub,AML.T0118.000,AML.T0118,Communication via Shared Artifacts,(inherits parent),"Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0118
+ATLAS-sub,AML.T0118.001,AML.T0118,Direct Agent Communication,(inherits parent),"Agentic AI,Enterprise",4,-,-,-,,,,inherits parent AML.T0118
+ATT&CK,T1001,,Data Obfuscation,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1001.001,T1001,Junk Data,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1001.002,T1001,Steganography,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1001.003,T1001,Protocol or Service Impersonation,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1003,,OS Credential Dumping,Credential Access,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1003.005,T1003,Cached Domain Credentials,(inherits parent),"Linux,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1003.007,T1003,Proc Filesystem,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1003.008,T1003,/etc/passwd and /etc/shadow,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1005,,Data from Local System,Collection,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1007,,System Service Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1008,,Fallback Channels,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1010,,Application Window Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1011,,Exfiltration Over Other Network Medium,Exfiltration,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1011.001,T1011,Exfiltration Over Bluetooth,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1014,,Rootkit,Stealth,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1016,,System Network Configuration Discovery,Discovery,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1016.001,T1016,Internet Connection Discovery,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1016.002,T1016,Wi-Fi Discovery,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1018,,Remote System Discovery,Discovery,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1020,,Automated Exfiltration,Exfiltration,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1020.001,T1020,Traffic Duplication,(inherits parent),"IaaS,Network Devices",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1021,,Remote Services,Lateral Movement,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1021.004,T1021,SSH,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1021.005,T1021,VNC,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1021.007,T1021,Cloud Services,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1021.008,T1021,Direct Cloud VM Connections,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1025,,Data from Removable Media,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1027,,Obfuscated Files or Information,Stealth,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1027.001,T1027,Binary Padding,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.002,T1027,Software Packing,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.003,T1027,Steganography,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.004,T1027,Compile After Delivery,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.005,T1027,Indicator Removal from Tools,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.006,T1027,HTML Smuggling,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.008,T1027,Stripped Payloads,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.009,T1027,Embedded Payloads,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.010,T1027,Command Obfuscation,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.011,T1027,Fileless Storage,(inherits parent),"Linux,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.013,T1027,Encrypted/Encoded File,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.014,T1027,Polymorphic Code,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.015,T1027,Compression,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.016,T1027,Junk Code Insertion,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.017,T1027,SVG Smuggling,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1027.018,T1027,Invisible Unicode,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1029,,Scheduled Transfer,Exfiltration,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1030,,Data Transfer Size Limits,Exfiltration,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1033,,System Owner/User Discovery,Discovery,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1036,,Masquerading,Stealth,"Containers,ESXi,Linux,Windows,macOS",1,k8s,evict,exists,workload-present,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.002,T1036,Right-to-Left Override,(inherits parent),"Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.003,T1036,Rename Legitimate Utilities,(inherits parent),"Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.004,T1036,Masquerade Task or Service,(inherits parent),"Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.005,T1036,Match Legitimate Resource Name or Location,(inherits parent),"Containers,ESXi,Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.006,T1036,Space after Filename,(inherits parent),"Linux,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.008,T1036,Masquerade File Type,(inherits parent),"Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.009,T1036,Break Process Trees,(inherits parent),"Linux,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.010,T1036,Masquerade Account Name,(inherits parent),"Containers,IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.011,T1036,Overwrite Process Arguments,(inherits parent),Linux,1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK-sub,T1036.012,T1036,Browser Fingerprint,(inherits parent),"Linux,Windows,macOS",1,k8s,evict,exists,workload-present,(sub of T1036) attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK,T1037,,Boot or Logon Initialization Scripts,Persistence;Privilege Escalation,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1037.004,T1037,RC Scripts,(inherits parent),"ESXi,Linux,Network Devices,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1039,,Data from Network Shared Drive,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1040,,Network Sniffing,Credential Access;Discovery,"IaaS,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1041,,Exfiltration Over C2 Channel,Exfiltration,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1046,,Network Service Discovery,Discovery,"Containers,IaaS,Linux,Network Devices,Windows,macOS",1,cni,route-rotate,partial(label-only M-33),no-networkpolicy,attacker learned/reaches the route,route epoch rotated,
+ATT&CK,T1048,,Exfiltration Over Alternative Protocol,Exfiltration,"ESXi,IaaS,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1048.001,T1048,Exfiltration Over Symmetric Encrypted Non-C2 Protocol,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1048.002,T1048,Exfiltration Over Asymmetric Encrypted Non-C2 Protocol,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1048.003,T1048,Exfiltration Over Unencrypted Non-C2 Protocol,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1049,,System Network Connections Discovery,Discovery,"ESXi,IaaS,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1052,,Exfiltration Over Physical Medium,Exfiltration,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1052.001,T1052,Exfiltration over USB,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1053,,Scheduled Task/Job,Execution;Persistence;Privilege Escalation,"Containers,ESXi,Linux,Network Devices,Windows,macOS",2,k8s,respawn,exists,overbroad-rbac,attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1053.002,T1053,At,(inherits parent),"Linux,Windows,macOS",2,k8s,respawn,exists,overbroad-rbac,(sub of T1053) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1053.003,T1053,Cron,(inherits parent),"ESXi,Linux,macOS",2,k8s,respawn,exists,overbroad-rbac,(sub of T1053) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1053.006,T1053,Systemd Timers,(inherits parent),Linux,2,k8s,respawn,exists,overbroad-rbac,(sub of T1053) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1053.007,T1053,Container Orchestration Job,(inherits parent),Containers,2,k8s,respawn,exists,overbroad-rbac,(sub of T1053) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK,T1055,,Process Injection,Stealth;Privilege Escalation,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1055.008,T1055,Ptrace System Calls,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1055.009,T1055,Proc Memory,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1055.014,T1055,VDSO Hijacking,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1056,,Input Capture,Collection;Credential Access,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1056.001,T1056,Keylogging,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1056.002,T1056,GUI Input Capture,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1056.003,T1056,Web Portal Capture,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1056.004,T1056,Credential API Hooking,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1057,,Process Discovery,Discovery,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1059,,Command and Scripting Interpreter,Execution,"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.001,T1059,PowerShell,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.004,T1059,Unix Shell,(inherits parent),"ESXi,Linux,Network Devices,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.005,T1059,Visual Basic,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.006,T1059,Python,(inherits parent),"ESXi,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.007,T1059,JavaScript,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.009,T1059,Cloud API,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.011,T1059,Lua,(inherits parent),"Linux,Network Devices,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1059.013,T1059,Container CLI/API,(inherits parent),Containers,1,k8s,quarantine,exists,workload-present,(sub of T1059) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1068,,Exploitation for Privilege Escalation,Privilege Escalation,"Containers,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1069,,Permission Groups Discovery,Discovery,"Containers,IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1069.001,T1069,Local Groups,(inherits parent),"Linux,Windows,macOS",1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1069) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1069.002,T1069,Domain Groups,(inherits parent),"Linux,Windows,macOS",1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1069) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1069.003,T1069,Cloud Groups,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1069) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1070,,Indicator Removal,Stealth,"Containers,ESXi,Linux,Network Devices,Office Suite,Windows,macOS",1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.003,T1070,Clear Command History,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.004,T1070,File Deletion,(inherits parent),"ESXi,Linux,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.006,T1070,Timestomp,(inherits parent),"ESXi,Linux,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.007,T1070,Clear Network Connection History and Configurations,(inherits parent),"Linux,Network Devices,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.008,T1070,Clear Mailbox Data,(inherits parent),"Linux,Office Suite,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.009,T1070,Clear Persistence,(inherits parent),"ESXi,Linux,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1070.010,T1070,Relocate Malware,(inherits parent),"Linux,Network Devices,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1070) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK,T1071,,Application Layer Protocol,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1071.001,T1071,Web Protocols,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1071.002,T1071,File Transfer Protocols,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1071.003,T1071,Mail Protocols,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1071.004,T1071,DNS,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1071.005,T1071,Publish/Subscribe Protocols,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1072,,Software Deployment Tools,Execution;Lateral Movement,"Linux,Network Devices,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1074,,Data Staged,Collection,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1074.001,T1074,Local Data Staging,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1074.002,T1074,Remote Data Staging,(inherits parent),"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1078,,Valid Accounts,Stealth;Persistence;Privilege Escalation;Initial Access,"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1078.001,T1078,Default Accounts,(inherits parent),"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1078) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1078.002,T1078,Domain Accounts,(inherits parent),"ESXi,Linux,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1078) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1078.003,T1078,Local Accounts,(inherits parent),"Containers,ESXi,Linux,Network Devices,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1078) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1078.004,T1078,Cloud Accounts,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1078) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1080,,Taint Shared Content,Lateral Movement,"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1082,,System Information Discovery,Discovery,"ESXi,IaaS,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1083,,File and Directory Discovery,Discovery,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1087,,Account Discovery,Discovery,"ESXi,IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1087.001,T1087,Local Account,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1087.002,T1087,Domain Account,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1087.004,T1087,Cloud Account,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1090,,Proxy,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1090.001,T1090,Internal Proxy,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1090.002,T1090,External Proxy,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1090.003,T1090,Multi-hop Proxy,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1090.004,T1090,Domain Fronting,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1092,,Communication Through Removable Media,Command and Control,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1095,,Non-Application Layer Protocol,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1098,,Account Manipulation,Persistence;Privilege Escalation,"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1098.001,T1098,Additional Cloud Credentials,(inherits parent),"IaaS,Identity Provider,SaaS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1098) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1098.003,T1098,Additional Cloud Roles,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1098) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1098.004,T1098,SSH Authorized Keys,(inherits parent),"ESXi,IaaS,Linux,Network Devices,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1098) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1098.006,T1098,Additional Container Cluster Roles,(inherits parent),Containers,2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1098) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1098.007,T1098,Additional Local or Domain Groups,(inherits parent),"Linux,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1098) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1102,,Web Service,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1102.001,T1102,Dead Drop Resolver,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1102.002,T1102,Bidirectional Communication,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1102.003,T1102,One-Way Communication,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1104,,Multi-Stage Channels,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1105,,Ingress Tool Transfer,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1106,,Native API,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1110,,Brute Force,Credential Access,"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,key-rotate,needs-build,public-exposure,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1110.001,T1110,Password Guessing,(inherits parent),"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,key-rotate,needs-build,public-exposure,(sub of T1110) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1110.002,T1110,Password Cracking,(inherits parent),"Identity Provider,Linux,Network Devices,Office Suite,Windows,macOS",2,identity,key-rotate,needs-build,public-exposure,(sub of T1110) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1110.003,T1110,Password Spraying,(inherits parent),"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,key-rotate,needs-build,public-exposure,(sub of T1110) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1110.004,T1110,Credential Stuffing,(inherits parent),"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,key-rotate,needs-build,public-exposure,(sub of T1110) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK,T1111,,Multi-Factor Authentication Interception,Credential Access,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1113,,Screen Capture,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1114,,Email Collection,Collection,"Linux,Office Suite,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1114.003,T1114,Email Forwarding Rule,(inherits parent),"Linux,Office Suite,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1115,,Clipboard Data,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1119,,Automated Collection,Collection,"IaaS,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1120,,Peripheral Device Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1123,,Audio Capture,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1124,,System Time Discovery,Discovery,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1125,,Video Capture,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1129,,Shared Modules,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1132,,Data Encoding,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1132.001,T1132,Standard Encoding,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1132.002,T1132,Non-Standard Encoding,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1133,,External Remote Services,Persistence;Initial Access,"Containers,Linux,Windows,macOS",1,k8s,quarantine,exists,public-exposure,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1135,,Network Share Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1136,,Create Account,Persistence,"Containers,ESXi,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1136.001,T1136,Local Account,(inherits parent),"Containers,ESXi,Linux,Network Devices,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1136) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1136.002,T1136,Domain Account,(inherits parent),"Linux,Windows,macOS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1136) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1136.003,T1136,Cloud Account,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",2,identity,identity-rotate,partial(label-only M-33),overbroad-rbac,(sub of T1136) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1140,,Deobfuscate/Decode Files or Information,Stealth,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1176,,Software Extensions,Persistence,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1176.001,T1176,Browser Extensions,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1176.002,T1176,IDE Extensions,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1189,,Drive-by Compromise,Initial Access,"Identity Provider,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1190,,Exploit Public-Facing Application,Initial Access,"Containers,ESXi,IaaS,Linux,Network Devices,Windows,macOS",1,k8s,quarantine,exists,public-exposure,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1195,,Supply Chain Compromise,Initial Access,"Linux,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1195.001,T1195,Compromise Software Dependencies and Development Tools,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1195.002,T1195,Compromise Software Supply Chain,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1195.003,T1195,Compromise Hardware Supply Chain,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1199,,Trusted Relationship,Initial Access,"IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1200,,Hardware Additions,Initial Access,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1201,,Password Policy Discovery,Discovery,"IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1203,,Exploitation for Client Execution,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1204,,User Execution,Execution,"Containers,IaaS,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1204.001,T1204,Malicious Link,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1204) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1204.002,T1204,Malicious File,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1204) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1204.003,T1204,Malicious Image,(inherits parent),"Containers,IaaS",1,k8s,quarantine,exists,workload-present,(sub of T1204) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1204.004,T1204,Malicious Copy and Paste,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1204) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1204.005,T1204,Malicious Library,(inherits parent),"Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1204) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1205,,Traffic Signaling,Stealth;Persistence;Command and Control,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1205.001,T1205,Port Knocking,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1205.002,T1205,Socket Filters,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1210,,Exploitation of Remote Services,Lateral Movement,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1211,,Exploitation for Stealth,Stealth,"IaaS,Linux,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1212,,Exploitation for Credential Access,Credential Access,"Identity Provider,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1213,,Data from Information Repositories,Collection,"IaaS,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1213.006,T1213,Databases,(inherits parent),"IaaS,Linux,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1217,,Browser Information Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1218,,System Binary Proxy Execution,Stealth,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1218.015,T1218,Electron Applications,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1219,,Remote Access Tools,Command and Control,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1219.001,T1219,IDE Tunneling,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1219.002,T1219,Remote Desktop Software,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1219.003,T1219,Remote Access Hardware,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1222,,File and Directory Permissions Modification,Defense Impairment,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1222.002,T1222,Linux and Mac Permissions,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1480,,Execution Guardrails,Stealth,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1480.001,T1480,Environmental Keying,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1480.002,T1480,Mutual Exclusion,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1485,,Data Destruction,Impact,"Containers,ESXi,IaaS,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1485.001,T1485,Lifecycle-Triggered Deletion,(inherits parent),IaaS,1,k8s,quarantine,exists,workload-present,(sub of T1485) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1486,,Data Encrypted for Impact,Impact,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1489,,Service Stop,Impact,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1490,,Inhibit System Recovery,Impact,"Containers,ESXi,IaaS,Linux,Network Devices,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1491,,Defacement,Impact,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1491.001,T1491,Internal Defacement,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1491.002,T1491,External Defacement,(inherits parent),"IaaS,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1495,,Firmware Corruption,Impact,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1496,,Resource Hijacking,Impact,"Containers,IaaS,Linux,SaaS,Windows,macOS",1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1496.001,T1496,Compute Hijacking,(inherits parent),"Containers,IaaS,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1496) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK-sub,T1496.002,T1496,Bandwidth Hijacking,(inherits parent),"Containers,IaaS,Linux,Windows,macOS",1,k8s,quarantine,exists,workload-present,(sub of T1496) attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1497,,Virtualization/Sandbox Evasion,Stealth;Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1497.001,T1497,System Checks,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1497.002,T1497,User Activity Based Checks,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1497.003,T1497,Time Based Checks,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1498,,Network Denial of Service,Impact,"Containers,IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1498.001,T1498,Direct Network Flood,(inherits parent),"IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,no-networkpolicy,(sub of T1498) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1498.002,T1498,Reflection Amplification,(inherits parent),"IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,no-networkpolicy,(sub of T1498) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK,T1499,,Endpoint Denial of Service,Impact,"Containers,IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,public-exposure,attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1499.001,T1499,OS Exhaustion Flood,(inherits parent),"Linux,Windows,macOS",1,cni,cut the network,exists,public-exposure,(sub of T1499) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1499.002,T1499,Service Exhaustion Flood,(inherits parent),"IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,public-exposure,(sub of T1499) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1499.003,T1499,Application Exhaustion Flood,(inherits parent),"IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,public-exposure,(sub of T1499) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK-sub,T1499.004,T1499,Application or System Exploitation,(inherits parent),"IaaS,Linux,Windows,macOS",1,cni,cut the network,exists,public-exposure,(sub of T1499) attacker C2 / DoS channel open,channel edge removed,
+ATT&CK,T1505,,Server Software Component,Persistence,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1505.001,T1505,SQL Stored Procedures,(inherits parent),"Linux,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1505.002,T1505,Transport Agent,(inherits parent),"Linux,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1505.003,T1505,Web Shell,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1518,,Software Discovery,Discovery,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1518.001,T1518,Security Software Discovery,(inherits parent),"IaaS,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1518.002,T1518,Backup Software Discovery,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1525,,Implant Internal Image,Persistence,"Containers,IaaS",2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+ATT&CK,T1526,,Cloud Service Discovery,Discovery,"IaaS,Identity Provider,Office Suite,SaaS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1528,,Steal Application Access Token,Credential Access,"Containers,IaaS,Identity Provider,Office Suite,SaaS",2,identity,key-rotate,needs-build,mounted-sa-token,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK,T1529,,System Shutdown/Reboot,Impact,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1530,,Data from Cloud Storage,Collection,"IaaS,Office Suite,SaaS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1531,,Account Access Removal,Impact,"ESXi,IaaS,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1534,,Internal Spearphishing,Lateral Movement,"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1535,,Unused/Unsupported Cloud Regions,Stealth,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1537,,Transfer Data to Cloud Account,Exfiltration,"IaaS,Office Suite,SaaS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1538,,Cloud Service Dashboard,Discovery,"IaaS,Identity Provider,Office Suite,SaaS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1539,,Steal Web Session Cookie,Credential Access,"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1542,,Pre-OS Boot,Stealth;Persistence,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1542.002,T1542,Component Firmware,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1542.003,T1542,Bootkit,(inherits parent),"Linux,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1543,,Create or Modify System Process,Persistence;Privilege Escalation,"Containers,Linux,Windows,macOS",1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1543.002,T1543,Systemd Service,(inherits parent),Linux,1,k8s,respawn,exists,workload-present,(sub of T1543) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1543.005,T1543,Container Service,(inherits parent),Containers,1,k8s,respawn,exists,workload-present,(sub of T1543) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK,T1546,,Event Triggered Execution,Privilege Escalation;Persistence,"IaaS,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1546.004,T1546,Unix Shell Configuration Modification,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1546.005,T1546,Trap,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1546.016,T1546,Installer Packages,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1546.017,T1546,Udev Rules,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1546.018,T1546,Python Startup Hooks,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1547,,Boot or Logon Autostart Execution,Persistence;Privilege Escalation,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1547.006,T1547,Kernel Modules and Extensions,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1547.013,T1547,XDG Autostart Entries,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1548,,Abuse Elevation Control Mechanism,Privilege Escalation,"IaaS,Identity Provider,Linux,Office Suite,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1548.001,T1548,Setuid and Setgid,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1548.003,T1548,Sudo and Sudo Caching,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1548.005,T1548,Temporary Elevated Cloud Access,(inherits parent),"IaaS,Identity Provider,Office Suite",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1550,,Use Alternate Authentication Material,Lateral Movement,"Containers,IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows",1,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1550.001,T1550,Application Access Token,(inherits parent),"Containers,IaaS,Identity Provider,Office Suite,SaaS",1,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1550) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK-sub,T1550.004,T1550,Web Session Cookie,(inherits parent),"IaaS,Office Suite,SaaS",1,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,(sub of T1550) attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1552,,Unsecured Credentials,Credential Access,"Containers,IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",2,identity,key-rotate,needs-build,plaintext-secret,credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1552.001,T1552,Credentials In Files,(inherits parent),"Containers,IaaS,Linux,Windows,macOS",2,identity,key-rotate,needs-build,plaintext-secret,(sub of T1552) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1552.003,T1552,Shell History,(inherits parent),"Linux,Windows,macOS",2,identity,key-rotate,needs-build,plaintext-secret,(sub of T1552) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1552.004,T1552,Private Keys,(inherits parent),"Linux,Network Devices,Windows,macOS",2,identity,key-rotate,needs-build,plaintext-secret,(sub of T1552) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1552.005,T1552,Cloud Instance Metadata API,(inherits parent),IaaS,2,identity,key-rotate,needs-build,plaintext-secret,(sub of T1552) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK-sub,T1552.007,T1552,Container API,(inherits parent),Containers,2,identity,key-rotate,needs-build,plaintext-secret,(sub of T1552) credential exposed/harvested on infra,credential rotated; old value rejected,
+ATT&CK,T1553,,Subvert Trust Controls,Defense Impairment,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1553.004,T1553,Install Root Certificate,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1554,,Compromise Host Software Binary,Persistence,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1555,,Credentials from Password Stores,Credential Access,"IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1555.002,T1555,Securityd Memory,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1555.003,T1555,Credentials from Web Browsers,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1555.005,T1555,Password Managers,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1555.006,T1555,Cloud Secrets Management Stores,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1556,,Modify Authentication Process,Defense Impairment;Persistence;Credential Access,"IaaS,Identity Provider,Linux,Network Devices,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1556.003,T1556,Pluggable Authentication Modules,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1556.006,T1556,Multi-Factor Authentication,(inherits parent),"IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1556.007,T1556,Hybrid Identity,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1556.009,T1556,Conditional Access Policies,(inherits parent),"IaaS,Identity Provider",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1557,,Adversary-in-the-Middle,Credential Access;Collection,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1557.002,T1557,ARP Cache Poisoning,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1557.003,T1557,DHCP Spoofing,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1558,,Steal or Forge Kerberos Tickets,Credential Access,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1558.005,T1558,Ccache Files,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1559,,Inter-Process Communication,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1560,,Archive Collected Data,Collection,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1560.001,T1560,Archive via Utility,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1560.002,T1560,Archive via Library,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1560.003,T1560,Archive via Custom Method,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1561,,Disk Wipe,Impact,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1561.001,T1561,Disk Content Wipe,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1561.002,T1561,Disk Structure Wipe,(inherits parent),"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1563,,Remote Service Session Hijacking,Lateral Movement,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1563.001,T1563,SSH Hijacking,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1564,,Hide Artifacts,Stealth,"ESXi,Linux,Office Suite,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1564.001,T1564,Hidden Files and Directories,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.002,T1564,Hidden Users,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.003,T1564,Hidden Window,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.005,T1564,Hidden File System,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.006,T1564,Run Virtual Instance,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.007,T1564,VBA Stomping,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.008,T1564,Email Hiding Rules,(inherits parent),"Linux,Office Suite,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.011,T1564,Ignore Process Interrupts,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.012,T1564,File/Path Exclusions,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.013,T1564,Bind Mounts,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1564.014,T1564,Extended Attributes,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1565,,Data Manipulation,Impact,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1565.001,T1565,Stored Data Manipulation,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1565.002,T1565,Transmitted Data Manipulation,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1565.003,T1565,Runtime Data Manipulation,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1566,,Phishing,Initial Access,"Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1566.001,T1566,Spearphishing Attachment,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1566.002,T1566,Spearphishing Link,(inherits parent),"Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1566.003,T1566,Spearphishing via Service,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1566.004,T1566,Spearphishing Voice,(inherits parent),"Identity Provider,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1567,,Exfiltration Over Web Service,Exfiltration,"ESXi,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1567.001,T1567,Exfiltration to Code Repository,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1567.002,T1567,Exfiltration to Cloud Storage,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1567.003,T1567,Exfiltration to Text Storage Sites,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1567.004,T1567,Exfiltration Over Webhook,(inherits parent),"ESXi,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1568,,Dynamic Resolution,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1568.001,T1568,Fast Flux DNS,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1568.002,T1568,Domain Generation Algorithms,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1568.003,T1568,DNS Calculation,(inherits parent),"ESXi,Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1569,,System Services,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1569.003,T1569,Systemctl,(inherits parent),Linux,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1570,,Lateral Tool Transfer,Lateral Movement,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1571,,Non-Standard Port,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1572,,Protocol Tunneling,Command and Control,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1573,,Encrypted Channel,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1573.001,T1573,Symmetric Cryptography,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1573.002,T1573,Asymmetric Cryptography,(inherits parent),"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1574,,Hijack Execution Flow,Stealth;Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1574.006,T1574,Dynamic Linker Hijacking,(inherits parent),"Linux,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1574.007,T1574,Path Interception by PATH Environment Variable,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1578,,Modify Cloud Compute Infrastructure,Defense Impairment,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1578.001,T1578,Create Snapshot,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1578.002,T1578,Create Cloud Instance,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1578.003,T1578,Delete Cloud Instance,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1578.004,T1578,Revert Cloud Instance,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1578.005,T1578,Modify Cloud Compute Configurations,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1580,,Cloud Infrastructure Discovery,Discovery,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1606,,Forge Web Credentials,Credential Access,"IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1606.001,T1606,Web Cookies,(inherits parent),"IaaS,Linux,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1606.002,T1606,SAML Tokens,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS,Windows",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1609,,Container Administration Command,Execution,Containers,1,k8s,quarantine,exists,overbroad-rbac,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+ATT&CK,T1610,,Deploy Container,Execution,Containers,1,k8s,evict,exists,overbroad-rbac,attacker-controlled workload running,workload gone; owner not rescheduling it,
+ATT&CK,T1611,,Escape to Host,Privilege Escalation,"Containers,ESXi,Linux,Windows",1,node,node-cordon-drain-replace,needs-build,privileged-pod|hostpath-mount|host-namespace,attacker on the host/node,workload off node; node cordoned/replaced,
+ATT&CK,T1612,,Build Image on Host,Stealth,Containers,2,node,node-cordon-drain-replace,needs-build,privileged-pod,attacker on the host/node,workload off node; node cordoned/replaced,
+ATT&CK,T1613,,Container and Resource Discovery,Discovery,Containers,1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+ATT&CK,T1614,,System Location Discovery,Discovery,"IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1614.001,T1614,System Language Discovery,(inherits parent),"Linux,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1619,,Cloud Storage Object Discovery,Discovery,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1620,,Reflective Code Loading,Stealth,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1621,,Multi-Factor Authentication Request Generation,Credential Access,"IaaS,Identity Provider,Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1622,,Debugger Evasion,Stealth;Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1648,,Serverless Execution,Execution,"IaaS,Office Suite,SaaS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1649,,Steal or Forge Authentication Certificates,Credential Access,"Identity Provider,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1651,,Cloud Administration Command,Execution,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1652,,Device Driver Discovery,Discovery,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1653,,Power Settings,Persistence,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1654,,Log Enumeration,Discovery,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1657,,Financial Theft,Impact,"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1659,,Content Injection,Initial Access;Command and Control,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1665,,Hide Infrastructure,Command and Control,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1666,,Modify Cloud Resource Hierarchy,Defense Impairment,IaaS,4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1667,,Email Bombing,Impact,"Linux,Office Suite,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1668,,Exclusive Control,Persistence,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1669,,Wi-Fi Networks,Initial Access,"Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1673,,Virtual Machine Discovery,Discovery,"ESXi,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1674,,Input Injection,Execution,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1678,,Delay Execution,Stealth,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1680,,Local Storage Discovery,Discovery,"ESXi,IaaS,Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1684,,Social Engineering,Stealth,"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1684.001,T1684,Impersonation,(inherits parent),"Linux,Office Suite,SaaS,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK-sub,T1684.002,T1684,Email Spoofing,(inherits parent),"Linux,Office Suite,Windows,macOS",4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1685,,Disable or Modify Tools,Defense Impairment,"Containers,ESXi,IaaS,Linux,Network Devices,Windows,macOS",1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1685.002,T1685,Disable or Modify Cloud Log,(inherits parent),"IaaS,Identity Provider,Office Suite,SaaS",1,k8s,respawn,exists,workload-present,(sub of T1685) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1685.003,T1685,Modify or Spoof Tool UI,(inherits parent),"Linux,Windows,macOS",1,k8s,respawn,exists,workload-present,(sub of T1685) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1685.004,T1685,Disable or Modify Linux Audit System Log,(inherits parent),Linux,1,k8s,respawn,exists,workload-present,(sub of T1685) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK-sub,T1685.006,T1685,Clear Linux or Mac System Logs,(inherits parent),"Linux,macOS",1,k8s,respawn,exists,workload-present,(sub of T1685) attacker modification persisted in the pod,pod replaced from clean image,
+ATT&CK,T1686,,Disable or Modify System Firewall,Defense Impairment,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK-sub,T1686.001,T1686,Cloud Firewall,(inherits parent),IaaS,4,-,-,-,,,,"inherits parent (host/cloud-level, not K8s control plane)"
+ATT&CK,T1687,,Exploitation for Defense Impairment,Defense Impairment,"IaaS,Linux,SaaS,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1689,,Downgrade Attack,Defense Impairment,"Linux,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+ATT&CK,T1690,,Prevent Command History Logging,Defense Impairment,"ESXi,Linux,Network Devices,Windows,macOS",4,-,-,-,,,,ATT&CK on IaaS/Linux but no K8s-control-plane end-state (host/cloud-level; see node/identity entries)
+MS-K8s,MS-IN-using-cloud-credential,,Using cloud credentials,Initial Access,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-IN-compromised-image-in-r,,Compromised image in registry,Initial Access,Kubernetes,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+MS-K8s,MS-IN-kubeconfig-file,,Kubeconfig file,Initial Access,Kubernetes,2,identity,key-rotate,needs-build,plaintext-secret,credential exposed/harvested on infra,credential rotated; old value rejected,
+MS-K8s,MS-IN-application-vulnerabil,,Application vulnerability,Initial Access,Kubernetes,1,k8s,quarantine,exists,public-exposure,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-IN-exposed-sensitive-inte,,Exposed sensitive interfaces,Initial Access,Kubernetes,1,cni,route-rotate,partial(label-only M-33),public-exposure,attacker learned/reaches the route,route epoch rotated,
+MS-K8s,MS-EX-exec-into-container,,Exec into container,Execution,Kubernetes,1,k8s,quarantine,exists,overbroad-rbac,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-EX-bashcmd-inside-contain,,Bash/cmd inside container,Execution,Kubernetes,1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-EX-new-container,,New container,Execution,Kubernetes,1,k8s,evict,exists,overbroad-rbac,attacker-controlled workload running,workload gone; owner not rescheduling it,
+MS-K8s,MS-EX-application-exploit-(r,,Application exploit (RCE),Execution,Kubernetes,1,k8s,quarantine,exists,public-exposure,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-EX-ssh-server-running-ins,,SSH server running inside container,Execution,Kubernetes,1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-EX-sidecar-injection,,Sidecar injection,Execution,Kubernetes,1,k8s,respawn,exists,overbroad-rbac,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-PE-backdoor-container,,Backdoor container,Persistence,Kubernetes,1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-PE-writable-hostpath-moun,,Writable hostPath mount,Persistence,Kubernetes,1,node,node-cordon-drain-replace,needs-build,hostpath-mount,attacker on the host/node,workload off node; node cordoned/replaced,
+MS-K8s,MS-PE-kubernetes-cronjob,,Kubernetes CronJob,Persistence,Kubernetes,2,k8s,respawn,exists,overbroad-rbac,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-PE-malicious-admission-co,,Malicious admission controller,Persistence,Kubernetes,2,k8s,respawn,exists,overbroad-rbac,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-PE-container-service-acco,,Container service account,Persistence,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-PE-static-pods,,Static pods,Persistence,Kubernetes,1,node,node-cordon-drain-replace,needs-build,host-namespace,attacker on the host/node,workload off node; node cordoned/replaced,
+MS-K8s,MS-PR-privileged-container,,Privileged container,Privilege Escalation,Kubernetes,1,node,node-cordon-drain-replace,needs-build,privileged-pod,attacker on the host/node,workload off node; node cordoned/replaced,
+MS-K8s,MS-PR-cluster-admin-binding,,Cluster-admin binding,Privilege Escalation,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),cluster-admin-binding,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-PR-access-cloud-resources,,Access cloud resources,Privilege Escalation,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-DE-clear-container-logs,,Clear container logs,Defense Evasion,Kubernetes,1,k8s,respawn,exists,workload-present,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-DE-delete-kubernetes-even,,Delete Kubernetes events,Defense Evasion,Kubernetes,1,k8s,respawn,exists,overbroad-rbac,attacker modification persisted in the pod,pod replaced from clean image,
+MS-K8s,MS-DE-pod-or-container-name-,,Pod or container name similarity,Defense Evasion,Kubernetes,1,k8s,evict,exists,workload-present,attacker-controlled workload running,workload gone; owner not rescheduling it,
+MS-K8s,MS-DE-connect-from-proxy-ser,,Connect from proxy server,Defense Evasion,Kubernetes,4,-,-,-,,,,host/proxy-level; no K8s-control-plane end-state
+MS-K8s,MS-CR-list-kubernetes-secret,,List Kubernetes secrets,Credential Access,Kubernetes,2,identity,key-rotate,needs-build,overbroad-rbac,credential exposed/harvested on infra,credential rotated; old value rejected,
+MS-K8s,MS-CR-mount-service-principa,,Mount service principal,Credential Access,Kubernetes,2,identity,key-rotate,needs-build,mounted-sa-token,credential exposed/harvested on infra,credential rotated; old value rejected,
+MS-K8s,MS-CR-application-credential,,Application credentials in configuration files,Credential Access,Kubernetes,2,identity,key-rotate,needs-build,plaintext-secret,credential exposed/harvested on infra,credential rotated; old value rejected,
+MS-K8s,MS-CR-access-managed-identit,,Access Managed Identity credentials,Credential Access,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-DI-access-kubernetes-api-,,Access Kubernetes API server,Discovery,Kubernetes,1,k8s,identity-rotate,partial(label-only M-33),overbroad-rbac,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-DI-access-kubelet-api,,Access Kubelet API,Discovery,Kubernetes,1,node,node-cordon-drain-replace,needs-build,host-namespace,attacker on the host/node,workload off node; node cordoned/replaced,
+MS-K8s,MS-DI-network-mapping,,Network mapping,Discovery,Kubernetes,1,cni,route-rotate,partial(label-only M-33),no-networkpolicy,attacker learned/reaches the route,route epoch rotated,
+MS-K8s,MS-DI-instance-metadata-api,,Instance Metadata API,Discovery,Kubernetes,2,identity,identity-rotate,partial(label-only M-33),mounted-sa-token,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+MS-K8s,MS-LA-cluster-internal-netwo,,Cluster internal networking,Lateral Movement,Kubernetes,1,cni,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+MS-K8s,MS-LA-coredns-poisoning,,CoreDNS poisoning,Lateral Movement,Kubernetes,1,cni,cut the network,exists,no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+MS-K8s,MS-LA-arp-poisoning-and-ip-s,,ARP poisoning and IP spoofing,Lateral Movement,Kubernetes,1,cni,cut the network,exists,no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+MS-K8s,MS-CO-images-from-a-private-,,Images from a private registry,Collection,Kubernetes,1,k8s,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+MS-K8s,MS-CO-collecting-data-from-p,,Collecting data from pod,Collection,Kubernetes,1,k8s,cut reachability,exists,no-networkpolicy,attacker can reach the target over the pod network,foothold->target edge removed,
+MS-K8s,MS-IM-data-destruction,,Data destruction,Impact,Kubernetes,1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-IM-resource-hijacking,,Resource hijacking,Impact,Kubernetes,1,k8s,quarantine,exists,workload-present,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+MS-K8s,MS-IM-denial-of-service,,Denial of service,Impact,Kubernetes,1,cni,cut the network,exists,no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+OWASP-LLM,LLM01:2025,,Prompt Injection,-,Generative/Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-LLM,LLM02:2025,,Sensitive Information Disclosure,-,Generative/Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-LLM,LLM03:2025,,Supply Chain,-,Generative/Agentic AI,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+OWASP-LLM,LLM04:2025,,Data and Model Poisoning,-,Generative/Agentic AI,2,serving,registry-rollback,needs-build,serves-model,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+OWASP-LLM,LLM05:2025,,Improper Output Handling,-,Generative/Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-LLM,LLM06:2025,,Excessive Agency,-,Generative/Agentic AI,3,agent,constrain-agent-scope,needs-build,has-agent,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+OWASP-LLM,LLM07:2025,,System Prompt Leakage,-,Generative/Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-LLM,LLM08:2025,,Vector and Embedding Weaknesses,-,Generative/Agentic AI,2,serving,rag-restore,needs-build,uses-rag,poisoned index/model/tool-data persisted,store hash == trusted snapshot,
+OWASP-LLM,LLM09:2025,,Misinformation,-,Generative/Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-LLM,LLM10:2025,,Unbounded Consumption,-,Generative/Agentic AI,1,serving,throttle,needs-build,serves-model,attacker driving runaway cost/load,driving path capped; rate at baseline,
+OWASP-Agentic,ASI01:2026,,Agent Goal Hijack,-,Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-Agentic,ASI02:2026,,Tool Misuse,-,Agentic AI,3,agent,constrain-agent-scope,needs-build,has-agent,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+OWASP-Agentic,ASI03:2026,,Identity & Privilege Abuse,-,Agentic AI,2,identity,identity-rotate,partial(label-only M-33),has-agent,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+OWASP-Agentic,ASI04:2026,,Agentic Supply Chain Vulnerabilities,-,Agentic AI,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+OWASP-Agentic,ASI05:2026,,Unexpected Code Execution,-,Agentic AI,1,k8s,quarantine,exists,has-agent,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+OWASP-Agentic,ASI06:2026,,Memory & Context Poisoning,-,Agentic AI,2,serving,context-reset,needs-build,has-agent,poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+OWASP-Agentic,ASI07:2026,,Insecure Inter-Agent Communication,-,Agentic AI,1,cni,cut the network,exists,has-agent;no-networkpolicy,attacker C2 / DoS channel open,channel edge removed,
+OWASP-Agentic,ASI08:2026,,Cascading Failures,-,Agentic AI,1,k8s,quarantine,exists,has-agent,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+OWASP-Agentic,ASI09:2026,,Human-Agent Trust Exploitation,-,Agentic AI,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-Agentic,ASI10:2026,,Rogue Agents,-,Agentic AI,1,k8s,evict,exists,has-agent,attacker-controlled workload running,workload gone; owner not rescheduling it,
+OWASP-MCP,MCP01:2025,,Token Mismanagement & Secret Exposure,-,Agentic AI/MCP,2,identity,key-rotate,needs-build,has-mcp-tools,credential exposed/harvested on infra,credential rotated; old value rejected,
+OWASP-MCP,MCP02:2025,,Privilege Escalation via Scope Creep,-,Agentic AI/MCP,3,agent,constrain-agent-scope,needs-build,has-mcp-tools,over-broad agent identity/tool scope abused,agent scope reduced; identity rotated,
+OWASP-MCP,MCP03:2025,,Tool Poisoning,-,Agentic AI/MCP,2,serving,tool-repin,needs-build,has-mcp-tools,poisoned MCP tool descriptor loaded,descriptor hash == trusted,
+OWASP-MCP,MCP04:2025,,Software Supply Chain Attacks & Dependency Tampering,-,Agentic AI/MCP,2,artifact,registry-rollback,needs-build,no-image-signing|mutable-tag,poisoned artifact/image/model in supply chain,running digest == trusted-pin,
+OWASP-MCP,MCP05:2025,,Command Injection & Execution,-,Agentic AI/MCP,1,k8s,quarantine,exists,has-mcp-tools,attacker foothold active on the workload,foothold path cut; workload Ready on clean placement,
+OWASP-MCP,MCP06:2025,,Prompt Injection via Contextual Payloads,-,Agentic AI/MCP,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-MCP,MCP07:2025,,Insufficient Authentication & Authorization,-,Agentic AI/MCP,2,identity,identity-rotate,partial(label-only M-33),has-mcp-tools,attacker holds/learned a workload identity or recon map,identity epoch rotated; map stale,
+OWASP-MCP,MCP08:2025,,Lack of Audit and Telemetry,-,Agentic AI/MCP,4,-,-,-,,,,in-request / governance; no movable infra state
+OWASP-MCP,MCP09:2025,,Shadow MCP Servers,-,Agentic AI/MCP,1,k8s,evict,exists,has-mcp-tools,attacker-controlled workload running,workload gone; owner not rescheduling it,
+OWASP-MCP,MCP10:2025,,Context Injection & Over-Sharing,-,Agentic AI/MCP,2,serving,context-reset,needs-build,has-mcp-tools,poisoned agent memory/context/config persisted,context/config == trusted snapshot,
+NIST-AI-100-2,NIST-PredAI-evasion,,Evasion (adversarial examples),-,AI,4,-,-,-,,,,in-request; see ATLAS AML.T0015
+NIST-AI-100-2,NIST-PredAI-poison-avail,,Poisoning — availability,-,AI,2,-,(pointer),-,,(see referenced entry),,"model end-state covered by registry-rollback (AML.T0018/T0076, LLM04)"
+NIST-AI-100-2,NIST-PredAI-poison-target,,Poisoning — targeted/backdoor,-,AI,2,-,(pointer),-,,(see referenced entry),,model end-state covered by registry-rollback
+NIST-AI-100-2,NIST-PredAI-priv-reconstruct,,Privacy — data reconstruction,-,AI,3,-,(pointer),-,,(see referenced entry),,covered by AML.T0024 (make extraction costly)
+NIST-AI-100-2,NIST-PredAI-priv-membership,,Privacy — membership inference,-,AI,4,-,-,-,,,,in-request inference; no infra end-state
+NIST-AI-100-2,NIST-PredAI-priv-extraction,,Privacy — model extraction,-,AI,3,-,(pointer),-,,(see referenced entry),,covered by AML.T0024 (key-rotate/throttle/move endpoint)
+NIST-AI-100-2,NIST-PredAI-priv-property,,Privacy — property inference,-,AI,4,-,-,-,,,,in-request inference; no infra end-state
+NIST-AI-100-2,NIST-GenAI-supply,,GenAI — supply chain,-,AI,2,-,(pointer),-,,(see referenced entry),,"covered by registry-rollback (LLM03, AML.T0010)"
+NIST-AI-100-2,NIST-GenAI-direct-inject,,GenAI — direct prompt injection,-,AI,4,-,-,-,,,,in-request; inline filter / partner
+NIST-AI-100-2,NIST-GenAI-indirect-inject,,GenAI — indirect prompt injection,-,AI,2,-,(pointer),-,,(see referenced entry),,persisted vector covered by rag-restore/context-reset (AML.T0070/T0080)
+NIST-AI-100-2,NIST-GenAI-poison,,GenAI — poisoning,-,AI,2,-,(pointer),-,,(see referenced entry),,covered by registry-rollback / rag-restore
+NIST-AI-100-2,NIST-GenAI-abuse,,GenAI — abuse/misuse,-,AI,4,-,-,-,,,,governance; no movable infra state
+AVID,AVID-SEC-leak,,Security — information leak,-,AI,4,-,-,-,,,,in-request/privacy; see NIST privacy pointers
+AVID,AVID-SEC-evasion,,Security — evasion,-,AI,4,-,-,-,,,,in-request; see ATLAS AML.T0015
+AVID,AVID-SEC-poison,,Security — poisoning,-,AI,2,-,(pointer),-,,(see referenced entry),,covered by registry-rollback / rag-restore
+AVID,AVID-SEC-theft,,Security — model/IP theft,-,AI,3,-,(pointer),-,,(see referenced entry),,covered by AML.T0024
+AVID,AVID-SEC-availability,,Security — availability/DoS,-,AI,1,-,(pointer),-,,(see referenced entry),,"covered by throttle/quarantine (LLM10, AML.T0029)"

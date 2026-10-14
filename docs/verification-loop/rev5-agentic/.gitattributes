@@ -1,0 +1,3 @@
+# Preserve the supplied, hash-pinned source bundle byte for byte.
+# Original source formatting is reviewed through its manifest, not normalized.
+source/rev5/** -text -whitespace linguist-vendored
