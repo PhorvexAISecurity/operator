@@ -1,0 +1,120 @@
+# Manual object: apply separately AFTER the Helm-owned Alertmanager is verified.
+# Exact identities come from the retained 2026-10-13 audit, not live inspection.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: phorvex-runtime-health
+  namespace: monitoring
+  labels:
+    release: kube-prom-stack
+    app.kubernetes.io/part-of: phorvex-monitoring
+    app.kubernetes.io/managed-by: phorvex-monitoring-manual
+spec:
+  groups:
+    - name: phorvex.runtime-health
+      interval: 30s
+      rules:
+        - alert: PhorvexDeploymentReplicasUnavailable
+          expr: |
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="phorvex-system",deployment=~"phorvex-phorvex|phorvex-phorvex-console"})
+              - max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="phorvex-system",deployment=~"phorvex-phorvex|phorvex-phorvex-console"})
+            ) > 0
+            or
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="voice",deployment="voice-bot"})
+              - max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="voice",deployment="voice-bot"})
+            ) > 0
+            or
+            (
+              max by (namespace, deployment) (kube_deployment_spec_replicas{namespace="mcp",deployment="mcp-server"})
+              - max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace="mcp",deployment="mcp-server"})
+            ) > 0
+          for: 5m
+          labels:
+            phorvex_cluster: dev
+            severity: warning
+          annotations:
+            summary: Expected application deployment has a replica deficit
+        - alert: PhorvexEngineScrapeUnavailable
+          expr: |
+            max by (namespace) (up{namespace="phorvex-system",job="monitoring/phorvex-operator"}) == 0
+            or
+            max by (namespace) (absent(up{namespace="phorvex-system",job="monitoring/phorvex-operator"}))
+          for: 5m
+          labels:
+            phorvex_cluster: dev
+            namespace: phorvex-system
+            monitor: engine
+            severity: critical
+          annotations:
+            summary: Expected engine metrics target is down or absent
+        - alert: PhorvexPrometheusPVCFreeSpaceLow
+          expr: |
+            (
+              min by (namespace, persistentvolumeclaim) (kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"})
+              / max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"})
+            ) < 0.2
+            and on (namespace, persistentvolumeclaim)
+            max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}) > 0
+          for: 10m
+          labels:
+            phorvex_cluster: dev
+            severity: warning
+          annotations:
+            summary: Prometheus PVC has less than 20 percent free space
+        - alert: PhorvexPrometheusPVCFreeSpaceLow
+          expr: |
+            (
+              min by (namespace, persistentvolumeclaim) (kubelet_volume_stats_available_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"})
+              / max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"})
+            ) < 0.1
+            and on (namespace, persistentvolumeclaim)
+            max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes{namespace="monitoring",persistentvolumeclaim="prometheus-kube-prom-stack-kube-prome-prometheus-db-prometheus-kube-prom-stack-kube-prome-prometheus-0"}) > 0
+          for: 10m
+          labels:
+            phorvex_cluster: dev
+            severity: critical
+          annotations:
+            summary: Prometheus PVC has less than 10 percent free space
+        - alert: PhorvexMathLabBudgetHigh
+          expr: |
+            max by (namespace) (phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator"}) / 1073741824 > 0.9
+          for: 5m
+          labels:
+            phorvex_cluster: dev
+            monitor: engine
+            severity: warning
+          annotations:
+            summary: Math Lab snapshot store exceeds 90 percent of its one GiB budget
+        - alert: PhorvexMathLabSnapshotsEvicted
+          expr: |
+            sum by (namespace) (increase(phorvex_mathlab_store_evicted_total{namespace="phorvex-system",job="monitoring/phorvex-operator"}[1h])) > 0
+          labels:
+            phorvex_cluster: dev
+            monitor: engine
+            severity: critical
+          annotations:
+            summary: Math Lab evicted original snapshots within the last hour
+        - alert: PhorvexMathLabSnapshotWriteFailures
+          expr: |
+            sum by (namespace) (increase(phorvex_mathlab_store_write_failures_total{namespace="phorvex-system",job="monitoring/phorvex-operator"}[15m])) > 0
+          labels:
+            phorvex_cluster: dev
+            monitor: engine
+            severity: critical
+          annotations:
+            summary: Math Lab snapshot writes failed within the last 15 minutes
+        - alert: PhorvexMathLabStoreMetricsMissing
+          expr: |
+            max by (namespace) (absent(phorvex_mathlab_store_bytes{namespace="phorvex-system",job="monitoring/phorvex-operator"}))
+            and on (namespace)
+            max by (namespace) (up{namespace="phorvex-system",job="monitoring/phorvex-operator"}) == 1
+          for: 10m
+          labels:
+            phorvex_cluster: dev
+            monitor: engine
+            coverage: mathlab
+            severity: warning
+          annotations:
+            summary: Healthy engine scrape is missing its expected Math Lab store gauge
