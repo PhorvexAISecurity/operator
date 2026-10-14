@@ -25,8 +25,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: epss-ecr-auth-${{ github.ref }}
-  cancel-in-progress: false
+  group: >-
+    epss-ecr-auth-${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   RECIPE: build/integrations/epss-ecr-auth-runtime
@@ -107,6 +110,10 @@ jobs:
         run: git diff --exit-code
 
   publish:
+    concurrency:
+      group: epss-ecr-auth-publish-${{ github.sha }}
+      cancel-in-progress: false
+      queue: max
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: [test, isolated-tests]
     runs-on: [self-hosted, linux, x64, phorvex-isolated-aws]

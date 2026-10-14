@@ -10,6 +10,7 @@ permissions:
 concurrency:
   group: litellm-gateway-runtime-${{ github.sha }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   verify:

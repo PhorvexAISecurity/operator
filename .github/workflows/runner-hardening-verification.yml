@@ -1,0 +1,78 @@
+name: Verify shared runner hardening
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/runner/**'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: runner-hardening-verification-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@v3
+        id: buildx
+        with:
+          cleanup: true
+          keep-state: false
+          driver-opts: image=moby/buildkit@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea
+
+      - name: Register exact runner builder
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/phvx-disk-hygiene register \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --builder "$BUILDER_NAME"
+
+      - name: Create isolated verification fixture
+        id: fixture
+        run: |
+          set -euo pipefail
+          fixture_dir="$(mktemp -d "${RUNNER_TEMP:?}/runner-hardening-verification.XXXXXX")"
+          printf '%s\n' 'FROM alpine:3.21' 'RUN echo verification && sleep 12' > "$fixture_dir/Dockerfile"
+          printf 'context=%s\n' "$fixture_dir" >> "$GITHUB_OUTPUT"
+
+      - name: Build verification fixture without exporting an image
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+          FIXTURE_DIR: ${{ steps.fixture.outputs.context }}
+        run: |
+          set -euo pipefail
+          test -n "$BUILDER_NAME"
+          case "$FIXTURE_DIR" in
+            "$RUNNER_TEMP"/runner-hardening-verification.*) ;;
+            *) echo '::error::Unexpected verification context.' >&2; exit 1 ;;
+          esac
+          test -f "$FIXTURE_DIR/Dockerfile"
+          printf 'verification builder=%s run=%s attempt=%s\n' "$BUILDER_NAME" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+          # The default docker-container driver retains only build cache: no output exporter.
+          # Force RUN execution on every run so the coordinator can observe its cgroup.
+          docker buildx build --builder "$BUILDER_NAME" --no-cache --progress=plain "$FIXTURE_DIR"

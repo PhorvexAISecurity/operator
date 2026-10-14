@@ -19,8 +19,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: litellm-metrics-source-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: >-
+    litellm-metrics-source-${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   source-protocol:

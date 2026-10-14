@@ -27,7 +27,12 @@ on:
         type: string
         default: ''
 
+concurrency:
+  group: operator-ci-${{ github.event_name }}-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
+
 permissions:
+  actions: read   # metadata-only completion refresh for registered runner builders
   id-token:      write   # request OIDC JWT (build jobs assume the AWS role)
   contents:      write   # release job pushes the version bump commit and the tag
   pull-requests: write   # the E2E job posts / updates its report comment
@@ -71,11 +76,30 @@ jobs:
   # ── 1. Detect which parts of the monorepo changed ──────────────────────────
   changes:
     runs-on: self-hosted
+    concurrency:
+      group: >-
+        operator-ci-changes-${{ github.event_name == 'pull_request'
+          && format('pr-{0}', github.event.pull_request.number)
+          || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     outputs:
       operator: ${{ steps.decide.outputs.operator }}
       console:  ${{ steps.decide.outputs.console }}
       phoenix:  ${{ steps.decide.outputs.phoenix }}
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # the release history decides what is unshipped (see "decide")
@@ -158,6 +182,19 @@ jobs:
   chart-sync:
     runs-on: self-hosted
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
 
       - name: Modeled claim language
@@ -215,9 +252,28 @@ jobs:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.operator == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: self-hosted
+    concurrency:
+      group: >-
+        operator-ci-build-operator-${{ github.event_name == 'pull_request'
+          && format('pr-{0}', github.event.pull_request.number)
+          || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -229,6 +285,16 @@ jobs:
         id: ecr
 
       - uses: docker/setup-buildx-action@v3
+        id: buildx
+
+      - name: Register exact runner builder
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/phvx-disk-hygiene register \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --builder "$BUILDER_NAME"
 
       - uses: docker/metadata-action@v5
         id: meta
@@ -278,9 +344,28 @@ jobs:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.console == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: self-hosted
+    concurrency:
+      group: >-
+        operator-ci-build-console-${{ github.event_name == 'pull_request'
+          && format('pr-{0}', github.event.pull_request.number)
+          || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
 
       - uses: aws-actions/configure-aws-credentials@v4
@@ -292,6 +377,16 @@ jobs:
         id: ecr
 
       - uses: docker/setup-buildx-action@v3
+        id: buildx
+
+      - name: Register exact runner builder
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/phvx-disk-hygiene register \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --builder "$BUILDER_NAME"
 
       - uses: docker/metadata-action@v5
         id: meta
@@ -336,9 +431,28 @@ jobs:
     needs: [changes, chart-sync]
     if: needs.changes.outputs.phoenix == 'true' || startsWith(github.ref, 'refs/tags/v')
     runs-on: self-hosted
+    concurrency:
+      group: >-
+        operator-ci-build-phoenix-${{ github.event_name == 'pull_request'
+          && format('pr-{0}', github.event.pull_request.number)
+          || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     env:
       BUILD_PHOENIX: ${{ github.event_name == 'pull_request' && 'true' || vars.BUILD_PHOENIX || 'false' }}
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - name: Skip if BUILD_PHOENIX != true
         if: env.BUILD_PHOENIX != 'true'
         run: |
@@ -359,7 +473,18 @@ jobs:
         id: ecr
 
       - uses: docker/setup-buildx-action@v3
+        id: buildx
         if: env.BUILD_PHOENIX == 'true'
+
+      - name: Register exact runner builder
+        if: env.BUILD_PHOENIX == 'true'
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/phvx-disk-hygiene register \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --builder "$BUILDER_NAME"
 
       - uses: docker/metadata-action@v5
         if: env.BUILD_PHOENIX == 'true'
@@ -421,7 +546,21 @@ jobs:
     concurrency:
       group: phorvex-e2e-live
       cancel-in-progress: false
+      queue: max
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
 
       - name: Verify sshpass
@@ -619,10 +758,24 @@ jobs:
     concurrency:
       group: phorvex-deploy-main
       cancel-in-progress: false
+      queue: max
     outputs:
       version: ${{ steps.version.outputs.version }}
       released: ${{ steps.publish.outputs.released }}
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # the version is derived from the tag history
@@ -848,7 +1001,21 @@ jobs:
     concurrency:
       group: phorvex-e2e-live
       cancel-in-progress: false
+      queue: max
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
         with:
           ref: main

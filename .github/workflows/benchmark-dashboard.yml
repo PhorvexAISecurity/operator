@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
     paths: ['benchmark/**', '.github/workflows/benchmark-dashboard.yml']
+concurrency:
+  group: >-
+    benchmark-dashboard-${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 jobs:

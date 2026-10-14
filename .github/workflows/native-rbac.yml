@@ -3,12 +3,33 @@ on:
   pull_request:
   push:
     branches: [main]
+concurrency:
+  group: >-
+    native-rbac-${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
+  actions: read   # metadata-only completion refresh for registered runner builders
   contents: read
 jobs:
   contract:
     runs-on: self-hosted
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:

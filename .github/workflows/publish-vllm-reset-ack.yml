@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read   # metadata-only completion refresh for registered runner builders
   contents: read
   id-token: write
 
 concurrency:
   group: vllm-reset-ack-${{ github.sha }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
@@ -19,6 +21,19 @@ jobs:
       AWS_REGION: us-east-2
       RECIPE: build/integrations/vllm-0.7.3-reset-ack
     steps:
+      - name: Refresh completed runner build leases
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          helper=/usr/local/libexec/phvx-disk-hygiene
+          if [ ! -x "$helper" ]; then
+            echo '::error::Scoped runner hygiene helper is not installed.' >&2
+            exit 1
+          fi
+          "$helper" refresh --repository "$GITHUB_REPOSITORY"
+
       - name: Require reviewed main source
         env:
           SOURCE_REF: ${{ github.ref }}
@@ -56,6 +71,16 @@ jobs:
         id: ecr
 
       - uses: docker/setup-buildx-action@v3
+        id: buildx
+
+      - name: Register exact runner builder
+        env:
+          BUILDER_NAME: ${{ steps.buildx.outputs.name }}
+        run: |
+          set -euo pipefail
+          /usr/local/libexec/phvx-disk-hygiene register \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" --builder "$BUILDER_NAME"
 
       - name: Refuse an existing source tag
         id: image
