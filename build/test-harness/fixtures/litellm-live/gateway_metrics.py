@@ -120,6 +120,25 @@ def configured_metrics(environ):
             if enabled == "1" else None)
 
 
+def configured_metrics_token(environ):
+    enabled = environ.get("PHORVEX_LITELLM_METRICS_ENABLED", "0")
+    if enabled == "0":
+        return None
+    try:
+        path = environ.get("PHORVEX_LITELLM_METRICS_TOKEN_FILE", "")
+        if enabled != "1" or not path or not Path(path).is_absolute():
+            raise ValueError()
+        # Kubernetes projections use symlinks. Read bounded bytes without
+        # normalizing whitespace and retain this immutable generation in memory.
+        with Path(path).open("rb") as stream:
+            token = stream.read(65)
+        if not re.fullmatch(b"[0-9a-f]{64}", token):
+            raise ValueError()
+        return token
+    except (OSError, ValueError, TypeError):
+        raise ValueError("metrics authentication configuration invalid") from None
+
+
 def strict_json(raw: bytes):
     def unique(pairs):
         result = {}
@@ -716,6 +735,7 @@ class PublicHandler(BaseHTTPRequestHandler):
 
 class MetricsHandler(BaseHTTPRequestHandler):
     metrics: RequestMetrics
+    metrics_token: bytes
     timeout = 5
 
     def parse_request(self):
@@ -735,19 +755,31 @@ class MetricsHandler(BaseHTTPRequestHandler):
     def send_error(self, code, message=None, explain=None):
         self.send_response(code)
         self.send_header("Content-Length", "0")
+        if code == 401:
+            self.send_header("WWW-Authenticate", "Bearer")
         self.send_header("Connection", "close")
         self.end_headers()
         self.close_connection = True
 
     def do_GET(self):
         # Exact raw target: no API/status paths, absolute URLs, query/path variants
-        # or request bodies. No authorization or upstream state is consulted.
+        # or request bodies. Authenticate only this metrics route.
         if self.path != "/metrics" or self.requestline.split()[1] != "/metrics":
             self.send_error(404)
             return
         lengths = self.headers.get_all("Content-Length", [])
-        if lengths not in ([], ["0"]) or self.headers.get("Transfer-Encoding"):
+        if lengths not in ([], ["0"]) or self.headers.get_all("Transfer-Encoding", []):
             self.send_error(400)
+            return
+        authorization = self.headers.get_all("Authorization", [])
+        try:
+            value = authorization[0].encode("ascii") if len(authorization) == 1 else b""
+        except UnicodeError:
+            value = b""
+        if (len(value) != 71 or value[:6].lower() != b"bearer" or value[6:7] != b" " or
+                not re.fullmatch(b"[0-9a-f]{64}", value[7:]) or
+                not hmac.compare_digest(value[7:], self.metrics_token)):
+            self.send_error(401)
             return
         body = self.metrics.exposition()
         self.send_response(200)
@@ -758,6 +790,12 @@ class MetricsHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
         self.close_connection = True
+
+
+class MetricsHTTPServer(ThreadingHTTPServer):
+    def handle_error(self, *_):
+        # Handler failures must not print request/credential-bearing tracebacks.
+        pass
 
 
 class StatusHandler(BaseHTTPRequestHandler):
@@ -809,6 +847,10 @@ class StatusHandler(BaseHTTPRequestHandler):
 
 def serve():
     metrics = configured_metrics(os.environ)
+    try:
+        metrics_token = configured_metrics_token(os.environ)
+    except ValueError:
+        raise SystemExit("metrics authentication configuration invalid") from None
     status_token = Path(os.environ["PHORVEX_LITELLM_STATUS_TOKEN_FILE"]).read_text().strip()
     gateway = Gateway(Path(os.environ["PHORVEX_LITELLM_CLIENTS_FILE"]),
                       Path(os.environ["PHORVEX_LITELLM_POLICY_FILE"]),
@@ -832,8 +874,9 @@ def serve():
     listeners = [ThreadingHTTPServer(("0.0.0.0", 4002), status)]
     try:
         if metrics is not None:
-            bound = type("BoundMetricsHandler", (MetricsHandler,), {"metrics": metrics})
-            listeners.append(ThreadingHTTPServer(("0.0.0.0", 4003), bound))
+            bound = type("BoundMetricsHandler", (MetricsHandler,),
+                         {"metrics": metrics, "metrics_token": metrics_token})
+            listeners.append(MetricsHTTPServer(("0.0.0.0", 4003), bound))
         public_server = ThreadingHTTPServer(("0.0.0.0", 4001), public)
     except Exception:
         for listener in listeners:

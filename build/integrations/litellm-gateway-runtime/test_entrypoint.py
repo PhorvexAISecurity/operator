@@ -17,7 +17,8 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
-SOURCE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live/gateway_metrics.py"
+FIXTURE = Path(__file__).resolve().parents[2] / "test-harness/fixtures/litellm-live"
+SOURCE = Path(os.environ.get("PHORVEX_TEST_CANDIDATE_PATH", str(FIXTURE / "gateway_metrics.py")))
 
 
 class LocalModel(BaseHTTPRequestHandler):
@@ -50,9 +51,19 @@ class EntrypointTests(unittest.TestCase):
         self.entrypoint_protocol(metrics_enabled=True)
 
     def test_preserved_legacy_source_entrypoint(self):
-        self.entrypoint_protocol(metrics_enabled=False, source=SOURCE.with_name("gateway.py"))
+        self.entrypoint_protocol(metrics_enabled=False, source=FIXTURE / "gateway.py")
 
-    def entrypoint_protocol(self, metrics_enabled, source=SOURCE):
+    def test_preserved_m1b_source_entrypoint(self):
+        frozen = FIXTURE.parents[3] / "deploy/helm/phorvex-stack/files/litellm-m1b/gateway-metrics-source-configmap.json"
+        raw = json.loads(frozen.read_text())["data"]["gateway.py"]
+        self.assertEqual(hashlib.sha256(raw.encode()).hexdigest(),
+                         "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1")
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp) / "gateway.py"
+            source.write_text(raw)
+            self.entrypoint_protocol(metrics_enabled=True, source=source, metrics_auth=False)
+
+    def entrypoint_protocol(self, metrics_enabled, source=SOURCE, metrics_auth=True):
         source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
         seed = b"synthetic-local-trial-seed-32-bytes-0001"
         nonce = "a" * 32
@@ -65,6 +76,9 @@ class EntrypointTests(unittest.TestCase):
         old, control = token("a"), token("c")
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            metrics_token = "a" * 64  # Isolated synthetic fixture, unrelated to production.
+            (root / "metrics-token").write_bytes(metrics_token.encode())
+            (root / "metrics-token").chmod(0o440)
             (root / "seed").write_bytes(seed)
             (root / "status-token").write_text("synthetic-private-status-token-32-bytes")
             (root / "clients.json").write_text(json.dumps({"version": 2,
@@ -87,6 +101,8 @@ class EntrypointTests(unittest.TestCase):
             if metrics_enabled:
                 env.update({"PHORVEX_LITELLM_METRICS_ENABLED": "1", "POD_NAMESPACE": "litellm",
                             "POD_NAME": "litellm-runtime-fixture"})
+                if metrics_auth:
+                    env["PHORVEX_LITELLM_METRICS_TOKEN_FILE"] = str(root / "metrics-token")
             proc = subprocess.Popen([sys.executable, "-B", str(source)], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
@@ -137,11 +153,16 @@ class EntrypointTests(unittest.TestCase):
                 self.assertEqual(LocalModel.calls, 3)
                 if metrics_enabled:
                     deadline = time.monotonic() + 3
+                    if metrics_auth:
+                        for credential in ("", "b" * 64, "synthetic-private-status-token-32-bytes", old):
+                            self.assertEqual(request(4003, "GET", "/metrics", credential), (401, b""))
+                        self.assertEqual(request(4002, "GET", path, metrics_token)[0], 401)
+                        self.assertEqual(request(4001, "POST", "/v1/chat/completions", metrics_token, body)[0], 401)
                     while True:
-                        status, raw = request(4003, "GET", "/metrics", "")
+                        status, raw = request(4003, "GET", "/metrics", metrics_token if metrics_auth else "")
                         self.assertEqual(status, 200)
                         counters = dict(re.findall(rb'^http_requests_total\{(.*)\} (\d+)$', raw, re.M))
-                        if sum(int(value) for value in counters.values()) == 4:
+                        if sum(int(value) for value in counters.values()) == (5 if metrics_auth else 4):
                             break
                         if time.monotonic() >= deadline:
                             self.fail("terminal runtime accounting did not catch up")
@@ -149,8 +170,9 @@ class EntrypointTests(unittest.TestCase):
                     self.assertIn(b'namespace="litellm",pod="litellm-runtime-fixture",target="litellm"', raw)
                     histograms = dict(re.findall(rb'^http_request_duration_seconds_count\{(.*)\} (\d+)$', raw, re.M))
                     self.assertEqual(counters, histograms)
-                    self.assertEqual(sum(int(value) for value in counters.values()), 4)
-                    self.assertEqual(request(4003, "GET", "/metrics?x=y", "")[0], 404)
+                    self.assertEqual(sum(int(value) for value in counters.values()), 5 if metrics_auth else 4)
+                    self.assertNotIn(metrics_token.encode(), raw)
+                    self.assertEqual(request(4003, "GET", "/metrics?x=y", metrics_token)[0], 404)
                     self.assertEqual(request(4003, "GET", path, "synthetic-private-status-token-32-bytes")[0], 404)
                     self.assertEqual(request(4003, "POST", "/v1/chat/completions", old, body)[0], 501)
                     self.assertEqual(LocalModel.calls, 3)
