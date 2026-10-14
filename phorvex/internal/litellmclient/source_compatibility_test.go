@@ -64,9 +64,11 @@ func compatibilityFixture(t *testing.T, metrics bool, image string) client.Clien
 		}
 		p.Spec.Volumes[0].ConfigMap.Name = sourceName
 		p.Status.ContainerStatuses[1].ImageID = image
+		desiredStatus := p.Status.DeepCopy()
 		if err := c.Update(ctx, p); err != nil {
 			t.Fatal(err)
 		}
+		p.Status = *desiredStatus
 		if err := c.Status().Update(ctx, p); err != nil {
 			t.Fatal(err)
 		}
