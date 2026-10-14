@@ -175,7 +175,9 @@ class EntrypointTests(unittest.TestCase):
                     self.assertEqual(request(4003, "GET", "/metrics?x=y", metrics_token)[0], 404)
                     self.assertEqual(request(4003, "GET", path, "synthetic-private-status-token-32-bytes")[0], 404)
                     self.assertEqual(request(4003, "POST", "/v1/chat/completions", old, body)[0], 501)
-                    self.assertEqual(LocalModel.calls, 3)
+                    # Unknown public credentials retain the legacy upstream 401 path.
+                    # The metrics-only path/method controls above add zero upstream calls.
+                    self.assertEqual(LocalModel.calls, 4 if metrics_auth else 3)
                 else:
                     with self.assertRaises(OSError):
                         socket.create_connection(("127.0.0.1", 4003), timeout=0.2)
