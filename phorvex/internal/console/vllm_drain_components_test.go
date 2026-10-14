@@ -271,3 +271,51 @@ func TestDrainComponentRejectsMountedVolumeSubstitution(t *testing.T) {
 		t.Fatal("same container with different mounted source accepted")
 	}
 }
+
+func TestDrainComponentNativeMetricsSidecarRestriction(t *testing.T) {
+	profile, snap, _ := revalidationFixture(t)
+	workload := leaseTestServingPod(profile, snap.Pods[0])
+	leaseTestAddNativeMetrics(&workload)
+	service := &corev1.Service{Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "vllm"}}}
+	if !endpointLeaseReadyPod(&workload, profile, service) {
+		t.Fatal("vllm workload with a native metrics init sidecar refused")
+	}
+	for _, component := range []string{"manager", "console"} {
+		for _, gate := range []string{"deployment-template", "admitted-pod"} {
+			t.Run(component+"/"+gate, func(t *testing.T) {
+				dep, sets, pods, release := drainComponentFixture(component)
+				selfName, selfUID := pods.Items[0].Name, string(pods.Items[0].UID)
+				// Keep volumes equal at both zero-init gates so an unrelated mount
+				// mismatch cannot explain the refusal of the added init container.
+				dep.Spec.Template.Spec.Volumes = leaseTestMetricsVolumes()
+				sets.Items[0].Spec.Template = *dep.Spec.Template.DeepCopy()
+				pods.Items[0].Spec = *dep.Spec.Template.Spec.DeepCopy()
+				// The same vllm workload is outside this component's owner graph.
+				pods.Items = append(pods.Items, workload)
+				before, err := drainValidateComponent(dep, sets, pods, dep.Name, string(dep.UID), component, release, selfName, selfUID)
+				if err != nil {
+					t.Fatalf("reviewed zero-init phorvex-system %s refused: %v", component, err)
+				}
+				if before.PodUID != selfUID || before.ContainerID != "containerd://current" || before.ImageID != release.Image {
+					t.Fatalf("component authority escaped phorvex-system: %+v", before)
+				}
+				metrics := leaseTestMetricsSidecar()
+				if gate == "deployment-template" {
+					dep.Spec.Template.Spec.InitContainers = []corev1.Container{metrics}
+					sets.Items[0].Spec.Template = *dep.Spec.Template.DeepCopy()
+					pods.Items[0].Spec = *dep.Spec.Template.Spec.DeepCopy()
+				} else {
+					pods.Items[0].Spec.InitContainers = []corev1.Container{metrics}
+				}
+				pods.Items[0].Status.InitContainerStatuses = []corev1.ContainerStatus{{Name: metrics.Name, Ready: true,
+					ContainerID: "containerd://metrics", ImageID: metrics.Image, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}}
+				if _, err := drainValidateComponent(dep, sets, pods, dep.Name, string(dep.UID), component, release, selfName, selfUID); err == nil {
+					t.Fatalf("%s accepted an init sidecar at its %s zero-init gate", component, gate)
+				}
+				if !endpointLeaseReadyPod(&workload, profile, service) {
+					t.Fatal("component init restriction contaminated vllm workload acceptance")
+				}
+			})
+		}
+	}
+}

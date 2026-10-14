@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -34,24 +35,27 @@ func (*guardrailTestRecorder) MetricRaw(json.RawMessage) error { return nil }
 func (*guardrailTestRecorder) Result(Result) error             { return nil }
 
 type guardrailFixture struct {
-	mu             sync.Mutex
-	active         string
-	wrongTarget    bool
-	wrongOwner     bool
-	unreadyPod     bool
-	shadowSource   bool
-	wrongProtocol  bool
-	drift          bool
-	malformedScore bool
-	oversizeBody   bool
-	denyService    bool
-	classifyTexts  []string
-	proxyState     int
-	mutatingCalls  int
-	serviceReads   int
-	requestPaths   []string
-	stateRaw       []byte
-	stateAfterRaw  []byte
+	mu              sync.Mutex
+	active          string
+	wrongTarget     bool
+	wrongOwner      bool
+	unreadyPod      bool
+	shadowSource    bool
+	nativeMetrics   bool
+	regularMetrics  bool
+	metricsRestarts int32
+	wrongProtocol   bool
+	drift           bool
+	malformedScore  bool
+	oversizeBody    bool
+	denyService     bool
+	classifyTexts   []string
+	proxyState      int
+	mutatingCalls   int
+	serviceReads    int
+	requestPaths    []string
+	stateRaw        []byte
+	stateAfterRaw   []byte
 }
 
 func (f *guardrailFixture) setup(t *testing.T) (Runtime, *guardrailTestRecorder, func()) {
@@ -94,6 +98,42 @@ func (f *guardrailFixture) setup(t *testing.T) (Runtime, *guardrailTestRecorder,
 			write(w, service)
 		case "/api/v1/namespaces/vllm/pods":
 			copyPod := pod.DeepCopy()
+			if f.nativeMetrics || f.regularMetrics {
+				restart := corev1.ContainerRestartPolicyAlways
+				metrics := corev1.Container{Name: "phorvex-vllm-metrics", Image: "example/metrics@sha256:" + strings.Repeat("9", 64),
+					Command: []string{"python3", "-B", "/opt/phorvex/metrics.py"}, RestartPolicy: &restart,
+					VolumeMounts: []corev1.VolumeMount{
+						{Name: "metrics-source", MountPath: "/opt/phorvex/metrics.py", SubPath: "metrics.py", ReadOnly: true},
+						{Name: "metrics-token", MountPath: "/etc/phorvex-vllm-metrics", ReadOnly: true},
+					},
+					Ports: []corev1.ContainerPort{{Name: "engine-metrics", ContainerPort: 9102, Protocol: corev1.ProtocolTCP}}}
+
+				optional, mode := false, int32(0440)
+				metricsVolumes := []corev1.Volume{
+					{Name: "metrics-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "phorvex-vllm-native-metrics-fixture"}, Optional: &optional,
+						Items: []corev1.KeyToPath{{Key: "metrics.py", Path: "metrics.py"}},
+					}}},
+					{Name: "metrics-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+						SecretName: "phorvex-vllm-native-metrics-token-v1", Optional: &optional, DefaultMode: &mode,
+						Items: []corev1.KeyToPath{{Key: "token", Path: "token"}},
+					}}},
+				}
+				copyPod.Spec.Volumes = append(copyPod.Spec.Volumes, metricsVolumes...)
+				status := corev1.ContainerStatus{Name: metrics.Name, Ready: true, ContainerID: "containerd://metrics",
+					ImageID: "image-metrics", RestartCount: f.metricsRestarts, State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}}
+				copyPod.Spec.InitContainers = []corev1.Container{{Name: "phorvex-drain-ledger-init"}}
+				copyPod.Status.InitContainerStatuses = []corev1.ContainerStatus{{Name: "phorvex-drain-ledger-init",
+					State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}}}
+				if f.nativeMetrics {
+					copyPod.Spec.InitContainers = append(copyPod.Spec.InitContainers, metrics)
+					copyPod.Status.InitContainerStatuses = append(copyPod.Status.InitContainerStatuses, status)
+				} else {
+					metrics.RestartPolicy = nil
+					copyPod.Spec.Containers = append(copyPod.Spec.Containers, metrics)
+					copyPod.Status.ContainerStatuses = append(copyPod.Status.ContainerStatuses, status)
+				}
+			}
 			if f.drift && f.serviceReads >= 2 {
 				copyPod.ResourceVersion = "changed"
 			}
@@ -227,6 +267,7 @@ func TestGuardrailCalibrationRefusesBeforeClassifierOnAuthorityFailure(t *testin
 		{"wrong Service owner UID", func(f *guardrailFixture, _ *Runtime) { f.wrongOwner = true }},
 		{"Pod Ready false", func(f *guardrailFixture, _ *Runtime) { f.unreadyPod = true }},
 		{"source shadow mount", func(f *guardrailFixture, _ *Runtime) { f.shadowSource = true }},
+		{"third regular metrics container", func(f *guardrailFixture, _ *Runtime) { f.regularMetrics = true }},
 		{"wrong endpoint protocol", func(f *guardrailFixture, _ *Runtime) { f.wrongProtocol = true }},
 		{"source digest", func(_ *guardrailFixture, r *Runtime) { r.Guardrail.ExpectedSourceSHA256 = strings.Repeat("0", 64) }},
 		{"read permission", func(f *guardrailFixture, _ *Runtime) { f.denyService = true }},
@@ -444,5 +485,42 @@ func TestGuardrailCalibrationDeclaredStateDriftStopsResult(t *testing.T) {
 				t.Fatalf("metadata drift completed calibration: %+v", result)
 			}
 		})
+	}
+}
+
+func TestGuardrailCalibrationNativeMetricsSidecarPreservesServingAuthority(t *testing.T) {
+	fixture := &guardrailFixture{}
+	runtime, recorder, closeServer := fixture.setup(t)
+	defer closeServer()
+	before, err := captureGuardrailAuthority(context.Background(), runtime)
+	if err != nil {
+		t.Fatalf("existing two-container workload refused: %v", err)
+	}
+	fixture.mu.Lock()
+	fixture.nativeMetrics = true
+	fixture.mu.Unlock()
+	for _, restarts := range []int32{0, 3} {
+		fixture.mu.Lock()
+		fixture.metricsRestarts = restarts
+		fixture.mu.Unlock()
+		after, err := captureGuardrailAuthority(context.Background(), runtime)
+		if err != nil || !reflect.DeepEqual(before, after) || guardrailFingerprint(before) != guardrailFingerprint(after) {
+			t.Fatalf("metrics init/restarts changed serving/source/route authority: before=%+v after=%+v err=%v", before, after, err)
+		}
+	}
+	if len(before.Containers) != 2 || before.Containers[0].Name != "guardrail" || before.Containers[1].Name != "vllm" ||
+		before.PodUID != "pod-uid" || before.ServiceUID != "service-uid" || before.SourceUID != "cm-uid" || before.SourceSHA256 != runtime.Guardrail.ExpectedSourceSHA256 {
+		t.Fatalf("unexpected serving authority: %+v", before)
+	}
+	result := NewGuardrailCalibrationHandler().Run(context.Background(), JobContext{Runtime: runtime, Recorder: recorder})
+	if result.Outcome != OutcomeFunctionalPass || !result.Cleanup.Verified ||
+		result.Evidence["authorityBeforeSHA256"] != guardrailFingerprint(before) || result.Evidence["authorityAfterSHA256"] != guardrailFingerprint(before) ||
+		strings.Join(fixture.classifyTexts, "|") != guardrailSayOK+"|"+guardrailArithmetic || fixture.proxyState != 2 || fixture.mutatingCalls != 0 || len(recorder.intents) != 2 || len(recorder.events) != 2 {
+		t.Fatalf("native metrics workload failed real calibration handler: %+v", result)
+	}
+	for _, request := range fixture.requestPaths {
+		if strings.Contains(request, ":9102") || strings.Contains(request, "/metrics") {
+			t.Fatalf("calibration was rebound to metrics: %s", request)
+		}
 	}
 }

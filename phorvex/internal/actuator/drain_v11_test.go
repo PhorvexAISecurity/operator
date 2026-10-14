@@ -476,6 +476,8 @@ func TestDrainV11StatusRejectsSelfConsistentDifferentAdmissionGeneration(t *test
 func TestRecoverDrainV11PersistsExactStaleSupersessionBeforeSecondCreate(t *testing.T) {
 	oldPod := drainV11TestPod("old")
 	newPod := drainV11TestPod("new")
+	drainV11TestAddNativeMetrics(oldPod)
+	drainV11TestAddNativeMetrics(newPod)
 	oldCapabilitySHA, oldIncarnation := strings.Repeat("a", 64), strings.Repeat("b", 64)
 	newCapabilitySHA, newIncarnation := strings.Repeat("c", 64), strings.Repeat("d", 64)
 	receipt, priorStatus := drainV11ConfirmedReceipt(t, oldPod, oldCapabilitySHA, oldIncarnation)
@@ -914,6 +916,111 @@ func TestBindDrainV11StatusRejectsSelfConsistentMalformedProofWithoutMutation(t 
 			}
 			if !reflect.DeepEqual(receipt, before) {
 				t.Fatalf("receipt mutated on refusal: %#v", receipt)
+			}
+		})
+	}
+}
+
+func drainV11TestAddNativeMetrics(pod *corev1.Pod) {
+	restart := corev1.ContainerRestartPolicyAlways
+	// The metrics participant is a restartable init after the ledger initializer;
+	// both original serving participants retain their regular status entries.
+	if len(pod.Spec.Containers) == 0 {
+		pod.Spec.Containers = []corev1.Container{{Name: "vllm"}, {Name: "guardrail"}}
+	}
+	pod.Spec.InitContainers = []corev1.Container{
+		{Name: "phorvex-drain-ledger-init"},
+		{Name: "phorvex-vllm-metrics", Image: "example/metrics@sha256:" + strings.Repeat("9", 64),
+			Command: []string{"python3", "-B", "/opt/phorvex/metrics.py"}, RestartPolicy: &restart,
+			VolumeMounts: []corev1.VolumeMount{
+				{Name: "metrics-source", MountPath: "/opt/phorvex/metrics.py", SubPath: "metrics.py", ReadOnly: true},
+				{Name: "metrics-token", MountPath: "/etc/phorvex-vllm-metrics", ReadOnly: true},
+			},
+			Ports: []corev1.ContainerPort{{Name: "engine-metrics", ContainerPort: 9102, Protocol: corev1.ProtocolTCP}}},
+	}
+
+	optional, mode := false, int32(0440)
+	metricsVolumes := []corev1.Volume{
+		{Name: "metrics-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "phorvex-vllm-native-metrics-fixture"}, Optional: &optional,
+			Items: []corev1.KeyToPath{{Key: "metrics.py", Path: "metrics.py"}},
+		}}},
+		{Name: "metrics-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName: "phorvex-vllm-native-metrics-token-v1", Optional: &optional, DefaultMode: &mode,
+			Items: []corev1.KeyToPath{{Key: "token", Path: "token"}},
+		}}},
+	}
+	pod.Spec.Volumes = append(pod.Spec.Volumes, metricsVolumes...)
+	pod.Status.InitContainerStatuses = []corev1.ContainerStatus{
+		{Name: "phorvex-drain-ledger-init", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}},
+		{Name: "phorvex-vllm-metrics", Ready: true, ContainerID: "containerd://metrics", ImageID: pod.Spec.InitContainers[1].Image,
+			State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+	}
+}
+
+func TestDrainV11NativeMetricsSidecarPreservesBindingAndRecovery(t *testing.T) {
+	pod := drainV11TestPod("serving")
+	pod.Namespace = "vllm"
+	pod.Spec.Containers = []corev1.Container{{Name: "vllm"}, {Name: "guardrail"}}
+	capabilitySHA, incarnation := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	receipt, status := drainV11ConfirmedReceipt(t, pod, capabilitySHA, incarnation)
+	native := pod.DeepCopy()
+	drainV11TestAddNativeMetrics(native)
+	binding, err := drainV11OperatorBinding(native, capabilitySHA, incarnation)
+	if err != nil || binding != receipt.OperatorBinding {
+		t.Fatalf("native init sidecar changed serving binding: %q err=%v", binding, err)
+	}
+	for _, tc := range []struct {
+		name   string
+		accept bool
+		mutate func(*corev1.Pod)
+	}{
+		{"native-init-sidecar", true, func(*corev1.Pod) {}},
+		{"metrics-restart", true, func(p *corev1.Pod) {
+			p.Status.InitContainerStatuses[1].RestartCount = 3
+			p.Status.InitContainerStatuses[1].ContainerID = "containerd://metrics-restarted"
+		}},
+		{"third-regular-container", false, func(p *corev1.Pod) {
+			metrics := p.Spec.InitContainers[1]
+			metrics.RestartPolicy = nil
+			p.Spec.Containers = append(p.Spec.Containers, metrics)
+			p.Spec.InitContainers = p.Spec.InitContainers[:1]
+			p.Status.ContainerStatuses = append(p.Status.ContainerStatuses, p.Status.InitContainerStatuses[1])
+			p.Status.InitContainerStatuses = p.Status.InitContainerStatuses[:1]
+		}},
+		{"guardrail-restart", false, func(p *corev1.Pod) { p.Status.ContainerStatuses[1].RestartCount++ }},
+		{"engine-container-replacement", false, func(p *corev1.Pod) { p.Status.ContainerStatuses[0].ContainerID = "containerd://replacement" }},
+		{"replacement-pod", false, func(p *corev1.Pod) { p.UID = "replacement-pod-uid" }},
+		{"source-drift", false, func(p *corev1.Pod) { p.Annotations[annoDrainEngineSource] = "changed" }},
+		{"not-ready", false, func(p *corev1.Pod) { p.Status.Conditions[0].Status = corev1.ConditionFalse }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := native.DeepCopy()
+			tc.mutate(candidate)
+			reader := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(candidate).Build()
+			backend := &scriptedDrainV11{t: t, status: status}
+			ec := EnactCtx{Reader: reader, VLLM: backend}
+			if err := drainV11Authority(t.Context(), ec, receipt); tc.accept != (err == nil) {
+				t.Fatalf("protected native drain authority accept=%v err=%v", tc.accept, err)
+			}
+			operation := &operationReceipt{Version: operationDrainReceiptVersion, Kind: "request-drain",
+				Phase: "drain-dispatching-v11", DrainAttempts: 1, DrainV11: cloneDrainV11Receipt(receipt)}
+			persisted := 0
+			err := recoverDrainV11(t.Context(), ec, servingEndpoint{}, operation, func() error { persisted++; return nil })
+			if tc.accept {
+				if err != nil || !operation.DrainV11.confirmed() || backend.statusCalls != 1 ||
+					operation.DrainV11.OperatorBinding != receipt.OperatorBinding || operation.DrainV11.Owner != receipt.Owner ||
+					operation.DrainV11.OperationID != receipt.OperationID || operation.DrainV11.OperationGeneration != receipt.OperationGeneration ||
+					operation.DrainV11.ExpectedIncarnation != receipt.ExpectedIncarnation || operation.DrainV11.Attempt != 1 || operation.DrainV11.Supersedes != nil ||
+					operation.DrainV11.ProxySource != receipt.ProxySource || operation.DrainV11.EngineSource != receipt.EngineSource {
+					t.Fatalf("native sidecar broke GET-only recovery: operation=%#v err=%v", operation.DrainV11, err)
+				}
+			} else if err == nil || !reflect.DeepEqual(operation.DrainV11, receipt) {
+				t.Fatalf("changed serving identity rewrote/completed the old receipt: %#v err=%v", operation.DrainV11, err)
+			}
+			if backend.createCalls != 0 || backend.cancelCalls != 0 || backend.reopenCalls != 0 || persisted != 0 ||
+				operation.DrainAttempts != 1 || operation.Phase != "drain-dispatching-v11" {
+				t.Fatal("metrics compatibility replayed or superseded a protected drain operation")
 			}
 		})
 	}
