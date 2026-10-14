@@ -47,7 +47,7 @@ RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 
 # Static, stripped manager binary. GOARCH left to BuildKit so the binary matches the
 # image platform (amd64 on x86 EKS nodes, arm64 on Graviton).
-RUN HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
+RUN : && HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
     if case "$HEAD_VALUE" in "ref: "*) true;; *) false;; esac; then \
       REF_PATH="${HEAD_VALUE#ref: }"; \
       if [ -f "/tmp/phorvex-git/${REF_PATH}" ]; then GIT_SHA="$(cat "/tmp/phorvex-git/${REF_PATH}")"; else GIT_SHA="notAvailable"; fi; \

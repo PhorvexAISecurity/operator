@@ -40,7 +40,7 @@ RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 # defaults to "dev", which made the deployed console report "dev" against operator "0.4.6"
 # and tripped the End-to-End version-match check (P02) on every single run.
 ARG CONSOLE_VERSION=dev
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+RUN : && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
       -a -o /console cmd/console/main.go
