@@ -20,6 +20,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/litellmclient"
+
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -161,7 +164,7 @@ func parseLiteLiveProfile(raw []byte) (liteLLMLiveProfile, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if len(raw) == 0 || len(raw) > 16<<10 || dec.Decode(&p) != nil || dec.Decode(new(any)) != io.EOF ||
-		p.Version != 2 || !staticSHA256.MatchString(p.SourceSHA256) || !mongoPinnedImage.MatchString(p.GatewayImage) ||
+		p.Version != 2 || !litellmclient.ApprovedRuntime(p.SourceSHA256, p.GatewayImage) ||
 		!staticSHA256.MatchString(p.ClientsSHA256) || !staticSHA256.MatchString(p.SeedSHA256) ||
 		p.PolicyName != "litellm-defense" || p.ModelAlias != "gpt-4o-mini" ||
 		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
@@ -368,7 +371,7 @@ func liteInt(value map[string]any, key string) int64 {
 
 func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 	var out liteLiveSnapshot
-	if !staticSHA256.MatchString(w.p.SourceSHA256) {
+	if !litellmclient.ApprovedRuntime(w.p.SourceSHA256, w.p.GatewayImage) {
 		return out, errors.New("LiteLLM reviewed source digest invalid")
 	}
 	cluster, e := w.kube(label+"-cluster", "get", "namespace", "kube-system", "-o", "json")
@@ -396,11 +399,10 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 			sourceName = liteStr(availabilityMap(volume["configMap"]), "name")
 		}
 	}
-	const legacySourceSHA = "59a0521cf3a7621dc6e8db6f0a2f5e0c66a6cad8228253638c039edf110f0450"
-	if sourceName != "phorvex-litellm-admission-gateway-"+w.p.SourceSHA256[:12] &&
-		!(sourceName == "phorvex-litellm-admission-gateway" && w.p.SourceSHA256 == legacySourceSHA) {
+	if sourceName != litellmclient.ApprovedSourceConfigMap(w.p.SourceSHA256) {
 		return out, errors.New("LiteLLM Deployment immutable source name differs")
 	}
+
 	svc, e := w.kube(label+"-service", "-n", "litellm", "get", "service", "litellm", "-o", "json")
 	if e != nil {
 		return out, e
@@ -551,17 +553,13 @@ func (w *liteLiveWorker) snapshot(label string) (liteLiveSnapshot, error) {
 			return out, errors.New("LiteLLM container source differs")
 		}
 		pin.BackendImageID, pin.GatewayImageID = backend, gateway
-		var gatewaySpecImage string
-		containers, _ := availabilityMap(found["spec"])["containers"].([]any)
-		for _, c := range containers {
-			row := availabilityMap(c)
-			if liteStr(row, "name") == "litellm-admission-gateway" {
-				gatewaySpecImage = liteStr(row, "image")
-			}
+		var sourcePod corev1.Pod
+		podRaw, marshalErr := json.Marshal(found)
+		if marshalErr != nil || json.Unmarshal(podRaw, &sourcePod) != nil ||
+			litellmclient.ValidateGatewaySourceBinding(&sourcePod, w.p.SourceSHA256, w.p.GatewayImage) != nil {
+			return out, errors.New("LiteLLM reviewed Pod gateway source binding differs")
 		}
-		if gatewaySpecImage != w.p.GatewayImage {
-			return out, errors.New("LiteLLM reviewed gateway image differs")
-		}
+
 		annotations := availabilityMap(liteMeta(found)["annotations"])
 		if liteStr(annotations, "phorvex.ai/litellm-gateway-source-sha256") != w.p.SourceSHA256 ||
 			liteStr(annotations, "phorvex.ai/litellm-gateway-image") != w.p.GatewayImage ||

@@ -77,7 +77,7 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 		req.PolicyUID == "" || req.PolicyGeneration < 1 || req.OperationID == "" || len(req.OperationID) > 128 || req.TickID == "" ||
 		o == nil || o.TargetPodUID != req.TargetUID || o.PeerPodUID == "" || o.EventUID == "" ||
 		o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration ||
-		o.GatewaySourceSHA256 != litellmclient.ApprovedSourceSHA256 || !litellmclient.ValidSHA(o.ClientSHA256) ||
+		!litellmclient.ApprovedSource(o.GatewaySourceSHA256) || !litellmclient.ValidSHA(o.ClientSHA256) ||
 		o.ClientsConfigMapUID == "" || !litellmclient.ValidSHA(o.SeedSHA256) ||
 		o.ObservedAt.IsZero() || time.Since(o.ObservedAt) < 0 || time.Since(o.ObservedAt) >= 60*time.Second {
 		return litellmclient.Live{}, errors.New("owned-client request/observation authority incomplete")

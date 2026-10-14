@@ -30,18 +30,24 @@ import (
 // supplies admission UID/creator metadata. Ingestion, recon and selection are
 // production code. This proves source wiring, not live LiteLLM enforcement.
 func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
+	for _, sourceFile := range []string{"gateway.py", "gateway_metrics.py"} {
+		t.Run(sourceFile, func(t *testing.T) { liteLiveProducedEventFeedsNormalDecision(t, sourceFile) })
+	}
+}
+
+func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 	ctx := context.Background()
 	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.UTC)
 	const creator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 	const policyUID = "policy-uid"
 	const clientSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	seedSHA := strings.Repeat("b", 64)
-	source, err := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/gateway.py")
+	source, err := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/" + sourceFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sourceSHA := litellmclient.SHA256(source)
-	if sourceSHA != litellmclient.ApprovedSourceSHA256 {
+	if !litellmclient.ApprovedSource(sourceSHA) {
 		t.Fatalf("reviewed gateway source drift: %s", sourceSHA)
 	}
 	immutable := true
@@ -49,7 +55,7 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "litellm"}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: "litellm", UID: "service-uid"},
 			Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "litellm"}, Ports: []corev1.ServicePort{{Port: 4000, TargetPort: intstr.FromInt32(4001)}}}},
-		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: litellmclient.SourceConfigMapName, UID: "source-uid"},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: litellmclient.ApprovedSourceConfigMap(sourceSHA), UID: "source-uid"},
 			Immutable: &immutable, Data: map[string]string{litellmclient.SourceKey: string(source)}},
 		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: litellmclient.ClientsConfigMapName, UID: "clients-uid"},
 			Immutable: &immutable, Data: map[string]string{litellmclient.ClientsKey: `{"modelAlias":"gpt-4o-mini","seedSHA256":"` + seedSHA + `","version":2}`}},
@@ -68,11 +74,11 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "litellm", Name: name, UID: uid,
 			CreationTimestamp: metav1.NewTime(now.Add(-20 * time.Minute)), Labels: map[string]string{"app": "litellm", "r6th.io/rotation-target": "true"},
 			Annotations: map[string]string{litellmclient.SourceSHAAnnotation: sourceSHA,
-				litellmclient.GatewayImageAnnotation: litellmclient.ApprovedGatewayImage,
+				litellmclient.GatewayImageAnnotation: litellmclient.ApprovedRuntimeImage,
 				litellmclient.PolicyUIDAnnotation:    "policy-cm-uid", litellmclient.ServiceUIDAnnotation: "service-uid",
 				litellmclient.SeedSHAAnnotation: seedSHA}},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "litellm", Image: "backend@sha256:" + strings.Repeat("d", 64)},
-				{Name: litellmclient.GatewayContainerName, Image: litellmclient.ApprovedGatewayImage,
+				{Name: litellmclient.GatewayContainerName, Image: litellmclient.ApprovedRuntimeImage,
 					Command: []string{"python3", "-B", "/opt/phorvex/gateway.py"},
 					Env: []corev1.EnvVar{{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}},
 						{Name: "PHORVEX_LITELLM_CLIENTS_FILE", Value: "/etc/phorvex-litellm/clients.json"},
@@ -86,7 +92,7 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 						{Name: "litellm-live-policy", MountPath: "/etc/phorvex-litellm-policy", ReadOnly: true},
 						{Name: "litellm-live-status", MountPath: "/etc/phorvex-litellm-status", ReadOnly: true},
 						{Name: "litellm-live-trial-seed", MountPath: "/etc/phorvex-litellm-seed", ReadOnly: true}}}},
-				Volumes: []corev1.Volume{{Name: "litellm-live-gateway-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.SourceConfigMapName}}}},
+				Volumes: []corev1.Volume{{Name: "litellm-live-gateway-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.ApprovedSourceConfigMap(sourceSHA)}}}},
 					{Name: "litellm-live-clients", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.ClientsConfigMapName}}}},
 					{Name: "litellm-live-policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.PolicyConfigMapName}}}},
 					{Name: "litellm-live-status", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "status-token"}}},
@@ -94,7 +100,7 @@ func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
 			Status: corev1.PodStatus{Phase: corev1.PodRunning, PodIP: ip,
 				Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
 				ContainerStatuses: []corev1.ContainerStatus{{Name: "litellm", ImageID: "backend@sha256:" + strings.Repeat("d", 64), Ready: true},
-					{Name: litellmclient.GatewayContainerName, ImageID: litellmclient.ApprovedGatewayImage, Ready: true}}}}
+					{Name: litellmclient.GatewayContainerName, ImageID: litellmclient.ApprovedRuntimeImage, Ready: true}}}}
 		objects = append(objects, pod)
 		endpoints = append(endpoints, discoveryv1.Endpoint{Addresses: []string{ip}, Conditions: discoveryv1.EndpointConditions{Ready: &ready},
 			TargetRef: &corev1.ObjectReference{Kind: "Pod", Name: name, UID: uid}})

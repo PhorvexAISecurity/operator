@@ -22,7 +22,7 @@ type Live struct {
 }
 
 func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID string) (Live, error) {
-	return validateLive(ctx, r, targetUID, peerUID, ApprovedGatewayImage)
+	return validateLive(ctx, r, targetUID, peerUID, "")
 }
 
 func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, approvedGatewayImage string) (Live, error) {
@@ -45,6 +45,27 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	if len(svc.Spec.Ports) != 1 || !portOK {
 		return Live{}, errors.New("owned-client gateway is not Service target")
 	}
+	var pods corev1.PodList
+	if e := r.List(ctx, &pods, client.InNamespace(Namespace), client.MatchingLabels{"app": "litellm"}); e != nil {
+		return Live{}, e
+	}
+	if len(pods.Items) != 2 {
+		return Live{}, fmt.Errorf("owned-client gateway requires exactly two Service Pods; got %d", len(pods.Items))
+	}
+	// Select authority from observed Pods, then verify the immutable bytes below.
+	// Never derive a name from an arbitrary event/profile or an unapproved prefix.
+	declaredSHA := pods.Items[0].Annotations[SourceSHAAnnotation]
+	sourceName := ApprovedSourceConfigMap(declaredSHA)
+	if sourceName == "" {
+		return Live{}, errors.New("owned-client declared gateway source not reviewed")
+	}
+	enforceSourceBinding := approvedGatewayImage == ""
+	if approvedGatewayImage == "" {
+		approvedGatewayImage = pods.Items[0].Annotations[GatewayImageAnnotation]
+		if !ApprovedRuntime(declaredSHA, approvedGatewayImage) {
+			return Live{}, errors.New("owned-client gateway source/runtime pair not reviewed")
+		}
+	}
 	imageMark := strings.LastIndex(approvedGatewayImage, "@sha256:")
 	if imageMark < 1 || !ValidSHA(approvedGatewayImage[imageMark+8:]) {
 		return Live{}, errors.New("owned-client gateway image has no reviewed digest pin")
@@ -56,7 +77,7 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	for _, item := range []struct {
 		name string
 		out  *corev1.ConfigMap
-	}{{SourceConfigMapName, source}, {ClientsConfigMapName, clients}, {PolicyConfigMapName, policy}} {
+	}{{sourceName, source}, {ClientsConfigMapName, clients}, {PolicyConfigMapName, policy}} {
 		if e := r.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: item.name}, item.out); e != nil {
 			return Live{}, e
 		}
@@ -70,7 +91,7 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 		return Live{}, errors.New("owned-client source/credential inventory not immutable")
 	}
 	sourceSHA := SHA256([]byte(source.Data[SourceKey]))
-	if sourceSHA != ApprovedSourceSHA256 {
+	if sourceSHA != declaredSHA || !ApprovedSource(sourceSHA) {
 		return Live{}, errors.New("owned-client installed gateway source not reviewed")
 	}
 	inventory, e := ParseClients(clients.Data[ClientsKey])
@@ -81,19 +102,17 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	if e != nil {
 		return Live{}, e
 	}
-	var pods corev1.PodList
-	if e := r.List(ctx, &pods, client.InNamespace(Namespace), client.MatchingLabels{"app": "litellm"}); e != nil {
-		return Live{}, e
-	}
-	if len(pods.Items) != 2 {
-		return Live{}, fmt.Errorf("owned-client gateway requires exactly two Service Pods; got %d", len(pods.Items))
-	}
 	result := Live{ServiceUID: string(svc.UID), SourceSHA256: sourceSHA, SourceUID: string(source.UID),
 		ClientsUID: string(clients.UID), PolicyUID: string(policy.UID), PolicyRV: policy.ResourceVersion,
 		SeedSHA256: inventory.SeedSHA256, State: state}
 	seen := map[string]bool{}
 	for i := range pods.Items {
 		p := &pods.Items[i]
+		if enforceSourceBinding {
+			if err := ValidateGatewaySourceBinding(p, sourceSHA, approvedGatewayImage); err != nil {
+				return Live{}, err
+			}
+		}
 		if p.DeletionTimestamp != nil || p.UID == "" || p.Status.PodIP == "" || seen[string(p.UID)] ||
 			p.Annotations[SourceSHAAnnotation] != sourceSHA || p.Annotations[PolicyUIDAnnotation] != string(policy.UID) ||
 			p.Annotations[ServiceUIDAnnotation] != string(svc.UID) || p.Annotations[SeedSHAAnnotation] != inventory.SeedSHA256 {
@@ -121,6 +140,9 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 			}
 			env := map[string]corev1.EnvVar{}
 			for _, entry := range container.Env {
+				if _, exists := env[entry.Name]; exists {
+					return Live{}, errors.New("owned-client duplicate gateway environment")
+				}
 				env[entry.Name] = entry
 			}
 			if env["PHORVEX_LITELLM_CLIENTS_FILE"].Value != "/etc/phorvex-litellm/clients.json" ||
@@ -141,15 +163,21 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 				"litellm-live-trial-seed":     "/etc/phorvex-litellm-seed",
 			}
 			for _, mount := range container.VolumeMounts {
-				if mount.ReadOnly && needed[mount.Name] == mount.MountPath {
+				if mount.ReadOnly && mount.SubPath == "" && mount.SubPathExpr == "" && needed[mount.Name] == mount.MountPath {
 					delete(needed, mount.Name)
 				}
 			}
 			if len(needed) != 0 {
 				break
 			}
+			sourceVolume := volumes["litellm-live-gateway-source"].ConfigMap
+			if sourceVolume == nil || (sourceVolume.Optional != nil && *sourceVolume.Optional) ||
+				(len(sourceVolume.Items) != 0 && (len(sourceVolume.Items) != 1 ||
+					sourceVolume.Items[0].Key != SourceKey || sourceVolume.Items[0].Path != SourceKey)) {
+				break
+			}
 			gateway = volumes["litellm-live-gateway-source"].ConfigMap != nil &&
-				volumes["litellm-live-gateway-source"].ConfigMap.Name == SourceConfigMapName &&
+				volumes["litellm-live-gateway-source"].ConfigMap.Name == sourceName &&
 				volumes["litellm-live-clients"].ConfigMap != nil &&
 				volumes["litellm-live-clients"].ConfigMap.Name == ClientsConfigMapName &&
 				volumes["litellm-live-policy"].ConfigMap != nil &&
@@ -220,4 +248,59 @@ func validateLive(ctx context.Context, r client.Reader, targetUID, peerUID, appr
 	}
 	sort.Slice(result.Pods, func(i, j int) bool { return result.Pods[i].UID < result.Pods[j].UID })
 	return result, nil
+}
+
+// ValidateGatewaySourceBinding checks what a Pod will execute, independently of
+// its declaration. Console uses this after verifying the immutable source bytes.
+func ValidateGatewaySourceBinding(p *corev1.Pod, sha, image string) error {
+	if p == nil || !ApprovedRuntime(sha, image) {
+		return errors.New("owned-client unapproved Pod source/runtime")
+	}
+	name := ApprovedSourceConfigMap(sha)
+	var source *corev1.ConfigMapVolumeSource
+	for _, volume := range p.Spec.Volumes {
+		if volume.Name == "litellm-live-gateway-source" {
+			if source != nil {
+				return errors.New("owned-client repeated source volume")
+			}
+			source = volume.ConfigMap
+		}
+	}
+	if source == nil || source.Name != name || (source.Optional != nil && *source.Optional) || (len(source.Items) > 0 && (len(source.Items) != 1 || source.Items[0].Key != SourceKey || source.Items[0].Path != SourceKey)) {
+		return errors.New("owned-client Pod source volume differs")
+	}
+	found := false
+	for _, container := range p.Spec.Containers {
+		if container.Name != GatewayContainerName {
+			continue
+		}
+		if found || container.Image != image || len(container.Command) != 3 || container.Command[0] != "python3" || container.Command[1] != "-B" || container.Command[2] != "/opt/phorvex/gateway.py" || len(container.Args) != 0 {
+			return errors.New("owned-client Pod source command/image differs")
+		}
+		found = true
+		env := map[string]bool{}
+		sourceEnv := false
+		for _, entry := range container.Env {
+			if env[entry.Name] {
+				return errors.New("owned-client repeated source environment")
+			}
+			env[entry.Name] = true
+			if entry.Name == "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256" {
+				sourceEnv = entry.Value == sha && entry.ValueFrom == nil
+			}
+		}
+		mountOK := false
+		for _, mount := range container.VolumeMounts {
+			if mount.Name == "litellm-live-gateway-source" {
+				mountOK = mount.MountPath == "/opt/phorvex" && mount.ReadOnly && mount.SubPath == "" && mount.SubPathExpr == ""
+			}
+		}
+		if !sourceEnv || !mountOK {
+			return errors.New("owned-client Pod source environment/mount differs")
+		}
+	}
+	if !found {
+		return errors.New("owned-client Pod gateway missing")
+	}
+	return nil
 }

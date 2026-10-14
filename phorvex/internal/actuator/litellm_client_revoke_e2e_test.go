@@ -47,14 +47,20 @@ func (c litePolicyWriteError) Update(ctx context.Context, obj client.Object, opt
 	return c.Client.Update(ctx, obj, opts...)
 }
 
-func newLiteNativeFixture(t *testing.T) liteNativeFixture {
+func newLiteNativeFixture(t *testing.T, metrics ...bool) liteNativeFixture {
 	t.Helper()
-	code, e := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/gateway.py")
+	sourceFile := "gateway.py"
+	gatewayImage := litellmclient.ApprovedGatewayImage
+	if len(metrics) > 0 && metrics[0] {
+		sourceFile = "gateway_metrics.py"
+		gatewayImage = litellmclient.ApprovedRuntimeImage
+	}
+	code, e := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/" + sourceFile)
 	if e != nil {
 		t.Fatal(e)
 	}
 	sourceSHA := litellmclient.SHA256(code)
-	if sourceSHA != litellmclient.ApprovedSourceSHA256 {
+	if !litellmclient.ApprovedSource(sourceSHA) {
 		t.Fatalf("gateway source not pinned: %s", sourceSHA)
 	}
 	immutable := true
@@ -63,7 +69,7 @@ func newLiteNativeFixture(t *testing.T) liteNativeFixture {
 	clientB := strings.Repeat("b", 64)
 	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: litellmclient.ServiceName, Namespace: litellmclient.Namespace, UID: "service-uid"},
 		Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "litellm"}, Ports: []corev1.ServicePort{{Port: 4000, TargetPort: intstr.FromInt32(4001)}}}}
-	source := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: litellmclient.SourceConfigMapName, Namespace: litellmclient.Namespace, UID: "source-uid"},
+	source := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: litellmclient.ApprovedSourceConfigMap(sourceSHA), Namespace: litellmclient.Namespace, UID: "source-uid"},
 		Immutable: &immutable, Data: map[string]string{litellmclient.SourceKey: string(code)}}
 	clients := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: litellmclient.ClientsConfigMapName, Namespace: litellmclient.Namespace, UID: "clients-uid"},
 		Immutable: &immutable, Data: map[string]string{litellmclient.ClientsKey: `{"modelAlias":"gpt-4o-mini","seedSHA256":"` + seedSHA + `","version":2}`}}
@@ -83,11 +89,11 @@ func newLiteNativeFixture(t *testing.T) liteNativeFixture {
 		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: litellmclient.Namespace, UID: uid,
 			Labels: map[string]string{"app": "litellm", "r6th.io/rotation-target": "true"},
 			Annotations: map[string]string{litellmclient.SourceSHAAnnotation: sourceSHA,
-				litellmclient.GatewayImageAnnotation: litellmclient.ApprovedGatewayImage,
+				litellmclient.GatewayImageAnnotation: gatewayImage,
 				litellmclient.PolicyUIDAnnotation:    "policy-cm-uid", litellmclient.ServiceUIDAnnotation: "service-uid",
 				litellmclient.SeedSHAAnnotation: seedSHA}},
 			Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "litellm", Image: "backend@sha256:" + strings.Repeat(string(rune('d'+i)), 64)},
-				{Name: litellmclient.GatewayContainerName, Image: litellmclient.ApprovedGatewayImage, Command: []string{"python3", "-B", "/opt/phorvex/gateway.py"},
+				{Name: litellmclient.GatewayContainerName, Image: gatewayImage, Command: []string{"python3", "-B", "/opt/phorvex/gateway.py"},
 					Env: []corev1.EnvVar{{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.uid"}}},
 						{Name: "PHORVEX_LITELLM_CLIENTS_FILE", Value: "/etc/phorvex-litellm/clients.json"},
 						{Name: "PHORVEX_LITELLM_TRIAL_SEED_FILE", Value: "/etc/phorvex-litellm-seed/seed"},
@@ -102,14 +108,14 @@ func newLiteNativeFixture(t *testing.T) liteNativeFixture {
 						{Name: "litellm-live-status", MountPath: "/etc/phorvex-litellm-status", ReadOnly: true},
 						{Name: "litellm-live-trial-seed", MountPath: "/etc/phorvex-litellm-seed", ReadOnly: true}}}},
 				Volumes: []corev1.Volume{
-					{Name: "litellm-live-gateway-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.SourceConfigMapName}}}},
+					{Name: "litellm-live-gateway-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.ApprovedSourceConfigMap(sourceSHA)}}}},
 					{Name: "litellm-live-clients", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.ClientsConfigMapName}}}},
 					{Name: "litellm-live-policy", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: litellmclient.PolicyConfigMapName}}}},
 					{Name: "litellm-live-status", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: "status-secret"}}},
 					{Name: "litellm-live-trial-seed", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: litellmclient.TrialSeedSecretName}}}}},
 			Status: corev1.PodStatus{PodIP: ip, ContainerStatuses: []corev1.ContainerStatus{
 				{Name: "litellm", ImageID: "backend@sha256:" + strings.Repeat(string(rune('d'+i)), 64), Ready: true},
-				{Name: litellmclient.GatewayContainerName, ImageID: litellmclient.ApprovedGatewayImage, Ready: true}}}}
+				{Name: litellmclient.GatewayContainerName, ImageID: gatewayImage, Ready: true}}}}
 		objects = append(objects, pod)
 	}
 	ready := true
@@ -191,7 +197,17 @@ func (f liteNativeFixture) enactContext(t *testing.T) EnactCtx {
 }
 
 func TestLiteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T) {
-	f := newLiteNativeFixture(t)
+	for _, metrics := range []bool{false, true} {
+		name := "legacy"
+		if metrics {
+			name = "metrics"
+		}
+		t.Run(name, func(t *testing.T) { liteLLMNativeTwoDistinctFiresPreservePriorDenial(t, metrics) })
+	}
+}
+
+func liteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T, metrics bool) {
+	f := newLiteNativeFixture(t, metrics)
 	ec := f.enactContext(t)
 	for i, pair := range []struct{ hash, op string }{{f.clientA, "decision-1"}, {f.clientB, "decision-2"}} {
 		req := f.request(t, pair.hash, pair.op)
@@ -219,8 +235,18 @@ func TestLiteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T) {
 }
 
 func TestLiteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t *testing.T) {
+	for _, metrics := range []bool{false, true} {
+		name := "legacy"
+		if metrics {
+			name = "metrics"
+		}
+		t.Run(name, func(t *testing.T) { liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t, metrics) })
+	}
+}
+
+func liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t *testing.T, metrics bool) {
 	ctx := context.Background()
-	f := newLiteNativeFixture(t)
+	f := newLiteNativeFixture(t, metrics)
 	req := f.request(t, f.clientA, "decision-recover")
 	policyCM := &corev1.ConfigMap{}
 	policyKey := client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.PolicyConfigMapName}
@@ -431,5 +457,29 @@ func TestLiteLLMPendingJournalFencesBothBoundPodsOnly(t *testing.T) {
 	pending, e = PendingLiteLLMClientOperation(ctx, f.c, "phorvex-system", "litellm", "pod-a")
 	if e != nil || pending {
 		t.Fatalf("uninstalled profile fenced unrelated LiteLLM target: %v %v", pending, e)
+	}
+}
+
+func TestLiteLLMNewSourceJournalAndInvalidObservationControls(t *testing.T) {
+	ctx := context.Background()
+	f := newLiteNativeFixture(t, true)
+	req := f.request(t, f.clientA, "invalid-source")
+	req.LiteLLMClientObservation.GatewaySourceSHA256 = strings.Repeat("d", 64)
+	if _, err := (litellmClientRevokeHandler{}).Enact(ctx, f.enactContext(t), req); err == nil {
+		t.Fatal("unapproved observation accepted")
+	}
+	req.LiteLLMClientObservation.GatewaySourceSHA256 = litellmclient.ApprovedSourceSHA256
+	if _, err := (litellmClientRevokeHandler{}).Enact(ctx, f.enactContext(t), req); err == nil {
+		t.Fatal("old observation against new live source accepted")
+	}
+	journal := &corev1.ConfigMap{}
+	if err := f.c.Get(ctx, client.ObjectKey{Namespace: "phorvex-system", Name: litellmclient.JournalName}, journal); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.c.Delete(ctx, journal); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := PendingLiteLLMClientOperation(ctx, f.c, "phorvex-system", "litellm", "pod-a"); !pending || err == nil {
+		t.Fatal("missing journal with only new source did not fence")
 	}
 }
