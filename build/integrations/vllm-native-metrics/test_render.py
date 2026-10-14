@@ -125,7 +125,7 @@ def patched(original, operations):
     return result
 
 
-def write_inputs(directory, inputs):
+def write_inputs(directory, inputs, captured_at=None):
     digests = {}
     for name, obj_value in inputs.items():
         # Use pretty-printed, noncanonical file bytes to exercise exact file SHA.
@@ -133,7 +133,7 @@ def write_inputs(directory, inputs):
         (directory / name).write_bytes(raw)
         digests[name] = render.sha(raw)
     (directory / "captures.json").write_bytes(render.canonical({"schema": render.CAPTURE_SCHEMA,
-        "capturedAt": render.token.utc(), "sha256": digests}))
+        "capturedAt": captured_at or render.token.utc(), "sha256": digests}))
 
 
 class Renderer(unittest.TestCase):
@@ -142,6 +142,53 @@ class Renderer(unittest.TestCase):
 
     def rendered(self, inputs=None, **kwargs):
         return render.render(inputs or self.inputs, self.capture, SOURCE, **kwargs)
+
+    def rollback_args(self, artifacts, current):
+        raw = render.canonical(artifacts["metrics-closure.json"]) + b"\n"
+        return {"rollback": current, "rollback_sha": render.sha(render.canonical(current)),
+                "rollback_closure": raw, "rollback_closure_sha": render.sha(raw),
+                "rollback_captured_at": render.token.utc()}
+
+    def frozen_originals(self):
+        captured = datetime.now(timezone.utc) - timedelta(hours=2)
+        self.capture["capturedAt"] = captured.isoformat()
+        self.inputs["token-metadata.json"]["utc"] = (captured - timedelta(minutes=5)).isoformat()
+        self.capture["sha256"]["token-metadata.json"] = render.sha(render.canonical(self.inputs["token-metadata.json"]))
+        return captured
+
+    def frozen_forward(self):
+        captured = self.frozen_originals()
+        with patch.object(render.provision, "datetime") as clock:
+            clock.now.return_value = captured + timedelta(seconds=1)
+            clock.fromisoformat.side_effect = datetime.fromisoformat
+            return self.rendered()
+
+    def prepare_rollback_cli(self, directory):
+        captured = self.frozen_originals()
+        inputs = directory / "inputs"
+        inputs.mkdir()
+        write_inputs(inputs, self.inputs, self.capture["capturedAt"])
+        forward = directory / "forward"
+        argv = ["render.py", "--inputs", str(inputs), "--output", str(forward)]
+        with patch.object(render.provision, "datetime") as clock, \
+                patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+            clock.now.return_value = captured + timedelta(seconds=1)
+            clock.fromisoformat.side_effect = datetime.fromisoformat
+            self.assertEqual(render.main(), 0)
+        closure = forward / "metrics-closure.json"
+        operations = json.loads((forward / "deployment-metrics-json-patch.json").read_bytes())
+        current = patched(self.inputs["deployment.json"], operations)
+        current["metadata"]["resourceVersion"] = "post-rollout-rv"
+        candidate = directory / "candidate.json"
+        candidate.write_bytes(json.dumps(current, indent=2).encode() + b"\n")
+        output = directory / "rollback"
+        argv[4] = str(output)
+        argv += ["--rollback-deployment", str(candidate),
+                 "--rollback-sha256", render.sha(candidate.read_bytes()),
+                 "--rollback-captured-at", render.token.utc(),
+                 "--rollback-closure", str(closure),
+                 "--rollback-closure-sha256", render.sha(closure.read_bytes())]
+        return argv, current
 
     def test_forward_preserves_every_original_setting_and_source_policy_journals(self):
         before = copy.deepcopy(self.inputs)
@@ -236,7 +283,7 @@ class Renderer(unittest.TestCase):
         current["metadata"]["resourceVersion"] = "post-rollout-rv"
         with self.assertRaises(ValueError):
             patched(current, artifacts["deployment-metrics-rollback-json-patch.json"])
-        rebound = self.rendered(rollback=current, rollback_sha=render.sha(render.canonical(current)))
+        rebound = self.rendered(**self.rollback_args(artifacts, current))
         operations = rebound["deployment-metrics-rollback-json-patch.json"]
         self.assertEqual([o["path"] for o in operations[:3]], ["/metadata/uid", "/metadata/resourceVersion", "/spec"])
         self.assertEqual(operations[1]["value"], "post-rollout-rv")
@@ -251,7 +298,148 @@ class Renderer(unittest.TestCase):
             changed = copy.deepcopy(current)
             mutate(changed)
             with self.subTest(mutate=mutate), self.assertRaises(ValueError):
-                self.rendered(rollback=changed, rollback_sha=render.sha(render.canonical(changed)))
+                self.rendered(**self.rollback_args(artifacts, changed))
+
+    def test_rollback_frozen_originals_and_token_evidence_do_not_expire(self):
+        artifacts = self.frozen_forward()
+        original = copy.deepcopy(self.inputs)
+        current = patched(self.inputs["deployment.json"], artifacts["deployment-metrics-json-patch.json"])
+        current["metadata"]["resourceVersion"] = "post-rollout-rv"
+        args = self.rollback_args(artifacts, current)
+        with patch.object(render.provision, "validate_metadata", side_effect=AssertionError("frozen UTC must stay frozen")), \
+                patch.object(render.provision, "recent", wraps=render.provision.recent) as recent, \
+                patch.object(render.token, "validate_record", wraps=render.token.validate_record) as records:
+            rebound = self.rendered(**args)
+        recent.assert_called_once_with(args["rollback_captured_at"])
+        self.assertEqual(records.call_count, 4)
+        self.assertEqual(self.inputs, original)
+        self.assertEqual(patched(current, rebound["deployment-metrics-rollback-json-patch.json"])["spec"],
+                         original["deployment.json"]["spec"])
+        self.assertEqual(rebound["metrics-closure.json"]["rollback"]["forwardClosureSHA256"], args["rollback_closure_sha"])
+        self.assertEqual(rebound["metrics-closure.json"]["rollback"]["capturedAt"], args["rollback_captured_at"])
+        operations = rebound["deployment-metrics-rollback-json-patch.json"]
+        for mutate in (lambda d: d["metadata"].update(uid="replacement"),
+                       lambda d: d["metadata"].update(resourceVersion="later-status-update"),
+                       lambda d: d["spec"].update(progressDeadlineSeconds=902)):
+            changed = copy.deepcopy(current)
+            mutate(changed)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                patched(changed, operations)
+        with self.assertRaises(ValueError):
+            self.rendered()
+
+    def test_rollback_candidate_timestamp_is_required_bounded_fresh_and_utc(self):
+        artifacts = self.frozen_forward()
+        current = patched(self.inputs["deployment.json"], artifacts["deployment-metrics-json-patch.json"])
+        for value in (None, "", "x" * 65, "not-a-date", datetime.now().isoformat(),
+                      (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat(),
+                      (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(),
+                      "2026-10-14T12:00:00+01:00"):
+            args = self.rollback_args(artifacts, current)
+            args["rollback_captured_at"] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.rendered(**args)
+        instant = datetime.now(timezone.utc)
+        args = self.rollback_args(artifacts, current)
+        args["rollback_captured_at"] = (instant - timedelta(minutes=30)).isoformat()
+        with patch.object(render.provision, "datetime") as clock:
+            clock.now.return_value = instant
+            clock.fromisoformat.side_effect = datetime.fromisoformat
+            self.rendered(**args)
+            args["rollback_captured_at"] = (instant - timedelta(seconds=1800, microseconds=1)).isoformat()
+            with self.assertRaises(ValueError):
+                self.rendered(**args)
+
+    def test_rollback_rejects_missing_closure_wrong_file_sha_and_modified_closure_bindings(self):
+        artifacts = self.frozen_forward()
+        current = patched(self.inputs["deployment.json"], artifacts["deployment-metrics-json-patch.json"])
+        args = self.rollback_args(artifacts, current)
+        for key in args:
+            missing = dict(args)
+            missing[key] = None
+            with self.subTest(missing=key), self.assertRaises(ValueError):
+                self.rendered(**missing)
+        for raw, digest in ((args["rollback_closure"], "0" * 64),
+                            (args["rollback_closure"] + b"\n", args["rollback_closure_sha"]),
+                            (b"{}", render.sha(b"{}"))):
+            with self.subTest(digest=digest), self.assertRaises(ValueError):
+                self.rendered(**(args | {"rollback_closure": raw, "rollback_closure_sha": digest}))
+        mutations = [
+            lambda c: c.update(schema="different-schema"),
+            lambda c: c["capture"].update(manifestSHA256="0" * 64),
+            lambda c: c["capture"]["sha256"].update({"pod.json": "0" * 64}),
+            lambda c: c["inputsCanonicalSHA256"].update({"token-metadata.json": "0" * 64}),
+            lambda c: c.update(metricsSourceSHA256="0" * 64),
+            lambda c: c.update(sourceManifestSHA256="0" * 64),
+            lambda c: c.update(originalSpecSHA256="0" * 64),
+            lambda c: c.update(candidateSpecSHA256="0" * 64),
+            lambda c: c.update(originalTemplateSHA256="0" * 64),
+            lambda c: c.update(candidateTemplateSHA256="0" * 64),
+            lambda c: c.update(tokenMetadataSHA256="0" * 64),
+            lambda c: c["secretPair"]["secrets"][0].update(uid="recreated"),
+            lambda c: c["tokenHelperProvenance"]["generate_metrics_token.py"].update(sourceSHA256="0" * 64),
+            lambda c: c["artifactsSHA256"].update({"deployment-metrics-rollback-json-patch.json": "0" * 64}),
+            lambda c: c["rollback"].update(requiresCurrentDeploymentCapture=False)]
+        for mutate in mutations:
+            changed = copy.deepcopy(artifacts["metrics-closure.json"])
+            mutate(changed)
+            raw = render.canonical(changed) + b"\n"
+            # Even a matching file SHA cannot authorize an inconsistent closure.
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                self.rendered(**(args | {"rollback_closure": raw, "rollback_closure_sha": render.sha(raw)}))
+
+    def test_rollback_rejects_frozen_capture_token_source_and_spec_tampering(self):
+        artifacts = self.frozen_forward()
+        current = patched(self.inputs["deployment.json"], artifacts["deployment-metrics-json-patch.json"])
+        args = self.rollback_args(artifacts, current)
+        for mutate in (lambda x: x["pod.json"]["metadata"].update(resourceVersion="later"),
+                       lambda x: x["source.json"]["data"].update({"dual_server.py": "changed"}),
+                       lambda x: x["token-metadata.json"].update(utc=render.token.utc()),
+                       lambda x: x["token-metadata.json"]["secrets"][0].update(uid="recreated"),
+                       lambda x: x["token-metadata.json"]["generator"].update(pairID="2" * 32)):
+            changed = copy.deepcopy(self.inputs)
+            mutate(changed)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                self.rendered(changed, **args)
+        for key in ("manifestSHA256", "capturedAt", "sha256"):
+            changed = copy.deepcopy(self.capture)
+            changed[key] = ({**changed[key], "token-metadata.json": "0" * 64} if key == "sha256"
+                            else render.token.utc() if key == "capturedAt" else "0" * 64)
+            with self.subTest(capture=key), self.assertRaises(ValueError):
+                render.render(self.inputs, changed, SOURCE, **args)
+        with self.assertRaises(ValueError):
+            render.render(self.inputs, self.capture, SOURCE + b"# source drift\n", **args)
+        for mutate in (lambda d: d["metadata"].update(uid="recreated"),
+                       lambda d: d["spec"].update(replicas=2),
+                       lambda d: d["spec"].update(progressDeadlineSeconds=902),
+                       lambda d: d["spec"]["template"]["spec"]["initContainers"][-1].update(image="unreviewed")):
+            changed = copy.deepcopy(current)
+            mutate(changed)
+            with self.subTest(candidate=mutate), self.assertRaises(ValueError):
+                self.rendered(**(args | {"rollback": changed, "rollback_sha": render.sha(render.canonical(changed))}))
+
+    def test_frozen_token_whitelist_generator_provenance_and_identity_checks_remain_enforced(self):
+        artifacts = self.frozen_forward()
+        closure = artifacts["metrics-closure.json"]
+        evidence = self.inputs["token-metadata.json"]
+        for mutate in (
+            lambda m: m.update(schema="stage5-schema"),
+            lambda m: m["secrets"][0].update(data={"token": "forbidden"}),
+            lambda m: m["secrets"][0].update(uid="recreated"),
+            lambda m: m["secrets"][0].update(resourceVersion="drift"),
+            lambda m: m["secrets"][0].update(provenance="stage5-v1"),
+            lambda m: m["secrets"][0].update(ready=False),
+            lambda m: m["secrets"][0].update(lastAppliedPresent=True),
+            lambda m: m["generator"].update(sourceSHA256="0" * 64),
+            lambda m: m["generator"].update(imageByDigest="unreviewed"),
+            lambda m: m["generator"].update(jobUID=""),
+            lambda m: m["generator"]["records"][0].update(immutable=False),
+            lambda m: m["generator"]["records"][1].update(namespace="vllm"),
+            lambda m: m["secrets"].pop()):
+            changed = copy.deepcopy(evidence)
+            mutate(changed)
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                render.frozen_token_records(changed, closure, closure["metricsProtection"])
 
     def test_graph_source_endpoint_policy_and_security_drift_fail(self):
         mutations = [
@@ -409,7 +597,7 @@ class Renderer(unittest.TestCase):
                 self.assertEqual(render.main(), 1)
             self.assertFalse(absent.exists())
 
-    def test_cli_source_race_and_rollback_file_hash_mismatch_emit_no_artifacts(self):
+    def test_cli_source_race_emits_no_artifacts(self):
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp) / "inputs"
             directory.mkdir()
@@ -429,13 +617,143 @@ class Renderer(unittest.TestCase):
                     patch.object(render, "read_bounded", side_effect=source_race):
                 self.assertEqual(render.main(), 1)
             self.assertFalse(output.exists())
-            current = patched(self.inputs["deployment.json"], self.rendered()["deployment-metrics-json-patch.json"])
-            rollback = Path(temp) / "rollback.json"
-            rollback.write_bytes(render.canonical(current))
-            argv += ["--rollback-deployment", str(rollback), "--rollback-sha256", "0" * 64]
+
+    def test_cli_rollback_after_originals_and_tokens_expire_restores_exact_original(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            argv, current = self.prepare_rollback_cli(directory)
+            forward = directory / "forward" / "metrics-closure.json"
+            frozen_bytes = forward.read_bytes()
+            with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()), \
+                    patch.object(render.provision, "ProxyAPI", side_effect=AssertionError("renderer must stay offline")):
+                self.assertEqual(render.main(), 0)
+            output = directory / "rollback"
+            operations = json.loads((output / "deployment-metrics-rollback-json-patch.json").read_bytes())
+            self.assertEqual(patched(current, operations)["spec"], self.inputs["deployment.json"]["spec"])
+            self.assertEqual(operations[1]["value"], "post-rollout-rv")
+            closure = json.loads((output / "metrics-closure.json").read_bytes())
+            self.assertEqual(closure["capture"], json.loads(frozen_bytes)["capture"])
+            self.assertEqual(closure["rollback"]["forwardClosureSHA256"], render.sha(frozen_bytes))
+            self.assertEqual(closure["rollback"]["captureSHA256"], render.sha((directory / "candidate.json").read_bytes()))
+            self.assertEqual(closure["rollback"]["capturedAt"], argv[argv.index("--rollback-captured-at") + 1])
+            for name, digest in closure["artifactsSHA256"].items():
+                self.assertEqual(render.sha((output / name).read_bytes()), digest)
+            self.assertEqual(forward.read_bytes(), frozen_bytes)
+            with self.assertRaises(ValueError):
+                render.load_inputs(directory / "inputs")
+            # A rebound closure cannot replace the explicit original forward closure.
+            argv[4] = str(directory / "second-rollback")
+            argv[argv.index("--rollback-closure") + 1] = str(output / "metrics-closure.json")
+            argv[argv.index("--rollback-closure-sha256") + 1] = render.sha((output / "metrics-closure.json").read_bytes())
             with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
                 self.assertEqual(render.main(), 1)
-            self.assertFalse(output.exists())
+            self.assertFalse((directory / "second-rollback").exists())
+
+    def test_cli_rollback_incomplete_flags_stale_candidate_and_wrong_file_hashes_emit_nothing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            argv, _ = self.prepare_rollback_cli(Path(temp))
+            flags = ("--rollback-deployment", "--rollback-sha256", "--rollback-captured-at",
+                     "--rollback-closure", "--rollback-closure-sha256")
+            refused = []
+            for flag in flags:
+                index = argv.index(flag)
+                refused.append(argv[:index] + argv[index + 2:])
+            for flag, value in (
+                ("--rollback-sha256", "0" * 64), ("--rollback-closure-sha256", "0" * 64),
+                ("--rollback-sha256", "a" * 65), ("--rollback-closure-sha256", "A" * 64),
+                ("--rollback-captured-at", "x" * 65),
+                ("--rollback-captured-at", (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()),
+                ("--rollback-captured-at", (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat())):
+                changed = list(argv)
+                changed[changed.index(flag) + 1] = value
+                refused.append(changed)
+            for changed in refused:
+                with self.subTest(argv=changed), patch.object(sys, "argv", changed), \
+                        patch.object(sys, "stdout", io.StringIO()):
+                    self.assertEqual(render.main(), 1)
+                self.assertFalse(Path(argv[4]).exists())
+
+    def test_cli_rollback_frozen_capture_and_token_file_tampering_cannot_be_rehashed_away(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            argv, _ = self.prepare_rollback_cli(directory)
+            inputs = directory / "inputs"
+            originals = {name: (inputs / name).read_bytes() for name in (*render.INPUT_FILES, "captures.json")}
+            for filename in ("captures.json", "deployment.json", "pod.json", "source.json", "token-metadata.json"):
+                for repair_manifest in (False, True):
+                    for name, raw in originals.items():
+                        (inputs / name).write_bytes(raw)
+                    (inputs / filename).write_bytes(originals[filename] + b"\n")
+                    if repair_manifest and filename != "captures.json":
+                        manifest = json.loads(originals["captures.json"])
+                        manifest["sha256"][filename] = render.sha((inputs / filename).read_bytes())
+                        (inputs / "captures.json").write_bytes(render.canonical(manifest))
+                    with self.subTest(filename=filename, repair=repair_manifest), \
+                            patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                        self.assertEqual(render.main(), 1)
+                    self.assertFalse(Path(argv[4]).exists())
+            # Refreshing UTC and repinning the manifest cannot change frozen token evidence.
+            for name, raw in originals.items():
+                (inputs / name).write_bytes(raw)
+            evidence = json.loads(originals["token-metadata.json"])
+            evidence["utc"] = render.token.utc()
+            (inputs / "token-metadata.json").write_bytes(render.canonical(evidence))
+            manifest = json.loads(originals["captures.json"])
+            manifest["sha256"]["token-metadata.json"] = render.sha((inputs / "token-metadata.json").read_bytes())
+            (inputs / "captures.json").write_bytes(render.canonical(manifest))
+            with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                self.assertEqual(render.main(), 1)
+            self.assertFalse(Path(argv[4]).exists())
+
+    def test_cli_rollback_candidate_and_closure_are_exact_bounded_regular_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            argv, current = self.prepare_rollback_cli(directory)
+            candidate = directory / "candidate.json"
+            closure = directory / "forward" / "metrics-closure.json"
+            for path, limit in ((candidate, render.MAX_CAPTURE), (closure, render.MAX_CLOSURE)):
+                original = path.read_bytes()
+                path.write_bytes(original + b"\n")
+                with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                    self.assertEqual(render.main(), 1)
+                self.assertFalse(Path(argv[4]).exists())
+                path.unlink()
+                path.symlink_to(directory / "inputs" / "deployment.json")
+                with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                    self.assertEqual(render.main(), 1)
+                path.unlink()
+                with path.open("wb") as stream:
+                    stream.truncate(limit + 1)
+                with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                    self.assertEqual(render.main(), 1)
+                self.assertFalse(Path(argv[4]).exists())
+                path.write_bytes(original)
+            current["spec"]["progressDeadlineSeconds"] += 1
+            candidate.write_bytes(render.canonical(current))
+            argv[argv.index("--rollback-sha256") + 1] = render.sha(candidate.read_bytes())
+            with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                self.assertEqual(render.main(), 1)
+            self.assertFalse(Path(argv[4]).exists())
+
+    def test_forward_cli_stale_original_capture_and_stale_token_metadata_still_refuse(self):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            inputs = directory / "inputs"
+            inputs.mkdir()
+            stale = (datetime.now(timezone.utc) - timedelta(minutes=31)).isoformat()
+            write_inputs(inputs, self.inputs, stale)
+            with self.assertRaises(ValueError):
+                render.load_inputs(inputs)
+            for phase in ("capture", "token"):
+                if phase == "token":
+                    self.inputs["token-metadata.json"]["utc"] = stale
+                    write_inputs(inputs, self.inputs)
+                    render.load_inputs(inputs)  # Fresh manifest; stale token must still fail rendering.
+                output = directory / phase
+                argv = ["render.py", "--inputs", str(inputs), "--output", str(output)]
+                with patch.object(sys, "argv", argv), patch.object(sys, "stdout", io.StringIO()):
+                    self.assertEqual(render.main(), 1)
+                self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

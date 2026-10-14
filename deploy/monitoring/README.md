@@ -30,7 +30,7 @@ PVCs and unrelated monitoring configuration are preserved.
 
 ## Applying
 
-Run from a directory holding both files, with cluster-admin `kubectl`:
+Apply the dashboard from a directory holding `phorvex-apps-dashboard.json`, with authorized `kubectl`:
 
 ```sh
 kubectl -n monitoring create configmap phorvex-apps-dashboard \
@@ -39,8 +39,7 @@ kubectl -n monitoring create configmap phorvex-apps-dashboard \
   | kubectl -n monitoring apply -f -
 ```
 
-Prometheus reloads the scrape config within about two minutes, and the Grafana sidecar picks up
-the dashboard on its next poll. The label must be part of the applied manifest: the existing
+The Grafana sidecar picks up the dashboard on its next poll. The label must be part of the applied manifest: the existing
 object's last-applied record contains `grafana_dashboard=1`, so an `apply` without it removes the
 label and the Grafana sidecar stops loading the dashboard (this happened once on 2026-09-29). Persist scrape changes through the serialized, focused Helm procedure below;
 a Secret-only patch is overwritten by the next release upgrade.
@@ -284,8 +283,9 @@ start the prepared inverse if serving is not restored within ten minutes.
 Restore the prior brake after serving/source/lease/auth proof, keeping affected
 catalogue entries unavailable until reviewed recapture.
 
-After serving and cross-namespace 401/200 proof, apply the Service/ServiceMonitor.
-Scope overlap checks by service=phorvex-vllm-native-metrics. Remove only the old
+After serving/source/lease proof, create the metrics ClusterIP Service. Run the
+monitoring-namespace 401/200 auth Job through that Service, then create the
+ServiceMonitor only if every auth case passes. Scope overlap checks by service=phorvex-vllm-native-metrics. Remove only the old
 vllm job through a serialized off-gateway chart 88.5.3 Helm upgrade with
 `--reuse-values` and an overlay containing only additionalScrapeConfigs. Prove
 unrelated jobs match the current release before this write. Secret-only scrape

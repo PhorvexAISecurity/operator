@@ -115,6 +115,98 @@ mapping needs explicit selection and separate reviewed attribution; do not relab
 Stage 5 traffic as vLLM. Independent DCGM capability work does not block native
 scraping and needs its own isolated diagnostic/rollback evidence.
 
+## Offline renderer and rollback CLI
+
+Forward rendering requires the complete original capture directory and token
+metadata, each with age **0..1800 seconds**. `captures.json` has exactly `schema`,
+`capturedAt`, and `sha256`; its schema is
+`phorvex-vllm-native-metrics-captures-v1`. The SHA map contains exactly
+`deployment.json`, `pod.json`, `replicaset.json`, `service.json`,
+`endpointslices.json`, `source.json`, `policy.json`, `journal.json`,
+`drain-journals.json`, `inventory.json`, and `token-metadata.json`. These are full
+original objects/lists and metadata-only token evidence; the renderer makes no
+API calls. Run from this integration directory:
+
+```sh
+python3 -B render.py \
+  --inputs /path/frozen-originals \
+  --output /path/forward-review
+sha256sum /path/forward-review/metrics-closure.json
+```
+
+Retain the original directory, all forward artifacts, and the recorded **exact
+closure file SHA256**, including its newline. The forward closure binds the raw
+manifest and every input file SHA, original capture UTC, canonical input-object
+hashes (`inputsCanonicalSHA256`), original/candidate spec and template hashes,
+metrics source and generated source-manifest hashes, token metadata/pair, helper
+provenance, and generated artifact hashes. Before forward activation, regenerate
+and review these artifacts with the current renderer; older completion/pins and
+closures lacking `inputsCanonicalSHA256` are superseded. `metrics.py` is unchanged
+by this rollback fix, so its existing content-named source ConfigMap is unchanged.
+
+The initial inverse tests the original RV and is review-only. To rebind it, capture
+a **full current candidate Deployment** separately and record its capture UTC
+when the file is collected, plus its exact file SHA256. Use that capture time,
+never the original capture UTC, Deployment creation time, or render time. Supply
+**all five** rollback flags together:
+
+```sh
+python3 -B render.py \
+  --inputs /path/frozen-originals \
+  --output /path/rollback-review \
+  --rollback-deployment /path/candidate-deployment.json \
+  --rollback-sha256 '<EXACT_CANDIDATE_FILE_SHA256>' \
+  --rollback-captured-at '<CANDIDATE_CAPTURE_UTC>' \
+  --rollback-closure /path/forward-review/metrics-closure.json \
+  --rollback-closure-sha256 '<RECORDED_FORWARD_CLOSURE_FILE_SHA256>'
+```
+
+| Flag | Exact requirement |
+| --- | --- |
+| `--rollback-deployment` | Full `vllm/vllm` Deployment JSON; nonempty regular file, no symlink, at most 32MiB; original stable UID and exactly the full forward candidate `/spec`. |
+| `--rollback-sha256` | Exactly 64 lowercase hex characters; SHA256 of the candidate file's exact bytes. |
+| `--rollback-captured-at` | Separately recorded ISO 8601 UTC with `Z` or zero UTC offset, at most 64 characters; age 0..1800 seconds, inclusive; future or timezone-free values refused. |
+| `--rollback-closure` | Original forward `metrics-closure.json`; nonempty regular file, no symlink, at most 1MiB. A previously rebound rollback closure is refused. |
+| `--rollback-closure-sha256` | Exactly 64 lowercase hex characters; must match the forward closure file and the SHA recorded before activation. |
+
+Rollback preserves original capture/token timestamps and gives those frozen
+records **no age limit**. Their exact file hashes and manifest must still match
+the explicit forward closure; rewriting UTC, rehashing a modified capture, or
+substituting token metadata is refused. Frozen token records pass the existing
+low-level whitelist/identity checks, including namespace, name, UID/RV, pair,
+provenance, readiness and immutable generator records. No helper freshness
+behavior changes and no refreshed token UTC is synthesized. The entire
+regenerated forward closure must match before the inverse is rebound.
+
+The rebound inverse still tests **UID, current RV, and the entire candidate
+`/spec`**, then restores the exact original template. Status-only RV churn after
+capture requires another candidate capture and render; any spec drift requires
+reviewed reconciliation. The output closure records `rollback.captureSHA256`,
+`capturedAt`, `resourceVersion`, and `forwardClosureSHA256`, with
+`requiresCurrentDeploymentCapture=false`. Review/apply only
+`deployment-metrics-rollback-json-patch.json` for rollback; the re-emitted forward
+and monitoring artifacts do not authorize another rollout or scrape activation.
+
+All input reads retain their byte bounds (manifest 16KiB, each original file
+32MiB, original files total 64MiB). Duplicate JSON fields, nonfinite values,
+credentials in captures, missing flags, stale candidate UTC, hash/identity/spec
+drift, and changed source/helper closure refuse before output creation. Output
+must be a new directory; an existing one is never refreshed. Rendering exits 0
+with a nonsecret review-only summary on success, or 1 with a fixed refusal on
+validation failure. Flag abbreviations are disabled.
+
+Offline renderer controls use synthetic captures and no listener, socket, API,
+image, or serving process:
+
+```sh
+python3 -B -m unittest -v test_render
+```
+
+The lead must rerun the actual-image suites against these exact changed files on
+isolated EC2; the previous worker completion and actual-image pins do not cover
+this renderer revision. All existing lifecycle, CI, review and activation gates
+remain pending until separately recorded.
+
 ## One-shot in-cluster auth proof
 
 `verify_metrics_auth.py` is a temporary **Job in monitoring**, separate from the
@@ -214,8 +306,9 @@ using captured identity/ownership guards. No serving-coupled probes are added.
 ## Isolated validation only
 
 No runtime test, socket fixture, process, image pull, or probe is authorized on
-the shared VPS or gateway for this worker. All tests default to skipped unless
-`PHORVEX_STAGE6_ISOLATED_TESTS=1` is explicitly set. On isolated EC2, from this
+the shared VPS or gateway for this worker. Listener runtime tests default to
+skipped unless `PHORVEX_STAGE6_ISOLATED_TESTS=1` is explicitly set. The offline
+renderer controls above do not execute the listener. On isolated EC2, from this
 directory, run:
 
 ```sh
