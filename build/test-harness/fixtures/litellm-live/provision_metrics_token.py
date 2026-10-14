@@ -129,7 +129,7 @@ class ProxyAPI:
     def logs(self, namespace, pod):
         # Only these reviewed bounded helpers' nonsecret logs are allowed.
         request = Request(self.base + f"/api/v1/namespaces/{namespace}/pods/{pod}/log?limitBytes=65536",
-                          headers={"Accept": "text/plain"})
+                          headers={"Accept": "application/json"})
         try:
             with self.opener.open(request, timeout=10) as response:
                 raw = response.read(65537)
