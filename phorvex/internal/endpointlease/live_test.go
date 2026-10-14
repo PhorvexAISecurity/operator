@@ -2,6 +2,7 @@ package endpointlease
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -228,6 +229,127 @@ func TestValidateLiveSecretProjectionMustBeExactIdentity(t *testing.T) {
 			if tc.accept != (err == nil) {
 				t.Fatalf("accept=%v err=%v", tc.accept, err)
 			}
+		})
+	}
+}
+
+func TestValidateLiveNativeMetricsSidecarPreservesLeaseAuthority(t *testing.T) {
+	for _, placement := range []string{"native-init-sidecar", "third-regular-in-template", "third-regular-in-pod"} {
+		t.Run(placement, func(t *testing.T) {
+			ctx := context.Background()
+			c, sourceSHA, proxyImage, engineImage := fixtureLive(t)
+			policy := &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: PolicyConfigMapName}, policy); err != nil {
+				t.Fatal(err)
+			}
+			state, err := ParseState(policy.Data[PolicyKey])
+			if err != nil {
+				t.Fatal(err)
+			}
+			state, err = state.Revoke(strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("d", 32))
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw, err := EncodeState(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			policy.Data[PolicyKey] = raw
+			if err := c.Update(ctx, policy); err != nil {
+				t.Fatal(err)
+			}
+			before, err := ValidateLive(ctx, c, testPodUID, sourceSHA, proxyImage, engineImage)
+			if err != nil {
+				t.Fatalf("existing two-container workload refused: %v", err)
+			}
+			dep := &appsv1.Deployment{}
+			pod := &corev1.Pod{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: ServiceName}, dep); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: "vllm-pod"}, pod); err != nil {
+				t.Fatal(err)
+			}
+			restart := corev1.ContainerRestartPolicyAlways
+			metrics := corev1.Container{Name: "phorvex-vllm-metrics", Image: "example/metrics@sha256:" + strings.Repeat("9", 64),
+				Command: []string{"python3", "-B", "/opt/phorvex/metrics.py"}, RestartPolicy: &restart,
+				VolumeMounts: []corev1.VolumeMount{
+					{Name: "metrics-source", MountPath: "/opt/phorvex/metrics.py", SubPath: "metrics.py", ReadOnly: true},
+					{Name: "metrics-token", MountPath: "/etc/phorvex-vllm-metrics", ReadOnly: true},
+				},
+				Ports: []corev1.ContainerPort{{Name: "engine-metrics", ContainerPort: 9102, Protocol: corev1.ProtocolTCP}}}
+
+			optional, mode := false, int32(0440)
+			metricsVolumes := []corev1.Volume{
+				{Name: "metrics-source", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "phorvex-vllm-native-metrics-fixture"}, Optional: &optional,
+					Items: []corev1.KeyToPath{{Key: "metrics.py", Path: "metrics.py"}},
+				}}},
+				{Name: "metrics-token", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+					SecretName: "phorvex-vllm-native-metrics-token-v1", Optional: &optional, DefaultMode: &mode,
+					Items: []corev1.KeyToPath{{Key: "token", Path: "token"}},
+				}}},
+			}
+			dep.Spec.Template.Spec.Volumes = append(dep.Spec.Template.Spec.Volumes, metricsVolumes...)
+			pod.Spec.Volumes = append(pod.Spec.Volumes, metricsVolumes...)
+			dep.Spec.Template.Spec.InitContainers = []corev1.Container{{Name: "phorvex-drain-ledger-init"}, metrics}
+			pod.Spec.InitContainers = append([]corev1.Container(nil), dep.Spec.Template.Spec.InitContainers...)
+			pod.Status.InitContainerStatuses = []corev1.ContainerStatus{
+				{Name: "phorvex-drain-ledger-init", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 0}}},
+				{Name: metrics.Name, Ready: true, ContainerID: "containerd://metrics", ImageID: metrics.Image,
+					State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}},
+			}
+			if placement != "native-init-sidecar" {
+				metrics.RestartPolicy = nil
+				if placement == "third-regular-in-template" {
+					dep.Spec.Template.Spec.InitContainers = dep.Spec.Template.Spec.InitContainers[:1]
+					dep.Spec.Template.Spec.Containers = append(dep.Spec.Template.Spec.Containers, metrics)
+				} else {
+					pod.Spec.InitContainers = pod.Spec.InitContainers[:1]
+					pod.Spec.Containers = append(pod.Spec.Containers, metrics)
+					pod.Status.ContainerStatuses = append(pod.Status.ContainerStatuses, pod.Status.InitContainerStatuses[1])
+					pod.Status.InitContainerStatuses = pod.Status.InitContainerStatuses[:1]
+				}
+			}
+			if err := c.Update(ctx, dep); err != nil {
+				t.Fatal(err)
+			}
+			status := pod.Status.DeepCopy()
+			if err := c.Update(ctx, pod); err != nil {
+				t.Fatal(err)
+			}
+			pod.Status = *status
+			if err := c.Status().Update(ctx, pod); err != nil {
+				t.Fatal(err)
+			}
+			after, err := ValidateLive(ctx, c, testPodUID, sourceSHA, proxyImage, engineImage)
+			if placement != "native-init-sidecar" {
+				if err == nil {
+					t.Fatal("third regular container accepted")
+				}
+				return
+			}
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatalf("native init sidecar changed lease/source/route authority: before=%+v after=%+v err=%v", before, after, err)
+			}
+			pod.Status.InitContainerStatuses[1].RestartCount++
+			pod.Status.InitContainerStatuses[1].ContainerID = "containerd://metrics-restarted"
+			if err := c.Status().Update(ctx, pod); err != nil {
+				t.Fatal(err)
+			}
+			restarted, err := ValidateLive(ctx, c, testPodUID, sourceSHA, proxyImage, engineImage)
+			if err != nil || !reflect.DeepEqual(before, restarted) {
+				t.Fatalf("metrics restart changed serving authority: %+v err=%v", restarted, err)
+			}
+			current := &corev1.ConfigMap{}
+			if err := c.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: PolicyConfigMapName}, current); err != nil {
+				t.Fatal(err)
+			}
+			if current.UID != policy.UID || current.ResourceVersion != policy.ResourceVersion || current.Data[PolicyKey] != raw ||
+				after.State.Revision != 1 || after.State.AllowedClientHMACs[0] != strings.Repeat("b", 64) || after.State.RevokedClientHMACs[0] != strings.Repeat("a", 64) {
+				t.Fatal("native metrics changed the protected A revocation/B allowance")
+			}
+			// fixtureLive has no Secret objects: metrics compatibility grants no manager-side Secret GET.
 		})
 	}
 }

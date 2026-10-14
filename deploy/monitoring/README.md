@@ -30,25 +30,19 @@ PVCs and unrelated monitoring configuration are preserved.
 
 ## Applying
 
-Run from a directory holding both files, with cluster-admin `kubectl`:
+Apply the dashboard from a directory holding `phorvex-apps-dashboard.json`, with authorized `kubectl`:
 
 ```sh
-B=$(base64 -w0 additional-scrape-configs.yaml)
-kubectl -n monitoring patch secret kube-prom-stack-kube-prome-prometheus-scrape-confg --type=json \
-  -p "[{\"op\":\"replace\",\"path\":\"/data/additional-scrape-configs.yaml\",\"value\":\"$B\"}]"
-
 kubectl -n monitoring create configmap phorvex-apps-dashboard \
   --from-file=phorvex-apps.json=phorvex-apps-dashboard.json --dry-run=client -o yaml \
   | kubectl label --local -f - grafana_dashboard=1 -o yaml \
   | kubectl -n monitoring apply -f -
 ```
 
-Prometheus reloads the scrape config within about two minutes, and the Grafana sidecar picks up
-the dashboard on its next poll. The label must be part of the applied manifest: the existing
+The Grafana sidecar picks up the dashboard on its next poll. The label must be part of the applied manifest: the existing
 object's last-applied record contains `grafana_dashboard=1`, so an `apply` without it removes the
-label and the Grafana sidecar stops loading the dashboard (this happened once on 2026-09-29). On the next
-`helm upgrade` of `kube-prom-stack`, pass `additional-scrape-configs.yaml` as
-`additionalScrapeConfigs` or the vllm job reverts.
+label and the Grafana sidecar stops loading the dashboard (this happened once on 2026-09-29). Persist scrape changes through the serialized, focused Helm procedure below;
+a Secret-only patch is overwritten by the next release upgrade.
 
 ## 2026-09-30 changes
 
@@ -69,17 +63,17 @@ label and the Grafana sidecar stops loading the dashboard (this happened once on
 
 ## 2026-09-29 changes
 
-- **vllm scrape job — still down.** It kept container port 8000, the guardrail boundary, which answers
-  `/metrics` with 404. The job was changed to scrape the engine on 8001, but the engine is started
-  with `--host 127.0.0.1` and the boundary (`dual_server.py`) deliberately exposes no upstream route,
-  so the target now reports "connection refused". Collecting `vllm:*` series needs a boundary change
-  (for example a read-only `/metrics` pass-through, or a metrics sidecar in the vLLM Pod); until
-  then the LLM-serving latency, TTFT, queue and token panels stay empty.
+- **Native vLLM metrics:** the old PodIP:8001 job cannot reach the engine bound to
+  loopback. Stage6's authenticated restartable init sidecar exposes only GET
+  `/metrics` on 9102; the serving boundary on 8000 retains its existing routes.
+  The checked-in sidecar/source/ServiceMonitor describe the candidate.
+  Installation and the obsolete scrape's removal require the gates below; these
+  files do not by themselves prove an installed listener or healthy target.
 - **Dashboard.** "Apps attacked" and "Apps under attack" use the 15-minute peak of the candidate
   coverage, because the attacked app's value drops back to 0 within seconds of the defense. The
   defense panels add the brain's selected decisions and the actuation attempts by outcome. Token
-  throughput reads `vllm:generation_tokens_total` and `vllm:prompt_tokens_total`; `nim_tokens_total`
-  never existed on this cluster.
+  throughput reads `vllm:generation_tokens_total` and `vllm:prompt_tokens_total`; `nim_tokens_total` is now defined by the existing physics bridge from generation tokens;
+  native scraping supplies its input.
 
 M1b source preparation adds the active immutable gateway/profile and private
 scrape closure to the stack chart. The external gateway stays manually owned;
@@ -252,3 +246,109 @@ non-alerting Prometheus spec, scrape resourceVersion and PVC identity after roll
 Revert the corresponding Git overlay/rule changes through review. For excessive
 noise, disable the Telegram route first in a reviewed native-config change; retain
 the external Secret. Never roll back Hami's retention/scrape release or delete a PVC.
+
+## Stage6 — authenticated native vLLM metrics
+
+The native sidecar preserves the two regular serving containers, guardrail source,
+loopback engine bind, serving Service and protected lease/drain records. It runs
+as a restartable init container after the drain-ledger init, using the published
+Python image pinned by digest. Scrape failure has no serving probes. It forwards
+only authenticated, bodyless GET `/metrics` to literal loopback:8001 with a
+three-second deadline, two workers and a one-MiB upstream limit. Model and control
+routes are unavailable through 9102.
+
+The independent immutable Secret `phorvex-vllm-native-metrics-token-v1`, key
+`token`, exists in both vllm and monitoring only after in-cluster provisioning.
+ServiceMonitor credentials resolve in monitoring. No token bytes belong in Git,
+Helm values, argv or evidence. The fixed provisioner creates exclusive empty
+slots, gives its bounded Job exact-name patch authority, and records only generator
+provenance and matching PartialObjectMetadata UID/resourceVersion receipts.
+
+The offline renderer and token tools are documented in
+[the integration runbook](../../build/integrations/vllm-native-metrics/README.md).
+`vllm-native-metrics.yaml` contains the source ConfigMap, ClusterIP Service and
+ServiceMonitor; the external Deployment remains manually owned. The metrics
+Service selects app=vllm plus the metrics opt-in independently of serving=true.
+The monitor preserves actual namespace/pod/node, sets container=vllm and job=vllm,
+and disables redirects.
+
+Apply order: merge reviewed source after exact-head self-hosted CI and isolated
+EC2 workflow comparison; capture fresh objects, shared Helm state, namespace
+annotations and catalogue holds; provision/prove the pair and source; record the
+next 15-minute UTC maintenance slot; engage a UID/RV-guarded namespace dry-run
+brake and hold catalogue producers; prove the current Pod idle and startup
+headroom; apply the reviewed UID/RV/full-spec-guarded Deployment patch. Preserve
+replicas=1/maxSurge=0/maxUnavailable=1. Record actual endpoint loss/restoration;
+start the prepared inverse if serving is not restored within ten minutes.
+Restore the prior brake after serving/source/lease/auth proof, keeping affected
+catalogue entries unavailable until reviewed recapture.
+
+After serving/source/lease proof, create the metrics ClusterIP Service. Run the
+monitoring-namespace 401/200 auth Job through that Service, then create the
+ServiceMonitor only if every auth case passes. Scope overlap checks by service=phorvex-vllm-native-metrics. Remove only the old
+vllm job through a serialized off-gateway chart 88.5.3 Helm upgrade with
+`--reuse-values` and an overlay containing only additionalScrapeConfigs. Prove
+unrelated jobs match the current release before this write. Secret-only scrape
+changes are not persistent Helm ownership.
+
+Acceptance requires native gauge/counter/E2E/TTFT families, a single current-Pod
+target, ten minutes of UP (at least 19 samples, all 1, no sample or window-edge gap
+above 45 seconds), healthy bridge rules, preserved serving/source/lease/journals,
+and every active exact engine query below. Finite nonnegative zero rates are
+valid. P99/mean-sojourn/TTFT quantiles require actual completions; absent traffic
+leaves statistical acceptance pending. Do not clamp NaNs or manufacture traffic.
+
+Prepare the inverse from the immediate baseline before activation. Rebind it to
+fresh candidate UID/RV/spec before applying; any drift requires new review.
+Restore the original template under the maintenance brake, verify one Ready
+serving endpoint and protected policy/journal bytes, and recapture any affected
+Pod-incarnation profile. Restore only Stage6's scrape change from current Helm
+values, retaining unrelated jobs, Stage5 additions and Stage4 alerting/storage.
+Delete only recorded Stage6 objects after consumers disappear, with UID/RV/owner
+checks. Retain or metadata-guard-delete the pair after all references disappear;
+clean temporary generator/probe privileges. Preserve TSDB and historical receipts.
+
+S6-D independently tests the same exporter digest and driver on an isolated T4.
+Its approved CSV preserves every default field and adds only validated SM/link
+fields. Exporter rollback restores only the captured DaemonSet collector
+projection/configuration; it never rolls vLLM. Start that inverse if existing
+DCGM queries/readiness fail to recover within two minutes or serving degrades.
+Missing test capacity is pending, not evidence of unsupported hardware.
+
+### Engine signal coverage
+
+Before results below were queried on 2026-10-14 for Pod
+`vllm-6cc84d486f-8jtwz`. Installation and after results are pending; unsupported
+statuses require actual exporter/driver diagnostics. T1 is measured outside the
+serving Pod; T1* is steerable outside measurement requiring the 281 clipping or
+leave-one-out treatment. T2 is reported by the serving Pod and may only lower
+cost under PHORVEXSEC-281. Authentication does not change that tier or cost use.
+
+TokensPerSec retains the existing generation-only bridge
+`nim_tokens_total ← vllm:generation_tokens_total`; no default/query override and
+no prompt-token addition. ReqRate is successes only and P99 is engine-completion
+latency. Branch B applies without an explicit selection: both remain T2 interim
+with the 281 polarity caveat. Gateway series retain actual litellm labels. The
+T1 per-site gateway mapping is an open decision; branch A requires explicit
+selection plus verified single-backend attribution and independent review.
+
+| Signal | Exact engine query | Tier | Before UTC/value | After / status |
+| --- | --- | --- | --- | --- |
+| `reqRate` | `sum by (pod) (rate(http_requests_total{namespace="vllm"}[1m]))` | T2 | 2026-10-14T14:06:20.380912+00:00; empty vector | pending activation/verification |
+| `p99Ms` | `1000 * histogram_quantile(0.99, sum by (pod, le) (rate(http_request_duration_seconds_bucket{namespace="vllm"}[5m])))` | T2 | 2026-10-14T14:06:21.717747+00:00; empty vector | pending activation/verification |
+| `connCount` | `sum by (pod) (container_network_tcp_usage_total{namespace="vllm"})` | T1* | 2026-10-14T14:06:23.154816+00:00; 40 | pending activation/verification |
+| `bytesIn` | `sum by (pod) (rate(container_network_receive_bytes_total{namespace="vllm"}[1m]))` | T1* | 2026-10-14T14:06:24.539546+00:00; 1865.9762596899225 | pending activation/verification |
+| `bytesOut` | `sum by (pod) (rate(container_network_transmit_bytes_total{namespace="vllm"}[1m]))` | T1* | 2026-10-14T14:06:26.087826+00:00; 2310.7134205426355 | pending activation/verification |
+| `gpuUtil` | `avg by (pod) (DCGM_FI_DEV_GPU_UTIL{namespace="vllm"}) / 100` | T1* | 2026-10-14T14:06:27.418644+00:00; 0 | pending activation/verification |
+| `tokensPerSec` | `sum by (pod) (rate(nim_tokens_total{namespace="vllm"}[1m]))` | T2 | 2026-10-14T14:06:28.810004+00:00; empty vector | pending activation/verification |
+| `inFlightMean` | `avg_over_time((sum by (pod) (vllm:num_requests_running{namespace="vllm"}) + sum by (pod) (vllm:num_requests_waiting{namespace="vllm"}))[5m:])` | T2 | 2026-10-14T14:06:30.110173+00:00; empty vector | pending activation/verification |
+| `completionRate` | `sum by (pod) (rate(vllm:e2e_request_latency_seconds_count{namespace="vllm"}[5m]))` | T2 | 2026-10-14T14:06:31.420587+00:00; empty vector | pending activation/verification |
+| `meanSojournSec` | `sum by (pod) (increase(vllm:e2e_request_latency_seconds_sum{namespace="vllm"}[5m])) / sum by (pod) (increase(vllm:e2e_request_latency_seconds_count{namespace="vllm"}[5m]))` | T2 | 2026-10-14T14:06:32.880078+00:00; empty vector | pending activation/verification |
+| `queueDepth` | `sum by (pod) (workload_queue_depth{namespace="vllm"}) or sum by (pod) (vllm:num_requests_waiting{namespace="vllm"}) or sum by (pod) (nv_inference_pending_request_count{namespace="vllm"})` | T2 for the native fallback | 2026-10-14T14:06:34.250280+00:00; empty vector | pending activation/verification |
+| `vramUsedMiB` | `sum by (namespace, pod) (DCGM_FI_DEV_FB_USED)` | T1* | 2026-10-14T14:06:35.613092+00:00; 11868 | pending activation/verification |
+| `vramFreeMiB` | `sum by (namespace, pod) (DCGM_FI_DEV_FB_FREE)` | T1* | 2026-10-14T14:06:36.932166+00:00; 3226 | pending activation/verification |
+| `smActive` | `avg by (namespace, pod) (DCGM_FI_PROF_SM_ACTIVE)` | T1* | 2026-10-14T14:06:38.304304+00:00; empty vector | pending activation/verification |
+| `pcieBytes` | `sum by (namespace, pod) (rate(DCGM_FI_PROF_PCIE_RX_BYTES[1m]) + rate(DCGM_FI_PROF_PCIE_TX_BYTES[1m]))` | T1* | 2026-10-14T14:06:39.661150+00:00; 164.4 | pending activation/verification |
+| `pcieLinkGen` | `max by (namespace, pod) (DCGM_FI_DEV_PCIE_LINK_GEN)` | T1 discovery | 2026-10-14T14:06:41.255749+00:00; empty vector | pending activation/verification |
+| `pcieLinkWidth` | `max by (namespace, pod) (DCGM_FI_DEV_PCIE_LINK_WIDTH)` | T1 discovery | 2026-10-14T14:06:42.662492+00:00; empty vector | pending activation/verification |
+| `syscallRate` | Deliberately absent from DefaultPromQueries | Unsupported/inactive | No query | No engine consumer; no fabricated zero |
