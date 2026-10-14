@@ -228,8 +228,32 @@ def create_recorded(api, body, state, save):
     return result
 
 
+def validate_owned_record(record, state):
+    body = record.get("body", {})
+    meta = body.get("metadata", {})
+    namespace, name = meta.get("namespace"), meta.get("name", "")
+    if namespace not in NAMESPACES or body.get("kind") not in {
+            "ServiceAccount", "Role", "RoleBinding", "ConfigMap", "Job", "Pod"}:
+        raise SafeFailure("cleanup object outside bounded namespaces or kinds")
+    if "pairID" in state:
+        expected_name = "phorvex-metrics-token-" + state["pairID"][:12]
+        if name != expected_name or meta.get("labels") != labels(state["pairID"]):
+            raise SafeFailure("cleanup object outside recorded bootstrap generation")
+    else:
+        run_id = state.get("runID", "")
+        if not re.fullmatch(r"[0-9a-f]{32}", run_id):
+            raise SafeFailure("invalid proof cleanup identity")
+        prefix = "phorvex-metrics-proof-" + run_id[:12]
+        if name not in {prefix + suffix for suffix in ("-helper", "-source", "-witness", "-probe")} or meta.get("labels") != {
+                "phorvex.ai/metrics-auth-proof": run_id}:
+            raise SafeFailure("cleanup object outside recorded witness generation")
+    if record.get("path") != resource_path(body) or not record.get("uid"):
+        raise SafeFailure("cleanup path or UID differs")
+
+
 def cleanup_objects(api, state, save):
     for record in list(reversed(state["objects"])):
+        validate_owned_record(record, state)
         current = api.get(record["path"], missing=True)
         if current is not None:
             if current["metadata"]["uid"] != record["uid"] or not matches_subset(current, record["body"]):
@@ -293,6 +317,12 @@ def validate_report(report, pair_id):
     return report
 
 
+def check_generator_job(job, state, expected):
+    if (job.get("metadata", {}).get("uid") != state.get("jobUID") or
+            not matches_subset(job, expected)):
+        raise SafeFailure("fresh generator Job UID or reviewed spec drift")
+
+
 def generator_pod(api, job, complete=False):
     pods = api.get("/api/v1/namespaces/litellm/pods")["items"]
     owned = [pod for pod in pods if any(owner.get("uid") == job["metadata"]["uid"] and owner.get("kind") == "Job"
@@ -352,6 +382,7 @@ def provision(api, state, save, wait_seconds=120):
         deadline = time.monotonic() + min(max(wait_seconds, 1), 120)
         while time.monotonic() < deadline:
             job = api.get(resource_path(actual))
+            check_generator_job(job, state, objects[-1])
             if job.get("status", {}).get("succeeded") == 1 or job.get("status", {}).get("failed"):
                 pod = generator_pod(api, job, complete=job.get("status", {}).get("succeeded") == 1)
                 report = validate_report(json.loads(api.logs("litellm", pod["metadata"]["name"])), state["pairID"])
@@ -372,6 +403,7 @@ def provision(api, state, save, wait_seconds=120):
         # Privileges are removed first even if Pod evidence/deletion subsequently fails.
         privileged = [r for r in state["objects"] if r["body"]["kind"] in ("RoleBinding", "Role")]
         for record in reversed(privileged):
+            validate_owned_record(record, state)
             current = api.get(record["path"], missing=True)
             if current is not None:
                 if current["metadata"]["uid"] != record["uid"] or not matches_subset(current, record["body"]):

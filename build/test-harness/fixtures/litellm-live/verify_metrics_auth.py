@@ -441,6 +441,49 @@ def probe_main():
         return 1
 
 
+def validate_production_pod(plan, pod):
+    closure = plan["closure"]
+    spec, meta = pod["spec"], pod["metadata"]
+    gateways = [c for c in spec["containers"] if c["name"] == "litellm-admission-gateway"]
+    if (len(gateways) != 1 or not ready(pod) or meta.get("namespace") != "litellm" or
+            meta.get("labels", {}).get("phorvex.ai/litellm-gateway-metrics") != "enabled" or
+            meta.get("annotations", {}).get("phorvex.ai/litellm-gateway-source-sha256") != closure["gatewaySourceSHA256"] or
+            spec.get("securityContext", {}).get("fsGroup") != 10001):
+        raise SafeFailure("production gateway Pod binding differs")
+    gateway = gateways[0]
+    if (gateway.get("image") != IMAGE or gateway.get("command") != ["python3", "-B", "/opt/phorvex/gateway.py"] or
+            gateway.get("envFrom") or gateway.get("securityContext", {}).get("readOnlyRootFilesystem") is not True or
+            gateway.get("securityContext", {}).get("runAsUser") != 10001):
+        raise SafeFailure("production gateway runtime differs")
+    for key, expected in (("PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256", closure["gatewaySourceSHA256"]),
+                          ("PHORVEX_LITELLM_METRICS_ENABLED", "1"),
+                          ("PHORVEX_LITELLM_METRICS_TOKEN_FILE", TOKEN_FILE)):
+        items = [item for item in gateway.get("env", []) if item.get("name") == key]
+        if len(items) != 1 or items[0] != {"name": key, "value": expected}:
+            raise SafeFailure("production gateway auth environment differs")
+    volumes = spec.get("volumes", [])
+    credential = [volume for volume in volumes if volume["name"] == "litellm-gateway-metrics-token"]
+    expected_volume = {"name": "litellm-gateway-metrics-token", "secret": {"secretName": NAME,
+        "optional": False, "defaultMode": 288, "items": [{"key": "token", "path": "token", "mode": 288}]}}
+    if credential != [expected_volume]:
+        raise SafeFailure("production credential projection differs")
+    directory = str(Path(TOKEN_FILE).parent)
+    for container in spec["containers"]:
+        mounts = [mount for mount in container.get("volumeMounts", []) if mount["name"] == "litellm-gateway-metrics-token" or
+                  mount.get("mountPath") == directory or mount.get("mountPath", "").startswith(directory + "/")]
+        expected_mounts = [{"name": "litellm-gateway-metrics-token", "mountPath": directory, "readOnly": True}] if container is gateway else []
+        if mounts != expected_mounts:
+            raise SafeFailure("production credential mount shadowed or shared")
+    source = [volume for volume in volumes if volume["name"] == "litellm-live-gateway-source"]
+    if (len(source) != 1 or source[0].get("configMap", {}).get("name") != closure["sourceConfigMapName"] or
+            [mount for mount in gateway.get("volumeMounts", []) if mount.get("mountPath") == "/opt/phorvex"] != [
+                {"name": "litellm-live-gateway-source", "mountPath": "/opt/phorvex", "readOnly": True}]):
+        raise SafeFailure("production gateway source projection differs")
+    statuses = [status for status in pod.get("status", {}).get("containerStatuses", []) if status.get("name") == "litellm-admission-gateway"]
+    if len(statuses) != 1 or not runtime_image_matches(statuses[0].get("imageID", "")):
+        raise SafeFailure("actual production gateway image identity required")
+
+
 def prepare_live(plan, pods, service):
     """Three exact targets, for immediate production proof after the reviewed rollout.
 
@@ -457,15 +500,7 @@ def prepare_live(plan, pods, service):
         raise SafeFailure("exact production replicas and metrics ClusterIP required")
     targets = []
     for index, pod in enumerate(pods):
-        if not ready(pod) or pod["metadata"].get("namespace") != "litellm":
-            raise SafeFailure("actual Ready production replicas required")
-        spec = pod["spec"]
-        gateway = next((c for c in spec["containers"] if c["name"] == "litellm-admission-gateway"), None)
-        if gateway is None or gateway.get("image") != IMAGE:
-            raise SafeFailure("production gateway image differs")
-        source_env = next((e.get("value") for e in gateway.get("env", []) if e.get("name") == "PHORVEX_LITELLM_GATEWAY_SOURCE_SHA256"), None)
-        if source_env != plan["closure"]["gatewaySourceSHA256"]:
-            raise SafeFailure("production gateway source differs")
+        validate_production_pod(plan, pod)
         targets.append({"name": "replica-" + str(index + 1), "host": str(ipaddress.ip_address(pod["status"]["podIP"])),
                         "port": 4003, "podUID": pod["metadata"]["uid"]})
     targets.append({"name": "clusterip", "host": str(ipaddress.ip_address(service["spec"]["clusterIP"])),
@@ -479,10 +514,21 @@ def prepare_live(plan, pods, service):
 
 def live_inputs_current(api, plan):
     for prior in plan["pods"]:
+        validate_production_pod(plan, prior)
         current = api.get(f"/api/v1/namespaces/litellm/pods/{prior['metadata']['name']}")
         if (current["metadata"]["uid"] != prior["metadata"]["uid"] or current["spec"] != prior["spec"] or
                 current["status"].get("podIP") != prior["status"].get("podIP") or not ready(current)):
             raise SafeFailure("production replica UID spec IP or readiness drift")
+        validate_production_pod(plan, current)
+    source = api.get(f"/api/v1/namespaces/litellm/configmaps/{plan['closure']['sourceConfigMapName']}")
+    if (source.get("immutable") is not True or set(source.get("data", {})) != {"gateway.py"} or source.get("binaryData") or
+            hashlib.sha256(source["data"]["gateway.py"].encode()).hexdigest() != plan["closure"]["gatewaySourceSHA256"]):
+        raise SafeFailure("actual production immutable source differs")
+    identity = {"name": source["metadata"]["name"], "uid": source["metadata"]["uid"],
+                "sourceSHA256": plan["closure"]["gatewaySourceSHA256"]}
+    if plan.get("sourceConfigMapIdentity", identity) != identity:
+        raise SafeFailure("actual production source CM recreated")
+    plan["sourceConfigMapIdentity"] = identity
     prior = plan["service"]
     current = api.get("/api/v1/namespaces/litellm/services/phorvex-litellm-gateway-metrics")
     if current["metadata"]["uid"] != prior["metadata"]["uid"] or current["spec"] != prior["spec"]:
@@ -519,8 +565,24 @@ def collect_live(api, plan):
         record = next((item for item in plan["objects"] if item["path"] == resource_path(current)), None)
         if record is None or record["uid"] != current["metadata"]["uid"] or not matches_subset(current, expected):
             raise SafeFailure("production probe helper identity drift")
-    evidence = {"replicas": plan["pods"], "service": plan["service"], "probeJob": job,
-                "probePod": pod, "helperConfigMaps": helpers, "probeReport": report}
+    service = {"apiVersion": plan["service"]["apiVersion"], "kind": "Service",
+               "metadata": {key: plan["service"]["metadata"][key] for key in ("namespace", "name", "uid", "resourceVersion")},
+               "spec": plan["service"]["spec"]}
+    # Production Pod specs contain unrelated serving credentials/env in some
+    # installations. Retain only identity/image/source/projection proof fields.
+    replicas = []
+    for production in plan["pods"]:
+        container = next(c for c in production["spec"]["containers"] if c["name"] == "litellm-admission-gateway")
+        statuses = production["status"].get("containerStatuses", [])
+        status = next(c for c in statuses if c["name"] == "litellm-admission-gateway")
+        replicas.append({"name": production["metadata"]["name"], "uid": production["metadata"]["uid"],
+            "nodeName": production["spec"]["nodeName"], "podIP": production["status"]["podIP"],
+            "imageByDigest": container["image"], "imageID": status["imageID"],
+            "sourceSHA256": plan["closure"]["gatewaySourceSHA256"], "ready": ready(production)})
+    evidence = {"replicas": replicas, "service": service, "sourceConfigMap": plan["sourceConfigMapIdentity"],
+                "probeJob": sanitize_evidence_object(job),
+                "probePod": sanitize_evidence_object(pod), "helperConfigMaps": [sanitize_evidence_object(cm) for cm in helpers],
+                "probeReport": report}
     return {"schema": "phorvex-litellm-metrics-live-auth-proof-v1", "utc": utc(),
             "scope": "live-two-replica-clusterip", "closureSHA256": auth_closure_hash(plan["closure"]),
             "secretMetadata": metadata, "targets": report["targets"], "modelCalls": 0,

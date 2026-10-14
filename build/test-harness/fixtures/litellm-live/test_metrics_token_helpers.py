@@ -207,6 +207,67 @@ class TokenHelpers(unittest.TestCase):
         with self.assertRaises(ValueError): provision.cleanup_slots(api, state, Mock())
         self.assertEqual(api.delete.call_count, 1)
 
+    def test_fresh_generator_job_uid_and_full_reviewed_spec_are_required(self):
+        expected = provision.bootstrap_objects(self.pair, self.slots)[-1]
+        job = copy.deepcopy(expected)
+        job["metadata"].update(uid="created-generator-job", resourceVersion="23")
+        job["status"] = {"succeeded": 1}
+        state = {"jobUID": "created-generator-job"}
+        provision.check_generator_job(job, state, expected)
+        changed = copy.deepcopy(job)
+        changed["metadata"]["uid"] = "same-name-replacement"
+        with self.assertRaises(ValueError): provision.check_generator_job(changed, state, expected)
+        changed = copy.deepcopy(job)
+        changed["spec"]["template"]["spec"]["containers"][0]["image"] = "other-runtime"
+        with self.assertRaises(ValueError): provision.check_generator_job(changed, state, expected)
+        changed = copy.deepcopy(job)
+        changed["spec"]["template"]["spec"]["containers"][0]["command"] = ["python3", "unreviewed.py"]
+        with self.assertRaises(ValueError): provision.check_generator_job(changed, state, expected)
+
+    def test_cleanup_real_own_prefix_uid_rv_anchor_and_unsafe_paths_refused(self):
+        body = provision.bootstrap_objects(self.pair, self.slots)[0]
+        path = provision.resource_path(body)
+        current = copy.deepcopy(body)
+        current["metadata"].update(uid="own-sa-uid", resourceVersion="18")
+        record = {"path": path, "uid": "own-sa-uid", "body": body}
+        state = {"pairID": self.pair, "slots": [], "objects": [copy.deepcopy(record)]}
+        api = Mock()
+        api.get.return_value = current
+        provision.cleanup_objects(api, state, Mock())
+        api.delete.assert_called_once_with(path, "own-sa-uid", "18")
+        self.assertEqual(state["objects"], [])
+        state["objects"] = [copy.deepcopy(record)]
+        current["metadata"]["uid"] = "recreated-sa"
+        with self.assertRaises(ValueError): provision.cleanup_objects(api, state, Mock())
+        self.assertEqual(api.delete.call_count, 1)
+        for mutate in (lambda r: r.update(path="/api/v1/namespaces/other/serviceaccounts/unrelated"),
+                       lambda r: r["body"]["metadata"].update(name="unrelated"),
+                       lambda r: r["body"]["metadata"].update(namespace="other"),
+                       lambda r: r["body"].update(kind="Secret"),
+                       lambda r: r["body"]["metadata"]["labels"].update({generate.PAIR_LABEL: "9" * 32})):
+            unsafe = copy.deepcopy(record)
+            mutate(unsafe)
+            state["objects"] = [unsafe]
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError):
+                provision.cleanup_objects(api, state, Mock())
+        self.assertEqual(api.delete.call_count, 1)
+        run_id = "2" * 32
+        witness_body = {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"namespace": "monitoring",
+            "name": "phorvex-metrics-proof-" + run_id[:12] + "-helper",
+            "labels": {"phorvex.ai/metrics-auth-proof": run_id}}, "immutable": True, "data": auth.helper_data()}
+        witness_current = copy.deepcopy(witness_body)
+        witness_current["metadata"].update(uid="own-witness-helper", resourceVersion="29")
+        witness_record = {"path": provision.resource_path(witness_body), "uid": "own-witness-helper", "body": witness_body}
+        witness_state = {"runID": run_id, "objects": [copy.deepcopy(witness_record)]}
+        api.get.side_effect = None
+        api.get.return_value = witness_current
+        provision.cleanup_objects(api, witness_state, Mock())
+        api.delete.assert_called_with(witness_record["path"], "own-witness-helper", "29")
+        witness_state["objects"] = [copy.deepcopy(witness_record)]
+        witness_state["objects"][0]["body"]["metadata"]["labels"]["phorvex.ai/metrics-auth-proof"] = "9" * 32
+        with self.assertRaises(ValueError): provision.cleanup_objects(api, witness_state, Mock())
+        self.assertEqual(api.delete.call_count, 2)
+
     def test_partial_secret_never_complete_and_rerun_never_generates(self):
         api = Mock()
         state = {"pairID": self.pair, "slots": self.slots, "objects": []}
@@ -287,6 +348,75 @@ class AuthProof(unittest.TestCase):
         value = copy.deepcopy(self.proof)
         value["checks"][0]["Authorization"] = "forbidden"
         with self.assertRaises(ValueError): auth.validate_auth_proof(value, self.closure, self.metadata)
+
+    def production_fixture(self):
+        # Use the actual renderer's complete healthy candidate; do not invent
+        # gateway container, env, Secret projection or source binding shapes.
+        from test_render_metrics import auth_render, originals, patched
+        baseline, profiles, policies, labels = originals()
+        objects = auth_render(baseline, profiles, policies, labels, enabled=True)
+        candidate = patched(baseline, objects["deployment-metrics-json-patch.json"])
+        closure = objects["metrics-closure.json"]
+        metadata = make_metadata_fixture(closure)
+        plan = auth.prepare(closure, metadata, self.source, "3" * 32)
+        pods = []
+        for index in (1, 2):
+            pod = {"apiVersion": "v1", "kind": "Pod", "metadata": copy.deepcopy(candidate["spec"]["template"]["metadata"]),
+                   "spec": copy.deepcopy(candidate["spec"]["template"]["spec"])}
+            pod["metadata"].update(namespace="litellm", name="candidate-replica-" + str(index),
+                                   uid="replica-uid-" + str(index), resourceVersion="25")
+            pod["spec"]["nodeName"] = "actual-node-" + str(index)
+            pod["status"] = {"phase": "Running", "podIP": "10.2.3." + str(index),
+                "conditions": [{"type": "Ready", "status": "True"}],
+                "containerStatuses": [{"name": "litellm-admission-gateway", "imageID": "docker-pullable://" + generate.IMAGE}]}
+            pods.append(pod)
+        service = copy.deepcopy(objects["metrics-service.json"])
+        service["metadata"].update(uid="metrics-service-uid", resourceVersion="26")
+        service["spec"]["clusterIP"] = "10.4.5.6"
+        source_cm = copy.deepcopy(objects["gateway-metrics-source-configmap.json"])
+        source_cm["metadata"].update(uid="actual-production-source-uid", resourceVersion="27")
+        return plan, pods, service, source_cm
+
+    def test_live_preparation_binds_healthy_generated_two_replicas_and_clusterip(self):
+        plan, pods, service, source_cm = self.production_fixture()
+        live = auth.prepare_live(plan, pods, service)
+        self.assertEqual([target["name"] for target in live["targets"]], ["replica-1", "replica-2", "clusterip"])
+        self.assertEqual([target["podUID"] for target in live["targets"][:2]], [pod["metadata"]["uid"] for pod in pods])
+        self.assertEqual(live["probeJob"]["spec"]["activeDeadlineSeconds"], 120)
+        inventory = {"/api/v1/namespaces/litellm/pods/" + pod["metadata"]["name"]: pod for pod in pods}
+        inventory["/api/v1/namespaces/litellm/configmaps/" + source_cm["metadata"]["name"]] = source_cm
+        inventory["/api/v1/namespaces/litellm/services/phorvex-litellm-gateway-metrics"] = service
+        api = Mock()
+        api.get.side_effect = lambda path: copy.deepcopy(inventory[path])
+        auth.live_inputs_current(api, live)
+        self.assertEqual(live["sourceConfigMapIdentity"]["uid"], source_cm["metadata"]["uid"])
+        inventory["/api/v1/namespaces/litellm/configmaps/" + source_cm["metadata"]["name"]]["metadata"]["uid"] = "recreated-source"
+        with self.assertRaises(ValueError): auth.live_inputs_current(api, live)
+
+    def test_live_mount_image_source_and_uid_drift_fail_before_probe(self):
+        plan, pods, service, source_cm = self.production_fixture()
+        mutations = [lambda p: p["spec"]["containers"][1]["volumeMounts"][-1].update(readOnly=False),
+            lambda p: p["status"]["containerStatuses"][0].update(imageID="sha256:" + "f" * 64),
+            lambda p: p["spec"]["containers"][1]["env"].append({"name": "PHORVEX_LITELLM_METRICS_ENABLED", "value": "1"}),
+            lambda p: p["spec"]["volumes"][-1]["secret"].update(optional=True),
+            lambda p: p["metadata"]["annotations"].update({"phorvex.ai/litellm-gateway-source-sha256": "f" * 64})]
+        for mutate in mutations:
+            changed = copy.deepcopy(pods)
+            mutate(changed[0])
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError): auth.prepare_live(plan, changed, service)
+        live = auth.prepare_live(plan, pods, service)
+        inventory = {"/api/v1/namespaces/litellm/pods/" + pod["metadata"]["name"]: copy.deepcopy(pod) for pod in pods}
+        inventory["/api/v1/namespaces/litellm/configmaps/" + source_cm["metadata"]["name"]] = copy.deepcopy(source_cm)
+        inventory["/api/v1/namespaces/litellm/services/phorvex-litellm-gateway-metrics"] = copy.deepcopy(service)
+        api = Mock()
+        api.get.side_effect = lambda path: copy.deepcopy(inventory[path])
+        pod_path = "/api/v1/namespaces/litellm/pods/" + pods[0]["metadata"]["name"]
+        inventory[pod_path]["metadata"]["uid"] = "recreated-replica"
+        with self.assertRaises(ValueError): auth.live_inputs_current(api, live)
+        inventory[pod_path] = copy.deepcopy(pods[0])
+        source_path = "/api/v1/namespaces/litellm/configmaps/" + source_cm["metadata"]["name"]
+        inventory[source_path]["data"]["gateway.py"] = "unreviewed-source"
+        with self.assertRaises(ValueError): auth.live_inputs_current(api, live)
 
     def test_disposable_probe_runs_all_controls_against_actual_candidate_handler(self):
         # A synthetic file credential and loopback ephemeral listener only. This
