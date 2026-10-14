@@ -40,6 +40,10 @@ def check(closure, inputs, runtime_receipt, network_config, network_proof, prome
     args=agent.get('args',[])
     if '--enable-network-policy=true' not in args or '--enable-network-policy=false' in args:
         raise ValueError('CNI network enforcement disabled: stop before exposing 4003')
+    mode = next((e.get('value') for e in network_config.get('networkPolicyEnv', [])
+                 if e.get('name') == 'NETWORK_POLICY_ENFORCING_MODE'), None)
+    if mode != 'strict':
+        raise ValueError('strict CNI startup enforcement required before exposing 4003')
     # This is owner-produced evidence from a representative isolated data-plane
     # witness; actual gateway allow/deny controls are repeated after rollout.
     checked_recent(network_proof['utc'])

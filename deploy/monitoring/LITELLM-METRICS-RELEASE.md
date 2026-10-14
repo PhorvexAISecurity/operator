@@ -54,7 +54,10 @@ The 2026-10-14 baseline has two external prerequisites:
 
 1. `aws-eks-nodeagent --enable-network-policy=false`: NetworkPolicy objects do
    not enforce privacy. Hami must separately enable and prove enforcement on
-   relevant nodes. No kube-system change is authorized by M1b. Require a fresh
+   relevant nodes, with strict startup enforcement. Standard mode permits
+   traffic while a new Pod’s policies are being configured, so the guard also
+   refuses standard mode. [AWS startup enforcement](https://docs.aws.amazon.com/eks/latest/userguide/cni-network-policy-configure.html)
+   documents this window. No kube-system change is authorized by M1b. Require a fresh
    owner-produced allowed/denied data-plane witness before rollout; repeat those
    controls against both actual gateway replicas afterward.
 2. Native vLLM target `:8001` is DOWN, connection refused. The existing healthy
