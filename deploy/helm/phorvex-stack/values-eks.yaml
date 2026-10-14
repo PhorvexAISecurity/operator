@@ -187,9 +187,9 @@ phorvex:
       # the gateway sidecar serves the litellm Service on 4001 since install.sh switch.
       litellmLive:
         enabled: true
-        configMapName: phorvex-litellm-live-profile-b86af202d902
-        profileSHA256: b86af202d9023358a0bf2cbf091227423897cc773a0cfbf9a13c0cea603bb68d
-        sourceConfigMapName: phorvex-litellm-admission-gateway-91af283097af
+        configMapName: phorvex-litellm-live-profile-7ca969928785
+        profileSHA256: 7ca969928785e68e4959b99605b34d5666e34f239ce300a031fe438b619553cc
+        sourceConfigMapName: phorvex-litellm-admission-gateway-4bf046ce690c
         seedSecret: phorvex-litellm-trial-seed
         statusSecret: phorvex-litellm-status-token
         journalName: phorvex-litellm-revoke-journal
@@ -661,7 +661,7 @@ catalogueProfiles:
 # release and actual-image/auth proof; native acceptance is separate Stage 6 work. See
 # deploy/monitoring/LITELLM-METRICS-RELEASE.md; no Helm adoption of Deployment/litellm.
 litellmGatewayMetrics:
-  enabled: true
+  enabled: false
   protectionMode: bearerToken
   auth:
     secretName: phorvex-litellm-gateway-metrics-token-v1
