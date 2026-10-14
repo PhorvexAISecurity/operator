@@ -1,0 +1,62 @@
+#!/usr/bin/python3
+"""Synchronous completion hook: one isolated process group, <=90s, always success."""
+import contextlib
+import json
+import os
+import signal
+import subprocess
+import time
+
+HELPER = '/usr/local/libexec/phvx-disk-hygiene'
+BUDGET = 85.0
+GRACE = 3.0
+
+
+def emit(event, **fields):
+    with contextlib.suppress(Exception):
+        print(json.dumps({'event': event, **fields}, sort_keys=True), flush=True)
+
+
+def stop_group(proc):
+    # Only the process group created for this helper, including Docker/Buildx children.
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGTERM)
+    try:
+        proc.wait(timeout=GRACE)
+    except subprocess.TimeoutExpired:
+        pass
+    # Parent exit is insufficient: a client/plugin child might remain in this group.
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(proc.pid, signal.SIGKILL)
+    with contextlib.suppress(Exception):
+        proc.wait(timeout=.5)
+
+
+def main():
+    proc = None
+    started = time.monotonic()
+    try:
+        proc = subprocess.Popen([HELPER, '--job-boundary'], start_new_session=True)
+        code = proc.wait(timeout=BUDGET)
+        emit('completion-hygiene', returncode=code, elapsed_seconds=round(time.monotonic() - started, 3))
+    except subprocess.TimeoutExpired:
+        emit('completion-hygiene-timeout', pending_request='preserved')
+    except BaseException:
+        # Errors/signals affect housekeeping only, including a missing helper.
+        emit('completion-hygiene-deferred', pending_request='preserved')
+    finally:
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if proc is not None:
+            with contextlib.suppress(BaseException):
+                stop_group(proc)
+    return 0
+
+
+if __name__ == '__main__':
+    def interrupted(signum, frame):
+        raise InterruptedError()
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    main()
+    os._exit(0)

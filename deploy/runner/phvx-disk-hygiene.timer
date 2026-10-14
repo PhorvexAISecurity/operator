@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly Phorvex runner disk hygiene
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5min
+Persistent=true
+Unit=phvx-disk-hygiene.service
+
+[Install]
+WantedBy=timers.target

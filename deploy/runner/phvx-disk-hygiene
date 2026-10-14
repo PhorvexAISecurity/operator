@@ -1,0 +1,1169 @@
+#!/usr/bin/python3
+"""Exact registered rootful Buildx orphan reclamation; no filesystem eviction."""
+import argparse
+import contextlib
+import datetime as dt
+import fcntl
+import hashlib
+import http.client
+import json
+import os
+from pathlib import Path
+import pwd
+import re
+import signal
+import socket
+import stat
+import subprocess
+import sys
+import time
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import phvx_runner_profiles as profiles_lib
+import urllib.error
+import urllib.request
+
+SOCKET = '/var/run/docker.sock'
+ENDPOINT = 'unix://' + SOCKET
+HOME = '/home/github-runner'
+INSTANCES = HOME + '/.docker/buildx/instances'
+DIAG = HOME + '/actions-runner/_diag'
+STATE = '/var/lib/phvx-runner-hygiene'
+DOCKER_CONFIG = HOME + '/.docker'
+PROFILES = profiles_lib.APPROVED[:1]
+ACTIVE_PROFILES = PROFILES
+CONFIG = '/etc/phvx-runner-hygiene.json'
+DOCKER = '/usr/bin/docker'
+GH = '/usr/bin/gh'
+RUNNER_BIN = HOME + '/actions-runner/bin/'
+RUNNER_UNIT = 'actions.runner.PhorvexSecurity.phorvex.service'
+CGROUP_ROOT = '/sys/fs/cgroup'
+RUNNER_GROUPS = ('/system.slice/' + RUNNER_UNIT, '/phvxci.slice/' + RUNNER_UNIT)
+BOOKKEEPING_LOCK_WAIT = 100
+REFRESH_MAX_ENTRIES = 8
+MAX_BYTES = 8 * 1024 * 1024
+MAX_ENTRIES = 512
+NAME = re.compile(r'builder-[a-z0-9][a-z0-9-]{7,100}\Z')
+REPO = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z')
+FULL_ID = re.compile(r'[0-9a-f]{64}\Z')
+RUNNING = re.compile(r'Running job:\s*(.*?)\s*$')
+COMPLETED = re.compile(r'Job\s+(.*?)\s+completed with result:\s*\S+\s*$', re.I)
+DEFAULT_CONFIG = {'schema': 1, 'timer_orphan_live': False, 'hook_orphan_live': False,
+                  'hook_ordering_verified': False, 'runner_id': 130, 'deadline_seconds': 80,
+                  'max_entries': MAX_ENTRIES}
+
+
+class Refuse(Exception):
+    pass
+
+
+class Busy(Refuse):
+    pass
+
+
+def now():
+    return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def log(event, **fields):
+    print(json.dumps({'time': now(), 'event': event, **fields}, sort_keys=True), flush=True)
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def safe_dir(path, uid=None, metadata_only=False):
+    """Open every component without following symlinks, rejecting writable parents."""
+    path = Path(path)
+    if not path.is_absolute() or '..' in path.parts:
+        raise Refuse('unsafe directory')
+    fd = os.open('/', os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for component in path.parts[1:]:
+            nxt = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
+            info = os.fstat(fd)
+            trusted_group = metadata_only and info.st_uid == uid and info.st_gid == os.getegid()
+            bad_mode = info.st_mode & (0o002 if trusted_group else 0o022)
+            if info.st_uid not in {0, uid} or bad_mode:
+                raise Refuse('unsafe directory ownership/mode')
+        return fd
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def mount_id(fd):
+    data = Path('/proc/self/fdinfo/' + str(fd)).read_text()
+    match = re.search(r'^mnt_id:\s*(\d+)\s*$', data, re.M)
+    if not match:
+        raise Refuse('cannot identify filesystem mount')
+    return int(match.group(1))
+
+
+def read_at(fd, name, uid, optional=False, tail=None):
+    try:
+        handle = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    except FileNotFoundError:
+        if optional:
+            return None, None
+        raise Refuse('required file absent')
+    try:
+        info = os.fstat(handle)
+        if mount_id(handle) != mount_id(fd):
+            raise Refuse('metadata crosses mount boundary')
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != uid or info.st_mode & 0o022:
+            raise Refuse('unsafe file type/owner/mode')
+        if tail is None and info.st_size > MAX_BYTES:
+            raise Refuse('metadata file too large')
+        bound = tail if tail is not None else MAX_BYTES
+        offset = max(0, info.st_size - bound) if tail is not None else 0
+        if offset:
+            os.lseek(handle, offset, os.SEEK_SET)
+        data = b''
+        while True:
+            chunk = os.read(handle, min(65536, bound + 1 - len(data)))
+            if not chunk:
+                break
+            data += chunk
+            if len(data) > bound:
+                raise Refuse('metadata file too large')
+        after = os.fstat(handle)
+        if (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns) != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns):
+            raise Refuse('metadata changed during read')
+        if offset:
+            data = data.split(b'\n', 1)[1] if b'\n' in data else b''
+        return data, info
+    finally:
+        os.close(handle)
+
+
+def trusted_json(path):
+    """Only root-attested regular metadata input/config; never credential files."""
+    parent = safe_dir(str(Path(path).parent), 0)
+    try:
+        data, _ = read_at(parent, Path(path).name, 0)
+        return json.loads(data)
+    finally:
+        os.close(parent)
+
+
+def positive(value):
+    if isinstance(value, bool) or not str(value).isdigit() or int(value) <= 0:
+        raise Refuse('invalid positive identifier')
+    return int(value)
+
+
+def binding(repository, run_id, attempt):
+    if not REPO.fullmatch(repository) or repository.startswith('.'):
+        raise Refuse('invalid repository')
+    return {'repository': repository, 'run_id': positive(run_id), 'run_attempt': positive(attempt)}
+
+
+def same_binding(a, b):
+    return all(a.get(k) == b.get(k) for k in ('repository', 'run_id', 'run_attempt'))
+
+
+class Store:
+    def __init__(self, path, uid, maximum, wait_seconds=0):
+        if not 0 <= wait_seconds <= BOOKKEEPING_LOCK_WAIT:
+            raise Refuse('invalid bounded lock wait')
+        self.wait_seconds = wait_seconds
+        self.fd = safe_dir(path, uid)
+        if os.fstat(self.fd).st_uid != uid:
+            raise Refuse('state must be runner-owned')
+        self.uid = uid
+        self.maximum = maximum
+        self.lockfd = None
+
+    def __enter__(self):
+        try:
+            self.lockfd = os.open('lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                  0o600, dir_fd=self.fd)
+            info = os.fstat(self.lockfd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != self.uid or info.st_nlink != 1 or info.st_mode & 0o077:
+                raise Refuse('unsafe lock')
+            until = time.monotonic() + self.wait_seconds
+            while True:
+                self.assert_lock()
+                try:
+                    fcntl.flock(self.lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    left = until - time.monotonic()
+                    if left <= 0:
+                        raise Busy('bounded lock wait exhausted' if self.wait_seconds else 'lock contention')
+                    time.sleep(min(.1, left))
+            self.assert_lock()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def assert_lock(self):
+        current = os.stat('lock', dir_fd=self.fd, follow_symlinks=False)
+        held = os.fstat(self.lockfd)
+        if (current.st_dev, current.st_ino) != (held.st_dev, held.st_ino):
+            raise Refuse('lock identity drift')
+
+    def __exit__(self, *args):
+        if self.lockfd is not None:
+            os.close(self.lockfd)
+            self.lockfd = None
+        os.close(self.fd)
+
+    def read(self, name, default):
+        data, _ = read_at(self.fd, name, self.uid, optional=True)
+        return json.loads(data) if data is not None else default
+
+    def write(self, name, value):
+        self.assert_lock()
+        data = json.dumps(value, sort_keys=True, indent=2).encode() + b'\n'
+        if len(data) > MAX_BYTES:
+            raise Refuse('state too large')
+        # Refuse unsafe existing files, including symlinks; rename only own regular records.
+        read_at(self.fd, name, self.uid, optional=True)
+        tmp = '.write-' + str(os.getpid()) + '-' + str(time.monotonic_ns())
+        handle = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=self.fd)
+        try:
+            with os.fdopen(handle, 'wb') as stream:
+                stream.write(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.rename(tmp, name, src_dir_fd=self.fd, dst_dir_fd=self.fd)
+            os.fsync(self.fd)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp, dir_fd=self.fd)
+
+    def registry(self):
+        result = self.read('registry.json', {'schema': 1, 'entries': []})
+        if result.get('schema') != 1 or not isinstance(result.get('entries'), list) or len(result['entries']) > self.maximum:
+            raise Refuse('invalid/bounded registry')
+        names = [e.get('builder') for e in result['entries']]
+        if len(names) != len(set(names)):
+            raise Refuse('duplicate registry identity')
+        return result
+
+    def pending(self, reason):
+        self.write('pending.json', {'schema': 1, 'time': now(), 'reason': reason})
+
+
+class Ops:
+    def __init__(self, uid, gid, deadline):
+        self.uid, self.gid, self.deadline = uid, gid, deadline
+        self._volume_sizes, self._size_failed = None, False
+
+    def remaining(self):
+        left = self.deadline - time.monotonic()
+        if left <= 0:
+            raise Refuse('deadline reached; request remains pending')
+        return left
+
+    def run(self, argv):
+        self.remaining()
+        # No caller DOCKER_CONTEXT/HOST, BUILDX_CONFIG, credential or token inheritance.
+        env = {'PATH': '/usr/bin:/bin', 'HOME': HOME, 'DOCKER_CONFIG': DOCKER_CONFIG,
+               'BUILDX_CONFIG': DOCKER_CONFIG + '/buildx', 'DOCKER_HOST': ENDPOINT}
+        proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env)
+        try:
+            out, _ = proc.communicate(timeout=min(20, self.remaining()))
+            if len(out) > MAX_BYTES:
+                raise Refuse('command metadata output too large')
+            if proc.returncode:
+                raise Refuse('metadata/removal command failed')
+            return out.decode()
+        except BaseException:
+            proc.terminate()
+            try:
+                proc.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            raise
+
+    def docker(self, *args):
+        return self.run([DOCKER, '--host', ENDPOINT, *args])
+
+    def daemon(self):
+        # /var/run is Ubuntu's controlled alias for /run; no alternate socket accepted.
+        if os.path.realpath(SOCKET) != '/run/docker.sock':
+            raise Refuse('socket path drift')
+        info = os.stat(SOCKET, follow_symlinks=False)
+        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != 0:
+            raise Refuse('socket is not root-owned Docker socket')
+        values = json.loads(self.docker('info', '--format',
+            '[{{json .ID}},{{json .DockerRootDir}},{{json .SecurityOptions}},{{json .OSType}}]'))
+        ident, root, security, kind = values
+        if not ident or root != '/var/lib/docker' or kind != 'linux' or any('rootless' in item for item in security):
+            raise Refuse('not the fixed rootful daemon')
+        return {'id': ident, 'root': root, 'socket_dev': info.st_dev, 'socket_ino': info.st_ino}
+
+    def exists(self, kind, name):
+        fmt = '{{.Names}}' if kind == 'container' else '{{.Name}}'
+        args = ['container', 'ls', '--all', '--filter', 'name=^/' + name + '$', '--format', fmt] if kind == 'container' else [
+            'volume', 'ls', '--filter', 'name=^' + name + '$', '--format', fmt]
+        return name in self.docker(*args).splitlines()
+
+    def container(self, name):
+        if not self.exists('container', name):
+            return None
+        values = json.loads(self.docker('container', 'inspect', '--format',
+            '[{{json .Id}},{{json .Name}},{{json .Created}},{{json .Image}},{{json .Mounts}},'
+            '{{json .State}},{{json .ExecIDs}},{{json .HostConfig.Binds}}]', name))
+        cid, cname, created, image, mounts, state, exec_ids, binds = values
+        if not FULL_ID.fullmatch(cid) or cname != '/' + name or not created or not FULL_ID.fullmatch(image.replace('sha256:', '')):
+            raise Refuse('invalid container identity')
+        if exec_ids or state.get('Paused') or state.get('Restarting') or state.get('Dead'):
+            raise Refuse('container has active exec or uncertain state')
+        volume = name + '_state'
+        if len(mounts) != 1 or binds or mounts[0].get('Type') != 'volume' or mounts[0].get('Name') != volume or mounts[0].get('Destination') != '/var/lib/buildkit':
+            raise Refuse('unexpected builder mount/attachment')
+        if state.get('Running'):
+            processes = self.docker('container', 'top', cid, '-eo', 'pid,comm').splitlines()
+            if len(processes) < 2 or any(len(item.split()) != 2 or not item.split()[0].isdigit() or item.split()[1] not in {'buildkitd', 'docker-init', 'tini'} for item in processes[1:]):
+                raise Refuse('active/unrecognized builder workload process')
+        return {'id': cid, 'name': name, 'created': created, 'image': image,
+                'mounts': mounts, 'running': bool(state.get('Running'))}
+
+    def volume(self, name):
+        if not self.exists('volume', name):
+            return None
+        values = json.loads(self.docker('volume', 'inspect', '--format',
+            '[{{json .Name}},{{json .CreatedAt}},{{json .Driver}},{{json .Scope}},'
+            '{{json .Options}},{{json .Labels}},{{json .Mountpoint}}]', name))
+        vname, created, driver, scope, options, labels, mountpoint = values
+        if vname != name or not created or driver != 'local' or scope != 'local' or options or labels:
+            raise Refuse('unknown/nonlocal volume ownership/configuration')
+        if mountpoint != '/var/lib/docker/volumes/' + name + '/_data':
+            raise Refuse('volume mountpoint drift')
+        return {'name': name, 'created': created, 'driver': driver, 'scope': scope,
+                'options': options, 'labels': labels, 'mountpoint': mountpoint}
+
+    def attachments(self, volume):
+        # Filter queries all containers, including stopped containers. Never infer safety from running-only ls.
+        values = self.docker('container', 'ls', '--all', '--no-trunc', '--filter',
+                             'volume=' + volume, '--format', '{{.ID}}').splitlines()
+        if any(not FULL_ID.fullmatch(item) for item in values):
+            raise Refuse('invalid attachment identity')
+        return sorted(values)
+
+    def size(self, volume):
+        # At most one bounded byte inventory per pass, even if accounting is slow.
+        if self._size_failed:
+            raise Refuse('byte accounting unavailable in this pass')
+        if self._volume_sizes is not None:
+            return self._volume_sizes.get(volume)
+        # Rootful Engine metadata only; no privileged traversal of Docker data.
+        class UnixConnection(http.client.HTTPConnection):
+            def connect(inner):
+                inner.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                inner.sock.settimeout(inner.timeout)
+                inner.sock.connect(SOCKET)
+        connection = UnixConnection('localhost', timeout=min(10, self.remaining()))
+        try:
+            # API >=1.42 supports volume-only accounting, avoiding native BuildKit/cache scans.
+            connection.request('GET', '/v1.47/system/df?type=volume')
+            response = connection.getresponse()
+            data = response.read(MAX_BYTES + 1)
+            if response.status != 200 or len(data) > MAX_BYTES:
+                raise Refuse('volume byte accounting unavailable')
+            value = json.loads(data)
+            self._volume_sizes = {}
+            for item in value.get('Volumes') or []:
+                size = (item.get('UsageData') or {}).get('Size')
+                self._volume_sizes[item['Name']] = size if type(size) is int and size >= 0 else None
+            return self._volume_sizes.get(volume)
+        except (Refuse, OSError, ValueError, http.client.HTTPException):
+            self._size_failed = True
+            raise Refuse('bounded byte accounting unavailable') from None
+        finally:
+            connection.close()
+
+    def api(self, repository, run_id, attempt, use_gh=False):
+        base = 'repos/' + repository + '/actions/runs/' + str(run_id) + '/attempts/' + str(attempt)
+        if use_gh:
+            run = json.loads(self.run([GH, 'api', '--hostname', 'github.com', base]))
+            jobs = json.loads(self.run([GH, 'api', '--hostname', 'github.com', base + '/jobs?per_page=100']))
+        else:
+            token = os.environ.get('GH_TOKEN')
+            if not token:
+                raise Refuse('GH_TOKEN required only for metadata refresh')
+            def query(path):
+                req = urllib.request.Request('https://api.github.com/' + path,
+                    headers={'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
+                             'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'phvx-runner-hygiene'})
+                # Refuse redirects so an automatic token cannot escape github.com.
+                class NoRedirect(urllib.request.HTTPRedirectHandler):
+                    def redirect_request(self, *args, **kwargs):
+                        return None
+                try:
+                    with urllib.request.build_opener(NoRedirect()).open(req, timeout=min(10, self.remaining())) as response:
+                        data = response.read(MAX_BYTES + 1)
+                    if len(data) > MAX_BYTES:
+                        raise Refuse('API response too large')
+                    return json.loads(data)
+                except (urllib.error.URLError, ValueError):
+                    raise Refuse('exact metadata API query failed') from None
+            run = query(base)
+            jobs = query(base + '/jobs?per_page=100')
+        if not isinstance(run, dict) or not isinstance(jobs, dict):
+            raise Refuse('invalid exact-attempt API metadata')
+        if jobs.get('total_count', 101) > 100:
+            raise Refuse('attempt has too many jobs for bounded metadata pass')
+        return run, jobs
+
+    def remove_builder(self, name):
+        # Explicit default context and fixed rootful endpoint, no --force/--keep-state/--keep-daemon.
+        self.docker('buildx', 'rm', name)
+
+    def stop_container(self, cid):
+        self.docker('container', 'stop', '--time', '5', cid)
+
+    def remove_container(self, cid):
+        self.docker('container', 'rm', cid)
+
+    def remove_volume(self, name):
+        self.docker('volume', 'rm', name)
+
+
+def instance(uid, builder):
+    fd = safe_dir(INSTANCES, uid)
+    try:
+        homefd = safe_dir(HOME, uid)
+        try:
+            if mount_id(homefd) != mount_id(fd):
+                raise Refuse('instances cross fixed runner home mount')
+        finally:
+            os.close(homefd)
+        data, info = read_at(fd, builder, uid, optional=True)
+        if data is None:
+            return None
+        if info.st_dev != os.fstat(fd).st_dev:
+            raise Refuse('instance crosses filesystem boundary')
+        value = json.loads(data)
+        nodes = value.get('Nodes')
+        if value.get('Name') != builder or value.get('Driver') != 'docker-container' or value.get('Dynamic') or not isinstance(nodes, list) or len(nodes) != 1:
+            raise Refuse('not an exact single-node docker-container instance')
+        node = nodes[0]
+        # The default context resolves to our --host endpoint; named contexts never qualify.
+        if node.get('Name') != builder + '0' or node.get('Endpoint') not in {'default', ENDPOINT}:
+            raise Refuse('instance node/endpoint drift')
+        return {'sha256': hashlib.sha256(data).hexdigest(), 'dev': info.st_dev,
+                'ino': info.st_ino, 'uid': info.st_uid, 'size': info.st_size,
+                'mtime_ns': info.st_mtime_ns, 'name': builder, 'node': builder + '0',
+                'endpoint': node['Endpoint'], 'mount_id': mount_id(fd)}
+    finally:
+        os.close(fd)
+
+
+def verify_api(run, jobs, bound, runner_id, job_id=None):
+    if not isinstance(run, dict) or not isinstance(jobs, dict) or not isinstance(run.get('repository'), dict):
+        raise Refuse('invalid exact-attempt API metadata')
+    if run.get('repository', {}).get('full_name') != bound['repository'] or run.get('id') != bound['run_id'] or run.get('run_attempt') != bound['run_attempt']:
+        raise Refuse('API run/attempt/repository mismatch')
+    expected_url = 'https://api.github.com/repos/' + bound['repository'] + '/actions/runs/' + str(bound['run_id'])
+    if run.get('url') != expected_url:
+        raise Refuse('API canonical URL mismatch')
+    if not isinstance(jobs.get('jobs'), list) or jobs.get('total_count') != len(jobs['jobs']) or len(jobs['jobs']) > 100:
+        raise Refuse('incomplete exact-attempt jobs metadata')
+    selected = []
+    for job in jobs['jobs']:
+        if not isinstance(job, dict):
+            raise Refuse('invalid exact-attempt job metadata')
+        if job.get('run_id') != bound['run_id'] or job.get('run_attempt') != bound['run_attempt']:
+            raise Refuse('API job attempt mismatch')
+        if job.get('runner_id') == runner_id and (job_id is None or job.get('id') == job_id):
+            selected.append({'id': positive(job['id']), 'runner_id': runner_id,
+                             'status': job.get('status'), 'conclusion': job.get('conclusion'),
+                             'started_at': job.get('started_at'), 'completed_at': job.get('completed_at')})
+    if not selected:
+        raise Refuse('no exact-attempt job on the expected runner')
+    status = run.get('status')
+    terminal = status == 'completed' and bool(run.get('conclusion')) and all(j['status'] == 'completed' and j['completed_at'] and j['conclusion'] for j in selected)
+    return {**bound, 'status': status, 'conclusion': run.get('conclusion'),
+            'terminal': terminal, 'jobs': selected, 'url': expected_url,
+            'verified_at': now(), 'source': 'github-api-exact-attempt'}
+
+
+def terminal_evidence(entry, runner_id):
+    """Validate persisted exact-attempt completion before skipping refresh or deletion."""
+    try:
+        evidence = entry.get('evidence')
+        if not isinstance(evidence, dict) or not same_binding(evidence, entry):
+            return False
+        bound = binding(entry['repository'], entry['run_id'], entry['run_attempt'])
+        expected_url = 'https://api.github.com/repos/' + bound['repository'] + '/actions/runs/' + str(bound['run_id'])
+        if evidence.get('source') != 'github-api-exact-attempt' or evidence.get('url') != expected_url or evidence.get('status') != 'completed' or evidence.get('terminal') is not True or not evidence.get('conclusion'):
+            return False
+        jobs = evidence.get('jobs')
+        if not isinstance(jobs, list) or not 1 <= len(jobs) <= 100:
+            return False
+        for job in jobs:
+            positive(job['id'])
+            if job.get('runner_id') != runner_id or job.get('status') != 'completed' or not job.get('conclusion') or (entry.get('job_id') is not None and job['id'] != entry['job_id']):
+                return False
+        def timestamp(value):
+            point = dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+            if point.tzinfo is None:
+                raise ValueError('timezone required')
+            return point
+        intervals = [(timestamp(j['started_at']), timestamp(j['completed_at'])) for j in jobs]
+        if any(start > end for start, end in intervals):
+            return False
+        created = [timestamp(entry['identities'][kind]['created']) for kind in ('container', 'volume') if entry['identities'].get(kind)]
+        return bool(entry['identities'].get('instance') and created and
+                    any(all(start <= point <= end for point in created) for start, end in intervals))
+    except (Refuse, ValueError, KeyError, TypeError, AttributeError):
+        return False
+
+
+def process_table():
+    result = {}
+    for entry in os.scandir('/proc'):
+        if not entry.name.isdigit():
+            continue
+        try:
+            status = Path(entry.path + '/stat').read_text()
+            parts = status[status.rfind(')') + 2:].split()
+            comm = Path(entry.path + '/comm').read_text().strip()
+            exe = os.readlink(entry.path + '/exe')
+            if comm in {'Runner.Worker', 'Runner.Listener'} and exe not in {p['bin'] + comm for p in PROFILES}:
+                raise Refuse('unverified/deleted runner executable')
+            uid = os.stat(entry.path).st_uid
+            record = {'pid': int(entry.name), 'ppid': int(parts[1]),
+                'start': int(parts[19]), 'exe': exe, 'uid': uid,
+                'cgroup': Path(entry.path + '/cgroup').read_text(), 'comm': comm}
+            if uid == os.geteuid() and exe in {'/usr/bin/bash'} | {p['root'] + '/externals/node20/bin/node' for p in PROFILES}:
+                record['argv'] = Path(entry.path + '/cmdline').read_bytes().rstrip(b'\0').split(b'\0')
+                record['cwd'] = os.readlink(entry.path + '/cwd')
+            result[int(entry.name)] = record
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except PermissionError:
+            # Process name still identifies a Worker/listener we cannot validate; fail closed.
+            try:
+                name = Path(entry.path + '/comm').read_text().strip()
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            if name in {'Runner.Worker', 'Runner.Listener'}:
+                raise Refuse('cannot validate runner process metadata')
+    return result
+
+
+def latest_job_logs(uid, listener=None):
+    # The runner's _diag is group-writable by its own primary group. Read-only
+    # metadata inspection permits that group; instances/state never do.
+    fd = safe_dir(DIAG, uid, metadata_only=True)
+    try:
+        names = [name for name in os.listdir(fd) if re.fullmatch(r'Runner_[0-9]{8}-[0-9]{6}-utc\.log', name)]
+        if len(names) > 4096:
+            raise Refuse('diagnostic inventory exceeds bound')
+        active_inode = None
+        if listener is not None:
+            matches = {}
+            fdroot = '/proc/' + str(listener['pid']) + '/fd'
+            for item in os.scandir(fdroot):
+                try:
+                    target = os.readlink(item.path)
+                    if target.startswith(DIAG + '/') and Path(target).name in names:
+                        opened = os.stat(item.path)
+                        matches[Path(target).name] = (opened.st_dev, opened.st_ino)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+            if len(matches) != 1:
+                raise Refuse('cannot identify single listener open diagnostic log')
+            names = list(matches)
+            active_inode = matches[names[0]]
+        else:
+            # During a stopped-listener maintenance pass, use the most recently
+            # modified runner-owned log carrying job events. Ignore root-owned probes.
+            names = [name for name in names if os.stat(name, dir_fd=fd, follow_symlinks=False).st_uid == uid]
+            names.sort(key=lambda name: os.stat(name, dir_fd=fd, follow_symlinks=False).st_mtime_ns, reverse=True)
+            names = names[:20]
+        budget = 32 * 1024 * 1024
+        for name in names:
+            data, info = read_at(fd, name, uid, tail=2 * 1024 * 1024)
+            budget -= len(data)
+            if budget < 0:
+                raise Refuse('diagnostic read exceeds bounded pass')
+            if active_inode and active_inode != (info.st_dev, info.st_ino):
+                raise Refuse('listener diagnostic inode drift')
+            latest_start = latest_done = None
+            for line in data.decode(errors='replace').splitlines():
+                match = RUNNING.search(line)
+                if match:
+                    latest_start, latest_done = match.group(1), None
+                match = COMPLETED.search(line)
+                if match:
+                    latest_done = match.group(1)
+            if latest_start is None and latest_done is None and listener is None:
+                continue
+            if latest_start is None or latest_done != latest_start:
+                raise Refuse('latest local Running job/Job completed logs do not match')
+            return {'name': name, 'dev': info.st_dev, 'ino': info.st_ino,
+                    'latest_job': latest_start, 'completed': latest_done}
+        raise Refuse('no verified local Running job/Job completed records')
+    finally:
+        os.close(fd)
+
+
+def runner_service():
+    """Read the actual service identity; never stop/restart/signal it."""
+    result = subprocess.run(['/usr/bin/systemctl', 'show', RUNNER_UNIT,
+        '--property=MainPID', '--property=ControlGroup'], stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, timeout=2, check=False, env={'PATH': '/usr/bin:/bin'})
+    if result.returncode or len(result.stdout) > 4096:
+        raise Refuse('cannot verify runner service identity')
+    fields = dict(line.split('=', 1) for line in result.stdout.decode().splitlines())
+    main = fields.get('MainPID', '')
+    group = fields.get('ControlGroup', '')
+    if not main.isdigit() or (group and (not group.startswith('/') or
+            str(Path(group)) != group or '..' in Path(group).parts or Path(group).name != RUNNER_UNIT)):
+        raise Refuse('invalid runner service identity')
+    return int(main), group
+
+
+def unified_group(process):
+    groups = [line[3:] for line in process.get('cgroup', '').splitlines() if line.startswith('0::')]
+    return groups[0] if len(groups) == 1 else None
+
+
+def runner_cgroup_members(groups):
+    """Census both topology paths and every nested cgroup, failing on unreadable data."""
+    members, count = set(), 0
+    for group in groups:
+        root = Path(CGROUP_ROOT + group)
+        try:
+            root.lstat()
+        except FileNotFoundError:
+            continue
+        todo = [root]
+        while todo:
+            directory = todo.pop()
+            if not stat.S_ISDIR(directory.lstat().st_mode):
+                raise Refuse('runner cgroup directory type drift')
+            count += 1
+            if count > 4096:
+                raise Refuse('runner cgroup inventory exceeds bound')
+            data = (directory / 'cgroup.procs').read_text()
+            if len(data) > MAX_BYTES:
+                raise Refuse('runner cgroup process inventory exceeds bound')
+            for pid in data.split():
+                members.add(positive(pid))
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    if entry.is_symlink():
+                        raise Refuse('runner cgroup symlink drift')
+                    if entry.is_dir(follow_symlinks=False):
+                        todo.append(Path(entry.path))
+    return members
+
+
+def timer_cgroup_gate(uid, processes, listeners):
+    main, actual = runner_service()
+    groups = set(RUNNER_GROUPS)
+    if actual:
+        groups.add(actual)
+    members = runner_cgroup_members(groups)
+    # Also retain the /proc census: a process may move/exit while either census runs.
+    def in_group(process):
+        path = unified_group(process)
+        return path is not None and any(path == group or path.startswith(group + '/') for group in groups)
+    members.update(p['pid'] for p in processes.values() if in_group(p))
+    allowed = set()
+    helper = processes.get(os.getpid())
+    if helper and helper['uid'] == uid and helper['exe'] == os.readlink('/proc/self/exe'):
+        allowed.add(helper['pid'])
+    if not listeners:
+        if members - allowed:
+            raise Refuse('stopped listener with populated runner cgroup')
+        return
+    listener = listeners[0]
+    if listener['pid'] not in members or not in_group(listener):
+        raise Refuse('listener is outside verified runner service cgroup')
+    parent = processes.get(listener['ppid'])
+    def script_process(process, executable, script):
+        if not process or process['uid'] != uid or process['exe'] != executable or not in_group(process):
+            return False
+        args = process.get('argv', [])
+        if len(args) != 2:
+            return False
+        argument = os.fsdecode(args[1])
+        path = argument if argument.startswith('/') else os.path.join(process.get('cwd', ''), argument)
+        return os.path.normpath(path) == script
+    if not script_process(parent, str(Path(RUNNER_BIN).parent / 'externals/node20/bin/node'), RUNNER_BIN + 'RunnerService.js'):
+        raise Refuse('unverified runner node service parent')
+    allowed.update((listener['pid'], parent['pid']))
+    if parent['ppid'] != 1:
+        wrapper = processes.get(parent['ppid'])
+        if parent['ppid'] != main or not script_process(wrapper, '/usr/bin/bash', str(Path(RUNNER_BIN).parent / 'runsvc.sh')):
+            raise Refuse('unverified runner runsvc MainPID wrapper')
+        allowed.add(wrapper['pid'])
+    if members - allowed:
+        raise Refuse('unclassified process remains in runner service cgroup')
+
+
+def local_gate(uid, mode, current):
+    all_processes = process_table()
+    if mode == 'timer' and any(p['exe'].endswith('/Runner.Worker') for p in all_processes.values()):
+        raise Refuse('Runner.Worker present on host')
+    processes = {pid: p for pid, p in all_processes.items() if not p['exe'].endswith(('/Runner.Listener', '/Runner.Worker')) or p['exe'].startswith(RUNNER_BIN)}
+    workers = [p for p in processes.values() if p['exe'].endswith('/Runner.Worker')]
+    listeners = [p for p in processes.values() if p['exe'].endswith('/Runner.Listener')]
+    if len(listeners) > 1 or any(p['uid'] != uid or p['exe'] != RUNNER_BIN + 'Runner.Listener' for p in listeners):
+        raise Refuse('unexpected/duplicate listener')
+    if mode == 'timer':
+        if workers:
+            raise Refuse('Runner.Worker present')
+        timer_cgroup_gate(uid, processes, listeners)
+        # Reject surviving listener children (e.g. a Worker descendant after its Worker died).
+        for p in processes.values():
+            parent = p['ppid']
+            seen = set()
+            while parent in processes and parent not in seen:
+                seen.add(parent)
+                if any(parent == x['pid'] for x in listeners) and p['pid'] != os.getpid():
+                    raise Refuse('runner job descendant remains')
+                parent = processes[parent]['ppid']
+        return latest_job_logs(uid, listeners[0] if listeners else None)
+    if mode != 'hook' or current is None or len(workers) != 1 or len(listeners) != 1:
+        raise Refuse('hook requires current identity and one Worker/listener')
+    worker, listener = workers[0], listeners[0]
+    if worker['uid'] != uid or worker['exe'] != RUNNER_BIN + 'Runner.Worker' or worker['ppid'] != listener['pid'] or worker['cgroup'] != listener['cgroup']:
+        raise Refuse('Worker identity/ancestry/cgroup mismatch')
+    pid = os.getpid()
+    ancestors = set()
+    while pid in processes and pid not in ancestors:
+        ancestors.add(pid)
+        pid = processes[pid]['ppid']
+    if worker['pid'] not in ancestors:
+        raise Refuse('helper is not descended from the current Worker')
+    return {'worker_pid': worker['pid'], 'worker_start': worker['start'], 'listener_pid': listener['pid']}
+
+
+@contextlib.contextmanager
+def profile_context(p):
+    global INSTANCES, DIAG, STATE, RUNNER_BIN, RUNNER_UNIT, RUNNER_GROUPS, DOCKER_CONFIG
+    old = INSTANCES, DIAG, STATE, RUNNER_BIN, RUNNER_UNIT, RUNNER_GROUPS, DOCKER_CONFIG
+    INSTANCES, DIAG, STATE = p['instances'], p['diag'], p['state']
+    RUNNER_BIN, RUNNER_UNIT, DOCKER_CONFIG = p['bin'], p['unit'], p['docker_config']
+    RUNNER_GROUPS = ('/system.slice/' + RUNNER_UNIT, '/phvxci.slice/' + RUNNER_UNIT)
+    try:
+        yield
+    finally:
+        INSTANCES, DIAG, STATE, RUNNER_BIN, RUNNER_UNIT, RUNNER_GROUPS, DOCKER_CONFIG = old
+
+
+def global_gate(uid, mode, current):
+    table = process_table()
+    try:
+        listeners, workers = profiles_lib.census(table.values(), PROFILES)
+    except RuntimeError as error:
+        raise Refuse(str(error)) from None
+    if mode == 'timer':
+        if workers:
+            raise Refuse('Either Runner.Worker blocks all deletion')
+        result = []
+        for p in PROFILES:
+            with profile_context(p):
+                if p not in ACTIVE_PROFILES and p['runner_id'] not in listeners:
+                    # A disabled, never-repaired R2 is not idle-log evidence. Verify
+                    # its service cgroups empty; do not use its historic failed job.
+                    timer_cgroup_gate(uid, table, [])
+                    result.append({'runner_id': p['runner_id'], 'inactive': True})
+                else:
+                    result.append(local_gate(uid, mode, current))
+        return result
+    # Destructive hooks remain false. Even if enabled later, any Worker on
+    # the host makes deletion fail closed instead of racing another build.
+    raise Refuse('Hook deletion disabled for shared host')
+
+
+class Hygiene:
+    def __init__(self, store, ops, uid, config, gate=local_gate, capture=instance):
+        self.store, self.ops, self.uid, self.config = store, ops, uid, config
+        self.gate, self.instance = gate, capture
+
+    def snapshot(self, builder):
+        if not NAME.fullmatch(builder) or 'ptest' in builder:
+            raise Refuse('builder name is not an allowed per-job identity')
+        cname = 'buildx_buildkit_' + builder + '0'
+        vname = cname + '_state'
+        daemon = self.ops.daemon()
+        inst = self.instance(self.uid, builder)
+        container = self.ops.container(cname)
+        volume = self.ops.volume(vname)
+        attachments = self.ops.attachments(vname)
+        expected = [container['id']] if container else []
+        if attachments != expected:
+            raise Refuse('unrelated/stale volume attachment')
+        if self.instance(self.uid, builder) != inst:
+            raise Refuse('instance changed during Docker metadata inspection')
+        return {'daemon': daemon, 'instance': inst, 'container': container,
+                'volume': volume, 'attachments': attachments}
+
+    def register(self, bound, builder, current):
+        if current is None or not same_binding(bound, current):
+            raise Refuse('registration is not bound to the current GitHub job')
+        registry = self.store.registry()
+        completed = [e for e in registry['entries'] if e.get('removed')]
+        registry['entries'] = [e for e in registry['entries'] if not e.get('removed')] + completed[-64:]
+        snap = self.snapshot(builder)
+        if any(snap[k] is None for k in ('instance', 'container', 'volume')):
+            raise Refuse('registration requires live instance/container/state volume')
+        existing = next((e for e in registry['entries'] if e['builder'] == builder), None)
+        record = {**bound, 'builder': builder, 'registered_at': now(), 'origin': 'current-job', 'runner_id': self.config['runner_id'],
+                  'identities': snap, 'evidence': None, 'removed': False}
+        if existing:
+            if not same_binding(existing, bound) or existing['identities'] != snap:
+                raise Refuse('registered identity cannot be rebound/replaced')
+            log('registered', builder=builder, duplicate=True)
+            return
+        if len(registry['entries']) >= self.config['max_entries']:
+            raise Refuse('registry full; report/review before further registrations')
+        registry['entries'].append(record)
+        self.store.write('registry.json', registry)
+        log('registered', builder=builder, **bound)
+
+    def refresh(self, repository, use_gh=False):
+        registry = self.store.registry()
+        failures, processed = 0, 0
+        cache = {}
+        # Completion is monotonic for an exact attempt. Only fully verified proof
+        # can bypass API queries; malformed/contradictory evidence never can.
+        entries = sorted((e for e in registry['entries'] if e['repository'] == repository
+            and not e.get('removed') and not terminal_evidence(e, self.config['runner_id'])),
+            key=lambda e: e['builder'])
+        cursors = registry.setdefault('refresh_cursors', {})
+        if not isinstance(cursors, dict) or any(not isinstance(k, str) or not isinstance(v, str) for k, v in cursors.items()):
+            raise Refuse('invalid persistent refresh cursor')
+        cursor = cursors.get(repository, '')
+        entries = [e for e in entries if e['builder'] > cursor] + [e for e in entries if e['builder'] <= cursor]
+        for entry in entries[:REFRESH_MAX_ENTRIES]:
+            try:
+                self.ops.remaining()
+            except Refuse:
+                failures += 1
+                log('refresh-budget-deferred', unprocessed=len(entries) - processed)
+                break
+            try:
+                key = (entry['repository'], entry['run_id'], entry['run_attempt'])
+                if key not in cache:
+                    try:
+                        cache[key] = self.ops.api(*key, use_gh=use_gh)
+                    except (Refuse, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+                        cache[key] = Refuse('exact metadata API query failed')
+                if isinstance(cache[key], Refuse):
+                    raise cache[key]
+                run, jobs = cache[key]
+                entry['evidence'] = verify_api(run, jobs, entry, self.config['runner_id'], entry.get('job_id'))
+                if entry['evidence']['terminal'] and not terminal_evidence(entry, self.config['runner_id']):
+                    raise Refuse('contradictory terminal runner job/creation metadata')
+                log('refreshed', builder=entry['builder'], terminal=entry['evidence']['terminal'])
+            except (Refuse, OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as error:
+                failures += 1
+                entry['evidence'] = None
+                log('refresh-deferred', builder=entry['builder'],
+                    reason=str(error) if isinstance(error, Refuse) else 'metadata inspection failed')
+            processed += 1
+            cursors[repository] = entry['builder']
+            self.store.write('registry.json', registry)
+        log('refresh-report', processed=processed, deferred=failures,
+            unprocessed=len(entries) - processed, maximum_entries=REFRESH_MAX_ENTRIES)
+        if failures:
+            raise Refuse('one or more exact metadata refreshes failed/deferred')
+
+    def seed(self, manifest, api_records=None, use_gh=False):
+        if manifest.get('schema') != 1 or not isinstance(manifest.get('entries'), list) or len(manifest['entries']) > self.config['max_entries']:
+            raise Refuse('invalid seed manifest')
+        registry = self.store.registry()
+        additions = []
+        for item in manifest['entries']:
+            bound = binding(item['repository'], item['run_id'], item['run_attempt'])
+            job_id, runner_id = positive(item['job_id']), positive(item['runner_id'])
+            if runner_id != self.config['runner_id']:
+                raise Refuse('seed has wrong runner identity')
+            snap = self.snapshot(item['builder'])
+            if snap['instance'] is None or snap['volume'] is None:
+                raise Refuse('initial seed requires original instance and exact state volume')
+            # Required root-attested identity fingerprint prevents inspecting the wrong recycled objects.
+            expected = item.get('expected')
+            if not isinstance(expected, dict) or any(expected.get(k) != snap[k] for k in ('instance', 'container', 'volume')):
+                raise Refuse('seed expected identity does not match root-attested metadata')
+            if use_gh:
+                run, jobs = self.ops.api(bound['repository'], bound['run_id'], bound['run_attempt'], use_gh=True)
+            else:
+                records = api_records.get('records', []) if api_records and api_records.get('schema') == 1 else []
+                selected = [r for r in records if r.get('run', {}).get('id') == bound['run_id'] and r.get('run', {}).get('run_attempt') == bound['run_attempt'] and r.get('run', {}).get('repository', {}).get('full_name') == bound['repository']]
+                if len(selected) != 1:
+                    raise Refuse('missing/duplicate exact root-attested API record')
+                run, jobs = selected[0]['run'], selected[0]['jobs']
+            evidence = verify_api(run, jobs, bound, runner_id, job_id)
+            if not evidence['terminal']:
+                raise Refuse('legacy seed is not a verified completed attempt/job')
+            if any(e['builder'] == item['builder'] for e in registry['entries'] + additions):
+                raise Refuse('seed cannot overwrite registered builder')
+            additions.append({**bound, 'builder': item['builder'], 'job_id': job_id,
+                'runner_id': runner_id, 'origin': 'root-attested-legacy', 'registered_at': now(),
+                'identities': snap, 'evidence': evidence, 'removed': False})
+        if len(registry['entries']) + len(additions) > self.config['max_entries']:
+            raise Refuse('registry full')
+        registry['entries'].extend(additions)
+        self.store.write('registry.json', registry)
+        log('seeded', count=len(additions))
+
+    def validated(self, entry, mode, current):
+        self.store.assert_lock()
+        self.ops.remaining()
+        if entry.get('runner_id', 130) != self.config['runner_id']:
+            raise Refuse('wrong-profile lease ownership')
+        if current is not None and same_binding(entry, current):
+            raise Refuse('current run/attempt protected')
+        if not terminal_evidence(entry, self.config['runner_id']):
+            raise Refuse('missing verified terminal exact-attempt/runner-job/creation provenance')
+        self.gate(self.uid, mode, current)
+        fresh = self.snapshot(entry['builder'])
+        old = entry['identities']
+        if fresh['daemon'] != old['daemon']:
+            raise Refuse('registered daemon/socket identity changed')
+        # Disappearance is allowed for normal post-cleanup and partial recovery, replacement is not.
+        for kind in ('instance', 'container', 'volume'):
+            if fresh[kind] is not None:
+                original = old.get(kind)
+                a, b = dict(fresh[kind]), dict(original or {})
+                if kind == 'container':
+                    a.pop('running', None)
+                    b.pop('running', None)
+                if original is None or a != b:
+                    raise Refuse(kind + ' identity drift')
+        # Last check after all Docker metadata inspection and directly before the caller mutates.
+        self.store.assert_lock()
+        self.ops.remaining()
+        self.gate(self.uid, mode, current)
+        return fresh
+
+    def sweep(self, mode, current, dry_run):
+        registry = self.store.registry()
+        live = not dry_run and ((mode == 'timer' and self.config['timer_orphan_live']) or
+            (mode == 'hook' and self.config['hook_orphan_live'] and self.config['hook_ordering_verified']))
+        if live:
+            self.store.pending('exact orphan sweep in progress')
+        total, failures, eligible, remaining, unknown_sizes = 0, 0, 0, 0, 0
+        for entry in registry['entries']:
+            if entry.get('removed'):
+                continue
+            remaining += 1
+            try:
+                fresh = self.validated(entry, mode, current)
+                if not any(fresh[k] for k in ('instance', 'container', 'volume')):
+                    log('already-absent', builder=entry['builder'])
+                    if live:
+                        entry['removed'] = True
+                        self.store.write('registry.json', registry)
+                        remaining -= 1
+                    continue
+                try:
+                    size = self.ops.size('buildx_buildkit_' + entry['builder'] + '0_state') if fresh['volume'] else 0
+                except (Refuse, OSError, ValueError, http.client.HTTPException):
+                    size = None
+                    log('byte-accounting-unavailable', builder=entry['builder'], expected_upper_bound_bytes=None)
+                eligible += 1
+                log('candidate', builder=entry['builder'], mode=mode, dry_run=not live,
+                    identities=fresh, expected_upper_bound_bytes=size)
+                if not live:
+                    continue
+                if fresh['instance']:
+                    # Immediately before the first destructive command: all gates/identities/attachments again.
+                    self.validated(entry, mode, current)
+                    try:
+                        self.ops.remove_builder(entry['builder'])
+                        log('builder-command', builder=entry['builder'], result='success')
+                    except Refuse as error:
+                        log('builder-command', builder=entry['builder'], result='partial-or-failed', reason=str(error))
+                after = self.validated(entry, mode, current)
+                if after['container'] and not after['instance']:
+                    # Recover a partially removed registered builder by immutable container ID.
+                    # Never recreate metadata, force-remove, or act on a name-only match.
+                    if after['container']['running']:
+                        after = self.validated(entry, mode, current)
+                        self.ops.stop_container(after['container']['id'])
+                        log('container-stop', builder=entry['builder'], id=after['container']['id'])
+                    after = self.validated(entry, mode, current)
+                    if after['container']:
+                        if after['container']['running']:
+                            raise Refuse('exact container did not stop; no force removal')
+                        self.ops.remove_container(after['container']['id'])
+                        log('container-command', builder=entry['builder'], id=after['container']['id'], result='success')
+                    after = self.validated(entry, mode, current)
+                if after['volume'] and not after['instance'] and not after['container']:
+                    # Buildx leaves the exact volume when the container was already absent.
+                    after = self.validated(entry, mode, current)
+                    if after['attachments']:
+                        raise Refuse('remaining state volume attached')
+                    self.ops.remove_volume(after['volume']['name'])
+                    log('volume-command', builder=entry['builder'], volume=after['volume']['name'], result='success')
+                after = self.validated(entry, mode, current)
+                for kind in ('instance', 'container', 'volume'):
+                    log('object-result', builder=entry['builder'], object=kind,
+                        absent=after[kind] is None, identity=entry['identities'].get(kind),
+                        expected_upper_bound_bytes=size if kind == 'volume' else None)
+                if any(after[k] for k in ('instance', 'container', 'volume')):
+                    raise Refuse('partial removal; exact registered remnants retained for retry')
+                entry['removed'], entry['removed_at'] = True, now()
+                entry['reclaimed_upper_bound_bytes'] = size
+                if size is not None:
+                    total += size
+                else:
+                    unknown_sizes += 1
+                self.store.write('registry.json', registry)
+                remaining -= 1
+            except (Refuse, OSError, ValueError, KeyError, TypeError) as error:
+                failures += 1
+                log('deferred', builder=entry.get('builder'), reason=str(error) if isinstance(error, Refuse) else 'metadata inspection failed')
+        pressure = disk_pressure()
+        log('sweep-report', mode=mode, dry_run=not live, eligible=eligible, deferred=failures,
+            remaining=remaining, reclaimed_upper_bound_bytes=total if not unknown_sizes else None,
+            known_reclaimed_upper_bound_bytes=total, unknown_size_removed_objects=unknown_sizes, pressure=pressure,
+            filesystem_deletion='report-only', unknown_volumes='excluded', irreversible_cache_eviction=live)
+        if live:
+            self.store.write('last-report.json', {'time': now(), 'remaining': remaining,
+                'deferred': failures, 'reclaimed_upper_bound_bytes': total if not unknown_sizes else None,
+                'known_reclaimed_upper_bound_bytes': total, 'unknown_size_removed_objects': unknown_sizes, 'pressure': pressure})
+            self.store.pending('pressure/unverified/remnants remain' if remaining or pressure['normal'] else 'no pending reclaim')
+        return failures
+
+
+def disk_pressure():
+    info = os.statvfs('/')
+    available = info.f_bavail * info.f_frsize
+    used = (info.f_blocks - info.f_bfree) * info.f_frsize
+    if used + available <= 0 or info.f_files <= 0:
+        raise Refuse('invalid filesystem pressure denominator')
+    used_fraction = used / (used + available)
+    inode_fraction = (info.f_files - info.f_ffree) / info.f_files
+    return {'available_bytes': available, 'used_fraction': used_fraction, 'inode_fraction': inode_fraction,
+            'normal': available < 42949672960 or used_fraction >= .8 or inode_fraction >= .8,
+            'critical': available < 32212254720 or used_fraction >= .85 or inode_fraction >= .9}
+
+
+def current_binding():
+    values = [os.environ.get(key) for key in ('GITHUB_REPOSITORY', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT')]
+    if not any(values):
+        return None
+    if not all(values):
+        raise Refuse('incomplete current GitHub identity')
+    return binding(*values)
+
+
+def parser():
+    result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument('--dry-run', action='store_true')
+    result.add_argument('--profile', choices=('130', '21'))
+    mode = result.add_mutually_exclusive_group()
+    mode.add_argument('--timer', action='store_true')
+    mode.add_argument('--job-boundary', action='store_true')
+    sub = result.add_subparsers(dest='command')
+    reg = sub.add_parser('register')
+    for flag in ('repository', 'run-id', 'run-attempt', 'builder'):
+        reg.add_argument('--' + flag, required=True)
+    refresh = sub.add_parser('refresh')
+    refresh.add_argument('--repository', required=True)
+    refresh.add_argument('--gh', action='store_true')
+    inspect = sub.add_parser('inspect')
+    inspect.add_argument('--builder', required=True)
+    sub.add_parser('request')
+    sub.add_parser('report')
+    seed = sub.add_parser('seed')
+    seed.add_argument('--file', required=True)
+    source = seed.add_mutually_exclusive_group(required=True)
+    source.add_argument('--gh', action='store_true')
+    source.add_argument('--api-file')
+    return result
+
+
+def main():
+    args = parser().parse_args()
+    if args.command and (args.timer or args.job_boundary):
+        raise Refuse('mode and bookkeeping command cannot be combined')
+    account = pwd.getpwnam('github-runner')
+    if os.geteuid() != account.pw_uid:
+        raise Refuse('run as github-runner; root attests seed/config separately')
+    config = trusted_json(CONFIG)
+    global PROFILES, ACTIVE_PROFILES
+    PROFILES = profiles_lib.profiles(config)
+    expected = set(DEFAULT_CONFIG) | ({'profiles'} if config['schema'] == 2 else set())
+    if set(config) != expected or config.get('runner_id') != 130:
+        raise Refuse('unsupported config fields/schema')
+    if any(type(config[key]) is not bool for key in ('timer_orphan_live', 'hook_orphan_live', 'hook_ordering_verified')):
+        raise Refuse('live flags must be booleans')
+    if config['hook_orphan_live'] or config['hook_ordering_verified']:
+        raise Refuse('shared host hook deletion must remain false')
+    if not 5 <= positive(config['deadline_seconds']) <= 80 or not 1 <= positive(config['max_entries']) <= MAX_ENTRIES:
+        raise Refuse('invalid bounded configuration')
+    ACTIVE_PROFILES = PROFILES[:profiles_lib.listener_count()] if config['schema'] == 2 else PROFILES
+    current = current_binding()
+    if args.command in {'register', 'refresh'} or args.job_boundary:
+        selected = profiles_lib.worker_profile(process_table(), allowed=PROFILES)
+        if args.profile and int(args.profile) != selected['runner_id']:
+            raise Refuse('job cannot select a different profile')
+        local = [selected]
+    elif args.profile:
+        local = [profiles_lib.select(args.profile, PROFILES)]
+    else:
+        local = PROFILES
+    deadline = time.monotonic() + config['deadline_seconds']
+    lock = profiles_lib.cleanup_lock(account.pw_uid) if args.timer or args.job_boundary else contextlib.nullcontext()
+    with lock:
+        for selected in local:
+            with profile_context(selected):
+                per_config = {**config, 'runner_id': selected['runner_id']}
+                dispatch(args, account, per_config, current, deadline)
+    return 0
+
+
+def dispatch(args, account, config, current, deadline):
+    wait = BOOKKEEPING_LOCK_WAIT if args.command in {'register', 'refresh'} else 0
+    with Store(STATE, account.pw_uid, config['max_entries'], wait_seconds=wait) as store:
+        # All profiles share the timer's existing total deadline, not 80s each.
+        ops = Ops(account.pw_uid, account.pw_gid, time.monotonic() + config['deadline_seconds'] if args.command in {'register', 'refresh'} else deadline)
+        hygiene = Hygiene(store, ops, account.pw_uid, config, gate=global_gate)
+        if args.command == 'register':
+            hygiene.register(binding(args.repository, args.run_id, args.run_attempt), args.builder, current)
+        elif args.command == 'refresh':
+            if not REPO.fullmatch(args.repository):
+                raise Refuse('invalid repository')
+            hygiene.refresh(args.repository, args.gh)
+        elif args.command == 'inspect':
+            log('identity-inspection', builder=args.builder, expected=hygiene.snapshot(args.builder))
+        elif args.command == 'seed':
+            hygiene.seed(trusted_json(args.file), trusted_json(args.api_file) if args.api_file else None, args.gh)
+        elif args.command == 'request':
+            if not args.dry_run:
+                store.pending('manual workflow requested scoped inventory')
+            log('requested', dry_run=args.dry_run, filesystem_deletion='report-only')
+        elif args.timer or args.job_boundary:
+            hygiene.sweep('timer' if args.timer else 'hook', current, args.dry_run)
+        else:
+            registry = store.registry()
+            log('report', entries=[{k: e.get(k) for k in ('builder', 'repository', 'run_id', 'run_attempt', 'evidence', 'removed')} for e in registry['entries']],
+                pressure=disk_pressure(), config=config, filesystem_deletion='report-only',
+                request=store.read('pending.json', None))
+    return 0
+
+
+if __name__ == '__main__':
+    def interrupted(signum, frame):
+        raise Refuse('helper interrupted; pending request preserved')
+    signal.signal(signal.SIGTERM, interrupted)
+    signal.signal(signal.SIGINT, interrupted)
+    try:
+        sys.exit(main())
+    except Refuse as error:
+        log('refused', reason=str(error))
+        sys.exit(2)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+        # Deliberately never format external exceptions/HTTP headers/token-bearing responses.
+        log('refused', reason='lock/gate/identity/API/config inspection failed; see preceding scoped events')
+        sys.exit(2)

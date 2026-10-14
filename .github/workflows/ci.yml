@@ -276,6 +276,17 @@ jobs:
 
       - uses: actions/checkout@v4
 
+      - name: Read runner build capacity
+        id: capacity
+        run: |
+          set -euo pipefail
+          p=2
+          if [ -r /run/phvx-runner-capacity.env ]; then
+            value=$(sed -n 's/^P=//p' /run/phvx-runner-capacity.env)
+            if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then p=$value; fi
+          fi
+          echo "build_jobs=$p" >> "$GITHUB_OUTPUT"
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
@@ -336,6 +347,7 @@ jobs:
           push:       ${{ github.event_name != 'pull_request' }}
           tags:       ${{ steps.meta.outputs.tags }}
           labels:     ${{ steps.meta.outputs.labels }}
+          build-args: BUILD_JOBS=${{ steps.capacity.outputs.build_jobs }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
 
@@ -367,6 +379,17 @@ jobs:
           "$helper" refresh --repository "$GITHUB_REPOSITORY"
 
       - uses: actions/checkout@v4
+
+      - name: Read runner build capacity
+        id: capacity
+        run: |
+          set -euo pipefail
+          p=2
+          if [ -r /run/phvx-runner-capacity.env ]; then
+            value=$(sed -n 's/^P=//p' /run/phvx-runner-capacity.env)
+            if [[ "$value" =~ ^[1-9][0-9]*$ ]]; then p=$value; fi
+          fi
+          echo "build_jobs=$p" >> "$GITHUB_OUTPUT"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -421,6 +444,7 @@ jobs:
           # on a release and the sha- tag otherwise, which is exactly what should be shown.
           build-args: |
             CONSOLE_VERSION=${{ steps.meta.outputs.version }}
+            BUILD_JOBS=${{ steps.capacity.outputs.build_jobs }}
           tags:       ${{ steps.meta.outputs.tags }}
           labels:     ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

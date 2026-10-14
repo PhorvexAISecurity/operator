@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+"""Serialize admission; permit the other verified installation, never duplicates."""
+import fcntl
+import os
+from pathlib import Path
+import sys
+from phvx_runner_profiles import profiles, select, census, FENCE, check_hold, listener_count
+
+def processes():
+    result = []
+    for path in Path('/proc').iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            name = (path / 'comm').read_text().strip()
+            if name not in ('Runner.Listener', 'Runner.Worker'):
+                continue
+            stat = (path / 'stat').read_text().rsplit(')', 1)[1].split()
+            result.append({'pid': int(path.name), 'ppid': int(stat[1]), 'comm': name,
+                           'uid': path.stat().st_uid, 'exe': os.readlink(path / 'exe'),
+                           'cgroup': (path / 'cgroup').read_text()})
+        except FileNotFoundError:
+            continue
+    return result
+
+def check(value, table=None):
+    allowed = profiles()
+    p = select(value, allowed)
+    check_hold()
+    if FENCE.exists():
+        raise RuntimeError('Maintenance offline fence active')
+    if p['runner_id'] == 21 and listener_count() != 2:
+        raise RuntimeError('Runner 21 awaits R2 acceptance')
+    listeners, _ = census(processes() if table is None else table, allowed)
+    if p['runner_id'] in listeners:
+        raise RuntimeError('Existing listener in this installation')
+
+def main():
+    directory = Path('/run/phvx-runner-maintenance')
+    directory.mkdir(mode=0o755, exist_ok=True)
+    if directory.is_symlink() or directory.stat().st_uid != 0 or directory.stat().st_mode & 0o022:
+        raise RuntimeError('Unsafe admission lock directory')
+    fd = os.open(directory / 'start.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        check(sys.argv[1] if len(sys.argv) > 1 else '130')
+    finally:
+        os.close(fd)
+
+if __name__ == '__main__':
+    main()
