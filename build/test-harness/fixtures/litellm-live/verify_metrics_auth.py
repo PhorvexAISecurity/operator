@@ -298,6 +298,32 @@ def run(api, plan, save):
     raise SafeFailure("witness readiness deadline exceeded")
 
 
+def named_probe_pod(api, job):
+    # PodList items omit TypeMeta. Obtain authoritative GVK from a named GET,
+    # retaining the list-to-read UID and complete Job-owner identity binding.
+    job_meta = job["metadata"]
+    def owner(pod):
+        refs = [ref for ref in pod.get("metadata", {}).get("ownerReferences", []) if ref.get("kind") == "Job"]
+        return refs[0] if len(refs) == 1 and refs[0].get("uid") == job_meta["uid"] else None
+    items = api.get("/api/v1/namespaces/monitoring/pods")["items"]
+    owned = [pod for pod in items if owner(pod) is not None]
+    if len(owned) != 1:
+        raise SafeFailure("one actual Job-owned probe Pod required")
+    listed = owned[0]
+    meta, ref = listed["metadata"], owner(listed)
+    if (meta.get("namespace") != "monitoring" or not meta.get("uid") or
+            not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?", meta.get("name", "")) or
+            ref.get("apiVersion") != "batch/v1" or ref.get("name") != job_meta["name"] or ref.get("controller") is not True):
+        raise SafeFailure("actual probe Pod list identity differs")
+    pod = api.get("/api/v1/namespaces/monitoring/pods/" + meta["name"])
+    current = pod.get("metadata", {})
+    if (pod.get("kind") != "Pod" or pod.get("apiVersion") != "v1" or
+            any(current.get(key) != meta[key] for key in ("namespace", "name", "uid")) or owner(pod) != ref or
+            current.get("ownerReferences", []) != meta.get("ownerReferences", [])):
+        raise SafeFailure("named probe Pod GVK UID or Job owner drift")
+    return pod
+
+
 def collect(api, plan):
     job = api.get(resource_path(plan["probeJob"]))
     deadline = time.monotonic() + 120
@@ -308,15 +334,11 @@ def collect(api, plan):
         job = api.get(resource_path(plan["probeJob"]))
     if job.get("status", {}).get("succeeded") != 1:
         raise SafeFailure("probe completion deadline exceeded")
-    pods = api.get("/api/v1/namespaces/monitoring/pods")["items"]
-    pods = [pod for pod in pods if any(owner.get("uid") == job["metadata"]["uid"]
-                                     for owner in pod["metadata"].get("ownerReferences", []))]
-    if len(pods) != 1:
-        raise SafeFailure("one actual probe Pod required")
+    pod = named_probe_pod(api, job)
     evidence = {"sourceConfigMap": api.get(resource_path(plan["sourceConfigMap"])),
         "helperConfigMaps": [api.get(resource_path(body)) for body in plan["helperConfigMaps"]],
-        "witnessPod": api.get(resource_path(plan["witnessPod"])), "probeJob": job, "probePod": pods[0],
-        "probeReport": json.loads(api.logs("monitoring", pods[0]["metadata"]["name"]))}
+        "witnessPod": api.get(resource_path(plan["witnessPod"])), "probeJob": job, "probePod": pod,
+        "probeReport": json.loads(api.logs("monitoring", pod["metadata"]["name"]))}
     # Bind every readback to this exclusive run's recorded object UIDs.
     for obj in [evidence["sourceConfigMap"], *evidence["helperConfigMaps"], evidence["witnessPod"], job]:
         record = next((item for item in plan["objects"] if item["path"] == resource_path(obj)), None)
@@ -549,12 +571,7 @@ def collect_live(api, plan):
     record = next((item for item in plan["objects"] if item["path"] == resource_path(job)), None)
     if record is None or record["uid"] != job["metadata"]["uid"] or not matches_subset(job, plan["probeJob"]):
         raise SafeFailure("production probe Job identity drift")
-    pods = api.get("/api/v1/namespaces/monitoring/pods")["items"]
-    pods = [pod for pod in pods if any(owner.get("uid") == job["metadata"]["uid"]
-                                     for owner in pod["metadata"].get("ownerReferences", []))]
-    if len(pods) != 1:
-        raise SafeFailure("one actual production probe Pod required")
-    pod = pods[0]
+    pod = named_probe_pod(api, job)
     check_pod(pod, plan["probeJob"]["spec"]["template"]["spec"], succeeded=True)
     report = validate_probe_report(json.loads(api.logs("monitoring", pod["metadata"]["name"])), plan["targets"])
     metadata = dict(plan["metadata"], utc=utc(), secrets=[

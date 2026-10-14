@@ -45,7 +45,7 @@ def make_auth_fixture(closure, metadata, source):
     job = identified(auth.probe_job(plan, targets), "probe-job-uid")
     job["status"] = {"succeeded": 1}
     probe = {"apiVersion": "v1", "kind": "Pod", "metadata": {"namespace": "monitoring", "name": "actual-probe-pod",
-        "uid": "probe-pod-uid", "resourceVersion": "21", "ownerReferences": [{"kind": "Job", "uid": job["metadata"]["uid"]}]},
+        "uid": "probe-pod-uid", "resourceVersion": "21", "ownerReferences": [{"apiVersion": "batch/v1", "kind": "Job", "name": job["metadata"]["name"], "uid": job["metadata"]["uid"], "controller": True, "blockOwnerDeletion": True}]},
         "spec": copy.deepcopy(job["spec"]["template"]["spec"])}
     probe["spec"]["nodeName"] = "probe-node"
     probe["status"] = {"phase": "Succeeded", "containerStatuses": [{"name": "probe", "imageID": "docker-pullable://" + generate.IMAGE}]}
@@ -347,6 +347,47 @@ class AuthProof(unittest.TestCase):
         value["evidence"]["witnessPod"]["spec"].pop("automountServiceAccountToken")
         with self.assertRaises(ValueError): auth.validate_auth_proof(value, self.closure, self.metadata)
 
+    def test_collect_reads_named_pod_when_list_items_omit_type_meta(self):
+        evidence = copy.deepcopy(self.proof["evidence"])
+        plan = auth.prepare(self.closure, self.metadata, self.source, "2" * 32)
+        plan["probeJob"] = copy.deepcopy(evidence["probeJob"])
+        objects = [evidence["sourceConfigMap"], *evidence["helperConfigMaps"], evidence["witnessPod"], evidence["probeJob"]]
+        plan["objects"] = [{"path": provision.resource_path(obj), "uid": obj["metadata"]["uid"]} for obj in objects]
+        named = evidence["probePod"]
+        listed = copy.deepcopy(named)
+        listed.pop("kind")
+        listed.pop("apiVersion")
+        responses = {provision.resource_path(obj): obj for obj in [*objects, named]}
+        responses["/api/v1/namespaces/monitoring/pods"] = {"apiVersion": "v1", "kind": "PodList", "items": [listed]}
+        api = Mock()
+        api.get.side_effect = lambda path: copy.deepcopy(responses[path])
+        api.logs.return_value = generate.canonical(evidence["probeReport"])
+        api.metadata.side_effect = lambda namespace, pair_id, filled: next(
+            record for record in self.metadata["secrets"] if record["namespace"] == namespace)
+        bundle = auth.collect(api, plan)
+        actual = bundle["authProof"]["evidence"]["probePod"]
+        self.assertEqual((actual["kind"], actual["apiVersion"]), ("Pod", "v1"))
+        self.assertEqual(actual["metadata"]["uid"], listed["metadata"]["uid"])
+        auth.validate_auth_proof(bundle["authProof"], self.closure, bundle["secretMetadata"])
+        api.get.assert_any_call(provision.resource_path(named))
+
+    def test_named_probe_rejects_uid_owner_and_gvk_recreation(self):
+        job = copy.deepcopy(self.proof["evidence"]["probeJob"])
+        named = copy.deepcopy(self.proof["evidence"]["probePod"])
+        listed = copy.deepcopy(named)
+        listed.pop("kind")
+        listed.pop("apiVersion")
+        api = Mock()
+        for mutate in (lambda p: p["metadata"].update(uid="same-name-replacement"),
+                       lambda p: p["metadata"]["ownerReferences"][0].update(uid="recreated-job"),
+                       lambda p: p["metadata"]["ownerReferences"][0].update(name="different-job"),
+                       lambda p: p.update(kind="PartialObjectMetadata"),
+                       lambda p: p.pop("apiVersion")):
+            changed = copy.deepcopy(named)
+            mutate(changed)
+            api.get.side_effect = [{"items": [listed]}, changed]
+            with self.subTest(mutate=mutate), self.assertRaises(ValueError): auth.named_probe_pod(api, job)
+
     def test_stable_binding_survives_only_deployment_resource_version_refresh(self):
         closure = copy.deepcopy(self.closure)
         closure["artifactsSHA256"] = {"patch": "f" * 64}
@@ -422,6 +463,42 @@ class AuthProof(unittest.TestCase):
         self.assertEqual(live["sourceConfigMapIdentity"]["uid"], source_cm["metadata"]["uid"])
         inventory["/api/v1/namespaces/litellm/configmaps/" + source_cm["metadata"]["name"]]["metadata"]["uid"] = "recreated-source"
         with self.assertRaises(ValueError): auth.live_inputs_current(api, live)
+
+    def test_live_collect_reads_named_pod_when_list_items_omit_type_meta(self):
+        plan, pods, service, source_cm = self.production_fixture()
+        live = auth.prepare_live(plan, pods, service)
+        helper = copy.deepcopy(live["helperConfigMaps"][0])
+        helper["metadata"].update(uid="live-helper-uid", resourceVersion="30")
+        job = copy.deepcopy(live["probeJob"])
+        job["metadata"].update(uid="live-job-uid", resourceVersion="31")
+        job["status"] = {"succeeded": 1}
+        named = {"apiVersion": "v1", "kind": "Pod", "metadata": {
+            "namespace": "monitoring", "name": "actual-live-probe-pod", "uid": "live-probe-uid", "resourceVersion": "32",
+            "ownerReferences": [{"apiVersion": "batch/v1", "kind": "Job", "name": job["metadata"]["name"],
+                "uid": job["metadata"]["uid"], "controller": True, "blockOwnerDeletion": True}]},
+            "spec": copy.deepcopy(job["spec"]["template"]["spec"]), "status": {"phase": "Succeeded",
+                "containerStatuses": [{"name": "probe", "imageID": "docker-pullable://" + generate.IMAGE}]}}
+        named["spec"]["nodeName"] = "actual-probe-node"
+        listed = copy.deepcopy(named)
+        listed.pop("kind")
+        listed.pop("apiVersion")
+        live["objects"] = [{"path": provision.resource_path(obj), "uid": obj["metadata"]["uid"]} for obj in (helper, job)]
+        responses = {provision.resource_path(obj): obj for obj in [*pods, source_cm, helper, job, named]}
+        responses["/api/v1/namespaces/litellm/services/" + service["metadata"]["name"]] = service
+        responses["/api/v1/namespaces/monitoring/pods"] = {"apiVersion": "v1", "kind": "PodList", "items": [listed]}
+        report = {"schema": "phorvex-litellm-metrics-probe-report-v1", "utc": auth.utc(), "modelCalls": 0,
+            "upstreamConfigured": False, "targets": [{"target": target, "checks": copy.deepcopy(self.proof["checks"])} for target in live["targets"]]}
+        api = Mock()
+        api.get.side_effect = lambda path: copy.deepcopy(responses[path])
+        api.logs.return_value = generate.canonical(report)
+        api.metadata.side_effect = lambda namespace, pair_id, filled: next(
+            record for record in live["metadata"]["secrets"] if record["namespace"] == namespace)
+        proof = auth.collect_live(api, live)
+        actual = proof["evidence"]["probePod"]
+        self.assertEqual((actual["kind"], actual["apiVersion"]), ("Pod", "v1"))
+        self.assertEqual(actual["metadata"]["uid"], listed["metadata"]["uid"])
+        self.assertEqual(len(proof["targets"]), 3)
+        api.get.assert_any_call(provision.resource_path(named))
 
     def test_live_mount_image_source_and_uid_drift_fail_before_probe(self):
         plan, pods, service, source_cm = self.production_fixture()
