@@ -34,7 +34,7 @@ func PendingLiteLLMClientOperation(ctx context.Context, reader client.Reader, op
 		// An absent journal is normal only before the source fixture exists.
 		// Once the gateway source is installed, absence cannot prove that no
 		// prepared operation was lost with the protected journal.
-		for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256} {
+		for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256, litellmclient.AuthMetricsSourceSHA256} {
 			source := &corev1.ConfigMap{}
 			sourceErr := reader.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.ApprovedSourceConfigMap(sha)}, source)
 			if apierrors.IsNotFound(sourceErr) {

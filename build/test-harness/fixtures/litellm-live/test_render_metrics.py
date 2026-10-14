@@ -21,10 +21,12 @@ def originals():
         "spec": {"template": {"metadata": {
             "labels": {"app": "litellm", "existing": "preserved"},
             "annotations": {module.SOURCE_ANNOTATION: OLD_SHA, "status-policy": "preserved"}},
-            "spec": {"containers": [
+            "spec": {"securityContext": {"fsGroup": 10001}, "containers": [
                 {"name": "litellm", "image": "fixture-upstream:unchanged", "ports": [{"name": "http", "containerPort": 4000}]},
                 {"name": module.CONTAINER, "image": json.loads(CONTRACT.read_text())["imageByDigest"],
                  "command": ["python3", "-B", "/opt/phorvex/gateway.py"],
+                 "securityContext": {"runAsUser": 10001, "runAsGroup": 10001,
+                                     "runAsNonRoot": True, "readOnlyRootFilesystem": True},
                  "ports": [{"name": "admission", "containerPort": 4001}, {"name": "admin-status", "containerPort": 4002}],
                  "env": [{"name": module.SOURCE_ENV, "value": OLD_SHA},
                          {"name": "LITELLM_MASTER_KEY", "valueFrom": {"secretKeyRef": {"name": "existing-master", "key": "master-key"}}}],
@@ -71,6 +73,13 @@ def patched(document, patch):
     return result
 
 
+AUTH = {"protection_mode": "bearerToken", "metrics_secret_name": module.SECRET_NAME, "metrics_secret_key": "token"}
+
+
+def auth_render(*args, **kwargs):
+    return module.render(*args, **{**AUTH, **kwargs})
+
+
 class MetricsRenderTests(unittest.TestCase):
     def test_default_off_emits_nothing(self):
         self.assertEqual(module.render(), {})
@@ -82,17 +91,17 @@ class MetricsRenderTests(unittest.TestCase):
         path_env = {"name": "PHORVEX_LITELLM_STATUS_TOKEN_FILE",
                     "value": "/etc/phorvex-litellm-status/token"}
         gateway["env"].append(path_env)
-        objects = module.render(d, profiles, policies, labels, enabled=True)
+        objects = auth_render(d, profiles, policies, labels, enabled=True)
         result = patched(d, objects["deployment-metrics-json-patch.json"])
         self.assertIn(path_env, result["spec"]["template"]["spec"]["containers"][1]["env"])
         gateway["env"][-1]["value"] = "literal-private-token"
         with self.assertRaisesRegex(ValueError, "Secret references"):
-            module.render(d, profiles, policies, labels, enabled=True)
+            auth_render(d, profiles, policies, labels, enabled=True)
 
     def test_opt_in_closure_is_content_derived_and_preserves_owner_state(self):
         d, profiles, policies, labels = originals()
         original = copy.deepcopy((d, profiles, policies, labels))
-        objects = module.render(d, profiles, policies, labels, enabled=True)
+        objects = auth_render(d, profiles, policies, labels, enabled=True)
         self.assertEqual((d, profiles, policies, labels), original)
         closure = objects["metrics-closure.json"]
         digest = hashlib.sha256(module.GATEWAY_SOURCE.read_bytes()).hexdigest()
@@ -111,7 +120,19 @@ class MetricsRenderTests(unittest.TestCase):
         before = d["spec"]["template"]
         after = result["spec"]["template"]
         self.assertEqual(before["spec"]["containers"][0], after["spec"]["containers"][0])
-        self.assertEqual(before["spec"]["containers"][1]["volumeMounts"], after["spec"]["containers"][1]["volumeMounts"])
+        self.assertEqual(before["spec"]["containers"][1]["volumeMounts"], after["spec"]["containers"][1]["volumeMounts"][:-1])
+        self.assertEqual(after["spec"]["containers"][1]["volumeMounts"][-1],
+                         {"name": module.TOKEN_VOLUME, "mountPath": module.TOKEN_DIRECTORY, "readOnly": True})
+        self.assertEqual(after["spec"]["volumes"][-1], {"name": module.TOKEN_VOLUME, "secret": {
+            "secretName": module.SECRET_NAME, "optional": False, "defaultMode": 288,
+            "items": [{"key": "token", "path": "token", "mode": 288}]}})
+        self.assertEqual(closure["schema"], "phorvex-litellm-metrics-candidate-v2")
+        self.assertEqual(closure["metricsProtection"], module.protection("bearerToken", module.SECRET_NAME, "token", digest))
+        self.assertEqual(closure["nativeDecision"], "A")
+        self.assertEqual(closure["nativeVLLMPolicy"], "separateAcceptance")
+        for name, value in objects.items():
+            if name != "metrics-closure.json":
+                self.assertEqual(closure["artifactsSHA256"][name], module.object_hash(value))
         self.assertEqual(after["metadata"]["annotations"]["status-policy"], "preserved")
         self.assertEqual(after["spec"]["containers"][1]["ports"][-1]["containerPort"], 4003)
         env = {e["name"]: e for e in after["spec"]["containers"][1]["env"]}
@@ -136,8 +157,8 @@ class MetricsRenderTests(unittest.TestCase):
         p[0]["data"]["profile.json"] = raw
         p[0]["metadata"]["name"] = "phorvex-litellm-live-profile-" + hashlib.sha256(raw.encode()).hexdigest()[:12]
         with self.assertRaisesRegex(ValueError, "preserve"):
-            module.render(d, p, [], labels, enabled=True)
-        objects = module.render(d, p, [], labels, enabled=True, preserve_unisolated_ingress=True)
+            auth_render(d, p, [], labels, enabled=True)
+        objects = auth_render(d, p, [], labels, enabled=True, preserve_unisolated_ingress=True)
         result = patched(d, objects["deployment-metrics-json-patch.json"])
         self.assertEqual(result["spec"]["template"]["spec"]["containers"][1]["image"], contract["imageByDigest"])
         self.assertEqual(patched(result, objects["deployment-metrics-rollback-json-patch.json"]), d)
@@ -152,7 +173,7 @@ class MetricsRenderTests(unittest.TestCase):
 
     def test_private_named_port_monitor_and_intersection_network_source(self):
         d, p, n, labels = originals()
-        objects = module.render(d, p, n, labels, enabled=True)
+        objects = auth_render(d, p, n, labels, enabled=True)
         service = objects["metrics-service.json"]
         self.assertEqual(service["spec"]["type"], "ClusterIP")
         self.assertEqual(service["spec"]["selector"], {"app": "litellm", module.LABEL: "enabled"})
@@ -160,6 +181,10 @@ class MetricsRenderTests(unittest.TestCase):
         self.assertEqual((endpoint["port"], endpoint["path"], endpoint["honorLabels"]), ("gateway-metrics", "/metrics", False))
         self.assertEqual([r["targetLabel"] for r in endpoint["relabelings"]], ["namespace", "pod", "target"])
         self.assertNotIn("bearerTokenSecret", endpoint)
+        self.assertEqual(endpoint["authorization"], {"type": "Bearer", "credentials": {
+            "name": module.SECRET_NAME, "key": "token", "optional": False}})
+        self.assertIs(endpoint["followRedirects"], False)
+        self.assertEqual(objects["metrics-servicemonitor.json"]["metadata"]["namespace"], "monitoring")
         policy = objects["metrics-networkpolicy.json"]["spec"]
         self.assertEqual(policy["ingress"], [{"from": [{
             "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "monitoring"}},
@@ -171,10 +196,10 @@ class MetricsRenderTests(unittest.TestCase):
         d, p, n, labels = originals()
         for change, expected in [
             (lambda d,p,n,l: d["spec"]["template"]["spec"]["containers"][0]["ports"].append({"containerPort": 4003}), "conflicts"),
-            (lambda d,p,n,l: n[0]["spec"]["ingress"].append({}), "all ports"),
-            (lambda d,p,n,l: n[0]["spec"]["ingress"].append({"ports": [{"port": 4003}]}), "permits metrics"),
-            (lambda d,p,n,l: n[0]["spec"]["ingress"].append({"ports": [{"port": 4000, "endPort": 4010}]}), "permits metrics"),
             (lambda d,p,n,l: n[0]["spec"].update({"ingress": []}), "preserve"),
+            (lambda d,p,n,l: n[0]["spec"]["ingress"].append({"ports": [{"port": "unknown"}]}), "unresolved"),
+            (lambda d,p,n,l: d["spec"]["template"]["spec"]["securityContext"].update(fsGroup=0), "fsGroup"),
+            (lambda d,p,n,l: d["spec"]["template"]["spec"]["containers"][1]["volumeMounts"].append({"name": "shadow", "mountPath": "/etc"}), "mount conflict"),
             (lambda d,p,n,l: p.clear(), "profiles"),
             (lambda d,p,n,l: l.clear(), "Prometheus"),
             (lambda d,p,n,l: d["spec"]["template"]["spec"]["containers"][1].update({"image": "registry/foreign@sha256:" + "b" * 64}), "convergence"),
@@ -186,24 +211,46 @@ class MetricsRenderTests(unittest.TestCase):
                 args = copy.deepcopy((d, p, n, labels))
                 change(*args)
                 with self.assertRaisesRegex(ValueError, expected):
-                    module.render(*args, enabled=True)
+                    auth_render(*args, enabled=True)
         with self.assertRaisesRegex(ValueError, "preserve"):
-            module.render(d, p, [], labels, enabled=True)
+            auth_render(d, p, [], labels, enabled=True)
         with self.assertRaisesRegex(ValueError, "catalogue profile source"):
             p[0]["data"]["profile.json"] = module.canonical({"sourceSHA256": "f" * 64})
-            module.render(d, p, n, labels, enabled=True)
+            auth_render(d, p, n, labels, enabled=True)
 
     def test_stale_owner_patch_fails_and_active_output_trial_blocks_migration(self):
         d, p, n, labels = originals()
-        objects = module.render(d, p, n, labels, enabled=True)
+        objects = auth_render(d, p, n, labels, enabled=True)
         changed = copy.deepcopy(d)
         changed["metadata"]["resourceVersion"] = "43"
         with self.assertRaisesRegex(ValueError, "stale"):
             patched(changed, objects["deployment-metrics-json-patch.json"])
         d["spec"]["template"]["spec"]["containers"][1]["env"].append({"name": "PHORVEX_LITELLM_OUTPUT_POLICY_FILE", "value": "/existing/policy.json"})
         with self.assertRaisesRegex(ValueError, "quiescent"):
-            module.render(d, p, n, labels, {"version": 2, "revision": 1, "entries": [{}]}, enabled=True)
-        module.render(d, p, n, labels, {"version": 2, "revision": 0, "entries": []}, enabled=True)
+            auth_render(d, p, n, labels, {"version": 2, "revision": 1, "entries": [{}]}, enabled=True)
+        auth_render(d, p, n, labels, {"version": 2, "revision": 0, "entries": []}, enabled=True)
+
+
+    def test_required_auth_contract_and_broad_ingress_is_recorded(self):
+        for changes, message in [
+            ({"protection_mode": None}, "protection mode"),
+            ({"protection_mode": "networkEnforced"}, "protection mode"),
+            ({"metrics_secret_name": ""}, "Secret name"),
+            ({"metrics_secret_name": "Uppercase"}, "Secret name"),
+            ({"metrics_secret_name": "a" * 64}, "Secret name"),
+            ({"metrics_secret_key": "master-key"}, "key must be token"),
+        ]:
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, message):
+                auth_render(*originals(), enabled=True, **changes)
+        with self.assertRaisesRegex(ValueError, "protection mode"):
+            module.render(*originals(), enabled=True)
+        for rule in ({}, {"ports": [{"port": 4003}]}, {"ports": [{"port": 4000, "endPort": 4010}]}):
+            d, p, n, labels = originals()
+            n[0]["spec"]["ingress"].append(rule)
+            candidate = auth_render(d, p, n, labels, enabled=True)
+            self.assertTrue(candidate["metrics-closure.json"]["networkAudit"]["existingMetricsIngress"])
+            with self.assertRaisesRegex(ValueError, "all ports|permits metrics"):
+                module.validate_network(n, d["spec"]["template"]["metadata"]["labels"], d["spec"]["template"]["spec"]["containers"])
 
 
 if __name__ == "__main__":

@@ -15,38 +15,42 @@ import (
 )
 
 const (
-	Namespace              = "litellm"
-	ServiceName            = "litellm"
-	SourceConfigMapName    = "phorvex-litellm-admission-gateway-4bf046ce690c"
-	ClientsConfigMapName   = "phorvex-litellm-live-clients"
-	PolicyConfigMapName    = "phorvex-litellm-client-policy"
-	TrialSeedSecretName    = "phorvex-litellm-trial-seed"
-	GatewayContainerName   = "litellm-admission-gateway"
-	JournalName            = "phorvex-litellm-revoke-journal"
-	JournalKey             = "receipts.json"
-	JournalLabel           = "phorvex.ai/litellm-client-revoke-journal"
-	SourceKey              = "gateway.py"
-	PolicyKey              = "state.json"
-	ClientsKey             = "clients.json"
-	SourceSHAAnnotation    = "phorvex.ai/litellm-gateway-source-sha256"
-	GatewayImageAnnotation = "phorvex.ai/litellm-gateway-image"
-	PolicyUIDAnnotation    = "phorvex.ai/litellm-client-policy-configmap-uid"
-	ServiceUIDAnnotation   = "phorvex.ai/litellm-live-service-uid"
-	ClientSHAAnnotation    = "phorvex.ai/litellm-owned-client-sha256"
-	SeedSHAAnnotation      = "phorvex.ai/litellm-trial-seed-sha256"
-	ObservationAnnotation  = "phorvex.ai/litellm-client-observation-v1"
-	RuleType               = "phorvex.attack.litellm-client-abuse"
-	ApprovedSourceSHA256   = "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1"
-	ApprovedGatewayImage   = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
-	MetricsSourceSHA256    = "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1"
-	ApprovedRuntimeImage   = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108"
+	Namespace               = "litellm"
+	ServiceName             = "litellm"
+	SourceConfigMapName     = "phorvex-litellm-admission-gateway-4bf046ce690c"
+	ClientsConfigMapName    = "phorvex-litellm-live-clients"
+	PolicyConfigMapName     = "phorvex-litellm-client-policy"
+	TrialSeedSecretName     = "phorvex-litellm-trial-seed"
+	GatewayContainerName    = "litellm-admission-gateway"
+	JournalName             = "phorvex-litellm-revoke-journal"
+	JournalKey              = "receipts.json"
+	JournalLabel            = "phorvex.ai/litellm-client-revoke-journal"
+	SourceKey               = "gateway.py"
+	PolicyKey               = "state.json"
+	ClientsKey              = "clients.json"
+	SourceSHAAnnotation     = "phorvex.ai/litellm-gateway-source-sha256"
+	GatewayImageAnnotation  = "phorvex.ai/litellm-gateway-image"
+	PolicyUIDAnnotation     = "phorvex.ai/litellm-client-policy-configmap-uid"
+	ServiceUIDAnnotation    = "phorvex.ai/litellm-live-service-uid"
+	ClientSHAAnnotation     = "phorvex.ai/litellm-owned-client-sha256"
+	SeedSHAAnnotation       = "phorvex.ai/litellm-trial-seed-sha256"
+	ObservationAnnotation   = "phorvex.ai/litellm-client-observation-v1"
+	RuleType                = "phorvex.attack.litellm-client-abuse"
+	ApprovedSourceSHA256    = "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1"
+	ApprovedGatewayImage    = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
+	MetricsSourceSHA256     = "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1"
+	AuthMetricsSourceSHA256 = "91af283097afd331d3c5b5cbe863694e85e7708c75b3cacbeaf56250f1c223ca"
+	MetricsTokenVolumeName  = "litellm-gateway-metrics-token"
+	MetricsTokenMountPath   = "/etc/phorvex-litellm-metrics"
+	MetricsTokenFilePath    = MetricsTokenMountPath + "/token"
+	ApprovedRuntimeImage    = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108"
 )
 
 // ApprovedSourceConfigMap derives a name only for reviewed complete source hashes.
 // Keep the legacy approval through convergence and rollback; a SHA prefix alone
 // is never authority to read or execute another ConfigMap.
 func ApprovedSourceConfigMap(sha string) string {
-	if sha != ApprovedSourceSHA256 && sha != MetricsSourceSHA256 {
+	if sha != ApprovedSourceSHA256 && sha != MetricsSourceSHA256 && sha != AuthMetricsSourceSHA256 {
 		return ""
 	}
 	return "phorvex-litellm-admission-gateway-" + sha[:12]

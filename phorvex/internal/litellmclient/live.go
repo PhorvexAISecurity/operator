@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -258,7 +259,12 @@ func ValidateGatewaySourceBinding(p *corev1.Pod, sha, image string) error {
 	}
 	name := ApprovedSourceConfigMap(sha)
 	var source *corev1.ConfigMapVolumeSource
+	volumeNames := map[string]bool{}
 	for _, volume := range p.Spec.Volumes {
+		if volumeNames[volume.Name] {
+			return errors.New("owned-client repeated Pod volume")
+		}
+		volumeNames[volume.Name] = true
 		if volume.Name == "litellm-live-gateway-source" {
 			if source != nil {
 				return errors.New("owned-client repeated source volume")
@@ -291,11 +297,14 @@ func ValidateGatewaySourceBinding(p *corev1.Pod, sha, image string) error {
 		}
 		mountOK := false
 		mountPaths := map[string]bool{}
+		mountNames := map[string]bool{}
 		for _, mount := range container.VolumeMounts {
-			if mountPaths[mount.MountPath] || strings.HasPrefix(mount.MountPath, "/opt/phorvex/") {
+			if mountPaths[mount.MountPath] || mountNames[mount.Name] ||
+				(mount.Name != "litellm-live-gateway-source" && overlappingMount(mount.MountPath, "/opt/phorvex")) {
 				return errors.New("owned-client shadowed source mount")
 			}
 			mountPaths[mount.MountPath] = true
+			mountNames[mount.Name] = true
 			if mount.Name == "litellm-live-gateway-source" {
 				mountOK = mount.MountPath == "/opt/phorvex" && mount.ReadOnly && mount.SubPath == "" && mount.SubPathExpr == ""
 			}
@@ -303,9 +312,117 @@ func ValidateGatewaySourceBinding(p *corev1.Pod, sha, image string) error {
 		if !sourceEnv || !mountOK {
 			return errors.New("owned-client Pod source environment/mount differs")
 		}
+		if sha == AuthMetricsSourceSHA256 {
+			if err := validateMetricsTokenBinding(p, &container); err != nil {
+				return err
+			}
+		}
 	}
 	if !found {
 		return errors.New("owned-client Pod gateway missing")
+	}
+	return nil
+}
+
+func overlappingMount(a, b string) bool {
+	a, b = path.Clean(a), path.Clean(b)
+	return a == b || a == "/" || b == "/" || strings.HasPrefix(a, b+"/") || strings.HasPrefix(b, a+"/")
+}
+
+// Inspect references only: the native client has no Secret API authority.
+// The activation closure binds the concrete Secret name/UID to its generation.
+func validateMetricsTokenBinding(p *corev1.Pod, gateway *corev1.Container) error {
+	if len(gateway.EnvFrom) != 0 {
+		return errors.New("owned-client metrics environment has envFrom")
+	}
+	env := map[string]corev1.EnvVar{}
+	for _, entry := range gateway.Env {
+		env[entry.Name] = entry // The caller has already rejected duplicate names.
+	}
+	for name, value := range map[string]string{
+		"PHORVEX_LITELLM_METRICS_ENABLED":    "1",
+		"PHORVEX_LITELLM_METRICS_TOKEN_FILE": MetricsTokenFilePath,
+	} {
+		entry := env[name]
+		if entry.Value != value || entry.ValueFrom != nil {
+			return errors.New("owned-client metrics opt-in/token path differs")
+		}
+	}
+	for name, field := range map[string]string{"POD_NAME": "metadata.name", "POD_NAMESPACE": "metadata.namespace"} {
+		entry := env[name]
+		ref := entry.ValueFrom
+		if entry.Value != "" || ref == nil || ref.FieldRef == nil || ref.FieldRef.FieldPath != field ||
+			(ref.FieldRef.APIVersion != "" && ref.FieldRef.APIVersion != "v1") ||
+			ref.SecretKeyRef != nil || ref.ConfigMapKeyRef != nil || ref.ResourceFieldRef != nil {
+			return errors.New("owned-client metrics Pod identity differs")
+		}
+	}
+	if p.Spec.SecurityContext == nil || p.Spec.SecurityContext.FSGroup == nil || *p.Spec.SecurityContext.FSGroup != 10001 {
+		return errors.New("owned-client metrics projection fsGroup differs")
+	}
+	var token *corev1.SecretVolumeSource
+	for _, volume := range p.Spec.Volumes {
+		if volume.Name == MetricsTokenVolumeName {
+			token = volume.Secret
+		}
+	}
+	if token == nil || token.SecretName == "" || token.Optional == nil || *token.Optional ||
+		token.DefaultMode == nil || *token.DefaultMode != 0440 || len(token.Items) != 1 ||
+		token.Items[0].Key != "token" || token.Items[0].Path != "token" ||
+		(token.Items[0].Mode != nil && *token.Items[0].Mode != 0440) {
+		return errors.New("owned-client metrics token projection differs")
+	}
+	for _, volume := range p.Spec.Volumes {
+		if volume.Name == MetricsTokenVolumeName {
+			continue
+		}
+		if volume.Secret != nil && volume.Secret.SecretName == token.SecretName {
+			return errors.New("owned-client metrics token has another projection")
+		}
+		if volume.Projected != nil {
+			for _, source := range volume.Projected.Sources {
+				if source.Secret != nil && source.Secret.Name == token.SecretName {
+					return errors.New("owned-client metrics token has another projection")
+				}
+			}
+		}
+	}
+	mounted := false
+	for _, mount := range gateway.VolumeMounts {
+		if mount.Name == MetricsTokenVolumeName {
+			if mounted || mount.MountPath != MetricsTokenMountPath || !mount.ReadOnly || mount.SubPath != "" || mount.SubPathExpr != "" {
+				return errors.New("owned-client metrics token mount differs")
+			}
+			mounted = true
+		} else if overlappingMount(mount.MountPath, MetricsTokenMountPath) {
+			return errors.New("owned-client shadowed metrics token mount")
+		}
+	}
+	if !mounted {
+		return errors.New("owned-client metrics token mount absent")
+	}
+	private := func(mounts []corev1.VolumeMount) bool {
+		for _, mount := range mounts {
+			if mount.Name == MetricsTokenVolumeName {
+				return false
+			}
+		}
+		return true
+	}
+	for _, container := range p.Spec.Containers {
+		if container.Name != GatewayContainerName && !private(container.VolumeMounts) {
+			return errors.New("owned-client metrics token mounted by another container")
+		}
+	}
+	for _, container := range p.Spec.InitContainers {
+		if !private(container.VolumeMounts) {
+			return errors.New("owned-client metrics token mounted by an init container")
+		}
+	}
+	for _, container := range p.Spec.EphemeralContainers {
+		if !private(container.VolumeMounts) {
+			return errors.New("owned-client metrics token mounted by an ephemeral container")
+		}
 	}
 	return nil
 }

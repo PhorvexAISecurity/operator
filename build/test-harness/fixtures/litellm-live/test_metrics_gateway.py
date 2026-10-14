@@ -42,7 +42,9 @@ class MetricsGatewayTests(baseline.GatewayTests):
         super().setUp()
         self.metrics = ObservedMetrics()
         self.g.metrics = self.metrics
-        bound = type("TestMetrics", (gateway.MetricsHandler,), {"metrics": self.metrics})
+        self.metrics_token = b"a" * 64
+        bound = type("TestMetrics", (gateway.MetricsHandler,),
+                     {"metrics": self.metrics, "metrics_token": self.metrics_token})
         self.metrics_server = QuietServer(("127.0.0.1", 0), bound)
         threading.Thread(target=self.metrics_server.serve_forever, daemon=True).start()
         self.addCleanup(self.metrics_server.server_close)
@@ -88,7 +90,8 @@ class MetricsGatewayTests(baseline.GatewayTests):
         self.assertIn('namespace="litellm",pod="litellm-fixture-gateway",target="litellm"', text)
         for secret in (self.attacker, self.control, self.g.master_key, self.g.status_token,
                        self.attacker_sha, self.g.source_sha256, "Say OK.", "secret-prompt",
-                       "secret-auth", "private-client-id", "private-operation", "private-upstream-url"):
+                       "secret-auth", "private-client-id", "private-operation", "private-upstream-url",
+                       self.metrics_token.decode()):
             self.assertNotIn(secret, text)
 
     def test_upstream_error_and_unsupported_method_each_count_once(self):
@@ -214,7 +217,7 @@ class MetricsGatewayTests(baseline.GatewayTests):
         ]:
             with self.subTest(method=method, path=path):
                 conn = http.client.HTTPConnection("127.0.0.1", self.metrics_server.server_address[1], timeout=3)
-                conn.request(method, path)
+                conn.request(method, path, headers={"Authorization": "Bearer " + self.metrics_token.decode()})
                 response = conn.getresponse()
                 self.assertEqual(response.status, expected)
                 self.assertIsNone(response.getheader("Location"))
@@ -235,6 +238,83 @@ class MetricsGatewayTests(baseline.GatewayTests):
         self.assertEqual(response.status, 431)
         response.read()
         conn.close()
+
+    def metrics_call(self, authorization=(), path="/metrics", method="GET", other=()):
+        conn = http.client.HTTPConnection("127.0.0.1", self.metrics_server.server_address[1], timeout=3)
+        try:
+            conn.putrequest(method, path)
+            for value in authorization:
+                conn.putheader("Authorization", value)
+            for key, value in other:
+                conn.putheader(key, value)
+            conn.endheaders()
+            response = conn.getresponse()
+            return response.status, dict(response.getheaders()), response.read()
+        finally:
+            conn.close()
+
+    def test_metrics_bearer_rejects_ambiguous_malformed_and_other_credentials(self):
+        token = self.metrics_token.decode()
+        valid = "Bearer " + token
+        before = baseline.Upstream.calls
+        for values in ((), ("Bearer " + "b" * 64,), (valid, valid), (valid, "Basic private"),
+                       (valid + "," + valid,), ("Basic " + token,), ("Bearer  " + token,),
+                       (valid + " ",), (valid + "\t",), ("Bearer\t" + token,),
+                       ("Bearer " + "A" * 64,), ("Bearer " + "g" * 64,),
+                       ("Bearer " + "a" * 63,), ("Bearer " + "a" * 65,),
+                       ("Bearer " + "a" * 512,), ("Bearer " + "é" * 64,),
+                       ("Bearer " + self.g.status_token,), ("Bearer " + self.g.master_key,),
+                       ("Bearer " + self.attacker,), ("Bearer " + self.control,)):
+            with self.subTest(authorization=values):
+                status, headers, body = self.metrics_call(values)
+                self.assertEqual((status, body), (401, b""))
+                self.assertEqual(headers.get("WWW-Authenticate"), "Bearer")
+                self.assertEqual(headers.get("Connection"), "close")
+                self.assertEqual(headers.get("Content-Length"), "0")
+        self.assertEqual(baseline.Upstream.calls, before)
+        self.assertEqual(self.count(), 0)
+
+    def test_valid_metrics_auth_uses_bytes_comparison_and_parser_normalization(self):
+        token = self.metrics_token.decode()
+        for value in ("Bearer " + token, "bearer " + token, "BEARER " + token,
+                      "  Bearer " + token):  # Leading OWS is normalized by the HTTP parser.
+            with self.subTest(value=value), mock.patch.object(gateway.hmac, "compare_digest",
+                                                              wraps=gateway.hmac.compare_digest) as compare:
+                status, headers, body = self.metrics_call((value,))
+                self.assertEqual(status, 200)
+                self.assertEqual(headers.get("Cache-Control"), "no-store")
+                self.assertEqual(headers.get("Connection"), "close")
+                self.assertTrue(headers.get("Content-Type", "").startswith("text/plain; version=0.0.4"))
+                self.assertNotIn(self.metrics_token, body)
+                compare.assert_called_once_with(self.metrics_token, self.metrics_token)
+        self.assertEqual(self.count(), 0)
+
+    def test_metrics_body_framing_rejected_before_auth_including_empty_transfer_encoding(self):
+        for authorization in ((), ("Bearer " + self.metrics_token.decode(),)):
+            for headers in ((("Content-Length", "1"),), (("Content-Length", "00"),),
+                            (("Content-Length", "0"), ("Content-Length", "0")),
+                            (("Transfer-Encoding", "chunked"),), (("Transfer-Encoding", ""),),
+                            (("Content-Length", "0"), ("Transfer-Encoding", ""))):
+                with self.subTest(authorization=authorization, headers=headers):
+                    self.assertEqual(self.metrics_call(authorization, other=headers)[0], 400)
+            self.assertEqual(self.metrics_call(authorization, path="/metrics?private")[0], 404)
+        self.assertEqual(self.metrics_call(("Bearer " + self.metrics_token.decode(),),
+                                          other=(("Content-Length", "0"),))[0], 200)
+        self.assertEqual(self.count(), 0)
+
+    def test_metrics_token_is_independent_of_status_and_model_credentials(self):
+        before = baseline.Upstream.calls
+        conn = http.client.HTTPConnection("127.0.0.1", self.status_server.server_address[1], timeout=3)
+        conn.request("GET", "/v1/admission/state?clientSHA256=" + self.attacker_sha,
+                     headers={"Authorization": "Bearer " + self.metrics_token.decode()})
+        response = conn.getresponse()
+        self.assertEqual((response.status, response.read()), (401, b""))
+        conn.close()
+        self.assertEqual(baseline.Upstream.calls, before)
+        self.assertEqual(self.post(self.metrics_token.decode())[0], 401)
+        self.finish()
+        self.assertEqual(baseline.Upstream.calls, before + 1)  # Existing invalid-model auth response.
+        self.assertNotIn(self.metrics_token, self.metrics.exposition())
 
 
 class RegistryTests(unittest.TestCase):

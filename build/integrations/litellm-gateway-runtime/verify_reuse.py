@@ -24,7 +24,8 @@ def verify():
         "python", "user", "gatewaySourceSHA256", "gatewayCommand",
         "gatewaySourcePath", "legacyGatewaySourceSHA256", "publishedReceiptPath",
         "actualImageReceiptPath", "actualImageReceiptSHA256",
-    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v3":
+        "previousMetricsSourceSHA256", "previousMetricsSourcePath",
+    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v4":
         raise ValueError("gateway image reuse contract differs")
     if not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", contract["imageByDigest"]):
         raise ValueError("published image is not an immutable digest reference")
@@ -50,10 +51,13 @@ def verify():
     actual_raw = (ROOT / contract["actualImageReceiptPath"]).read_bytes()
     actual = json.loads(actual_raw)
     if (hashlib.sha256(actual_raw).hexdigest() != contract["actualImageReceiptSHA256"] or
-            actual.get("schema") != "phorvex-litellm-gateway-runtime-reuse-receipt-v1" or
+            actual.get("schema") != "phorvex-litellm-gateway-runtime-reuse-receipt-v2" or
             actual.get("result") != "pass-local-and-published-image-protocol" or
             actual.get("imageByDigest") != contract["imageByDigest"] or
-            actual.get("sourceCommit") != contract["publishedImageSourceCommit"] or
+            actual.get("publishedImageSourceCommit") != contract["publishedImageSourceCommit"] or
+            not re.fullmatch(r"[0-9a-f]{40}", actual.get("sourceCommit", "")) or
+            actual.get("mountedSourceCommit") != actual.get("sourceCommit") or
+            actual.get("previousMetricsSourceSHA256") != contract["previousMetricsSourceSHA256"] or
             actual.get("gatewaySourceSHA256") != contract["gatewaySourceSHA256"] or
             actual.get("legacyGatewaySourceSHA256") != contract["legacyGatewaySourceSHA256"] or
             actual.get("publicationReceiptSHA256") != contract["publishedReceiptSHA256"] or
@@ -67,11 +71,20 @@ def verify():
     if (active_sha is None or hashlib.sha256(legacy).hexdigest() != active_sha[1] or
             active_sha[1] != contract["legacyGatewaySourceSHA256"]):
         raise ValueError("preserved legacy source or engine approval differs")
-    metrics_sha = re.search(r'MetricsSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
+    metrics_sha = re.search(r'AuthMetricsSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
     runtime_image = re.search(r'ApprovedRuntimeImage\s*=\s*"([^"\n]+)"', active_contract)
     if (metrics_sha is None or metrics_sha[1] != contract["gatewaySourceSHA256"] or
             runtime_image is None or runtime_image[1] != contract["imageByDigest"]):
         raise ValueError("compatible engine source/runtime approval differs")
+    previous_sha = re.search(r'(?<!Auth)MetricsSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
+    if contract["previousMetricsSourcePath"] != "deploy/helm/phorvex-stack/files/litellm-m1b/gateway-metrics-source-configmap.json":
+        raise ValueError("previous metrics source path differs")
+    previous = json.loads((ROOT / contract["previousMetricsSourcePath"]).read_text())
+    previous_bytes = previous.get("data", {}).get("gateway.py", "").encode()
+    if (previous.get("immutable") is not True or previous_sha is None or
+            previous_sha[1] != contract["previousMetricsSourceSHA256"] or
+            hashlib.sha256(previous_bytes).hexdigest() != contract["previousMetricsSourceSHA256"]):
+        raise ValueError("preserved M1b source or approval differs")
     source = (ROOT / contract["gatewaySourcePath"]).read_bytes()
     if hashlib.sha256(source).hexdigest() != contract["gatewaySourceSHA256"]:
         raise ValueError("merged gateway source moved without a new image/source review")

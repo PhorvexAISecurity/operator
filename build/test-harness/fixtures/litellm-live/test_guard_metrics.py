@@ -1,11 +1,13 @@
 """Offline fail-closed controls using synthetic nonsecret owner evidence."""
 import copy
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
+import contextlib
+import io
 from guard_metrics_activation import check
 from render import canonical
 
@@ -24,7 +26,7 @@ class GuardTests(unittest.TestCase):
             'output-policy.json':None}
         for name,obj in objects.items():(path/name).write_text(canonical(obj))
         labels={'app.kubernetes.io/name':'prometheus','prometheus':'fixture-prometheus'}
-        closure={'baseline':{'deploymentUID':'deployment-fixture','sourceUID':'source-fixture','serviceUID':'service-fixture',
+        closure={'schema':'phorvex-litellm-metrics-candidate-v1','baseline':{'deploymentUID':'deployment-fixture','sourceUID':'source-fixture','serviceUID':'service-fixture',
             'deploymentSpecSHA256':hashlib.sha256(canonical(d['spec']).encode()).hexdigest(),
             'profiles':[{'uid':'profile-fixture','name':'profile','profileSHA256':profile_sha}],'prometheusPodLabels':labels},
             'previousGatewaySourceSHA256':source_sha,'gatewayImageByDigest':'fixture@sha256:'+sha,'gatewaySourceSHA256':sha}
@@ -63,5 +65,168 @@ class GuardTests(unittest.TestCase):
             d=json.loads((path/'deployment.json').read_text());d['spec']['replicas']=3
             (path/'deployment.json').write_text(canonical(d))
             with self.assertRaisesRegex(ValueError,'UID/spec drift'):check(*args)
+
+    def test_legacy_network_freshness_and_unknown_modes_remain_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            args=self.fixture(Path(temp))
+            for index in (3,4,5):
+                for offset in (-1801,1):
+                    current=copy.deepcopy(args)
+                    current[index]['utc']=(datetime.now(timezone.utc)+timedelta(seconds=offset)).isoformat()
+                    with self.subTest(index=index,offset=offset),self.assertRaisesRegex(ValueError,'fresh owner evidence'):
+                        check(*current)
+            for mode in ('bearerToken','unknown'):
+                current=copy.deepcopy(args);current[0]['metricsProtection']={'mode':mode}
+                with self.assertRaisesRegex(ValueError,'legacy v1'):
+                    check(*current)
+            current=copy.deepcopy(args);current[0].pop('schema')
+            with self.assertRaisesRegex(ValueError,'closure schema'):
+                check(*current)
+
+
+class AuthGuardTests(unittest.TestCase):
+    def fixture(self,path):
+        from prepare_metrics_activation import prepare
+        from test_prepare_metrics import owned_inputs
+        from test_render_metrics import AUTH, module
+        from test_metrics_token_helpers import make_metadata_fixture, make_auth_fixture
+        inputs=path/'inputs';values_path,values=owned_inputs(inputs)
+        candidate=prepare(inputs,values_path,**AUTH)
+        artifacts=path/'candidate';artifacts.mkdir()
+        for name,value in candidate.items():
+            (artifacts/name).write_text(canonical(value)+'\n')
+        closure=candidate['metrics-closure.json']
+        contract=json.loads((Path(__file__).resolve().parents[4]/'build/integrations/litellm-gateway-runtime/image-contract.json').read_text())
+        runtime={'schema':'phorvex-litellm-gateway-runtime-reuse-receipt-v2',
+            'result':'pass-local-and-published-image-protocol','imageByDigest':closure['gatewayImageByDigest'],
+            'gatewaySourceSHA256':closure['gatewaySourceSHA256'],'sourceCommit':'a'*40,'mountedSourceCommit':'a'*40,
+            'publishedImageSourceCommit':contract['publishedImageSourceCommit'],
+            'publicationReceiptSHA256':contract['publishedReceiptSHA256'],
+            'previousMetricsSourceSHA256':contract['previousMetricsSourceSHA256']}
+        metadata=make_metadata_fixture(closure)
+        proof=make_auth_fixture(closure,metadata,module.GATEWAY_SOURCE.read_text())
+        utc=datetime.now(timezone.utc).isoformat();stamp=datetime.now(timezone.utc).timestamp()
+        from guard_metrics_activation import NATIVE_QUERIES
+        prom={'utc':utc,'queries':{name:{'query':query,'result':{'status':'success','data':{
+            'resultType':'vector','result':[{'metric':{'namespace':'vllm','pod':'native-fixture'},'value':[stamp,'1']}]}}}
+            for name,query in NATIVE_QUERIES.items()},
+            'targets':[{'labels':{'job':'vllm','namespace':'vllm','pod':'native-fixture'},'health':'up','lastError':''}],
+            'bridgeRules':[{'name':'phorvex.physics.bridge','rules':[{'name':'http_requests_total',
+                'query':'sum by (namespace, pod, container, node) (vllm:request_success_total)',
+                'health':'ok','lastEvaluation':utc}]}]}
+        args=[closure,inputs,runtime,{'utc':utc,'containerArgs':[{'name':'aws-eks-nodeagent',
+            'args':['--enable-network-policy=false']}],'networkPolicyEnv':[{'name':'NETWORK_POLICY_ENFORCING_MODE','value':'standard'}]},None,prom]
+        return args,{'auth_proof':proof,'secret_metadata':metadata,'artifacts':artifacts}
+
+    def test_disabled_cni_with_valid_auth_passes_with_separate_native_acceptance(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            output=io.StringIO()
+            with contextlib.redirect_stdout(output):result=check(*args,**kwargs)
+            self.assertEqual(result['protectionMode'],'bearerToken')
+            self.assertEqual(result['nativeDecision'],'A')
+            self.assertEqual(result['nativeVLLM'],'pass')
+            self.assertIn('PROTECTION PASS',output.getvalue())
+            args[5]['queries']['vllm-up']['result']['data']['result'][0]['value'][1]='0'
+            args[5]['queries']['vllm-up10m']['result']['data']['result'][0]['value'][1]='0'
+            args[5]['queries']['vllm-native']['result']['data']['result']=[]
+            args[5]['queries']['vllm-ReqRate']['result']['data']['result']=[]
+            args[5]['targets'][0].update(health='down',lastError='connection refused')
+            output=io.StringIO()
+            with contextlib.redirect_stdout(output):result=check(*args,**kwargs)
+            self.assertEqual(result['protection'],'pass')
+            self.assertEqual(result['nativeVLLM'],'unmet')
+            self.assertEqual(result['nativeVLLMDetails']['dependency'],'stage6')
+            self.assertIn('PROTECTION PASS',output.getvalue())
+            self.assertIn('stage6 dependency, gateway activation may proceed',output.getvalue())
+            # Fresh successful empty vectors/target absence remain an honest observed gap.
+            for query in args[5]['queries'].values():query['result']['data']['result']=[]
+            args[5]['targets']=[]
+            self.assertEqual(check(*args,**kwargs)['nativeVLLM'],'unmet')
+
+    def test_missing_stale_future_and_wrong_source_or_receipt_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            for name in ('auth_proof','secret_metadata'):
+                for value in (None,'stale','future'):
+                    current=copy.deepcopy(kwargs)
+                    if value is None:current[name]=None
+                    else:current[name]['utc']=(datetime.now(timezone.utc)+timedelta(seconds=-1801 if value=='stale' else 60)).isoformat()
+                    with self.subTest(name=name,value=value),self.assertRaisesRegex(ValueError,'fresh'):
+                        check(*args,**current)
+            for mutate in (
+                lambda a:a[0]['metricsProtection'].update(mode='networkEnforced'),
+                lambda a:a[0]['metricsProtection'].update(tokenFile='/foreign/token'),
+                lambda a:a[0]['metricsProtection'].update(secretKey='master-key'),
+                lambda a:a[0].update(gatewaySourceSHA256='f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1'),
+                lambda a:a[2].update(schema='phorvex-litellm-gateway-runtime-reuse-receipt-v1'),
+                lambda a:a[2].update(mountedSourceCommit='b'*40),
+                lambda a:a[0].update(nativeDecision='B'),
+                lambda a:a[0].update(nativeVLLMPolicy='hardGate'),
+            ):
+                current=copy.deepcopy(args);mutate(current)
+                with self.assertRaises(ValueError):check(*current,**kwargs)
+
+    def test_secret_generation_uid_rv_annotation_and_proof_binding_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            for mutate in (
+                lambda k:k['secret_metadata']['secrets'][0].update(uid='replacement-same-name'),
+                lambda k:k['secret_metadata']['secrets'][0].update(resourceVersion='drifted-version'),
+                lambda k:k['secret_metadata']['secrets'][0].update(lastAppliedPresent=True),
+                lambda k:k['secret_metadata']['secrets'][0].update(pairID='foreign-generation'),
+                lambda k:k['auth_proof'].update(gatewaySourceSHA256='a'*64),
+                lambda k:k['auth_proof'].update(candidateTemplateSHA256='a'*64),
+                lambda k:k['auth_proof'].update(modelCalls=1),
+            ):
+                current=copy.deepcopy(kwargs);mutate(current)
+                with self.assertRaises(ValueError):check(*args,**current)
+
+    def test_rehashed_bad_projection_or_endpoint_still_fails_reviewed_derivation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            from render_metrics import object_hash
+            for name,mutate in (
+                ('deployment-metrics-json-patch.json',lambda obj:obj[3]['value']['spec']['volumes'][-1]['secret'].update(optional=True)),
+                ('metrics-servicemonitor.json',lambda obj:obj['spec']['endpoints'][0]['authorization']['credentials'].update(key='master-key')),
+            ):
+                path=kwargs['artifacts']/name;original=path.read_text();obj=json.loads(original);mutate(obj)
+                path.write_text(canonical(obj)+'\n');current=copy.deepcopy(args)
+                current[0]['artifactsSHA256'][name]=object_hash(obj)
+                with self.assertRaisesRegex(ValueError,'candidate template/projection/endpoint'):
+                    check(*current,**kwargs)
+                path.write_text(original)
+
+    def test_native_missing_stale_malformed_query_or_identity_evidence_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            for mutate in (
+                lambda p:p['queries'].pop('vllm-up10m'),
+                lambda p:p['queries']['vllm-ReqRate'].update(query='sum(http_requests_total)'),
+                lambda p:p['queries']['vllm-native']['result']['data']['result'][0]['metric'].update(pod='foreign-pod'),
+                lambda p:p['queries']['vllm-native']['result'].update(status='error'),
+                lambda p:p['queries']['vllm-ReqRate']['result']['data'].update(result=None),
+                lambda p:p.pop('targets'),
+                lambda p:p['bridgeRules'][0]['rules'][0].update(query='sum(http_requests_total)'),
+                lambda p:p.update(utc=(datetime.now(timezone.utc)-timedelta(seconds=1801)).isoformat()),
+                lambda p:p.update(utc=(datetime.now(timezone.utc)+timedelta(seconds=60)).isoformat()),
+            ):
+                current=copy.deepcopy(args);mutate(current[5])
+                with self.assertRaises(ValueError):check(*current,**kwargs)
+
+    def test_fresh_native_health_gaps_are_reported_without_blocking_auth(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args,kwargs=self.fixture(Path(tmp))
+            for mutate in (
+                lambda p:p['queries']['vllm-up10m']['result']['data']['result'][0]['value'].__setitem__(1,'0'),
+                lambda p:p['targets'][0].update(health='down'),
+                lambda p:p['bridgeRules'][0]['rules'][0].update(health='err'),
+            ):
+                current=copy.deepcopy(args);mutate(current[5])
+                result=check(*current,**kwargs)
+                self.assertEqual(result['protection'],'pass')
+                self.assertEqual(result['nativeVLLM'],'unmet')
+                self.assertEqual(result['nativeVLLMDetails']['dependency'],'stage6')
+
 
 if __name__=='__main__':unittest.main()

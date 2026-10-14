@@ -71,3 +71,17 @@ process/image/native checks run on isolated EC2 or CI, never on the VPS/gateway.
 The fresh stage 3 discovery of a missing historical image, disabled CNI network
 enforcement and unavailable native vLLM scrape is recorded in the release
 runbook. None is replaced with a guessed pin or fabricated runtime evidence.
+
+## Stage 5 authenticated source
+
+The v4 source contract preserves the immutable legacy and frozen M1b sources and
+adds the exact authenticated candidate. Port 4003 requires a separate file-mounted
+64-byte hexadecimal bearer credential. Authentication initializes before listeners;
+the published source-free runtime stays unchanged. The v2 actual-image receipt
+binds its tested mounted-source commit and hash separately from the original image
+publication commit and receipt. The three sources are exercised on that actual
+pulled digest with network disabled, read-only root/source and UID/GID 10001.
+Active EKS values remain disabled with the legacy Console profile during S5a.
+Native vLLM health remains an activation hard gate under the recorded default B.
+Tokens are generated only inside the cluster after that gate passes; no token
+rotation tooling is part of Stage 5.
