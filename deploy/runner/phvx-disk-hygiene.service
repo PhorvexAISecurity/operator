@@ -1,0 +1,21 @@
+[Unit]
+Description=Scoped Phorvex runner orphan inventory and reclamation
+After=local-fs.target docker.service
+
+[Service]
+Type=oneshot
+User=github-runner
+Group=github-runner
+Slice=phvxci.slice
+StateDirectory=phvx-runner-hygiene phvx-runner-hygiene-133 phvx-runner-cleanup
+StateDirectoryMode=0750
+ExecStart=/usr/local/libexec/phvx-disk-hygiene --timer
+TimeoutStartSec=90s
+TimeoutStopSec=3s
+KillMode=control-group
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=256M
+StandardOutput=journal
+StandardError=journal

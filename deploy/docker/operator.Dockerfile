@@ -11,6 +11,8 @@
 FROM golang:1.26 AS builder
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILD_JOBS=2
+ENV GOMAXPROCS=${BUILD_JOBS} GOFLAGS=-p=${BUILD_JOBS}
 
 WORKDIR /workspace
 
@@ -34,7 +36,7 @@ COPY build/metricvalidity/ build/metricvalidity/
 COPY phorvex/go.mod phorvex/go.mod
 COPY phorvex/go.sum phorvex/go.sum
 WORKDIR /workspace/phorvex
-RUN go mod download
+RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-operator-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked go mod download
 
 # Now the operator source.
 WORKDIR /workspace
@@ -43,41 +45,27 @@ WORKDIR /workspace/phorvex
 
 # PHORVEXSEC-83: fail the same build CI already runs if unfinished-work markers
 # enter production paths, lose their Plane owner, or drift from the inventory.
-RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
+RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-operator-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 
 # Static, stripped manager binary. GOARCH left to BuildKit so the binary matches the
 # image platform (amd64 on x86 EKS nodes, arm64 on Graviton).
-RUN : && HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
+RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-operator-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked HEAD_VALUE="$(cat /tmp/phorvex-git/HEAD)" && \
     if case "$HEAD_VALUE" in "ref: "*) true;; *) false;; esac; then \
       REF_PATH="${HEAD_VALUE#ref: }"; \
       if [ -f "/tmp/phorvex-git/${REF_PATH}" ]; then GIT_SHA="$(cat "/tmp/phorvex-git/${REF_PATH}")"; else GIT_SHA="notAvailable"; fi; \
     else GIT_SHA="$HEAD_VALUE"; fi && \
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /manager ./cmd && \
-    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -a -o /brain-replay ./cmd/brain-replay
+    go build -trimpath -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA}" -o /out/ ./cmd ./cmd/brain-replay && \
+    mv /out/cmd /manager && mv /out/brain-replay /brain-replay
 
-# /brain-replay is the offline Math Lab replay of recorded decision snapshots. It is built
-# in the same step with the same source identity as /manager, so a replay can prove it runs
-# the exact decision code that recorded the snapshot. It is never the entrypoint.
-
-# Administrative recovery is a separate, explicit invocation. The image entrypoint
-# remains the manager; operators must override it to run this bounded CLI.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /phorvex-recovery ./cmd/recovery
-
-# Node-local read-only kubelet PodResources helper. The optional MIG agent runs this
-# binary in a separate container from vendor GPU tooling.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /phorvex-mig-allocation-helper ./cmd/mig-allocation-helper
-
-# Independently authenticated one-shot synthetic completed-disclosure observer.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /loss-observer ./cmd/loss-observer
-
-# Independently authenticated one-shot synthetic current-inventory observer.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /current-inventory-observer ./cmd/current-inventory-observer
+# Keep the four administrative/observer binaries' original plain ldflags.
+RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-operator-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/ \
+      ./cmd/recovery ./cmd/mig-allocation-helper ./cmd/loss-observer ./cmd/current-inventory-observer && \
+    mv /out/recovery /phorvex-recovery && \
+    mv /out/mig-allocation-helper /phorvex-mig-allocation-helper && \
+    mv /out/loss-observer /loss-observer && \
+    mv /out/current-inventory-observer /current-inventory-observer
 
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot

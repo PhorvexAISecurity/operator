@@ -1,0 +1,33 @@
+{
+  "schema": 2,
+  "timer_orphan_live": true,
+  "hook_orphan_live": false,
+  "hook_ordering_verified": false,
+  "runner_id": 130,
+  "deadline_seconds": 80,
+  "max_entries": 512,
+  "profiles": [
+    {
+      "runner_id": 130,
+      "unit": "actions.runner.PhorvexSecurity.phorvex.service",
+      "root": "/home/github-runner/actions-runner",
+      "bin": "/home/github-runner/actions-runner/bin/",
+      "diag": "/home/github-runner/actions-runner/_diag",
+      "work": "/home/github-runner/actions-runner/phorvex",
+      "docker_config": "/home/github-runner/.docker",
+      "instances": "/home/github-runner/.docker/buildx/instances",
+      "state": "/var/lib/phvx-runner-hygiene"
+    },
+    {
+      "runner_id": 133,
+      "unit": "actions.runner.PhorvexSecurity.phorvex-1.service",
+      "root": "/home/github-runner/action-runner-1",
+      "bin": "/home/github-runner/action-runner-1/bin/",
+      "diag": "/home/github-runner/action-runner-1/_diag",
+      "work": "/home/github-runner/action-runner-1/phorvex_1_work",
+      "docker_config": "/home/github-runner/.docker-phorvex-1",
+      "instances": "/home/github-runner/.docker-phorvex-1/buildx/instances",
+      "state": "/var/lib/phvx-runner-hygiene-133"
+    }
+  ]
+}

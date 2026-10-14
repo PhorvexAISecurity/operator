@@ -10,7 +10,7 @@
 FROM node:20-bookworm-slim AS web
 WORKDIR /web
 COPY dashboard-web/package.json dashboard-web/package-lock.json ./
-RUN npm ci
+RUN --mount=type=cache,id=phvx-console-npm,target=/root/.npm,sharing=locked npm ci
 COPY dashboard-web/ ./
 RUN npm run build      # emits ./out (static SPA)
 
@@ -18,6 +18,8 @@ RUN npm run build      # emits ./out (static SPA)
 FROM golang:1.26 AS gobuild
 ARG TARGETOS
 ARG TARGETARCH
+ARG BUILD_JOBS=2
+ENV GOMAXPROCS=${BUILD_JOBS} GOFLAGS=-p=${BUILD_JOBS}
 WORKDIR /workspace
 COPY build/phoenix-extended/ build/phoenix-extended/
 # The console reads the harness metrics stream, so the phorvex module replaces
@@ -28,22 +30,22 @@ COPY build/metricvalidity/ build/metricvalidity/
 COPY phorvex/go.mod phorvex/go.mod
 COPY phorvex/go.sum phorvex/go.sum
 WORKDIR /workspace/phorvex
-RUN go mod download
+RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked go mod download
 WORKDIR /workspace
 COPY phorvex/ phorvex/
 WORKDIR /workspace/phorvex
 # PHORVEXSEC-83: the console build shares the marker/ownership gate with the operator.
-RUN go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
+RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked go run ./cmd/pendingcheck -root . -inventory PENDING-INVENTORY.md
 # BuildStamp is what GET /api/version reports as the console's own version, and it is the
 # ONLY way to tell which console build is serving — the operator's version is read from the
 # live Deployment, but the console can only report what was compiled into it. Left unset it
 # defaults to "dev", which made the deployed console report "dev" against operator "0.4.6"
 # and tripped the End-to-End version-match check (P02) on every single run.
 ARG CONSOLE_VERSION=dev
-RUN : && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
-      -a -o /console cmd/console/main.go
+      -o /console cmd/console/main.go
 
 # The console's live-scan/ablation subsystems SHELL OUT to the phorvex operator binary at
 # <root>/phorvex/bin/phorvex.exe (subsystems.go: c.PhorvexBin runs `phorvex --scan`). That
@@ -51,8 +53,8 @@ RUN : && CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 # dashboard's Scan step reported 0 nodes / 0 pods on a full cluster (platform then falls back
 # to generic-k8s). Build it from the SAME phorvex module — in-cluster it scans via the pod
 # ServiceAccount, exactly like the running operator.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -a -o /phorvex ./cmd
+RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /phorvex ./cmd
 
 # ---- Stage 2c: the harness binary ----
 # GET /api/catalog enumerates the full scenario catalogue by SHELLING OUT to this binary
@@ -63,19 +65,19 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
 # `replace github.com/phorvex/metricvalidity => ../metricvalidity`, so all three directories must
 # sit side by side for those relative replaces to resolve.
 FROM golang:1.26 AS harnessbuild
+ARG TARGETOS
+ARG TARGETARCH
+ARG BUILD_JOBS=2
+ENV GOMAXPROCS=${BUILD_JOBS} GOFLAGS=-p=${BUILD_JOBS}
 WORKDIR /workspace
 COPY build/phoenix-extended/ build/phoenix-extended/
 COPY build/metricvalidity/ build/metricvalidity/
 COPY build/test-harness/ build/test-harness/
 WORKDIR /workspace/build/test-harness
 # CGO-free + static so it runs on the distroless/static final base next to the console binary.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /harness ./cmd/harness
-# The synthetic NATS observer is a single read-only client. Build it from the
-# same reviewed source into the existing console image; no runtime download or
-# second image release is involved. Its Pod runs only this binary.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /nats-owned-observer ./cmd/nats-owned-observer
+RUN --mount=type=cache,id=phvx-harness-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-harness-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/ ./cmd/harness ./cmd/nats-owned-observer && \
+    mv /out/harness /harness && mv /out/nats-owned-observer /nats-owned-observer
 
 # ---- Stage 2b: kubectl ----
 # internal/console/workload_attack.go fires a real attack by applying a SecurityEvent CR,

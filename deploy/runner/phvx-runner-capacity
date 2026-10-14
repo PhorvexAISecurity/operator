@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+"""Boot CPU policy. Explicit apply and R2 acceptance require offline admission."""
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import time
+from phvx_runner_profiles import FENCE, HOLD, CAPACITY, listener_count, trusted_json
+
+OVERRIDE = Path('/etc/systemd/system/phvxci.slice.d/70-runner-speed.conf')
+ENV = Path('/run/phvx-runner-capacity.env')
+RECEIPT = Path('/var/lib/phvx-runner-maintenance/r2-capacity.json')
+CGROUP = Path('/sys/fs/cgroup/phvxci.slice')
+
+def policy(cores, runners):
+    if cores < 1 or runners not in (1, 2):
+        raise RuntimeError('Invalid cores/listeners')
+    return max(1, cores - 1) * 100, min(10000, 50 * max(2, cores - 2)), max(1, (cores - 2) // runners)
+
+def atomic(path, contents, mode=0o644):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise RuntimeError('Destination symlink refused')
+    temp = path.with_name(path.name + '.speed-' + str(os.getpid()))
+    fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            stream.write(contents)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temp, mode)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+def reading():
+    mem = dict(line.split(':', 1) for line in Path('/proc/meminfo').read_text().splitlines())
+    physical = int(mem['MemTotal'].split()[0]) * 1024
+    available = int(mem['MemAvailable'].split()[0]) * 1024
+    disk = os.statvfs('/')
+    full = next(line for line in Path('/proc/pressure/memory').read_text().splitlines() if line.startswith('full '))
+    psi = float(dict(pair.split('=') for pair in full.split()[1:])['avg10'])
+    events = (CGROUP / 'memory.events').read_text() if CGROUP.exists() else ''
+    return {'cores': int(subprocess.check_output(['nproc', '--all'], text=True)), 'physical_bytes': physical,
+            'available_bytes': available, 'disk_available_bytes': disk.f_bavail * disk.f_frsize,
+            'memory_full_avg10': psi, 'memory_events': events, 'at': time.time()}
+
+def gate(sample):
+    if not (sample['cores'] >= 8 and sample['physical_bytes'] >= 24 * 2**30 and
+            sample['available_bytes'] >= 12 * 2**30 and sample['disk_available_bytes'] >= 40 * 2**30 and
+            sample['memory_full_avg10'] < 1):
+        raise RuntimeError('R2 CPU/RAM/disk/PSI gate failed')
+
+def offline():
+    if not (FENCE.is_file() or HOLD.is_file()):
+        raise RuntimeError('Between-job apply requires drained admission fence/hold')
+    for directory in Path('/proc').iterdir():
+        if directory.name.isdigit():
+            try:
+                if (directory / 'comm').read_text().strip() in {'Runner.Listener', 'Runner.Worker'}:
+                    raise RuntimeError('Runner processes remain; defer apply')
+            except FileNotFoundError:
+                continue
+
+def accept_second():
+    offline()
+    samples = []
+    start = time.monotonic()
+    while True:
+        offline()
+        sample = reading()
+        gate(sample)
+        samples.append(sample)
+        if samples[0]['memory_events'] != sample['memory_events']:
+            # Strict: even a new memory event defers acceptance until investigated.
+            raise RuntimeError('New memory events during idle sample')
+        if time.monotonic() - start >= 600:
+            break
+        time.sleep(10)
+    receipt = {'duration_seconds': time.monotonic() - start, 'samples': samples,
+               'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+    atomic(RECEIPT, json.dumps(receipt) + '\n', 0o600)
+    atomic(CAPACITY, '{"listeners": 2}\n')
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--boot', action='store_true')
+    parser.add_argument('--accept-second', action='store_true')
+    args = parser.parse_args()
+    if os.geteuid() != 0:
+        raise RuntimeError('Root required')
+    if args.accept_second:
+        accept_second()
+    # At boot ExecStart precedes listeners; on explicit apply demand an offline host.
+    if not args.boot:
+        offline()
+    runners = listener_count()
+    sample = reading()
+    if runners == 2:
+        gate(sample)
+        receipt = trusted_json(RECEIPT)
+        if receipt.get('duration_seconds', 0) < 600 or len(receipt.get('samples', [])) < 61:
+            raise RuntimeError('R2 requires ten-minute acceptance receipt')
+    quota, weight, parallel = policy(sample['cores'], runners)
+    atomic(OVERRIDE, f'[Slice]\nCPUQuota={quota}%\nCPUWeight={weight}\n')
+    atomic(ENV, f'P={parallel}\nGOMAXPROCS={parallel}\nGOFLAGS=-p={parallel}\n')
+    subprocess.run(['systemctl', 'daemon-reload'], check=True)
+    subprocess.run(['systemctl', 'set-property', '--runtime', 'phvxci.slice',
+                    f'CPUQuota={quota}%', f'CPUWeight={weight}'], check=True)
+    # Verify cgroup values, rather than trusting successful systemctl alone.
+    maximum, period = (CGROUP / 'cpu.max').read_text().split()
+    if int(maximum) * 100 != quota * int(period) or int((CGROUP / 'cpu.weight').read_text()) != weight:
+        raise RuntimeError('Effective CPU properties mismatch')
+    print(json.dumps({'listeners': runners, 'quota_percent': quota, 'weight': weight, 'P': parallel, 'host': sample}))
+
+if __name__ == '__main__':
+    main()

@@ -80,7 +80,9 @@ def normalize(document, candidate=False):
     has_shared = any(shared(job) for job in result["jobs"].values())
     if candidate and has_shared:
         result["permissions"].pop("actions", None)
-    for job in result["jobs"].values():
+    for name, job in result["jobs"].items():
+        if candidate and name in ("build-operator", "build-console"):
+            remove_capacity(job, name)
         job.pop("concurrency", None)
         if candidate and shared(job):
             job["steps"] = [step for step in job["steps"]
@@ -89,6 +91,22 @@ def normalize(document, candidate=False):
                 if step.get("uses") == "docker/setup-buildx-action@v3":
                     step.pop("id", None)
     return result
+
+
+CAPACITY_NAME = "Read runner build capacity"
+CAPACITY_REF = "BUILD_JOBS=${{ steps.capacity.outputs.build_jobs }}"
+
+
+def remove_capacity(job, name):
+    """Remove this task's exact plumbing; separate tests validate its values."""
+    job['steps'] = [step for step in job['steps'] if step.get('name') != CAPACITY_NAME]
+    for step in job['steps']:
+        if step.get('uses') == 'docker/build-push-action@v6':
+            args = step['with'].get('build-args', '')
+            if name == 'build-operator' and args == CAPACITY_REF:
+                step['with'].pop('build-args')
+            elif name == 'build-console':
+                step['with']['build-args'] = args.replace(CAPACITY_REF + '\n', '')
 
 
 def workflow_key(group, event, ref, run_id, pr):
@@ -656,6 +674,55 @@ sys.exit(codes.get(sys.argv[1], int(os.environ['TEST_HELPER_EXIT'])))
             self.assertFalse(log.exists(), "unexpected context reached Docker")
             self.assertEqual(sentinel.read_text(), "preserve")
             self.assertTrue((fixture / "Dockerfile").exists(), "job body deleted fixture/RUNNER_TEMP")
+
+
+class RunnerSpeedPolicy(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.pin = os.environ.get('RUNNER_SPEED_BASELINE', '9fd64966de5b93162da59f1a21cedafd11ff9ce0')
+        cls.candidate = {path.name: load(path.read_text()) for path in (ROOT / '.github/workflows').glob('*.yml')}
+        names = subprocess.check_output(['git', 'ls-tree', '--name-only', cls.pin, '.github/workflows/'], cwd=ROOT, text=True).splitlines()
+        cls.baseline = {Path(name).name: load(subprocess.check_output(['git', 'show', f'{cls.pin}:{name}'], cwd=ROOT, text=True)) for name in names if name.endswith('.yml')}
+
+    def test_only_two_exact_capacity_differences_against_pinned_main(self):
+        self.assertEqual(set(self.candidate), set(self.baseline))
+        for name, before in self.baseline.items():
+            after = copy.deepcopy(self.candidate[name])
+            if name == 'ci.yml':
+                for job_name in ('build-operator', 'build-console'):
+                    job = after['jobs'][job_name]
+                    capacity = [step for step in job['steps'] if step.get('name') == CAPACITY_NAME]
+                    self.assertEqual(len(capacity), 1)
+                    step = capacity[0]
+                    self.assertEqual(set(step), {'name', 'id', 'run'})
+                    self.assertEqual(step['id'], 'capacity')
+                    index = job['steps'].index(step)
+                    self.assertEqual(job['steps'][index - 1]['uses'], 'actions/checkout@v4')
+                    self.assertLess(index, next(i for i, item in enumerate(job['steps']) if item.get('uses') == 'docker/setup-buildx-action@v3'))
+                    build = next(item for item in job['steps'] if item.get('uses') == 'docker/build-push-action@v6')
+                    expected = CAPACITY_REF if job_name == 'build-operator' else 'CONSOLE_VERSION=${{ steps.meta.outputs.version }}\n' + CAPACITY_REF + '\n'
+                    self.assertEqual(build['with']['build-args'], expected)
+                    self.assertEqual(step['run'], self.candidate['ci.yml']['jobs']['build-operator']['steps'][index]['run'])
+                    remove_capacity(job, job_name)
+            with self.subTest(workflow=name):
+                self.assertEqual(before, after)
+
+    def test_capacity_shell_validation_and_fallback_without_eval(self):
+        steps = self.candidate['ci.yml']['jobs']['build-operator']['steps']
+        body = next(step['run'] for step in steps if step.get('id') == 'capacity')
+        self.assertNotRegex(body, r'\b(?:source|eval)\b')
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'capacity.env'
+            output = Path(directory) / 'output'
+            body = body.replace('/run/phvx-runner-capacity.env', str(file))
+            for value, expected in [(None, '2'), ('P=7\nGOMAXPROCS=7\n', '7'), ('P=0\n', '2'), ('P=2;touch injected\n', '2'), ('P=7\nP=8\n', '2'), ('P=-1\n', '2')]:
+                if value is None: file.unlink(missing_ok=True)
+                else: file.write_text(value)
+                output.write_text('')
+                result = subprocess.run(['bash', '-e', '-o', 'pipefail'], input=body, text=True, capture_output=True, cwd=directory, env={**os.environ, 'GITHUB_OUTPUT': str(output)})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output.read_text(), 'build_jobs=' + expected + '\n')
+                self.assertFalse((Path(directory) / 'injected').exists())
 
 
 if __name__ == "__main__":

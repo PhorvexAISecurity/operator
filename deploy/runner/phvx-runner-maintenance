@@ -1,0 +1,282 @@
+#!/usr/bin/env python3
+"""Root admission controller; only verified listener gets STOP/INT/CONT, no force."""
+import contextlib,fcntl,json,os,pathlib,re,secrets,select,signal,subprocess,sys,time,importlib.machinery,importlib.util
+sys.dont_write_bytecode=True
+sys.path.insert(0,str(pathlib.Path(__file__).resolve().parent))
+import phvx_runner_profiles as profiles_lib
+ROOT=pathlib.Path('/home/github-runner/actions-runner'); RUN=pathlib.Path('/run/phvx-runner-maintenance'); UNIT='actions.runner.PhorvexSecurity.phorvex.service'
+REPOS={'operator','terraform-infrastructure','phorvex-voice-agent','landing','NOperator','demo-repository','target-ai-app','dashboard','phorvex-general','phorvex-mtd'}
+def log(kind,**kw):print(json.dumps({'at':time.time(),'kind':kind,**kw}),flush=True)
+def command(args,timeout=8):return subprocess.check_output(args,text=True,timeout=timeout)
+def proc(pid):
+ d=pathlib.Path('/proc')/str(pid);s=(d/'stat').read_text();f=s[s.rfind(')')+2:].split()
+ return {'pid':int(pid),'ppid':int(f[1]),'start':int(f[19]),'state':f[0],'uid':d.stat().st_uid,'exe':str((d/'exe').resolve()),'comm':(d/'comm').read_text().strip(),'cgroup':(d/'cgroup').read_text().strip()}
+def processes():
+ out=[]
+ for d in pathlib.Path('/proc').iterdir():
+  if not d.name.isdigit():continue
+  try:
+   if (d/'comm').read_text().strip() in ('Runner.Listener','Runner.Worker'):out.append(proc(int(d.name)))
+  except FileNotFoundError:continue
+ return out
+
+def local_idle(allow_listener=True,allow_unmatched=False):
+ ps=processes();configured=profiles_lib.profiles()
+ listeners,workers=profiles_lib.census(ps,configured)
+ if workers or (listeners and not allow_listener):raise RuntimeError('Worker/unexpected listener present')
+ allowed=set();latest=[]
+ for profile in configured:
+  p=listeners.get(profile['runner_id']);root=pathlib.Path(profile['root']);unit=profile['unit']
+  if p:
+   parent=proc(p['ppid'])
+   if parent['uid']!=1000 or parent['exe']!=str(root/'externals/node20/bin/node'):raise RuntimeError('Service parent identity mismatch')
+   allowed.update((p['pid'],parent['pid']))
+   main=int(command(['systemctl','show',unit,'-p','MainPID','--value']).strip())
+   if main:
+    wrapper=proc(main);args=(pathlib.Path('/proc')/str(main)/'cmdline').read_bytes().split(b'\0')
+    if main!=parent['ppid'] or wrapper['uid']!=1000 or wrapper['exe']!='/usr/bin/bash' or str(root/'runsvc.sh').encode() not in args:raise RuntimeError('Runner wrapper identity mismatch')
+    allowed.add(main)
+  groups={'/system.slice/'+unit,'/phvxci.slice/'+unit}
+  for group in groups:
+   cg=pathlib.Path('/sys/fs/cgroup'+group)
+   if cg.exists():
+    extra=[int(i) for f in cg.rglob('cgroup.procs') for i in f.read_text().split() if int(i) not in allowed]
+    if extra:raise RuntimeError('Runner descendants remain: '+repr(extra))
+  if not p and profile['runner_id']==133 and profiles_lib.listener_count()==1:
+   latest.append({'runner_id':133,'inactive':True});continue
+  code="""import sys,json,os,importlib.machinery,importlib.util
+sys.dont_write_bytecode=True
+sys.path.insert(0,'/usr/local/libexec')
+l=importlib.machinery.SourceFileLoader('h','/usr/local/libexec/phvx-disk-hygiene');s=importlib.util.spec_from_loader(l.name,l);h=importlib.util.module_from_spec(s);l.exec_module(h)
+from phvx_runner_profiles import select
+profile=select(sys.argv[1]);pid=int(sys.argv[2]);listener={'pid':pid} if pid else None
+with h.profile_context(profile):
+ try:result=h.latest_job_logs(1000,listener)
+ except h.Refuse:
+  if not pid:raise
+  active=[]
+  for p in h.Path('/proc',str(pid),'fd').iterdir():
+   try:
+    target=os.readlink(p)
+    if target.startswith(h.DIAG+'/Runner_') and target.endswith('.log'):active.append(target)
+   except FileNotFoundError:continue
+  if len(set(active))!=1:raise
+  data=h.Path(active[0]).read_text(errors='replace')
+  if 'Running job:' in data or 'completed with result:' in data:raise
+  result=h.latest_job_logs(1000,None);result['new_listener_no_job_records']=True
+ print(json.dumps(result))
+"""
+  try:latest.append(json.loads(command(['runuser','-u','github-runner','--','python3','-c',code,str(profile['runner_id']),str(p['pid'] if p else 0)],2)))
+  except Exception:
+   if not allow_unmatched:raise RuntimeError('Listener job log busy/unknown')
+ log('local-idle',processes=ps,last_job_event=latest,recovery_history_unmatched=allow_unmatched);return list(listeners.values())
+
+def proof(after=None,allow_busy=False):
+ if not select.select([sys.stdin],[],[],13)[0]:raise RuntimeError('API input deadline')
+ data=json.loads(sys.stdin.readline());now=time.time()
+ if allow_busy and data.get('recovery_api_unavailable') is True:
+  log('recovery-api-unavailable',error_type=data.get('error_type'),policy='start only after local offline proof; no stop/restart');return data
+ if (not data.get('idle') and not allow_busy) or now-data['finished_at']>5 or data['finished_at']-data['started_at']>13:raise RuntimeError('Stale/slow/busy API proof')
+ if after is not None and data['started_at']<after:raise RuntimeError('Proof predates admission freeze')
+ repos=data['repositories'];checks=data['checks']
+ if {r['name'] for r in repos}!=REPOS or any(r['viewerPermission']!='ADMIN' for r in repos):raise RuntimeError('ADMIN scope changed')
+ if len(checks)!=20 or {(r['repository'],r['query_status']) for r in checks}!={(r,s) for r in REPOS for s in ('queued','in_progress')} or (any(r['runs'] for r in checks) and not allow_busy):raise RuntimeError('Incomplete/busy API gate')
+ log('api-recovery-evidence' if allow_busy else 'api-idle',proof=data);return data
+
+def recent(data,age=2):
+ if time.time()-data['finished_at']>age:raise RuntimeError('Proof expired at mutation boundary')
+
+def write_state(path,data):
+ temp=path.with_name(path.name+'.'+str(os.getpid()));temp.write_text(json.dumps(data)+'\n');temp.chmod(0o600);os.replace(temp,path)
+def coord(path):
+ f=open(str(path)+'.lock','a');os.chmod(str(path)+'.lock',0o600);fcntl.flock(f,fcntl.LOCK_EX);return f
+
+def watchdog(path,listener_pid,listener_start,controller_pid,controller_start):
+ """An acknowledged watchdog never disarms before the stop transaction ends."""
+ listener_fd=os.pidfd_open(listener_pid)
+ try:
+  p=proc(listener_pid)
+  if p['uid']!=1000 or p['start']!=listener_start or p['exe'] not in {x['bin']+'Runner.Listener' for x in profiles_lib.profiles()}:raise RuntimeError('Watchdog listener mismatch')
+  controller_fd=os.pidfd_open(controller_pid);c=proc(controller_pid)
+  if c['uid']!=0 or c['start']!=controller_start:raise RuntimeError('Watchdog controller mismatch')
+  with coord(path):
+   state=json.loads(path.read_text());state.update(phase='armed',watchdog_pid=os.getpid(),watchdog_start=proc(os.getpid())['start']);write_state(path,state)
+  observed_stop=None
+  while True:
+   if select.select([listener_fd],[],[],0)[0]:return
+   dead=bool(select.select([controller_fd],[],[],0)[0])
+   with coord(path):
+    state=json.loads(path.read_text())
+    if state['phase'] in ('committed','aborted','expired'):return
+    p=proc(listener_pid)
+    if p['start']!=listener_start:raise RuntimeError('Watchdog identity drift')
+    if p['state'] in ('T','t') and observed_stop is None:observed_stop=time.monotonic()
+    deadline=state.get('deadline')
+    if observed_stop is not None:deadline=min(deadline or float('inf'),observed_stop+14)
+    if dead or (deadline is not None and time.monotonic()>=deadline):
+     signal.pidfd_send_signal(listener_fd,signal.SIGCONT);state['phase']='expired';write_state(path,state);log('watchdog-resumed',controller_dead=dead);return
+   time.sleep(.02)
+ finally:os.close(listener_fd)
+
+def drain():
+ ls=local_idle()
+ if not ls:raise RuntimeError('No listener to drain')
+ fence=RUN/'offline-fence'
+ if fence.exists():raise RuntimeError('Existing fence; inspect/recover explicitly')
+ nonce=secrets.token_hex(12)
+ write_state(fence,{'at':time.time(),'listeners':ls,'owner':'runner-speed-20261014','nonce':nonce})
+ fence.chmod(0o644)
+ transactions=[];committed=False
+ def resume_all():
+  for tx in transactions:
+   with coord(tx['path']):
+    state=json.loads(tx['path'].read_text())
+    if tx.get('frozen'):
+     try:signal.pidfd_send_signal(tx['fd'],signal.SIGCONT)
+     except ProcessLookupError:pass
+     tx['frozen']=False
+    state['phase']='committed' if committed else 'aborted';write_state(tx['path'],state)
+ try:
+  command(['systemd-run','--quiet','--collect','--on-active=5min','--timer-property=AccuracySec=1s','--unit=phvx-offline-recovery-'+nonce,'/usr/local/libexec/phvx-runner-maintenance','--offline-recovery',nonce])
+  controller=proc(os.getpid())
+  # Arm independent pidfd watchdogs for ALL listeners before freezing ANY.
+  for index,p in enumerate(ls):
+   tx={'listener':p,'fd':os.pidfd_open(p['pid']),'parent':pathlib.Path('/proc')/str(p['ppid']),'path':RUN/('watchdog-'+nonce+'-'+str(index)+'.json')}
+   transactions.append(tx);write_state(tx['path'],{'phase':'arming','listener':p})
+   unit='phvx-admission-resume-'+str(p['pid'])+'-'+str(p['start'])+'-'+nonce[-8:]
+   command(['systemd-run','--quiet','--collect','--unit='+unit,'/usr/local/libexec/phvx-runner-maintenance','--watchdog',str(tx['path']),str(p['pid']),str(p['start']),str(controller['pid']),str(controller['start'])])
+   limit=time.monotonic()+5
+   while time.monotonic()<limit:
+    state=json.loads(tx['path'].read_text())
+    if state['phase']=='armed':break
+    time.sleep(.02)
+   else:raise RuntimeError('Independent watchdog did not acknowledge readiness')
+   tx['watchfd']=os.pidfd_open(state['watchdog_pid']);wp=proc(state['watchdog_pid'])
+   if wp['uid']!=0 or wp['start']!=state['watchdog_start'] or int(command(['systemctl','show',unit,'-p','MainPID','--value']).strip())!=wp['pid']:raise RuntimeError('Watchdog identity mismatch')
+  paused=time.time();deadline=time.monotonic()+14
+  for tx in transactions:
+   with coord(tx['path']):
+    state=json.loads(tx['path'].read_text())
+    if state['phase']!='armed' or select.select([tx['watchfd']],[],[],0)[0]:raise RuntimeError('Watchdog no longer armed')
+    state.update(phase='paused',deadline=deadline);write_state(tx['path'],state)
+    signal.pidfd_send_signal(tx['fd'],signal.SIGSTOP);tx['frozen']=True
+  print('PAUSED',flush=True);data=proof(after=paused);local_idle()
+  # Validate every transaction under locks before any shutdown signal.
+  with contextlib.ExitStack() as stack:
+   for tx in transactions:stack.enter_context(coord(tx['path']))
+   recent(data)
+   for tx in transactions:
+    state=json.loads(tx['path'].read_text())
+    if state['phase']!='paused' or time.monotonic()>=deadline-.3 or select.select([tx['watchfd']],[],[],0)[0] or proc(tx['listener']['pid'])['state'] not in ('T','t'):raise RuntimeError('Pause expired/resumed; no termination allowed')
+   for tx in transactions:
+    signal.pidfd_send_signal(tx['fd'],signal.SIGINT);committed=True
+    signal.pidfd_send_signal(tx['fd'],signal.SIGCONT);tx['frozen']=False
+    state=json.loads(tx['path'].read_text());state['phase']='committed';write_state(tx['path'],state)
+  log('listeners-graceful-int',identities=ls)
+  until=time.monotonic()+25
+  while time.monotonic()<until:
+   if any(q['comm']=='Runner.Worker' for q in processes()):raise RuntimeError('Worker raced after graceful INT; no force; recover after drain')
+   if not processes() and all(not tx['parent'].exists() for tx in transactions):
+    try:local_idle(False)
+    except RuntimeError:time.sleep(.1);continue
+    log('offline-drained');return
+   time.sleep(.1)
+  raise RuntimeError('Graceful drain incomplete; no forced kill')
+ except BaseException:
+  resume_all()
+  if not committed:fence.unlink(missing_ok=True)
+  else:log('recovery-required',fence='retained',instruction='Wait for all runner processes to drain; start-only recover-fence')
+  raise
+ finally:
+  resume_all()
+  for tx in transactions:
+   os.close(tx['fd'])
+   if 'watchfd' in tx:os.close(tx['watchfd'])
+
+def daemon_preflight():
+ if subprocess.run(['systemctl','is-active','--quiet','docker.service']).returncode==0 and command(['docker','ps','-aq']).strip():raise RuntimeError('Surviving/new rootful container')
+ namespaces=command(['ctr','namespaces','list','--quiet']).split()
+ if set(namespaces)-{'moby','moby_history'}:raise RuntimeError('Unknown rootful namespace')
+ for n in namespaces:
+  if len(command(['ctr','--namespace',n,'tasks','list']).splitlines())>1:raise RuntimeError('Surviving rootful task')
+
+def offline_recovery(nonce):
+ """Short-lived lease recovery after controller/SSH loss; starts only."""
+ if os.geteuid()!=0 or pathlib.Path('/etc/machine-id').read_text().strip()!='7089cf7bcdeb41869b950cf23aefff81':raise RuntimeError('Root/host recovery required')
+ lock=open(RUN/'maintenance.lock','a');deadline=time.monotonic()+120
+ while True:
+  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB);break
+  except BlockingIOError:
+   if time.monotonic()>=deadline:raise RuntimeError('Recovery lease cannot acquire maintenance lock')
+   time.sleep(1)
+ fence=RUN/'offline-fence'
+ if not fence.is_file():return
+ state=json.loads(fence.read_text())
+ if state.get('owner') not in {'fix1-20261014T092326Z','runner-speed-20261014'} or state.get('nonce')!=nonce or time.time()-state['at']<290:return
+ profiles_lib.check_hold()
+ local_idle(False,allow_unmatched=True)
+ command(['systemctl','start','containerd.service'],120);command(['systemctl','start','docker.service'],120)
+ fence.unlink();start_listeners();log('offline-lease-recovered',nonce=nonce,policy='starts only; no active job/process stopped')
+
+def start_listeners():
+ profiles_lib.check_hold()
+ for p in profiles_lib.profiles()[:profiles_lib.listener_count()]:
+  command(['systemctl','start',p['unit']],120)
+
+def hold(action,nonce):
+ path=profiles_lib.HOLD
+ if action=='release':
+  state=profiles_lib.trusted_json(path)
+  if state.get('owner')!='runner-speed-20261014' or state.get('nonce')!=nonce:raise RuntimeError('Task-owned hold nonce mismatch')
+  path.unlink();log('rescale-hold-released',nonce=nonce);return
+ local_idle(False)
+ if not (RUN/'offline-fence').is_file():raise RuntimeError('Drain before setting persistent hold')
+ if path.exists():raise RuntimeError('Existing hold; do not replace')
+ path.parent.mkdir(mode=0o755,exist_ok=True)
+ write_state(path,{'owner':'runner-speed-20261014','nonce':nonce,'at':time.time()})
+ log('rescale-hold-set',nonce=nonce)
+
+def main():
+ if os.geteuid()!=0 or pathlib.Path('/etc/machine-id').read_text().strip()!='7089cf7bcdeb41869b950cf23aefff81':raise RuntimeError('Root/host required')
+ action=sys.argv[1] if len(sys.argv)>1 else 'inspect'
+ if action not in ('inspect','drain','restart-containerd','restart-docker','stop-docker','start-runner','recover-fence','stop-runner','start-second','hold','release'):raise RuntimeError('Unknown action')
+ RUN.mkdir(mode=0o755,exist_ok=True)
+ if RUN.is_symlink() or RUN.stat().st_uid!=0 or RUN.stat().st_mode&0o022:raise RuntimeError('Unsafe maintenance directory')
+ lock=open(RUN/'maintenance.lock','a');os.chmod(RUN/'maintenance.lock',0o600);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+ proof(allow_busy=action=='recover-fence')
+ if action=='inspect':local_idle();return
+ if action in ('hold','release'):
+  hold(action,sys.argv[2]);return
+ if action=='start-second':
+  profiles_lib.check_hold()
+  if (RUN/'offline-fence').exists() or profiles_lib.listener_count()!=2:raise RuntimeError('R2 admission not ready')
+  local_idle();print('RECHECK',flush=True);data=proof();local_idle();recent(data)
+  command(['systemctl','start',profiles_lib.select(133)['unit']],120);return
+ if action in ('drain','stop-runner'):drain();return
+ local_idle(False,allow_unmatched=action=='recover-fence')
+ if not (RUN/'offline-fence').is_file() and action!='recover-fence':raise RuntimeError('Offline fence absent')
+ if action=='recover-fence':
+  # Abort recovery starts only; persistent rescale hold survives reboot.
+  profiles_lib.check_hold()
+  command(['systemctl','start','containerd.service'],120);command(['systemctl','start','docker.service'],120)
+  (RUN/'offline-fence').unlink(missing_ok=True);start_listeners();log('runner-started',recovery=True);return
+ if action=='start-runner':
+  profiles_lib.check_hold()
+  print('RECHECK',flush=True);data=proof();local_idle(False);recent(data)
+  (RUN/'offline-fence').unlink();start_listeners();log('runner-started',recovery=False);return
+ daemon_preflight()
+ print('RECHECK',flush=True);data=proof();local_idle(False);daemon_preflight();recent(data)
+ if action=='stop-docker':command(['systemctl','stop','docker.service'],120);log('docker-stopped');return
+ unit={'restart-containerd':'containerd.service','restart-docker':'docker.service'}[action]
+ command(['systemctl','restart',unit],120);log('daemon-restarted',unit=unit,state=command(['systemctl','show',unit,'-p','MainPID','-p','ActiveState','-p','ControlGroup']))
+
+if __name__=='__main__':
+ def interrupted(signum,frame):raise InterruptedError('Controller interrupted')
+ for s in (signal.SIGHUP,signal.SIGTERM,signal.SIGINT):signal.signal(s,interrupted)
+ try:
+  if len(sys.argv)>1 and sys.argv[1]=='--watchdog':
+   if os.geteuid()!=0 or pathlib.Path('/etc/machine-id').read_text().strip()!='7089cf7bcdeb41869b950cf23aefff81':raise RuntimeError('Root/host watchdog required')
+   watchdog(pathlib.Path(sys.argv[2]),*[int(i) for i in sys.argv[3:7]])
+  elif len(sys.argv)>1 and sys.argv[1]=='--offline-recovery':offline_recovery(sys.argv[2])
+  else:main()
+ except BaseException as e:log('refused',reason=str(e));raise
