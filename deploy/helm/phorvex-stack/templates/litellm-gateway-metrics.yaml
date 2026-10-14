@@ -1,31 +1,47 @@
 {{- if .Values.litellmGatewayMetrics.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne .Release.Name "phorvex") }}{{ fail "litellmGatewayMetrics requires phorvex-system release namespace" }}{{- end }}
+{{- $metrics := .Values.litellmGatewayMetrics }}
+{{- range $key, $_ := $metrics }}{{- if not (has $key (list "enabled" "protectionMode" "auth")) }}{{ fail "Stage5 metrics accepts only nonsecret protection and Secret reference values" }}{{- end }}{{- end }}
+{{- if ne (default "" $metrics.protectionMode) "bearerToken" }}{{ fail "Stage5 metrics requires explicit bearerToken protection mode" }}{{- end }}
+{{- $auth := default dict $metrics.auth }}
+{{- range $key, $_ := $auth }}{{- if not (has $key (list "secretName" "secretKey")) }}{{ fail "Stage5 metrics auth accepts Secret references only" }}{{- end }}{{- end }}
+{{- $secretName := default "" $auth.secretName }}
+{{- if or (not (kindIs "string" $secretName)) (gt (len $secretName) 253) (not (regexMatch "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$" $secretName)) }}{{ fail "Stage5 valid metrics Secret name required" }}{{- end }}
+{{- if ne (default "" $auth.secretKey) "token" }}{{ fail "Stage5 metrics Secret key must be token" }}{{- end }}
 {{- $console := .Values.phorvex.phorvex.console.litellmLive }}
-{{- $source := .Files.Get "files/litellm-m1b/gateway-metrics-source-configmap.json" | fromJson }}
-{{- $profile := .Files.Get "files/litellm-m1b/phorvex-litellm-live-profile-64098e6f1280.json" | fromJson }}
+{{- $source := .Files.Get "files/litellm-m5/gateway-metrics-source-configmap.json" | fromJson }}
+{{- $profilePath := "files/litellm-m5/phorvex-litellm-live-profile-b86af202d902.json" }}
+{{- $profile := .Files.Get $profilePath | fromJson }}
+{{- $monitor := .Files.Get "files/litellm-m5/metrics-servicemonitor.json" | fromJson }}
 {{- $sha := sha256sum (get $source.data "gateway.py") }}
 {{- $profileSHA := sha256sum (get $profile.data "profile.json") }}
 {{- $value := get $profile.data "profile.json" | fromJson }}
-{{- if or (ne $sha "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1") (ne $source.metadata.name (printf "phorvex-litellm-admission-gateway-%s" (trunc 12 $sha))) }}{{ fail "M1b immutable source bytes/name differ" }}{{- end }}
-{{- if or (ne $value.sourceSHA256 $sha) (ne $value.gatewayImage "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108") (ne $profile.metadata.name (printf "phorvex-litellm-live-profile-%s" (trunc 12 $profileSHA))) }}{{ fail "M1b immutable profile source/runtime/name differ" }}{{- end }}
-{{- if or (not $console.enabled) (ne $console.configMapName $profile.metadata.name) (ne $console.profileSHA256 $profileSHA) (ne $console.sourceConfigMapName $source.metadata.name) }}{{ fail "M1b active Console profile/source closure differs" }}{{- end }}
-{{- range $path, $_ := .Files.Glob "files/litellm-m1b/*.json" }}
+{{- if or (ne $sha "91af283097afd331d3c5b5cbe863694e85e7708c75b3cacbeaf56250f1c223ca") (not $source.immutable) (ne $source.metadata.namespace "litellm") (ne $source.metadata.name (printf "phorvex-litellm-admission-gateway-%s" (trunc 12 $sha))) }}{{ fail "Stage5 immutable authenticated source bytes/name differ" }}{{- end }}
+{{- if or (not $profile.immutable) (ne $profile.metadata.namespace "phorvex-system") (ne $value.sourceSHA256 $sha) (ne $value.gatewayImage "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108") (ne $profile.metadata.name (printf "phorvex-litellm-live-profile-%s" (trunc 12 $profileSHA))) }}{{ fail "Stage5 immutable profile source/runtime/name differ" }}{{- end }}
+{{- if or (not $console.enabled) (ne $console.configMapName $profile.metadata.name) (ne $console.profileSHA256 $profileSHA) (ne $console.sourceConfigMapName $source.metadata.name) }}{{ fail "Stage5 active Console profile/source closure differs" }}{{- end }}
+{{- $endpoint := first $monitor.spec.endpoints }}
+{{- if or (ne $monitor.metadata.namespace "monitoring") (ne $endpoint.authorization.type "Bearer") (ne $endpoint.authorization.credentials.name $secretName) (ne $endpoint.authorization.credentials.key $auth.secretKey) $endpoint.authorization.credentials.optional $endpoint.followRedirects }}{{ fail "Stage5 ServiceMonitor auth reference differs from reviewed candidate" }}{{- end }}
+{{- range $path := list "files/litellm-m5/gateway-metrics-source-configmap.json" $profilePath "files/litellm-m5/metrics-service.json" "files/litellm-m5/metrics-servicemonitor.json" "files/litellm-m5/metrics-networkpolicy.json" }}
 ---
 {{ $.Files.Get $path | fromJson | toYaml }}
 {{- end }}
 ---
-# Both reviewed sources remain readable through convergence and rollback.
+# All three reviewed sources remain readable through convergence and rollback.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: phorvex-console-litellm-metrics-source
   namespace: litellm
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
   resourceNames:
   - phorvex-litellm-admission-gateway-4bf046ce690c
   - phorvex-litellm-admission-gateway-f550b9890b20
+  - {{ $source.metadata.name }}
   verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -33,6 +49,9 @@ kind: RoleBinding
 metadata:
   name: phorvex-console-litellm-metrics-source
   namespace: litellm
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 subjects:
 - kind: ServiceAccount
   name: phorvex-phorvex-console

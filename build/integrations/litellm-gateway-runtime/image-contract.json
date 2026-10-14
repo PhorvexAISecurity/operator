@@ -1,5 +1,5 @@
 {
-  "schema": "phorvex-litellm-gateway-image-reuse-v3",
+  "schema": "phorvex-litellm-gateway-image-reuse-v4",
   "imageByDigest": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108",
   "publishedImageSourceCommit": "d4b1da8955aae4e3ca5d349cc38dd7a57ccedb55",
   "publishedRunID": null,
@@ -9,7 +9,7 @@
   "platform": "linux/amd64",
   "python": "3.11",
   "user": "10001:10001",
-  "gatewaySourceSHA256": "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1",
+  "gatewaySourceSHA256": "91af283097afd331d3c5b5cbe863694e85e7708c75b3cacbeaf56250f1c223ca",
   "gatewayCommand": [
     "python3",
     "-B",
@@ -19,5 +19,7 @@
   "legacyGatewaySourceSHA256": "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1",
   "publishedReceiptPath": "build/integrations/litellm-gateway-runtime/runtime-publication.json",
   "actualImageReceiptPath": "build/integrations/litellm-gateway-runtime/actual-image-receipt.json",
-  "actualImageReceiptSHA256": "ebc6d0d44c3c3d14df08f047d91ff1a4d56664419ef086e15b4a07f3d0487eee"
+  "actualImageReceiptSHA256": "69469da3f67292b16b36e86278cefb2cbd33420b63a0b095cc6af6982c94ec0e",
+  "previousMetricsSourceSHA256": "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1",
+  "previousMetricsSourcePath": "deploy/helm/phorvex-stack/files/litellm-m1b/gateway-metrics-source-configmap.json"
 }

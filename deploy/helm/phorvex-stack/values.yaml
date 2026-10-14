@@ -128,6 +128,10 @@ catalogueProfiles:
     profileBase64: ""
     manifestBase64: ""
 
-# M1b gateway activation remains opt-in outside the reviewed EKS closure.
+# Stage 5 bearer-auth metrics remain opt-in; tokens are supplied only by Secret references.
 litellmGatewayMetrics:
   enabled: false
+  protectionMode: bearerToken
+  auth:
+    secretName: phorvex-litellm-gateway-metrics-token-v1
+    secretKey: token

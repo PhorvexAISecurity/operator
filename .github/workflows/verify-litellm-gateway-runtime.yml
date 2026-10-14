@@ -21,7 +21,7 @@ jobs:
     env:
       AWS_REGION: us-east-2
       IMAGE: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108
-      EXPECTED_SOURCE_SHA: f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1
+      EXPECTED_SOURCE_SHA: 91af283097afd331d3c5b5cbe863694e85e7708c75b3cacbeaf56250f1c223ca
     steps:
       - name: Require reviewed main
         env:
@@ -74,6 +74,9 @@ jobs:
             --pids-limit 128 --memory 512m --cpus 2 --user 10001:10001
             --tmpfs /tmp:rw,nosuid,nodev,size=64m,uid=10001,gid=10001
             --mount "type=bind,source=$PWD/build,target=/workspace/build,readonly"
+            --mount "type=bind,source=$PWD/deploy,target=/workspace/deploy,readonly"
+            --mount "type=bind,source=$PWD/build/test-harness/fixtures/litellm-live/gateway_metrics.py,target=/opt/phorvex/gateway.py,readonly"
+            --env PHORVEX_TEST_CANDIDATE_PATH=/opt/phorvex/gateway.py
             --entrypoint python3)
           docker run "${common[@]}" "$IMAGE" -B -m unittest discover \
             -s /workspace/build/test-harness/fixtures/litellm-live -p 'test_*gateway.py' -v
@@ -88,21 +91,30 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import hashlib, json, os
+          import datetime, hashlib, json, os, subprocess
           from pathlib import Path
           contract_path = Path('build/integrations/litellm-gateway-runtime/image-contract.json')
           contract = json.loads(contract_path.read_text())
           if contract['imageByDigest'] != os.environ['IMAGE'] or contract['gatewaySourceSHA256'] != os.environ['EXPECTED_SOURCE_SHA']:
               raise SystemExit('published image/source identity changed before receipt')
-          receipt = {'schema': 'phorvex-litellm-gateway-runtime-reuse-receipt-v1',
-                     'sourceCommit': os.environ['SOURCE_SHA'], 'githubRunID': os.environ['RUN_ID'],
+          receipt = {'schema': 'phorvex-litellm-gateway-runtime-reuse-receipt-v2',
+                     'sourceCommit': os.environ['SOURCE_SHA'], 'mountedSourceCommit': os.environ['SOURCE_SHA'],
+                     'publishedImageSourceCommit': contract['publishedImageSourceCommit'],
+                     'previousMetricsSourceSHA256': contract['previousMetricsSourceSHA256'],
+                     'githubRunID': os.environ['RUN_ID'],
                      'githubRunAttempt': os.environ['RUN_ATTEMPT'],
+                     'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                     'execution': 'isolated AWS workflow exact pulled image',
+                     'platform': contract['platform'], 'user': contract['user'],
+                     'imageID': subprocess.check_output(['docker','image','inspect','--format','{{.Id}}',os.environ['IMAGE']], text=True).strip(),
+                     'python': subprocess.check_output(['docker','run','--rm','--network','none','--entrypoint','python3',os.environ['IMAGE'],'--version'], text=True).strip(),
+                     'tests': ['gateway-suites','candidate-default-off-entrypoint','authenticated-candidate-entrypoint','legacy-entrypoint','frozen-M1b-entrypoint'],
                      'imageByDigest': os.environ['IMAGE'],
                      'gatewaySourceSHA256': os.environ['EXPECTED_SOURCE_SHA'],
                      'gatewaySourcePath': contract['gatewaySourcePath'],
                      'legacyGatewaySourceSHA256': contract['legacyGatewaySourceSHA256'],
                      'contractSHA256': hashlib.sha256(contract_path.read_bytes()).hexdigest(),
-                     'runtimePublicationReceiptSHA256': contract['publishedReceiptSHA256'],
+                     'publicationReceiptSHA256': contract['publishedReceiptSHA256'],
                      'result': 'pass-local-and-published-image-protocol'}
           Path('litellm-gateway-runtime-reuse-receipt.json').write_text(json.dumps(receipt, sort_keys=True, separators=(',', ':')) + '\n')
           PY

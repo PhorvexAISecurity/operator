@@ -10,15 +10,22 @@ Argo CD, and until 2026-09-29 these two pieces existed only on the cluster.
 
 ## LiteLLM gateway metrics preparation
 
-The M1a candidate adds opt-in LiteLLM admission counters/histograms with a
-separate GET-only port 4003, private Service/ServiceMonitor and narrow monitoring
-NetworkPolicy. Active deployment pins and values stay unchanged. The source
-runtime reuses the existing published Python image with a new immutable source
-ConfigMap after its merged runtime verification passes. Activation belongs to
-M1b, after Hami's vLLM merge and fresh owner/network checks. The
-[application metrics coverage record](APP-METRICS-COVERAGE.md) defines the
-populations, fixed labels, renderer and acceptance gates, remaining app gaps,
-vLLM-only bridge scope, ALB follow-up and 14d/15GB sizing recommendation.
+Stage 5 prepares bearer-authenticated admission counters/histograms on exact
+GET-only port 4003. The active EKS chart remains disabled with legacy Console
+bindings. The prospective source/profile/ClusterIP Service/ServiceMonitor/NetworkPolicy
+closure is in `litellm-m5`; frozen `litellm-m1b` files remain historical compatibility
+artifacts. Tokens are generated once inside the cluster, consumed by Secret mounts
+and selectors, and verified later only by sanitized generator records plus
+PartialObjectMetadata UID/resourceVersion readbacks.
+
+The [release runbook](LITELLM-METRICS-RELEASE.md) requires a real cross-namespace
+auth witness, the compatible release, actual-image/source proof and native-vLLM
+health before activation. Valid auth passes protection with CNI disabled, without
+claiming network enforcement. Default B retains native-vLLM as a hard gate; its
+DOWN/empty dependency defers provisioning and active values. The
+[coverage record](APP-METRICS-COVERAGE.md) defines populations, fixed labels,
+acceptance limits and remaining app gaps. Existing Stage 4 alerting, 14d/15GB,
+PVCs and unrelated monitoring configuration are preserved.
 
 ## Applying
 
