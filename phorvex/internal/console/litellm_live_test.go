@@ -238,7 +238,7 @@ func TestLiteLivePriorJournalMatchesActiveEntriesAndAborts(t *testing.T) {
 
 func TestLiteLiveProfileOldNewAndInvalidApprovalControls(t *testing.T) {
 	p := liteLLMLiveProfile{Version: 2, GatewayImage: litellmclient.ApprovedRuntimeImage, ClientsSHA256: strings.Repeat("a", 64), SeedSHA256: strings.Repeat("b", 64), PolicyName: "litellm-defense", ModelAlias: "gpt-4o-mini", EventCreator: "system:serviceaccount:phorvex-system:phorvex-phorvex-console", AuditSourceIdentity: "reviewed-audit", MaxRunSeconds: 900}
-	for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256, strings.Repeat("c", 64)} {
+	for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256, litellmclient.AuthMetricsSourceSHA256, strings.Repeat("c", 64)} {
 		p.SourceSHA256 = sha
 		raw, _ := json.Marshal(p)
 		_, err := parseLiteLiveProfile(raw)
@@ -246,10 +246,12 @@ func TestLiteLiveProfileOldNewAndInvalidApprovalControls(t *testing.T) {
 			t.Fatalf("profile approval %s: %v", sha, err)
 		}
 	}
-	p.SourceSHA256 = litellmclient.MetricsSourceSHA256
-	p.GatewayImage = litellmclient.ApprovedGatewayImage
-	raw, _ := json.Marshal(p)
-	if _, err := parseLiteLiveProfile(raw); err == nil {
-		t.Fatal("metrics with legacy runtime accepted")
+	for _, sha := range []string{litellmclient.MetricsSourceSHA256, litellmclient.AuthMetricsSourceSHA256} {
+		p.SourceSHA256 = sha
+		p.GatewayImage = litellmclient.ApprovedGatewayImage
+		raw, _ := json.Marshal(p)
+		if _, err := parseLiteLiveProfile(raw); err == nil {
+			t.Fatal("metrics with legacy runtime accepted")
+		}
 	}
 }

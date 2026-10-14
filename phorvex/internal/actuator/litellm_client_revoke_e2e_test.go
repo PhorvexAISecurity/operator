@@ -47,17 +47,31 @@ func (c litePolicyWriteError) Update(ctx context.Context, obj client.Object, opt
 	return c.Client.Update(ctx, obj, opts...)
 }
 
-func newLiteNativeFixture(t *testing.T, metrics ...bool) liteNativeFixture {
+func newLiteNativeFixture(t *testing.T, variants ...string) liteNativeFixture {
 	t.Helper()
 	sourceFile := "gateway.py"
 	gatewayImage := litellmclient.ApprovedGatewayImage
-	if len(metrics) > 0 && metrics[0] {
-		sourceFile = "gateway_metrics.py"
+	if len(variants) > 0 {
+		sourceFile = variants[0]
 		gatewayImage = litellmclient.ApprovedRuntimeImage
 	}
-	code, e := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/" + sourceFile)
+	sourcePath := "../../../build/test-harness/fixtures/litellm-live/" + sourceFile
+	if sourceFile == "frozen-m1b" {
+		sourcePath = "../../../deploy/helm/phorvex-stack/files/litellm-m1b/gateway-metrics-source-configmap.json"
+	}
+	code, e := os.ReadFile(sourcePath)
 	if e != nil {
 		t.Fatal(e)
+	}
+	if sourceFile == "frozen-m1b" {
+		var cm corev1.ConfigMap
+		if json.Unmarshal(code, &cm) != nil || cm.Immutable == nil || !*cm.Immutable || len(cm.Data) != 1 {
+			t.Fatal("frozen M1b source ConfigMap differs")
+		}
+		code = []byte(cm.Data[litellmclient.SourceKey])
+		if litellmclient.SHA256(code) != litellmclient.MetricsSourceSHA256 {
+			t.Fatal("frozen M1b source bytes drifted")
+		}
 	}
 	sourceSHA := litellmclient.SHA256(code)
 	if !litellmclient.ApprovedSource(sourceSHA) {
@@ -116,6 +130,9 @@ func newLiteNativeFixture(t *testing.T, metrics ...bool) liteNativeFixture {
 			Status: corev1.PodStatus{PodIP: ip, ContainerStatuses: []corev1.ContainerStatus{
 				{Name: "litellm", ImageID: "backend@sha256:" + strings.Repeat(string(rune('d'+i)), 64), Ready: true},
 				{Name: litellmclient.GatewayContainerName, ImageID: gatewayImage, Ready: true}}}}
+		if sourceSHA == litellmclient.AuthMetricsSourceSHA256 {
+			addActuatorAuthMetricsBinding(pod)
+		}
 		objects = append(objects, pod)
 	}
 	ready := true
@@ -197,17 +214,13 @@ func (f liteNativeFixture) enactContext(t *testing.T) EnactCtx {
 }
 
 func TestLiteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T) {
-	for _, metrics := range []bool{false, true} {
-		name := "legacy"
-		if metrics {
-			name = "metrics"
-		}
-		t.Run(name, func(t *testing.T) { liteLLMNativeTwoDistinctFiresPreservePriorDenial(t, metrics) })
+	for _, sourceFile := range []string{"gateway.py", "frozen-m1b", "gateway_metrics.py"} {
+		t.Run(sourceFile, func(t *testing.T) { liteLLMNativeTwoDistinctFiresPreservePriorDenial(t, sourceFile) })
 	}
 }
 
-func liteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T, metrics bool) {
-	f := newLiteNativeFixture(t, metrics)
+func liteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T, sourceFile string) {
+	f := newLiteNativeFixture(t, sourceFile)
 	ec := f.enactContext(t)
 	for i, pair := range []struct{ hash, op string }{{f.clientA, "decision-1"}, {f.clientB, "decision-2"}} {
 		req := f.request(t, pair.hash, pair.op)
@@ -235,18 +248,14 @@ func liteLLMNativeTwoDistinctFiresPreservePriorDenial(t *testing.T, metrics bool
 }
 
 func TestLiteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t *testing.T) {
-	for _, metrics := range []bool{false, true} {
-		name := "legacy"
-		if metrics {
-			name = "metrics"
-		}
-		t.Run(name, func(t *testing.T) { liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t, metrics) })
+	for _, sourceFile := range []string{"gateway.py", "frozen-m1b", "gateway_metrics.py"} {
+		t.Run(sourceFile, func(t *testing.T) { liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t, sourceFile) })
 	}
 }
 
-func liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t *testing.T, metrics bool) {
+func liteLLMPreparedOperationRecoversOnlyMatchingCASWithoutSecondWrite(t *testing.T, sourceFile string) {
 	ctx := context.Background()
-	f := newLiteNativeFixture(t, metrics)
+	f := newLiteNativeFixture(t, sourceFile)
 	req := f.request(t, f.clientA, "decision-recover")
 	policyCM := &corev1.ConfigMap{}
 	policyKey := client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.PolicyConfigMapName}
@@ -461,8 +470,14 @@ func TestLiteLLMPendingJournalFencesBothBoundPodsOnly(t *testing.T) {
 }
 
 func TestLiteLLMNewSourceJournalAndInvalidObservationControls(t *testing.T) {
+	for _, sourceFile := range []string{"frozen-m1b", "gateway_metrics.py"} {
+		t.Run(sourceFile, func(t *testing.T) { liteLLMNewSourceJournalAndInvalidObservationControls(t, sourceFile) })
+	}
+}
+
+func liteLLMNewSourceJournalAndInvalidObservationControls(t *testing.T, sourceFile string) {
 	ctx := context.Background()
-	f := newLiteNativeFixture(t, true)
+	f := newLiteNativeFixture(t, sourceFile)
 	req := f.request(t, f.clientA, "invalid-source")
 	req.LiteLLMClientObservation.GatewaySourceSHA256 = strings.Repeat("d", 64)
 	if _, err := (litellmClientRevokeHandler{}).Enact(ctx, f.enactContext(t), req); err == nil {
@@ -482,4 +497,18 @@ func TestLiteLLMNewSourceJournalAndInvalidObservationControls(t *testing.T) {
 	if pending, err := PendingLiteLLMClientOperation(ctx, f.c, "phorvex-system", "litellm", "pod-a"); !pending || err == nil {
 		t.Fatal("missing journal with only new source did not fence")
 	}
+}
+
+func addActuatorAuthMetricsBinding(p *corev1.Pod) {
+	group, mode, optional := int64(10001), int32(0440), false
+	p.Spec.SecurityContext = &corev1.PodSecurityContext{FSGroup: &group}
+	p.Spec.Volumes = append(p.Spec.Volumes, corev1.Volume{Name: litellmclient.MetricsTokenVolumeName, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+		SecretName: "phorvex-litellm-gateway-metrics-token-v1", Optional: &optional, DefaultMode: &mode, Items: []corev1.KeyToPath{{Key: "token", Path: "token"}},
+	}}})
+	gateway := &p.Spec.Containers[1]
+	gateway.Env = append(gateway.Env, corev1.EnvVar{Name: "PHORVEX_LITELLM_METRICS_ENABLED", Value: "1"},
+		corev1.EnvVar{Name: "PHORVEX_LITELLM_METRICS_TOKEN_FILE", Value: litellmclient.MetricsTokenFilePath},
+		corev1.EnvVar{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+		corev1.EnvVar{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}})
+	gateway.VolumeMounts = append(gateway.VolumeMounts, corev1.VolumeMount{Name: litellmclient.MetricsTokenVolumeName, MountPath: litellmclient.MetricsTokenMountPath, ReadOnly: true})
 }

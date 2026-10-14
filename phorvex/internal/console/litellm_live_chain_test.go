@@ -30,7 +30,7 @@ import (
 // supplies admission UID/creator metadata. Ingestion, recon and selection are
 // production code. This proves source wiring, not live LiteLLM enforcement.
 func TestLiteLiveProducedEventFeedsNormalDecision(t *testing.T) {
-	for _, sourceFile := range []string{"gateway.py", "gateway_metrics.py"} {
+	for _, sourceFile := range []string{"gateway.py", "frozen-m1b", "gateway_metrics.py"} {
 		t.Run(sourceFile, func(t *testing.T) { liteLiveProducedEventFeedsNormalDecision(t, sourceFile) })
 	}
 }
@@ -42,9 +42,23 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 	const policyUID = "policy-uid"
 	const clientSHA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	seedSHA := strings.Repeat("b", 64)
-	source, err := os.ReadFile("../../../build/test-harness/fixtures/litellm-live/" + sourceFile)
+	sourcePath := "../../../build/test-harness/fixtures/litellm-live/" + sourceFile
+	if sourceFile == "frozen-m1b" {
+		sourcePath = "../../../deploy/helm/phorvex-stack/files/litellm-m1b/gateway-metrics-source-configmap.json"
+	}
+	source, err := os.ReadFile(sourcePath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if sourceFile == "frozen-m1b" {
+		var cm corev1.ConfigMap
+		if json.Unmarshal(source, &cm) != nil || cm.Immutable == nil || !*cm.Immutable || len(cm.Data) != 1 {
+			t.Fatal("frozen M1b source ConfigMap differs")
+		}
+		source = []byte(cm.Data[litellmclient.SourceKey])
+		if litellmclient.SHA256(source) != litellmclient.MetricsSourceSHA256 {
+			t.Fatal("frozen M1b source bytes drifted")
+		}
 	}
 	sourceSHA := litellmclient.SHA256(source)
 	if !litellmclient.ApprovedSource(sourceSHA) {
@@ -101,6 +115,9 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 				Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
 				ContainerStatuses: []corev1.ContainerStatus{{Name: "litellm", ImageID: "backend@sha256:" + strings.Repeat("d", 64), Ready: true},
 					{Name: litellmclient.GatewayContainerName, ImageID: litellmclient.ApprovedRuntimeImage, Ready: true}}}}
+		if sourceSHA == litellmclient.AuthMetricsSourceSHA256 {
+			addConsoleAuthMetricsBinding(pod)
+		}
 		objects = append(objects, pod)
 		endpoints = append(endpoints, discoveryv1.Endpoint{Addresses: []string{ip}, Conditions: discoveryv1.EndpointConditions{Ready: &ready},
 			TargetRef: &corev1.ObjectReference{Kind: "Pod", Name: name, UID: uid}})
@@ -214,4 +231,18 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 		t.Fatal(err)
 	}
 	check(now, false)
+}
+
+func addConsoleAuthMetricsBinding(p *corev1.Pod) {
+	group, mode, optional := int64(10001), int32(0440), false
+	p.Spec.SecurityContext = &corev1.PodSecurityContext{FSGroup: &group}
+	p.Spec.Volumes = append(p.Spec.Volumes, corev1.Volume{Name: litellmclient.MetricsTokenVolumeName, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+		SecretName: "phorvex-litellm-gateway-metrics-token-v1", Optional: &optional, DefaultMode: &mode, Items: []corev1.KeyToPath{{Key: "token", Path: "token"}},
+	}}})
+	gateway := &p.Spec.Containers[1]
+	gateway.Env = append(gateway.Env, corev1.EnvVar{Name: "PHORVEX_LITELLM_METRICS_ENABLED", Value: "1"},
+		corev1.EnvVar{Name: "PHORVEX_LITELLM_METRICS_TOKEN_FILE", Value: litellmclient.MetricsTokenFilePath},
+		corev1.EnvVar{Name: "POD_NAME", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
+		corev1.EnvVar{Name: "POD_NAMESPACE", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}})
+	gateway.VolumeMounts = append(gateway.VolumeMounts, corev1.VolumeMount{Name: litellmclient.MetricsTokenVolumeName, MountPath: litellmclient.MetricsTokenMountPath, ReadOnly: true})
 }
