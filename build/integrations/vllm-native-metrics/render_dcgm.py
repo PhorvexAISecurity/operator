@@ -1,8 +1,13 @@
 """Offline S6-D renderer; no Kubernetes client or runtime probe.
 
-Render requires fresh full API captures and an independently supplied SHA-bound
-capability receipt. Capability is not final Kubernetes/serving acceptance. The
-prepared inverse is deliberately unusable until `rollback` binds a fresh RV.
+Render requires fresh complete DaemonSet/ConfigMap captures and an independently
+supplied SHA-bound capability receipt. Default `kubectl get -o json` captures
+that omit managedFields are supported: UID/current RV/full-spec patch tests
+guard writes, and any metadata update changes RV. Rollback also compares the
+preserved ownership projection, excluding the controller's template-generation
+annotation. Capability is not final Kubernetes/serving acceptance. The prepared
+inverse is deliberately unusable until `rollback` binds a fresh RV; the frozen
+closure does not expire.
 """
 from __future__ import annotations
 
@@ -169,7 +174,8 @@ def baseline(ds):
                                        ["/usr/local/bin/dcgm-exporter"]), "unresolved exporter command override")
     args = exporter.get("args", [])
     require(isinstance(args, list) and all(isinstance(x, str) for x in args), "exporter args required")
-    require(not any(x.startswith(("--collectors", "-f", "--configmap-data", "-m")) or
+    require(not any(x.startswith(("--collectors", "-collectors", "-f",
+                                  "--configmap-data", "-configmap-data", "-m")) or
                     any(name in x for name in OVERRIDE_ENV)
                     for x in command + args), "existing collectors argument override")
     volumes = named_rows(ps.get("volumes", []), "volume")
@@ -288,10 +294,11 @@ def additions(spec, index, cm_name):
 
 
 def guarded(ds, expected_spec, operations, rv=None):
+    # kubectl captures can omit API-managed fields. UID/RV bind the stored
+    # object, including metadata changes; do not compare the whole metadata map.
     return [{"op": "test", "path": "/metadata/uid", "value": ds["metadata"]["uid"]},
             {"op": "test", "path": "/metadata/resourceVersion", "value": rv or ds["metadata"]["resourceVersion"]},
             {"op": "test", "path": "/spec", "value": copy.deepcopy(expected_spec)},
-            *([] if rv == REVIEW_RV else [{"op": "test", "path": "/metadata", "value": copy.deepcopy(ds["metadata"])}]),
             *copy.deepcopy(operations)]
 
 

@@ -45,7 +45,7 @@ def fixture():
         "terminationGracePeriodSeconds": 30, "dnsPolicy": "ClusterFirst", "restartPolicy": "Always"}
     ds = {"apiVersion": "apps/v1", "kind": "DaemonSet", "metadata": {
         "name": dcgm.DAEMONSET, "namespace": dcgm.NAMESPACE, "uid": "stable-dcgm-uid",
-        "resourceVersion": "10", "generation": 1,
+        "resourceVersion": "10", "generation": 1, "creationTimestamp": STAMP,
         "labels": {"app": "dcgm-exporter", "app.kubernetes.io/managed-by": "original-owner"},
         "annotations": {"original/annotation": "preserve", "deprecated.daemonset.template.generation": "1"},
         "ownerReferences": [{"apiVersion": "v1", "kind": "OriginalOwner", "name": "owner", "uid": "owner-uid"}]},
@@ -58,6 +58,28 @@ def fixture():
                    "updatedNumberScheduled": 1, "numberReady": 1, "numberAvailable": 1, "numberMisscheduled": 0}}
     cms = {"apiVersion": "v1", "kind": "ConfigMapList", "metadata": {"resourceVersion": "200"}, "items": []}
     return ds, cms
+
+
+def api_daemonset(capture):
+    """Synthetic API shape; default kubectl captures omit these managedFields."""
+    stored = copy.deepcopy(capture)
+    stored["metadata"]["managedFields"] = [
+        {"manager": "kubectl-client-side-apply", "operation": "Update", "apiVersion": "apps/v1",
+         "time": STAMP, "fieldsType": "FieldsV1", "fieldsV1": {
+             "f:metadata": {"f:annotations": {"f:original/annotation": {}},
+                            "f:labels": {"f:app": {}}},
+             "f:spec": {"f:selector": {}, "f:template": {}, "f:updateStrategy": {}}}},
+        {"manager": "kube-controller-manager", "operation": "Update", "apiVersion": "apps/v1",
+         "time": STAMP, "fieldsType": "FieldsV1", "subresource": "status", "fieldsV1": {
+             "f:status": {"f:observedGeneration": {}, "f:numberReady": {}, "f:numberAvailable": {}}}}]
+    return stored
+
+
+def kubectl_capture(stored):
+    """Model kubectl get -o json without --show-managed-fields."""
+    capture = copy.deepcopy(stored)
+    capture["metadata"].pop("managedFields", None)
+    return capture
 
 
 def receipt(ds, ds_sha=None, stamp=STAMP):
@@ -186,16 +208,25 @@ class RendererTests(unittest.TestCase):
         self.assertEqual(self.rendered()["dcgm-closure.json"]["candidateSpec"]["template"]["spec"]["containers"][1]["command"],
                          ["/usr/bin/dcgm-exporter"])
 
-    def test_forward_uid_rv_whole_spec_and_metadata_preconditions(self):
+    def test_forward_uid_rv_whole_spec_preconditions_and_metadata_races(self):
         operations = self.rendered()["daemonset-forward.json"]
-        self.assertEqual([op["path"] for op in operations[:4]], ["/metadata/uid", "/metadata/resourceVersion", "/spec", "/metadata"])
-        for field in ("uid", "resourceVersion", "ownerReferences", "annotations", "labels"):
-            changed = copy.deepcopy(self.ds)
-            changed["metadata"][field] = "drift"
+        self.assertEqual([op for op in operations if op["op"] == "test"], [
+            {"op": "test", "path": "/metadata/uid", "value": self.ds["metadata"]["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": self.ds["metadata"]["resourceVersion"]},
+            {"op": "test", "path": "/spec", "value": self.ds["spec"]}])
+        stored = api_daemonset(self.ds)
+        self.assertEqual(patched(stored, operations)["spec"], self.rendered()["dcgm-closure.json"]["candidateSpec"])
+        for field, value in (("uid", "replacement"), ("resourceVersion", "11"),
+                             ("ownerReferences", []), ("annotations", {"foreign/annotation": "drift"}),
+                             ("labels", {"app.kubernetes.io/managed-by": "Helm"})):
+            changed = copy.deepcopy(stored)
+            changed["metadata"][field] = value
+            if field not in ("uid", "resourceVersion"):
+                changed["metadata"]["resourceVersion"] = "11"  # every API metadata write changes RV
             with self.subTest(field=field), self.assertRaises(ValueError):
                 patched(changed, operations)
         for field in ("revisionHistoryLimit", "selector", "updateStrategy", "template"):
-            changed = copy.deepcopy(self.ds)
+            changed = copy.deepcopy(stored)
             changed["spec"][field] = "drift"
             with self.subTest(field=field), self.assertRaises(ValueError):
                 patched(changed, operations)
@@ -213,15 +244,38 @@ class RendererTests(unittest.TestCase):
         current["status"].update(numberReady=0, numberAvailable=0)  # rollback also works on a failed rollout
         current["metadata"]["resourceVersion"] = "19999"
         inverse = self.rolled_back(current, artifacts["dcgm-closure.json"])["daemonset-inverse.json"]
-        self.assertEqual(inverse[1]["value"], "19999")
+        self.assertEqual([op for op in inverse if op["op"] == "test"], [
+            {"op": "test", "path": "/metadata/uid", "value": current["metadata"]["uid"]},
+            {"op": "test", "path": "/metadata/resourceVersion", "value": "19999"},
+            {"op": "test", "path": "/spec", "value": current["spec"]}])
         restored = patched(current, inverse)
         self.assertEqual(restored["spec"], self.ds["spec"])
         self.assertEqual(restored["metadata"], current["metadata"])
-        for field in ("uid", "resourceVersion"):
+        for field, value in (("uid", "replacement"), ("resourceVersion", "20000"),
+                             ("ownerReferences", []), ("annotations", {"foreign/annotation": "drift"}),
+                             ("labels", {"app.kubernetes.io/managed-by": "Helm"})):
             changed = copy.deepcopy(current)
-            changed["metadata"][field] = "drift"
+            changed["metadata"][field] = value
+            if field not in ("uid", "resourceVersion"):
+                changed["metadata"]["resourceVersion"] = "20000"
             with self.subTest(field=field), self.assertRaises(ValueError):
                 patched(changed, inverse)
+        for field in ("revisionHistoryLimit", "selector", "updateStrategy", "template"):
+            changed = copy.deepcopy(current)
+            changed["spec"][field] = "drift"
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                patched(changed, inverse)
+
+    def test_fresh_rollback_accepts_frozen_closure_after_render_and_support_expire(self):
+        artifacts = self.rendered()
+        closure = artifacts["dcgm-closure.json"]
+        before = copy.deepcopy(closure)
+        current = self.candidate(artifacts)
+        later = NOW + timedelta(days=2)
+        inverse = dcgm.rollback(current, dcgm.sha(dcgm.canonical(current)), closure,
+                                later.isoformat(), now=later)["daemonset-inverse.json"]
+        self.assertEqual(patched(current, inverse)["spec"], self.ds["spec"])
+        self.assertEqual(closure, before)
 
     def test_rollback_uid_spec_and_ownership_drift_refused(self):
         for mutation in (lambda d: d["metadata"].update(uid="replacement"),
@@ -233,6 +287,7 @@ class RendererTests(unittest.TestCase):
                          lambda d: d["metadata"].update(ownerReferences=[])):
             current = self.candidate()
             mutation(current)
+            current["metadata"]["resourceVersion"] = "13"
             with self.subTest(current=current), self.assertRaises(ValueError):
                 self.rolled_back(current)
         with self.assertRaises(ValueError):
@@ -279,7 +334,10 @@ class RendererTests(unittest.TestCase):
     def test_collectors_flags_and_shell_command_refused(self):
         for args in (["-f", "/old"], ["-f/old"], ["-f=/old"], ["--collectors", "/old"],
                      ["--collectors=/old"], ["DCGM_EXPORTER_COLLECTORS=/old"],
-                     ["--configmap-data=namespace:old"], ["-m", "namespace:old"]):
+                     ["-collectors", "/old"], ["-collectors=/old"],
+                     ["--configmap-data", "namespace:old"], ["--configmap-data=namespace:old"],
+                     ["-configmap-data", "namespace:old"], ["-configmap-data=namespace:old"],
+                     ["-m", "namespace:old"]):
             ds = copy.deepcopy(self.ds)
             self.exporter(ds)["args"] = args
             with self.subTest(args=args), self.assertRaises(ValueError):
@@ -441,12 +499,17 @@ class RendererTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 dcgm.read_bounded(path)
 
-    def test_cli_render_rollback_sha_bindings_and_exclusive_outputs(self):
+    def test_cli_serialized_guards_on_api_managed_fields_and_sha_exclusive_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             stamp = datetime.now(timezone.utc).isoformat()
-            raw_ds = json.dumps(self.ds, indent=2).encode()
-            bound = receipt(self.ds, dcgm.sha(raw_ds), stamp)
+            stored = api_daemonset(self.ds)
+            capture = kubectl_capture(stored)
+            self.assertEqual(capture, self.ds)
+            self.assertTrue(stored["metadata"]["managedFields"])
+            self.assertNotIn("managedFields", capture["metadata"])
+            raw_ds = json.dumps(capture, indent=2).encode()
+            bound = receipt(capture, dcgm.sha(raw_ds), stamp)
             rows = {"ds": raw_ds, "cms": json.dumps(self.cms, indent=2).encode(),
                     "support": json.dumps(bound, indent=2).encode(), "default": DEFAULT, "counters": COUNTERS}
             for name, raw in rows.items():
@@ -463,9 +526,20 @@ class RendererTests(unittest.TestCase):
             closure_path = root / "rendered/dcgm-closure.json"
             closure_raw = closure_path.read_bytes()
             closure = json.loads(closure_raw)
-            candidate = patched(self.ds, json.loads((root / "rendered/daemonset-forward.json").read_bytes()))
-            candidate["metadata"]["resourceVersion"] = "321"
-            candidate_raw = json.dumps(candidate, indent=2).encode()
+            forward = json.loads((root / "rendered/daemonset-forward.json").read_bytes())
+            candidate = patched(stored, forward)  # serialized patch sees API managedFields
+            self.assertEqual(candidate["metadata"], stored["metadata"])
+            self.assertEqual(candidate["spec"], closure["candidateSpec"])
+            candidate["metadata"].update(resourceVersion="321", generation=2)
+            candidate["metadata"]["annotations"]["deprecated.daemonset.template.generation"] = "2"
+            candidate["metadata"]["managedFields"].append({
+                "manager": "kubectl-patch", "operation": "Update", "apiVersion": "apps/v1",
+                "time": stamp, "fieldsType": "FieldsV1", "fieldsV1": {
+                    "f:spec": {"f:template": {"f:spec": {"f:volumes": {
+                        'k:{"name":"phorvex-dcgm-counters"}': {".": {}, "f:configMap": {}, "f:name": {}}}}}}}})
+            current_capture = kubectl_capture(candidate)
+            self.assertNotIn("managedFields", current_capture["metadata"])
+            candidate_raw = json.dumps(current_capture, indent=2).encode()
             (root / "current").write_bytes(candidate_raw)
             rollback_args = ["rollback", "--daemonset", str(root / "current"), "--daemonset-sha256", dcgm.sha(candidate_raw),
                 "--captured-at", stamp, "--closure", str(closure_path), "--closure-sha256", dcgm.sha(closure_raw),
@@ -473,7 +547,19 @@ class RendererTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 dcgm.main(rollback_args)
             inverse = json.loads((root / "inverse/daemonset-inverse.json").read_bytes())
-            self.assertEqual(patched(candidate, inverse)["spec"], closure["originalSpec"])
+            restored = patched(candidate, inverse)  # serialized fresh inverse sees managedFields too
+            self.assertEqual(restored["spec"], closure["originalSpec"])
+            self.assertEqual(restored["metadata"], candidate["metadata"])
+            for obj, operations in ((stored, forward), (candidate, inverse)):
+                for field in ("uid", "resourceVersion"):
+                    changed = copy.deepcopy(obj)
+                    changed["metadata"][field] = "replacement" if field == "uid" else "999999"
+                    with self.subTest(patch=operations[-1]["op"], field=field), self.assertRaises(ValueError):
+                        patched(changed, operations)
+                changed = copy.deepcopy(obj)
+                changed["spec"]["revisionHistoryLimit"] = 99
+                with self.subTest(patch=operations[-1]["op"], field="spec"), self.assertRaises(ValueError):
+                    patched(changed, operations)
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
                 dcgm.main(args)
             self.assertEqual(error.exception.code, 2)  # refuses overwriting existing output
