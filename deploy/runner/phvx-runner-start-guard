@@ -29,8 +29,8 @@ def check(value, table=None):
     check_hold()
     if FENCE.exists():
         raise RuntimeError('Maintenance offline fence active')
-    if p['runner_id'] == 133 and listener_count() != 2:
-        raise RuntimeError('Runner 133 awaits R2 acceptance')
+    if p['runner_id'] == 21 and listener_count() != 2:
+        raise RuntimeError('Runner 21 awaits R2 acceptance')
     listeners, _ = census(processes() if table is None else table, allowed)
     if p['runner_id'] in listeners:
         raise RuntimeError('Existing listener in this installation')

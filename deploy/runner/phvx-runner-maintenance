@@ -42,8 +42,8 @@ def local_idle(allow_listener=True,allow_unmatched=False):
    if cg.exists():
     extra=[int(i) for f in cg.rglob('cgroup.procs') for i in f.read_text().split() if int(i) not in allowed]
     if extra:raise RuntimeError('Runner descendants remain: '+repr(extra))
-  if not p and profile['runner_id']==133 and profiles_lib.listener_count()==1:
-   latest.append({'runner_id':133,'inactive':True});continue
+  if not p and profile['runner_id']==21 and profiles_lib.listener_count()==1:
+   latest.append({'runner_id':21,'inactive':True});continue
   code="""import sys,json,os,importlib.machinery,importlib.util
 sys.dont_write_bytecode=True
 sys.path.insert(0,'/usr/local/libexec')
@@ -251,7 +251,7 @@ def main():
   profiles_lib.check_hold()
   if (RUN/'offline-fence').exists() or profiles_lib.listener_count()!=2:raise RuntimeError('R2 admission not ready')
   local_idle();print('RECHECK',flush=True);data=proof();local_idle();recent(data)
-  command(['systemctl','start',profiles_lib.select(133)['unit']],120);return
+  command(['systemctl','start',profiles_lib.select(21)['unit']],120);return
  if action in ('drain','stop-runner'):drain();return
  local_idle(False,allow_unmatched=action=='recover-fence')
  if not (RUN/'offline-fence').is_file() and action!='recover-fence':raise RuntimeError('Offline fence absent')

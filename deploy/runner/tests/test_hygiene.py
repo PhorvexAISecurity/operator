@@ -836,7 +836,7 @@ class Fixture(unittest.TestCase):
         edits = [lambda e: e['evidence'].update(run_attempt=2),
                  lambda e: e['evidence'].update(source='caller'),
                  lambda e: e['evidence'].update(url='https://invalid'),
-                 lambda e: e['evidence']['jobs'][0].update(runner_id=133),
+                 lambda e: e['evidence']['jobs'][0].update(runner_id=21),
                  lambda e: e['evidence']['jobs'][0].update(conclusion=None),
                  lambda e: e['evidence']['jobs'][0].update(started_at='invalid')]
         for edit in edits:
@@ -1050,7 +1050,7 @@ class MetadataTests(unittest.TestCase):
                 elif mutation == 'repository':
                     run['repository']['full_name'] = 'other/repo'
                 elif mutation == 'runner':
-                    jobs['jobs'][0]['runner_id'] = 133
+                    jobs['jobs'][0]['runner_id'] = 21
                 else:
                     jobs['total_count'] = 2
                 with self.assertRaises(h.Refuse):

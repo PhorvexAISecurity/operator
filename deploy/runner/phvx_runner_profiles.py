@@ -23,7 +23,7 @@ def profile(runner_id, name, installation, work, docker_config, state):
 
 APPROVED = [
     profile(130, 'phorvex', 'actions-runner', 'phorvex', '.docker', '/var/lib/phvx-runner-hygiene'),
-    profile(133, 'phorvex-1', 'action-runner-1', 'phorvex_1_work', '.docker-phorvex-1', '/var/lib/phvx-runner-hygiene-133'),
+    profile(21, 'phorvex-1', 'action-runner-1', 'phorvex_1_work', '.docker-phorvex-1', '/var/lib/phvx-runner-hygiene-133'),
 ]
 
 def trusted_json(path):

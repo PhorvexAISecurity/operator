@@ -1060,7 +1060,7 @@ def current_binding():
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument('--dry-run', action='store_true')
-    result.add_argument('--profile', choices=('130', '133'))
+    result.add_argument('--profile', choices=('130', '21'))
     mode = result.add_mutually_exclusive_group()
     mode.add_argument('--timer', action='store_true')
     mode.add_argument('--job-boundary', action='store_true')

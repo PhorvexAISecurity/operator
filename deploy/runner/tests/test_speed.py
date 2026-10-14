@@ -57,9 +57,9 @@ class Profiles(unittest.TestCase):
         table = [listener(a, 10), worker(a, 20, 10)]
         with patch.object(g, 'profiles', return_value=p.APPROVED), patch.object(g, 'check_hold'), patch.object(g, 'listener_count', return_value=2), patch.object(g, 'FENCE') as fence:
             fence.exists.return_value = False
-            g.check(133, table)
+            g.check(21, table)
             with self.assertRaises(RuntimeError): g.check(130, table)
-            with self.assertRaises(RuntimeError): g.check(133, table + [listener(b, 30)])
+            with self.assertRaises(RuntimeError): g.check(21, table + [listener(b, 30)])
 
     def test_duplicate_unknown_and_action_runner_2_refused(self):
         a, b = p.APPROVED
@@ -105,13 +105,13 @@ class Profiles(unittest.TestCase):
                     with p.cleanup_lock(os.getuid()): pass
 
     def test_schema1_lease_primary_only_and_wrong_profile_refused(self):
-        entry = {'runner_id': 133, 'repository': 'PhorvexSecurity/operator', 'run_id': 42, 'run_attempt': 1}
+        entry = {'runner_id': 21, 'repository': 'PhorvexSecurity/operator', 'run_id': 42, 'run_attempt': 1}
         store = unittest.mock.Mock(spec=h.Store)
         ops = unittest.mock.Mock()
         obj = h.Hygiene(store, ops, 1000, {'runner_id': 130})
         with self.assertRaisesRegex(h.Refuse, 'wrong-profile'): obj.validated(entry, 'timer', None)
         # Schema-1 entries have no runner_id, so they retain ID130 ownership.
-        obj = h.Hygiene(store, ops, 1000, {'runner_id': 133})
+        obj = h.Hygiene(store, ops, 1000, {'runner_id': 21})
         entry.pop('runner_id')
         with self.assertRaisesRegex(h.Refuse, 'wrong-profile'): obj.validated(entry, 'timer', None)
 
