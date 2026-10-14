@@ -243,7 +243,7 @@ def main():
  RUN.mkdir(mode=0o755,exist_ok=True)
  if RUN.is_symlink() or RUN.stat().st_uid!=0 or RUN.stat().st_mode&0o022:raise RuntimeError('Unsafe maintenance directory')
  lock=open(RUN/'maintenance.lock','a');os.chmod(RUN/'maintenance.lock',0o600);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
- proof(allow_busy=action=='recover-fence')
+ proof(allow_busy=action in ('release','recover-fence'))
  if action=='inspect':local_idle();return
  if action in ('hold','release'):
   hold(action,sys.argv[2]);return

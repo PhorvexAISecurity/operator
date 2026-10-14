@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Boot CPU policy. Explicit apply and R2 acceptance require offline admission."""
+"""CPU policy and measured CPX42 admission; explicit apply requires offline admission."""
 import argparse
 import json
 import os
@@ -46,11 +46,17 @@ def reading():
             'available_bytes': available, 'disk_available_bytes': disk.f_bavail * disk.f_frsize,
             'memory_full_avg10': psi, 'memory_events': events, 'at': time.time()}
 
-def gate(sample):
-    if not (sample['cores'] >= 8 and sample['physical_bytes'] >= 24 * 2**30 and
-            sample['available_bytes'] >= 12 * 2**30 and sample['disk_available_bytes'] >= 40 * 2**30 and
-            sample['memory_full_avg10'] < 1):
-        raise RuntimeError('R2 CPU/RAM/disk/PSI gate failed')
+def gate(sample, receipt):
+    # CPX42 (8 vCPU / ~15 GiB) is final; acceptance replaces the 24 GiB upgrade.
+    jobs = receipt.get('build_jobs', [])
+    if not (sample['cores'] >= 8 and sample['physical_bytes'] >= 14 * 2**30 and
+            sample['disk_available_bytes'] >= 30 * 2**30 and sample['memory_full_avg10'] < 1 and
+            receipt.get('physical_bytes') == sample['physical_bytes'] and
+            0 < receipt.get('ci_peak_bytes', 0) <= 11 * 2**30 and
+            receipt.get('mehrdad_running') is True and receipt.get('oom_kill_delta') == 0 and
+            {j.get('name') for j in jobs} == {'build-console', 'build-operator'} and
+            all(j.get('conclusion') == 'success' and j.get('job_id') and j.get('run_id') for j in jobs)):
+        raise RuntimeError('R2 measured build/CPU/RAM/disk/PSI gate failed')
 
 def offline():
     if not (FENCE.is_file() or HOLD.is_file()):
@@ -63,23 +69,14 @@ def offline():
             except FileNotFoundError:
                 continue
 
-def accept_second():
+def accept_second(measurement):
     offline()
-    samples = []
-    start = time.monotonic()
-    while True:
-        offline()
-        sample = reading()
-        gate(sample)
-        samples.append(sample)
-        if samples[0]['memory_events'] != sample['memory_events']:
-            # Strict: even a new memory event defers acceptance until investigated.
-            raise RuntimeError('New memory events during idle sample')
-        if time.monotonic() - start >= 600:
-            break
-        time.sleep(10)
-    receipt = {'duration_seconds': time.monotonic() - start, 'samples': samples,
-               'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip()}
+    receipt = trusted_json(Path(measurement))
+    # Root records real CI jobs and the kernel slice peak while Mehrdad runs.
+    # An idle sample cannot substitute for builds or prolong a queued-work hold.
+    if receipt.get('boot_id') != Path('/proc/sys/kernel/random/boot_id').read_text().strip():
+        raise RuntimeError('Measurement must be from the current boot')
+    gate(reading(), receipt)
     atomic(RECEIPT, json.dumps(receipt) + '\n', 0o600)
     atomic(CAPACITY, '{"listeners": 2}\n')
 
@@ -87,27 +84,34 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--boot', action='store_true')
     parser.add_argument('--accept-second', action='store_true')
+    parser.add_argument('--measurement', help='Root-owned real-build memory receipt')
     args = parser.parse_args()
     if os.geteuid() != 0:
         raise RuntimeError('Root required')
     if args.accept_second:
-        accept_second()
+        if not args.measurement:
+            parser.error('--accept-second requires --measurement')
+        accept_second(args.measurement)
     # At boot ExecStart precedes listeners; on explicit apply demand an offline host.
     if not args.boot:
         offline()
     runners = listener_count()
     sample = reading()
     if runners == 2:
-        gate(sample)
-        receipt = trusted_json(RECEIPT)
-        if receipt.get('duration_seconds', 0) < 600 or len(receipt.get('samples', [])) < 61:
-            raise RuntimeError('R2 requires ten-minute acceptance receipt')
+        gate(sample, trusted_json(RECEIPT))
     quota, weight, parallel = policy(sample['cores'], runners)
-    atomic(OVERRIDE, f'[Slice]\nCPUQuota={quota}%\nCPUWeight={weight}\n')
+    memory = 'MemoryHigh=9G\nMemoryMax=11G\nMemorySwapMax=0\n' if runners == 2 else ''
+    atomic(OVERRIDE, f'[Slice]\nCPUQuota={quota}%\nCPUWeight={weight}\n' + memory)
     atomic(ENV, f'P={parallel}\nGOMAXPROCS={parallel}\nGOFLAGS=-p={parallel}\n')
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
-    subprocess.run(['systemctl', 'set-property', '--runtime', 'phvxci.slice',
-                    f'CPUQuota={quota}%', f'CPUWeight={weight}'], check=True)
+    properties = [f'CPUQuota={quota}%', f'CPUWeight={weight}']
+    if runners == 2:
+        properties += ['MemoryHigh=9G', 'MemoryMax=11G', 'MemorySwapMax=0']
+    subprocess.run(['systemctl', 'set-property', '--runtime', 'phvxci.slice', *properties], check=True)
+    if runners == 2 and ((CGROUP / 'memory.high').read_text().strip() != str(9 * 2**30) or
+                         (CGROUP / 'memory.max').read_text().strip() != str(11 * 2**30) or
+                         (CGROUP / 'memory.swap.max').read_text().strip() != '0'):
+        raise RuntimeError('Effective CI memory ceiling mismatch')
     # Verify cgroup values, rather than trusting successful systemctl alone.
     maximum, period = (CGROUP / 'cpu.max').read_text().split()
     if int(maximum) * 100 != quota * int(period) or int((CGROUP / 'cpu.weight').read_text()) != weight:

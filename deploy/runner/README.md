@@ -38,54 +38,42 @@ leases retain their original identities and state. The failed inactive R2 has no
 admitted job and is verified absent instead of treating its OOM log as idle evidence.
 Completion hooks return success; their destructive flags remain false.
 
-## Rescale and persistent admission hold
+## Final host and persistent admission hold
 
-Recommended: same server/fsn1, x86 CX53, 16 vCPU / 32 GB, CPU/RAM only. Keep the current
-~160 GB disk. CX53 was publicly unavailable on 2026-10-14; check this server's selector.
-If absent, wait for Milad's explicit priced fallback choice. No automatic CPX62 upgrade.
-The whole-host outage interrupts Mehrdad as well; the owner must schedule it.
-Drain is preparation (historical heavy jobs 15–18m); actual shutdown/provider action
-are unbounded references, boot previously 62.468s. CI readiness adds separate checks
-and a ten-minute R2 idle sample. Do not promise a fixed total downtime.
+The final host is CPX42: 8 vCPU / approximately 15 GiB physical RAM. No further
+rescale is required. The 2026-10-14 18:20 update replaces the old 24 GiB threshold.
 
-After the fresh drain, pass fresh gate evidence to the generalized controller's
-`hold <nonce>` action. It creates a root-owned persistent task/nonce hold. Record the
-nonce in the task evidence. Every start/abort watchdog respects this hold, including
-across reboot when the /run fence disappears. Never set it merely to wait for a date.
-If the rescale is cancelled/deferred, `release <nonce>` removes only this task's hold;
-use start-only recover-fence immediately. An unknown hold must not be removed.
+Setting `hold <nonce>` still requires a fresh complete idle gate after drain.
+The root-owned persistent task/nonce hold blocks starts across reboot. Explicit
+`release <nonce>` accepts queued work with fresh complete ADMIN evidence, verifies
+this task's nonce, and removes only that hold. Follow immediately with start-only
+`recover-fence`; neither operation stops or cancels work. Wrong nonces remain refused.
+Draining/stopping services and setting a hold retain the strict idle gate.
 
-Mostafa gracefully shuts down, waits for Hetzner Off, chooses Rescale -> CX53 ->
-CPU and RAM only (disk disabled), waits for action completion, and powers on.
-Do not Rebuild/Reset or force power-off. Record listener-stopped, Off, power-on and
-CI-admitted times separately. Rescales use current tariffs; account SKU/price and
-backup/recovery access must be confirmed beforehand.
+## Accept runner 133 on CPX42
 
-Keep the hold during post-boot checks: same IP/disk/mounts, CPU/RAM, boot journal,
-rootless workload presence/health, effective slice properties and daemon containment.
-R1 adapts to the new core count. Do not restart Mehrdad's services to repair readiness.
-Release the hold and reset primary failure only after these checks, then recover
-through the controller's start-only path. Primary recovery precedes R2 acceptance.
+Measure the CI slice over real console and operator builds while Mehrdad's slice
+is running. Retain job/run IDs, successful conclusions, physical RAM, boot ID,
+CI memory.peak and memory.events. If CI peak exceeds 11 GiB or an OOM occurs,
+keep runner 133 disabled. An idle memory sample does not prove build capacity.
 
-## Accept runner 133 after rescale
+A root-owned measurement receipt supplies `physical_bytes`, `ci_peak_bytes`,
+`mehrdad_running`, `oom_kill_delta`, `boot_id`, and `build_jobs` containing name,
+job_id, run_id and conclusion for both builds. At a fresh idle drain, run
+`phvx-runner-capacity --accept-second --measurement /root/task-measurement.json`.
+It requires a receipt from this boot, at least 8 cores / 14 GiB physical RAM,
+30 GiB free disk, and full memory PSI avg10 below 1%. R2 sets the aggregate
+phvxci.slice MemoryHigh=9G, MemoryMax=11G and MemorySwapMax=0, verified in cgroup v2.
+Listeners, rootful Docker/containerd and nested build containers must all be in
+that slice. A ceiling-triggered OOM is confined to CI cgroups; Mehrdad's slice
+and system service memory policies are unchanged. Eight-core R2 uses CPU700%,
+weight300 and Go P3 per build.
 
-At another ten-repo idle boundary, drain the primary, set this task's persistent
-hold, and run `phvx-runner-capacity --accept-second` as root. It samples for at least
-600 seconds: N >=8, physical MemTotal >=24 GiB, MemAvailable >=12 GiB, available
-root disk >=40 GiB, full memory PSI avg10 <1%, no new memory events. Any runner
-process refuses acceptance. Receipt and root-owned listener count become R2 only
-on success. With 16 cores R2 gets CPUQuota1500%, weight700, Go P7.
-On failure remain R1; do not lower thresholds to admit a 24 GB advertised plan.
-
-Release only this task's hold, then use start-only recovery. Start runner 133 after
-primary readiness; verify its authentication/listener and first actual job ID133,
-then enable its existing service for boot. A stale registration blocks admission;
-no new registration token, credential copying or scope expansion is permitted.
-Run systemctl reset-failed only for a diagnosed guarded-start failure.
-Verify two jobs overlap on IDs130/133, separate work/Docker roots, nested build
-children in phvxci.slice, cleanup-hook success and combined build disk growth.
-Disk below30 GiB, OOM, pressure or output/release differences require R1 rollback
-at the next safe drain; only verified completed builders may be reclaimed.
+Release this task's hold and use start-only recovery. Verify authentication and
+actual jobs on IDs130/133, overlapping builds, separate work/Docker/state roots,
+cleanup-hook success and memory.events. Enable the existing runner-133 service
+for boot after these checks; no re-registration or credential copy is needed.
+If no idle boundary arrives, defer service changes and report the queue.
 
 ## Rollback
 
@@ -98,9 +86,6 @@ evidence; restoring legacy helpers is permitted only after R2 is fully absent.
 Recover primary through start-only admission. Never recreate the old orphan state.
 Source regression: reviewed revert of this PR only, preserving newer work and
 release/hardening policies; let live jobs finish, never retag/manual-push images.
-Before any downgrade disable R2 and restore R1, then repeat the whole-host drain
-and power-off procedure. Original CPX32, if selectable, is current €35.49/month;
-CX43 €15.99/month is a disk-compatible R1 candidate, subject to Milad's choice.
 Cache eviction cannot be rolled back. Do not prune shared caches, ptest volumes,
 workspaces, rootless objects or any Mehrdad files/services/slice.
 

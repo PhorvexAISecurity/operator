@@ -32,6 +32,49 @@ class Proof(unittest.TestCase):
   e=self.evidence();e['repositories'][0]['viewerPermission']='WRITE'
   with self.assertRaises(RuntimeError):self.check(e)
 
+class HoldDispatch(unittest.TestCase):
+ def run_main(self,action,nonce='correct',evidence=None):
+  evidence=self.evidence if evidence is None else evidence
+  with patch.object(m.sys,'argv',['maintenance',action,nonce]),patch.object(m.sys,'stdin',io.StringIO(json.dumps(evidence)+'\n')),patch.object(m.select,'select',return_value=([True],[],[])),contextlib.redirect_stdout(io.StringIO()):
+   m.main()
+ def setUp(self):
+  self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+  self.root=pathlib.Path(self.temp.name);self.run=self.root/'run';self.run.mkdir()
+  self.hold=self.root/'hold';self.hold.write_text(json.dumps({'owner':'runner-speed-20261014','nonce':'correct'}))
+  (self.run/'offline-fence').write_text('{}')
+  self.evidence=Proof().evidence();self.evidence['idle']=False
+  next(c for c in self.evidence['checks'] if c['repository']=='operator' and c['query_status']=='queued')['runs']=[{'id':42,'status':'queued'}]
+  original_stat=pathlib.Path.stat;original_read=pathlib.Path.read_text
+  def stat(path,*args,**kwargs):
+   value=original_stat(path,*args,**kwargs)
+   return types.SimpleNamespace(st_uid=0,st_mode=value.st_mode) if path==self.run else value
+  def read(path,*args,**kwargs):
+   return '7089cf7bcdeb41869b950cf23aefff81' if str(path)=='/etc/machine-id' else original_read(path,*args,**kwargs)
+  self.commands=unittest.mock.Mock();self.idle=unittest.mock.Mock()
+  for mock in [patch.object(m,'RUN',self.run),patch.object(m.os,'geteuid',return_value=0),patch.object(pathlib.Path,'stat',stat),patch.object(pathlib.Path,'read_text',read),patch.object(m.profiles_lib,'HOLD',self.hold),patch.object(m.profiles_lib,'trusted_json',side_effect=lambda path:json.loads(path.read_text())),patch.object(m.profiles_lib,'listener_count',return_value=1),patch.object(m,'local_idle',self.idle),patch.object(m,'command',self.commands)]:
+   mock.start();self.addCleanup(mock.stop)
+ def test_queued_hold_release_then_start_only_recovery_through_main(self):
+  self.run_main('release')
+  self.assertFalse(self.hold.exists());self.commands.assert_not_called();self.idle.assert_not_called()
+  self.run_main('recover-fence')
+  self.assertFalse((self.run/'offline-fence').exists())
+  self.idle.assert_called_once_with(False,allow_unmatched=True)
+  self.assertEqual([call.args[0] for call in self.commands.call_args_list],[['systemctl','start','containerd.service'],['systemctl','start','docker.service'],['systemctl','start',m.profiles_lib.APPROVED[0]['unit']]])
+ def test_wrong_nonce_refused_and_recovery_keeps_hold(self):
+  with self.assertRaisesRegex(RuntimeError,'nonce mismatch'):self.run_main('release','wrong')
+  self.assertTrue(self.hold.exists())
+  with self.assertRaisesRegex(RuntimeError,'Persistent rescale hold'):self.run_main('recover-fence')
+  self.commands.assert_not_called();self.assertTrue(self.hold.exists())
+ def test_queued_work_still_refuses_drain_stop_and_set_hold(self):
+  for action in ('drain','stop-runner','stop-docker','restart-docker','restart-containerd','hold'):
+   with self.subTest(action=action),self.assertRaisesRegex(RuntimeError,'busy API proof'):self.run_main(action)
+  self.commands.assert_not_called();self.idle.assert_not_called();self.assertTrue(self.hold.exists())
+ def test_release_still_requires_complete_fresh_admin_proof(self):
+  for mutate in (lambda e:e['checks'].pop(),lambda e:e['repositories'][0].update(viewerPermission='READ'),lambda e:e.update(finished_at=time.time()-10)):
+   e=Proof().evidence();mutate(e)
+   with self.assertRaises(RuntimeError):self.run_main('release',evidence=e)
+  self.assertTrue(self.hold.exists());self.commands.assert_not_called()
+
 class Drain(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.run=pathlib.Path(self.tmp.name);self.clock=0;self.state='S';self.signals=[]

@@ -122,12 +122,21 @@ class Capacity(unittest.TestCase):
         self.assertEqual(c.policy(1, 1), (100, 100, 1))
         self.assertEqual(c.policy(1000, 2)[1], 10000)
 
-    def test_r2_gate_never_accepts_current_host_or_advertised_24gb(self):
-        good = {'cores': 16, 'physical_bytes': 31 * 2**30, 'available_bytes': 15 * 2**30,
-                'disk_available_bytes': 50 * 2**30, 'memory_full_avg10': 0}
-        c.gate(good)
-        for key, value in [('cores', 4), ('physical_bytes', int(22.7 * 2**30)), ('available_bytes', 11 * 2**30), ('disk_available_bytes', 39 * 2**30), ('memory_full_avg10', 1)]:
-            with self.assertRaises(RuntimeError): c.gate({**good, key: value})
+    def test_r2_gate_uses_real_build_peak_on_final_cpx42(self):
+        sample = {'cores': 8, 'physical_bytes': int(15.24 * 2**30),
+                  'disk_available_bytes': 40 * 2**30, 'memory_full_avg10': 0}
+        receipt = {'physical_bytes': sample['physical_bytes'], 'ci_peak_bytes': 10 * 2**30,
+                   'mehrdad_running': True, 'oom_kill_delta': 0,
+                   'build_jobs': [{'name': name, 'job_id': i, 'run_id': 42, 'conclusion': 'success'}
+                                  for i, name in enumerate(('build-console', 'build-operator'), 1)]}
+        c.gate(sample, receipt)
+        for key, value in [('cores', 4), ('physical_bytes', 7 * 2**30),
+                           ('disk_available_bytes', 29 * 2**30), ('memory_full_avg10', 1)]:
+            with self.assertRaises(RuntimeError): c.gate({**sample, key: value}, receipt)
+        for key, value in [('ci_peak_bytes', 11 * 2**30 + 1), ('ci_peak_bytes', 0),
+                           ('mehrdad_running', False), ('oom_kill_delta', 1), ('build_jobs', []),
+                           ('physical_bytes', sample['physical_bytes'] + 1024)]:
+            with self.assertRaises(RuntimeError): c.gate(sample, {**receipt, key: value})
 
     def test_listener_requires_capacity_daemons_only_want_it(self):
         for filename in ('130.conf', '133.conf'):
