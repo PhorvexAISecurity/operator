@@ -49,8 +49,11 @@ class EntrypointTests(unittest.TestCase):
     def test_opt_in_metrics_entrypoint_is_private_and_counts_terminal_requests(self):
         self.entrypoint_protocol(metrics_enabled=True)
 
-    def entrypoint_protocol(self, metrics_enabled):
-        source_sha = hashlib.sha256(SOURCE.read_bytes()).hexdigest()
+    def test_preserved_legacy_source_entrypoint(self):
+        self.entrypoint_protocol(metrics_enabled=False, source=SOURCE.with_name("gateway.py"))
+
+    def entrypoint_protocol(self, metrics_enabled, source=SOURCE):
+        source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
         seed = b"synthetic-local-trial-seed-32-bytes-0001"
         nonce = "a" * 32
 
@@ -84,7 +87,7 @@ class EntrypointTests(unittest.TestCase):
             if metrics_enabled:
                 env.update({"PHORVEX_LITELLM_METRICS_ENABLED": "1", "POD_NAMESPACE": "litellm",
                             "POD_NAME": "litellm-runtime-fixture"})
-            proc = subprocess.Popen([sys.executable, "-B", str(SOURCE)], env=env,
+            proc = subprocess.Popen([sys.executable, "-B", str(source)], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 deadline = time.monotonic() + 5

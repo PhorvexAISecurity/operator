@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
     env:
       AWS_REGION: us-east-2
-      IMAGE: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32
+      IMAGE: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108
       EXPECTED_SOURCE_SHA: f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1
     steps:
       - name: Require reviewed main
@@ -61,7 +61,7 @@ jobs:
           available_kib="$(df -Pk . | awk 'NR==2 {print $4}')"
           [[ "$available_kib" =~ ^[0-9]+$ ]]
           test "$available_kib" -ge $((15 * 1024 * 1024))
-          docker buildx imagetools inspect "$IMAGE" | grep -Eq '^Digest:[[:space:]]+sha256:91cd4812dcb808d0498ddd0f7f768d64c34e86d05229cec25250abdd1402db32$'
+          docker buildx imagetools inspect "$IMAGE" | grep -Eq '^Digest:[[:space:]]+sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108$'
           docker pull --platform linux/amd64 "$IMAGE"
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$IMAGE")" = linux/amd64
           test "$(docker image inspect --format '{{.Config.User}}' "$IMAGE")" = 10001:10001
@@ -101,7 +101,7 @@ jobs:
                      'gatewaySourcePath': contract['gatewaySourcePath'],
                      'legacyGatewaySourceSHA256': contract['legacyGatewaySourceSHA256'],
                      'contractSHA256': hashlib.sha256(contract_path.read_bytes()).hexdigest(),
-                     'publishedProxyReceiptSHA256': contract['publishedReceiptSHA256'],
+                     'runtimePublicationReceiptSHA256': contract['publishedReceiptSHA256'],
                      'result': 'pass-local-and-published-image-protocol'}
           Path('litellm-gateway-runtime-reuse-receipt.json').write_text(json.dumps(receipt, sort_keys=True, separators=(',', ':')) + '\n')
           PY

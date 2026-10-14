@@ -72,3 +72,12 @@ label and the Grafana sidecar stops loading the dashboard (this happened once on
   defense panels add the brain's selected decisions and the actuation attempts by outcome. Token
   throughput reads `vllm:generation_tokens_total` and `vllm:prompt_tokens_total`; `nim_tokens_total`
   never existed on this cluster.
+
+M1b source preparation adds the active immutable gateway/profile and private
+scrape closure to the stack chart. The external gateway stays manually owned;
+[the release runbook](LITELLM-METRICS-RELEASE.md) orders its guarded rollout after
+compatible engine/Console release and actual runtime/network proof. Old source
+approval and ConfigMaps remain available for rollback. Gateway admission
+telemetry retains LiteLLM namespace/pod and fixed target; native vLLM ReqRate
+continues through the existing bridge. The observed disabled network enforcement
+and DOWN native vLLM scrape are separate owner prerequisites, not claimed fixes.

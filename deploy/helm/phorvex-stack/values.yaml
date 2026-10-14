@@ -127,3 +127,7 @@ catalogueProfiles:
     configMapName: ""
     profileBase64: ""
     manifestBase64: ""
+
+# M1b gateway activation remains opt-in outside the reviewed EKS closure.
+litellmGatewayMetrics:
+  enabled: false

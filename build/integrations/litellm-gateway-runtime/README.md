@@ -36,7 +36,7 @@ histograms on a separate GET-only listener, port 4003. Metrics are disabled by
 default; enabling them requires actual namespace/pod name fields from the
 Downward API. No extra Python packages or new image are needed. The candidate
 source hash in the contract and manual verification workflow move together;
-the previously published source-free runtime digest and provenance stay fixed.
+M1a left the historical runtime pin unchanged. M1b reconciles an actually available publication of the same source-free recipe and verifies both mounted sources in that exact image.
 This source contract is not an active deployment/source/profile binding.
 
 The new `litellm-gateway-metrics.yml` PR workflow runs the source contract,
@@ -54,8 +54,20 @@ activation. Network policy inventory/enforcement and both gateway replicas'
 source/runtime convergence must be proved in the later owner window. See
 [coverage and release gates](../../../deploy/monitoring/APP-METRICS-COVERAGE.md).
 Never reuse the legacy install/switch path as an upgrade, reset a live output
-trial, change active values, or enable this monitor against old gateway source.
+trial, or enable this monitor against old gateway source. M1b supplies a complete
+content-derived active values/immutable-CM closure and guarded manual gateway
+rollout after the compatible engine/Console release.
 
 The actual-image verification job requires the reserved `phorvex-isolated-aws` executor label; stage 1 does not verify or provision that executor. The owner must provide approved isolated AWS capacity before dispatch. Never register the shared gateway/CI runner with that label. Hosted source/protocol checks remain separate and do not replace the merged-source image receipt.
 
 M1a preserves the installed `gateway.py` file and every active Go approval. Its candidate source path is explicit in the v2 reuse contract. M1b must first release the compatible engine/Console hash/ConfigMap/observation/runtime contract, including actuator and journal checks, before projecting candidate bytes under the installed `gateway.py` key. See the [engine contract release gate](../../../deploy/monitoring/LITELLM-METRICS-RELEASE.md). Source-free runtime reuse alone cannot establish that approval.
+
+M1b preserves both complete approved hashes in native and Console source checks,
+verifies actual Pod source mounts/command/env, and retains old ConfigMaps through
+rollback. Existing source/recipe validation now also checks the exact engine
+metrics-source and published-runtime approvals. The entrypoint suite includes a
+legacy-source control plus candidate default-off and enabled controls. All
+process/image/native checks run on isolated EC2 or CI, never on the VPS/gateway.
+The fresh stage 3 discovery of a missing historical image, disabled CNI network
+enforcement and unavailable native vLLM scrape is recorded in the release
+runbook. None is replaced with a guessed pin or fabricated runtime evidence.

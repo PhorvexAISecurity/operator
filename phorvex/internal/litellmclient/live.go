@@ -290,7 +290,12 @@ func ValidateGatewaySourceBinding(p *corev1.Pod, sha, image string) error {
 			}
 		}
 		mountOK := false
+		mountPaths := map[string]bool{}
 		for _, mount := range container.VolumeMounts {
+			if mountPaths[mount.MountPath] || strings.HasPrefix(mount.MountPath, "/opt/phorvex/") {
+				return errors.New("owned-client shadowed source mount")
+			}
+			mountPaths[mount.MountPath] = true
 			if mount.Name == "litellm-live-gateway-source" {
 				mountOK = mount.MountPath == "/opt/phorvex" && mount.ReadOnly && mount.SubPath == "" && mount.SubPathExpr == ""
 			}

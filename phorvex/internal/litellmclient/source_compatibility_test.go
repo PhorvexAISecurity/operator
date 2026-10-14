@@ -164,6 +164,12 @@ func TestConsolePodSourceBindingRejectsStaleVolumeAndCommand(t *testing.T) {
 		if err := ValidateGatewaySourceBinding(bad, sha, ApprovedRuntimeImage); err == nil {
 			t.Fatal("alternate executable accepted")
 		}
+		shadow := pod.DeepCopy()
+		shadow.Spec.Containers[1].VolumeMounts = append(shadow.Spec.Containers[1].VolumeMounts, corev1.VolumeMount{Name: "shadow", MountPath: "/opt/phorvex/gateway.py", ReadOnly: true})
+		if err := ValidateGatewaySourceBinding(shadow, sha, ApprovedRuntimeImage); err == nil {
+			t.Fatal("shadowed executable accepted")
+		}
+
 		bad = pod.DeepCopy()
 		bad.Spec.Volumes[0].ConfigMap.Name = "other-source"
 		if err := ValidateGatewaySourceBinding(bad, sha, ApprovedRuntimeImage); err == nil {

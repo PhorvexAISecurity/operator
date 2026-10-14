@@ -33,7 +33,7 @@ def selected(selector, labels):
     return all(labels.get(key) == value for key, value in selector.get("matchLabels", {}).items())
 
 
-def validate_network(policies, labels, containers):
+def validate_network(policies, labels, containers, preserve_unisolated_ingress=False):
     ports = {port["name"]: port["containerPort"] for container in containers
              for port in container.get("ports", []) if "name" in port}
     allowed = set()
@@ -66,8 +66,11 @@ def validate_network(policies, labels, containers):
                 for required in (4001, 4002):
                     if number <= required <= end:
                         allowed.add(required)
+    if not selected_policies and preserve_unisolated_ingress:
+        return True
     if not selected_policies or allowed != {4001, 4002}:
         raise ValueError("reviewed ingress must preserve admission and protected status access")
+    return False
 
 
 def monitoring_objects(prometheus_labels):
@@ -106,7 +109,7 @@ def monitoring_objects(prometheus_labels):
 
 
 def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labels=None,
-           output_policy=None, *, enabled=False):
+           output_policy=None, *, enabled=False, preserve_unisolated_ingress=False):
     if not enabled:
         return {}  # No opt-in objects, ports, env, source or profile changes by default.
     metadata = deployment.get("metadata", {})
@@ -132,7 +135,7 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
         raise ValueError("reviewed source-free runtime digest and command required")
     contract_path = Path(__file__).resolve().parents[4] / "build/integrations/litellm-gateway-runtime/image-contract.json"
     contract = json.loads(contract_path.read_text())
-    if gateway["image"] != contract["imageByDigest"]:
+    if gateway["image"] not in (contract["imageByDigest"], contract["baseImage"]):
         raise ValueError("installed image needs separate verified runtime convergence")
     if {p.get("containerPort") for p in gateway.get("ports", [])} != {4001, 4002}:
         raise ValueError("installed admission/status port declarations differ")
@@ -154,6 +157,8 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
                     name == "PHORVEX_LITELLM_STATUS_TOKEN_FILE" and
                     value == "/etc/phorvex-litellm-status/token"):
                 continue
+            if container.get("name") == "litellm" and name == "OPENAI_API_KEY" and value == "sk-placeholder-replace-me":
+                continue  # Verified inert installed placeholder, never a credential.
             raise ValueError("owner snapshot must contain Secret references only")
     if any(e.get("name") == "PHORVEX_LITELLM_OUTPUT_POLICY_FILE" for e in env):
         if (not isinstance(output_policy, dict) or output_policy != {"version": 2, "revision": 0, "entries": []}):
@@ -162,9 +167,16 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
     source_volume = [j for j, v in enumerate(volumes) if v.get("name") == "litellm-live-gateway-source"]
     if len(source_volume) != 1 or "configMap" not in volumes[source_volume[0]]:
         raise ValueError("installed source volume differs")
+    if volumes[source_volume[0]]["configMap"].get("name") != "phorvex-litellm-admission-gateway-" + old_sha[:12]:
+        raise ValueError("installed source volume is outside the reviewed source closure")
     opted_labels = {**labels, LABEL: "enabled"}
-    validate_network(networkpolicies or [], opted_labels, containers)
+    was_unisolated = validate_network(networkpolicies or [], opted_labels, containers, preserve_unisolated_ingress)
     objects = monitoring_objects(prometheus_labels)
+    if was_unisolated:
+        # Explicitly preserve all currently declared serving/status listeners.
+        # No selectors on this rule: the baseline had no ingress isolation.
+        objects["metrics-networkpolicy.json"]["spec"]["ingress"].append(
+            {"ports": [{"protocol": "TCP", "port": port} for port in (4000, 4001, 4002)]})
     source = GATEWAY_SOURCE.read_text()
     source_sha = hashlib.sha256(source.encode()).hexdigest()
     if source_sha != contract["gatewaySourceSHA256"]:
@@ -192,6 +204,7 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
                 value.get("gatewayImage", gateway["image"]) != gateway["image"]):
             raise ValueError("catalogue profile hash/runtime differs")
         value["sourceSHA256"] = source_sha
+        value["gatewayImage"] = contract["imageByDigest"]
         raw = canonical(value)
         digest = hashlib.sha256(raw.encode()).hexdigest()
         # The owner records these derived bindings in M1b, never in M1a values.
@@ -202,50 +215,49 @@ def render(deployment=None, profiles=None, networkpolicies=None, prometheus_labe
         objects[f"{name}.json"] = candidate
         bindings.append({"previousConfigMapName": meta["name"], "configMapName": name,
                          "profileSHA256": digest, "sourceConfigMapName": source_name})
-    patch = [
-        {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
-        {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
-        {"op": "test", "path": "/spec/template", "value": template},
-        {"op": "replace", "path": "/spec/template/metadata/annotations/" + SOURCE_ANNOTATION.replace("/", "~1"), "value": source_sha},
-        {"op": "add", "path": "/spec/template/metadata/labels/" + LABEL.replace("/", "~1"), "value": "enabled"},
-        {"op": "replace", "path": f"/spec/template/spec/volumes/{source_volume[0]}/configMap/name", "value": source_name},
-        {"op": "replace", "path": f"/spec/template/spec/containers/{i}/env/{source_env[0]}/value", "value": source_sha},
-        {"op": "add", "path": f"/spec/template/spec/containers/{i}/ports/-",
-         "value": {"name": "gateway-metrics", "containerPort": 4003, "protocol": "TCP"}},
-    ]
-    for name, value in (("PHORVEX_LITELLM_METRICS_ENABLED", "1"), ("POD_NAMESPACE", "metadata.namespace"), ("POD_NAME", "metadata.name")):
-        entry = {"name": name, "value": value} if name == "PHORVEX_LITELLM_METRICS_ENABLED" else {
-            "name": name, "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": value}}}
-        patch.append({"op": "add", "path": f"/spec/template/spec/containers/{i}/env/-", "value": entry})
-    objects["deployment-metrics-json-patch.json"] = patch
     candidate_template = copy.deepcopy(template)
     candidate_template["metadata"]["annotations"][SOURCE_ANNOTATION] = source_sha
+    candidate_template["metadata"]["annotations"]["phorvex.ai/litellm-gateway-image"] = contract["imageByDigest"]
     candidate_template["metadata"]["labels"][LABEL] = "enabled"
     candidate_template["spec"]["volumes"][source_volume[0]]["configMap"]["name"] = source_name
     candidate_gateway = candidate_template["spec"]["containers"][i]
+    candidate_gateway["image"] = contract["imageByDigest"]
     candidate_gateway["env"][source_env[0]]["value"] = source_sha
-    candidate_gateway["ports"].append(copy.deepcopy(patch[7]["value"]))
-    candidate_gateway["env"].extend(copy.deepcopy(op["value"]) for op in patch[8:])
+    candidate_gateway["ports"].append({"name": "gateway-metrics", "containerPort": 4003, "protocol": "TCP"})
+    candidate_gateway["env"].extend([
+        {"name": "PHORVEX_LITELLM_METRICS_ENABLED", "value": "1"},
+        {"name": "POD_NAMESPACE", "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": "metadata.namespace"}}},
+        {"name": "POD_NAME", "valueFrom": {"fieldRef": {"apiVersion": "v1", "fieldPath": "metadata.name"}}}])
+    candidate_spec = {**copy.deepcopy(deployment["spec"]), "template": candidate_template}
+    objects["deployment-metrics-json-patch.json"] = [
+        {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
+        {"op": "test", "path": "/metadata/resourceVersion", "value": metadata["resourceVersion"]},
+        {"op": "test", "path": "/spec", "value": deployment["spec"]},
+        {"op": "replace", "path": "/spec/template", "value": candidate_template}]
     objects["deployment-metrics-rollback-json-patch.json"] = [
         {"op": "test", "path": "/metadata/uid", "value": metadata["uid"]},
-        {"op": "test", "path": "/spec/template", "value": candidate_template},
-        {"op": "replace", "path": "/spec/template", "value": template},
-    ]
+        {"op": "test", "path": "/spec", "value": candidate_spec},
+        {"op": "replace", "path": "/spec/template", "value": template}]
     objects["metrics-closure.json"] = {"schema": "phorvex-litellm-metrics-candidate-v1",
         "gatewaySourceSHA256": source_sha, "previousGatewaySourceSHA256": old_sha,
-        "gatewayImageByDigest": gateway["image"], "sourceConfigMapName": source_name,
+        "gatewayImageByDigest": contract["imageByDigest"], "previousGatewayImageByDigest": gateway["image"],
+        "sourceConfigMapName": source_name, "previousIngressUnisolated": was_unisolated,
         "profiles": bindings,
         "engineContract": {"status": "activation-required",
                            "installedSourceSHA256": old_sha,
                            "candidateSourceSHA256": source_sha,
                            "candidateSourceConfigMapName": source_name},
         "activation": "M1b only after engine/Console contract release and merged runtime verification"}
+    for obj in objects.values():
+        if isinstance(obj, dict) and obj.get("kind") in ("ConfigMap", "Service", "ServiceMonitor", "NetworkPolicy"):
+            obj["metadata"].setdefault("annotations", {})["helm.sh/resource-policy"] = "keep"
     return objects
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--enable-metrics", action="store_true")
+    parser.add_argument("--preserve-unisolated-ingress", action="store_true")
     for name in ("deployment-original", "profiles-original", "networkpolicies-original", "prometheus-pod-labels", "output-policy-original"):
         parser.add_argument("--" + name, type=Path)
     parser.add_argument("--output", type=Path, required=True)
@@ -254,7 +266,8 @@ def main():
         return json.loads(path.read_text()) if path else None
     objects = render(read(args.deployment_original), read(args.profiles_original),
                      read(args.networkpolicies_original), read(args.prometheus_pod_labels),
-                     read(args.output_policy_original), enabled=args.enable_metrics)
+                     read(args.output_policy_original), enabled=args.enable_metrics,
+                     preserve_unisolated_ingress=args.preserve_unisolated_ingress)
     args.output.mkdir(parents=True, exist_ok=False, mode=0o700)
     for name, value in objects.items():
         (args.output / name).write_text(canonical(value) + "\n")

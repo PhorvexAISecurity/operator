@@ -1,0 +1,9 @@
+# Test-only copy of the observed existing bridge; do not deploy duplicate rules.
+groups:
+- name: phorvex.physics.bridge
+  interval: 30s
+  rules:
+  - record: http_requests_total
+    expr: sum by (namespace, pod, container, node) (vllm:request_success_total)
+  - record: http_request_duration_seconds_bucket
+    expr: vllm:e2e_request_latency_seconds_bucket
