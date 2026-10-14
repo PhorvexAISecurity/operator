@@ -34,15 +34,18 @@ func PendingLiteLLMClientOperation(ctx context.Context, reader client.Reader, op
 		// An absent journal is normal only before the source fixture exists.
 		// Once the gateway source is installed, absence cannot prove that no
 		// prepared operation was lost with the protected journal.
-		source := &corev1.ConfigMap{}
-		sourceErr := reader.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.SourceConfigMapName}, source)
-		if apierrors.IsNotFound(sourceErr) {
-			return false, nil
+		for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256} {
+			source := &corev1.ConfigMap{}
+			sourceErr := reader.Get(ctx, client.ObjectKey{Namespace: litellmclient.Namespace, Name: litellmclient.ApprovedSourceConfigMap(sha)}, source)
+			if apierrors.IsNotFound(sourceErr) {
+				continue
+			}
+			if sourceErr != nil {
+				return true, sourceErr
+			}
+			return true, errors.New("owned-client protected journal absent with installed gateway source")
 		}
-		if sourceErr != nil {
-			return true, sourceErr
-		}
-		return true, errors.New("owned-client protected journal absent with installed gateway source")
+		return false, nil
 	}
 	if e != nil {
 		return true, e
@@ -85,7 +88,7 @@ func litellmValidateReceipt(r litellmRevokeReceipt) error {
 		(r.Phase != "aborted" && r.AbortReason != "") ||
 		(r.Phase == "aborted" && r.AbortReason != "pre-cas-authority-changed" && r.AbortReason != "definitive-policy-conflict") ||
 		!litellmclient.ValidSHA(r.ClientSHA256) || !litellmclient.ValidSHA(r.SeedSHA256) ||
-		!litellmclient.ValidSHA(r.SourceSHA256) || r.PolicyName == "" || r.PolicyUID == "" ||
+		!litellmclient.ApprovedSource(r.SourceSHA256) || r.PolicyName == "" || r.PolicyUID == "" ||
 		r.PolicyGeneration < 1 || r.TargetUID == "" || r.PeerUID == "" || r.TargetUID == r.PeerUID ||
 		r.ConfigMapUID == "" || r.ClientsConfigMapUID == "" || r.ServiceUID == "" ||
 		r.OperationID == "" || len(r.OperationID) > 128 || r.SelectionDecisionID != r.OperationID ||

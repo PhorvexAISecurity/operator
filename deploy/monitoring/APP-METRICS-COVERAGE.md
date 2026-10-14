@@ -8,7 +8,7 @@ candidate only. No live scrape, deployment or seven-day history is claimed.
 
 ## Engine/Console contract gate for M1b
 
-M1a preserves the installed `gateway.py` bytes and its native Go source-hash tests. The metrics program is versioned as `gateway_metrics.py`, verified separately, and becomes the projected `gateway.py` key only in a later reviewed activation. The active engine contract still accepts the installed hash `4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1`; the metrics candidate hash is `f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1` and is **not approved by that engine yet**.
+M1a preserves the installed `gateway.py` bytes and its native Go source-hash tests. The metrics program is versioned as `gateway_metrics.py`, verified separately, and becomes the projected `gateway.py` key only in a later reviewed activation. M1b adds compatibility for the installed hash `4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1`; the metrics candidate hash is `f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1` and is approved by the M1b engine/Console source contract alongside the legacy source. Activation still requires its actual compatible release, published-image proof and enforced network isolation.
 
 Before any candidate source/profile/Deployment activation, M1b must ship a reviewed engine/Console contract release that supports the candidate while preserving the installed version throughout transition. Inventory and update every source hash, content-named ConfigMap, runtime/profile and observation check: `internal/litellmclient/{contract.go,live.go}`, `internal/actuator/{litellm_client_revoke.go,litellm_client_journal.go}`, Console/campaign consumers and all source-bound profile validation. Updating just one hash or a profile is insufficient. `SourceConfigMapName`, the source-volume match, the observation hash and gateway image checks must agree with the new closure. The renderer marks `engineContract.status=activation-required`; its output is not proof of engine approval.
 
@@ -171,3 +171,31 @@ cannot recover previously deleted samples. No retention values or Helm release
 are changed by M1a.
 
 Exact future preparation, apply and rollback commands are in [LITELLM-METRICS-RELEASE.md](LITELLM-METRICS-RELEASE.md); none has run in stage 1.
+
+## M1b source preparation and live prerequisite
+
+The stack chart now owns the complete new immutable source/profile and private
+scrape closure; the existing gateway Deployment remains manually owned. The
+release runbook orders compatible engine/Console release before its guarded
+external rollout, holds catalogue fires through convergence, and retains both
+source approvals and old immutable objects for rollback. No child chart package
+or EPSS change is required.
+
+Fresh 2026-10-14 owner evidence shows the existing generic bridge is healthy,
+while its native vLLM target at port 8001 is DOWN (connection refused). ReqRate
+has no label defect: gateway labels correctly select namespace `litellm`, and
+native/bridge labels correctly select namespace `vllm`. Gateway scraping cannot
+fill an absent native completion population. Native vLLM ReqRate acceptance
+requires Hami's separate scrape repair/release; no default query, recording
+rule, vLLM pod or scrape configuration was changed here. PromQL tests exercise
+both populations and the empty-native control without duplicate rules.
+
+Network enforcement was disabled in the fresh owner snapshot. A NetworkPolicy
+object alone supplies no privacy. Stage 3b stops before listener activation
+until the separately owned CNI release and actual allowed/denied controls pass.
+The historical image digest was missing in ECR. The lead republished the exact
+source-free recipe and passed old/new protocol tests in its actual published
+image on isolated Spot EC2; both byte-exact receipts are committed and hashed
+in the v3 runtime contract. They establish image/source compatibility, while
+live gateway rollout, enforced privacy and native-vLLM acceptance remain gated.
+No deployment, network or telemetry success is claimed by source preparation.

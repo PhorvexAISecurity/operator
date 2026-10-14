@@ -142,3 +142,37 @@ func TestPrometheusInstantQueryRetriesTransientFailure(t *testing.T) {
 		t.Fatalf("transient query was not retried into a real value: attempts=%d values=%v", attempts, got)
 	}
 }
+
+// The admission and native completion boundaries already use distinct namespace
+// labels. Exercise the actual ReqRate parser without summing native and bridge
+// counters or pretending an admission Pod is a serving Pod.
+func TestGatewayAndVLLMReqRateKeepSeparateNamespaces(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("query")
+		want := strings.ReplaceAll(DefaultPromQueries()[SigReqRate], "{namespace}", "litellm")
+		pod, value := "litellm-gateway-a", "2"
+		if q != want {
+			if q != strings.ReplaceAll(DefaultPromQueries()[SigReqRate], "{namespace}", "vllm") {
+				t.Errorf("unexpected ReqRate query: %s", q)
+				http.Error(w, "bad query", 400)
+				return
+			}
+			pod, value = "vllm-serving-a", "1"
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"vector","result":[{"metric":{"pod":%q},"value":[1,%q]}]}}`, pod, value)
+	}))
+	defer server.Close()
+	p := NewPromHTTP(server.URL, map[string]string{SigReqRate: DefaultPromQueries()[SigReqRate]})
+	for _, tc := range []struct {
+		namespace, pod, other string
+		want                  float64
+	}{{"litellm", "litellm-gateway-a", "vllm-serving-a", 2}, {"vllm", "vllm-serving-a", "litellm-gateway-a", 1}} {
+		got, err := p.PodMetrics(context.Background(), tc.namespace, []string{tc.pod})
+		if err != nil || !got[tc.pod].ReqRate.Usable() || got[tc.pod].ReqRate.Value != tc.want {
+			t.Fatalf("separate namespace rate: %+v %v", got, err)
+		}
+		if _, exists := got[tc.other]; exists {
+			t.Fatal("another boundary entered per-Pod telemetry")
+		}
+	}
+}

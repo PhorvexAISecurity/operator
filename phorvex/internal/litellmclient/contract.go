@@ -38,7 +38,28 @@ const (
 	RuleType               = "phorvex.attack.litellm-client-abuse"
 	ApprovedSourceSHA256   = "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1"
 	ApprovedGatewayImage   = "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff"
+	MetricsSourceSHA256    = "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1"
+	ApprovedRuntimeImage   = "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108"
 )
+
+// ApprovedSourceConfigMap derives a name only for reviewed complete source hashes.
+// Keep the legacy approval through convergence and rollback; a SHA prefix alone
+// is never authority to read or execute another ConfigMap.
+func ApprovedSourceConfigMap(sha string) string {
+	if sha != ApprovedSourceSHA256 && sha != MetricsSourceSHA256 {
+		return ""
+	}
+	return "phorvex-litellm-admission-gateway-" + sha[:12]
+}
+
+func ApprovedSource(sha string) bool { return ApprovedSourceConfigMap(sha) != "" }
+
+// The source-free runtime is the published image from image-contract.json.
+// The original Python runtime remains approved only for the legacy source.
+func ApprovedRuntime(sha, image string) bool {
+	return ApprovedSource(sha) && (image == ApprovedRuntimeImage ||
+		(sha == ApprovedSourceSHA256 && image == ApprovedGatewayImage))
+}
 
 var shaPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 

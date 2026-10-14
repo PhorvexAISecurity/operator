@@ -122,8 +122,33 @@ class MetricsRenderTests(unittest.TestCase):
         candidate = objects[binding["configMapName"] + ".json"]
         raw = candidate["data"]["profile.json"]
         self.assertEqual(binding["profileSHA256"], hashlib.sha256(raw.encode()).hexdigest())
-        self.assertEqual(json.loads(raw), {**json.loads(profiles[0]["data"]["profile.json"]), "sourceSHA256": digest})
+        self.assertEqual(json.loads(raw), {**json.loads(profiles[0]["data"]["profile.json"]), "sourceSHA256": digest,
+                                          "gatewayImage": json.loads(CONTRACT.read_text())["imageByDigest"]})
         self.assertNotEqual(candidate["metadata"]["name"], profiles[0]["metadata"]["name"])
+
+    def test_original_runtime_migrates_and_unisolated_baseline_is_explicit(self):
+        d, p, _, labels = originals()
+        contract = json.loads(CONTRACT.read_text())
+        d["spec"]["template"]["spec"]["containers"][1]["image"] = contract["baseImage"]
+        value = json.loads(p[0]["data"]["profile.json"])
+        value["gatewayImage"] = contract["baseImage"]
+        raw = module.canonical(value)
+        p[0]["data"]["profile.json"] = raw
+        p[0]["metadata"]["name"] = "phorvex-litellm-live-profile-" + hashlib.sha256(raw.encode()).hexdigest()[:12]
+        with self.assertRaisesRegex(ValueError, "preserve"):
+            module.render(d, p, [], labels, enabled=True)
+        objects = module.render(d, p, [], labels, enabled=True, preserve_unisolated_ingress=True)
+        result = patched(d, objects["deployment-metrics-json-patch.json"])
+        self.assertEqual(result["spec"]["template"]["spec"]["containers"][1]["image"], contract["imageByDigest"])
+        self.assertEqual(patched(result, objects["deployment-metrics-rollback-json-patch.json"]), d)
+        rules = objects["metrics-networkpolicy.json"]["spec"]["ingress"]
+        self.assertEqual([x["port"] for x in rules[1]["ports"]], [4000, 4001, 4002])
+        self.assertEqual(rules[0]["ports"], [{"port": 4003, "protocol": "TCP"}])
+        self.assertEqual(objects["metrics-closure.json"]["previousGatewayImageByDigest"], contract["baseImage"])
+        changed = copy.deepcopy(d)
+        changed["spec"]["replicas"] = 3
+        with self.assertRaisesRegex(ValueError, "stale"):
+            patched(changed, objects["deployment-metrics-json-patch.json"])
 
     def test_private_named_port_monitor_and_intersection_network_source(self):
         d, p, n, labels = originals()

@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-litellm-gateway-runtime-reuse-receipt-v1",
+  "sourceCommit": "d4b1da8955aae4e3ca5d349cc38dd7a57ccedb55",
+  "mountedSourceCommit": "7ff407d38f9bea7c209a8a9e421a1fcf39f64dc8",
+  "sameRootGitTree": "e05743fd148f1fa8738ff33acc7a1b69803dd31d",
+  "githubRunID": null,
+  "githubRunAttempt": null,
+  "execution": "isolated Spot EC2 manual exact-image tests; no GitHub runner registered",
+  "instance": "i-034ecee3304a333d0",
+  "utc": "2026-10-14T08:54:17.030140+00:00",
+  "imageByDigest": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108",
+  "gatewaySourceSHA256": "f550b9890b20da4b02b68fac5c102a99a0313e6f419dc41dd0c409b2bdd165c1",
+  "legacyGatewaySourceSHA256": "4bf046ce690c280da4b4f0f613ac52d2b4511285454f18c25b2e144b574d5cc1",
+  "publicationReceiptSHA256": "ac0d0818cc3e718aacc0c8cc89f1567c3da88c01800bca5c07741997f8d06830",
+  "result": "pass-local-and-published-image-protocol",
+  "tests": [
+    "gateway-suites",
+    "candidate-entrypoint",
+    "legacy-entrypoint"
+  ],
+  "platform": "linux/amd64",
+  "user": "10001:10001",
+  "python": "Python 3.11.15"
+}

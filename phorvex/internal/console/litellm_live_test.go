@@ -2,7 +2,9 @@ package console
 
 import (
 	"encoding/json"
+
 	"errors"
+	"github.com/phorvex/phorvex/internal/litellmclient"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,9 +13,9 @@ import (
 
 func TestLiteLiveReviewedProfileRejectsMutableSourceAndRuntimeUIDs(t *testing.T) {
 	hash := strings.Repeat("a", 64)
-	image := "example.invalid/litellm@sha256:" + hash
+	image := litellmclient.ApprovedRuntimeImage
 	profile := liteLLMLiveProfile{
-		Version: 2, SourceSHA256: hash, GatewayImage: image, ClientsSHA256: hash,
+		Version: 2, SourceSHA256: litellmclient.ApprovedSourceSHA256, GatewayImage: image, ClientsSHA256: hash,
 		SeedSHA256: strings.Repeat("b", 64), PolicyName: "litellm-defense",
 		ModelAlias:          "gpt-4o-mini",
 		EventCreator:        "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
@@ -231,5 +233,23 @@ func TestLiteLivePriorJournalMatchesActiveEntriesAndAborts(t *testing.T) {
 	if _, err := litePriorJournal(snapshot, []map[string]any{terminal,
 		{"phase": "prepared", "clientSHA256": aborted, "operationId": "other-op", "abortReason": ""}}); err == nil {
 		t.Fatal("unresolved prepared attempt accepted as prior history")
+	}
+}
+
+func TestLiteLiveProfileOldNewAndInvalidApprovalControls(t *testing.T) {
+	p := liteLLMLiveProfile{Version: 2, GatewayImage: litellmclient.ApprovedRuntimeImage, ClientsSHA256: strings.Repeat("a", 64), SeedSHA256: strings.Repeat("b", 64), PolicyName: "litellm-defense", ModelAlias: "gpt-4o-mini", EventCreator: "system:serviceaccount:phorvex-system:phorvex-phorvex-console", AuditSourceIdentity: "reviewed-audit", MaxRunSeconds: 900}
+	for _, sha := range []string{litellmclient.ApprovedSourceSHA256, litellmclient.MetricsSourceSHA256, strings.Repeat("c", 64)} {
+		p.SourceSHA256 = sha
+		raw, _ := json.Marshal(p)
+		_, err := parseLiteLiveProfile(raw)
+		if (err == nil) != litellmclient.ApprovedSource(sha) {
+			t.Fatalf("profile approval %s: %v", sha, err)
+		}
+	}
+	p.SourceSHA256 = litellmclient.MetricsSourceSHA256
+	p.GatewayImage = litellmclient.ApprovedGatewayImage
+	raw, _ := json.Marshal(p)
+	if _, err := parseLiteLiveProfile(raw); err == nil {
+		t.Fatal("metrics with legacy runtime accepted")
 	}
 }

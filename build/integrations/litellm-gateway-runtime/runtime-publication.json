@@ -1,0 +1,20 @@
+{
+  "schema": "phorvex-litellm-gateway-runtime-publication-v1",
+  "utc": "2026-10-14T08:51:41.464060+00:00",
+  "sourceCommit": "d4b1da8955aae4e3ca5d349cc38dd7a57ccedb55",
+  "buildSourceCommit": "7ff407d38f9bea7c209a8a9e421a1fcf39f64dc8",
+  "identicalRuntimeGitTree": "6478df7b522646b78cf76f045a8e0b210e81a3bf",
+  "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:litellm-gateway-runtime-d4b1da8955aae4e3ca5d349cc38dd7a57ccedb55",
+  "imageByDigest": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108",
+  "digest": "sha256:cb16b9b573dea616b184263915f7cb259f39e012650d8ad398456e0e6c91a108",
+  "instance": "i-034ecee3304a333d0",
+  "platform": "linux/amd64",
+  "user": "10001:10001",
+  "baseImage": "docker.io/library/python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff",
+  "dockerfileSHA256": "556ea86deca65d2021432629cf0e93b6880697b2812b588c28b5a9bb2bcb20ed",
+  "applicationSourceIncluded": false,
+  "gatewaySourceMountedReadOnly": true,
+  "publicationMethod": "isolated EC2 exact pinned recipe; offline build; ECR push to absent dedicated source tag",
+  "githubRunID": null,
+  "status": "published-actual-image-proof-pending"
+}

@@ -22,14 +22,43 @@ def verify():
         "schema", "imageByDigest", "publishedImageSourceCommit", "publishedRunID",
         "publishedReceiptSHA256", "dockerfileSHA256", "baseImage", "platform",
         "python", "user", "gatewaySourceSHA256", "gatewayCommand",
-        "gatewaySourcePath", "legacyGatewaySourceSHA256",
-    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v2":
+        "gatewaySourcePath", "legacyGatewaySourceSHA256", "publishedReceiptPath",
+        "actualImageReceiptPath", "actualImageReceiptSHA256",
+    } or contract["schema"] != "phorvex-litellm-gateway-image-reuse-v3":
         raise ValueError("gateway image reuse contract differs")
     if not re.fullmatch(r"[^\s@]+@sha256:[0-9a-f]{64}", contract["imageByDigest"]):
         raise ValueError("published image is not an immutable digest reference")
-    for field in ("publishedReceiptSHA256", "dockerfileSHA256", "gatewaySourceSHA256"):
+    for field in ("publishedReceiptSHA256", "dockerfileSHA256", "gatewaySourceSHA256", "actualImageReceiptSHA256"):
         if not re.fullmatch(r"[0-9a-f]{64}", contract[field]):
             raise ValueError(field + " is not SHA-256")
+    receipt_path = ROOT / contract["publishedReceiptPath"]
+    if contract["publishedReceiptPath"] != "build/integrations/litellm-gateway-runtime/runtime-publication.json":
+        raise ValueError("publication receipt path differs")
+    receipt_raw = receipt_path.read_bytes()
+    receipt = json.loads(receipt_raw)
+    if (hashlib.sha256(receipt_raw).hexdigest() != contract["publishedReceiptSHA256"] or
+            receipt.get("schema") != "phorvex-litellm-gateway-runtime-publication-v1" or
+            receipt.get("imageByDigest") != contract["imageByDigest"] or
+            receipt.get("sourceCommit") != contract["publishedImageSourceCommit"] or
+            receipt.get("dockerfileSHA256") != contract["dockerfileSHA256"] or
+            receipt.get("applicationSourceIncluded") is not False or
+            receipt.get("platform") != "linux/amd64" or receipt.get("user") != "10001:10001" or
+            receipt.get("githubRunID") is not None or contract["publishedRunID"] is not None):
+        raise ValueError("actual isolated publication provenance differs")
+    if contract["actualImageReceiptPath"] != "build/integrations/litellm-gateway-runtime/actual-image-receipt.json":
+        raise ValueError("actual-image receipt path differs")
+    actual_raw = (ROOT / contract["actualImageReceiptPath"]).read_bytes()
+    actual = json.loads(actual_raw)
+    if (hashlib.sha256(actual_raw).hexdigest() != contract["actualImageReceiptSHA256"] or
+            actual.get("schema") != "phorvex-litellm-gateway-runtime-reuse-receipt-v1" or
+            actual.get("result") != "pass-local-and-published-image-protocol" or
+            actual.get("imageByDigest") != contract["imageByDigest"] or
+            actual.get("sourceCommit") != contract["publishedImageSourceCommit"] or
+            actual.get("gatewaySourceSHA256") != contract["gatewaySourceSHA256"] or
+            actual.get("legacyGatewaySourceSHA256") != contract["legacyGatewaySourceSHA256"] or
+            actual.get("publicationReceiptSHA256") != contract["publishedReceiptSHA256"] or
+            actual.get("platform") != contract["platform"] or actual.get("user") != contract["user"]):
+        raise ValueError("actual published image old/new protocol evidence differs")
     if contract["gatewaySourcePath"] != "build/test-harness/fixtures/litellm-live/gateway_metrics.py":
         raise ValueError("candidate path differs")
     legacy = (ROOT / "build/test-harness/fixtures/litellm-live/gateway.py").read_bytes()
@@ -37,7 +66,12 @@ def verify():
     active_sha = re.search(r'ApprovedSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
     if (active_sha is None or hashlib.sha256(legacy).hexdigest() != active_sha[1] or
             active_sha[1] != contract["legacyGatewaySourceSHA256"]):
-        raise ValueError("installed source or engine approval moved during M1a")
+        raise ValueError("preserved legacy source or engine approval differs")
+    metrics_sha = re.search(r'MetricsSourceSHA256\s*=\s*"([0-9a-f]{64})"', active_contract)
+    runtime_image = re.search(r'ApprovedRuntimeImage\s*=\s*"([^"\n]+)"', active_contract)
+    if (metrics_sha is None or metrics_sha[1] != contract["gatewaySourceSHA256"] or
+            runtime_image is None or runtime_image[1] != contract["imageByDigest"]):
+        raise ValueError("compatible engine source/runtime approval differs")
     source = (ROOT / contract["gatewaySourcePath"]).read_bytes()
     if hashlib.sha256(source).hexdigest() != contract["gatewaySourceSHA256"]:
         raise ValueError("merged gateway source moved without a new image/source review")

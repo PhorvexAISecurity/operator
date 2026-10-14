@@ -1,0 +1,36 @@
+rule_files:
+- litellm-metrics-bridge.rules.yaml
+evaluation_interval: 30s
+tests:
+- name: gateway-and-native-completion-remain-separate
+  interval: 30s
+  input_series:
+  - series: 'http_requests_total{namespace="litellm",pod="litellm-a",target="litellm",method="POST",route="/v1/chat/completions",status_class="2xx",outcome="completed"}'
+    values: '0+30x12'
+  - series: 'vllm:request_success_total{namespace="vllm",pod="vllm-a",container="vllm",node="node-a"}'
+    values: '0+15x12'
+  promql_expr_test:
+  - expr: 'sum by (pod) (rate(http_requests_total{namespace="litellm"}[1m]))'
+    eval_time: 5m
+    exp_samples:
+    - labels: '{pod="litellm-a"}'
+      value: 1
+  - expr: 'sum by (pod) (rate(http_requests_total{namespace="vllm"}[1m]))'
+    eval_time: 5m
+    exp_samples:
+    - labels: '{pod="vllm-a"}'
+      value: 0.5
+- name: gateway-does-not-fill-missing-native-vllm-source
+  interval: 30s
+  input_series:
+  - series: 'http_requests_total{namespace="litellm",pod="litellm-a",target="litellm",method="POST",route="/v1/chat/completions",status_class="2xx",outcome="completed"}'
+    values: '0+30x12'
+  promql_expr_test:
+  - expr: 'sum by (pod) (rate(http_requests_total{namespace="vllm"}[1m]))'
+    eval_time: 5m
+    exp_samples: []
+  - expr: 'sum by (pod) (rate(http_requests_total{namespace="litellm"}[1m]))'
+    eval_time: 5m
+    exp_samples:
+    - labels: '{pod="litellm-a"}'
+      value: 1
