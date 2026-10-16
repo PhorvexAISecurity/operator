@@ -14,6 +14,7 @@ import (
 	"context"
 	"errors"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/phorvex/phorvex/internal/model"
@@ -48,22 +49,6 @@ const (
 	NoEffectSatisfied  NoEffectDisposition = "already-satisfied"
 	NoEffectReconciled NoEffectDisposition = "reconciled"
 	NoEffectDeclared   NoEffectDisposition = "declared-only"
-)
-
-// Phorvex-controlled rule vocabulary. Because Phorvex authors BOTH a controlled
-// SecurityEvent and the AMTD strategy that matches it, the retained quarantine route
-// avoids Phoenix's brittle external-rule matching. These rule
-// fields are Phorvex-private (Source=PhorvexController) so they never collide with a
-// real integrator's events.
-const (
-	// RuleSource marks an event as authored by Phorvex's controller.
-	RuleSource = "PhorvexController"
-	// RuleThreatLevel is the canonical level Phorvex emits at (Phoenix vocabulary).
-	RuleThreatLevel = "high"
-	// RuleTypeRotate is the Phorvex-private rule type mapped to Phoenix Delete.
-	RuleTypeRotate = "phorvex.rotate"
-	// RuleTypeQuarantine is the Phorvex-private rule type mapped to Phoenix Quarantine.
-	RuleTypeQuarantine = "phorvex.quarantine"
 )
 
 // TenantTarget describes one tenant's protected workloads for AMTD maintenance.
@@ -255,9 +240,9 @@ type PolicyBindingLifecycle interface {
 func RuleTypeFor(a model.Action) string {
 	switch a {
 	case model.ActionRotate:
-		return RuleTypeRotate
+		return amtdv1beta1.PhorvexRuleTypeRotate
 	case model.ActionQuarantine:
-		return RuleTypeQuarantine
+		return amtdv1beta1.PhorvexRuleTypeQuarantine
 	default:
 		return ""
 	}

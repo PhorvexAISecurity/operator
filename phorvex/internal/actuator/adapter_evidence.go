@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -76,7 +77,7 @@ func validateAdapterDispatch(ctx context.Context, ec EnactCtx, req Request, podU
 		return "", fmt.Errorf("adapter-rotate unsupported: detector event type drifted")
 	}
 	source, _, _ := unstructured.NestedString(se.Object, "spec", "rule", "source")
-	if source == RuleSource {
+	if source == amtdv1beta1.PhorvexRuleSource {
 		return "", fmt.Errorf("adapter-rotate unsupported: self event cannot authenticate adapter")
 	}
 	targets, _, _ := unstructured.NestedStringSlice(se.Object, "spec", "targets")

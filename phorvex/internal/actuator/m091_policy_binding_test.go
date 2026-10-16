@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -205,7 +206,7 @@ func TestM091HybridForwardsRetirementAndPreservesPhoenixQuarantineRoute(t *testi
 		t.Fatalf("hybrid did not forward native retirement: %v", err)
 	}
 	result, err = h.Actuate(t.Context(), Request{Tenant: "tenant", Namespace: "ns", Pod: "pod", TargetUID: "pod-uid", TargetNamespaceUID: "namespace-uid", OperationID: strings.Repeat("a", 40), Action: model.ActionQuarantine})
-	if err != nil || !result.Emitted || result.RuleType != RuleTypeQuarantine {
+	if err != nil || !result.Emitted || result.RuleType != amtdv1beta1.PhorvexRuleTypeQuarantine {
 		t.Fatalf("Phoenix route changed by native retirement: result=%+v err=%v", result, err)
 	}
 }

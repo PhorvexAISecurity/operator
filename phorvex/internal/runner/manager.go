@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -1467,8 +1468,8 @@ func phoenixRotationReceiptConfirmed(p pendingRotation, snap *ingest.Snapshot) b
 		return false
 	}
 	r, ok := snap.PhoenixReceipts[p.phoenixEventName]
-	if !ok || r.EventName != p.phoenixEventName || r.EventUID != p.phoenixEventUID || r.RuleType != actuator.RuleTypeRotate ||
-		r.ThreatLevel != actuator.RuleThreatLevel || r.RuleSource != actuator.RuleSource || len(r.Targets) != 1 ||
+	if !ok || r.EventName != p.phoenixEventName || r.EventUID != p.phoenixEventUID || r.RuleType != amtdv1beta1.PhorvexRuleTypeRotate ||
+		r.ThreatLevel != amtdv1beta1.PhorvexRuleThreatLevel || r.RuleSource != amtdv1beta1.PhorvexRuleSource || len(r.Targets) != 1 ||
 		r.Targets[0] != p.view.Pod.Namespace+"/"+p.view.Pod.Name ||
 		r.TargetUID != p.phoenixTargetUID || r.AppliedAction != "rotate" ||
 		r.CreatedAt.IsZero() || r.ProcessedAt.IsZero() {

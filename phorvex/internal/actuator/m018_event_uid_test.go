@@ -68,8 +68,8 @@ func TestM018ActuateCarriesServerAssignedEventUID(t *testing.T) {
 		t.Fatalf("M-18 must not add SecurityEvent reads; saw %d", reads)
 	}
 	// The five original fields are unchanged by the companion addition.
-	if res.AMTDName != "phorvex-ns-team-a" || res.RuleType != RuleTypeQuarantine ||
-		res.RuleThreatLevel != RuleThreatLevel || res.RuleSource != RuleSource || !res.Emitted {
+	if res.AMTDName != "phorvex-ns-team-a" || res.RuleType != amtdv1beta1.PhorvexRuleTypeQuarantine ||
+		res.RuleThreatLevel != amtdv1beta1.PhorvexRuleThreatLevel || res.RuleSource != amtdv1beta1.PhorvexRuleSource || !res.Emitted {
 		t.Fatalf("existing Result fields changed: %+v", res)
 	}
 }

@@ -241,9 +241,9 @@ func TestM018PhoenixForensicIdentifiersReachTheAuditRecord(t *testing.T) {
 		"amtdNamespace":   "ns",                // the AMTD is namespaced; the event is cluster-scoped
 		"eventName":       created.Name,        // server-assigned via GenerateName
 		"eventUID":        created.UID,         // server-assigned; the only same-name-safe identity
-		"ruleType":        actuator.RuleTypeQuarantine,
-		"ruleThreatLevel": actuator.RuleThreatLevel,
-		"ruleSource":      actuator.RuleSource,
+		"ruleType":        amtdv1beta1.PhorvexRuleTypeQuarantine,
+		"ruleThreatLevel": amtdv1beta1.PhorvexRuleThreatLevel,
+		"ruleSource":      amtdv1beta1.PhorvexRuleSource,
 	}
 	for key, expected := range want {
 		got, present := phoenix[key]
@@ -309,8 +309,8 @@ func TestM018PartialResultWithErrorKeepsFactsAndFailureOutcome(t *testing.T) {
 		res: actuator.Result{
 			Actuator: "phoenix", AMTDName: "phorvex-ns-team-a",
 			EventName: "phorvex-rotate-abc12", EventUID: "uid-partial-1",
-			RuleType: actuator.RuleTypeRotate, RuleThreatLevel: actuator.RuleThreatLevel,
-			RuleSource: actuator.RuleSource,
+			RuleType: amtdv1beta1.PhorvexRuleTypeRotate, RuleThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel,
+			RuleSource: amtdv1beta1.PhorvexRuleSource,
 			Emitted:    false,
 		},
 		err: errors.New("emit SecurityEvent: connection reset after acknowledgement"),
@@ -560,7 +560,7 @@ func TestM018AMTDNamespaceIsNotGuessedWithoutAnAMTD(t *testing.T) {
 	fa := &m018PartialActuator{
 		res: actuator.Result{
 			Actuator: "phoenix", EventName: "phorvex-rotate-noamtd", EventUID: "uid-no-amtd",
-			RuleType: actuator.RuleTypeRotate, Emitted: true,
+			RuleType: amtdv1beta1.PhorvexRuleTypeRotate, Emitted: true,
 		},
 	}
 	m := &Manager{Actuator: fa, Log: logr.Discard()}

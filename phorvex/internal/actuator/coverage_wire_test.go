@@ -9,6 +9,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/model"
 	amtd "github.com/r6security/phoenix/api/v1beta1"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -50,12 +51,12 @@ func TestM032RawCoverageWireAndExactMatcher(t *testing.T) {
 				}
 			}
 			for _, strategy := range buildStrategies(nil) {
-				if strategy.Rule.Type == RuleTypeQuarantine && !amtd.MatchStrategy(strategy.Rule, ev.Spec) {
+				if strategy.Rule.Type == amtdv1beta1.PhorvexRuleTypeQuarantine && !amtd.MatchStrategy(strategy.Rule, ev.Spec) {
 					t.Fatal("generated strategy no longer matches")
 				}
 			}
 			// The generated exact-match rule remains identical without an anomaly score.
-			if ev.Spec.Rule.Type != RuleTypeQuarantine || ev.Spec.Rule.Source != RuleSource || ev.Spec.Rule.ThreatLevel != RuleThreatLevel {
+			if ev.Spec.Rule.Type != amtdv1beta1.PhorvexRuleTypeQuarantine || ev.Spec.Rule.Source != amtdv1beta1.PhorvexRuleSource || ev.Spec.Rule.ThreatLevel != amtdv1beta1.PhorvexRuleThreatLevel {
 				t.Fatal("action contract changed")
 			}
 		})

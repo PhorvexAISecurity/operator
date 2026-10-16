@@ -18,16 +18,6 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
-const (
-	// PhoenixRotateTargetUIDAnnotation binds a controlled asynchronous rotate to
-	// the exact Pod identity selected by the runner. The Phoenix consumer verifies
-	// it immediately before any target mutation.
-	PhoenixRotateTargetUIDAnnotation        = "phorvex.ai/rotate-target-uid"
-	phorvexQuarantineTargetUIDAnnotation    = "phorvex.ai/quarantine-target-uid"
-	phorvexQuarantineNamespaceUIDAnnotation = "phorvex.ai/quarantine-namespace-uid"
-	phorvexQuarantineOperationAnnotation    = "phorvex.ai/quarantine-operation"
-)
-
 // PhoenixActuator is the Phase-1 actuator (Seam 1). It actuates through the
 // extended Phoenix SecurityEvent contract:
 //
@@ -321,19 +311,19 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 			Targets: []string{req.Namespace + "/" + req.Pod},
 			Rule: amtdv1beta1.Rule{
 				Type:        ruleType,
-				ThreatLevel: RuleThreatLevel,
-				Source:      RuleSource,
+				ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel,
+				Source:      amtdv1beta1.PhorvexRuleSource,
 			},
 			Description: phorvexDescription(req),
 		},
 	}
 	if req.Action == model.ActionQuarantine {
-		se.Annotations[phorvexQuarantineTargetUIDAnnotation] = req.TargetUID
-		se.Annotations[phorvexQuarantineNamespaceUIDAnnotation] = req.TargetNamespaceUID
-		se.Annotations[phorvexQuarantineOperationAnnotation] = req.OperationID
+		se.Annotations[amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation] = req.TargetUID
+		se.Annotations[amtdv1beta1.PhorvexQuarantineNamespaceUIDAnnotation] = req.TargetNamespaceUID
+		se.Annotations[amtdv1beta1.PhorvexQuarantineOperationAnnotation] = req.OperationID
 	}
 	if req.Action == model.ActionRotate {
-		se.Annotations[PhoenixRotateTargetUIDAnnotation] = req.TargetUID
+		se.Annotations[amtdv1beta1.PhorvexRotateTargetUIDAnnotation] = req.TargetUID
 	}
 	if req.CoverageValue != nil {
 		se.Annotations["phorvex.ai/coverage-contract"] = "selection-fact-weight-v1"
@@ -365,8 +355,8 @@ func (p *PhoenixActuator) Actuate(ctx context.Context, req Request) (Result, err
 		EventName:       se.Name,
 		EventUID:        string(se.UID),
 		RuleType:        ruleType,
-		RuleThreatLevel: RuleThreatLevel,
-		RuleSource:      RuleSource,
+		RuleThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel,
+		RuleSource:      amtdv1beta1.PhorvexRuleSource,
 		Emitted:         true,
 	}, nil
 }
@@ -376,13 +366,13 @@ func buildStrategies(enabled map[model.Action]bool) []amtdv1beta1.ResponseStrate
 	var out []amtdv1beta1.ResponseStrategy
 	if enabled == nil || enabled[model.ActionRotate] {
 		out = append(out, amtdv1beta1.ResponseStrategy{
-			Rule:   amtdv1beta1.Rule{Type: RuleTypeRotate, ThreatLevel: RuleThreatLevel, Source: RuleSource},
+			Rule:   amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource},
 			Action: amtdv1beta1.AMTDAction{Delete: &amtdv1beta1.DeleteAction{}},
 		})
 	}
 	if enabled == nil || enabled[model.ActionQuarantine] {
 		out = append(out, amtdv1beta1.ResponseStrategy{
-			Rule:   amtdv1beta1.Rule{Type: RuleTypeQuarantine, ThreatLevel: RuleThreatLevel, Source: RuleSource},
+			Rule:   amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeQuarantine, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource},
 			Action: amtdv1beta1.AMTDAction{Quarantine: &amtdv1beta1.QuarantineAction{}},
 		})
 	}
@@ -390,7 +380,7 @@ func buildStrategies(enabled map[model.Action]bool) []amtdv1beta1.ResponseStrate
 	// if somehow nothing is enabled, default to the rotate strategy.
 	if len(out) == 0 {
 		out = append(out, amtdv1beta1.ResponseStrategy{
-			Rule:   amtdv1beta1.Rule{Type: RuleTypeRotate, ThreatLevel: RuleThreatLevel, Source: RuleSource},
+			Rule:   amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource},
 			Action: amtdv1beta1.AMTDAction{Delete: &amtdv1beta1.DeleteAction{}},
 		})
 	}

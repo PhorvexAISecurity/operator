@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -137,7 +138,7 @@ func TestM095AuthoritativeEventRecheckRejectsInvalidLiveObjects(t *testing.T) {
 			e.SetDeletionTimestamp(&now)
 		}},
 		{"self source", func(e *unstructured.Unstructured) {
-			_ = unstructured.SetNestedField(e.Object, RuleSource, "spec", "rule", "source")
+			_ = unstructured.SetNestedField(e.Object, amtdv1beta1.PhorvexRuleSource, "spec", "rule", "source")
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
