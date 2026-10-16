@@ -20,7 +20,6 @@
 **/*.exe~
 phorvex/bin/console.exe
 phorvex/bin/*.exe
-redteam-rl.exe
 
 # Research corpus + vendored upstream repos (not part of any image).
 papers/

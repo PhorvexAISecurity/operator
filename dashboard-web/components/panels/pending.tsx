@@ -30,11 +30,6 @@ const SLOTS: Record<string, { title: string; sub: string; stage: string; bullets
     sub: "The full per-decision rationale stream — SHAP attribution, the without-Phorvex counterfactual, the predictive horizon.",
     bullets: ["Investor/vendor scope only (IP)", "Source: phorvex --audit-json", "moved-before-next-stage [PENDING-serialize]"],
   },
-  redteam: {
-    title: "RL Red-Team", stage: "P-REDTEAM",
-    sub: "A cutting-edge reinforcement-learning pentester that continuously co-trains against the live Phorvex decision loop.",
-    bullets: ["Human-approved promotion gates", "Feeds new adversarial scenarios into the benchmark", "Attacker-side only — Phorvex stays deterministic"],
-  },
   vcluster: {
     title: "Multi-Tenant + Auth", stage: "P-VCLUSTER",
     sub: "Per-tenant physics/context with a hard isolation proof, plus real authentication / SSO.",

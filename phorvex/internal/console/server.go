@@ -13,9 +13,9 @@
  *   - shared product metadata (catalogue, registry, version): any read grant;
  *   - tenant-attributable data (the decision audit and live cluster state): filtered to the
  *     tenants the grant covers, so an omitted or mismatched scope yields nothing, not everything;
- *   - the private evidence corpus (benchmarks, effectiveness, reports, raw logs, red-team
- *     artifacts): indivisible and attributable to no tenant, so it takes an explicit
- *     cross-tenant grant rather than being readable by any tenant-limited identity.
+ *   - the private evidence corpus (benchmarks, effectiveness, reports, raw logs): indivisible
+ *     and attributable to no tenant, so it takes an explicit cross-tenant grant rather than
+ *     being readable by any tenant-limited identity.
  *
  * The lens is not an identity and never was a credential: X-Phorvex-Lens / ?lens= may narrow a
  * caller's projection below its grant, and can never widen it. The routing contract lives in

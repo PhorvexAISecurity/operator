@@ -470,7 +470,6 @@ func TestPrivateEvidenceCorpusNeedsACrossTenantGrant(t *testing.T) {
 	corpus := []string{
 		"/api/effectiveness", "/api/frontier", "/api/benchmarks", "/api/posture",
 		"/api/rawlog", "/api/matrix", "/api/ai-surface", "/api/reports",
-		"/api/redteam/curves", "/api/redteam/campaigns", "/api/redteam/findings", "/api/redteam/run-status",
 	}
 	scoped := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"tenant-a"}, []string{wildcardScope}))
 	wide := newAuthFixture(t, Config{Root: "."}, investorGrant("inv", []string{wildcardScope}, []string{wildcardScope}))
@@ -637,7 +636,7 @@ func TestLocalSourceReadsRequireTheSourceTarget(t *testing.T) {
 	// The attack ledger, the audit aggregates and the private corpus read the same local source.
 	local := []string{
 		"/api/attack-results", "/api/attack-monitoring", "/api/cost-timeseries",
-		"/api/effectiveness", "/api/reports", "/api/rawlog", "/api/redteam/findings", "/api/version",
+		"/api/effectiveness", "/api/reports", "/api/rawlog", "/api/version",
 	}
 	for _, path := range local {
 		if w := noTarget.do(noTarget.albReqAs(t, http.MethodGet, path, "", "op")); w.Code != http.StatusForbidden {
@@ -800,21 +799,6 @@ func TestLocalClusterAliasesAreOneResource(t *testing.T) {
 	}
 	if w := f2.do(f2.albReqAs(t, http.MethodGet, "/api/pricing?target=remote-eks", "", "op")); w.Code != http.StatusForbidden {
 		t.Fatalf("a local-cluster grant reached remote-eks: %d", w.Code)
-	}
-}
-
-// The global red-team controls write shared state that belongs to no tenant.
-func TestGlobalRedteamControlsRequireCrossTenantGrant(t *testing.T) {
-	limited := newAuthFixture(t, Config{Root: "."}, operatorGrant("op", []string{"vllm"}, []string{wildcardScope}))
-	for _, c := range []struct{ path, body string }{
-		{"/api/redteam/decision", `{"ID":"f1","Status":"addressed"}`},
-		{"/api/redteam/run", `{}`},
-		{"/api/redteam/continuous", `{"Action":"start"}`},
-	} {
-		w := limited.do(limited.albReqAs(t, http.MethodPost, c.path, c.body, "op"))
-		if w.Code != http.StatusForbidden {
-			t.Fatalf("%s for a tenant-limited grant: got %d, want 403\n%s", c.path, w.Code, w.Body.String())
-		}
 	}
 }
 

@@ -156,5 +156,5 @@ actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: restCfg, Clientset
 
 **Brain invariant (unchanged across all of the above):** the optimizer / cost / feasibility decision logic is
 NOT touched by any real-env wiring. The gates (recon-per-$ ratio>1.0, P3 zero-day, lead-demo, the O1 golden, the
-Pass-1 O1–O10) must stay green after wiring — re-run them (`/api/redteam/gates` from the dashboard, or
-`go test ./internal/...`) on the real deployment.
+Pass-1 O1–O10) must stay green after wiring — re-run them (`go test ./internal/...`) on the real
+deployment.

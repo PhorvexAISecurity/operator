@@ -170,21 +170,6 @@ func (s *Server) apiRoutes() []route {
 		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
 
-		// ── red team ──────────────────────────────────────────────────────────────────────
-		// The red-team state is GLOBAL console state: one artifact set, one decisions file, one
-		// background job. None of it is attributable to a tenant, so the writes take a
-		// cross-tenant grant and run on this host's target.
-		read("/api/redteam/curves", s.redteamCurves, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/campaigns", s.redteamCampaigns, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/live", s.redteamLive, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/findings", s.redteamFindings, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/gates", s.redteamGates, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/redteam/run-status", s.redteamRunStatus, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		control("/api/redteam/decision", s.redteamDecision, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		control("/api/redteam/run", s.redteamRun, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		control("/api/redteam/continuous", s.redteamContinuous, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/redteam", s.redteamPage, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-
 		// ── apply-fix write path ──────────────────────────────────────────────────────────
 		// The tenant is resolved from the grant (requestTenant), never from the body, and the
 		// applier acts on this console's own cluster.

@@ -98,15 +98,15 @@ func TestNoRouteIsServedOutsideTheTable(t *testing.T) {
 	}
 }
 
-// pathLiteralsInPackageSource collects every "/api/…" or "/redteam" string literal in the
-// package's non-test Go files.
+// pathLiteralsInPackageSource collects every "/api/…" string literal in the package's non-test
+// Go files.
 func pathLiteralsInPackageSource(t *testing.T) []string {
 	t.Helper()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	re := regexp.MustCompile(`"(/api/[A-Za-z0-9._/-]*|/redteam)"`)
+	re := regexp.MustCompile(`"(/api/[A-Za-z0-9._/-]*)"`)
 	seen := map[string]bool{}
 	var out []string
 	for _, e := range entries {
@@ -147,9 +147,6 @@ func TestRouteContractsAreCoherent(t *testing.T) {
 		"/api/runs/start":              true,
 		"/api/runs/scenario":           true,
 		"/api/runs/stop":               true,
-		"/api/redteam/decision":        true,
-		"/api/redteam/run":             true,
-		"/api/redteam/continuous":      true,
 		"/api/apply-fix/submit":        true,
 		"/api/apply-fix/approve":       true,
 	}

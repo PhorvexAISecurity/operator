@@ -29,7 +29,6 @@ func (c *Config) reportRegistry() []reportMeta {
 		{"bench-dollars", "Benchmark — cost / ROI", "Benchmarks", j("build", "test-harness", "out-bench", "report-dollars.md")},
 		{"p3", "P3 — structural zero-day", "Zero-day", j("phorvex", "P3-REPORT.md")},
 		{"p3deep", "P3-DEEP — zero-day frontier (full)", "Zero-day", j("build", "test-harness", "out-p3-full", "report.md")},
-		{"redteam-report", "P-REDTEAM — the RL adversary report", "Red-Team", j("phorvex", "P-REDTEAM-REPORT.md")},
 	}
 }
 
