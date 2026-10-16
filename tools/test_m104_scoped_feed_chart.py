@@ -10,7 +10,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "phorvex/charts/phorvex"
-HELM = os.environ.get("HELM_BIN", "/opt/phorvex-tools/helm")
+HELM = os.environ.get("HELM_BIN", "helm")
 DIGEST = "registry.example/public@sha256:" + "a" * 64
 
 

@@ -8,7 +8,7 @@ import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = [os.environ.get("HELM", "/opt/phorvex-tools/helm"), "template", "stack-check",
+BASE = [os.environ.get("HELM", "helm"), "template", "stack-check",
         str(ROOT / "phorvex/charts/phorvex"), "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",
         "--set", "phorvex.console.auditTransport.serverSecretName=audit-server",
