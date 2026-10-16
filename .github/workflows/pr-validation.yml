@@ -44,6 +44,25 @@ jobs:
         run: python tools/check-path-case-collisions.py
       - run: python -m unittest discover -s tools -p 'test_*.py' -v
       - run: python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v
+      # Offline recipe and fixture suites outside tools/. Suites that need cloud
+      # CLIs or extra packages are not listed here; see .github/PR-VALIDATION.md.
+      - name: Recipe and fixture tests (offline)
+        run: |
+          python build/integrations/epss-ecr-auth-runtime/verify_recipe.py
+          for suite in \
+            build/integrations/epss-ecr-auth-runtime \
+            build/integrations/litellm-gateway-runtime \
+            build/integrations/vllm-lease-proxy-runtime \
+            build/integrations/vllm-native-metrics \
+            build/test-harness/fixtures/guardrail-output \
+            build/test-harness/fixtures/vllm-endpoint-lease-console \
+            build/test-harness/guardrail/canary-fixture \
+            build/test-harness/security-gain-validation \
+            deploy/eks/epss \
+            deploy/helm/phorvex-stack/examples/math-observers/scripts \
+            phorvex/internal/console; do
+            python -B -m unittest discover -s "$suite" -p 'test_*.py'
+          done
 
   go-unit:
     runs-on: ubuntu-latest
@@ -76,6 +95,8 @@ jobs:
             build/phoenix-extended/go.sum
             build/metricvalidity/go.sum
             build/test-harness/go.sum
+            build/integrations/epss-ecr-auth-runtime/go.sum
+            libs/logging/go.sum
       # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
       - uses: azure/setup-helm@v4
         with:
@@ -105,6 +126,62 @@ jobs:
       # specs, so its BeforeSuite never starts an API server here.
       - name: Extended Phoenix operator module unit tests (fake clients, no cluster)
         run: go -C build/phoenix-extended test -mod=readonly -count=1 -timeout=15m ./...
+      - name: Shared library unit tests
+        run: go -C libs/logging test -mod=readonly -count=1 -timeout=5m ./...
+      - name: EPSS ECR auth helper unit tests
+        run: go -C build/integrations/epss-ecr-auth-runtime test -mod=readonly -count=1 -timeout=5m ./...
+
+  # Every Go module is vetted, and every Go file a change touches must be
+  # gofmt-clean. Untouched files are not reformatted wholesale: some are pinned by
+  # content hash (scenario sourceSHA256, generated cover maps).
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
+      KUBECONFIG: /dev/null
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache-dependency-path: |
+            phorvex/go.sum
+            build/phoenix-extended/go.sum
+            build/metricvalidity/go.sum
+            build/test-harness/go.sum
+            build/integrations/epss-ecr-auth-runtime/go.sum
+            libs/logging/go.sum
+      - name: Changed Go files are gofmt-clean
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 tools/check-go-format.py "$BASE"
+      - name: Vet every Go module
+        run: |
+          for module in phorvex build/metricvalidity build/test-harness build/phoenix-extended \
+            build/integrations/epss-ecr-auth-runtime libs/logging; do
+            go -C "$module" vet ./...
+          done
+
+  # The release images must keep building from candidate source: a shared lib or
+  # replace target missing from a Dockerfile only fails at `go mod download` in the
+  # image. Built locally and discarded; nothing is pushed.
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [operator, console]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build the ${{ matrix.image }} image without pushing
+        run: docker build --file deploy/docker/${{ matrix.image }}.Dockerfile --tag phorvex-${{ matrix.image }}:candidate .
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
   # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
@@ -203,7 +280,7 @@ jobs:
   pr-validation:
     name: PR validation
     if: always()
-    needs: [charts, go-unit, go-envtest, frontend]
+    needs: [charts, go-unit, go-envtest, frontend, lint, images]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     steps:
@@ -213,8 +290,12 @@ jobs:
           GO_UNIT: ${{ needs.go-unit.result }}
           GO_ENVTEST: ${{ needs.go-envtest.result }}
           FRONTEND: ${{ needs.frontend.result }}
+          LINT: ${{ needs.lint.result }}
+          IMAGES: ${{ needs.images.result }}
         run: |
           test "$CHARTS" = success
           test "$GO_UNIT" = success
           test "$GO_ENVTEST" = success
           test "$FRONTEND" = success
+          test "$LINT" = success
+          test "$IMAGES" = success

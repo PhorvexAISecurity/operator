@@ -1,6 +1,7 @@
 """Guard the actual all-base candidate-source workflow and its fail-closed gate."""
 from pathlib import Path
 import os
+import re
 import subprocess
 import unittest
 
@@ -51,10 +52,32 @@ class PRValidationTests(unittest.TestCase):
                             for s in jobs['go-unit']['steps']))
         # Separate modules are executed, not merely compiled as dependencies.
         for module, minutes in (('build/metricvalidity', 5), ('build/test-harness', 15),
-                                ('build/phoenix-extended', 15)):
+                                ('build/phoenix-extended', 15), ('libs/logging', 5),
+                                ('build/integrations/epss-ecr-auth-runtime', 5)):
             self.assertIn(f'go -C {module} test -mod=readonly -count=1 -timeout={minutes}m ./...', runs['go-unit'])
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])
+        self.assertIn('python build/integrations/epss-ecr-auth-runtime/verify_recipe.py', runs['charts'])
+        self.assertIn('python3 tools/check-go-format.py "$BASE"', runs['lint'])
+        self.assertIn('go -C "$module" vet ./...', runs['lint'])
+        self.assertEqual(jobs['images']['strategy']['matrix']['image'], ['operator', 'console'])
+        self.assertIn('docker build --file deploy/docker/${{ matrix.image }}.Dockerfile', runs['images'])
+        for forbidden in ('docker push', 'docker login', '--push'):
+            self.assertNotIn(forbidden, runs['images'])
+
+    def test_every_go_module_is_tested_and_vetted(self):
+        # A new module must join go-unit and lint, or it would compile without its
+        # own tests ever running.
+        tracked = subprocess.run(['git', '-C', str(ROOT), 'ls-files', '*go.mod'], check=True,
+                                 capture_output=True, text=True).stdout.split()
+        modules = sorted(str(Path(p).parent) for p in tracked if not p.startswith('workflow/'))
+        runs = {k: '\n'.join(s.get('run', '') for s in v['steps']) for k, v in DOC['jobs'].items()}
+        vetted = re.search(r'for module in (.*?); do', runs['lint'], re.S).group(1).replace('\\', ' ').split()
+        self.assertIn('phorvex', modules)
+        self.assertEqual(sorted(vetted), modules)
+        for module in modules:
+            with self.subTest(module=module):
+                self.assertIn(f'go -C {module} test -mod=readonly', runs['go-unit'])
 
     def test_envtest_job_runs_required_api_and_controller_tests_on_pinned_local_binaries(self):
         job = DOC['jobs']['go-envtest']
@@ -109,9 +132,10 @@ class PRValidationTests(unittest.TestCase):
         job = DOC['jobs']['pr-validation']
         self.assertEqual(job['name'], 'PR validation')
         self.assertEqual(job['if'], 'always()')
-        self.assertEqual(set(job['needs']), {'charts', 'go-unit', 'go-envtest', 'frontend'})
+        self.assertEqual(set(job['needs']), {'charts', 'go-unit', 'go-envtest', 'frontend', 'lint', 'images'})
         script = job['steps'][0]['run']
-        good = dict(CHARTS='success', GO_UNIT='success', GO_ENVTEST='success', FRONTEND='success')
+        good = dict(CHARTS='success', GO_UNIT='success', GO_ENVTEST='success', FRONTEND='success',
+                    LINT='success', IMAGES='success')
         def check(env):
             return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script],
                                   env=dict(os.environ, **env), timeout=5).returncode
