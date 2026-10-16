@@ -374,7 +374,9 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	defer resetM168AttackMemory()
 	dir := t.TempDir()
 	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
-	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 30 * time.Millisecond, AttackWatchInterval: 2 * time.Millisecond, BlindRotationDelay: 8 * time.Millisecond}
+	// The window must outlast the fsynced stimulus-intent record written after it opens;
+	// a few milliseconds fail the acceptance check under load.
+	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: 2 * time.Millisecond, BlindRotationDelay: 8 * time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
 	op := experimentEvent{Operation: "op-all", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	if err := s.appendExperiment(op); err != nil {
@@ -402,7 +404,7 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	for _, a := range run.Arms {
 		start, _ := time.Parse(time.RFC3339Nano, a.Start)
 		end, _ := time.Parse(time.RFC3339Nano, a.End)
-		if end.Sub(start) != 30*time.Millisecond || a.ObservationSeconds != 0.03 {
+		if end.Sub(start) != cfg.AttackWatchDuration || a.ObservationSeconds != cfg.AttackWatchDuration.Seconds() {
 			t.Errorf("%s unequal registered window: %s / %v", a.ID, end.Sub(start), a.ObservationSeconds)
 		}
 		if !a.StimulusAccepted || !a.ObservationPersisted || a.AttackID == "" || a.TargetUID == "" || a.EventUID == "" {
@@ -536,7 +538,9 @@ func TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker(t *testing.T) {
 			dir := t.TempDir()
 			f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
 			failed := false
-			cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 20 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+			// The window must outlast the fsynced stimulus-intent record written after it
+			// opens; a few milliseconds fail the acceptance check under load.
+			cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
 			cfg.StateAppend = func(path string, record []byte) error {
 				if !failed && tc.failResult && path == armsPath(cfg) {
 					failed = true
