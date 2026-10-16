@@ -88,6 +88,18 @@ func newLiveHTTPFixture(t *testing.T) *liveHTTPFixture {
 	t.Cleanup(f.server.Close)
 	return f
 }
+
+// awaitLiveReadSlotsDrained reports whether every audit read permit is released
+// by deadline. The shared live tail producer finishes an in-flight read (bounded
+// by the read budget) after its last subscriber's handler returns, so release
+// follows handler completion rather than coinciding with it.
+func (f *liveHTTPFixture) awaitLiveReadSlotsDrained(deadline time.Time) bool {
+	for len(f.auth.srv.liveReadSlots) != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	return len(f.auth.srv.liveReadSlots) == 0
+}
+
 func (f *liveHTTPFixture) request(t *testing.T, ctx context.Context, path, subject string) *http.Request {
 	t.Helper()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.server.URL+path, nil)
@@ -312,7 +324,7 @@ func TestLiveHTTPFiveSubscribersShareBoundedSourceWorkAndRelease(t *testing.T) {
 	if f.completed.Load() < 23 {
 		t.Fatalf("disconnected handlers did not release: %d", f.completed.Load())
 	}
-	if len(f.auth.srv.liveReadSlots) != 0 {
+	if !f.awaitLiveReadSlotsDrained(deadline) {
 		t.Fatal("work permits retained after disconnect")
 	}
 	response, err = f.server.Client().Do(f.request(t, context.Background(), "/api/live?lens=operator", ""))
@@ -358,7 +370,8 @@ func TestLiveHTTPSlowReaderReleasesWorkAndSubscription(t *testing.T) {
 	for f.completed.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	if f.completed.Load() == 0 || len(f.auth.srv.liveReadSlots) != 0 || f.writeFailures.Load() == 0 {
+	drained := f.awaitLiveReadSlotsDrained(deadline)
+	if f.completed.Load() == 0 || !drained || f.writeFailures.Load() == 0 {
 		t.Fatalf("slow reader failed release/write-error witness: completed=%d work=%d failures=%d", f.completed.Load(), len(f.auth.srv.liveReadSlots), f.writeFailures.Load())
 	}
 	// A fresh reader proves the server still admits and can read the producer.
