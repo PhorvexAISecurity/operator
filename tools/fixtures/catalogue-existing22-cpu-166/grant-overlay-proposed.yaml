@@ -1,0 +1,21 @@
+phorvex:
+  phorvex:
+    console:
+      auth:
+        grants:
+          data: "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\"\
+            : \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\"\
+            ,\n      \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n    \
+            \  \"roles\": [\n        \"operator\"\n      ],\n      \"tenants\": [\n\
+            \        \"*\"\n      ],\n      \"targets\": [\n        \"default\"\n\
+            \      ],\n      \"note\": \"Operator access approved by the deployment\
+            \ owner on 2026-09-16\"\n    },\n    {\n      \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\"\
+            ,\n      \"subject\": \"system:serviceaccount:phorvex-system:phorvex-phorvex-console-e2e\"\
+            ,\n      \"roles\": [\n        \"operator\"\n      ],\n      \"tenants\"\
+            : [\n        \"voice\",\n        \"nats\",\n        \"vllm\",\n      \
+            \  \"document-store\",\n        \"litellm\",\n        \"mcp\",\n     \
+            \   \"phorvex-catalogue-cpu\"\n      ],\n      \"targets\": [\n      \
+            \  \"default\",\n        \"arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks\"\
+            \n      ],\n      \"note\": \"End-to-End pipeline (CI) and reviewed fixed\
+            \ catalogue profiles in the listed namespaces; token minted per run, never\
+            \ stored.\"\n    }\n  ]\n}\n"
