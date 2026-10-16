@@ -99,7 +99,8 @@ const (
 // the pod leaves the stage at Recon, so its urgency is identical to an asset with no evidence at
 // all (0.0504 at 90s), and a compromised neighbour only reaches 0.0511. Any threshold able to
 // discount a fresh decoy would therefore also discount a genuinely-attacked pod. The gate uses
-// Assessment.HasEvidence instead. See reports/phvx-fixes-20260809/PHORVEXSEC-128-*.
+// Assessment.HasEvidence instead. See PhorvexSecurity/operator@65af1c99:
+// reports/phvx-fixes-20260809/PHORVEXSEC-128-*.
 
 func consequence(s Stage) float64 {
 	switch s {

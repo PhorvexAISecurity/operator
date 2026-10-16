@@ -584,8 +584,8 @@ Written under `outDir` (default `out/`):
 - `report.md` — per-arm 95%-CI table.
 - `mitre_matrix.md` — MITRE ATT&CK for Containers coverage matrix.
 
-See `build/EFFECTIVENESS-K8S.md` (results), `build/ATTACKS-K8S.md` (scenario
-catalog + honest R6 verdicts), and `build/ATTACK-COVERAGE-K8S.md` (ATT&CK
+See `docs/archive/build/EFFECTIVENESS-K8S.md` (results), `docs/archive/build/ATTACKS-K8S.md` (scenario
+catalog + honest R6 verdicts), and `docs/archive/build/ATTACK-COVERAGE-K8S.md` (ATT&CK
 coverage) for the analysis of the current 2-trial smoke.
 
 ---
@@ -607,13 +607,13 @@ The two scenario **groups**:
 - **Group 1 — R6 Phoenix-for-AI product pillars** (5): `ai1-llm-jacking`,
   `ai1-model-theft`, `ai1-prompt-injection`, `ai1-inference-manipulation`,
   `ai1-pillar03-panic-mutation`. Each verdict traces verbatim to
-  `build/AI-MTD-AUDIT.md`.
+  `docs/archive/build/AI-MTD-AUDIT.md`.
 - **Group 2 — OWASP LLM Top-10 (2025) / MCP / Agentic / Extraction / KV-cache /
   Supply-chain / RAG** (22): the `ai2-*` files.
 
-See `build/ATTACKS-AI.md` (per-scenario catalog: source, R6 tag, MTD-effect tag,
-ATLAS + OWASP IDs, split oracles), `build/ATTACK-COVERAGE-AI.md` (MITRE ATLAS +
-OWASP LLM Top-10 coverage with gaps visible), and `build/EFFECTIVENESS-AI.md`
+See `docs/archive/build/ATTACKS-AI.md` (per-scenario catalog: source, R6 tag, MTD-effect tag,
+ATLAS + OWASP IDs, split oracles), `docs/archive/build/ATTACK-COVERAGE-AI.md` (MITRE ATLAS +
+OWASP LLM Top-10 coverage with gaps visible), and `docs/archive/build/EFFECTIVENESS-AI.md`
 (the live 2-trial smoke results + the `$`/Schwartau/reusability extension + the
 H1/H2/H3 frame + the recomputed Pass-A-with-dollars table).
 
