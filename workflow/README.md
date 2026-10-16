@@ -77,6 +77,7 @@ python3 workflow/tools/workflow.py brief T1-M160 --agent k3
 | Per-fix current state | `fixes/*/STATUS.yaml` (discovered through the static `fixes/INDEX.yaml` marker) |
 | Campaign state | `campaigns/*/STATUS.yaml` |
 | Evidence provenance | each record's `evidence/manifest.yaml` |
+| Records whose evidence stayed in the source repository | `ARCHIVE.yaml` |
 | Notifications | `coordination/`; never authoritative |
 
 Generated files are reviewed but not hand-edited.
@@ -105,6 +106,25 @@ finding, deployment/RBAC/actuation changes, and open-world or timing behavior.
 **Full-system campaign** is broad, long-running and optional. It begins only
 when the human owner requests it, possibly after several fixes. It can reopen
 issues but does not replace each fix's required L3.
+
+## Archived records
+
+This repository was imported from `PhorvexSecurity/operator@65af1c99` with
+filtered history: most evidence under `fixes/`, `campaigns/`, `assessments/` and
+`archive/` was stripped and every commit hash was rewritten. `ARCHIVE.yaml`
+freezes the id of every record that existed at import and the SHA-256 of each
+archived `STATUS.yaml`. For those records `doctor` keeps the structural contract
+(schema, state, roles and signers, index and issue links, recorded transitions,
+retained evidence that is present) and skips only checks that need removed
+evidence or source commits, reporting one summary warning. Records created here
+get every check.
+
+Archived records are immutable: changing, adding or removing an archived
+`STATUS.yaml` fails `doctor`. Continue archived work in a new record that
+references the archived id, or restore the record's evidence from the source and
+delist it from `ARCHIVE.yaml` in the same reviewed change. Old commit SHAs map
+to this history through `docs/provenance/operator-commit-map.tsv`; the source
+repository remains the complete evidence archive.
 
 ## Migration provenance
 

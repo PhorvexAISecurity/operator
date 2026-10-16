@@ -30,6 +30,7 @@ import attacks
 import evidence_scope
 import delivery
 import preflight
+import record_archive
 from types import SimpleNamespace
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -3899,10 +3900,14 @@ def validate_typed_evidence(
     warnings: list[str],
     deep: bool,
     hash_cache: dict[Path, str],
+    archived: bool = False,
 ) -> None:
+    """Archived records (ARCHIVE.yaml) may lack evidence removed at import;
+    whatever is retained is still verified."""
     label = str(manifest_path.relative_to(ROOT))
     if not manifest_path.is_file():
-        errors.append(f"{label}: missing evidence manifest")
+        if not archived:
+            errors.append(f"{label}: missing evidence manifest")
         return
     manifest = load_yaml(manifest_path) or {}
     validate_schema_instance(
@@ -3933,7 +3938,8 @@ def validate_typed_evidence(
                 continue
             source_path = candidate
             if not source_path.is_file():
-                errors.append(f"{label}: missing artifact {artifact.get('path')}")
+                if not (archived and not source_path.exists()):
+                    errors.append(f"{label}: missing artifact {artifact.get('path')}")
                 continue
         elif retention == "local-original":
             if not artifact.get("local_source"):
@@ -3961,6 +3967,22 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     warnings: list[str] = []
     local_hash_cache: dict[Path, str] = {}
     errors.extend(attacks.validate_catalogue(ROOT))
+
+    # Records frozen at import keep strict structural checks; only checks that need
+    # evidence removed at import or source-repository commits are relaxed.
+    archived = record_archive.Archive()
+    try:
+        archive_document = record_archive.read(ROOT)
+        if archive_document is not None:
+            validate_schema_instance(
+                record_archive.SCHEMA, archive_document, record_archive.FILE, errors
+            )
+            archived = record_archive.parse(archive_document)
+            errors.extend(record_archive.drift(ROOT, archived))
+            if archived:
+                warnings.append(archived.summary())
+    except Exception as exc:
+        errors.append(f"{record_archive.FILE}: {exc}")
 
     required = [
         ROOT / "AGENTS.md",
@@ -4069,6 +4091,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             if not status_path.is_file():
                 errors.append(f"{fix_id}: missing STATUS.yaml")
                 continue
+            in_archive = archived.fix(fix_id)
             status = load_yaml(status_path) or {}
             validate_schema_instance(
                 "fix-status.schema.json",
@@ -4095,13 +4118,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             if missing_roles:
                 errors.append(f"{fix_id}: missing role assignments {missing_roles}")
             if status.get("profile") != "legacy-migrated":
-                for failure in gates.prerequisites(ROOT, status_path.parent, status, status.get("state")):
+                for failure in gates.prerequisites(
+                    ROOT, status_path.parent, status, status.get("state"), archived=in_archive
+                ):
                     errors.append(f"{fix_id}: {failure}")
                 for key in status.get("checks", {}):
                     if key not in gates.CHECK_ROLES:
                         errors.append(f"{fix_id}: unknown check {key}")
                     elif status["checks"][key].get("result") in {"PASS", "NOT_REQUIRED"}:
-                        for failure in gates.check_errors(ROOT, status_path.parent, status, key):
+                        for failure in gates.check_errors(
+                            ROOT, status_path.parent, status, key, archived=in_archive
+                        ):
                             errors.append(f"{fix_id}: {failure}")
             implementation = status.get("implementation", {})
             if not isinstance(implementation.get("stacked_on"), list):
@@ -4118,9 +4145,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     errors.append(f"{fix_id}: unknown dependency {dep}")
             if status.get("state") == "PR_READY" and status.get("verification", {}).get("p3") != "PASS":
                 errors.append(f"{fix_id}: PR_READY without P3 PASS")
-            if status.get("state") == "PR_READY" and not (
-                FIXES / fix_id / "evidence" / "p3" / "verdict.md"
-            ).is_file():
+            p3_verdict = FIXES / fix_id / "evidence" / "p3" / "verdict.md"
+            if status.get("state") == "PR_READY" and not p3_verdict.is_file() and not (
+                in_archive and not p3_verdict.exists()
+            ):
                 errors.append(f"{fix_id}: PR_READY without evidence/p3/verdict.md")
             if status.get("state") == "PR_READY" and (FIXES / fix_id / "06-verdict.md").is_file():
                 if status.get("profile") == "legacy-migrated":
@@ -4131,7 +4159,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     errors.append(f"{fix_id}: PR_READY cycle has a premature final 06-verdict.md")
             manifest_path = FIXES / fix_id / "evidence" / "manifest.yaml"
             if not manifest_path.is_file():
-                errors.append(f"{fix_id}: missing evidence/manifest.yaml")
+                if not (in_archive and not manifest_path.exists()):
+                    errors.append(f"{fix_id}: missing evidence/manifest.yaml")
             else:
                 manifest = load_yaml(manifest_path) or {}
                 validate_schema_instance("evidence-manifest.schema.json", manifest,
@@ -4184,7 +4213,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                         continue
                     artifact_path = FIXES / fix_id / str(artifact.get("path", ""))
                     if not artifact_path.is_file():
-                        errors.append(f"{fix_id}: missing evidence artifact {artifact.get('path')}")
+                        if not (in_archive and gates.stripped(FIXES / fix_id, str(artifact.get("path", "")))):
+                            errors.append(f"{fix_id}: missing evidence artifact {artifact.get('path')}")
                         continue
                     if artifact_path.stat().st_size != artifact.get("bytes"):
                         errors.append(f"{fix_id}: evidence size mismatch {artifact.get('path')}")
@@ -4328,6 +4358,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             errors.append("campaigns/INDEX.yaml projection is stale")
         for campaign_id, record in expected_campaign_index.get("campaigns", {}).items():
             campaign_dir = CAMPAIGNS / campaign_id
+            in_archive = archived.campaign(campaign_id)
             status = load_yaml(campaign_dir / "STATUS.yaml") or {}
             if record.get("profile") == "legacy-migrated":
                 if not status.get("migration", {}).get("historical"):
@@ -4347,7 +4378,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 campaign_dir / "verdict.md",
             ]
             for required_path in required_campaign_files:
-                if not required_path.is_file():
+                if not required_path.is_file() and not (in_archive and not required_path.exists()):
                     errors.append(
                         f"{campaign_id}: missing {required_path.relative_to(campaign_dir)}"
                     )
@@ -4368,6 +4399,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     warnings=warnings,
                     deep=args.deep_evidence,
                     hash_cache=local_hash_cache,
+                    archived=archived.round(campaign_id, round_id),
                 )
     except Exception as exc:
         errors.append(f"campaign index: {exc}")

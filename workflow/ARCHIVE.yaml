@@ -1,0 +1,521 @@
+# Archived workflow records (generated once at import; do not regenerate).
+#
+# This repository was imported from PhorvexSecurity/operator with filtered
+# history. Evidence under fixes/, campaigns/, assessments/ and archive/ was
+# stripped (except STATUS.yaml, ALIASES.yaml, INDEX.yaml, templates and files
+# the framework references), and every commit hash was rewritten. The source
+# repository at `source.revision` remains the complete evidence archive.
+# Record ids come from the source tree at `source.revision` (including records
+# stripped entirely); digests come from the imported tree at
+# `source.imported_revision`, whose kept files are byte-identical.
+#
+# Every record listed below existed at import. `workflow.py doctor` checks an
+# archived record's structure here (schema, state, roles, index and issue
+# links, recorded transitions, retained evidence that is present) but does not
+# require its stripped evidence files or the source commits it pins; it emits
+# one summary warning instead. Records not listed here get every check.
+#
+# Archived records are immutable: doctor fails if an archived STATUS.yaml
+# differs from `status_sha256`, appears or disappears. To continue archived
+# work, open a new record that references the archived id. To reactivate an
+# archived record instead, restore its evidence from the source and remove its
+# entry here in the same reviewed change; it then gets every check.
+#
+# Map old commit SHAs pinned by archived records with `commit_map`
+# (repository-root relative; header `old new`, pruned commits map to zeros).
+schema_version: 1
+source:
+  repository: PhorvexSecurity/operator
+  url: https://github.com/PhorvexSecurity/operator.git
+  revision: 65af1c99265e29f72d6dba8f8216d5dfbe2fa9bb
+  imported_revision: 963edd7863c4299a61247f85ce9f004a3e4d2745
+  import_date: '2026-10-16'
+  commit_map: docs/provenance/operator-commit-map.tsv
+records:
+  fixes:
+    AUDIT-VOLUME-GUARD:
+      status_sha256: 7570b425617c717c860a840fdead0a3f88b6f385a4a57e53c1f4507874c93082
+    CAT-ADAPTER-DETECTOR:
+      status_sha256: 13293f47b89b211e2b58882224da2bf92a98e0e064a74e26d0d489ed82046b55
+    CAT-ADMISSION-VISIBILITY:
+      status_sha256: cda8e1decd7b0f4eab27aa7b02167eceb0fbb80d3bed1b2e76fdf0946cbc8f9b
+    CAT-AUTH-CONTROL-SCOPE:
+      status_sha256: d2c1381765a25b8534bb6faefe04f85ea10346bedf019c7ec3420f31f13b2c66
+    CAT-CATALOGUE-BATCH:
+      status_sha256: eeb2f9eaa911f6d260e2004bc8cc753eb7865042c7e8c4072d12aa290c319e1c
+    CAT-CONSOLE-SAFE-CONTROLS:
+      status_sha256: 307eb8ad8e28e44b16acc522499dfa6c9d176df59459cf64cc3939f38d40145f
+    CAT-CPU-COORDINATOR:
+      status_sha256: 046a07edc3b8452ec32ace6dd53c241c9f85633df716db3fae14e989b3871d04
+    CAT-CPU-METRIC-WARMUP:
+      status_sha256: eeb6a2bf102c634c97aef3cc13e92c754707897e857d0a1011a86d38285cba7e
+    CAT-CPU-MONGO-PRIOR:
+      status_sha256: d24131c5259b16c074c6a402eb46765c2c0302a6993df6a1bee4c9e3b55fb08c
+    CAT-CPU-PR354-PROFILE:
+      status_sha256: 40f294822015d89ada0e43b06faf1be8dc120da1a4c81e3a3cf624a0188fcf88
+    CAT-CPU-PROM-TIME:
+      status_sha256: 8e4c5b68a5e126f17e0171c281c49d33e2611cc26537e7edcc719654bae55f14
+    CAT-CPU-TOKEN-RESPONSE:
+      status_sha256: 3c4f31e855f493abe985f8cccbc76ace499e2d9eab18c2d543037d90bfd77cbb
+    CAT-CRM-CONTROLS:
+      status_sha256: 10e7c6f94f9c180ab554a1599da2d3d6aa1fa33bad27b8b8a418c4fe5ca9cc2d
+    CAT-CRM-PACKAGE:
+      status_sha256: 420c5def21111851da3002748f924353a00fcc4bcae6617d20fc95df8789772d
+    CAT-DISJOINT-ADMISSION:
+      status_sha256: 4c0666552bb2f7269a0851afb2062817207b168c1b93caff53eda599ff20c68c
+    CAT-DISPATCH-REASON:
+      status_sha256: 333815dfeae452e4f447fd0236e99a1bb1515214560991f567d6f355e0b7d108
+    CAT-EXACT-TARGET:
+      status_sha256: 7efa6e41b036041b7917f111d5574338ce9d1957a073f1237751d8abfed097b6
+    CAT-FIXED-LEDGER:
+      status_sha256: 12336a0a87a4255361f0b30d7acf2c3eda8281b91d36b73876a87f62804bae66
+    CAT-GUARDRAIL-COMPARISON:
+      status_sha256: ff2ef340ed0d5f6b05fc4aa8465ce1683d12c87aa9acc1a1c3fa8509f956baa5
+    CAT-GUARDRAIL-COVER:
+      status_sha256: ad316e17529aea303ea30d19991b114168e14501ce8ea0e55cdc0f1e7fa6a528
+    CAT-GUARDRAIL-OUTPUT:
+      status_sha256: 4db2466e218d99fc7cee24bba1efae14e9964c032bd1dfb0e161a0dfb6ab9903
+    CAT-GUARDRAIL-RECOVERY:
+      status_sha256: 469a508f9a9e5bc732b67a9d864ffd96b1d5f40fef4d762e43eaa5e353e44363
+    CAT-GUARDRAIL-RESPONSE:
+      status_sha256: null
+    CAT-GUARDRAIL-STATE:
+      status_sha256: dc2c1e44ba6925db1b0f516b025852c372734b4af35d1eeafd5ecc35a7ff9caf
+    CAT-LITELLM-ROUTING:
+      status_sha256: b418132894c9e62120398da51ea0c21bd41bc765ee8949b425985bf4de6ce28c
+    CAT-MCP-VOICE-MODEL:
+      status_sha256: e7df41ccf4063acbfe1abde127f5a3677f0f5ca22bbfb5038844f12ac77661c7
+    CAT-MONGO-ADMISSION:
+      status_sha256: 495916d2745f345848313d0ac221c1b1f3edacd472d5457b4cd005ecd9a1a815
+    CAT-MONGO-EXPOSURE:
+      status_sha256: 6df3193a35943a6ba639ade75e66ffdc869a311aeaed2d3034e35a71f8028b2a
+    CAT-PARTIAL-EVIDENCE:
+      status_sha256: 2e05c5cc93897a160b74ecdbbc244e6cf605390d511a8d2292e50734b5206931
+    CAT-PERSISTED-FSGROUP:
+      status_sha256: bd2d6c56045b345d3e34da447c602b00b20d8e01c317b6167b3adfaaca31dd7a
+    CAT-PHOENIX-LABEL:
+      status_sha256: c54e87938522281fbda5b9623f6ad8ca474abc345512ef581a633f4ad17efc16
+    CAT-POD-NODE:
+      status_sha256: 5b95aa629d236e03d92182f5fe9a7ac752447674bdd284afb365c3d251301b1d
+    CAT-POD-TOKEN:
+      status_sha256: a999bb18cc78204492dd51ff7494c82435ccbde4c21be1f3185adf1bc558870d
+    CAT-POD-TOKEN-CASE:
+      status_sha256: d46581e7541d4da803ea870df73c382f1a3d10e6763746e4b265bdc95c39a5c9
+    CAT-POD-TOKEN-VECTOR:
+      status_sha256: 0c8b9015f9ef5866b6c122b18625dcb31acd888590c975212bd356809a51f0c9
+    CAT-PROFILE-GRANTS:
+      status_sha256: 58d2e2bb44c67293ed507058794452b5e1ae06f9940deb486867775211fd96f8
+    CAT-PROFILE-MOUNTS:
+      status_sha256: 30fec6557928697169842388ae377e97a1a49189de56f9deff413e18fa36400b
+    CAT-RESOURCE-TRACE:
+      status_sha256: a55b88619d2ddfa8dbe492d064c5d614dfe254709aed491d60d3f99a33aa95b5
+    CAT-RESPONSE-GUIDANCE:
+      status_sha256: 91455fd40e923be06435fe806af10d4eaed8b835a90c2cd9d9fea9b36cecf011
+    CAT-SIGNAL-CLARITY:
+      status_sha256: 84c04becc82fc775ea3ece3dfd3e7ba96ed28263a86b70773050895385571081
+    CAT-STACK-CASES:
+      status_sha256: 772f24ab458198fc3f0645ad7967ca6038693b8f906bb5f642d16caf06267f15
+    CAT-STACK-PROFILES:
+      status_sha256: 96942d4284dc144970f14f27fd3bca6141abdb496bc4f30d1b7ca87d3705743a
+    CAT-STATEFUL-TARGET:
+      status_sha256: 0fa143d094e646ae4272ecaa5a130dc50caa370ac2b4862356819640386ebd51
+    CAT-STATIC-CURRENT-VARIANT:
+      status_sha256: 6f99bc5865b4a289719a0128881d8169f9802692f88d38be48091608559c10a7
+    CAT-VOICE-CLEANUP:
+      status_sha256: 88f99afe5cda1f4f7e37b85e2d81bf8ce7a58e9a57a250818dc405728fe5d59b
+    CONSOLE-LIVE-HISTORY:
+      status_sha256: fe6e76b35ec51bdfa6b679cb48d285baaba46458ac3aaf7fa3b760a5971d2b9b
+    CONSOLE-RECOVERY:
+      status_sha256: efec121374eae6fa0d3533ca10dbf49913366558ca2c3248eb86bae7e80baa32
+    DEPLOY-AUTOSYNC:
+      status_sha256: a7e7d804f29cc2554b632a665770cd88cd954f58473b1d45cdf98b1e43d8bf8c
+    M-035:
+      status_sha256: 7b24e863e33cd3fbaf8ec0dad8faa359b255ec34587683c5a69daab973f2c236
+    M-037:
+      status_sha256: 10665b18aca53a82a4c53848ff43b14c60310c8001649c5b396870f56234d09c
+    M-048:
+      status_sha256: 0a487e18eee8d671c8967220eb5a8949692b09ec067d75aba8c33638b9c92344
+    M-140:
+      status_sha256: 685a1ff2059e03d32fe4603ca35212c34a3bed0caf678a0086f91a57e37ccbbd
+    M-18:
+      status_sha256: 7862449333d4c635660531a14db3126ebb3bbb54d78d1da18c771c5fff6292b5
+    M-21:
+      status_sha256: 057b14949cbba8987a8d51186d1f9eba8f774a081c0de5ab2fa5adc41853a443
+    M-25:
+      status_sha256: 1c42946dc15cea5412320fb2e2b810560b4c5ec15ccaaec8b8259bdbe1b88ca5
+    M-6:
+      status_sha256: 591247b3f2520e0f33b95cbc07e2dee09dcb09686e3ebfb7f7d32c3f84c5957f
+    POST25-CALIB-EXPORT:
+      status_sha256: 64f7cceda99ff4c2bf9e3955e1fdadd45ae5020bafe7745d08f015b440e24caa
+    POST25-CATALOGUE-CLAIMS:
+      status_sha256: f9eaf8ba9902b9269e51bf91a45020bd9c25ba7e72406383e50a8c0abcfed98c
+    POST25-CHECKPOINT-LIFECYCLE:
+      status_sha256: 70a52d0004aecfce2de9d7e209655dd75ac7885d41ed4d6ec9085cd17aa8408d
+    POST25-CHECKPOINT-LOCAL-FIXTURE:
+      status_sha256: 75217faaa38b7a4e66d48945873c24b030e393a59eaff3c59620cc0b6e5696d7
+    POST25-CHECKPOINT-MULTI-ROTATION:
+      status_sha256: 2bb91885148b85aa6f13129aadecf7fc70abea82d09b3e8b9054b2512cadf0a9
+    POST25-CONSOLE-CASE-TRACE:
+      status_sha256: 589f47c27fd33e421e7042d0423528e46ca3211202db6651d272783f66db5975
+    POST25-CONSOLE-SIGNAL-TRUTH:
+      status_sha256: 689323b6666808dbeb889840c3fda4c5b1fd546ed8868340f8915d1ddc7d1437
+    POST25-CONSOLE-V1-VERDICTS:
+      status_sha256: 38fdb2aadb75fc9fc348084c4fcd76d210d1e4415afa098dacb28a5d8204ce9f
+    POST25-ECONOMICS:
+      status_sha256: 23e640bc94e569bdf982198dd3d555bcc85594744a0e915c731d49e04d18b9a8
+    POST25-GUARDRAIL-JOURNAL-COHERENCE:
+      status_sha256: 5b3b6526b0aa258b699c003c4fc053a86e2ea072f21d5b400e62cca430e44a0a
+    POST25-HYBRID-ROTATE-OWNERSHIP:
+      status_sha256: d9802ae49a80540e8d8feae5f234f1db3962c192e6dd58eea730a3ada7e3cd55
+    POST25-LIMITED-V1-CONSOLE:
+      status_sha256: b36bd709f185cdd3f72d311a984acc865de917f0030248be5fd795bb3df945ed
+    POST25-M043:
+      status_sha256: 18dbc936d48e8a59edb8edcc7a8418be5b0ba3ec3a95405dadbc3ad97c5e640f
+    POST25-M044:
+      status_sha256: 4638e121a2e5ec479a22a3db514ca9e20fae3f803a35b2ee286fb91087e69954
+    POST25-M054:
+      status_sha256: 27984d0a83114e4d9da3ae729bd5c243675ad686a438a2471f5d17b1926588e1
+    POST25-M067-DRAIN:
+      status_sha256: 8644224033ff9f4e765c75324306554164b734e16f6d210ee792b95e8326a6f8
+    POST25-M100:
+      status_sha256: 39270774096a6f5e65733d705a6d0eabec31524314f2e8e086d7acf75aadd36c
+    POST25-M100-CURRENT-VERSION:
+      status_sha256: 9b74f445e95391f8f2611c5c6c1e150c4ac29802cd9060079ec712cbf8bbb01b
+    POST25-M103:
+      status_sha256: 2dd00a5e3027db5ab5423e2e799ab136e5481a3636fd2d34409a64243bc8ef76
+    POST25-M104-REGISTRY-AUTH:
+      status_sha256: 186febf696163004881248f5adf7f7662165434087e1b9b090b230b1f1557bcc
+    POST25-M104-SCOPED-FEED:
+      status_sha256: 38d488e5f92cbcfb6518b49046283c21f2f708d9adcbab9c51a12604d19c084f
+    POST25-M106:
+      status_sha256: 94a6ce928dc2f32eaa91b4304232b44234488bfffff183aab7223ca295d70478
+    POST25-M106-RUNTIME-WIRING:
+      status_sha256: 5440f01724e2acd525061e2ba452491ad3a4bb611d46d1a3406bc2c14686683f
+    POST25-M106-SCOPED-OUTCOMES:
+      status_sha256: b8ec53fcdd462be69602fa8b490ada4f836c2a4fea6210e69103db5415aa6d1a
+    POST25-M108:
+      status_sha256: 31408baf98efeb0d4692c890aeae70b1933a756b06b7233f628a2cf710a0a215
+    POST25-M135:
+      status_sha256: bbb45fd457d3f2d52f129a4471d11d7dc1cc0af2159a77af159a45d6896175cb
+    POST25-M137:
+      status_sha256: ff146a1f1c180c80086df9150f0feb92c091ece44c624a2bdebab81a59056d03
+    POST25-M137-TRACE:
+      status_sha256: 1660b842914d6b021de13e2e1e3450a855262011cc4a456631d90cccc09f724d
+    POST25-M156:
+      status_sha256: 00cc8e0c60a88b411878f75b034458d9921bb74b8fc7c5218015769f493efa82
+    POST25-SERVING-JOURNAL-GATE:
+      status_sha256: 92b0fdd7e0408b6b3a768139d1aebc969671482eba1b4a6ce6d406f74771f7f9
+    POST25-SESSION-GVK:
+      status_sha256: ccd5740912d90794ff96e299318b2e0081ed26eba5436be2a7e9c1fd6c17a121
+    POST25-SESSION-OBSERVATION:
+      status_sha256: 8c57f5b0b60d7e224835bc293a2b864ff631b96e0bfbe13d9b27566c4485c179
+    POST25-VLLM-CONSOLE-OUTCOMES:
+      status_sha256: d9da711c2a3f7551378a5b10cb624b18d25461494a1325220f6d850144b0e88d
+    POST25-VLLM-REMAINING-OUTCOMES:
+      status_sha256: 87f91100fa42c960066ff6da3a6bc6023f29c2e9ede95cf12d2a0ddf97103a61
+    POST25-VLLM-RESET-AUTHORITY:
+      status_sha256: 7db04752d6ae5fda1b55c2b02e8b95f827622760a7052c56f28185e2782f9162
+    POST25-VOICE-EXEC-TIMEOUT:
+      status_sha256: 1effd9c4cdb820aad6781d10fa49beed1e8157bc74ca68a99132769e229fe6dd
+    POST25-VOICE-PDB:
+      status_sha256: 9cba8fba5399252614297be91be9e4c6c6b3c4a64cd6f08298357566ef322026
+    T0-C:
+      status_sha256: e8429559863d4b44b5ba7daa6ca434d207a9be5c8aaadf2339b934fdcc5d5c5f
+    T1-A:
+      status_sha256: c73a18b8075579cba32a17ee096d2bf2abf783dea4378ca2631e1fe8598f80b7
+    T1-B:
+      status_sha256: 51ccff0a734a4c0a9053199dd410f1bed5971dab667493fd1d08c95768b050c7
+    T1-C:
+      status_sha256: 7a27cf1649af9bf458571c883fb0a9ff4db7e9b5dbaddc7f1e30cd5730fe1ea6
+    T1-D:
+      status_sha256: 60e0dfe531162694f41dbe4f7c934a52a99198fe91a219a8972c0d4d4fb761ea
+    T1-E:
+      status_sha256: 59bb7d175f6f5608e2867ca6b6e5ce45b46a38462e3b91d5a4d5e40fea2620f8
+    T1-E2E-AUTH:
+      status_sha256: aa7bc89d03d265dee3e93d2b344a975997254d08228c38c86655e250ba884ac6
+    T1-M020:
+      status_sha256: cd2841c559444d400cd4a65e26ecf04638a3860145aaef4b14d47a611ba59340
+    T1-M023:
+      status_sha256: 1b28391bed741737be870f0a315217da9e55c4069b288b0720faedf0f04969a8
+    T1-M028:
+      status_sha256: 7374eb5780906106495b361d771541ae34d8d873b1cf5beb7420064948bfd7a2
+    T1-M079:
+      status_sha256: 7cb4a517b07d023c4823165fa910a94172d87f0b858a409dfc46a810988bb2cf
+    T1-M160:
+      status_sha256: 2fee65e9d8ab63a90cad0fbf251aa332eb99cdb06c3232092f0c88b246b48637
+    T10-M010:
+      status_sha256: bbbafbc1e861a11ee6b1ac5b08917a46e8dddf4ebfd5c613d87689fccde0dfed
+    T10-M077:
+      status_sha256: 37cc26ba2a74e9e4dd426f56117a0febd7b689994d0c904abd0f73f4076ea7f4
+    T11-M012:
+      status_sha256: 836c8936bcdac8a717a6a94c61b7c7e125c85e19422cfb8efa9500e601c7e2cd
+    T11-M045:
+      status_sha256: 5322a211b6187c6a41921d1d0edd6527647be3fb4372c5b0b28c091a9d3430ed
+    T11-M092:
+      status_sha256: af761d3ee1c74d724b21c202056023e31009716a3c120d80f0092642f8899d1d
+    T11-ROUTE:
+      status_sha256: 606a21a1635a1f30961250ae6b46416ec5c69431ab1f3a4e931dd0e6f663743d
+    T12-M093:
+      status_sha256: b0ab867bde5fae7240afb2475ce74636cf791eb2a295a295a0213a6d887e59bf
+    T13-M029:
+      status_sha256: 4a4f5fd97e3853014353af6c77ee2e8cc1c66916e25ddb1db3650404352b59fa
+    T13-M064:
+      status_sha256: 54242ddea28cb6a17439477aa8fcc8975e7d89f17d548e4231de72b2ba9678bc
+    T14-M036:
+      status_sha256: b239d79b050ea7a4c99b42c24b377fff210beaee4e1bf1316ae48567c9fdf1e8
+    T14-M177:
+      status_sha256: c9ed56e993f760d91a00205b2e4eb6e677b771cf3685273cd52d3ea46fb4ccd9
+    T14-M178:
+      status_sha256: da01cb786921e9cca799828dcc05a94b3f691fbc7df2e1f86b79050c5b5ca010
+    T16-M091:
+      status_sha256: 35341885a257649a530864165b83b9bc27e9bfc6ba6cfcbdd7812adc25bfd06a
+    T17-M065:
+      status_sha256: a07c4df3c0f5856b5db5e7c9858b35fd45b674636be13fea194a2b3168513dd5
+    T17-M109:
+      status_sha256: 4bce7b64dbc1a7e14a07ddc158bde3f1665dee44121d4ad63d5d03b549473510
+    T18-M068:
+      status_sha256: 66bcabeeb0df73f189b6bccbe0084ad1ca24fc980c5fbb16ef32e0197df83687
+    T18-M128:
+      status_sha256: 6a068b24e259310c7e0397b11b19d8d2d3f5227e3a6635e7da5ef7fa9c2c67eb
+    T19-M131:
+      status_sha256: f14f49d9b82e4646f3c3dc8982d0d2bf4bacc88d1f27f47edc5d692430e7cd6d
+    T2-DIFF-PORTABILITY:
+      status_sha256: 363af2bb6e69a622d2a03e454b6c9075391ac0cae9fd285b448773a4220fd404
+    T2-M016:
+      status_sha256: ecbabd4e411b50fc44cac669389ffe36ac734c5075c334941012663e139ea36d
+    T2-M042:
+      status_sha256: bbdc96724bc15a74b3610613be8d9e624fa56c55a17acd6dd5f4378e17d90601
+    T2-M069:
+      status_sha256: 373d629c2dbfa135519e16be337db7cce1b0bd3e7839595c257a36cc1a1fa92a
+    T2-M081:
+      status_sha256: d657c34120b9bb0098704f62985aa5b4991ef579d0922c1e0a795741f54c4e1e
+    T2-M087:
+      status_sha256: bf59c8e7ff6ba75add5f6df24086b25608027ec3810567e3abce9b2444e73727
+    T2-M120:
+      status_sha256: 6b392600377abf6b3b451eab7c4f916c77953c0cbbae0a185bfaa862a141d5ac
+    T2-M123:
+      status_sha256: 1fef219f1647cb90bd2fdef9e3dcb37f33f0b108c1b292c05bfe46d41b3d7044
+    T2-M126:
+      status_sha256: dd227eb1b3fc0e48df24ce52fa71d94cb5bdd6500729c37134a3a83196a03235
+    T2-M134:
+      status_sha256: ffd0814d09ad3ecc19acaa68f86b444fa36e7ee7f26499f68bd16838721347de
+    T2-M153:
+      status_sha256: 82fa847e60b53fc79a5d8f069973254ff8fe73b985dbed17ddb086b7fea1dcf9
+    T2-M154:
+      status_sha256: fe19521436475c10c509e514f527bce639a52fe4c4ef9e04bce54fa1ed7c60dd
+    T2-M162:
+      status_sha256: dced041ed9853bf194fdd145f8413457f3b8ae06373916fd3874907a909d8a23
+    T2-M166:
+      status_sha256: a54fc0452d2af8b96f6735d782d7d52b472ca589a1c441c4a9d0a35f97c2c220
+    T2-M174:
+      status_sha256: c33b3aeee6fd6100bd2411a79737d6ecb7a6f432a400a48dec40f5d169e15b8e
+    T2-M175:
+      status_sha256: f24ad00d9dc9f4b276e075840a3b46a40fc21ccc7021a0ab5794c53fe432ba69
+    T20-M137:
+      status_sha256: 1aaae3863a76f4bf403855042b0ba63fdd794d1b98a6e8fcc6596cb567688c4c
+    T20-M179:
+      status_sha256: 3effcc7b60dd866ad2911502bb8bd580198659e608d7ea3c016904687d61eac3
+    T22-M078:
+      status_sha256: 9a17f848c8d46f127515859c445c5ba994b0b6e5840d05da631df27761203646
+    T22-M180:
+      status_sha256: 8e63a46c3bbb1dbc7a6e456949faf039234f93896559ca1dadaeca54dddeae83
+    T24-M137-AUDIT:
+      status_sha256: 3c3f5e0e88a2638765b9bd45bbbf890020c354cd683d4baa9d966839b4ee91d9
+    T24-M181:
+      status_sha256: fae6beebce3b57973fee239ba6a2766b0719eb1736bff7184f24dea3e0290a54
+    T25-M067:
+      status_sha256: f29d86c0aa2d0d5a9e42c8b91ca0c3fb1b74205115b0874b250c6cfcf348626b
+    T26-M178:
+      status_sha256: 3f1191207183f44c006e795b2594293697d81fcd32f4dd85a86d95cb08c1fab0
+    T3-M026:
+      status_sha256: 2e8503a4fd00d1f91e828e7b2144ad1c94e743e9a9c128d2135825ccd37bb1cf
+    T3-M033:
+      status_sha256: 71b29512a3bc1fcf92efea5f744e4addb446af7a4a6c52049cb3487787296b2d
+    T3-M086:
+      status_sha256: 973e632ab8b2517f0a38e001bc6a01b48a958d8fd3bdb3b1973103d23872369b
+    T3-M092:
+      status_sha256: 80d8ab41479100e083335ffad4d94bff30c5cd86f10f802203c265c332b4c8a2
+    T3-M122:
+      status_sha256: fc11225328527fc162c2a2d4a58d9d3972cc878c86d08b4f749e81947e7b8c63
+    T3-M132:
+      status_sha256: 2873da15a0f57c55a423101e8fd0400c6a565f1474b8a7eee76599160213a1e9
+    T3-M148:
+      status_sha256: c83f1f0066dfd083d46b0dcaba1650be52e5c6d115d9094cdb78389eb55b1f2e
+    T3-M158:
+      status_sha256: ace2b0b51e035d01df9818e14978ceda977e37c129715b12a8e0389c15a9597e
+    T3-M169:
+      status_sha256: 445683535538691106c2703e0c60857359b6f8049dad0a8959b357291a1cc427
+    T3-M172:
+      status_sha256: aa89db294343b9fb88fb303a0cb3e4ca14fcf0293739bdd5d559262b6ff13e69
+    T4-M004:
+      status_sha256: b603757b3a2359ee5a883178e967723b970d9a0405d9df7ad0e12cd56895e2fc
+    T4-M019:
+      status_sha256: 0476861bc2a2cec3ee32e1ddf9780184184e373f0e6fd6aa6002082647067945
+    T4-M057:
+      status_sha256: 55c4a1dea2784f407b079b0c517f8e6f7eae465f009ada7036bf594ad6b67e36
+    T4-M066:
+      status_sha256: 470cad034bbf61595c58fd20d07accd3db87eddb52dccaf3e92ac64fbfd26605
+    T4-M095:
+      status_sha256: 11dd9b0ae85a25c9bd651102089f149026082ed93e7b34f8dd4638557503c28b
+    T4-M171:
+      status_sha256: 6a17d0d0a2405f81c95efaa4dfd087cfeb63e9385f4b8c74cc921d18d0a2c13d
+    T5-M061:
+      status_sha256: 10c92913ee9d0e472a90b80f54022bda3847c69081acca411429640035838cab
+    T5-M082:
+      status_sha256: 5d878d8ece048824b25c7049baab5c11330efe990296ad618b5a8a1eb33ee361
+    T5-M096:
+      status_sha256: 65d4a2959f5e5cd00f232ae1ab2925dc81a4318023a6ad48388eeb256e36f4a0
+    T5-M138:
+      status_sha256: 4ec4978963cae352f154fddd1efeffd054c9ae92e82278eba07a4c1dce6e484a
+    T5-M146:
+      status_sha256: 1fc6868a19b7a0ce60b6b21f5e9f594b77834ee689ac27e0b69b21c5fd21cb6d
+    T5-M150:
+      status_sha256: 041d886ff625f7161a3e10e1eba723cf1b2ba8fcb1ccbbd95a3fd104869b399a
+    T5-M167:
+      status_sha256: 0696196e226a42fce4e18032ec6c3ec2c6c33f47ec22552e55ebbf7991b5e4c3
+    T5-M167-ROLLOUT:
+      status_sha256: a96691498ec925184d23e38f5d176315900269392f1572c650f7ef0ea4808762
+    T5-M170:
+      status_sha256: b8c54e33c9e243f782de56d4a5f519bfc4a18601083f15f1ed549288fbdd14e0
+    T6-M001:
+      status_sha256: d1cba501e933ec1c8abc4d5f730bf102718db0e0824c22dba82bb28a46ba3106
+    T6-M022:
+      status_sha256: 18afe7bc501b08575189c87a3861c559cf7d2babd1c5d7b831567b3cd8d3522b
+    T6-M052:
+      status_sha256: 1a5cdb1d85ab8c4abd623d4d8030e6fe4df61fb52e1d525f300a1f36182f1723
+    T6-M074:
+      status_sha256: fb6e0002552f68ee799c459c4b1b151085b26e1eb4eeee181bc8edb483b9d1f8
+    T6-M083:
+      status_sha256: 73b99bf30d00223d3abb1f6bb3f18c390265a3bf903c178f2737a4a1b7ab1c23
+    T6-M090:
+      status_sha256: 75eb0822f06b394c96c044010212e27236a843fc537503637f518f78743bdd7a
+    T6-M168:
+      status_sha256: e36f4b550cb9d13af828179007faf499134cbe5b6f9e105e47afd2b8e19bc7c2
+    T7-M040:
+      status_sha256: 3a9a3a3dde371d8d88da68f2653e727c4dfb455fd837af3fd4520b0ea5b9bb9c
+    T7-M127:
+      status_sha256: a8c38efeca72e11a0941d6175c0317e7018fc9487f5287840b1fc430175317fc
+    T7-M142:
+      status_sha256: 843128acb181dc0ac3ff55f9f1ad0c7a4b651c809f450cb8e8af344347891ac2
+    T8-M034:
+      status_sha256: ff2ddee7885e2d168324a9675bda07da72db20bca93f63b2243f8142f7142a7f
+    T8-M116:
+      status_sha256: 943ccc3cab3d0cbc791a5ac7130bd07073d6edb1e6c94e9a7c3a9b1adcc5dbf9
+    T8-M124:
+      status_sha256: ade8238515e911781bc46bad4c2200880e44cfe1ac462e4e340be5d0a97aa3e9
+    T9-M009:
+      status_sha256: fa9d5053c2e146001880a14bd5bcbc11cf5718089aa6cb472aac545d1dba80be
+    T9-M035:
+      status_sha256: a46fd1abd016cbc99d68b38208dc6345f8c153356bb9df2f495a4fda179b7440
+    T9-M071:
+      status_sha256: 6dbdb9e02a5eece1fbf796b1154825e76a5881f9f7059396f48ac477ce26d091
+    TASK254-COST-PREFERENCES:
+      status_sha256: fcf38eefc302f70317fe6e60d8022de52a77f03105cfdb06f60caf6369e6cdea
+    V3-E2E:
+      status_sha256: 2819738ff04f1a8e33a6624a6720f4699bc08e8dfd71f0a839b0d059ee59f394
+    V3-M094:
+      status_sha256: 479e9c7c0f915b0c3f5e5eb35f70a54b6e53393ea4a92760da86ba0c5154b12a
+    V3-M136:
+      status_sha256: 41d49b8639b3807bff9b4503b1d9f575b0a5314b329562ea3dfb0d6f0d899d5f
+    V3-M152:
+      status_sha256: c03f1bbe78b3c39917ff6d8c65227fb48fc7c365877203851fef4d457252a7b5
+    V3-M161:
+      status_sha256: ec39b739b58c22db32e8434c6ed61776ff56101e1cb42d93c69c306a3485339e
+    V3-M163:
+      status_sha256: 79817a4ed2aa4a921f7518f31e3c850dcdbd06b724d76b7453e8c61ef3d293a3
+    V3-M164:
+      status_sha256: 13e1be570be712cf1db62d64d3c889f190f494c4ce864c746b2e0d0e39e88a67
+    V3-M173:
+      status_sha256: 80793205be6339f6584652e0e90014dccfcded3294c28a6df48c62937a40f29d
+  campaigns:
+    2026-08-25-live-validation:
+      status_sha256: 90210573febec03d733ab717b6aa971ca5419375199c1de31786d5ad288e14f2
+      rounds: []
+    2026-09-07-guardrail-rotation:
+      status_sha256: 1c76299e8a23bd5bbfb590acbd66cc3a0a5768f9859593513365b2d920128b9a
+      rounds:
+      - round-1
+    2026-09-07-quarantine-brain:
+      status_sha256: 93fa2685bc2a5c9376430b1727d8caa421eb39f910f04cd78dd1c0736d2f93ae
+      rounds:
+      - round-1
+    2026-09-10-v3-observe:
+      status_sha256: eb8d2d06549947d41720d9fb76c2e63a3acea38b3505b44fb46b1e233d66be36
+      rounds:
+      - round-1
+      - round-2
+    2026-09-20-post25-live:
+      status_sha256: 8393ba9a5353b0cc70656c37bce0791eac3b1e19cffe15b376fecf01918aae60
+      rounds:
+      - round-1
+      - round-2
+      - round-3
+      - round-4
+      - round-5
+      - round-6
+      - round-7
+      - round-8
+      - round-9
+      - round-10
+      - round-11
+      - round-12
+      - round-13
+      - round-14
+      - round-15
+      - round-16
+      - round-17
+      - round-18
+      - round-19
+      - round-20
+      - round-21
+      - round-22
+    2026-09-23-catalogue-coverage:
+      status_sha256: 9a9e3c8d772b408e39f6f9a05ce9e54327acc89a70c39d328e7a583004fecd56
+      rounds:
+      - round-1
+      - round-2
+      - round-3
+      - round-4
+      - round-5
+      - round-6
+      - round-7
+      - round-8
+      - round-9
+      - round-10
+      - round-11
+      - round-12
+      - round-13
+      - round-14
+      - round-15
+      - round-16
+      - round-17
+      - round-18
+      - round-19
+      - round-20
+      - round-21
+      - round-22
+      - round-23
+      - round-24
+      - round-25
+      - round-26
+    2026-09-26-live-workloads:
+      status_sha256: null
+      rounds: []
+  assessments:
+  - 20260910-readiness
+  - 20260912-brain-recommendations
+  - 20260913-tier1-live
+  - 20260913-tier2
+  - 20260914-tier2-live
+  - 20260915-release-milestones
+  - 20260915-tier3
+  - 20260915-tier3-live
+  - 20260915-tier4
+  - 20260915-tier4-live
+  - 20260915-tier5
+  - 20260916-local-continuation
+  - 20260916-tier5-live
+  - 20260916-tier6
+  - 20260916-tier7
+  - 20260916-tier8
+  - 20260921-math-consolidation

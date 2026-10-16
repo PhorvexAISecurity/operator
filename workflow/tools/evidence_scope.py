@@ -34,9 +34,11 @@ def fingerprint(repo: Path, source: str, inputs: list[str]) -> str:
     return signature({'tree_entries': records})
 
 
-def validate(root: Path, fix: Path, check: dict) -> list[str]:
+def validate(root: Path, fix: Path, check: dict, *, archived=False) -> list[str]:
+    """Archived records (ARCHIVE.yaml) pin source-repository commits that this history
+    lacks: their input fingerprints are not recomputed and a stripped verdict may be absent."""
     problems = []
-    if 'inputs' in check:
+    if 'inputs' in check and not archived:
         try:
             if fingerprint(root.parent, check['source_sha'], check['inputs']) != check.get('inputs_sha256'):
                 problems.append('declared evidence inputs changed')
@@ -45,11 +47,13 @@ def validate(root: Path, fix: Path, check: dict) -> list[str]:
     if 'reused_from' in check:
         approved = check.get('reuse_approval', {})
         verdict = fix / approved.get('artifact', '')
+        stripped = (archived and bool(approved.get('artifact')) and not verdict.exists()
+                    and fix.resolve() in verdict.resolve().parents)
         if (not approved.get('by') or approved.get('inputs_sha256') != check.get('inputs_sha256')
                 or approved.get('inputs') != check.get('inputs')
                 or approved.get('check_sha256') != check['reused_from'].get('check_sha256')
-                or not verdict.is_file() or fix.resolve() not in verdict.resolve().parents
-                or hashlib.sha256(verdict.read_bytes()).hexdigest() != approved.get('sha256')):
+                or (not stripped and (not verdict.is_file() or fix.resolve() not in verdict.resolve().parents
+                    or hashlib.sha256(verdict.read_bytes()).hexdigest() != approved.get('sha256')))):
             problems.append('reused evidence lacks its retained independent scope approval')
     return problems
 

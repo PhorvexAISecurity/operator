@@ -10,8 +10,6 @@ PR per tier targeting main; continue unblocked source work and retain live debt.
 2. Run `brief <fix> --agent <assigned-id>`; coordinator assigns roles. Read its
    stage, issue, source and artifacts. Don't preload the register, anatomy,
    archives or raw history. `MANIFEST.yaml` locates authorities.
-   For live catalogue design or handoff, use `operations/LIVE-CATALOGUE.md` and
-   its source-pinned 22-item continuation map before choosing a case.
 3. Complete owned work; use `submit-review` / `review-verdict` for evidence and
    state handoffs (`operations/HANDOFFS.md`). Continue the peer loop
    until PR delivery or a concrete external blocker; no human relay is needed.
