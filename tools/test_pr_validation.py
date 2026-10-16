@@ -25,7 +25,15 @@ class PRValidationTests(unittest.TestCase):
                 self.assertNotIn('if', job)
             for step in job['steps']:
                 if step.get('uses', '').startswith('actions/checkout@'):
-                    self.assertEqual(step['with'], {'persist-credentials': 'false'})
+                    self.assertEqual(step['with'].get('persist-credentials'), 'false')
+                    self.assertLessEqual(set(step['with']), {'persist-credentials', 'fetch-depth'})
+
+    def test_jobs_running_evidence_tests_fetch_full_history(self):
+        for workflow, job in (('pr-validation.yml', 'charts'), ('e2e-contract.yml', 'e2e-contract')):
+            doc = yaml.load((ROOT / '.github/workflows' / workflow).read_text(), Loader=yaml.BaseLoader)
+            checkout = next(s for s in doc['jobs'][job]['steps']
+                            if s.get('uses', '').startswith('actions/checkout@'))
+            self.assertEqual(checkout['with'].get('fetch-depth'), '0', workflow)
 
     def test_real_source_checks_are_wired_without_masking_failures(self):
         jobs = DOC['jobs']
