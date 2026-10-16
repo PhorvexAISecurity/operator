@@ -26,6 +26,7 @@ import (
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -186,7 +187,7 @@ func (s SecurityEventStamper) validateCurrentInventoryAdmission(ctx context.Cont
 		return "", time.Time{}, "", errors.New("ConfigMap source identity is not current")
 	}
 	binding, err := currentinventory.BindingFor(&pod, &cm, payload.SourceBinding.Key, payload.SourceBinding.VolumeName, payload.SourceBinding.ContainerName, payload.SourceBinding.MountPath, payload.SourceBinding.ProjectedPath)
-	immediate, stable, ownerErr := ingest.ResolveStableWorkloadOwner(ctx, s.Reader, payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
+	immediate, stable, ownerErr := ownership.ResolveStableWorkloadOwner(ctx, s.Reader, payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
 	if err != nil || ownerErr != nil || !currentinventory.SameBinding(binding, payload.SourceBinding) || immediate != payload.ImmediateController || stable != payload.StableWorkloadOwner {
 		return "", time.Time{}, "", errors.New("current inventory source binding is not current")
 	}
@@ -270,7 +271,7 @@ func (s SecurityEventStamper) validateCompletedDisclosureAdmission(ctx context.C
 	if tenant != payload.ProtectedScope.Tenant {
 		return "", time.Time{}, "", errors.New("policy tenant does not match protected scope")
 	}
-	immediate, stable, err := ingest.ResolveStableWorkloadOwner(ctx, s.Reader,
+	immediate, stable, err := ownership.ResolveStableWorkloadOwner(ctx, s.Reader,
 		payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
 	if err != nil || !sameDisclosureIdentity(immediate, payload.ImmediateController) || !sameDisclosureIdentity(stable, payload.StableWorkloadOwner) {
 		return "", time.Time{}, "", errors.New("workload owner identity is not current")

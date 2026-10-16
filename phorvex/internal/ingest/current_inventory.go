@@ -10,6 +10,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 )
 
 // AdmitCurrentInventory is the second, current-evidence admission transaction.
@@ -60,7 +61,7 @@ func AdmitCurrentInventory(ctx context.Context, reader client.Reader, store curr
 			continue
 		}
 		binding, bindErr := currentinventory.BindingFor(&pod, &cm, payload.SourceBinding.Key, payload.SourceBinding.VolumeName, payload.SourceBinding.ContainerName, payload.SourceBinding.MountPath, payload.SourceBinding.ProjectedPath)
-		immediate, stable, ownerErr := ResolveStableWorkloadOwner(ctx, reader, payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
+		immediate, stable, ownerErr := ownership.ResolveStableWorkloadOwner(ctx, reader, payload.DecisionAsset.Namespace, payload.DecisionAsset.Name, payload.DecisionAsset.TargetUID)
 		if bindErr != nil || ownerErr != nil || !currentinventory.SameBinding(binding, payload.SourceBinding) || immediate != payload.ImmediateController || stable != payload.StableWorkloadOwner {
 			log.Info("current inventory observation rejected", "event", event.Name, "reason", "current-inventory-live-binding-mismatch")
 			continue

@@ -10,8 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 )
 
 const maxReplacementInventory = 64
@@ -148,7 +148,7 @@ func (r KubernetesBindingResolver) currentPolicy(ctx context.Context, config Pre
 }
 
 func (r KubernetesBindingResolver) stableScope(ctx context.Context, pod *corev1.Pod) (model.PersistenceWorkloadScope, error) {
-	_, stable, err := ingest.ResolveStableWorkloadOwner(ctx, r.Reader, pod.Namespace, pod.Name, string(pod.UID))
+	_, stable, err := ownership.ResolveStableWorkloadOwner(ctx, r.Reader, pod.Namespace, pod.Name, string(pod.UID))
 	if err != nil {
 		return model.PersistenceWorkloadScope{}, err
 	}

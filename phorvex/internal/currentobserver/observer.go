@@ -17,8 +17,8 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/currentinventory"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -73,7 +73,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	if err != nil {
 		return nil, err
 	}
-	immediate, stable, err := ingest.ResolveStableWorkloadOwner(opctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	immediate, stable, err := ownership.ResolveStableWorkloadOwner(opctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	if err != nil || string(afterPod.UID) != cfg.TargetUID || !currentinventory.SameBinding(binding, afterBinding) {
 		return nil, errors.New("current inventory source changed during observation")
 	}
-	afterImmediate, afterStable, err := ingest.ResolveStableWorkloadOwner(opctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	afterImmediate, afterStable, err := ownership.ResolveStableWorkloadOwner(opctx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil || afterImmediate != immediate || afterStable != stable {
 		return nil, errors.New("target ownership changed during current inventory observation")
 	}

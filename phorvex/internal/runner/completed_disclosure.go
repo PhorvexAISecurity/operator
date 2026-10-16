@@ -15,6 +15,7 @@ import (
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 )
 
 const defaultLossHistoryReadTimeout = 100 * time.Millisecond
@@ -126,7 +127,7 @@ func representationHistoryInputsWithStores(ctx context.Context, reader client.Re
 	for _, d := range decisions {
 		key := d.Namespace + "/" + d.Pod
 		entry := representationHistoryInput{gaps: append([]string(nil), ingestGaps...), historyGaps: append([]string(nil), ingestGaps...)}
-		_, stable, err := ingest.ResolveStableWorkloadOwner(ctx, reader, d.Namespace, d.Pod, versions[key])
+		_, stable, err := ownership.ResolveStableWorkloadOwner(ctx, reader, d.Namespace, d.Pod, versions[key])
 		if err != nil {
 			entry.result = losshistory.Result{Status: "unavailable", Gaps: []string{"stable-workload-owner-unavailable"}}
 			entry.gaps = append(entry.gaps, fmt.Sprintf("stable-workload-owner-unavailable:%s", key))
@@ -176,7 +177,7 @@ func representationHistoryInputsWithStores(ctx context.Context, reader client.Re
 					continue
 				}
 				binding, bindErr := currentinventory.BindingFor(&pod, &cm, inv.SourceBinding.Key, inv.SourceBinding.VolumeName, inv.SourceBinding.ContainerName, inv.SourceBinding.MountPath, inv.SourceBinding.ProjectedPath)
-				immediate, currentStable, ownerErr := ingest.ResolveStableWorkloadOwner(ctx, reader, inv.DecisionAsset.Namespace, inv.DecisionAsset.Name, inv.DecisionAsset.TargetUID)
+				immediate, currentStable, ownerErr := ownership.ResolveStableWorkloadOwner(ctx, reader, inv.DecisionAsset.Namespace, inv.DecisionAsset.Name, inv.DecisionAsset.TargetUID)
 				if bindErr != nil || ownerErr != nil || !currentinventory.SameBinding(binding, inv.SourceBinding) || immediate != inv.ImmediateController || currentStable != inv.StableWorkloadOwner {
 					entry.gaps = append(entry.gaps, "current-inventory-live-binding-mismatch:"+inv.EvidenceID)
 					entry.currentUnknown = append(entry.currentUnknown, model.RepresentationGap{Scope: inv.ProtectedScope, Kind: model.CurrentInventoryClass, Reason: "current-inventory-live-binding-mismatch"})
