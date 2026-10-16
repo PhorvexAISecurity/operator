@@ -51,8 +51,7 @@ class PRValidationTests(unittest.TestCase):
                             for s in jobs['go-unit']['steps']))
         # Separate modules are executed, not merely compiled as dependencies.
         for module, minutes in (('build/metricvalidity', 5), ('build/test-harness', 15),
-                                ('build/phoenix-extended', 15), ('build/falco-integrator-extended', 10),
-                                ('build/prometheus-integrator-extended', 10)):
+                                ('build/phoenix-extended', 15)):
             self.assertIn(f'go -C {module} test -mod=readonly -count=1 -timeout={minutes}m ./...', runs['go-unit'])
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])

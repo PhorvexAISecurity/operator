@@ -5,11 +5,10 @@ and fork PRs. Checkout uses the event's merge revision, not the deployed image.
 There is no paths filter or draft guard on these source checks:
 
 - `charts`: current CRD and vendored subchart equality, Helm render, claim-language
-  checks, and tool regressions. The vendored-chart script is shared with release CI.
+  checks, and tool regressions.
 - `go-unit`: the Phorvex module unit tests (`go -C phorvex test ... ./...`) plus the
-  explicitly executed suites of the separate `build/metricvalidity`, `build/test-harness`,
-  `build/phoenix-extended`, `build/falco-integrator-extended` and
-  `build/prometheus-integrator-extended` modules, on one local Go toolchain (the highest
+  explicitly executed suites of the separate `build/metricvalidity`, `build/test-harness`
+  and `build/phoenix-extended` modules, on one local Go toolchain (the highest
   module `go` directive). These are unit tests with mocks, fake clients and local
   fixtures; `KUBEBUILDER_ASSETS` is deliberately blank, so the eight API-server tests
   skip here and no existing cluster is used.
@@ -35,6 +34,6 @@ There is no paths filter or draft guard on these source checks:
   installing the workflow does not change protection settings or bypass plan limits.
 
 All jobs use GitHub-hosted runners and read-only permissions, with no AWS, SSH,
-image publication, or deployment credentials. Existing `ci.yml` main/tag release
-and live-E2E routing is unchanged. Live E2E checks the deployed release; it is not
-a candidate-source validation verdict. This workflow does not replace live tests.
+image publication, or deployment credentials. The legacy release and live-E2E
+pipeline stays in PhorvexSecurity/operator. Live E2E checks the deployed release;
+it is not a candidate-source validation verdict. This workflow does not replace live tests.

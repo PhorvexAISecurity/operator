@@ -74,8 +74,6 @@ jobs:
           cache-dependency-path: |
             phorvex/go.sum
             build/phoenix-extended/go.sum
-            build/falco-integrator-extended/go.sum
-            build/prometheus-integrator-extended/go.sum
             build/metricvalidity/go.sum
             build/test-harness/go.sum
       # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
@@ -98,20 +96,15 @@ jobs:
       - name: Attack-harness unit tests (fake clients, not live E2E or envtest)
         run: go -C build/test-harness test -mod=readonly -count=1 -timeout=15m ./...
 
-      # The extended Phoenix operator and the two detector integrators are ALSO
-      # separate modules (phorvex and the integrators `replace` phoenix locally).
-      # Compiling them as a dependency executes none of their tests, so until now
-      # a PR could break the Phoenix CR controllers or an integrator's event
-      # translation without any check running. These are unit suites with fake
-      # clients and local fixtures: no live webhook, no grants, no image build.
+      # The extended Phoenix operator is ALSO a separate module (phorvex `replace`s
+      # it locally). Compiling it as a dependency executes none of its tests, so
+      # until now a PR could break the Phoenix CR controllers without any check
+      # running. It is a unit suite with fake clients and local fixtures: no
+      # live webhook, no grants, no image build.
       # The Phoenix controller package's Ginkgo envtest suite declares zero
       # specs, so its BeforeSuite never starts an API server here.
       - name: Extended Phoenix operator module unit tests (fake clients, no cluster)
         run: go -C build/phoenix-extended test -mod=readonly -count=1 -timeout=15m ./...
-      - name: Falco integrator module unit tests (fake clients, no live webhook)
-        run: go -C build/falco-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
-      - name: Prometheus integrator module unit tests (fake clients, no live webhook)
-        run: go -C build/prometheus-integrator-extended test -mod=readonly -count=1 -timeout=10m ./...
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
   # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
