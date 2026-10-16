@@ -301,6 +301,18 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.Contains(why, "endpoint-lease-revoke:") {
 				t.Fatalf("endpoint lease requires reviewed source, images, journal and live target: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionRequestDrain:
+			if ok || !registered || !strings.HasPrefix(why, "request-drain-capability:") {
+				t.Fatalf("request drain requires current secure v11 readiness: ok=%v registered=%v why=%q", ok, registered, why)
+			}
+		case model.ActionKVMigrateInvalidate:
+			if ok || !registered || why != ReasonKVMigrationConnectorUnavailable {
+				t.Fatalf("KV migration requires an attested remote connector: ok=%v registered=%v why=%q", ok, registered, why)
+			}
+		case model.ActionCRMRefundRevoke:
+			if ok || !registered || !strings.HasPrefix(why, "crm-refund-revoke:") {
+				t.Fatalf("CRM refund revoke requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		default:
 			if ok != registered {
 				t.Fatalf("native %s: support=%v but handler registered=%v (%s)", a, ok, registered, why)
