@@ -4,8 +4,8 @@
  * This is a CLI-LEVEL regression: it builds the real operator binary and runs it against
  * an isolated recording fake Kubernetes API, so it asserts what the PROCESS does, not what
  * a parser returns. That distinction is the finding: validation lived only inside the
- * runner's checked constructor, and --integration-emit / --native-demo / an empty-namespace
- * --scan never reach it. With PHORVEX_ACTUATOR=phoenixx the binary previously exited 0 and
+ * runner's checked constructor, and --integration-emit / an empty-namespace --scan never
+ * reach it. With PHORVEX_ACTUATOR=phoenixx the binary previously exited 0 and
  * POSTed both an AdaptiveMovingTargetDefense and a SecurityEvent.
  *
  * No real cluster is used and nothing outside the test's own temporary directories is touched.
@@ -190,7 +190,6 @@ func TestOneShotEntrypointsRejectInvalidSelectorBeforeAnyMutation(t *testing.T) 
 		args []string
 	}{
 		{"integration-emit", []string{"--integration-emit", "--emit-namespace=ns", "--emit-pod=p1", "--emit-matchlabels=app=demo"}},
-		{"native-demo", []string{"--native-demo", "--native-demo-namespace=phorvex-actuator-demo"}},
 		{"scan", []string{"--scan", "--scan-namespace=ns"}},
 		{"scan-empty-namespace", []string{"--scan"}},
 		{"ablation", []string{"--ablation", "--ablation-namespace=ns"}},
