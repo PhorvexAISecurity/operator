@@ -22,7 +22,8 @@
 # entry here in the same reviewed change; it then gets every check.
 #
 # Map old commit SHAs pinned by archived records with `commit_map`
-# (repository-root relative; header `old new`, pruned commits map to zeros).
+# (repository-root relative TSV; header `operator<TAB>operator_refactored`,
+# commits that touched only stripped paths map to `pruned`).
 schema_version: 1
 source:
   repository: PhorvexSecurity/operator
