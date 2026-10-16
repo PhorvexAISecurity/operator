@@ -9,6 +9,10 @@ forward-looking `_template/`, `new-campaign-round` for additional rounds, and
 `campaign-transition` for every lifecycle edge. `INDEX.yaml` is a generated
 projection of campaign status.
 
+Campaigns and rounds listed in `../ARCHIVE.yaml` were imported with their
+evidence left in `PhorvexSecurity/operator@65af1c99`; they are immutable here.
+Continue that work in a new campaign (see `../README.md`, “Archived records”).
+
 Use fix-level L3 for the narrow live verification that closes one fix. Use a
 campaign to study cross-fix interactions, long soaks, workload effects,
 open-world controller behavior, or attack-to-effect coverage across a

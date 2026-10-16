@@ -30,12 +30,17 @@ itself a follow-up with `--follow-up-to <fix-id>`.
 
 ## Historical records
 
-The migrated directories retain their original content. Missing historical
-steps are marked in `STATUS.yaml`; they are not fabricated. In particular,
-the recent M-020/M-023/M-160 root `06-verdict.md` files were P3/PR-ready
-verdicts rather than final live closure. The workflow copy relocates those
-three files byte-for-byte to `evidence/p3/verdict.md`; the original local fix
-trees remain unchanged. Future `06-verdict.md` files are final results only.
+Records listed in `../ARCHIVE.yaml` were imported from
+`PhorvexSecurity/operator@65af1c99`; most of their evidence stayed there. They
+are immutable here and verified structurally (see `../README.md`, “Archived
+records”). Continue archived work in a new fix that references the archived id.
+
+In the source repository the migrated directories retain their original
+content. Missing historical steps are marked in `STATUS.yaml`; they are not
+fabricated. In particular, the recent M-020/M-023/M-160 root `06-verdict.md`
+files were P3/PR-ready verdicts rather than final live closure. The workflow
+copy relocates those three files byte-for-byte to `evidence/p3/verdict.md`; the
+original local fix trees remain unchanged. Future `06-verdict.md` files are final results only.
 
 ## Branch and worktree rules
 
