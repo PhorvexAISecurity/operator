@@ -32,15 +32,89 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
+// The warm-swap drain is the operation-bound v11 protocol (b9f738cb): one
+// authenticated capability read before the receipt is persisted, one claimed
+// create POST, and GET-only status reads afterwards. These source identities
+// are bound to the Pod annotations and the guardrail/vllm container statuses.
+const (
+	m067DrainProxySource  = "m067-proxy-source"
+	m067DrainEngineSource = "m067-engine-source"
+)
+
 type m067Backend struct {
-	mu            sync.Mutex
-	posts         int
-	requests      []string
-	routesAtPOST  [][]string
-	routeErrors   []string
-	routeSnapshot func() ([]string, error)
-	mode          string
-	server        *httptest.Server
+	mu             sync.Mutex
+	posts          int
+	statusGETs     int
+	requests       []string
+	routesAtPOST   [][]string
+	routeErrors    []string
+	routeSnapshot  func() ([]string, error)
+	mode           string
+	server         *httptest.Server
+	podUID         string
+	status         drainV11StatusResponse
+	statusRecorded bool
+}
+
+func (b *m067Backend) capability() drainV11CapabilityResponse {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return drainV11CapabilityResponse{
+		Schema: drainV11Schema, Capability: drainV11Capability, PodUID: b.podUID,
+		LedgerID: strings.Repeat("1", 32), ProxyBootID: strings.Repeat("2", 32), EngineBootID: strings.Repeat("3", 32),
+		IncarnationDigest: strings.Repeat("2", 64), ProxySource: m067DrainProxySource, EngineSource: m067DrainEngineSource,
+		EngineMode: "v0-frontend-multiprocessing", VirtualEngineIDs: []int{0}, GenerationHighWater: "0",
+		NextOperationGeneration: "1", Admission: "OPEN",
+	}
+}
+
+func (b *m067Backend) create(w http.ResponseWriter, r *http.Request) {
+	var request drainV11CreateRequest
+	b.mu.Lock()
+	podUID := b.podUID
+	b.mu.Unlock()
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || request.Schema != drainV11Schema ||
+		request.Mode != "abort-and-quiesce" || request.Owner.PodUID != podUID ||
+		request.ExpectedIncarnationDigest != strings.Repeat("2", 64) {
+		http.Error(w, "invalid operation", http.StatusBadRequest)
+		return
+	}
+	status, err := m040DrainStatus(request, "QUIESCENT", "CLOSED", "3", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	b.mu.Lock()
+	b.status, b.statusRecorded = status, true
+	b.mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(status)
+}
+
+func (b *m067Backend) statusRead(w http.ResponseWriter, r *http.Request) {
+	b.mu.Lock()
+	b.statusGETs++
+	status, recorded := b.status, b.statusRecorded
+	b.mu.Unlock()
+	// A possibly-sent create left no producer record this fixture can vouch
+	// for; the bounded GET stays unresolved, so recovery must retain the claim.
+	if !recorded || r.URL.Path != defaultDrainPath+"/operations/"+status.OperationGeneration+"/"+status.OperationID {
+		http.NotFound(w, r)
+		return
+	}
+	nonce := r.URL.Query().Get("observation_nonce")
+	if nonce == "" {
+		http.Error(w, "missing observation nonce", http.StatusBadRequest)
+		return
+	}
+	status.QueryNonce = &nonce
+	if err := m040SignDrainStatus(&status); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (b *m067Backend) handler(w http.ResponseWriter, r *http.Request) {
@@ -66,15 +140,28 @@ func (b *m067Backend) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		w.Header().Set("Content-Type", "application/json")
-		if strings.Contains(r.URL.Path, "models") {
-			_, _ = w.Write([]byte(`{"data":[{"id":"model"}]}`))
+		switch {
+		case r.URL.Path == defaultDrainPath+"/capability":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(b.capability())
+			// The capability read is the last serving request before the claimed
+			// create; closing here makes that create definitely unsent.
 			if b.mode == "definitely-unsent" {
 				_ = b.server.Listener.Close()
 			}
-			return
+		case strings.HasPrefix(r.URL.Path, defaultDrainPath+"/operations/"):
+			b.statusRead(w, r)
+		case strings.Contains(r.URL.Path, "models"):
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":[{"id":"model"}]}`))
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{}`))
 		}
-		_, _ = w.Write([]byte(`{}`))
+		return
+	}
+	if r.URL.Path != defaultDrainPath+"/operations" {
+		http.NotFound(w, r)
 		return
 	}
 	switch b.mode {
@@ -103,8 +190,7 @@ func (b *m067Backend) handler(w http.ResponseWriter, r *http.Request) {
 		_ = rw.Flush()
 		_ = conn.Close()
 	default:
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"aborted":2}`))
+		b.create(w, r)
 	}
 }
 
@@ -112,6 +198,12 @@ func (b *m067Backend) counts() (int, []string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.posts, append([]string(nil), b.requests...)
+}
+
+func (b *m067Backend) statusReads() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.statusGETs
 }
 
 func (b *m067Backend) routeObservations() ([][]string, []string) {
@@ -146,30 +238,17 @@ func m067NonLoopbackIPv4(t *testing.T) string {
 	return ""
 }
 
-type m067APIFixture struct {
-	client  client.WithWatch
-	native  *NativeActuator
-	old     *corev1.Pod
-	next    *corev1.Pod
-	third   *corev1.Pod
-	policy  *v1alpha1.PhorvexPolicy
-	service *corev1.Service
-	backend *m067Backend
-	opns    string
+// m067BackendEndpoint is the TLS serving identity a ServingSecurityBinding pins.
+type m067BackendEndpoint struct {
+	host, portText, serverName string
+	port                       int
+	ca                         []byte
 }
 
-func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string) *m067APIFixture {
-	return m067NewAPIAvailabilityFixture(t, ctx, c, suffix, mode, 2, 1)
-}
-
-func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string, replicas int32, floor int) *m067APIFixture {
+// m067StartBackend starts the authenticated TLS serving/drain producer on a
+// non-loopback IPv4 address the real EndpointSlice controller accepts.
+func m067StartBackend(t *testing.T, mode string) (*m067Backend, m067BackendEndpoint) {
 	t.Helper()
-	nsName, opns := "m067-"+suffix, "m067-op-"+suffix
-	for _, name := range []string{nsName, opns} {
-		if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
-			t.Fatal(err)
-		}
-	}
 	backend := &m067Backend{mode: mode}
 	server := httptest.NewUnstartedServer(http.HandlerFunc(backend.handler))
 	if err := server.Listener.Close(); err != nil {
@@ -203,6 +282,54 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 		serverName = cert.IPAddresses[0].String()
 	}
 	ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+	return backend, m067BackendEndpoint{host: host, portText: portText, serverName: serverName, port: port, ca: ca}
+}
+
+// m067SetDrainParticipantReady seeds the status a kubelet would report for a
+// Ready guardrail+vllm serving Pod. envtest has no kubelet: this lets the real
+// EndpointSlice controller and the v11 operator binding observe exact UIDs and
+// container identities; it claims no kubelet readiness or Pod-network traffic.
+func m067SetDrainParticipantReady(t *testing.T, ctx context.Context, c client.Client, pod *corev1.Pod, ip string) {
+	t.Helper()
+	pod.Status.Phase = corev1.PodRunning
+	pod.Status.PodIP = ip
+	pod.Status.PodIPs = []corev1.PodIP{{IP: ip}}
+	pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "guardrail", ContainerID: "containerd://guardrail-" + string(pod.UID), Ready: true}, {Name: "vllm", ContainerID: "containerd://vllm-" + string(pod.UID), Ready: true}}
+	if err := c.Status().Update(ctx, pod); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type m067APIFixture struct {
+	client  client.WithWatch
+	native  *NativeActuator
+	old     *corev1.Pod
+	next    *corev1.Pod
+	third   *corev1.Pod
+	policy  *v1alpha1.PhorvexPolicy
+	service *corev1.Service
+	backend *m067Backend
+	opns    string
+}
+
+func m067NewAPIFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string) *m067APIFixture {
+	return m067NewAPIAvailabilityFixture(t, ctx, c, suffix, mode, 2, 1)
+}
+
+func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.WithWatch, suffix, mode string, replicas int32, floor int) *m067APIFixture {
+	t.Helper()
+	nsName, opns := "m067-"+suffix, "m067-op-"+suffix
+	for _, name := range []string{nsName, opns} {
+		if err := c.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	backend, endpoint := m067StartBackend(t, mode)
+	host, portText, port, serverName, ca := endpoint.host, endpoint.portText, endpoint.port, endpoint.serverName, endpoint.ca
 	service := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "serving"}, Spec: corev1.ServiceSpec{Selector: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleLeader}, Ports: []corev1.ServicePort{{Port: int32(port)}}}}
 	if err := c.Create(ctx, service); err != nil {
 		t.Fatal(err)
@@ -216,7 +343,7 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 		t.Fatal(err)
 	}
 	zero := int64(0)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix, labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"}, Annotations: map[string]string{annoRouteService: service.Name, "phorvex.ai/model-id": "model", annoServingPort: portText}}, Spec: corev1.PodSpec{NodeName: "m067-node", ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: nsName, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": suffix, labelSwapGroup: "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": suffix, labelSwapGroup: "g", labelRole: roleShadow, labelModelLoaded: "false"}, Annotations: map[string]string{annoRouteService: service.Name, "phorvex.ai/model-id": "model", annoServingPort: portText, annoDrainProxySource: m067DrainProxySource, annoDrainEngineSource: m067DrainEngineSource}}, Spec: corev1.PodSpec{NodeName: "m067-node", ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "guardrail", Image: "registry.k8s.io/pause:3.10"}, {Name: "vllm", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -236,6 +363,9 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 	}
 	sort.Slice(pods.Items, func(i, j int) bool { return pods.Items[i].Name < pods.Items[j].Name })
 	old, next := pods.Items[0].DeepCopy(), pods.Items[1].DeepCopy()
+	backend.mu.Lock()
+	backend.podUID = string(old.UID)
+	backend.mu.Unlock()
 	old.Labels[labelRole] = roleLeader
 	next.Labels[labelModelLoaded] = "true"
 	fixturePods := []*corev1.Pod{old, next}
@@ -252,19 +382,7 @@ func m067NewAPIAvailabilityFixture(t *testing.T, ctx context.Context, c client.W
 		if err := c.Update(ctx, pod); err != nil {
 			t.Fatal(err)
 		}
-		pod.Status.Phase = corev1.PodRunning
-		pod.Status.PodIP = host
-		pod.Status.PodIPs = []corev1.PodIP{{IP: host}}
-		pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
-		// envtest has no kubelet. These explicitly seeded statuses let the real
-		// EndpointSlice controller exercise UID membership, but do not claim
-		// kubelet readiness or cluster Pod-network traffic.
-		if err := c.Status().Update(ctx, pod); err != nil {
-			t.Fatal(err)
-		}
-		if err := c.Get(ctx, client.ObjectKeyFromObject(pod), pod); err != nil {
-			t.Fatal(err)
-		}
+		m067SetDrainParticipantReady(t, ctx, c, pod, host)
 	}
 	if err := c.Get(ctx, client.ObjectKeyFromObject(service), service); err != nil {
 		t.Fatal(err)
@@ -478,7 +596,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		claimed := false
 		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			cm, ok := obj.(*corev1.ConfigMap)
-			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 				return inner.Update(ctx, obj, opts...)
 			}
 			if err := inner.Update(ctx, obj, opts...); err != nil {
@@ -501,7 +619,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			t.Fatalf("authority drift after acknowledged claim reached POST: posts=%d requests=%v", posts, requests)
 		}
 		_, receipt := fixture.receipt(t, ctx)
-		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+		if receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 			t.Fatalf("authority drift did not retain dispatch claim: %+v", receipt)
 		}
 		oldCurrent, nextCurrent := &corev1.Pod{}, &corev1.Pod{}
@@ -517,7 +635,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		claimed := false
 		guard := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			cm, ok := obj.(*corev1.ConfigMap)
-			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+			if !ok || claimed || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 				return inner.Update(ctx, obj, opts...)
 			}
 			if err := inner.Update(ctx, obj, opts...); err != nil {
@@ -540,7 +658,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			t.Fatalf("promoted binding drift after acknowledged claim reached POST: posts=%d requests=%v", posts, requests)
 		}
 		_, receipt := fixture.receipt(t, ctx)
-		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+		if receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 			t.Fatalf("promoted binding drift did not retain dispatch claim: %+v", receipt)
 		}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); err != nil {
@@ -555,7 +673,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 				if err := inner.Update(ctx, obj, opts...); err != nil {
 					return err
 				}
-				if cm, ok := obj.(*corev1.ConfigMap); ok && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+				if cm, ok := obj.(*corev1.ConfigMap); ok && strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 					claimed = true
 				}
 				return nil
@@ -582,7 +700,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			t.Fatalf("actual API stale postclaim route reached backend: posts=%d requests=%v", posts, requests)
 		}
 		_, receipt := fixture.receipt(t, ctx)
-		if receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+		if receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 			t.Fatalf("actual API stale route did not retain dispatch claim: %+v", receipt)
 		}
 		if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.old), &corev1.Pod{}); err != nil {
@@ -618,7 +736,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		bothArrived := make(chan struct{})
 		barrier := interceptor.NewClient(c, interceptor.Funcs{Update: func(ctx context.Context, inner client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
 			cm, ok := obj.(*corev1.ConfigMap)
-			if !ok || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching"`) {
+			if !ok || !strings.Contains(cm.Data["receipt"], `"phase":"drain-dispatching-v11"`) {
 				return inner.Update(ctx, obj, opts...)
 			}
 			barrierMu.Lock()
@@ -700,7 +818,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			fixture := m067NewAPIFixture(t, ctx, c, fmt.Sprintf("u%d", i), mode)
 			result, enactErr := fixture.native.Actuate(ctx, fixture.request())
-			if enactErr == nil || result.Emitted {
+			if enactErr == nil || result.Emitted || !strings.Contains(enactErr.Error(), "GET-only recovery") {
 				t.Fatalf("possibly-sent drain was reported complete: result=%+v err=%v", result, enactErr)
 			}
 			posts, requests := fixture.backend.counts()
@@ -709,7 +827,7 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			}
 			fixture.assertPOSTRoute(t)
 			_, receipt := fixture.receipt(t, ctx)
-			if receipt.Version != warmDrainReceiptVersion || receipt.Phase != "drain-dispatching" || receipt.DrainAttempts != 1 {
+			if receipt.Version != operationDrainReceiptVersion || receipt.Phase != "drain-dispatching-v11" || receipt.DrainAttempts != 1 {
 				t.Fatalf("possibly-sent receipt lost exact state: %+v", receipt)
 			}
 			old, next := &corev1.Pod{}, &corev1.Pod{}
@@ -719,12 +837,21 @@ func TestM067ActualAPIControllersAndAuthenticatedDrainOutcomes(t *testing.T) {
 			if err := c.Get(ctx, client.ObjectKeyFromObject(fixture.next), next); err != nil || next.UID != fixture.next.UID || next.Labels[labelRole] != roleLeader {
 				t.Fatalf("promoted survivor changed: %v %+v", err, next)
 			}
+			// v11 recovery of a possibly-sent create is GET-only: it reads the exact
+			// operation status and never replays the create POST.
+			readsBefore := fixture.backend.statusReads()
 			events, recoverErr := fixture.native.RecoverOperations(ctx, false)
-			if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Err.Error(), "without replay") {
+			if recoverErr != nil || len(events) != 1 || events[0].Err == nil || !strings.Contains(events[0].Effect, "drain status retained") {
 				t.Fatalf("possibly-sent recovery was not retained: events=%+v err=%v", events, recoverErr)
 			}
 			if after, _ := fixture.backend.counts(); after != posts {
 				t.Fatalf("recovery replayed possibly-sent drain: before=%d after=%d", posts, after)
+			}
+			if fixture.backend.statusReads() <= readsBefore {
+				t.Fatal("possibly-sent recovery did not perform the GET-only status read")
+			}
+			if _, retained := fixture.receipt(t, ctx); retained.Phase != "drain-dispatching-v11" || retained.DrainAttempts != 1 {
+				t.Fatalf("possibly-sent recovery changed the retained claim: %+v", retained)
 			}
 		})
 	}
