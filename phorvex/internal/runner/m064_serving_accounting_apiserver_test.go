@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -65,11 +66,20 @@ func m064RunnerSecurity(t *testing.T, operatorNamespace string, binding actuator
 }
 
 // TestM064RealAPIRunnerNativeAccounting crosses the actual runner, Native,
-// API-server and protected TLS boundaries. A production-default local-only KV
-// result retains forensic evidence but earns no success, intent, failure or
-// fallback credit; its exact retry reconciles the receipt without another POST.
-// A separate stale-selection arm proves a genuine pre-create refusal retains the
+// API-server and protected TLS boundaries. A confirmed partial serving result
+// retains forensic evidence but earns no success, intent, failure or fallback
+// credit; its exact retry reconciles the receipt without another POST. A
+// separate stale-selection arm proves a genuine pre-create refusal retains the
 // established clean-refusal accounting rather than inheriting partial semantics.
+//
+// The confirmed partial is the production kv-reset explicit negative
+// acknowledgement (88daf954): a complete authenticated {"success":false} is
+// retained as terminal-partial because the cache may have partially changed.
+// The production-default KV migration route used to supply the local-only
+// partial, but 682657b3 deliberately fails it closed before dispatch until a
+// reviewed remote connector is installed; the last arm asserts that refusal is
+// accounted as a clean no-effect refusal that leaves the retained partial
+// evidence untouched.
 func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		t.Skip("requires isolated local envtest API binaries")
@@ -92,14 +102,14 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 	var calls atomic.Int32
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		if r.Method != http.MethodPost || r.URL.Path != "/v1/kv/invalidate" || r.Header.Get("Authorization") != "Bearer trusted-token" {
+		if r.Method != http.MethodPost || r.URL.Path != "/reset_prefix_cache" || r.Header.Get("Authorization") != "Bearer trusted-token" {
 			t.Errorf("unexpected protected serving request: %s %s auth=%q", r.Method, r.URL.Path, r.Header.Get("Authorization"))
 			http.Error(w, "unexpected request", http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"success":true}`))
+		_, _ = w.Write([]byte(`{"success":false}`))
 	}))
 	t.Cleanup(server.Close)
 	u, err := url.Parse(server.URL)
@@ -134,7 +144,7 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 		Budget: v1alpha1.BudgetSpec{
 			TickInterval: metav1.Duration{Duration: 20 * time.Second}, AntiOverRotationWindow: metav1.Duration{Duration: time.Minute}, ProactiveFloor: metav1.Duration{Duration: time.Hour},
 		},
-		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionKVMigrateInvalidate)}},
+		Actions: v1alpha1.ActionsSpec{Enabled: []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionKVReset), v1alpha1.ActionType(model.ActionKVMigrateInvalidate)}},
 	}}
 	if err := apiClient.Create(ctx, policy); err != nil {
 		t.Fatal(err)
@@ -187,19 +197,34 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 		GuardrailEpochObservation: model.OwnedValue{Present: true, Value: ""},
 	}}
 	views := map[string]*model.WorkloadView{namespace + "/" + pod.Name: view}
-	resolved := model.Policy{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID), TickID: "m064-runner-tick", EnabledActions: map[model.Action]bool{model.ActionKVMigrateInvalidate: true}}
-	decision := func(name string) []model.Decision {
-		return []model.Decision{{Tenant: namespace, Namespace: namespace, Pod: name, Action: model.ActionKVMigrateInvalidate, Selected: true, Feasible: true}}
+	resolved := model.Policy{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID), TickID: "m064-runner-tick", EnabledActions: map[model.Action]bool{model.ActionKVReset: true, model.ActionKVMigrateInvalidate: true}}
+	decision := func(name string, action model.Action) []model.Decision {
+		return []model.Decision{{Tenant: namespace, Namespace: namespace, Pod: name, Action: action, Selected: true, Feasible: true}}
+	}
+	journal := func() corev1.ConfigMap {
+		t.Helper()
+		var list corev1.ConfigMapList
+		if err := apiClient.List(ctx, &list, client.InNamespace(operator), client.MatchingLabels{"phorvex.ai/serving-effect-journal": "v1"}); err != nil {
+			t.Fatal(err)
+		}
+		if len(list.Items) != 1 {
+			t.Fatalf("protected serving receipts=%d, want 1", len(list.Items))
+		}
+		return list.Items[0]
 	}
 
-	partial := decision(pod.Name)
+	partial := decision(pod.Name, model.ActionKVReset)
 	if got := manager.actuate(ctx, entry, resolved, partial, views); got != 0 {
-		t.Fatalf("confirmed local-only partial actuations=%d, want 0", got)
+		t.Fatalf("confirmed negative-acknowledgement partial actuations=%d, want 0", got)
 	}
 	first := partial[0]
 	if first.Actuated || first.DispatchOutcome != model.DispatchError || first.DispatchReason != "outcome-unknown" ||
-		first.Handler != string(model.ActionKVMigrateInvalidate) || first.MutationKind != "partial" || len(first.ObjectsTouched) == 0 || first.RollbackRef == "" {
+		first.Handler != string(model.ActionKVReset) || first.MutationKind != "partial" || len(first.ObjectsTouched) == 0 || first.RollbackRef == "" {
 		t.Fatalf("runner lost confirmed partial evidence: %+v", first)
+	}
+	retained := journal()
+	if receipt := retained.Data["receipt"]; !strings.Contains(receipt, `"phase":"terminal-partial"`) || !strings.Contains(receipt, `"kvResetNegativeACK":{`) {
+		t.Fatalf("runner arm did not exercise the confirmed terminal partial: %s", receipt)
 	}
 	if calls.Load() != 1 || len(recording.requests) != 1 || len(manager.Failures.at) != 0 || len(manager.fallbackDecisions) != 0 ||
 		len(intents.Since(resolved.Owner(), namespace, pod.Name, time.Now())) != 0 {
@@ -213,7 +238,7 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 		t.Fatalf("runner dropped presence-aware serving observation: %+v", request)
 	}
 
-	reconciled := decision(pod.Name)
+	reconciled := decision(pod.Name, model.ActionKVReset)
 	if got := manager.actuate(ctx, entry, resolved, reconciled, views); got != 0 {
 		t.Fatalf("same-operation reconciliation actuations=%d", got)
 	}
@@ -249,12 +274,32 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 		Ready: true, DesiredReplicas: 1, ReadyReplicas: 1, ServingDeclared: true, ServingEndpointReady: true,
 		KVMigrateEpoch: model.OwnedValue{Present: true, Value: "stale-selection"},
 	}}
-	refused := decision(refusalPod.Name)
+	refused := decision(refusalPod.Name, model.ActionKVReset)
 	if got := manager.actuate(ctx, entry, refusalPolicy, refused, map[string]*model.WorkloadView{namespace + "/" + refusalPod.Name: staleView}); got != 0 {
 		t.Fatalf("stale pre-create refusal actuations=%d", got)
 	}
 	if refused[0].DispatchOutcome != model.DispatchRefused || refused[0].DispatchReason != "definite-no-effect-refusal" ||
 		refused[0].Actuated || calls.Load() != 1 || len(manager.Failures.at) != 1 || len(manager.fallbackDecisions) != 0 {
 		t.Fatalf("clean refusal accounting changed: decision=%+v calls=%d failures=%+v fallback=%+v", refused[0], calls.Load(), manager.Failures.at, manager.fallbackDecisions)
+	}
+
+	// 682657b3 (Fail closed on unavailable KV migration connector): the
+	// production NativeActuator has no reviewed remote connector, so KV
+	// migration is refused before any serving request or journal access. The
+	// runner must account that as a clean no-effect refusal, and the refusal
+	// must not touch the partial evidence retained for the same target.
+	migratePolicy := resolved
+	migratePolicy.TickID = "m064-runner-migrate-tick"
+	migrate := decision(pod.Name, model.ActionKVMigrateInvalidate)
+	if got := manager.actuate(ctx, entry, migratePolicy, migrate, views); got != 0 {
+		t.Fatalf("fail-closed KV migration actuations=%d", got)
+	}
+	if migrate[0].Actuated || migrate[0].DispatchOutcome != model.DispatchRefused || migrate[0].DispatchReason != "definite-no-effect-refusal" ||
+		migrate[0].Handler != string(model.ActionKVMigrateInvalidate) || migrate[0].MutationKind != "none" || len(migrate[0].ObjectsTouched) != 0 || migrate[0].RollbackRef != "" ||
+		calls.Load() != 1 || len(manager.Failures.at) != 2 || len(manager.fallbackDecisions) != 0 || len(intents.Since(resolved.Owner(), namespace, pod.Name, time.Now())) != 0 {
+		t.Fatalf("fail-closed KV migration accounting changed: decision=%+v calls=%d failures=%+v fallback=%+v", migrate[0], calls.Load(), manager.Failures.at, manager.fallbackDecisions)
+	}
+	if after := journal(); after.UID != retained.UID || after.ResourceVersion != retained.ResourceVersion || after.Data["receipt"] != retained.Data["receipt"] {
+		t.Fatalf("fail-closed KV migration changed retained partial evidence: before=%s after=%s", retained.Data["receipt"], after.Data["receipt"])
 	}
 }
