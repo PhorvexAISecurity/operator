@@ -40,17 +40,28 @@ Measured couplings that block a naive split (see `internal/runner/manager.go`):
 
 | Service | Responsibility | Owns today's packages (moved in phase 3) | Kubernetes access |
 |---|---|---|---|
-| **sensor** | Observe the cluster and derive physics and context | `ingest`, `graph`, `platform`, `physics`, `ctxprov`, `calib`, `epssfeed`, `epssmeta`, `gpudevice` | Read-only (`phorvex-scanner` role) |
+| **sensor** | Observe the cluster and derive physics and context | `ingest`, `graph`, `platform`, `physics`, `ctxprov`, `calib`, `epssfeed` | Read-only (`phorvex-scanner` role) |
 | **brain** | Choose actions | `decision`, `actionset`, `recon`, `cost`, `feasibility`, `killchain`, `mathlab` | None (no token mounted) |
-| **dispatcher** | Run the tick: policy reconcile, gates, kill switch, dispatch, audit | `runner`, `controller`, `capability`, `capacity`, `actuationbrake`, `slo`, `codeexec`, `exposure` | PhorvexPolicy, Leases, kill-switch and capacity ConfigMaps, webhooks |
-| **actuator** | Execute actions against workloads | `actuator`, `ownership`, `podresources`, workload contracts (`crmrefund`, `endpointlease`, `litellmclient`, `outputpolicy`, `voice*policy`); `recovery`, `mig-allocation-helper` | Namespaced write (`phorvex-actuator` role) |
-| **attacks** | Fire catalogue attacks and produce independent observations | `cataloguev1`, `build/test-harness`, `loss-observer`, `current-inventory-observer` | Scoped to attack targets |
+| **dispatcher** | Run the tick: policy reconcile, gates, kill switch, dispatch, audit | `runner`, `controller`, `capability`, `capacity`, `slo`, `codeexec`, `exposure`, `scopedoutcome` | PhorvexPolicy, Leases, kill-switch and capacity ConfigMaps, webhooks |
+| **actuator** | Execute actions against workloads | `actuator`, `podresources`, `startupauthz`; commands `recovery`, `mig-allocation-helper` | Namespaced write (`phorvex-actuator` role) |
+| **attacks** | Fire catalogue attacks and produce independent observations | `cataloguev1`, `lossobserver`, `currentobserver`, `build/test-harness` | Scoped to attack targets |
 | **console** | UI and API for operators | `console`, `dashboard-web` | Read, plus the grants it has today |
 
 Shared libraries (`libs/`): `api` (CRD types), `model`, `proto` (service
 contracts), and platform code: logging, metrics, build info, `authz`, `audit`,
-`audittransport`, `registry`. The extended Phoenix operator stays a separate
-third-party component with its own chart.
+`audittransport`, `registry`. Contracts one service writes and another reads are
+shared too: the workload policy formats (`crmrefund`, `endpointlease`,
+`litellmclient`, `outputpolicy`, `voice*policy`), the actuation brake
+annotations, workload ownership resolution, GPU device and serving declarations,
+and EPSS metadata. The Phorvex-controlled SecurityEvent vocabulary lives in the
+Phoenix `api/v1beta1` package, beside the type it extends. The extended Phoenix
+operator stays a separate third-party component with its own chart.
+
+`phorvex/internal/archtest` enforces this table while the services share one
+module: every package has a domain, a domain imports only shared code (the
+dispatcher may also drive sensor, brain and actuator until phase 4), and each
+remaining crossing is listed as debt with the phase that removes it. The list
+may only shrink.
 
 ### Communication: gRPC with protobuf, driven by the dispatcher
 
