@@ -31,6 +31,8 @@ COPY build/phoenix-extended/ build/phoenix-extended/
 # too — `go mod download` fails outright on a replace target that is not there,
 # and a local `go build` in phorvex/ cannot detect that.
 COPY build/metricvalidity/ build/metricvalidity/
+# Shared libraries under libs/ are replace targets too.
+COPY libs/logging/ libs/logging/
 
 # Cache dependency download on go.mod/go.sum alone.
 COPY phorvex/go.mod phorvex/go.mod
