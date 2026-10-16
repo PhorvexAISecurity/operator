@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """M100 product-copy gate; historical reports, tests and catalog labels excluded.
 
-Scan current dashboard components, audit/console Go and the report generator.
+Scan current dashboard components and audit/console Go.
 Exact legacy `contained` wire tokens remain compatible; prose using that word
 is rejected. Source comments and self-contained (software composition) are not
 outcome claims. This gate does not certify mathematical or security validity.
@@ -27,7 +27,6 @@ def main():
     files = list((ROOT / 'dashboard-web/components').rglob('*.tsx'))
     for part in ('audit', 'console'):
         files += list((ROOT / f'phorvex/internal/{part}').rglob('*.go'))
-    files += [ROOT / 'phorvex/cmd/p3report/main.go']
     files = sorted(p for p in files if not p.name.endswith('_test.go'))
     errors = [f'{p.relative_to(ROOT)}:{n}: unqualified outcome language' for p in files for n in violations(p.read_text())]
     if errors:

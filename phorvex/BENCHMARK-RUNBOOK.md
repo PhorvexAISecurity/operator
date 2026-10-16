@@ -43,7 +43,7 @@ So a developer running this on real EKS gets correctly-framed results:
 
 ```
 <repo-root>/
-  phorvex/                      # the Phorvex brain/operator + cmd/p3report (report generator)
+  phorvex/                      # the Phorvex brain/operator
   build/test-harness/           # the attack harness (cmd/harness) + scenarios + defender arms
   build/phoenix-extended/       # the unmodified extended-Phoenix operator (FullPhoenix + PX actuator)
 ```
@@ -53,10 +53,10 @@ Build the binaries once (Go 1.21+; on Windows the names get `.exe`):
 ```bash
 # the attack harness
 cd build/test-harness && go build -o bin/harness.exe ./cmd/harness
-
-# the report generator (EFFECTIVENESS-PHORVEX.md) + the Phorvex operator (built per-run by the PX arm too)
-cd ../../phorvex && go build -o bin/p3report.exe ./cmd/p3report
 ```
+
+The `EFFECTIVENESS-PHORVEX.md` generator (`cmd/p3report`) was removed from this repository; it remains in the
+archive at `PhorvexSecurity/operator@65af1c99:phorvex/cmd/p3report` if that report must be regenerated.
 
 The `d-phorvex` (PX) and `d-fullphoenix` arms **build the operators from source at run time** using
 `phoenixSrcDir` — so `build/phoenix-extended/` (and the `phorvex/` tree) must be present and buildable on the
@@ -304,10 +304,8 @@ phorvex/bin/phorvex.exe --ablation --ablation-namespace amtd-attack-test --ablat
 cd build/test-harness
 bin/harness.exe -dollars-from out-eks/metrics.jsonl     # writes out-eks/report-dollars.md next to the metrics
 
-# (3) EFFECTIVENESS-PHORVEX.md (the full effectiveness benchmark, GATE #2):
-cd ../../phorvex
-bin/p3report.exe --metrics ../build/test-harness/out-eks/metrics.jsonl --out EFFECTIVENESS-PHORVEX.md --phase FULL
-# (--phase SMOKE labels n<5 runs as directional)
+# (3) EFFECTIVENESS-PHORVEX.md (the full effectiveness benchmark, GATE #2) came from cmd/p3report, which now
+#     lives only in the archive (PhorvexSecurity/operator@65af1c99:phorvex/cmd/p3report).
 
 # (4) COMPARISON.md (vs R6) + the out-bench/out-ai-bench reports + the frontier table are regenerated from the
 #     same metrics.jsonl by the report writer; split K8s and AI into out-bench/ and out-ai-bench/ via
@@ -361,7 +359,6 @@ kubectl apply -f phorvex/config/rbac/phorvex-actuator-role.yaml
 
 # 3. build
 ( cd build/test-harness && go build -o bin/harness.exe ./cmd/harness )
-( cd phorvex && go build -o bin/p3report.exe ./cmd/p3report )
 
 # 4. config.eks.yaml  (context + namespace + ownedAck:true + trialsPerArm:20 + masterSeed:1337 + real ROI knobs)
 
@@ -372,5 +369,4 @@ bin/harness.exe -config config.eks.yaml
 
 # 6. regenerate reports
 bin/harness.exe -dollars-from out-eks/metrics.jsonl
-( cd ../../phorvex && bin/p3report.exe --metrics ../build/test-harness/out-eks/metrics.jsonl --out EFFECTIVENESS-PHORVEX.md --phase FULL )
 ```

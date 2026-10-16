@@ -50,16 +50,20 @@ Ops: `kv-reset` (prefix-cache flush), `adapter-rotate` (LoRA unload/load), `requ
 
 ## 2. Production applier — the apply-fix cluster write `[PENDING-CLUSTER-VALIDATION]`
 
-`internal/applier/crd.go` — patches the tenant's `PhorvexPolicy` (phorvex.ai/v1alpha1) via a per-namespace SA.
+No applier ships: the console wires `console.NewApplyFixManager(nil, nil, nil)`. The earlier CRD applier
+(`internal/applier/crd.go`, which patched the tenant's `PhorvexPolicy` via a per-namespace SA) was never imported
+by any binary and has been removed; it remains in the archive at
+`PhorvexSecurity/operator@65af1c99:phorvex/internal/applier/crd.go`.
 
-- **(a) Built + mock proves:** `crd_test.go` (fake client) proves the patch is correctly constructed
-  (NormSparsity/FlowDisruption/MaxMovesPerTick/ProactiveFloor), the **safety gate is RE-ASSERTED before the
-  patch** (a gate-breaking delta never patches), ambiguous (0 or >1 policy) + wrong-namespace targets
-  fail-closed, and a non-landing patch is **rolled back** (rollback-failure surfaced loudly).
+- **(a) What the archived applier proved (mock only):** its `crd_test.go` (fake client) proved the patch was
+  correctly constructed (NormSparsity/FlowDisruption/MaxMovesPerTick/ProactiveFloor), the **safety gate is
+  RE-ASSERTED before the patch** (a gate-breaking delta never patches), ambiguous (0 or >1 policy) +
+  wrong-namespace targets fail-closed, and a non-landing patch is **rolled back** (rollback-failure surfaced
+  loudly). An applier restored or rebuilt for a deployment must keep those properties.
 - **(b) Real-env step:** install the `PhorvexPolicy` CRD; create one PhorvexPolicy in a tenant namespace; create
-  a per-namespace SA with `get/list/patch` on `phorvexpolicies` in that namespace ONLY; wire the applier in the
-  console deployment (`console.NewApplyFixManager(basePol, applier.NewCRDApplier(client, console.PolicySafetyGate,
-  audit).Apply, audit)` with `ApplierMode="live"`); then run the apply-fix two-key flow from the dashboard.
+  a per-namespace SA with `get/list/patch` on `phorvexpolicies` in that namespace ONLY; wire an applier in the
+  console deployment (`console.NewApplyFixManager(basePol, <applier>.Apply, audit)` with `ApplierMode="live"`);
+  then run the apply-fix two-key flow from the dashboard.
 - **(c) Calibrate:** confirm the SA RBAC is namespace-scoped (a cross-namespace patch must 403); confirm the
   PhorvexPolicy name resolution (exactly one per namespace) matches your install convention.
 - **(d) Acceptance:** a gate-passing, two-key-approved delta lands on the real CRD (`kubectl get phorvexpolicy -o
@@ -144,8 +148,9 @@ Every route is a pod annotation with a documented default (no hardcoded literal 
 PHORVEX_OIDC_ISSUER, PHORVEX_OIDC_AUDIENCE, PHORVEX_OIDC_JWKS_URL,
 PHORVEX_OIDC_TENANT_CLAIM, PHORVEX_OIDC_LENS_CLAIM
 
-# Production applier (in the console bootstrap, with a controller-runtime client + per-namespace SA)
-console.NewApplyFixManager(basePol, applier.NewCRDApplier(client, console.PolicySafetyGate, audit).Apply, audit)
+# Production applier (in the console bootstrap, with a controller-runtime client + per-namespace SA;
+# none ships, see §2)
+console.NewApplyFixManager(basePol, <applier>.Apply, audit)
 # set manager.ApplierMode = "live"
 
 # MIG node-exec (at actuator startup, with the REST config + clientset)
