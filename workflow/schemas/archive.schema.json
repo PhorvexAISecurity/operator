@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "archive.schema.json",
+  "title": "Archived workflow records frozen at import",
+  "type": "object",
+  "required": ["schema_version", "source", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "source": {
+      "type": "object",
+      "required": ["repository", "url", "revision", "imported_revision", "import_date", "commit_map"],
+      "additionalProperties": false,
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "url": {"type": "string", "pattern": "^https://"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "imported_revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "import_date": {"type": "string", "format": "date"},
+        "commit_map": {"type": "string", "minLength": 1}
+      }
+    },
+    "records": {
+      "type": "object",
+      "required": ["fixes", "campaigns", "assessments"],
+      "additionalProperties": false,
+      "properties": {
+        "fixes": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "required": ["status_sha256"],
+            "additionalProperties": false,
+            "properties": {
+              "status_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+            }
+          }
+        },
+        "campaigns": {
+          "type": "object",
+          "propertyNames": {"pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"},
+          "additionalProperties": {
+            "type": "object",
+            "required": ["status_sha256", "rounds"],
+            "additionalProperties": false,
+            "properties": {
+              "status_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+              "rounds": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+            }
+          }
+        },
+        "assessments": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}
+        }
+      }
+    }
+  }
+}
