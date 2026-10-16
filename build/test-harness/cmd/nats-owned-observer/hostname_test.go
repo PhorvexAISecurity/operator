@@ -7,56 +7,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/nats-io/nats.go"
+	server "github.com/nats-io/nats-server/v2/server"
 )
 
+// standaloneNATSServer serves the pinned NATS version on 127.0.0.1 only and
+// returns a hostname URL, so the observer subprocess must resolve and pin the
+// address itself. The server runs in-process from the module's own dependency;
+// building the nats-server main package would need modules go.sum does not pin.
 func standaloneNATSServer(t *testing.T) (string, string) {
 	t.Helper()
-	serverBinary := filepath.Join(t.TempDir(), "nats-server-2.10.29")
-	build := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", serverBinary, "github.com/nats-io/nats-server/v2")
-	build.Env = append(os.Environ(), "GOPROXY=off", "GOSUMDB=off", "GOMAXPROCS=1", "GOFLAGS=-p=1")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build pinned local server: %v: %s", err, output)
+	if server.VERSION != "2.10.29" {
+		t.Fatalf("NATS server version=%s, want 2.10.29", server.VERSION)
 	}
-	version, err := exec.Command(serverBinary, "-v").CombinedOutput()
-	if err != nil || !strings.Contains(string(version), "v2.10.29") {
-		t.Fatalf("local NATS server version differs: err=%v version=%q", err, version)
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	srv, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, NoSigs: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	port := listener.Addr().(*net.TCPAddr).Port
-	listener.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	command := exec.CommandContext(ctx, serverBinary, "-a", "127.0.0.1", "-p", fmt.Sprint(port))
-	var logs bytes.Buffer
-	command.Stderr = &logs
-	if err := command.Start(); err != nil {
-		cancel()
-		t.Fatal(err)
+	go srv.Start()
+	if !srv.ReadyForConnections(5 * time.Second) {
+		srv.Shutdown()
+		t.Fatal("standalone local NATS did not become ready")
 	}
-	t.Cleanup(func() { cancel(); command.Wait() })
-	address := fmt.Sprintf("nats://127.0.0.1:%d", port)
-	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); {
-		client, err := nats.Connect(address, nats.Timeout(100*time.Millisecond), nats.NoReconnect())
-		if err == nil {
-			id := client.ConnectedServerId()
-			client.Close()
-			return fmt.Sprintf("nats://localhost:%d", port), id
-		}
-		time.Sleep(30 * time.Millisecond)
-	}
-	t.Fatalf("standalone local NATS did not become ready: %s", logs.String())
-	return "", ""
+	t.Cleanup(func() { srv.Shutdown(); srv.WaitForShutdown() })
+	return fmt.Sprintf("nats://localhost:%d", srv.Addr().(*net.TCPAddr).Port), srv.ID()
 }
 
 func TestHostnameURLUsesPinnedAddressBeforeSubscription(t *testing.T) {

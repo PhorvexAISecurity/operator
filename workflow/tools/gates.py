@@ -2,6 +2,11 @@
 
 Signatures are accountable local attestations, not authentication. Artifact hashes
 and source pins prevent accidental reuse; substantive review remains a human task.
+
+``archived=True`` is used only by ``doctor`` for records listed in ARCHIVE.yaml:
+evidence files stripped at import may be absent (present files are still
+verified) and checks that need source-repository commits are skipped. The
+STATUS-level contract (roles, signers, pins, declared fields) stays strict.
 """
 from __future__ import annotations
 
@@ -109,6 +114,14 @@ def local_file(root: Path, relative: str) -> Path | None:
     return path if root.resolve() in path.parents and path.is_file() else None
 
 
+def stripped(record: Path, relative: str) -> bool:
+    """True for an absent file inside the record: archived evidence the import removed."""
+    if not relative:
+        return False
+    path = (record / str(relative)).resolve()
+    return record.resolve() in path.parents and not path.exists()
+
+
 def substantive(fix: Path, relative: str) -> bool:
     path = local_file(fix, relative)
     if not path or not path.read_text().strip():
@@ -117,7 +130,7 @@ def substantive(fix: Path, relative: str) -> bool:
     return not template.is_file() or path.read_bytes() != template.read_bytes()
 
 
-def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
+def check_errors(root: Path, fix: Path, status: dict, key: str, *, archived=False) -> list[str]:
     check = status.get('checks', {}).get(key, {})
     problems = []
     result = check.get('result')
@@ -142,14 +155,16 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
         incident = status.get('checks', {}).get('incident', {})
         if not incident.get('sha256') or check.get('incident_sha256') != incident.get('sha256'):
             problems.append('p3: incident evidence changed or was not reviewed; re-sign P3')
-    problems += evidence_scope.validate(root, fix, check)
+    problems += evidence_scope.validate(root, fix, check, archived=archived)
     if check.get('reuse_approval') and check['reuse_approval'].get('by') != roles.get('skeptic'):
         problems.append('reuse approval signer differs from current independent reviewer')
     expected = source_for(status, key)
     if not expected or check.get('source_sha') != expected:
         problems.append(f'{key}: evidence source_sha differs from current {expected}')
     path = local_file(fix, check.get('artifact', ''))
-    if not path or not substantive(fix, check.get('artifact', '')):
+    if archived and stripped(fix, check.get('artifact', '')):
+        pass  # removed at import; the source archive retains it
+    elif not path or not substantive(fix, check.get('artifact', '')):
         problems.append(f'{key}: missing or unchanged template artifact')
     elif check.get('sha256') != digest(path):
         problems.append(f'{key}: artifact changed after attestation')
@@ -165,7 +180,7 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
         deployment = status.get('deployment', {})
         if check.get('deployment_digest') != deployment.get('digest') or not deployment.get('digest'):
             problems.append(f'{key}: evidence deployment digest differs')
-    if key == 'preflight' and result == 'PASS' and path and path.is_file():
+    if key == 'preflight' and result == 'PASS' and path and path.is_file() and not archived:
         try:
             import preflight
             preflight.validate_receipt(root.parent, path, status['implementation']['base_sha'], expected,
@@ -178,14 +193,16 @@ def check_errors(root: Path, fix: Path, status: dict, key: str) -> list[str]:
     manifest = yaml.safe_load(manifest_path.read_text()) if manifest_path.is_file() else {}
     indexed = any(a.get('path') == check.get('artifact') and a.get('sha256') == check.get('sha256')
                   for a in (manifest or {}).get('artifacts', []))
-    if not indexed:
+    if not indexed and not (archived and not manifest_path.is_file()):
         problems.append(f'{key}: artifact not indexed in evidence/manifest.yaml')
     return problems
 
 
-def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizing=False) -> list[str]:
+def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizing=False,
+                  archived=False) -> list[str]:
     if target not in STAGES or target == 'TRIAGED':
         return []
+    check = lambda key: check_errors(root, fix, status, key, archived=archived)
     rank = STAGES.index(target)
     reached = lambda stage: rank >= STAGES.index(stage)
     missing = []
@@ -204,17 +221,21 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
             continue
         if reached(stage) and not (status.get('profile') == 'legacy-migrated' and stage in {'DESIGNING', 'CRITIQUED'}):
             for path in paths:
+                if archived and stripped(fix, path):
+                    continue
                 if not substantive(fix, path):
                     missing.append(f'{path}: missing or unchanged template')
     if reached('CRITIQUED') and status.get('profile') != 'legacy-migrated' and not lead_worker(status):
         blind = status.get('blind_derivation', {})
         path = local_file(fix, '02A-blind-derivation.md')
-        if (blind.get('status') != 'sealed' or not path or blind.get('sha256') != digest(path)
+        if (blind.get('status') != 'sealed'
+                or (not path and not (archived and stripped(fix, '02A-blind-derivation.md')))
+                or (path and blind.get('sha256') != digest(path))
                 or blind.get('by') != roles.get('skeptic') or blind.get('source_sha') != baseline.get('code_sha')):
             missing.append('blind derivation: seal by skeptic at current baseline required')
-        missing += check_errors(root, fix, status, 'critique')
+        missing += check('critique')
     if reached('AGREED'):
-        missing += check_errors(root, fix, status, 'decision')
+        missing += check('decision')
         if status.get('change_class') not in {'A', 'B'}:
             missing.append('change_class must be A or B')
         required = status.get('verification', {}).get('required', [])
@@ -235,27 +256,27 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
             if not impl.get(field):
                 missing.append(f'implementation.{field}')
         if impl.get('base_sha') != baseline.get('code_sha'):
-            missing += check_errors(root, fix, status, 'base_review')
-        missing += check_errors(root, fix, status, 'implementation')
-        if impl.get('base_sha') and impl.get('head_sha'):
+            missing += check('base_review')
+        missing += check('implementation')
+        if impl.get('base_sha') and impl.get('head_sha') and not archived:
             # Byte-exact against the pinned pair; only index-header abbreviation is portable.
             error = patches.verify(root.parent, local_file(fix, '04-diff.patch'), impl['base_sha'], impl['head_sha'], impl.get('diff_format'))
             if error:
                 missing.append(error)
     if reached('OFFLINE_VERIFIED'):
         if status.get('delivery_version') == 1:
-            missing += check_errors(root, fix, status, 'preflight')
+            missing += check('preflight')
         for key in ('red', 'l0', 'l1', 'l2', 'positive_control'):
-            missing += check_errors(root, fix, status, key)
+            missing += check(key)
     if reached('DIFF_REVIEW_PASSED'):
-        missing += check_errors(root, fix, status, 'incident')
-        missing += check_errors(root, fix, status, 'p3')
+        missing += check('incident')
+        missing += check('p3')
     if reached('IN_PR'):
         pr = status.get('pull_request', {})
         if not pr.get('url'):
             missing.append('pull_request.url')
         if pr.get('reviewed_head') != status.get('implementation', {}).get('head_sha'):
-            missing += check_errors(root, fix, status, 'patch_equivalence')
+            missing += check('patch_equivalence')
     if reached('MERGED'):
         pr = status.get('pull_request', {})
         if not pr.get('merge_sha') or pr.get('checks') != 'PASS':
@@ -272,15 +293,16 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
         for field in ('image', 'digest', 'git_sha', 'rolled_out_at'):
             if not dep.get(field):
                 missing.append(f'deployment.{field}')
-        if dep.get('git_sha') and status.get('pull_request', {}).get('merge_sha'):
+        if dep.get('git_sha') and status.get('pull_request', {}).get('merge_sha') and not archived:
             result = subprocess.run(['git', '-C', str(root.parent), 'merge-base', '--is-ancestor',
                                      str(status['pull_request']['merge_sha']), str(dep['git_sha'])], capture_output=True)
             if result.returncode:
                 missing.append('deployed source does not contain recorded merge')
     if reached('LIVE_VERIFIED'):
-        missing += attacks.gate_errors(root, fix)
+        if not archived:
+            missing += attacks.gate_errors(root, fix)
         for key in ('l3', 'l4'):
-            missing += check_errors(root, fix, status, key)
+            missing += check(key)
         if roles.get('live_verifier') == roles.get('implementer'):
             missing.append('live verifier must differ from implementer')
     if reached('SYNCHRONIZED') and not finalizing:
@@ -288,16 +310,16 @@ def prerequisites(root: Path, fix: Path, status: dict, target: str, *, finalizin
         for key in ('issue_entries', 'master_register', 'anatomy_release', 'permanent_tests'):
             if not str(sync.get(key, '')).startswith('PASS:'):
                 missing.append(f'synchronization.{key}: needs PASS:<artifact>')
-            elif not local_file(root, str(sync[key])[5:]):
+            elif not local_file(root, str(sync[key])[5:]) and not (archived and stripped(root, str(sync[key])[5:])):
                 missing.append(f'synchronization.{key}: referenced artifact missing')
         import yaml
         current = yaml.safe_load((root / 'releases/CURRENT.yaml').read_text())
         pin = yaml.safe_load((root / 'anatomy/PIN.yaml').read_text())
         dep_sha = status.get('deployment', {}).get('git_sha')
-        if not (current.get('anatomy', {}).get('current_for_deployed_release')
+        if not archived and not (current.get('anatomy', {}).get('current_for_deployed_release')
                 and current.get('deployed', {}).get('embedded_git_sha') == dep_sha
                 and pin.get('anatomy', {}).get('source_commit') == dep_sha):
             missing.append('release/anatomy pins are not synchronized to deployment')
     if reached('CLOSED'):
-        missing += check_errors(root, fix, status, 'final')
+        missing += check('final')
     return list(dict.fromkeys(missing))

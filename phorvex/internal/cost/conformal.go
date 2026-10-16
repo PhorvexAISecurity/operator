@@ -12,7 +12,8 @@ import (
 )
 
 // conformal.go provides the DISTRIBUTIONALLY-ROBUST upper bound C_hi used by the HARD
-// feasibility/SLO gate (METHOD-DECISION cost graft, CDR-Cost). For GPU rotations,
+// feasibility/SLO gate (docs/archive/phorvex/METHOD-DECISION.md cost graft, CDR-Cost).
+// For GPU rotations,
 // C_hi = E[C] + max(generic conformal-residual quantile, explicitly configured GPU
 // envelope minimum). Feasibility uses C_hi; the objective uses E[C].
 

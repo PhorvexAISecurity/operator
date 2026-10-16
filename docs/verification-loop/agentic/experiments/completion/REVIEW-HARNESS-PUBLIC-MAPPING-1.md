@@ -1,3 +1,0 @@
-Accepted public runner18372560 and gate666efbc: both are byte-identical to the independently reviewed private candidate. Public path adaptations preserve the assertions, and nine affected portable tests passed. The public native fixture is explicitly a nonsecret projection: every retained metadata and receipt value matches the original, including omitted false authority. The failed B transcript retains exact excerpt bytes.
-
-This acceptance grants no runtime authority and does not change any physical outcome or criterion. README needs a separate doc-only current review/continuation link and suite-count correction before its replacement pin.

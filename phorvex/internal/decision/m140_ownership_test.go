@@ -312,7 +312,7 @@ func TestM140_LastOwnerRemovalStillRejectsLateFeedback(t *testing.T) {
 }
 
 // The offline arm of the same distinction: a producer that never registers liveness keeps
-// working exactly as before, so the guard cannot break ablation/benchmark/calib-soak.
+// working exactly as before, so the guard cannot break ablation/benchmark.
 func TestM140_UntrackedOfflineProducerStillCreatesBuckets(t *testing.T) {
 	e := NewCoverageEngine()
 	offline := covPolicy(2)

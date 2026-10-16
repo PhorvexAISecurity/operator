@@ -12,8 +12,8 @@ import (
 
 // rls.go holds the C_flow model: C_flow is nonlinear in the raw pod state but LINEAR in
 // engineered features phi(view), so Recursive Least Squares CAN give a closed-form online fit
-// from observed rotations (METHOD-DECISION cost winner, RC-DD). The feature vector and the RLS
-// recursion live here and the per-tick cost is a dot product.
+// from observed rotations (docs/archive/phorvex/METHOD-DECISION.md cost winner, RC-DD). The
+// feature vector and the RLS recursion live here and the per-tick cost is a dot product.
 //
 // The live runner feeds this recursion only after a rotation's replacement reaches
 // PodReady, keeping action emission latency out of the learned disruption label.

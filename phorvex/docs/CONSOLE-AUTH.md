@@ -166,9 +166,7 @@ A route's declared scope has to match what its handler actually does, not what t
   runs on. An omitted target cannot slip through as "unscoped".
 - **Indivisible effects need the wildcard.** `POST /api/live/clear` truncates one audit file
   holding every tenant's decisions. There is no way to clear only one tenant's records, so it
-  requires `"tenants": ["*"]` — the operator role alone is not enough. The same applies to the
-  global red-team controls (`/api/redteam/decision`, `/run`, `/continuous`), whose state belongs
-  to no tenant.
+  requires `"tenants": ["*"]` — the operator role alone is not enough.
 - **A tenant grant is not a cluster grant.** Every control that drives this console's own cluster
   (`/api/policy/edit`, the attack and fire-scenario triggers, the three-arm runner, the apply-fix
   write path) declares that cluster explicitly, so an identity granted a namespace but no target
@@ -218,10 +216,10 @@ A route's declared scope has to match what its handler actually does, not what t
 |---|---|---|
 | Shared product metadata | Any read grant | `/api/catalog`, `/api/suites`, `/api/threat-matrix`, `/api/handlers`, `/api/version`, `/api/session` |
 | Tenant-attributable data | Filtered to the granted tenants | `/api/cost`, `/api/cost-timeseries`, `/api/uptime`, `/api/live`, `/api/live/history`, `/api/owner/*`, `/api/attack-results`, `/api/attack-monitoring`, `/api/availability-arms`, `/api/workloads`, `/api/cluster`, `/api/metrics`, `/api/targets`, the run routes |
-| Private evidence corpus | Requires an explicit cross-tenant grant | `/api/effectiveness`, `/api/frontier`, `/api/benchmarks`, `/api/posture`, `/api/matrix`, `/api/ai-surface`, `/api/reports`, `/api/rawlog`, `/api/benchmark-sim`, `/api/redteam/*`, `/redteam` |
+| Private evidence corpus | Requires an explicit cross-tenant grant | `/api/effectiveness`, `/api/frontier`, `/api/benchmarks`, `/api/posture`, `/api/matrix`, `/api/ai-surface`, `/api/reports`, `/api/rawlog`, `/api/benchmark-sim` |
 
 The third class is the vendor-side moat: benchmark corpora, retained evidence reports and their
-raw logs, and red-team artifacts. None of it is attributable to a tenant, so it cannot be filtered
+raw logs. None of it is attributable to a tenant, so it cannot be filtered
 down to one — an identity limited to some tenants gets none of it, and a vendor-side identity is
 granted `"tenants": ["*"]` and gets all of it. **Consequence for grants:** a customer-facing
 operator scoped to specific tenants will not see the benchmark/evidence tabs. That is intended; if

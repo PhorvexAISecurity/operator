@@ -55,4 +55,4 @@ revoke with per-Pod readback and a protected journal). File by file:
    startup preflight passes, then enable the action.
 
 The enforcement mechanism this actuator drives (`deploy/apps/crm/app.py` deny-guard)
-is already live and proven cross-Pod (see `test_coverage/evidence/`).
+is already live and proven cross-Pod (see `test_coverage/evidence/` in PhorvexSecurity/operator@65af1c99).

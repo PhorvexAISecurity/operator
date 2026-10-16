@@ -4,9 +4,8 @@
 changes use their separately recorded scope.
 
 Run `doctor`, select/create the fix and reuse the assigned peers. New fixes use
-`fix_loop: lead_worker`: assign proposer, skeptic, coordinator and live_verifier
-to the lead; implementer to the worker. Keep code/records in the issue worktree
-(`WORKTREES.md`). Read `brief <fix> --agent <id>`.
+`fix_loop: lead_worker` roles from `AGENTS.md`. Keep code/records in the issue
+worktree (`WORKTREES.md`). Read `brief <fix> --agent <id>`.
 
 The lead investigates, using authorized live observations when useful, and signs
 one plan in `03-decision.md`. Transition DESIGNING → AGREED and instruct the worker

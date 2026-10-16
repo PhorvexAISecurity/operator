@@ -8,7 +8,7 @@ import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-HELM = os.environ.get("HELM", "/opt/phorvex-tools/helm")
+HELM = os.environ.get("HELM", "helm")
 BASE = [HELM, "template", "calibration-check", str(ROOT / "phorvex/charts/phorvex"),
         "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",

@@ -12,7 +12,9 @@ import yaml
 
 CHART = Path(__file__).resolve().parents[1] / "phorvex/charts/phorvex"
 STACK = Path(__file__).resolve().parents[1] / "deploy/helm/phorvex-stack"
-CPU_PACKAGE = Path(__file__).resolve().parents[1] / "workflow/campaigns/2026-09-23-catalogue-coverage/deployment/existing22-cpu-166"
+# Byte-identical copy of the reviewed grant overlay from the archived campaign package
+# operator@65af1c99:workflow/campaigns/2026-09-23-catalogue-coverage/deployment/existing22-cpu-166/.
+CPU_PACKAGE = Path(__file__).resolve().parent / "fixtures/catalogue-existing22-cpu-166"
 HELM = os.environ.get("HELM_BIN", "helm")
 BASE = [HELM, "template", "phorvex", str(CHART), "-n", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",

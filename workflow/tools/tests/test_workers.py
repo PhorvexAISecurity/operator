@@ -1647,7 +1647,10 @@ class StateIntegrityTests(RunnerTestCase):
 
 class PrivacyTests(RunnerTestCase):
     def test_runtime_lives_outside_tracked_files_and_stays_private(self):
-        self.assertIn(".git", DEFAULT_RUNTIME.parts, "runtime must sit under the Git common directory")
+        # Bare repositories with linked worktrees name the common directory freely (e.g. repo.git).
+        common = subprocess.run(["git", "-C", str(COORD.parent), "rev-parse", "--path-format=absolute",
+                                 "--git-common-dir"], capture_output=True, text=True, check=True).stdout.strip()
+        self.assertTrue(DEFAULT_RUNTIME.is_relative_to(common), "runtime must sit under the Git common directory")
         self.assertEqual(DEFAULT_RUNTIME.name, "workers")
         self.register()
         self.enqueue()

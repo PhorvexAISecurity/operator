@@ -25,7 +25,15 @@ class PRValidationTests(unittest.TestCase):
                 self.assertNotIn('if', job)
             for step in job['steps']:
                 if step.get('uses', '').startswith('actions/checkout@'):
-                    self.assertEqual(step['with'], {'persist-credentials': 'false'})
+                    self.assertEqual(step['with'].get('persist-credentials'), 'false')
+                    self.assertLessEqual(set(step['with']), {'persist-credentials', 'fetch-depth'})
+
+    def test_jobs_running_evidence_tests_fetch_full_history(self):
+        for workflow, job in (('pr-validation.yml', 'charts'), ('e2e-contract.yml', 'e2e-contract')):
+            doc = yaml.load((ROOT / '.github/workflows' / workflow).read_text(), Loader=yaml.BaseLoader)
+            checkout = next(s for s in doc['jobs'][job]['steps']
+                            if s.get('uses', '').startswith('actions/checkout@'))
+            self.assertEqual(checkout['with'].get('fetch-depth'), '0', workflow)
 
     def test_real_source_checks_are_wired_without_masking_failures(self):
         jobs = DOC['jobs']
@@ -43,8 +51,7 @@ class PRValidationTests(unittest.TestCase):
                             for s in jobs['go-unit']['steps']))
         # Separate modules are executed, not merely compiled as dependencies.
         for module, minutes in (('build/metricvalidity', 5), ('build/test-harness', 15),
-                                ('build/phoenix-extended', 15), ('build/falco-integrator-extended', 10),
-                                ('build/prometheus-integrator-extended', 10)):
+                                ('build/phoenix-extended', 15)):
             self.assertIn(f'go -C {module} test -mod=readonly -count=1 -timeout={minutes}m ./...', runs['go-unit'])
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])

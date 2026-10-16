@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Rendered opt-in MCP baseline authority and disabled defaults."""
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-HELM = "/opt/phorvex-tools/helm"
+HELM = os.environ.get("HELM", "helm")
 BASE = [HELM, "template", "mcp-check", str(ROOT / "phorvex/charts/phorvex"),
         "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",

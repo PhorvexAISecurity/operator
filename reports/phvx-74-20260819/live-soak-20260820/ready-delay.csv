@@ -1,1 +1,0 @@
-evidence_source,id,tenant,namespace,pod,action,started_at,recorded_at,ready_at,elapsed_seconds,outcome,invalid_reason,reference_at_start_seconds,censor_deadline,normalized

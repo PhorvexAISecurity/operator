@@ -9,7 +9,7 @@ Read the relevant runbook and target record. From repo root: `python3 workflow/t
 | File/update/defer an issue | `operations/ISSUE.md` | target entry and dedup candidates |
 | Reconcile main or deployment | `operations/SYNC.md` | `sync-main --check` or `release-sync --check` |
 | Run cluster tests or live experiments | `operations/CAMPAIGN.md` | `attacks preflight`, `new-campaign`, selected test plan |
-| Design workload red-team cases or promote catalogue items to Live | `operations/LIVE-CATALOGUE.md` | source-pinned successor handoff, original 22-item map, current workload inventory |
+| Design or promote live catalogue cases | `operations/LIVE-CATALOGUE.md` | source-pinned handoff, original 22-item map, workload inventory |
 | Regenerate master issues / system assessment | `operations/ASSESSMENT.md` | `guide assessment --show` |
 | Assess and resolve issues in parallel tiers | `operations/TIERS.md` | pin source/deployment; assess coverage |
 | Inspect state/provenance | `operations/AUDIT.md` | `doctor`, then bounded `brief` |

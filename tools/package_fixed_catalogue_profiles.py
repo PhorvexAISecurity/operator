@@ -16,6 +16,11 @@ from urllib.parse import urlsplit
 
 import yaml
 
+if __package__:
+    from .operator_provenance import local_commit
+else:
+    from operator_provenance import local_commit
+
 SPECS = {
     "mongo": ("config.mongo-exposure-baseline.yaml", "mongoExposure", "mongoExposureFixture", "document-store"),
     "guardrail-static": ("config.guardrail-confidentiality-static.yaml", "guardrailStatic", "guardrailStaticFixture", "vllm"),
@@ -292,15 +297,17 @@ def verified_mongo_166_evidence(root, profile, expected):
          "Mongo .166 reviewed source/build fields differ")
     source = build["releaseParentBuildSource"]
     repo = Path(__file__).resolve().parents[1]
+    release_here, source_here = local_commit(build["releaseCommit"]), local_commit(source)
     git = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%H%n%P%n%s",
-                          build["releaseCommit"]], capture_output=True, text=True, timeout=15)
+                          release_here], capture_output=True, text=True, timeout=15)
     need(git.returncode == 0 and git.stdout.splitlines() ==
-         [build["releaseCommit"], source, "release: v0.4.166 [skip ci]"],
+         [release_here, source_here, "release: v0.4.166 [skip ci]"],
          "Mongo .166 release parent/source is not present in reviewed Git")
-    parser = subprocess.run(["git", "-C", str(repo), "show", source + ":phorvex/internal/console/runs.go"],
+    parser = subprocess.run(["git", "-C", str(repo), "show", source_here + ":phorvex/internal/console/runs.go"],
                             capture_output=True, timeout=15)
     ancestor = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
-                               MONGO_REVIEWED_PARSER_REPAIR, source], capture_output=True, timeout=15)
+                               local_commit(MONGO_REVIEWED_PARSER_REPAIR), source_here],
+                              capture_output=True, timeout=15)
     need(parser.returncode == 0 and digest(parser.stdout) == MONGO_166_RUNS_SHA256 and
          b"validation.IsDNS1123Subdomain(name)" in parser.stdout and ancestor.returncode == 0,
          "Mongo .166 parser repair/source bytes differ")
@@ -496,14 +503,16 @@ def verified_mongo_current_evidence(root, profile, expected):
          review.get("sourceBuildSHA256") == digest(build_raw),
          "Mongo current source/build/reviewer fields differ")
     repo = Path(__file__).resolve().parents[1]
-    git = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%H%n%P%n%s", release],
+    release_here, source_here = local_commit(release), local_commit(source)
+    git = subprocess.run(["git", "-C", str(repo), "show", "-s", "--format=%H%n%P%n%s", release_here],
                          capture_output=True, text=True, timeout=15)
-    parser = subprocess.run(["git", "-C", str(repo), "show", source + ":phorvex/internal/console/runs.go"],
+    parser = subprocess.run(["git", "-C", str(repo), "show", source_here + ":phorvex/internal/console/runs.go"],
                             capture_output=True, timeout=15)
     ancestor = subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
-                               MONGO_REVIEWED_PARSER_REPAIR, source], capture_output=True, timeout=15)
+                               local_commit(MONGO_REVIEWED_PARSER_REPAIR), source_here],
+                              capture_output=True, timeout=15)
     need(git.returncode == 0 and git.stdout.splitlines() ==
-         [release, source, "release: v" + version + " [skip ci]"] and parser.returncode == 0 and
+         [release_here, source_here, "release: v" + version + " [skip ci]"] and parser.returncode == 0 and
          digest(parser.stdout) == MONGO_166_RUNS_SHA256 and ancestor.returncode == 0,
          "Mongo current Git release/source/parser bytes differ")
 
@@ -590,7 +599,7 @@ def verified_mongo_current_evidence(root, profile, expected):
     app = projection.get("stackApplication", {})
     app_revision = app.get("syncRevision", "")
     app_ancestor = (subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor",
-                                   release, app_revision], capture_output=True, timeout=15)
+                                   release_here, local_commit(app_revision)], capture_output=True, timeout=15)
                     if isinstance(app_revision, str) and COMMIT.fullmatch(app_revision) else None)
     need(app_ancestor is not None and app_ancestor.returncode == 0 and
          app.get("syncStatus") == "Synced" and

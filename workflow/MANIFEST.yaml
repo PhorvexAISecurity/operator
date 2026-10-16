@@ -34,6 +34,9 @@ canonical:
   campaigns: campaigns
   coordination: coordination
   schemas: schemas
+  # Records imported from PhorvexSecurity/operator@65af1c99 whose evidence stayed
+  # there; doctor checks them structurally and fails if one changes.
+  archived_records: ARCHIVE.yaml
   verification_levels: verification/LEVELS.md
   acceptance_scenarios: acceptance/SCENARIOS.md
   held_integration: acceptance/HELD_INTEGRATION.md
@@ -66,6 +69,7 @@ rules:
   ambiguous_dedup_requires_human_ruling: true
   source_main_and_observed_deployment_are_separate: true
   unknown_requests_are_read_only: true
+  archived_records_are_immutable: true
 
 legacy_sources:
   copied_from: /home/mehrdad/operator

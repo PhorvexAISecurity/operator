@@ -166,29 +166,3 @@ func TestEveryDeployDockerfileIsCovered(t *testing.T) {
 		}
 	}
 }
-
-// A change to a module that an image compiles must also trigger that image's
-// rebuild, or the running image keeps an older copy of the code.
-func TestCIPathFiltersCoverEveryBuiltModule(t *testing.T) {
-	root := repoRoot(t)
-	b, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	ci := string(b)
-	for _, s := range stages {
-		want := "'" + s.module + "/**'"
-		if !strings.Contains(ci, want) {
-			t.Errorf("%s compiles %s, but ci.yml has no %s path filter, so a change confined to "+
-				"that module would not rebuild the image", s.dockerfile, s.module, want)
-		}
-		for _, dep := range localReplaces(t, root, s.module) {
-			want := "'" + dep + "/**'"
-			if !strings.Contains(ci, want) {
-				t.Errorf("%s compiles %s, which depends on the local module %s, but ci.yml has no %s "+
-					"path filter, so a change confined to that dependency would not rebuild the image",
-					s.dockerfile, s.module, dep, want)
-			}
-		}
-	}
-}

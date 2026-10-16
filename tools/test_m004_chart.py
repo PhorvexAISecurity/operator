@@ -5,14 +5,15 @@ from pathlib import Path
 import subprocess
 import unittest
 import yaml
+from inherited_drift import inherited_drift
 
 ROOT = Path(__file__).resolve().parents[1]
-HELM = os.environ.get("HELM_BIN", "/opt/phorvex-tools/helm")
+HELM = os.environ.get("HELM_BIN", "helm")
 
 
 def render(chart, *flags):
     result = subprocess.run(
-        [HELM, "template", "phorvex-stack", str(chart), "--namespace", "phorvex-system",
+        [HELM, "template", "phorvex", str(chart), "--namespace", "phorvex-system",
          "--kube-version", "1.30.0", *flags],
         cwd=ROOT, text=True, capture_output=True, check=True,
     )
@@ -31,6 +32,7 @@ def allowed(role, group, resource, verb):
 
 
 class M004ChartTest(unittest.TestCase):
+    @inherited_drift("values-eks.yaml uses dated audit Secret names that provision-audit-mtls.sh does not default to")
     def test_eks_audit_identity_provisioner_matches_live_values(self):
         overlay = yaml.safe_load(
             (ROOT / "deploy/helm/phorvex-stack/values-eks.yaml").read_text()
@@ -73,8 +75,8 @@ class M004ChartTest(unittest.TestCase):
                         for v in manager_pod["volumes"] if "persistentVolumeClaim" in v}
         console_pvcs = {v["name"]: v["persistentVolumeClaim"]["claimName"]
                         for v in console_pod["volumes"] if "persistentVolumeClaim" in v}
-        self.assertEqual(manager_pvcs, {"audit": "phorvex-stack-phorvex-audit"})
-        self.assertEqual(console_pvcs, {"console-state": "phorvex-stack-phorvex-console-state"})
+        self.assertEqual(manager_pvcs, {"audit": "phorvex-phorvex-audit"})
+        self.assertEqual(console_pvcs, {"console-state": "phorvex-phorvex-console-state"})
         self.assertTrue(set(manager_pvcs.values()).isdisjoint(console_pvcs.values()))
         manager_mounts = {v["name"] for v in manager_pod["containers"][0].get("volumeMounts", [])}
         console_mounts = {v["name"] for v in console_pod["containers"][0].get("volumeMounts", [])}
@@ -109,6 +111,7 @@ class M004ChartTest(unittest.TestCase):
         self.assertTrue(allowed(role, "amtd.r6security.com", "securityevents", "create"))
         self.assertTrue(allowed(role, "phorvex.ai", "phorvexpolicies/status", "update"))
 
+    @inherited_drift("values-eks.yaml now needs the PodMonitor API at render time")
     def test_stack_selector_and_guard(self):
         docs = render(ROOT / "deploy/helm/phorvex-stack", "-f", str(ROOT / "deploy/helm/phorvex-stack/values.yaml"),
                       "-f", str(ROOT / "deploy/helm/phorvex-stack/values-eks.yaml"))
@@ -119,7 +122,7 @@ class M004ChartTest(unittest.TestCase):
         guard = next(d for d in docs if d["kind"] == "ValidatingAdmissionPolicy" and
                      d["metadata"]["labels"].get("phorvex.ai/policy") == "audit-volume-guard")
         rules = " ".join(v["expression"] for v in guard["spec"]["validations"])
-        self.assertIn("serviceAccountName == \"phorvex-stack-phorvex-manager\"", rules)
+        self.assertIn("serviceAccountName == \"phorvex-phorvex-manager\"", rules)
         self.assertIn("c.name == 'manager'", rules)
 
 

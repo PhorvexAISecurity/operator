@@ -10,6 +10,7 @@ import tempfile
 import unittest
 
 import yaml
+from inherited_drift import inherited_drift
 
 ROOT = Path(__file__).resolve().parents[1]
 CHART = ROOT / "deploy/helm/phorvex-stack"
@@ -74,6 +75,7 @@ def console_projection(docs):
 
 
 class MongoExposureProfileCMChart(unittest.TestCase):
+    @inherited_drift("values-eks.yaml now ships the Mongo profile ConfigMap")
     def test_default_off_and_source_only(self):
         result, docs = render()
         self.assertEqual(result.returncode, 0, result.stderr)

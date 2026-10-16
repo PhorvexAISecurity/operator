@@ -1,0 +1,29 @@
+name: Workflow harness
+on:
+  pull_request:
+    paths: ['workflow/**', 'AGENTS.md', '.github/workflows/workflow-harness.yml']
+  push:
+    branches: [main]
+    paths: ['workflow/**', 'AGENTS.md', '.github/workflows/workflow-harness.yml']
+concurrency:
+  group: >-
+    workflow-harness-${{ github.event_name == 'pull_request'
+      && format('pr-{0}', github.event.pull_request.number)
+      || format('{0}-{1}-{2}', github.event_name, github.ref, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -r workflow/requirements.txt
+      - run: bash workflow/tools/check.sh

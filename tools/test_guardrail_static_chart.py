@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Fixed guardrail comparison chart authority remains opt-in and read-only."""
+import os
 from pathlib import Path
 import subprocess
 import unittest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = ["/opt/phorvex-tools/helm", "template", "guardrail-static-check", str(ROOT / "phorvex/charts/phorvex"),
+BASE = [os.environ.get("HELM", "helm"), "template", "guardrail-static-check", str(ROOT / "phorvex/charts/phorvex"),
         "--namespace", "phorvex-system", "--set", "phorvex.console.enabled=true",
         "--set", "phorvex.audit.enabled=true",
         "--set", "phorvex.console.auditTransport.serverSecretName=audit-server",

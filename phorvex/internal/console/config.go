@@ -17,7 +17,7 @@ import (
 // Config locates the Phorvex tree the console reads (read-only) and triggers.
 type Config struct {
 	Root       string // the Phorvex root (holds phorvex/ + build/test-harness/)
-	PhorvexBin string // phorvex.exe (for --scan/--ablation/--native-demo/--audit-json)
+	PhorvexBin string // phorvex.exe (for --scan/--ablation/--audit-json)
 	HarnessBin string // harness.exe (for -config <yaml>)
 	HarnessDir string // build/test-harness (cwd for harness runs)
 	StateDir   string // writable console-owned state; never the manager decision audit

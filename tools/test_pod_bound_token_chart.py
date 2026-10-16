@@ -9,7 +9,7 @@ import yaml
 
 
 CHART = Path(__file__).resolve().parents[1] / "phorvex/charts/phorvex"
-HELM = os.environ.get("HELM", "/home/mehrdad/.local/share/phorvex-tools/helm/3.16.4/helm")
+HELM = os.environ.get("HELM", "helm")
 LEDGER = "phorvex-quarantine-capacity-" + "a" * 40
 BASE = [HELM, "template", "phorvex", str(CHART), "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",

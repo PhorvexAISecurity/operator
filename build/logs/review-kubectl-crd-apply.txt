@@ -1,2 +1,0 @@
-﻿customresourcedefinition.apiextensions.k8s.io/adaptivemovingtargetdefenses.amtd.r6security.com created
-customresourcedefinition.apiextensions.k8s.io/securityevents.amtd.r6security.com created

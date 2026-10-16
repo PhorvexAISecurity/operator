@@ -83,8 +83,8 @@ the value an approval acts on).
   is refused; a resubmission gets a new generation and needs a fresh approval. Two console
   replicas do not coordinate; a multi-replica persistent approval service is a separate design.
 - **A successful callback is the applier's acceptance by its own contract**, not proof of what the
-  cluster holds. The console does not claim an atomic or exactly-once physical cluster write; the
-  CRD applier's own verify/rollback behaviour is documented with it.
+  cluster holds. The console does not claim an atomic or exactly-once physical cluster write; an
+  injected applier documents its own verify/rollback behaviour.
 - The stale-base check compares the whole data content of the recomputed candidate with the
   approved snapshot; it does not make the base policy and the write a single transaction.
 - The shipped console wires **no** applier: every approval answers `applier-unavailable` until a

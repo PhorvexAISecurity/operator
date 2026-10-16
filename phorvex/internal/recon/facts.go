@@ -10,7 +10,7 @@
 //
 // A FACT is a (scope, variable, asset) tuple the attacker has learned or is about to learn,
 // crisply tied to a measured exposure variable so the per-dollar number is
-// falsifiable (METHOD-DECISION risk #a). Each fact carries a weight =
+// falsifiable (docs/archive/phorvex/METHOD-DECISION.md risk #a). Each fact carries a weight =
 // value x P(hold) x stage-urgency (x blast for lateral edges).
 package recon
 

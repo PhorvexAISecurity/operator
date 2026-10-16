@@ -9,7 +9,7 @@
  * substrate, the FROZEN per-tick λ (carried on every Decision as d.Lambda), and a prov() re-created
  * byte-for-byte from coverage.go:152-167 — so the only difference measured is the SELECTION RULE.
  *
- * Finding (P-OPTIMIZE-RATIO-DECISION.md): because recon.Fact.Key prefixes every selectable cover
+ * Finding (docs/archive/phorvex/P-OPTIMIZE-RATIO-DECISION.md): because recon.Fact.Key prefixes every selectable cover
  * key with its scope and owning block, distinct blocks have DISJOINT cover universes, the objective is
  * MODULAR, and greedy == exact (ratio 1.000). This file turns that into a reproducible measured fact.
  */

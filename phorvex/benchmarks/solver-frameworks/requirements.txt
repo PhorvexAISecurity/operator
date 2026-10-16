@@ -1,4 +1,0 @@
-# Pinned versions used by the shared PuLP/Pyomo/OR-Tools benchmark environment.
-pulp==2.7.0
-pyomo==6.9.5
-ortools==9.14.6206

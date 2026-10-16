@@ -202,6 +202,19 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionCRMRefundRevoke && e.Accepted {
+				if ok || !strings.HasPrefix(why, "crm-refund-revoke:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reader or exact CRM target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
+			// The native route fails closed until a connector attests remote migration.
+			if e.Action == model.ActionKVMigrateInvalidate && e.Accepted && !ok {
+				if why != ReasonKVMigrationConnectorUnavailable {
+					t.Fatalf("%s/%s: an unavailable KV connector must refuse with its reason, got %q", backend, e.Action, why)
+				}
+				continue
+			}
 			// mig-rebind on a native route has a runtime prerequisite the static table
 			// records separately; everywhere else acceptance and support must agree.
 			if e.Prerequisite != "" && !ok {

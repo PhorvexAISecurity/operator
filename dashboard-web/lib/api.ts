@@ -366,18 +366,9 @@ export const api = {
   matrix: (lens: Lens, signal?: AbortSignal) => get<MatrixResult>("/api/matrix", lens, signal),
   aiSurface: (lens: Lens, signal?: AbortSignal) => get<AISurface>("/api/ai-surface", lens, signal),
   metrics: (lens: Lens, signal?: AbortSignal) => get<MetricsResult>("/api/metrics", lens, signal),
-  // Red-team READ endpoints (previously backend-only; now wired). run/continuous/live trigger compute /
-  // need a real cluster — surfaced as [PENDING] actions, not auto-run.
-  redteamFindings: (lens: Lens, signal?: AbortSignal) => get<{ findings: RTFinding[] }>("/api/redteam/findings", lens, signal),
-  redteamGates: (lens: Lens) => get<{ gates: RTGate[]; allPass: boolean; ranAt: string }>("/api/redteam/gates", lens),
-  redteamCampaigns: (lens: Lens, signal?: AbortSignal) => get<{ campaigns: RTCampaign[] }>("/api/redteam/campaigns", lens, signal),
   // clearLive empties the live decision-audit the SSE replays (operator-only write).
   clearLive: (lens: Lens, context = "") => post<{ cleared: boolean; note?: string }>(`/api/live/clear?${new URLSearchParams({ context })}`, {}, lens),
 };
-export interface RTFinding { id: string; title: string; product: string; category: string; source: string; reasoning: string; cycle: string; fix: string; fixFile: string; status?: string; applyNote?: string }
-export interface RTGate { label: string; pass: boolean; out: string }
-export interface RTCampaignArm { arm: string; disruption: number; defensiveActions: number; n: number }
-export interface RTCampaign { scenario: string; product: string; arms: RTCampaignArm[] }
 export interface MatrixCell { scenario: string; arm: string; disruption: number; n: number }
 export interface LearnArm { arm: string; mean: number; firstHalf: number; secondHalf: number; n: number }
 export interface MatrixResult { source: string; arms: string[]; scenarios: string[]; cells: MatrixCell[]; fpRows: number; fpViolations: number; fpRate: number; learnability: LearnArm[]; learnScenario: string; note: string }

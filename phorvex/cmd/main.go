@@ -139,8 +139,6 @@ func main() {
 		scan                             bool
 		scanNS                           string
 		kubeContext                      string
-		nativeDemo                       bool
-		nativeDemoNS                     string
 		auditMaxBytes                    int64
 		auditMaxBackups                  int
 		gpuEnvelopeMax                   float64
@@ -192,8 +190,6 @@ func main() {
 		mathLabCaptureMaxBytes           int64
 		mathLabMaxSnapshotBytes          int
 	)
-	flag.BoolVar(&nativeDemo, "native-demo", false, "One-shot (P-ACTUATOR): drive the native actuator's full action set live against a demo namespace, verify cluster state + safety, print a table, then exit.")
-	flag.StringVar(&nativeDemoNS, "native-demo-namespace", "phorvex-actuator-demo", "[native-demo] namespace for the live actuation proof.")
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
 	flag.StringVar(&kubeContext, "context", "", "[scan] kubeconfig context to scan (empty = current-context; the console derives this from your kubeconfig, never hardcoded).")
@@ -356,7 +352,7 @@ func main() {
 	}
 	// [M-21 R1-1] Resolve PHORVEX_ACTUATOR HERE: after flag parsing, before ANY entrypoint
 	// below can dispatch. Every branch that follows — epss-feed, integration-emit, ablation,
-	// native-demo, scan and the controller — is an action entrypoint, and several of them
+	// scan and the controller — is an action entrypoint, and several of them
 	// construct an actuator directly or reach the cluster without going through the runner's
 	// checked constructor. Validating only inside that constructor left those paths able to
 	// run, and mutate, on a selector that names no backend. One resolution, at the top,
@@ -366,8 +362,8 @@ func main() {
 		setupLog.Error(backendErr, "invalid actuator configuration; refusing to run")
 		os.Exit(2)
 	}
-	// Logged HERE, not only where an actuator is constructed: --integration-emit and
-	// --native-demo drive a fixed backend and build no runner, so this is the only point
+	// Logged HERE, not only where an actuator is constructed: --integration-emit drives a
+	// fixed backend and builds no runner, so this is the only point
 	// at which every entrypoint reports what was configured and where it came from.
 	setupLog.Info("actuator configuration resolved",
 		"actuator", string(backend.Backend), "source", backend.Origin())
@@ -433,14 +429,6 @@ func main() {
 	if ablation {
 		if err := runAblation(ablationNS, ablationSelector, ablationBudget, ablationSeeds, backend); err != nil {
 			setupLog.Error(err, "ablation failed")
-			os.Exit(1)
-		}
-		return
-	}
-
-	if nativeDemo {
-		if err := runNativeActuatorDemo(nativeDemoNS, operatorNS); err != nil {
-			setupLog.Error(err, "native-demo failed")
 			os.Exit(1)
 		}
 		return

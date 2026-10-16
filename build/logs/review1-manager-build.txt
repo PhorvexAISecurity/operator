@@ -1,3 +1,0 @@
-﻿=== go build -o bin\manager.exe .\cmd ===
-
-MANAGER_BUILD_EXIT=0

@@ -1,6 +1,0 @@
-case_id,synthetic,stack,stage,substep,scheduling_state,work_state,accepted,required,completion_percent,outcome,evidence_level,current_validation,closure,last_evidence_at
-DEMO-ENGINEERING,True,synthetic-stack,SE_ENGINEERING,Await synthetic deployment,ACTIVE,BLOCKED,11,24,45.8,PENDING,NONE,UNKNOWN,OPEN,
-DEMO-FULL,True,synthetic-stack,S10_PUBLISH,Synthetic scoped report complete,TERMINAL,DONE,18,18,100.0,DEFENDED,INDEPENDENTLY_VERIFIED,CURRENT,FULL_FULL,2026-10-13T00:00:00+00:00
-DEMO-NEGATIVE,True,synthetic-stack,S7_MEASURE_REVIEW,Synthetic capability-removal gate failed,TERMINAL,DONE,7,18,38.9,NOT_DEFENDED,INDEPENDENTLY_VERIFIED,CURRENT,CLOSED_NEGATIVE,2026-10-13T00:00:00+00:00
-DEMO-PENDING,True,synthetic-stack,S1_SCAN_SELECT,Bind reviewed entry and observed target,PARKED,BLOCKED,0,18,0.0,PENDING,NONE,UNKNOWN,OPEN,
-DEMO-STALE,True,synthetic-stack,S3_TWIN_ADMIT,Blocked on synthetic readmission and fresh dependency reviews,PARKED,BLOCKED,2,18,11.1,DEFENDED,INDEPENDENTLY_VERIFIED,STALE,OPEN,2026-10-13T00:00:00+00:00

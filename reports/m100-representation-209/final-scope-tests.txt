@@ -1,3 +1,0 @@
-ok  	github.com/phorvex/phorvex/internal/representation	0.201s
-ok  	github.com/phorvex/phorvex/internal/runner	0.452s
-ok  	github.com/phorvex/phorvex/internal/console	0.048s

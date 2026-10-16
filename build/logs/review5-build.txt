@@ -1,4 +1,0 @@
-﻿=== go build ===
-build exit=0
-=== go vet ===
-vet exit=0

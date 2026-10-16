@@ -74,7 +74,7 @@ ledger; it does not resolve it by rank alone.
    | `P-THREAT-POSTURE-DECISION.md` | 2026-08-12 |
    | `P-CONTEXT-DECISION.md` | 2026-08-12 |
    | `P-ACTUATOR-SET-COMPLETENESS.md` | 2026-09-19 |
-   | `PX_Reports_V1/coversets/COVERSETS-DECISION.md` | 2026-08-16 |
+   | `docs/archive/coversets/COVERSETS-DECISION.md` | 2026-08-16 |
 
    Several are partly stale; see §8.
 4. The Brain baseline (§2).

@@ -27,6 +27,10 @@ phorvex/bin/console-audit.jsonl
 .DS_Store
 Thumbs.db
 *.log
+*.exe~
+*.tsbuildinfo
 
 # Retained workflow proof is versioned; runtime logs elsewhere remain ignored.
 !workflow/fixes/**/evidence/**/*.log
+# Recorded protocol replies used as console test fixtures.
+!phorvex/internal/console/testdata/**/*.log

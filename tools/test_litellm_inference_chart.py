@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from inherited_drift import inherited_drift
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,7 @@ class LiteLLMInferenceChart(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("requires console.enabled", result.stderr)
 
+    @inherited_drift("values-eks.yaml enables mcpVoiceModel, which needs the inference this test disables")
     def test_umbrella_eks_activates_only_reviewed_inference_alias(self):
         chart = ROOT / "deploy/helm/phorvex-stack"
         values = chart / "values-eks.yaml"

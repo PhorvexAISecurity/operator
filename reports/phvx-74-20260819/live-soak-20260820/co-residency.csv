@@ -1,6 +1,0 @@
-evidence_source,node,namespace_count,x_node,pod_count,eligible,candidate_scale,candidate_multiplier,shipped_multiplier
-runtime_cluster_snapshot,ip-172-27-11-103.us-east-2.compute.internal,2,1,6,true,8,1.125,1.25
-runtime_cluster_snapshot,ip-172-27-11-153.us-east-2.compute.internal,8,7,17,true,8,1.875,2
-runtime_cluster_snapshot,ip-172-27-12-134.us-east-2.compute.internal,9,8,26,true,8,2,2
-runtime_cluster_snapshot,ip-172-27-12-137.us-east-2.compute.internal,5,4,13,true,8,1.5,2
-runtime_cluster_snapshot,ip-172-27-12-51.us-east-2.compute.internal,4,3,8,true,8,1.375,1.75
