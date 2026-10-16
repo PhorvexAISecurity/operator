@@ -1,7 +1,11 @@
 package runner
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"net"
@@ -11,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -21,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,6 +52,187 @@ type m034RecordingActuator struct {
 	inner  actuator.Actuator
 	result actuator.Result
 	err    error
+}
+
+// The warm-swap drain is the operation-bound drain v11 protocol (b9f738cb,
+// "Implement operation-bound drain protocol"): one authenticated capability read
+// before the receipt is persisted, one claimed create POST, and GET-only status
+// reads afterwards. The fixture below is an independent producer of that wire
+// contract (phorvex.drain.v1): the capability's source identities are bound to
+// the Pod annotations and to the exact guardrail/vllm container statuses.
+const (
+	m034DrainSchema       = "phorvex.drain.v1"
+	m034DrainProxySource  = "m034-proxy-source"
+	m034DrainEngineSource = "m034-engine-source"
+)
+
+var (
+	m034DrainIncarnation  = strings.Repeat("2", 64)
+	m034DrainEngineBootID = strings.Repeat("3", 32)
+)
+
+type m034DrainCapability struct {
+	Schema                  string `json:"schema"`
+	Capability              string `json:"capability"`
+	PodUID                  string `json:"pod_uid"`
+	LedgerID                string `json:"ledger_id"`
+	ProxyBootID             string `json:"proxy_boot_id"`
+	EngineBootID            string `json:"engine_boot_id"`
+	IncarnationDigest       string `json:"incarnation_digest"`
+	ProxySource             string `json:"proxy_source"`
+	EngineSource            string `json:"engine_source"`
+	EngineMode              string `json:"engine_mode"`
+	VirtualEngineIDs        []int  `json:"virtual_engine_ids"`
+	GenerationHighWater     string `json:"generation_high_water"`
+	NextOperationGeneration string `json:"next_operation_generation,omitempty"`
+	Admission               string `json:"admission"`
+}
+
+type m034DrainOwner struct {
+	Tenant       string `json:"tenant"`
+	NamespaceUID string `json:"namespace_uid"`
+	PolicyUID    string `json:"policy_uid"`
+	PodUID       string `json:"pod_uid"`
+	ServiceUID   string `json:"service_uid"`
+}
+
+type m034DrainCreate struct {
+	Schema                    string          `json:"schema"`
+	OperationID               string          `json:"operation_id"`
+	OperationGeneration       string          `json:"operation_generation"`
+	Attempt                   int             `json:"attempt"`
+	Owner                     m034DrainOwner  `json:"owner"`
+	ExpectedIncarnationDigest string          `json:"expected_incarnation_digest"`
+	Deadline                  string          `json:"deadline"`
+	Mode                      string          `json:"mode"`
+	Supersedes                json.RawMessage `json:"supersedes,omitempty"`
+}
+
+type m034DrainQueues struct {
+	Waiting []string `json:"waiting"`
+	Running []string `json:"running"`
+	Swapped []string `json:"swapped"`
+	Cached  []string `json:"cached"`
+}
+
+type m034DrainObservation struct {
+	Nonce    string                     `json:"nonce"`
+	Sequence string                     `json:"sequence"`
+	Queues   map[string]m034DrainQueues `json:"queues"`
+	Hash     string                     `json:"hash"`
+}
+
+type m034DrainStatus struct {
+	Schema                    string                     `json:"schema"`
+	OperationID               string                     `json:"operation_id"`
+	OperationGeneration       string                     `json:"operation_generation"`
+	Attempt                   int                        `json:"attempt"`
+	OwnerDigest               string                     `json:"owner_digest"`
+	BackendIncarnationDigest  string                     `json:"backend_incarnation_digest"`
+	Revision                  string                     `json:"revision"`
+	State                     string                     `json:"state"`
+	Admission                 string                     `json:"admission"`
+	AdmissionGeneration       string                     `json:"admission_generation"`
+	EngineBootID              string                     `json:"engine_boot_id"`
+	VirtualEngineIDs          []int                      `json:"virtual_engine_ids"`
+	EngineSnapshot            map[string]m034DrainQueues `json:"engine_snapshot"`
+	TerminalDispositions      map[string]string          `json:"terminal_dispositions"`
+	ProxySnapshot             map[string]json.RawMessage `json:"proxy_snapshot"`
+	Observations              []m034DrainObservation     `json:"observations"`
+	Deadline                  string                     `json:"deadline"`
+	CancellationGraceDeadline string                     `json:"cancellation_grace_deadline"`
+	TransitionReason          string                     `json:"transition_reason"`
+	CancelBoundaryRevision    string                     `json:"cancel_boundary_revision"`
+	LastTransition            string                     `json:"last_transition"`
+	QueryNonce                *string                    `json:"query_nonce"`
+	ReceiptSHA256             string                     `json:"receipt_sha256"`
+}
+
+// m034DrainDigest is the contract's domain-separated SHA-256 over sorted-key,
+// compact, non-HTML-escaped JSON. Fixture values are ASCII, so the producer's
+// U+2028/U+2029 literal-output rule cannot apply here.
+func m034DrainDigest(domain string, value any) (string, error) {
+	input, err := json.Marshal(value)
+	if err != nil {
+		return "", err
+	}
+	var normalized any
+	decoder := json.NewDecoder(bytes.NewReader(input))
+	decoder.UseNumber()
+	if err := decoder.Decode(&normalized); err != nil {
+		return "", err
+	}
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(normalized); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(append(append([]byte(domain), 0), bytes.TrimSuffix(encoded.Bytes(), []byte{'\n'})...))
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// m034SignDrainStatus binds receipt_sha256 to every other status field.
+func m034SignDrainStatus(status *m034DrainStatus) error {
+	status.ReceiptSHA256 = ""
+	raw, err := json.Marshal(status)
+	if err != nil {
+		return err
+	}
+	var body map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&body); err != nil {
+		return err
+	}
+	delete(body, "receipt_sha256")
+	status.ReceiptSHA256, err = m034DrainDigest("phorvex-drain-status-v1", body)
+	return err
+}
+
+// m034QuiescentDrainStatus is the producer's terminal QUIESCENT response: one
+// owned request aborted, proxy admission closed with nothing remaining, and two
+// fresh zero-queue observations.
+func m034QuiescentDrainStatus(create m034DrainCreate) (m034DrainStatus, error) {
+	owner := create.Owner
+	ownerDigest, err := m034DrainDigest("phorvex-drain-owner-v1", map[string]string{
+		"namespace_uid": owner.NamespaceUID, "pod_uid": owner.PodUID, "policy_uid": owner.PolicyUID,
+		"service_uid": owner.ServiceUID, "tenant": owner.Tenant,
+	})
+	if err != nil {
+		return m034DrainStatus{}, err
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, create.Deadline)
+	if err != nil {
+		return m034DrainStatus{}, err
+	}
+	zero := m034DrainQueues{Waiting: []string{}, Running: []string{}, Swapped: []string{}, Cached: []string{}}
+	status := m034DrainStatus{
+		Schema: m034DrainSchema, OperationID: create.OperationID, OperationGeneration: create.OperationGeneration,
+		Attempt: create.Attempt, OwnerDigest: ownerDigest, BackendIncarnationDigest: m034DrainIncarnation,
+		Revision: "3", State: "QUIESCENT", Admission: "CLOSED", AdmissionGeneration: create.OperationGeneration,
+		EngineBootID: m034DrainEngineBootID, VirtualEngineIDs: []int{0},
+		EngineSnapshot:       map[string]m034DrainQueues{"0": {Waiting: []string{"request-a"}, Running: []string{}, Swapped: []string{}, Cached: []string{}}},
+		TerminalDispositions: map[string]string{"request-a": "aborted"},
+		ProxySnapshot: map[string]json.RawMessage{
+			"before_engine_begin": json.RawMessage(`{"active":1}`),
+			"after_engine_begin":  json.RawMessage(`{"cancelled":1,"remaining":0}`),
+		},
+		Observations: []m034DrainObservation{
+			{Nonce: strings.Repeat("4", 32), Sequence: "10", Queues: map[string]m034DrainQueues{"0": zero}, Hash: strings.Repeat("a", 64)},
+			{Nonce: strings.Repeat("5", 32), Sequence: "11", Queues: map[string]m034DrainQueues{"0": zero}, Hash: strings.Repeat("b", 64)},
+		},
+		Deadline:                  create.Deadline,
+		CancellationGraceDeadline: deadline.Add(30 * time.Second).UTC().Format("2006-01-02T15:04:05.000000Z"),
+		TransitionReason:          "none", CancelBoundaryRevision: "0", LastTransition: "2026-09-22T00:00:00Z",
+	}
+	return status, m034SignDrainStatus(&status)
+}
+
+func m034WriteJSON(w http.ResponseWriter, code int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(value)
 }
 
 type m034BoundedLog struct {
@@ -207,13 +394,84 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	var servingMu sync.Mutex
 	servingCalls := make([]string, 0, 5)
 	loadedInventoryEnabled := false
+	// Guarded by servingMu: the exact drain owner the producer admits, and the
+	// one operation it created.
+	var drainOwner m034DrainOwner
+	var drainCreated *m034DrainStatus
+	const drainStatusRoute = "/v1/drain/operations/{generation}/{operation}"
 	stack := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		servingMu.Lock()
-		servingCalls = append(servingCalls, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
+		recordedPath := r.URL.Path
+		if drainCreated != nil && r.URL.Path == "/v1/drain/operations/"+drainCreated.OperationGeneration+"/"+drainCreated.OperationID {
+			recordedPath = drainStatusRoute
+		}
+		servingCalls = append(servingCalls, r.Method+" "+recordedPath+" "+r.Header.Get("Authorization"))
 		loadedInventory := loadedInventoryEnabled
+		owner := drainOwner
 		servingMu.Unlock()
 		if r.Header.Get("Authorization") != "Bearer m078-trusted-token" {
 			http.Error(w, "missing trusted credential", http.StatusUnauthorized)
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/drain/capability":
+			m034WriteJSON(w, http.StatusOK, m034DrainCapability{
+				Schema: m034DrainSchema, Capability: "operation-bound-quiescence-v1", PodUID: owner.PodUID,
+				LedgerID: strings.Repeat("1", 32), ProxyBootID: strings.Repeat("2", 32), EngineBootID: m034DrainEngineBootID,
+				IncarnationDigest: m034DrainIncarnation, ProxySource: m034DrainProxySource, EngineSource: m034DrainEngineSource,
+				EngineMode: "v0-frontend-multiprocessing", VirtualEngineIDs: []int{0}, GenerationHighWater: "0",
+				NextOperationGeneration: "1", Admission: "OPEN",
+			})
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/drain/operations":
+			var create m034DrainCreate
+			decoder := json.NewDecoder(r.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&create); err != nil || create.Schema != m034DrainSchema || create.Mode != "abort-and-quiesce" ||
+				create.Attempt != 1 || create.OperationGeneration != "1" || len(create.Supersedes) != 0 || len(create.OperationID) != 32 ||
+				create.Owner != owner || owner.PodUID == "" || create.ExpectedIncarnationDigest != m034DrainIncarnation {
+				http.Error(w, "operation is not owned by the admitted leader", http.StatusBadRequest)
+				return
+			}
+			if _, err := hex.DecodeString(create.OperationID); err != nil {
+				http.Error(w, "invalid operation id", http.StatusBadRequest)
+				return
+			}
+			status, err := m034QuiescentDrainStatus(create)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			servingMu.Lock()
+			duplicate := drainCreated != nil
+			if !duplicate {
+				drainCreated = &status
+			}
+			servingMu.Unlock()
+			if duplicate {
+				http.Error(w, "operation generation already consumed", http.StatusConflict)
+				return
+			}
+			m034WriteJSON(w, http.StatusCreated, status)
+			return
+		case r.Method == http.MethodGet && recordedPath == drainStatusRoute:
+			nonce := r.URL.Query().Get("observation_nonce")
+			servingMu.Lock()
+			status := *drainCreated
+			servingMu.Unlock()
+			if nonce == "" {
+				http.Error(w, "missing observation nonce", http.StatusBadRequest)
+				return
+			}
+			status.QueryNonce = &nonce
+			if err := m034SignDrainStatus(&status); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			m034WriteJSON(w, http.StatusOK, status)
+			return
+		case strings.HasPrefix(r.URL.Path, "/v1/drain"):
+			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -226,7 +484,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 			return
 		}
 		if r.Method == http.MethodPost {
-			_, _ = w.Write([]byte(`{"aborted":1}`))
+			http.Error(w, "unexpected serving mutation", http.StatusNotFound)
 			return
 		}
 		_, _ = w.Write([]byte(`{}`))
@@ -283,7 +541,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	}
 	replicas := int32(3)
 	zero := int64(0)
-	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}}}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "pool"}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g"}}, Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"app": "m034", "phorvex.ai/swap-group": "g", "phorvex.ai/role": "warm-shadow", "phorvex.ai/model-loaded": "false"}, Annotations: map[string]string{"phorvex.ai/route-service": svc.Name, "phorvex.ai/model-id": "model", "phorvex.ai/serving-port": portText, "phorvex.ai/drain-proxy-source": m034DrainProxySource, "phorvex.ai/drain-engine-source": m034DrainEngineSource}}, Spec: corev1.PodSpec{NodeName: node.Name, ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "guardrail", Image: "registry.k8s.io/pause:3.10"}, {Name: "vllm", Image: "registry.k8s.io/pause:3.10"}}}}}}
 	if err := c.Create(ctx, rs); err != nil {
 		t.Fatal(err)
 	}
@@ -320,6 +578,9 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		p.Status.PodIP = host
 		p.Status.PodIPs = []corev1.PodIP{{IP: host}}
 		p.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+		// envtest has no kubelet: seed the exact container identities the drain
+		// v11 operator binding pins for the participant incarnation.
+		p.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: "guardrail", ContainerID: "containerd://guardrail-" + string(p.UID), Ready: true}, {Name: "vllm", ContainerID: "containerd://vllm-" + string(p.UID), Ready: true}}
 		if err := c.Status().Update(ctx, p); err != nil {
 			t.Fatal(err)
 		}
@@ -328,6 +589,13 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		t.Fatal(err)
 	}
 	oldUID := old.UID
+	poolNamespace := &corev1.Namespace{}
+	if err := c.Get(ctx, client.ObjectKey{Name: ns}, poolNamespace); err != nil {
+		t.Fatal(err)
+	}
+	servingMu.Lock()
+	drainOwner = m034DrainOwner{Tenant: "m034", NamespaceUID: string(poolNamespace.UID), PolicyUID: string(policy.UID), PodUID: string(oldUID), ServiceUID: string(svc.UID)}
+	servingMu.Unlock()
 	m034Poll(t, 20*time.Second, func() (bool, error) {
 		var slices discoveryv1.EndpointSliceList
 		if err := c.List(ctx, &slices, client.InNamespace(ns), client.MatchingLabels{discoveryv1.LabelServiceName: svc.Name}); err != nil {
@@ -448,6 +716,14 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 	if n := m.actuate(ctx, entry, pol, ds, map[string]*model.WorkloadView{ns + "/" + old.Name: view}); n != 0 || ds[0].Actuated || recording.err == nil || recording.result.Emitted {
 		t.Fatalf("runner must retain the controller-readiness interval as partial: n=%d result=%+v err=%v decision=%+v", n, recording.result, recording.err, ds[0])
 	}
+	// That interval exists only after the drain was confirmed and the exact old
+	// UID retired; a refusal before any effect must not be mistaken for it.
+	retiredOld := &corev1.Pod{}
+	if getErr := c.Get(ctx, client.ObjectKeyFromObject(old), retiredOld); (getErr == nil && retiredOld.UID == oldUID) || (getErr != nil && !apierrors.IsNotFound(getErr)) ||
+		ds[0].DispatchOutcome != model.DispatchError || ds[0].MutationKind != "swap" || ds[0].RollbackRef != ns+"/"+shadow.Name ||
+		!slices.Contains(ds[0].ObjectsTouched, "Pod/"+ns+"/"+old.Name) {
+		t.Fatalf("runner partial is not the post-retirement controller-readiness interval: old=%s/%s getErr=%v result=%+v err=%v decision=%+v", retiredOld.Name, retiredOld.UID, getErr, recording.result, recording.err, ds[0])
+	}
 	close(releaseReplacementReady)
 	if e := <-readyDone; e != nil {
 		t.Fatal(e)
@@ -541,12 +817,17 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		}
 	}
 	if posts != 1 {
-		t.Fatalf("confirmed warm retirement must send exactly one drain POST, got %d calls=%v", posts, servingCalls)
+		t.Fatalf("confirmed warm retirement must send exactly one drain create POST, got %d calls=%v", posts, servingCalls)
 	}
+	// Drain v11: capability before the receipt, the one claimed create, and the
+	// exact authenticated operation lookup immediately before the old UID is
+	// retired; then the controller replacement's readiness pair.
 	wantLoadedCalls := []string{
 		"GET /health-empty Bearer m078-trusted-token", "GET /models-empty Bearer m078-trusted-token",
 		"GET /health-loaded Bearer m078-trusted-token", "GET /models-loaded Bearer m078-trusted-token",
-		"POST /v1/drain Bearer m078-trusted-token",
+		"GET /v1/drain/capability Bearer m078-trusted-token",
+		"POST /v1/drain/operations Bearer m078-trusted-token",
+		"GET " + drainStatusRoute + " Bearer m078-trusted-token",
 		"GET /health Bearer m078-trusted-token", "GET /v1/models Bearer m078-trusted-token",
 	}
 	if strings.Join(servingCalls, ",") != strings.Join(wantLoadedCalls, ",") {
