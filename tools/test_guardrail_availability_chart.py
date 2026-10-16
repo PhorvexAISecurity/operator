@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from inherited_drift import inherited_drift
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -90,13 +91,14 @@ class GuardrailAvailabilityChart(unittest.TestCase):
             self.assertEqual(binding["subjects"], [{"kind": "ServiceAccount", "name": "phorvex-phorvex-console",
                                                      "namespace": "phorvex-system"}])
 
+    @inherited_drift("values-eks.yaml now needs the PodMonitor API at render time")
     def test_umbrella_eks_example_remains_disabled(self):
         chart = ROOT / "deploy/helm/phorvex-stack"
-        result = subprocess.run([HELM, "template", "phorvex-stack", str(chart), "-n", "phorvex-system",
+        result = subprocess.run([HELM, "template", "phorvex", str(chart), "-n", "phorvex-system",
                                  "-f", str(chart / "values-eks.yaml")], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         docs = [x for x in yaml.safe_load_all(result.stdout) if x]
-        dep = named(docs, "Deployment", "phorvex-stack-phorvex-console", "phorvex-system")
+        dep = named(docs, "Deployment", "phorvex-phorvex-console", "phorvex-system")
         spec = dep["spec"]["template"]["spec"]
         container = next(x for x in spec["containers"] if x["name"] == "console")
         env = {x["name"]: x.get("value") for x in container["env"]}

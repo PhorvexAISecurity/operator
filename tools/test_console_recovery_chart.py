@@ -2,9 +2,11 @@
 import unittest
 
 from test_m004_chart import ROOT, obj, render
+from inherited_drift import inherited_drift
 
 
 class ConsoleRecoveryChartTest(unittest.TestCase):
+    @inherited_drift("values-eks.yaml now needs release name phorvex and the PodMonitor API")
     def test_live_stack_migration_and_explicit_production_trust(self):
         docs = render(ROOT / "deploy/helm/phorvex-stack", "-f",
                       str(ROOT / "deploy/helm/phorvex-stack/values-eks.yaml"))

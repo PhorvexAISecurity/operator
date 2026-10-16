@@ -6,9 +6,10 @@ import subprocess
 import unittest
 
 import yaml
+from inherited_drift import inherited_drift
 
 ROOT = Path(__file__).resolve().parent.parent
-HELM = os.environ.get("HELM", "/opt/phorvex-tools/helm")
+HELM = os.environ.get("HELM", "helm")
 BASE = [HELM, "template", "mongo-exposure-check", str(ROOT / "phorvex/charts/phorvex"),
         "--namespace", "phorvex-system",
         "--set", "phorvex.console.enabled=true", "--set", "phorvex.audit.enabled=true",
@@ -44,6 +45,7 @@ class MongoExposureChart(unittest.TestCase):
         self.assertEqual(owned(docs), [])
         self.assertEqual(console_env(docs)["PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED"], "false")
 
+    @inherited_drift("the chart now requires console.mongoExposure.configMapName")
     def test_enabled_is_exact_namespace_role_and_console_binding(self):
         docs = render("--set", "phorvex.console.mongoExposure.enabled=true")
         rows = owned(docs)

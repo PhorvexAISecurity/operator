@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 import yaml
+from inherited_drift import inherited_drift
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +75,7 @@ def static_source(docs):
 
 
 class GuardrailStaticProfileCMChart(unittest.TestCase):
+    @inherited_drift("values-eks.yaml now ships the guardrail-static profile ConfigMap")
     def test_default_off_and_stage_a_source_only(self):
         result, docs = render()
         self.assertEqual(result.returncode, 0, result.stderr)

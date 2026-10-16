@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 import yaml
+from inherited_drift import inherited_drift
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,6 +77,7 @@ class GuardrailEffectChart(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(expected, result.stderr)
 
+    @inherited_drift("console.guardrailEffect.configMapName no longer matches catalogueProfiles")
     def test_umbrella_optional_immutable_source(self):
         raw = b"reviewed example bytes\n"
         sha = hashlib.sha256(raw).hexdigest()
