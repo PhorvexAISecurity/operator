@@ -27,6 +27,8 @@ COPY build/phoenix-extended/ build/phoenix-extended/
 # dependency-free measurement-validity contract. A replace target missing from
 # the build context fails `go mod download` outright.
 COPY build/metricvalidity/ build/metricvalidity/
+# Shared libraries under libs/ are replace targets too.
+COPY libs/logging/ libs/logging/
 COPY phorvex/go.mod phorvex/go.mod
 COPY phorvex/go.sum phorvex/go.sum
 WORKDIR /workspace/phorvex
