@@ -47,7 +47,7 @@ func validateMongoExposureFixture(c TargetConfig) error {
 	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-mongo-uncredentialed-service-exposure" || len(c.DefenderFilter) != 0 || f.MaxRunSeconds < 120 || f.MaxRunSeconds > 600 {
 		return errors.New("config: Mongo exposure requires one bounded unscored dedicated case")
 	}
-	if c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+	if c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: Mongo exposure cannot share another external fixture")
 	}
 	if f.MongoDeployment != "mongo" || f.MongoService != "mongo" || f.PolicyName != "mongo-defense" || f.ManagerNamespace == "" || f.ManagerDeployment == "" ||

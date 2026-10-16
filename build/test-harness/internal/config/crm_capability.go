@@ -28,7 +28,7 @@ func validateCRMCapabilityFixture(c TargetConfig) error {
 		return errors.New("config: CRM capability requires one exact scenario, d-nomtd arm and pinned kubeconfig")
 	}
 	if c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil ||
-		c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+		c.GPUFunctionalFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: CRM capability cannot combine with another fixture")
 	}
 	return nil

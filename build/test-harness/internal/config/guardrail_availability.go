@@ -21,7 +21,7 @@ func validateGuardrailAvailabilityFixture(c TargetConfig) error {
 		c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 0 || len(c.DefenderFilter) != 0 ||
 		c.GuardrailStaticFixture != nil || c.GuardrailOutputFixture != nil || c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
 		c.PodBoundTokenFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
-		c.NativeRouteFixture != nil || c.CRMCapabilityFixture != nil ||
+		c.CRMCapabilityFixture != nil ||
 		c.BenignCheckpointLocalFixture || f.Transport != "in-cluster" || !natsExposureRunID.MatchString(f.RunID) ||
 		!kubernetesUIDPattern.MatchString(f.ClusterUID) || !kubernetesUIDPattern.MatchString(f.PodUID) ||
 		!kubernetesUIDPattern.MatchString(f.ServiceUID) || !kubernetesUIDPattern.MatchString(f.SourceUID) ||
