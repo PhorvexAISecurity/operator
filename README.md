@@ -31,9 +31,9 @@ Each phase lands as its own pull request.
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Remove unreferenced code, archive historical docs, adapt the workflow harness, green CI | Done |
-| 2 | Foundation: `libs/logging` (JSON logs), gofmt/vet and image builds in CI | This change |
-| 3 | `go.work`, `libs/` and service modules; break import cycles inside one binary; enforce boundaries | Next |
-| 4 | gRPC/protobuf contracts and one binary per service: sensor, brain, dispatcher, actuator, attacks, console | |
+| 2 | Foundation: `libs/logging` (JSON logs), gofmt/vet and image builds in CI | Done |
+| 3 | Break the domain cycles and enforce the service boundaries (`archtest`); per-service brain configuration | In progress |
+| 4 | gRPC/protobuf contracts and one binary per service in the one module: sensor, brain, dispatcher, actuator, attacks, console | |
 | 5 | One image, chart and Argo CD Application per service; release-please tags; side-by-side namespace on the cluster | |
 | 6 | Move attack tooling out of the console | |
 

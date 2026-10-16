@@ -68,13 +68,24 @@ may only shrink.
 Each tick, per tenant:
 
 1. `Sensor.Snapshot(tenant)` returns workloads, physics witnesses and context features.
-2. `Actuator.Capabilities(targets)` returns one capability set per target. This
-   replaces the per-candidate callback, so the brain never calls the actuator.
-3. `Brain.Decide(snapshot, capabilities, recent failures)` returns decisions,
-   each with ranked alternatives. A fallback then needs no second call.
-4. `Actuator.Actuate(decision)` returns the result, and the dispatcher retries the
-   next alternative within the tick when the first is refused.
-5. `Brain.Observe(outcomes)` feeds rotation and persistence outcomes back.
+2. `Brain.Decide(snapshot)` is one bidirectional stream. While the brain generates
+   candidates it asks a capability question for each (asset, action) that
+   survives its structural filters; the dispatcher answers each one from the same
+   cheapest-first witness as today (actuator support, code-exec admission, cached
+   RBAC review) and its failure cooldowns. The stream ends with the decisions.
+3. `Actuator.Actuate(decision)` returns the result. When the actuator refuses
+   without effect, the dispatcher asks `Brain.SelectAlternative`, which picks from
+   the already-gated candidates and needs no new capability answer.
+4. `Brain.ObserveRotation(outcome)` feeds measured rotation outcomes back, as the
+   runner does today; scoped persistence observations stay reporting-only.
+
+The capability gate stays lazy and per candidate on purpose. Candidate generation
+asks it once per surviving (asset, action), and some answers run live probes (the
+request-drain readiness check is an HTTP call to the workload). Pre-resolving a
+batch would need a second brain pass that must not advance kill-chain or cost
+state, for a few hundred in-cluster round trips per tick. Over a stream the probe
+set, its order and the decisions stay identical to the single binary, which
+`mathlab` replays verify byte for byte.
 
 Rules:
 
@@ -102,23 +113,23 @@ Rules:
 ### Repository layout
 
 ```
-services/<name>/        cmd/, internal/, Dockerfile, go.mod
-libs/<name>/            shared Go modules (api, model, proto, platform)
-third_party/phoenix/    extended Phoenix operator
+phorvex/cmd/<service>/  one binary per service (sensor, brain, dispatcher, actuator, attacks, console)
+phorvex/internal/       service and shared packages, one domain each (archtest)
+libs/<name>/            Go modules shared with other modules (phorvex.ai/libs/...)
 deploy/charts/<name>/   one Helm chart per service
 deploy/environments/<env>/<name>.yaml   environment values
 deploy/argocd/          AppProject + ApplicationSet
-go.work                 local development across modules
 ```
 
-Each service and lib is its own Go module with a `phorvex.ai/<directory>`
-module path (for example `phorvex.ai/libs/logging`), independent of the
-repository name. Services consume libs through `replace` directives, the pattern
-`phorvex` already uses for `build/phoenix-extended`; CI and images build every
-module on its own. `go.work` joins them for local development once several
-service modules exist. A test keeps
-every Docker build context complete for its module's replace targets (today's
-`buildctx` check, per service).
+The services share one Go module. Splitting modules per service would force the
+dispatcher's in-process code to be exported until phase 4 removes those calls,
+and buys little: each service still has its own binary, image, chart, version
+tag and Argo CD Application. `phorvex/internal/archtest` enforces the domain
+boundaries the compiler would otherwise enforce between modules, and CI derives
+the services a change affects from the import graph (`go list -deps`). Code that
+other modules also need, such as `libs/logging`, is a separate module with a
+`phorvex.ai/<directory>` path, consumed through `replace` directives; a test keeps
+every Docker build context complete for those targets.
 
 ### Versioning and release
 
@@ -128,8 +139,8 @@ every Docker build context complete for its module's replace targets (today's
   pinned by digest) and packages its chart.
 - Deployment stays GitOps: CI commits the new tag and digest into
   `deploy/environments/<env>/<service>.yaml`, and Argo CD syncs it.
-- CI path filters build and test only the affected services, plus every
-  service that depends on a changed lib.
+- CI builds and releases only the services whose binary's import graph contains a
+  changed file, plus every service that depends on a changed lib.
 
 ### Argo CD
 
@@ -157,13 +168,24 @@ every Docker build context complete for its module's replace targets (today's
 |---|---|---|
 | 1 | Clean up, archive, adapt the workflow harness | Unchanged |
 | 2 | Foundation: first shared lib (`libs/logging`, slog JSON) adopted by the manager and console; gofmt/vet and image builds in CI | Unchanged (log format changes) |
-| 3 | `go.work`; move packages into `libs/` and service modules, break the cycles above, replace the per-candidate capability callback with a per-tick capability set; still one binary; import-boundary tests | Unchanged; parity tests on recorded ticks |
-| 4 | gRPC contracts and one binary per service, with an in-process mode kept behind a flag for rollback | Unchanged in in-process mode |
-| 5 | One image, chart and Argo CD Application per service; release-please components and per-service CI path filters; deploy side by side with actuation disabled and compare decisions against the live manager's audit stream; cut over when they match | Shadow, then cutover |
+| 3 | Break the domain cycles above and enforce the boundaries (`archtest`, done in 3a); turn the process-global brain configuration into per-service flags | Unchanged |
+| 4 | gRPC contracts (sensor snapshot, brain decide stream with capability questions, actuator actuate and journals) and one binary per service, with the in-process wiring kept behind a flag for rollback; `mathlab` replays prove decision parity | Unchanged in in-process mode |
+| 5 | One image, chart and Argo CD Application per service; release-please components and affected-service CI; deploy side by side with actuation disabled and compare decisions against the live manager's audit stream; cut over when they match | Shadow, then cutover |
 | 6 | Move attack firing and harness runs out of the console into the attacks service | Console calls the attacks API |
 
 Cutover criteria for phase 5 are decided separately. They must include decision
 parity on live ticks, and rollback to the current `phorvex-stack` Application.
+
+## Follow-ups
+
+- **Shadow evaluation probes live workloads.** `ShadowCapability` is documented as
+  free of externally visible effects, but `capability.Witness.EligibleObserved`
+  only swaps the RBAC leg to the cache; it still calls `actuator.SupportsAction`,
+  which for request drain issues the authenticated v11 readiness HTTP probe and
+  reads journals. A calibration-enabled tick therefore probes workloads a second
+  time. The refactor keeps this behaviour so decision parity stays testable; fix it
+  after the split, for example by answering the shadow pass from the production
+  pass's per-tick support answers.
 
 ## Consequences
 
