@@ -106,25 +106,17 @@ RUN set -eux; \
 FROM busybox:1.36 AS data
 WORKDIR /data
 COPY build/test-harness/ /data/build/test-harness/
-# console-audit.jsonl is a GENERATED runtime trail, excluded by .gitignore, so it is absent
-# from every clean checkout — a hard COPY of it made this image unbuildable in CI while
-# still working on a developer machine that happened to have run the console locally.
-# It is genuinely optional: newestAudit() in internal/console/server.go returns "" when the
-# file is missing, and the owner audit view degrades rather than breaking.
-#
-# The trailing * makes it a glob, which resolves to nothing instead of failing when the
-# file is absent — the same idiom as the familiar `COPY package.json package-lock.json* ./`.
-# A COPY still fails when ALL of its sources resolve to nothing, so phorvex/go.mod rides
-# along purely to guarantee one real match: it is always in the context (the gobuild stage
-# builds from it) and .dockerignore excludes only phorvex/bin/*.exe, not it. Deleted again
-# on the next line.
-COPY phorvex/go.mod phorvex/bin/console-audit.jsonl* /data/phorvex/bin/
+# console-audit.jsonl is a GENERATED local-development trail, excluded by .gitignore, so no
+# clean checkout has it and the image never carries one. It is optional: newestAudit() in
+# internal/console/server.go returns "" when the file is missing, and the owner audit view
+# degrades rather than breaking. The image only needs the directory the final stage writes
+# phorvex.exe into.
 # Drop anything heavy/irrelevant the .dockerignore didn't catch, but KEEP three things the
 # catalogue + scenario launcher need: the out-* metrics dirs, the per-target config*.yaml files
 # (StartScenario runs `harness -config <cfg> ...`), and a bin/ dir for the harness binary the
 # final stage drops in. `harness -list` itself short-circuits before it reads any config
 # (cmd/harness/main.go), so enumeration needs only the binary — the configs are for launching.
-RUN rm -f /data/phorvex/bin/go.mod && \
+RUN mkdir -p /data/phorvex/bin && \
     cd /data/build/test-harness && \
     find . -maxdepth 1 -mindepth 1 ! -name 'out-*' ! -name 'config*.yaml' ! -name 'bin' \
         -exec rm -rf {} + || true && \
