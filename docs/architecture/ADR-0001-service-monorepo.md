@@ -1,6 +1,6 @@
 # ADR-0001: Split the operator into independently released services
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-10-17)
 - **Date:** 2026-10-16
 - **Scope:** `phorvex/`, `build/test-harness`, `dashboard-web`, `deploy/`, CI
 
@@ -100,9 +100,12 @@ deploy/argocd/          AppProject + ApplicationSet
 go.work                 local development across modules
 ```
 
-Each service and lib is its own Go module. Services consume libs through
-`replace` directives, the pattern `phorvex` already uses for
-`build/phoenix-extended`, and `go.work` joins them for development. A test keeps
+Each service and lib is its own Go module with a `phorvex.ai/<directory>`
+module path (for example `phorvex.ai/libs/logging`), independent of the
+repository name. Services consume libs through `replace` directives, the pattern
+`phorvex` already uses for `build/phoenix-extended`; CI and images build every
+module on its own. `go.work` joins them for local development once several
+service modules exist. A test keeps
 every Docker build context complete for its module's replace targets (today's
 `buildctx` check, per service).
 
@@ -142,10 +145,10 @@ every Docker build context complete for its module's replace targets (today's
 | Phase | Change | Behaviour |
 |---|---|---|
 | 1 | Clean up, archive, adapt the workflow harness | Unchanged |
-| 2 | Monorepo skeleton: `go.work`, `libs/`, `services/`, slog JSON logging, per-service CI and release-please | Unchanged (log format changes) |
-| 3 | Move packages into service modules, break the cycles above, replace the per-candidate capability callback with a per-tick capability set; still one binary; import-boundary tests | Unchanged; parity tests on recorded ticks |
+| 2 | Foundation: first shared lib (`libs/logging`, slog JSON) adopted by the manager and console; gofmt/vet and image builds in CI | Unchanged (log format changes) |
+| 3 | `go.work`; move packages into `libs/` and service modules, break the cycles above, replace the per-candidate capability callback with a per-tick capability set; still one binary; import-boundary tests | Unchanged; parity tests on recorded ticks |
 | 4 | gRPC contracts and one binary per service, with an in-process mode kept behind a flag for rollback | Unchanged in in-process mode |
-| 5 | One image, chart and Argo CD Application per service; deploy side by side with actuation disabled and compare decisions against the live manager's audit stream; cut over when they match | Shadow, then cutover |
+| 5 | One image, chart and Argo CD Application per service; release-please components and per-service CI path filters; deploy side by side with actuation disabled and compare decisions against the live manager's audit stream; cut over when they match | Shadow, then cutover |
 | 6 | Move attack firing and harness runs out of the console into the attacks service | Console calls the attacks API |
 
 Cutover criteria for phase 5 are decided separately. They must include decision
