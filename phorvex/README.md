@@ -283,4 +283,4 @@ the source, the series is absent rather than a fabricated zero.
   its route prepares only selectors exactly expressible as nonempty equalities;
   unsupported expressions refuse Phoenix actions without broadening the guest list.
 
-See [P0-REPORT.md](P0-REPORT.md) for the real build/test/live results.
+See [P0-REPORT.md](../docs/archive/phorvex/P0-REPORT.md) for the real build/test/live results.
