@@ -2,6 +2,8 @@ package runner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -85,6 +87,11 @@ type m178Receipt struct {
 	} `json:"expectedReset"`
 	ServingBindingSHA256  string `json:"servingBindingSHA256"`
 	ServingServiceAccount string `json:"servingServiceAccount"`
+	KVResetNegativeACK    *struct {
+		HTTPStatus     int    `json:"httpStatus"`
+		Success        *bool  `json:"success"`
+		ResponseSHA256 string `json:"responseSHA256"`
+	} `json:"kvResetNegativeACK"`
 }
 
 type m178Fixture struct {
@@ -257,9 +264,13 @@ func TestM178RealAPINativeReceiptAndIngest(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 90*time.Second)
 	defer cancel()
 
-	t.Run("false-is-unknown-and-never-replayed", func(t *testing.T) {
+	// A complete strict HTTP 200 whose success field is not a JSON boolean is
+	// still an unknown post-send outcome. Since 88daf954 an explicit boolean
+	// false is a typed negative acknowledgement instead (next subtest), so the
+	// unknown-dispatch retention below is exercised with a string "false".
+	t.Run("nonboolean-false-is-unknown-and-never-replayed", func(t *testing.T) {
 		const privateMarker = "m178-private-response-marker"
-		f := newM178Fixture(t, ctx, apiClient, "unknown", `{"success":false,"detail":"`+privateMarker+`"}`)
+		f := newM178Fixture(t, ctx, apiClient, "unknown", `{"success":"false","detail":"`+privateMarker+`"}`)
 		firstReq := f.request(t, "m178-unknown-tick-1")
 		result, err := f.native.Actuate(ctx, firstReq)
 		calls, tokens := f.backend.observed()
@@ -273,7 +284,7 @@ func TestM178RealAPINativeReceiptAndIngest(t *testing.T) {
 			t.Fatalf("secure transport token observations=%v", tokens)
 		}
 		cm, receipt := f.receipt(t)
-		if cm.UID == "" || cm.ResourceVersion == "" || receipt.Version != 9 || receipt.Kind != string(model.ActionKVReset) || receipt.Phase != "dispatching" || receipt.Generation != 1 || receipt.TickID != firstReq.TickID || receipt.OperationID == "" || receipt.PolicyNamespace != f.ns || receipt.PolicyUID != string(f.policy.UID) || receipt.TargetUID != string(f.pod.UID) || receipt.SelectedReset.Present || !receipt.ExpectedReset.Present || receipt.ExpectedReset.Value == "" || receipt.ServingBindingSHA256 == "" || receipt.ServingServiceAccount != "model-sa" {
+		if cm.UID == "" || cm.ResourceVersion == "" || receipt.Version != 9 || receipt.Kind != string(model.ActionKVReset) || receipt.Phase != "dispatching" || receipt.Generation != 1 || receipt.TickID != firstReq.TickID || receipt.OperationID == "" || receipt.PolicyNamespace != f.ns || receipt.PolicyUID != string(f.policy.UID) || receipt.TargetUID != string(f.pod.UID) || receipt.SelectedReset.Present || !receipt.ExpectedReset.Present || receipt.ExpectedReset.Value == "" || receipt.ServingBindingSHA256 == "" || receipt.ServingServiceAccount != "model-sa" || receipt.KVResetNegativeACK != nil {
 			t.Fatalf("unknown receipt lost required authority/effect evidence: cm=%+v receipt=%+v", cm.ObjectMeta, receipt)
 		}
 		pod := &corev1.Pod{}
@@ -308,6 +319,90 @@ func TestM178RealAPINativeReceiptAndIngest(t *testing.T) {
 		if after.OperationID != receipt.OperationID || after.TickID != receipt.TickID || after.Generation != receipt.Generation || after.Phase != receipt.Phase {
 			t.Fatalf("unknown receipt was rewritten: before=%+v after=%+v", receipt, after)
 		}
+	})
+
+	// 88daf954 (fix(vllm): retain authenticated negative reset acknowledgements)
+	// deliberately classifies a complete strict {"success":false} received over
+	// the secure-required transport as a typed negative acknowledgement. False
+	// does not prove no effect (an allocator may already have been reset), so
+	// the receipt becomes terminal-partial with the exact response digest while
+	// nothing is credited, the reset epoch and session clock stay unchanged, and
+	// neither the same operation, a restart nor recovery replays the POST.
+	t.Run("explicit-false-is-terminal-partial-and-never-replayed", func(t *testing.T) {
+		const privateMarker = "m178-private-negative-marker"
+		body := `{"success":false,"detail":"` + privateMarker + `"}`
+		f := newM178Fixture(t, ctx, apiClient, "negative", body)
+		firstReq := f.request(t, "m178-negative-tick-1")
+		result, err := f.native.Actuate(ctx, firstReq)
+		calls, tokens := f.backend.observed()
+		if err == nil || !strings.Contains(err.Error(), "explicitly did not confirm a complete reset") || strings.Contains(err.Error(), "outcome unknown") ||
+			result.Emitted || result.NoEffect != "" || result.MutationKind != "partial" || result.RollbackRef == "" ||
+			len(result.ObjectsTouched) != 1 || !strings.HasPrefix(result.ObjectsTouched[0], "ConfigMap/"+f.opns+"/") ||
+			!strings.Contains(result.Note, "negative acknowledgement") || calls != 1 {
+			t.Fatalf("explicit false gained credit/fallback or lost partial evidence: result=%+v calls=%d err=%v", result, calls, err)
+		}
+		if strings.Contains(err.Error(), privateMarker) || strings.Contains(result.Note, privateMarker) {
+			t.Fatalf("private response leaked: result=%+v err=%v", result, err)
+		}
+		if len(tokens) != 1 || tokens[0] != "Bearer m178-trusted-token" {
+			t.Fatalf("secure transport token observations=%v", tokens)
+		}
+		cm, receipt := f.receipt(t)
+		digest := sha256.Sum256([]byte(body))
+		proof := receipt.KVResetNegativeACK
+		if cm.UID == "" || cm.ResourceVersion == "" || receipt.Version != 9 || receipt.Kind != string(model.ActionKVReset) || receipt.Phase != "terminal-partial" || receipt.Generation != 1 || receipt.TickID != firstReq.TickID || receipt.OperationID == "" || receipt.PolicyNamespace != f.ns || receipt.PolicyUID != string(f.policy.UID) || receipt.TargetUID != string(f.pod.UID) || receipt.SelectedReset.Present || receipt.ExpectedReset != receipt.SelectedReset || receipt.ServingBindingSHA256 == "" || receipt.ServingServiceAccount != "model-sa" ||
+			proof == nil || proof.HTTPStatus != http.StatusOK || proof.Success == nil || *proof.Success || proof.ResponseSHA256 != hex.EncodeToString(digest[:]) {
+			t.Fatalf("negative acknowledgement receipt lost required authority/proof or claimed a reset epoch: cm=%+v receipt=%+v proof=%+v", cm.ObjectMeta, receipt, proof)
+		}
+		if strings.Contains(cm.Data["receipt"], privateMarker) {
+			t.Fatal("private response persisted in the protected receipt")
+		}
+		assertUncredited := func(stage string) {
+			t.Helper()
+			pod := &corev1.Pod{}
+			if err := apiClient.Get(ctx, client.ObjectKeyFromObject(f.pod), pod); err != nil {
+				t.Fatal(err)
+			}
+			if _, present := pod.Annotations[m178ResetEpochAnnotation]; present {
+				t.Fatalf("%s: negative acknowledgement wrote reset epoch: %v", stage, pod.Annotations)
+			}
+			if session, exposed := f.session(t); session != "|" || exposed != "|" {
+				t.Fatalf("%s: unconfirmed reset changed ingest session clock: session=%q VarSession=%q", stage, session, exposed)
+			}
+		}
+		assertUncredited("first dispatch")
+
+		retry, retryErr := f.native.Actuate(ctx, firstReq)
+		if retryErr != nil || retry.Emitted || retry.NoEffect != actuator.NoEffectReconciled || retry.MutationKind != "none" || retry.RollbackRef == "" || !strings.Contains(retry.Note, "negative acknowledgement") {
+			t.Fatalf("same operation was not reconciled from the terminal negative receipt: result=%+v err=%v", retry, retryErr)
+		}
+		restarted := actuator.NewNativeActuator(apiClient)
+		restarted.Reader, restarted.JournalNamespace = apiClient, f.opns
+		restarted.SetServingSecurity(f.security)
+		if events, recoverErr := restarted.RecoverOperations(ctx, false); recoverErr != nil || len(events) != 1 || events[0].Err != nil || !strings.Contains(events[0].Effect, "negative acknowledgement") {
+			t.Fatalf("restart did not retain the negative acknowledgement without effect: events=%+v err=%v", events, recoverErr)
+		}
+		if calls, _ := f.backend.observed(); calls != 1 {
+			t.Fatalf("negative acknowledgement was replayed: calls=%d", calls)
+		}
+		afterCM, after := f.receipt(t)
+		if afterCM.ResourceVersion != cm.ResourceVersion || after.OperationID != receipt.OperationID || after.TickID != receipt.TickID || after.Generation != receipt.Generation || after.Phase != receipt.Phase {
+			t.Fatalf("terminal negative receipt was rewritten: before=%+v after=%+v", receipt, after)
+		}
+		assertUncredited("retry and restart")
+
+		// A separately selected fresh tick is a new operation, never a replay of
+		// the retained one: it advances the receipt generation, sends its own
+		// single POST and, receiving false again, is again credited nothing.
+		freshReq := f.request(t, "m178-negative-tick-2")
+		fresh, freshErr := f.native.Actuate(ctx, freshReq)
+		_, next := f.receipt(t)
+		if calls, _ := f.backend.observed(); freshErr == nil || fresh.Emitted || fresh.MutationKind != "partial" || calls != 2 ||
+			next.Generation != receipt.Generation+1 || next.OperationID == receipt.OperationID || next.TickID != freshReq.TickID ||
+			next.Phase != "terminal-partial" || next.KVResetNegativeACK == nil {
+			t.Fatalf("fresh selection did not progress as a separate uncredited operation: result=%+v err=%v calls=%d receipt=%+v", fresh, freshErr, calls, next)
+		}
+		assertUncredited("fresh tick")
 	})
 
 	t.Run("explicit-true-advances-receipt-and-session", func(t *testing.T) {

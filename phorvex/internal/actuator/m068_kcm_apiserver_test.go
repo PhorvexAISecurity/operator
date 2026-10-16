@@ -76,33 +76,11 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	}
 	m068AssertRealAPIParallelGroupRefusal(t, ctx, c)
 
-	var scalarHTTPCalls atomic.Int32
-	scalarServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		scalarHTTPCalls.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/v1/models":
-			_, _ = w.Write([]byte(`{"data":[{"id":"declared-model"}]}`))
-		case defaultDrainPath:
-			_, _ = w.Write([]byte(`{"aborted":0}`))
-		default:
-			_, _ = w.Write([]byte(`{"success":true}`))
-		}
-	}))
-	if err := scalarServer.Listener.Close(); err != nil {
-		t.Fatal(err)
-	}
-	scalarListener, err := net.Listen("tcp4", net.JoinHostPort(m067NonLoopbackIPv4(t), "0"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	scalarServer.Listener = scalarListener
-	scalarServer.Start()
-	t.Cleanup(scalarServer.Close)
-	scalarHost, scalarPortText, err := net.SplitHostPort(strings.TrimPrefix(scalarServer.URL, "http://"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	// model-shard-replace drains through the operation-bound v11 protocol, which
+	// requires secure serving credentials and a bound guardrail+vllm participant
+	// (b9f738cb). The shared M067 TLS producer serves readiness and v11 drain.
+	scalarBackend, scalarEndpoint := m067StartBackend(t, "confirmed")
+	scalarHost, scalarPortText := scalarEndpoint.host, scalarEndpoint.portText
 
 	const (
 		tenantNS = "m068-scalar-shard"
@@ -139,8 +117,8 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 		Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "m068", labelModelShard: shard}},
 		Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{
 			Labels:      map[string]string{"app": "m068", labelModelShard: shard, labelRole: roleShadow, labelModelLoaded: "false"},
-			Annotations: map[string]string{annoRouteService: service.Name, annoServingPort: scalarPortText, "phorvex.ai/model-id": "declared-model"},
-		}, Spec: corev1.PodSpec{NodeName: "m068-node", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "model", Image: "registry.k8s.io/pause:3.10"}}}},
+			Annotations: map[string]string{annoRouteService: service.Name, annoServingPort: scalarPortText, "phorvex.ai/model-id": "declared-model", annoDrainProxySource: m067DrainProxySource, annoDrainEngineSource: m067DrainEngineSource},
+		}, Spec: corev1.PodSpec{NodeName: "m068-node", ServiceAccountName: "model-sa", TerminationGracePeriodSeconds: &zero, Containers: []corev1.Container{{Name: "guardrail", Image: "registry.k8s.io/pause:3.10"}, {Name: "vllm", Image: "registry.k8s.io/pause:3.10"}}}},
 	}}
 	if err := c.Create(ctx, replicaSet); err != nil {
 		t.Fatal(err)
@@ -165,8 +143,11 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if err := c.Update(ctx, shadow); err != nil {
 		t.Fatal(err)
 	}
-	m066SetPodNetworkReady(t, ctx, c, leader, scalarHost)
-	m066SetPodNetworkReady(t, ctx, c, shadow, scalarHost)
+	m067SetDrainParticipantReady(t, ctx, c, leader, scalarHost)
+	m067SetDrainParticipantReady(t, ctx, c, shadow, scalarHost)
+	scalarBackend.mu.Lock()
+	scalarBackend.podUID = string(leader.UID)
+	scalarBackend.mu.Unlock()
 	if err := c.Get(ctx, client.ObjectKeyFromObject(service), service); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +158,14 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	guard := &m066NoPodCreate{WithWatch: c}
 	native := NewNativeActuator(guard)
 	native.Reader, native.JournalNamespace = c, operator
-	native.SetServingSecurity(legacyServingSecurityForTest(t))
+	servingSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: operator, Name: "serving-admin"}, Data: map[string][]byte{"bearer": []byte("m067-token"), "ca.crt": scalarEndpoint.ca}}
+	if err := c.Create(ctx, servingSecret); err != nil {
+		t.Fatal(err)
+	}
+	native.SetServingSecurity(writeServingSecurityConfig(t, ServingSecuritySecureRequired, operator, []ServingSecurityBinding{{
+		Namespace: tenantNS, PolicyName: policy.Name, PolicyUID: string(policy.UID), ServiceAccount: "model-sa",
+		ProfileID: "m068", SecretName: servingSecret.Name, BearerKey: "bearer", CAKey: "ca.crt", ServerName: scalarEndpoint.serverName,
+	}}))
 	if err := native.EnsurePolicy(ctx, TenantTarget{Tenant: "tenant-a", Namespace: tenantNS, PolicyName: policy.Name, PolicyUID: string(policy.UID)}); err != nil {
 		t.Fatal(err)
 	}
@@ -189,8 +177,8 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if enactErr == nil || result.MutationKind != "swap" || result.Handler != string(model.ActionModelShardReplace) {
 		t.Fatalf("scalar registered dispatch did not reach protected pending lifecycle: result=%+v err=%v kcm=%s", result, enactErr, kcmLog.String())
 	}
-	if scalarHTTPCalls.Load() == 0 {
-		t.Fatal("scalar registered Native positive did not reach serving readiness/drain controls")
+	if posts, requests := scalarBackend.counts(); posts != 1 {
+		t.Fatalf("scalar registered Native positive did not reach exactly one operation-bound drain create: posts=%d requests=%v", posts, requests)
 	}
 
 	var replacement *corev1.Pod
@@ -235,7 +223,7 @@ func TestM068RegisteredScalarModelShardUsesReplicaSetController(t *testing.T) {
 	if err := c.Update(ctx, replacement); err != nil {
 		t.Fatal(err)
 	}
-	m066SetPodNetworkReady(t, ctx, c, replacement, scalarHost)
+	m067SetDrainParticipantReady(t, ctx, c, replacement, scalarHost)
 	native.RecoveryVLLM = &mockVLLM{loaded: true}
 	var events []RecoveryEvent
 	m066Poll(t, 10*time.Second, func() (bool, error) {

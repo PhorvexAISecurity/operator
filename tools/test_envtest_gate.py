@@ -274,6 +274,88 @@ class SourceBindingTests(unittest.TestCase):
         self.assertGreaterEqual(len(inside), 8)
 
 
+ALLOWED = tuple(sorted(gate.ALLOWED_SKIPS))
+
+
+def opt_in_stream(action_for=lambda test: 'skip'):
+    """A green report in which every allowlisted opt-in test also runs and ends with `action_for(test)`."""
+    lines = passing_stream(extra=ALLOWED)
+    for package, test in ALLOWED:
+        at = lines.index(event('pass', package, test, Elapsed=1.5))
+        lines[at] = event(action_for(test), package, test, Elapsed=0)
+    return lines
+
+
+class AllowedSkipTests(unittest.TestCase):
+    """The exact opt-in allowlist is the only skip the gate accepts, and it never excuses a failure."""
+
+    def test_allowlist_is_exactly_the_four_console_opt_in_tests(self):
+        self.assertEqual({(p, t): s['env'] for (p, t), s in gate.ALLOWED_SKIPS.items()}, {
+            (CONSOLE, 'TestNATSResponseProduceWireDecision'): 'NATS_RESPONSE_WIRE_OUT',
+            (CONSOLE, 'TestPodBoundTokenActualR18Originals'): 'PHORVEX_PRIOR_VOICE_ORIGINALS',
+            (CONSOLE, 'TestCPUPostRequestOriginalRun23Shape'): 'CPU_RUN23_ORIGINALS',
+            (CONSOLE, 'TestDrainComponentArchived399Bindings'): 'PHORVEX_DRAIN_ARCHIVE_399',
+        })
+        for spec in gate.ALLOWED_SKIPS.values():
+            self.assertTrue(spec['reason'].strip())
+        required = {(p, t) for p, ts in gate.REQUIRED.items() for t in ts}
+        self.assertFalse(required & set(gate.ALLOWED_SKIPS), 'a required control can never be allowlisted')
+
+    def test_allowlisted_tests_are_declared_and_opted_in_by_their_variable(self):
+        # Bind each entry to source: one declaration whose skip is guarded by the named variable.
+        for package, test in ALLOWED:
+            directory = ROOT / 'phorvex' / package.removeprefix('github.com/phorvex/phorvex/')
+            bodies = []
+            for path in directory.glob('*_test.go'):
+                match = re.search(r'^func\s+' + test + r'\s*\(\s*t\s+\*testing\.T\s*\)\s*\{(.*?)^\}',
+                                  path.read_text(), re.M | re.S)
+                if match:
+                    bodies.append(match.group(1))
+            self.assertEqual(len(bodies), 1, f'{test} must be declared exactly once in {package}')
+            env = gate.ALLOWED_SKIPS[(package, test)]['env']
+            self.assertIn(f'os.Getenv("{env}")', bodies[0], f'{test} is no longer opted in by {env}')
+            self.assertIn('t.Skip(', bodies[0])
+
+    def test_allowed_skip_passes_and_is_recorded(self):
+        found, verdicts, _, allowed = gate.evaluate_with_allowed(opt_in_stream(), 0)
+        self.assertEqual(found, [])
+        self.assertEqual([row['verdict'] for row in allowed], ['skip'] * len(ALLOWED))
+        self.assertEqual([(row['package'], row['test']) for row in allowed], list(ALLOWED))
+        self.assertTrue(all(row['env'] and row['reason'] for row in allowed))
+        for _, test in ALLOWED:
+            self.assertEqual(verdicts[test], 'skip')
+
+    def test_non_allowlisted_skip_still_fails(self):
+        # Another console test, a subtest of an allowlisted test, and an allowlisted name in another package.
+        lines = opt_in_stream() + [
+            event('run', CONSOLE, 'TestSomeOtherOptIn'), event('skip', CONSOLE, 'TestSomeOtherOptIn', Elapsed=0),
+            event('run', CONSOLE, 'TestNATSResponseProduceWireDecision/sub'),
+            event('skip', CONSOLE, 'TestNATSResponseProduceWireDecision/sub', Elapsed=0),
+            event('run', ACTUATOR, 'TestCPUPostRequestOriginalRun23Shape'),
+            event('skip', ACTUATOR, 'TestCPUPostRequestOriginalRun23Shape', Elapsed=0),
+        ]
+        self.assertEqual(problems(lines), [
+            f'{CONSOLE} TestSomeOtherOptIn: skip',
+            f'{CONSOLE} TestNATSResponseProduceWireDecision/sub: skip',
+            f'{ACTUATOR} TestCPUPostRequestOriginalRun23Shape: skip',
+        ])
+
+    def test_allowlisted_test_that_fails_still_fails(self):
+        failing = 'TestPodBoundTokenActualR18Originals'
+        lines = opt_in_stream(lambda test: 'fail' if test == failing else 'skip')
+        found, _, _, allowed = gate.evaluate_with_allowed(lines, 1)
+        self.assertEqual(found, [f'{CONSOLE} {failing}: fail', 'go test exited 1'])
+        self.assertEqual({row['test']: row['verdict'] for row in allowed}[failing], 'fail')
+
+    def test_allowlisted_test_missing_or_passing_is_reported_without_failing(self):
+        found, _, _, allowed = gate.evaluate_with_allowed(passing_stream(), 0)
+        self.assertEqual(found, [])
+        self.assertEqual({row['verdict'] for row in allowed}, {'missing'})
+        found, _, _, allowed = gate.evaluate_with_allowed(opt_in_stream(lambda test: 'pass'), 0)
+        self.assertEqual(found, [])
+        self.assertEqual({row['verdict'] for row in allowed}, {'pass'})
+
+
 class CommandLineTests(unittest.TestCase):
     def run_check(self, lines, exit_code):
         with tempfile.TemporaryDirectory() as tmp:
@@ -301,6 +383,17 @@ class CommandLineTests(unittest.TestCase):
         proc, summary = self.run_check(passing_stream(), 1)
         self.assertNotEqual(proc.returncode, 0)
         self.assertEqual(summary['problems'], ['go test exited 1'])
+
+    def test_check_mode_records_allowed_opt_in_skips_under_their_own_key(self):
+        proc, summary = self.run_check(opt_in_stream(), 0)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(summary['result'], 'PASS')
+        self.assertEqual([(row['package'], row['test'], row['verdict']) for row in summary['allowed_skips']],
+                         [(p, t, 'skip') for p, t in ALLOWED])
+        self.assertIn(f'{len(ALLOWED)} allowlisted opt-in skips', proc.stdout)
+        proc, summary = self.run_check(opt_in_stream(lambda test: 'fail'), 1)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertEqual(summary['result'], 'FAIL')
 
     # Transport (review R1.2): the runner must drain stdout and stderr concurrently. A
     # synthetic `go` executable substitutes only the subprocess byte streams and exit code;

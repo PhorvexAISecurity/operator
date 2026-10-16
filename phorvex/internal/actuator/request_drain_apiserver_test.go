@@ -469,7 +469,10 @@ func TestM040RequestDrainAPIServerLifecycleAndRecovery(t *testing.T) {
 		capabilityRequests, createRequests := stack.capabilityRequests, stack.createRequests
 		statusRequests, reopenRequests := stack.statusRequests, stack.reopenRequests
 		stack.mu.Unlock()
-		if capabilityRequests != 1 || createRequests != 1 || statusRequests != 2 || reopenRequests != 1 {
+		// Two capability reads: the preparation read and the final exact
+		// recheck immediately before the routing mutation (b6d7c614). Neither
+		// is a create; exactly one operation is posted.
+		if capabilityRequests != 2 || createRequests != 1 || statusRequests != 2 || reopenRequests != 1 {
 			t.Fatalf("operation producer calls capability/create/status/reopen=%d/%d/%d/%d", capabilityRequests, createRequests, statusRequests, reopenRequests)
 		}
 		var receipts corev1.ConfigMapList

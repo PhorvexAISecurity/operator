@@ -214,6 +214,8 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 	create(secret)
 	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "unrelated", Namespace: ns}}
 	create(configMap)
+	otherConfigMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "unrelated", Namespace: "m048-unbound"}}
+	create(otherConfigMap)
 	otherPod := p.DeepCopy()
 	otherPod.Namespace = "m048-unbound"
 	otherPod.ResourceVersion = ""
@@ -241,9 +243,16 @@ func TestM048APIServerRestrictedRole(t *testing.T) {
 		},
 		"other-namespace-pod-read": func() error { return updated.Get(ctx, client.ObjectKeyFromObject(otherPod), &corev1.Pod{}) },
 		"secret-read":              func() error { return updated.Get(ctx, client.ObjectKeyFromObject(secret), &corev1.Secret{}) },
-		"configmap-update": func() error {
-			configMap.Data = map[string]string{"unauthorized": "yes"}
-			return updated.Update(ctx, configMap)
+		// The routine Role deliberately grants get/update on ConfigMaps in its own
+		// namespace for the sensitive-output-policy-activate CAS (4fc5fec4; pinned by
+		// TestM048QuarantineRoleContract). Every other ConfigMap write stays denied.
+		"configmap-create": func() error {
+			return updated.Create(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "unauthorized", Namespace: ns}})
+		},
+		"configmap-delete": func() error { return updated.Delete(ctx, configMap) },
+		"other-namespace-configmap-update": func() error {
+			otherConfigMap.Data = map[string]string{"unauthorized": "yes"}
+			return updated.Update(ctx, otherConfigMap)
 		},
 	}
 	for name, operation := range denied {

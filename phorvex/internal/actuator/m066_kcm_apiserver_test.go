@@ -238,7 +238,9 @@ func TestM066RealReplicaSetControllerReplenishesWithoutPhorvexCreate(t *testing.
 		t.Fatalf("injected old leader identity/spec not persisted: uid=%s ephemerals=%d err=%v", old.UID, len(old.Spec.EphemeralContainers), err)
 	}
 	guard := &m066NoPodCreate{WithWatch: c}
-	req := Request{Namespace: ns.Name, Pod: old.Name, TargetUID: string(old.UID), Action: model.ActionWarmSwap, PolicyName: pol.Name, PolicyUID: string(pol.UID)}
+	// The operation-bound drain v11 owner binds the tenant (b9f738cb); the runner
+	// supplies the policy tenant on every dispatch.
+	req := Request{Tenant: pol.EffectiveTenant(), Namespace: ns.Name, Pod: old.Name, TargetUID: string(old.UID), Action: model.ActionWarmSwap, PolicyName: pol.Name, PolicyUID: string(pol.UID)}
 	result, enactErr := (warmSwapHandler{}).Enact(ctx, EnactCtx{Client: guard, Reader: c, JournalNamespace: "m066-operator", VLLM: &mockVLLM{loaded: true}}, req)
 	if guard.attempts != 0 {
 		t.Fatalf("Phorvex attempted competing Pod Create: %d", guard.attempts)
