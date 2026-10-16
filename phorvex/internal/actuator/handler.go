@@ -16,7 +16,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/registry"
 )
@@ -191,13 +190,14 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	}, err
 }
 
-// MissingHandlers returns the generatable actions (model.MutatingActions) that have NO
-// registered native handler — the completeness violation set. Empty = the invariant
+// MissingHandlers returns the mutating actions of the shared vocabulary
+// (model.MutatingActions, which the brain generates from) that have NO registered
+// native handler — the completeness violation set. Empty = the invariant
 // holds. Used by both completeness_test.go (fails CI) and mustCoverAllActions (fails
 // binary startup).
 func MissingHandlers() []model.Action {
 	var missing []model.Action
-	for _, a := range actionset.GeneratableActions() {
+	for _, a := range model.MutatingActions {
 		if _, ok := HandlerRegistry.Get(string(a)); !ok {
 			missing = append(missing, a)
 		}
@@ -205,11 +205,11 @@ func MissingHandlers() []model.Action {
 	return missing
 }
 
-// OrphanHandlers returns registered handlers whose action is neither generatable nor a
-// recognized declared-only capability (ActionDisable) — a dead hand hiding a typo.
+// OrphanHandlers returns registered handlers whose action is neither a mutating action
+// nor a recognized declared-only capability (ActionDisable) — a dead hand hiding a typo.
 func OrphanHandlers() []string {
 	known := map[string]bool{string(model.ActionDisable): true}
-	for _, a := range actionset.GeneratableActions() {
+	for _, a := range model.MutatingActions {
 		known[string(a)] = true
 	}
 	var orphans []string

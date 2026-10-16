@@ -3,8 +3,9 @@
 Successor of [PhorvexSecurity/operator](https://github.com/PhorvexSecurity/operator),
 being restructured into a monorepo of independently versioned services.
 
-**Status: phase 0 (imported).** Production is still built and deployed from
-`PhorvexSecurity/operator`. Nothing in this repository deploys yet.
+**Status: phase 2 (foundation).** Production is still built and deployed from
+`PhorvexSecurity/operator`. Nothing in this repository deploys yet. The target
+architecture is [ADR-0001](docs/architecture/ADR-0001-service-monorepo.md).
 
 ## Provenance
 
@@ -27,11 +28,25 @@ self-hosted runner, a secret, OIDC write access or AWS actions.
 
 Each phase lands as its own pull request.
 
-| Phase | Scope |
+| Phase | Scope | State |
+|---|---|---|
+| 1 | Remove unreferenced code, archive historical docs, adapt the workflow harness, green CI | Done |
+| 2 | Foundation: `libs/logging` (JSON logs), gofmt/vet and image builds in CI | Done |
+| 3 | Break the domain cycles and enforce the service boundaries (`archtest`); per-service brain configuration | In progress |
+| 4 | gRPC/protobuf contracts and one binary per service in the one module: sensor, brain, dispatcher, actuator, attacks, console | |
+| 5 | One image, chart and Argo CD Application per service; release-please tags; side-by-side namespace on the cluster | |
+| 6 | Move attack tooling out of the console | |
+
+## Layout
+
+| Path | Contents |
 |---|---|
-| 1 | Remove unreferenced code, archive historical docs, adapt the workflow harness, architecture decision record |
-| 2 | Monorepo skeleton: `go.work`, `services/`, `libs/`, structured JSON logging, per-service CI |
-| 3 | Decouple domains inside one binary: break import cycles, enforce boundaries |
-| 4 | gRPC/protobuf contracts and one binary per service: sensor, brain, dispatcher, actuator, attacks, console |
-| 5 | One image, chart and Argo CD Application per service; independent release tags; side-by-side namespace on the cluster |
-| 6 | Move attack tooling out of the console |
+| `phorvex/` | Operator module (manager, console backend, all domains today) |
+| `libs/` | Shared Go modules (`phorvex.ai/libs/...`) |
+| `build/test-harness/` | Attack harness |
+| `build/phoenix-extended/` | Extended Phoenix operator (third party) |
+| `build/integrations/` | Workload runtime recipes |
+| `dashboard-web/` | Console frontend |
+| `deploy/` | Helm charts, Argo CD, monitoring |
+| `docs/` | Architecture, runbooks, provenance, archive |
+| `workflow/` | Agent workflow framework (archived records frozen) |

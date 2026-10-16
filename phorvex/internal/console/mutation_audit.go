@@ -12,7 +12,7 @@ package console
 import (
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"path/filepath"
 	"time"
 )
@@ -60,7 +60,7 @@ func (s *Server) auditConsoleMutation(m consoleMutation) error {
 	if err != nil {
 		return fmt.Errorf("encode mutation evidence: %w", err)
 	}
-	log.Printf("console-mutation %s", b)
+	slog.Info("console mutation", "record", json.RawMessage(b))
 	path := s.cfg.mutationAuditPath()
 	if path == "" {
 		err := fmt.Errorf("console state path is not configured")

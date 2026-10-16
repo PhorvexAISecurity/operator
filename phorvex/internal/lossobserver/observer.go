@@ -16,8 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/disclosure"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/ownership"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -54,7 +54,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	}
 	operationCtx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	immediate, stable, err := ingest.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	immediate, stable, err := ownership.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func ObserveOnce(ctx context.Context, c client.Client, httpClient *http.Client, 
 	// Prevent a copy completed across target/owner replacement from being bound
 	// to either generation. This second authoritative read creates no new GET to
 	// the canary endpoint.
-	afterImmediate, afterStable, err := ingest.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
+	afterImmediate, afterStable, err := ownership.ResolveStableWorkloadOwner(operationCtx, c, cfg.TargetNamespace, cfg.TargetName, cfg.TargetUID)
 	if err != nil || afterImmediate != immediate || afterStable != stable {
 		return nil, errors.New("target ownership changed during observation")
 	}

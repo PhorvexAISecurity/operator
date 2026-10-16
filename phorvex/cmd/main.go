@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -28,11 +29,11 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -65,6 +66,7 @@ import (
 	"github.com/phorvex/phorvex/internal/startupauthz"
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+	"phorvex.ai/libs/logging"
 )
 
 const (
@@ -290,9 +292,20 @@ func main() {
 	flag.StringVar(&emitTenant, "emit-tenant", "", "[integration-emit] tenant id (defaults to emit-namespace).")
 	flag.StringVar(&emitMatchLabels, "emit-matchlabels", "", "[integration-emit] AMTD guest-list matchLabels, e.g. app=demo,tier=web.")
 
-	opts := zap.Options{Development: true}
-	opts.BindFlags(flag.CommandLine)
+	logOptions := logging.Options{Service: "phorvex-manager", Version: buildinfo.Current().GitSHA}
+	logging.RegisterFlags(flag.CommandLine, &logOptions)
 	flag.Parse()
+	// Logs go to stderr: one-shot modes (--scan, --ablation) print their results on
+	// stdout for the console to parse. Set up before any configuration check, so
+	// a refusal below is logged instead of discarded by the unset delegating logger.
+	logger, logErr := logging.New(os.Stderr, logOptions)
+	if logErr != nil {
+		fmt.Fprintln(os.Stderr, logErr)
+		os.Exit(2)
+	}
+	slog.SetDefault(logger)
+	ctrl.SetLogger(logging.Logr(logger))
+	klog.SetLogger(logging.Logr(logger).WithName("client-go"))
 	if voiceMCPApprovedImage != "" && !voicemcppolicy.ValidApprovedImage(voiceMCPApprovedImage) {
 		setupLog.Error(fmt.Errorf("invalid reviewed MCP image reference"), "voice MCP image configuration invalid")
 		os.Exit(1)
@@ -315,7 +328,6 @@ func main() {
 	currentObservers := ingest.NewTrustedDetectors(strings.Split(trustedCurrentInventoryObservers, ","))
 	ingest.ConfigureCurrentInventoryTrust(currentObservers)
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 	if detectors.Empty() {
 		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")
 	} else {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
@@ -38,7 +39,7 @@ func m009PendingResult(t *testing.T, m *Manager, started time.Time, result actua
 func m009Receipt(p pendingRotation, processed time.Time) model.PhoenixExecutionReceipt {
 	return model.PhoenixExecutionReceipt{
 		EventName: p.phoenixEventName, EventUID: p.phoenixEventUID,
-		RuleType: actuator.RuleTypeRotate, ThreatLevel: actuator.RuleThreatLevel, RuleSource: actuator.RuleSource,
+		RuleType: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, RuleSource: amtdv1beta1.PhorvexRuleSource,
 		Targets: []string{p.view.Pod.Namespace + "/" + p.view.Pod.Name}, TargetUID: p.view.Pod.UID,
 		AppliedAction: "rotate", CreatedAt: p.startedAt.Add(time.Second), ProcessedAt: processed,
 	}
@@ -54,8 +55,8 @@ func TestM009LegacyAcceptedEventWithoutReceiptDoesNotTrain(t *testing.T) {
 	// event to prove that an uncorrelated replacement still cannot train the model.
 	result := actuator.Result{
 		Actuator: "phoenix", EventName: "phorvex-rotate-a", EventUID: "event-uid-a",
-		RuleType: actuator.RuleTypeRotate, RuleThreatLevel: actuator.RuleThreatLevel,
-		RuleSource: actuator.RuleSource, Emitted: true,
+		RuleType: amtdv1beta1.PhorvexRuleTypeRotate, RuleThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel,
+		RuleSource: amtdv1beta1.PhorvexRuleSource, Emitted: true,
 	}
 	p := m009PendingResult(t, m, started, result)
 	m.observeReadyRotations(&ingest.Snapshot{

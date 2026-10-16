@@ -15,7 +15,6 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/metrics"
@@ -66,17 +65,17 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 	receipts := map[string]model.PhoenixExecutionReceipt{}
 	for i := range seList.Items {
 		se := &seList.Items[i]
-		if se.Spec.Rule.Source == actuator.RuleSource {
+		if se.Spec.Rule.Source == amtdv1beta1.PhorvexRuleSource {
 			metrics.RecordSecurityEvent(TrustSelf)
 			// A finalizer-retained deleting event is no longer durable execution
 			// evidence. Keep it outside belief, but do not project a receipt that could
 			// authorize learning or cost attribution after deletion began.
-			if se.Spec.Rule.Type == actuator.RuleTypeRotate && se.DeletionTimestamp == nil {
+			if se.Spec.Rule.Type == amtdv1beta1.PhorvexRuleTypeRotate && se.DeletionTimestamp == nil {
 				targets := append([]string(nil), se.Spec.Targets...)
 				receipts[se.Name] = model.PhoenixExecutionReceipt{
 					EventName: se.Name, EventUID: string(se.UID), RuleType: se.Spec.Rule.Type,
 					ThreatLevel: se.Spec.Rule.ThreatLevel, RuleSource: se.Spec.Rule.Source, Targets: targets,
-					TargetUID:     se.Annotations[actuator.PhoenixRotateTargetUIDAnnotation],
+					TargetUID:     se.Annotations[amtdv1beta1.PhorvexRotateTargetUIDAnnotation],
 					AppliedAction: se.Status.AppliedAction, CreatedAt: se.CreationTimestamp.Time,
 					ProcessedAt: se.Status.ProcessedAt.Time,
 				}
@@ -133,7 +132,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			VoiceOutputRaw:                       se.Annotations["phorvex.ai/voice-output-observation-v1"],
 			VoiceAdmissionRaw:                    se.Annotations["phorvex.ai/voice-admission-observation-v1"],
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
-		CRMRefundRaw:                         se.Annotations["phorvex.ai/crm-refund-observation-v1"],
+			CRMRefundRaw:                         se.Annotations["phorvex.ai/crm-refund-observation-v1"],
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.

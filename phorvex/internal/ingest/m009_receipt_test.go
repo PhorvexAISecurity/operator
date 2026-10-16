@@ -12,7 +12,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/phorvex/phorvex/internal/actuator"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -22,8 +21,8 @@ func TestM009SelfEventProjectsReceiptOutsideBelief(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_800_000_000, 0).UTC()
-	ev := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: "event", UID: types.UID("event-uid"), CreationTimestamp: metav1.NewTime(now), Annotations: map[string]string{actuator.PhoenixRotateTargetUIDAnnotation: "pod-uid"}},
-		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: actuator.RuleTypeRotate, ThreatLevel: actuator.RuleThreatLevel, Source: actuator.RuleSource}},
+	ev := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: "event", UID: types.UID("event-uid"), CreationTimestamp: metav1.NewTime(now), Annotations: map[string]string{amtdv1beta1.PhorvexRotateTargetUIDAnnotation: "pod-uid"}},
+		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource}},
 		Status: amtdv1beta1.SecurityEventStatus{AppliedAction: "rotate", ProcessedAt: metav1.NewTime(now.Add(time.Second))}}
 	all, byPod, receipts, err := collectEventsAndReceipts(context.Background(), fake.NewClientBuilder().WithScheme(scheme).WithObjects(ev).Build(), now.Add(2*time.Second))
 	if err != nil {
@@ -33,7 +32,7 @@ func TestM009SelfEventProjectsReceiptOutsideBelief(t *testing.T) {
 		t.Fatalf("self event entered belief: all=%+v byPod=%+v", all, byPod)
 	}
 	r := receipts[ev.Name]
-	if r.EventUID != "event-uid" || r.TargetUID != "pod-uid" || r.ThreatLevel != actuator.RuleThreatLevel || r.AppliedAction != "rotate" || len(r.Targets) != 1 {
+	if r.EventUID != "event-uid" || r.TargetUID != "pod-uid" || r.ThreatLevel != amtdv1beta1.PhorvexRuleThreatLevel || r.AppliedAction != "rotate" || len(r.Targets) != 1 {
 		t.Fatalf("receipt projection=%+v", r)
 	}
 }
@@ -48,9 +47,9 @@ func TestM009DeletingSelfEventDoesNotProjectReceipt(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "event", UID: types.UID("event-uid"), CreationTimestamp: metav1.NewTime(now),
 			DeletionTimestamp: &metav1.Time{Time: now.Add(time.Second)}, Finalizers: []string{"retain"},
-			Annotations: map[string]string{actuator.PhoenixRotateTargetUIDAnnotation: "pod-uid"},
+			Annotations: map[string]string{amtdv1beta1.PhorvexRotateTargetUIDAnnotation: "pod-uid"},
 		},
-		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: actuator.RuleTypeRotate, ThreatLevel: actuator.RuleThreatLevel, Source: actuator.RuleSource}},
+		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource}},
 		Status: amtdv1beta1.SecurityEventStatus{AppliedAction: "rotate", ProcessedAt: metav1.NewTime(now.Add(time.Second))},
 	}
 	_, _, receipts, err := collectEventsAndReceipts(context.Background(), fake.NewClientBuilder().WithScheme(scheme).WithObjects(ev).Build(), now.Add(2*time.Second))
@@ -74,8 +73,8 @@ func TestM009ReceiptInventoryUsesAuthoritativeReader(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Unix(1_800_000_000, 0).UTC()
-	stale := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: "event", UID: "event-uid", CreationTimestamp: metav1.NewTime(now), Annotations: map[string]string{actuator.PhoenixRotateTargetUIDAnnotation: "pod-uid"}},
-		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: actuator.RuleTypeRotate, ThreatLevel: actuator.RuleThreatLevel, Source: actuator.RuleSource}},
+	stale := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: "event", UID: "event-uid", CreationTimestamp: metav1.NewTime(now), Annotations: map[string]string{amtdv1beta1.PhorvexRotateTargetUIDAnnotation: "pod-uid"}},
+		Spec:   amtdv1beta1.SecurityEventSpec{Targets: []string{"ns/pod"}, Rule: amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: amtdv1beta1.PhorvexRuleThreatLevel, Source: amtdv1beta1.PhorvexRuleSource}},
 		Status: amtdv1beta1.SecurityEventStatus{AppliedAction: "rotate", ProcessedAt: metav1.NewTime(now.Add(time.Second))}}
 	cached := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale).Build()
 	authoritative := fake.NewClientBuilder().WithScheme(scheme).Build()

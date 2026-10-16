@@ -57,10 +57,10 @@ func TestPhoenixEnsurePolicy(t *testing.T) {
 	// Verify rotate strategy maps to Delete and quarantine to Quarantine.
 	var sawRotateDelete, sawQuarantine bool
 	for _, st := range amtd.Spec.Strategy {
-		if st.Rule.Type == RuleTypeRotate && st.Action.Delete != nil {
+		if st.Rule.Type == amtdv1beta1.PhorvexRuleTypeRotate && st.Action.Delete != nil {
 			sawRotateDelete = true
 		}
-		if st.Rule.Type == RuleTypeQuarantine && st.Action.Quarantine != nil {
+		if st.Rule.Type == amtdv1beta1.PhorvexRuleTypeQuarantine && st.Action.Quarantine != nil {
 			sawQuarantine = true
 		}
 	}
@@ -88,7 +88,7 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Actuate: %v", err)
 	}
-	if !res.Emitted || res.RuleType != RuleTypeQuarantine || res.RuleSource != RuleSource {
+	if !res.Emitted || res.RuleType != amtdv1beta1.PhorvexRuleTypeQuarantine || res.RuleSource != amtdv1beta1.PhorvexRuleSource {
 		t.Errorf("unexpected result: %+v", res)
 	}
 
@@ -100,13 +100,13 @@ func TestPhoenixActuateEmitsSecurityEvent(t *testing.T) {
 		t.Fatalf("want 1 SecurityEvent emitted, got %d", len(seList.Items))
 	}
 	se := seList.Items[0]
-	if se.Annotations[phorvexQuarantineTargetUIDAnnotation] != "demo-uid" {
-		t.Fatalf("quarantine target UID envelope = %q", se.Annotations[phorvexQuarantineTargetUIDAnnotation])
+	if se.Annotations[amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation] != "demo-uid" {
+		t.Fatalf("quarantine target UID envelope = %q", se.Annotations[amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation])
 	}
 	if len(se.Spec.Targets) != 1 || se.Spec.Targets[0] != "ns/demo-1" {
 		t.Errorf("target = %v, want [ns/demo-1]", se.Spec.Targets)
 	}
-	if se.Spec.Rule.Type != RuleTypeQuarantine || se.Spec.Rule.Source != RuleSource || se.Spec.Rule.ThreatLevel != RuleThreatLevel {
+	if se.Spec.Rule.Type != amtdv1beta1.PhorvexRuleTypeQuarantine || se.Spec.Rule.Source != amtdv1beta1.PhorvexRuleSource || se.Spec.Rule.ThreatLevel != amtdv1beta1.PhorvexRuleThreatLevel {
 		t.Errorf("rule = %+v", se.Spec.Rule)
 	}
 	if se.Spec.AnomalyScore == nil || *se.Spec.AnomalyScore != "0.9000" {
@@ -156,7 +156,7 @@ func TestPhoenixActuateBindsControlledQuarantineIdentity(t *testing.T) {
 		t.Fatalf("events=%d want 1", len(events.Items))
 	}
 	annotations := events.Items[0].Annotations
-	if annotations[phorvexQuarantineTargetUIDAnnotation] != "pod-uid" || annotations[phorvexQuarantineNamespaceUIDAnnotation] != "namespace-uid" || annotations[phorvexQuarantineOperationAnnotation] != strings.Repeat("a", 40) {
+	if annotations[amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation] != "pod-uid" || annotations[amtdv1beta1.PhorvexQuarantineNamespaceUIDAnnotation] != "namespace-uid" || annotations[amtdv1beta1.PhorvexQuarantineOperationAnnotation] != strings.Repeat("a", 40) {
 		t.Fatalf("controlled quarantine identity annotations = %v", annotations)
 	}
 }

@@ -36,7 +36,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,6 +53,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"phorvex.ai/libs/logging"
 )
 
 func main() {
@@ -88,9 +89,16 @@ func historyCapacityDefaults(lookup func(string) (string, bool)) (int64, int64, 
 }
 
 func run() int {
+	// Install defaults first so configuration refusals before flag parsing are
+	// structured too; the flags below may then change level and format.
+	logOptions := logging.Options{Service: "phorvex-console", Version: console.BuildStamp}
+	if err := setLogger(logOptions); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	historyMaxDefault, historyMinFreeDefault, err := historyCapacityDefaults(os.LookupEnv)
 	if err != nil {
-		log.Printf("console history capacity configuration: %v", err)
+		slog.Error("console history capacity configuration invalid", "err", err)
 		return 2
 	}
 	var (
@@ -131,12 +139,17 @@ func run() int {
 	flag.StringVar(&catalogueV1Job, "catalogue-v1-job", "", "Internal: execute one private fixed-suite job.")
 	flag.StringVar(&catalogueV1Reconcile, "catalogue-v1-reconcile", "", "Internal: reconcile one interrupted fixed-suite job without replay.")
 	flag.StringVar(&catalogueV1Runtime, "catalogue-v1-runtime", "", "Internal: private server-generated fixed-suite runtime file.")
+	logging.RegisterFlags(flag.CommandLine, &logOptions)
 	flag.Parse()
+	if err := setLogger(logOptions); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	if catalogueV1Job != "" || catalogueV1Reconcile != "" {
 		return runCatalogueV1Worker(catalogueV1Job, catalogueV1Reconcile, catalogueV1Runtime)
 	}
 	if historyMaxBytes <= 0 || historyMinFree <= 0 {
-		log.Fatalf("console history capacity configuration: history limits must be positive")
+		fatal("console history capacity configuration invalid", "err", "history limits must be positive")
 	}
 
 	if root == "" {
@@ -149,7 +162,7 @@ func run() int {
 		cfg.StateDir = stateDir
 	}
 	if err := applyCatalogueV1Environment(&cfg, os.LookupEnv); err != nil {
-		log.Printf("catalogue v1 configuration: %v", err)
+		slog.Error("catalogue v1 configuration invalid", "err", err)
 		return 2
 	}
 	cfg.HistoryArchiveMaxBytes = historyMaxBytes
@@ -157,7 +170,7 @@ func run() int {
 	if raw, present := os.LookupEnv("PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS"); present {
 		days, err := strconv.Atoi(raw)
 		if err != nil || days < 0 || days > 3650 || raw != strconv.Itoa(days) {
-			log.Fatal("history retention days must be a canonical integer in 0..3650")
+			fatal("history retention days must be a canonical integer in 0..3650", "value", raw)
 		}
 		cfg.HistoryRetentionDays = days
 	}
@@ -168,7 +181,7 @@ func run() int {
 	if auditSourceURL != "" {
 		client, err := audittransport.NewClient(audittransport.ClientConfig{URL: auditSourceURL, ServerDNSName: auditServerDNS, CertFile: auditClientCert, KeyFile: auditClientKey, CAFile: auditSourceCA})
 		if err != nil {
-			log.Fatalf("audit source configuration: %v", err)
+			fatal("audit source configuration invalid", "err", err)
 		}
 		cfg.AuditSource = client
 		cfg.AuditSourceIdentity = auditSourceURL + "|" + auditServerDNS
@@ -177,10 +190,10 @@ func run() int {
 		cfg.Web = web
 	}
 	if err := cfg.ValidateStateDir(); err != nil {
-		log.Fatalf("console state storage unavailable: %v", err)
+		fatal("console state storage unavailable", "err", err)
 	}
 	if err := cfg.ValidateHistoryCapacity(); err != nil {
-		log.Fatalf("console history capacity configuration: %v", err)
+		fatal("console history capacity configuration invalid", "err", err)
 	}
 	for _, h := range strings.Split(metricsAllow, ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -213,51 +226,46 @@ func run() int {
 	// degrades into a console that serves cluster controls to whoever asks.
 	auth, err := console.NewAuthenticator(authCfg)
 	if err != nil {
-		log.Fatalf("Phorvex Console: refusing to start — %v\n"+
-			"Configure the ALB signed identity (PHORVEX_CONSOLE_ALB_SIGNER_ARN / _ISSUER / _CLIENT_ID) "+
-			"and/or a bearer IdP (PHORVEX_CONSOLE_OIDC_ISSUER / _AUDIENCE / _JWKS_URL). See docs/CONSOLE-AUTH.md.", err)
+		fatal("refusing to start without a valid identity configuration", "err", err,
+			"hint", "configure the ALB signed identity (PHORVEX_CONSOLE_ALB_SIGNER_ARN / _ISSUER / _CLIENT_ID) "+
+				"and/or a bearer IdP (PHORVEX_CONSOLE_OIDC_ISSUER / _AUDIENCE / _JWKS_URL); see docs/CONSOLE-AUTH.md")
 	}
 
 	url := "http://localhost" + addr
 	_, statErr := os.Stat(filepath.Join(cfg.Web, "index.html"))
 	hasWeb := statErr == nil
-	log.Printf("Phorvex Console")
-	log.Printf("  root      : %s", root)
-	log.Printf("  state     : %s (write/read/sync verified)", cfg.StateDir)
-	log.Printf("  dashboard : %s  ->  open %s", map[bool]string{true: "built (serving the SPA)", false: "NOT BUILT (run: cd dashboard-web && npm run build)"}[hasWeb], url)
-	log.Printf("  api       : %s/api/* (authenticated; only /api/health and the static SPA are public)", url)
-	log.Printf("  auth      : %s", strings.Join(auth.Modes(), "+"))
-	log.Printf("  origins   : %s", originSummary(auth.TrustedOrigins()))
-	if n := auth.GrantCount(); n == 0 {
+	if !hasWeb {
+		slog.Warn("dashboard not built; serving the API only", "web", cfg.Web, "hint", "cd dashboard-web && npm run build")
+	}
+	grants := auth.GrantCount()
+	if grants == 0 {
 		// Visibly fail closed: the service runs, authenticates callers, and authorizes nobody
 		// until DevOps supplies the bindings. Crash-looping the sidecar would take the operator
 		// pod with it and hide the reason.
-		log.Printf("  grants    : NONE CONFIGURED — every authenticated caller is denied. " +
-			"Supply the subject grant table (-auth-grants / PHORVEX_CONSOLE_GRANTS) before rollout; " +
-			"no user is an operator until it is bound explicitly.")
-	} else {
-		log.Printf("  grants    : %d subject binding(s) loaded", n)
+		slog.Warn("no subject grants configured; every authenticated caller is denied",
+			"hint", "supply the subject grant table (-auth-grants / PHORVEX_CONSOLE_GRANTS) before rollout")
 	}
 
 	srv := console.NewServer(cfg)
 	defer func() {
 		if err := srv.Close(); err != nil {
-			log.Printf("audit history close: %v", err)
+			slog.Error("audit history close failed", "err", err)
 		}
 	}()
 	srv.EnableAuth(auth)
 	// The applier is nil => record-only until a deployment injects the per-namespace-SA CRD
 	// patch (the UI labels this honestly).
 	srv.EnableVCluster(console.NewTenantQuota(console.DefaultQuota()), console.NewApplyFixManager(nil, nil, nil))
-	log.Printf("  apply-fix : %s/api/apply-fix/* (allowlist + gate-check + two-key on verified subjects; record-only applier [PENDING-CLUSTER-VALIDATION])", url)
 	// P-UPTIME: background sampler records MEASURED service availability (K8s API) so /api/uptime can
 	// show the real actuator impact on uptime. Read-only; no-ops if no cluster is reachable.
 	srv.StartUptimeSampler(context.Background())
-	log.Printf("  uptime    : %s/api/uptime (measured availability vs actuation markers)", url)
 	// Reap fired red-team SecurityEvents after a TTL so an un-cleared attack cannot pin an app
 	// to "under attack" forever (the state the dashboard was stuck in after heavy Fire-live use).
 	srv.StartRedTeamSweeper(context.Background())
-	log.Printf("  redteam   : auto-expiring fired attack events after %s", "5m")
+	slog.Info("console started",
+		"addr", addr, "url", url, "root", root, "state", cfg.StateDir, "dashboard", hasWeb,
+		"auth", strings.Join(auth.Modes(), "+"), "origins", originSummary(auth.TrustedOrigins()), "grants", grants,
+		"applyFix", "record-only", "redTeamEventTTL", "5m")
 
 	// Explicit server budgets. ReadHeaderTimeout bounds slow-header clients; WriteTimeout stays
 	// zero because /api/live and /api/runs/stream are long-lived SSE streams that a write
@@ -277,11 +285,11 @@ func run() int {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
-			log.Printf("console shutdown: %v", err)
+			slog.Error("console shutdown failed", "err", err)
 		}
 	case err := <-serveErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("console server: %v", err)
+			slog.Error("console server stopped", "err", err)
 			return 1
 		}
 	}
@@ -677,14 +685,31 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	return nil
 }
 
+// setLogger installs the console's structured logger as the slog default. Output
+// from the standard log package follows it.
+func setLogger(o logging.Options) error {
+	l, err := logging.New(os.Stderr, o)
+	if err != nil {
+		return err
+	}
+	slog.SetDefault(l)
+	return nil
+}
+
+// fatal logs an error and exits 1 without running deferred calls, as log.Fatal did.
+func fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
+	os.Exit(1)
+}
+
 func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 	if (executePath == "") == (reconcilePath == "") || runtimePath == "" {
-		log.Printf("catalogue v1 worker requires exactly one job mode and one runtime file")
+		slog.Error("catalogue v1 worker requires exactly one job mode and one runtime file")
 		return 2
 	}
 	runtimeConfig, err := cataloguev1.LoadRuntimeConfig(runtimePath)
 	if err != nil {
-		log.Printf("catalogue v1 runtime: %v", err)
+		slog.Error("catalogue v1 runtime invalid", "err", err)
 		return 2
 	}
 	jobPath := executePath
@@ -693,17 +718,17 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 	}
 	job, err := cataloguev1.LoadJob(jobPath, runtimeConfig.StateDir)
 	if err != nil {
-		log.Printf("catalogue v1 job: %v", err)
+		slog.Error("catalogue v1 job invalid", "err", err)
 		return 2
 	}
 	restConfig, kube, err := workerKubernetesRuntime(job.Profile, runtimeConfig)
 	if err != nil {
-		log.Printf("catalogue v1 Kubernetes runtime: %v", err)
+		slog.Error("catalogue v1 Kubernetes runtime unavailable", "err", err)
 		return 2
 	}
 	runtime, err := runtimeConfig.Runtime(restConfig, kube, &http.Client{Timeout: 30 * time.Second})
 	if err != nil {
-		log.Printf("catalogue v1 runtime authority: %v", err)
+		slog.Error("catalogue v1 runtime authority unavailable", "err", err)
 		return 2
 	}
 	runner, err := cataloguev1.New(runtime,
@@ -714,12 +739,12 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		cataloguev1.NewChromaHandler(), cataloguev1.NewLiteLLMHealthHandler(), cataloguev1.NewLiteLLMCredentialHandler(), cataloguev1.NewLiteLLMRoutingHandler(), cataloguev1.NewMCPVoiceModelHandler(),
 		cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMRefund), cataloguev1.NewCRMCapabilityHandler(cataloguev1.CRMReset))
 	if err != nil {
-		log.Printf("catalogue v1 registry: %v", err)
+		slog.Error("catalogue v1 registry invalid", "err", err)
 		return 2
 	}
 	release, err := cataloguev1.AcquireExecutionLock(job.OutputDir)
 	if err != nil {
-		log.Printf("catalogue v1 execution authority: %v", err)
+		slog.Error("catalogue v1 execution authority unavailable", "err", err)
 		return 2
 	}
 	defer release()
@@ -732,7 +757,7 @@ func runCatalogueV1Worker(executePath, reconcilePath, runtimePath string) int {
 		result = runner.Reconcile(ctx, job)
 	}
 	if err := cataloguev1.ValidateResult(job, result); err != nil {
-		log.Printf("catalogue v1 terminal result: %v", err)
+		slog.Error("catalogue v1 terminal result invalid", "err", err)
 		return 1
 	}
 	if result.Outcome == cataloguev1.OutcomeTestFailed {

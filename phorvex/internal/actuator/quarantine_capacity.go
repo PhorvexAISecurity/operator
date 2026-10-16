@@ -209,7 +209,7 @@ func (q *QuarantineCapacity) pendingPhoenixQuarantines(ctx context.Context, ns *
 	pending := map[string]struct{}{}
 	for i := range events.Items {
 		event := &events.Items[i]
-		if event.Spec.Rule.Type != RuleTypeQuarantine || event.Spec.Rule.Source != RuleSource {
+		if event.Spec.Rule.Type != amtdv1beta1.PhorvexRuleTypeQuarantine || event.Spec.Rule.Source != amtdv1beta1.PhorvexRuleSource {
 			continue
 		}
 		if len(event.Spec.Targets) != 1 {
@@ -222,9 +222,9 @@ func (q *QuarantineCapacity) pendingPhoenixQuarantines(ctx context.Context, ns *
 		if parts[0] != ns.Name {
 			continue
 		}
-		targetUID := strings.TrimSpace(event.Annotations[phorvexQuarantineTargetUIDAnnotation])
-		namespaceUID := strings.TrimSpace(event.Annotations[phorvexQuarantineNamespaceUIDAnnotation])
-		operationID := strings.TrimSpace(event.Annotations[phorvexQuarantineOperationAnnotation])
+		targetUID := strings.TrimSpace(event.Annotations[amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation])
+		namespaceUID := strings.TrimSpace(event.Annotations[amtdv1beta1.PhorvexQuarantineNamespaceUIDAnnotation])
+		operationID := strings.TrimSpace(event.Annotations[amtdv1beta1.PhorvexQuarantineOperationAnnotation])
 		if event.Name == "" || len(event.Name) > 253 || event.UID == "" || len(event.UID) > 128 || targetUID == "" || len(targetUID) > 128 || namespaceUID == "" || len(namespaceUID) > 128 || len(operationID) != 40 {
 			return nil, fmt.Errorf("legacy or malformed controlled Phoenix quarantine event %q for namespace %q lacks a trusted event/target/operation identity; administrative reconciliation is required", event.Name, ns.Name)
 		}

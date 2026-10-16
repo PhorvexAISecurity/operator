@@ -10,8 +10,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
-
-	"github.com/phorvex/phorvex/internal/actuator"
 )
 
 // event_trust_test.go — PHORVEXSEC-193 / M-94.
@@ -116,7 +114,7 @@ func TestEmptyAllowlistIsFailClosed(t *testing.T) {
 // Phorvex's own actuation events remain excluded (no feedback loop) regardless of trust config.
 func TestOwnEventsStillExcluded(t *testing.T) {
 	trustEvents(t, "vllm/detector-kv-canary")
-	own := seEvent("self", trustedSA, actuator.RuleSource, "vllm/vllm-0")
+	own := seEvent("self", trustedSA, amtdv1beta1.PhorvexRuleSource, "vllm/vllm-0")
 	verdicts, counts := collect(t, own)
 	if len(verdicts) != 0 || counts["vllm/vllm-0"] != 0 {
 		t.Fatalf("Phorvex's own event leaked into the stream: verdicts=%+v evidence=%d", verdicts, counts["vllm/vllm-0"])

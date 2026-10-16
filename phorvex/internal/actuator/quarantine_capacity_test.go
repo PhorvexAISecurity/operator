@@ -70,13 +70,13 @@ func TestQuarantineCapacityCountsBoundPendingPhoenixEventsAndRejectsLegacy(t *te
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "already", Namespace: ns.Name, UID: "pod-observed", Labels: map[string]string{phoenixQuarantineMarker: "policy"}}}
 	bound := &amtdv1beta1.SecurityEvent{
 		ObjectMeta: metav1.ObjectMeta{Name: "pending", UID: "event-uid", Annotations: map[string]string{
-			phorvexQuarantineTargetUIDAnnotation:    "pod-pending",
-			phorvexQuarantineNamespaceUIDAnnotation: string(ns.UID),
-			phorvexQuarantineOperationAnnotation:    operationID,
+			amtdv1beta1.PhorvexQuarantineTargetUIDAnnotation:    "pod-pending",
+			amtdv1beta1.PhorvexQuarantineNamespaceUIDAnnotation: string(ns.UID),
+			amtdv1beta1.PhorvexQuarantineOperationAnnotation:    operationID,
 		}},
 		Spec: amtdv1beta1.SecurityEventSpec{
 			Targets: []string{"tenant/replacement"},
-			Rule:    amtdv1beta1.Rule{Type: RuleTypeQuarantine, Source: RuleSource},
+			Rule:    amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeQuarantine, Source: amtdv1beta1.PhorvexRuleSource},
 		},
 	}
 	c := fake.NewClientBuilder().WithScheme(p4bScheme()).WithObjects(ns, pod, bound).Build()
