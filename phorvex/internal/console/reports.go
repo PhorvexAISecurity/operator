@@ -2,7 +2,9 @@
  * Phorvex Console — curated REPORTS endpoint (P-DASHBOARD). Serves the on-disk evidence/
  * investor artifacts (COMPARISON.md, the benchmark reports, EFFECTIVENESS-PHORVEX.md, the P3
  * reports) dynamically from disk — read-only, whitelisted by id (no arbitrary path), so the
- * dashboard shows the real curated markdown rather than re-deriving or hardcoding it.
+ * dashboard shows the real curated markdown rather than re-deriving or hardcoding it. The
+ * historical narrative reports live under docs/archive/ (repo-root documents) and
+ * docs/archive/phorvex/ (the Phorvex phase reports).
  */
 
 package console
@@ -22,14 +24,13 @@ type reportMeta struct {
 func (c *Config) reportRegistry() []reportMeta {
 	j := filepath.Join
 	return []reportMeta{
-		{"comparison", "Phorvex vs Without-Phorvex — head-to-head", "Comparison", "COMPARISON.md"},
-		{"effectiveness", "Effectiveness — Phorvex (full evidence)", "Effectiveness", j("phorvex", "EFFECTIVENESS-PHORVEX.md")},
+		{"comparison", "Phorvex vs Without-Phorvex — head-to-head", "Comparison", j("docs", "archive", "COMPARISON.md")},
+		{"effectiveness", "Effectiveness — Phorvex (full evidence)", "Effectiveness", j("docs", "archive", "phorvex", "EFFECTIVENESS-PHORVEX.md")},
 		{"bench-k8s", "Benchmark — K8s attack suite", "Benchmarks", j("build", "test-harness", "out-bench", "report.md")},
 		{"bench-ai", "Benchmark — AI / inference suite", "Benchmarks", j("build", "test-harness", "out-ai-bench", "report.md")},
 		{"bench-dollars", "Benchmark — cost / ROI", "Benchmarks", j("build", "test-harness", "out-bench", "report-dollars.md")},
-		{"p3", "P3 — structural zero-day", "Zero-day", j("phorvex", "P3-REPORT.md")},
+		{"p3", "P3 — structural zero-day", "Zero-day", j("docs", "archive", "phorvex", "P3-REPORT.md")},
 		{"p3deep", "P3-DEEP — zero-day frontier (full)", "Zero-day", j("build", "test-harness", "out-p3-full", "report.md")},
-		{"redteam-report", "P-REDTEAM — the RL adversary report", "Red-Team", j("phorvex", "P-REDTEAM-REPORT.md")},
 	}
 }
 

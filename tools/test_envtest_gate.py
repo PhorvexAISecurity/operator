@@ -10,7 +10,6 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import envtest_gate as gate  # noqa: E402
-from inherited_drift import inherited_drift
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTUATOR = 'github.com/phorvex/phorvex/internal/actuator'
@@ -261,7 +260,6 @@ class SourceBindingTests(unittest.TestCase):
                                  f'{test} has multiple Go Test declarations in {package}: {declared[test]}')
         self.assertEqual(sum(len(t) for t in gate.REQUIRED.values()), 37)
 
-    @inherited_drift("routecatalogue/adapter_apiserver_test.go imports envtest outside the gated packages")
     def test_envtest_importing_test_files_are_all_inside_the_selected_packages(self):
         # Textual import scan only: it flags an envtest-bearing test file the full-package
         # run would not reach. It does not (and cannot) prove how a test reaches envtest.

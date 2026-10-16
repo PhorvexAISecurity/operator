@@ -1546,8 +1546,8 @@ const (
 	// OwnerKindUID is the production identity: the PhorvexPolicy's UID.
 	OwnerKindUID = "uid"
 	// OwnerKindName is the fallback for the explicit offline/legacy producers
-	// (ablation, benchmark simulation, calib-soak) that build a model.Policy
-	// directly and have no API object. Production Upsert rejects an absent UID.
+	// (ablation, benchmark simulation) that build a model.Policy directly and
+	// have no API object. Production Upsert rejects an absent UID.
 	OwnerKindName = "name"
 )
 

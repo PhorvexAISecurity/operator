@@ -93,7 +93,7 @@ func TestEPSSMultiplierAbsenceSemantics(t *testing.T) {
 func TestEPSSEntersExactlyOneLayer(t *testing.T) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	root := filepath.Join(filepath.Dir(thisFile), "..")
-	forbidden := []string{"killchain", "belief", "ctxprov", "cost", "feasibility", "exposure", "actionset", "decision"}
+	forbidden := []string{"killchain", "ctxprov", "cost", "feasibility", "exposure", "actionset", "decision"}
 	for _, pkg := range forbidden {
 		entries, err := os.ReadDir(filepath.Join(root, pkg))
 		if err != nil {

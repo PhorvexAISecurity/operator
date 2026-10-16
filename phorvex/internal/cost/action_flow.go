@@ -48,7 +48,8 @@ type respawnFlowEstimate struct {
 // [ESTIMATE-UNVALIDATED] Cutover and the remaining serving-state values need their
 // own per-action measurements as the fleet makes them observable. kv-reset is no
 // longer in that bucket: PHVX-9d measured its paired TTFT penalty on the live AWS
-// vLLM endpoint and records the raw samples under benchmarks/kv-reset-ttft.
+// vLLM endpoint; the raw samples are archived at
+// PhorvexSecurity/operator@65af1c99:phorvex/benchmarks/kv-reset-ttft.
 const (
 	estimatedCutoverBase      = 0.10
 	estimatedCutoverLoadSpan  = 0.15

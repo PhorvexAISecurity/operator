@@ -1096,34 +1096,11 @@ func validateInstalledSessionCoordination(env *core.Env, request core.TargetedAc
 	} else if result.ActionAtUTC != "" {
 		return errors.New("installed session non-dispatch result carries action timestamp")
 	}
-	for _, receipt := range []string{result.ControlReceiptJSON, result.EligibleReceiptJSON, result.AuthorizationReceiptJSON} {
-		if len(receipt) > 32*1024 {
-			return errors.New("installed session coordinator receipt exceeds bound")
-		}
-		if receipt != "" && (!json.Valid([]byte(receipt)) || rejectDuplicateJSONFields([]byte(receipt)) != nil) {
-			return errors.New("installed session coordinator receipt JSON invalid")
-		}
-	}
-	if result.Coordinator == "d-phorvex-installed" && (result.ControlReceiptJSON == "" || result.EligibleReceiptJSON == "" || result.AuthorizationReceiptJSON == "") {
-		return errors.New("installed manager result omitted control, eligible, or fixture authorization receipt")
-	}
-	if result.Coordinator == "d-phorvex-installed" {
-		var receipt struct {
-			SchemaVersion, Namespace, RoleName, RoleUID, RoleBindingName, RoleBindingUID string
-			ManagerServiceAccount, ManagerNamespace, TargetName, TargetUID, FixtureNonce string
-			AuthorizationDenyNamespace, GateScope                                        string
-			ManagerGroups                                                                []string
-			NamelessFixtureAllowed, NamedTargetAllowed, UnrelatedNamespaceDenied         bool
-		}
-		decoder := json.NewDecoder(bytes.NewReader([]byte(result.AuthorizationReceiptJSON)))
-		decoder.DisallowUnknownFields()
-		wantGroups := []string{"system:serviceaccounts", "system:serviceaccounts:" + env.Config.InstalledManagerFixture.ManagerNamespace, "system:authenticated"}
-		if err := decoder.Decode(&receipt); err != nil || ensureJSONEOF(decoder) != nil || receipt.SchemaVersion != "phorvex.installed-fixture-authorization.v1" || receipt.Namespace != env.Config.Namespace || receipt.RoleName != "harness-installed-manager-eviction" || receipt.RoleBindingName != receipt.RoleName || receipt.RoleUID == "" || receipt.RoleBindingUID == "" || receipt.ManagerServiceAccount != env.Config.InstalledManagerFixture.ManagerServiceAccount || receipt.ManagerNamespace != env.Config.InstalledManagerFixture.ManagerNamespace || receipt.TargetName != request.TargetName || receipt.TargetUID != request.TargetUID || receipt.FixtureNonce != env.Config.InstalledManagerFixture.FixtureNonce || receipt.AuthorizationDenyNamespace != env.Config.InstalledManagerFixture.AuthorizationDenyNamespace || !slices.Equal(receipt.ManagerGroups, wantGroups) || !receipt.NamelessFixtureAllowed || !receipt.NamedTargetAllowed || !receipt.UnrelatedNamespaceDenied || receipt.GateScope == "" {
-			return errors.Join(err, errors.New("installed manager fixture authorization receipt differs"))
-		}
-	}
-	if result.Coordinator != "d-phorvex-installed" && (result.ControlReceiptJSON != "" || result.EligibleReceiptJSON != "" || result.AuthorizationReceiptJSON != "") {
-		return errors.New("non-installed coordinator supplied installed audit receipts")
+	// The installed-manager audit receipts were produced only by the removed
+	// d-phorvex-installed coordinator. The v1 evidence schema keeps their keys,
+	// so they must stay empty for every remaining coordinator.
+	if result.ControlReceiptJSON != "" || result.EligibleReceiptJSON != "" || result.AuthorizationReceiptJSON != "" {
+		return errors.New("coordinator supplied installed audit receipts")
 	}
 	return nil
 }

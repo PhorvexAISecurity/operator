@@ -1,6 +1,6 @@
 {
   "schema": "phorvex.catalogue-suite.v1",
-  "revision": "3.0.0-development.2",
+  "revision": "3.0.0-development.3",
   "status": "DEVELOPMENT_NOT_ACCEPTED_BENCHMARK_FREEZE",
   "purpose": "Workload-derived functional evaluation foundation for later brain regression comparisons. This manifest selects existing registered implementations; it is not an executable harness config.",
   "implementationStatus": "Source implementation requires its reviewed source commit and tests; consult campaign records for independent live acceptance.",
@@ -54,9 +54,9 @@
       "id": "c2-installed-manager-session",
       "workloadBoundary": "decision-dispatch-session-effect",
       "sourceFile": "scenarios/c2_installed_manager_session.go",
-      "measures": "Two CPU replicas, real process-local session, request observations, exact installed policy/target audit chain and independent effect.",
+      "measures": "Two CPU replicas, real process-local session, request observations and independent effect of the no-action and blind-timer arms.",
       "limits": "Attributable non-selection is valid; a dispatch acknowledgement is not completed effect or continuous availability.",
-      "sourceSHA256": "ba0d9fd68f787143c67394c79ee33f6c75ce82b9cc9a931fda8f68829f7e284a"
+      "sourceSHA256": "cfcbe5c4847dfbf3d99446ac80ca0080ec60135a7fd166e8b9b364789525493b"
     },
     {
       "id": "c2-vllm-prefix-cache-reset",
@@ -73,22 +73,6 @@
       "measures": "Actual engine admission, one late-selected authenticated unfinished SSE anchor captured and aborted by the engine operation, all engine dispositions, explicit unattributed background snapshot IDs, two fresh empty-queue observations and reopen.",
       "limits": "Client attribution is limited to the exact anchor; queued requests without an SSE identity remain unattributed and fullCohortAttributed is false. Direct operation-bound backend control; no graceful voice drain, MIG or installed selection claim.",
       "sourceSHA256": "22dac0abe400b9fb807a3583e3fb90412c49bd2f4ae78dc39e16fabbe3005a4e"
-    },
-    {
-      "id": "c2-native-route-cutover",
-      "workloadBoundary": "native-service-selector-cutover",
-      "sourceFile": "scenarios/c2_native_route_cutover.go",
-      "measures": "Production NativeActuator route-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
-      "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
-      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
-    },
-    {
-      "id": "c2-native-endpoint-cutover",
-      "workloadBoundary": "native-endpoint-selector-cutover",
-      "sourceFile": "scenarios/c2_native_route_cutover.go",
-      "measures": "Production NativeActuator endpoint-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback.",
-      "limits": "Selector rekey only; no locator, credential, session, security-efficacy, universal-availability or installed-brain claim.",
-      "sourceSHA256": "6a28026d78b3759e6784bd1eca3b7e2275d8c3a4e33c3584ff9018a691b5d150"
     }
   ],
   "profiles": [
@@ -244,27 +228,6 @@
       "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
     },
     {
-      "id": "manager-session-installed",
-      "scenarioFilter": [
-        "c2-installed-manager-session"
-      ],
-      "defenderFilter": [
-        "d-phorvex-installed"
-      ],
-      "trialsPerArm": 1,
-      "executionKind": "installed-manager-comparison",
-      "requiredFixtures": [
-        "owned CPU namespace",
-        "two-replica process-state fixture and PDB",
-        "exact installed manager source/digest/incarnation and policy CRD",
-        "authenticated audit reader with retained parameter material",
-        "namespace-scoped manager authorization; denial control",
-        "one bounded target policy and current availability controls"
-      ],
-      "requiredConfigValues": {},
-      "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
-    },
-    {
       "id": "gpu-prefix-cache-reset-no-action",
       "scenarioFilter": [
         "c2-vllm-prefix-cache-reset"
@@ -363,54 +326,6 @@
         "gpuFunctionalFixture.mode": "direct"
       },
       "outputIsolation": "Fresh namespace/fixture allocation and output directory for each profile invocation; never resume into another profile."
-    },
-    {
-      "id": "native-route-rotate",
-      "scenarioFilter": [
-        "c2-native-route-cutover"
-      ],
-      "defenderFilter": [
-        "d-nomtd"
-      ],
-      "trialsPerArm": 1,
-      "executionKind": "direct-production-entrypoint-control",
-      "requiredFixtures": [
-        "externally provisioned owned two-Pod HTTP fixture",
-        "exact tenant/journal Namespace, Policy, Pod and Service identities",
-        "source-bound native-route-catalogue binary and private typed config",
-        "external exact-UID fixture cleanup supervisor"
-      ],
-      "requiredRelationships": [
-        "expectedNamespaceUID == nativeRouteFixture.namespaceUID"
-      ],
-      "requiredConfigValues": {
-        "nativeRouteFixture.action": "route-rotate"
-      },
-      "outputIsolation": "Fresh externally owned namespaces, operation ID, private receipt path and output directory for each profile invocation; never resume or share protected journals."
-    },
-    {
-      "id": "native-endpoint-rotate",
-      "scenarioFilter": [
-        "c2-native-endpoint-cutover"
-      ],
-      "defenderFilter": [
-        "d-nomtd"
-      ],
-      "trialsPerArm": 1,
-      "executionKind": "direct-production-entrypoint-control",
-      "requiredFixtures": [
-        "externally provisioned owned two-Pod HTTP fixture",
-        "exact tenant/journal Namespace, Policy, Pod and Service identities",
-        "source-bound native-route-catalogue binary and private typed config",
-        "external exact-UID fixture cleanup supervisor"
-      ],
-      "requiredRelationships": [
-        "expectedNamespaceUID == nativeRouteFixture.namespaceUID"
-      ],
-      "requiredConfigValues": {
-        "nativeRouteFixture.action": "endpoint-rotate"
-      },
-      "outputIsolation": "Fresh externally owned namespaces, operation ID, private receipt path and output directory for each profile invocation; never resume or share protected journals."
     }
   ],
   "comparisonContract": {

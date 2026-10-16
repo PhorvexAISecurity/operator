@@ -114,8 +114,8 @@ func TestCollectKeepsMissingAndUnsupportedProfilesVisible(t *testing.T) {
 	missing.State = "missing"
 	missing.FailureReason = "trial was not run"
 	failed := available
-	failed.ID = "failed-installed"
-	failed.ProfileID = "manager-session-installed"
+	failed.ID = "failed-no-action"
+	failed.ProfileID = "manager-session-no-action"
 	failed.State = "failed"
 	failed.FailureReason = "bounded supervisor exited before a complete trial"
 	opaqueRaw := metricBytes(t, dir)

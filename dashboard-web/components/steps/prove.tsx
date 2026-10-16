@@ -12,12 +12,11 @@ import { RunAttackPanel } from "@/components/panels/run-attack";
 import { AblationPanel } from "@/components/subsystems/panels";
 import { UncoveredFrontier, MatrixPanel, AIBoundary } from "@/components/subsystems/analytics";
 import { ReportsPanel } from "@/components/panels/reports";
-import { RedTeamPanel } from "@/components/panels/redteam";
 import { CostPanel } from "@/components/panels/cost";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { useScopedUIState } from "@/lib/use-scoped-ui-state";
 
-type Sub = "launch" | "run" | "effectiveness" | "cost" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison" | "redteam";
+type Sub = "launch" | "run" | "effectiveness" | "cost" | "frontier" | "benchmarks" | "coverage" | "gap" | "matrix" | "aiboundary" | "posture" | "ablation" | "comparison";
 
 export function ProveStep({ lens }: { lens: Lens }) {
   const selected = useSelectedTarget();
@@ -35,7 +34,6 @@ export function ProveStep({ lens }: { lens: Lens }) {
     { id: "matrix", label: "52×N matrix" },
     { id: "aiboundary", label: "AI boundary" },
     { id: "ablation", label: "Recon-per-$" },
-    { id: "redteam", label: "RL red-team" },
   ];
   const detailTabs: { id: Sub; label: string }[] = [
     { id: "cost", label: "Cost (with/without)" },
@@ -66,7 +64,6 @@ export function ProveStep({ lens }: { lens: Lens }) {
         {activeSub === "matrix" && <MatrixPanel lens={lens} />}
         {activeSub === "aiboundary" && <AIBoundary lens={lens} />}
         {activeSub === "ablation" && <AblationPanel lens={lens} />}
-        {activeSub === "redteam" && <RedTeamPanel lens={lens} />}
         {activeSub === "posture" && <PosturePanel lens={lens} />}
       </div>
     </div>

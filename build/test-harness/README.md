@@ -243,13 +243,13 @@ a usable subset cannot establish a clean arm, so `partial` renders
 `n/a (partial: k of n observed)` and the hypothesis section carries an explicit
 caveat that no verdict establishes an absence of false defensive moves.
 
-The downstream product readers (`phorvex/cmd/p3report`, `phorvex/cmd/p3deep`,
-`phorvex/internal/console`) import the same contract rather than reimplementing
-it: they exclude refused rows, never average a `-1` cost, and disclose
-partial-control corpora instead of publishing them as measurements.
+The downstream product reader (`phorvex/internal/console`) imports the same
+contract rather than reimplementing it: it excludes refused rows, never averages
+a `-1` cost, and discloses partial-control corpora instead of publishing them as
+measurements.
 
-**Legacy rows are excluded from certified means everywhere**, including those
-product readers. A pre-contract row records no evidence that it measured
+**Legacy rows are excluded from certified means everywhere**, including that
+product reader. A pre-contract row records no evidence that it measured
 anything, so blending it into a current score or efficiency mean would launder
 unverified history into a fresh measurement. Such rows stay readable and are
 counted openly; a corpus with nothing certified left renders UNAVAILABLE, which
