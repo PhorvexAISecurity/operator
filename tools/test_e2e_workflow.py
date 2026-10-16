@@ -32,111 +32,9 @@ class E2EWorkflowTests(unittest.TestCase):
         self.assertNotIn('kubectl ', runs)
         self.assertNotIn('publish-report', runs)
 
-    def test_draft_guard_does_not_remove_live_release_validation(self):
-        doc = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
-        self.assertIn('ready_for_review', doc['on']['pull_request']['types'])
-        jobs = doc['jobs']
-        condition = jobs['e2e']['if']
-        self.assertIn("github.event_name == 'pull_request' && !github.event.pull_request.draft", condition)
-        self.assertIn("github.event_name == 'workflow_dispatch' && !inputs.force_release", condition)
-        self.assertIn('deploy', jobs['e2e-main']['needs'])
-        runs = '\n'.join(s.get('run', '') for s in jobs['e2e-main']['steps'])
-        self.assertIn('--mode attack', runs)
-        self.assertIn('exit "$RC"', runs)
-        self.assertNotIn('continue-on-error', jobs['e2e-main'])
 
-
-if __name__ == '__main__':
-    unittest.main()
-
-
-class E2EConsoleAuthInputsTests(unittest.TestCase):
-    """Every real pipeline invocation carries the authenticated console inputs and a pinned
-    SSH host identity (T1-E2E-AUTH); credentials stay out of publish/report steps.
-
-    Repository variables and secrets are not environment variables until a step maps them,
-    so this asserts the mapping at each call site rather than the existence of the secret.
-    """
-
-    CONSOLE_INPUTS = {'PHORVEX_CONSOLE_BASE': 'vars.PHORVEX_CONSOLE_BASE',
-                      'PHORVEX_CONSOLE_CA_FILE': 'vars.PHORVEX_CONSOLE_CA_FILE',
-                      'PHORVEX_CONSOLE_TOKEN': 'secrets.PHORVEX_CONSOLE_TOKEN'}
-
-    def jobs(self):
-        doc = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
-        return doc['jobs']
-
-    def test_every_pipeline_invocation_maps_the_console_inputs(self):
-        call_sites = []
-        for name, job in self.jobs().items():
-            for step in job['steps']:
-                if 'pipeline/e2e.py' in step.get('run', ''):
-                    call_sites.append((name, step))
-                    env = step.get('env', {})
-                    for key, source in self.CONSOLE_INPUTS.items():
-                        self.assertIn(source, env.get(key, ''), f'{name}: {key} not mapped from {source}')
-                    self.assertIn('secrets.PHORVEX_SSH_PASSWORD', env.get('PHORVEX_SSH_PASSWORD', ''))
-        self.assertEqual(sorted(j for j, _ in call_sites), ['e2e', 'e2e-main'])
-
-    @staticmethod
-    def uses_ssh(step):
-        """A step that reaches the jump host: through the pipeline, the publisher, or an
-        inline ssh/scp/sshpass command of its own."""
-        run = step.get('run', '')
-        return ('pipeline/e2e.py' in run or 'publish-report.sh' in run
-                or INLINE_SSH.search(run) is not None)
-
-    def test_every_inline_ssh_verifies_the_host_strictly(self):
-        inline = 0
-        for name, job in self.jobs().items():
-            for step in job['steps']:
-                run = step.get('run', '')
-                if not INLINE_SSH.search(run):
-                    continue
-                inline += 1
-                self.assertIn('StrictHostKeyChecking=yes', run, f"{name}: {step.get('name')}")
-                self.assertIn('UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS', run, f"{name}: {step.get('name')}")
-                self.assertIn('GlobalKnownHostsFile=/dev/null', run, f"{name}: {step.get('name')}")
-                for forbidden in ('StrictHostKeyChecking=no', 'StrictHostKeyChecking=accept-new',
-                                  'UserKnownHostsFile=/dev/null'):
-                    self.assertNotIn(forbidden, run, f"{name}: {step.get('name')}")
-        self.assertGreaterEqual(inline, 1)   # the deploy job's rollout waiter, at least
-
-    def test_each_ssh_using_job_provisions_the_host_identity_before_any_ssh(self):
-        for name, job in self.jobs().items():
-            steps = job['steps']
-            uses_ssh = [i for i, s in enumerate(steps) if self.uses_ssh(s)]
-            if not uses_ssh:
-                continue
-            provisioning = [i for i, s in enumerate(steps)
-                            if 'PHORVEX_SSH_KNOWN_HOSTS=' in s.get('run', '')
-                            and 'vars.PHORVEX_SSH_KNOWN_HOSTS' in str(s.get('env', {}))]
-            self.assertEqual(len(provisioning), 1, f'{name}: exactly one host-identity provisioning step')
-            self.assertLess(provisioning[0], min(uses_ssh), f'{name}: provisioning must precede ssh')
-            # Unconditional provisioning covers every later step. A conditional one (the deploy
-            # job's, gated on an actual rollout) must gate exactly what it serves, so a run that
-            # deploys nothing needs no host identity and a run that does never lacks one.
-            condition = steps[provisioning[0]].get('if')
-            if condition is not None:
-                for i in uses_ssh:
-                    self.assertEqual(condition, steps[i].get('if'),
-                                     f"{name}: provisioning and {steps[i].get('name')} must share one condition")
-            run = steps[provisioning[0]]['run']
-            self.assertIn('umask 077', run)
-            self.assertIn('GITHUB_ENV', run)
-            self.assertIn('exit 1', run)          # unprovisioned identity fails closed
-            self.assertNotIn('accept-new', run)
-
-    def test_credentials_stay_out_of_publish_and_report_steps(self):
-        for name, job in self.jobs().items():
-            for step in job['steps']:
-                run = step.get('run', '')
-                env = step.get('env', {})
-                if 'pipeline/e2e.py' not in run:
-                    self.assertNotIn('PHORVEX_CONSOLE_TOKEN', env,
-                                     f"{name}: {step.get('name')} carries the console token")
-                if 'publish-report.sh' in run or 'summary.py' in run:
-                    self.assertNotIn('PHORVEX_CONSOLE', str(env), f"{name}: {step.get('name')}")
+class E2EPublishTransportTests(unittest.TestCase):
+    """The report publisher and pipeline verify the pinned SSH host identity (T1-E2E-AUTH)."""
 
     def test_publish_script_and_pipeline_share_the_strict_host_identity(self):
         script = (ROOT / 'End-to-End/publish-report.sh').read_text()
@@ -145,3 +43,7 @@ class E2EConsoleAuthInputsTests(unittest.TestCase):
         for forbidden in ('StrictHostKeyChecking=no', 'UserKnownHostsFile=/dev/null', 'StrictHostKeyChecking=accept-new'):
             self.assertNotIn(forbidden, script)
             self.assertNotIn(forbidden, (ROOT / 'End-to-End/pipeline/transport.py').read_text())
+
+
+if __name__ == '__main__':
+    unittest.main()

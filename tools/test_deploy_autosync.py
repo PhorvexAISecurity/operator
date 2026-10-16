@@ -99,37 +99,6 @@ class DeployAutosyncTests(unittest.TestCase):
         self.assertIs(spec['syncPolicy']['automated']['selfHeal'], True)
         self.assertIn('RespectIgnoreDifferences=true', spec['syncPolicy']['syncOptions'])
 
-    def test_actual_waiter_is_streamed_by_ci_and_tested_in_isolated_jobs(self):
-        ci = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
-        step = next(s for s in ci['jobs']['deploy']['steps']
-                    if s.get('name') == 'Wait for ArgoCD to roll it out')
-        self.assertEqual(step['if'], "steps.publish.outputs.released == 'true'")
-        self.assertIn('< deploy/argocd/wait-for-rollout.sh', step['run'])
-        # Direct read-only cluster access first; the SSH jump host is the fallback. Both
-        # carry MARKERS so the waiter checks only the components this release re-tagged.
-        self.assertIn('V="$V" MARKERS="$MARKERS" bash deploy/argocd/wait-for-rollout.sh', step['run'])
-        self.assertIn("V=$V MARKERS='$MARKERS' bash -s", step['run'])
-        self.assertLess(step['run'].index('[[ "$V" =~'), step['run'].index('sshpass -e ssh'))
-        # The waiter logs in with the shared jump-host password, so it verifies the same
-        # pinned host identity as the E2E transport (T1-E2E-AUTH) and never accepts an
-        # unknown or changed key.
-        self.assertIn('StrictHostKeyChecking=yes', step['run'])
-        self.assertIn('UserKnownHostsFile=$PHORVEX_SSH_KNOWN_HOSTS', step['run'])
-        self.assertNotIn('StrictHostKeyChecking=no', step['run'])
-        self.assertNotIn('UserKnownHostsFile=/dev/null', step['run'])
-        steps = ci['jobs']['deploy']['steps']
-        provisioning = next(s for s in steps if s.get('name') == 'Provision the SSH host identity')
-        self.assertEqual(provisioning['if'], step['if'])
-        self.assertLess(steps.index(provisioning), steps.index(step))
-        chart = '\n'.join(s.get('run', '') for s in ci['jobs']['chart-sync']['steps'])
-        self.assertIn('python3 tools/test_deploy_autosync.py', chart)
-        self.assertIn('bash -n deploy/argocd/wait-for-rollout.sh', chart)
-        for workflow, job in (('pr-validation.yml', 'charts'), ('e2e-contract.yml', 'e2e-contract')):
-            isolated = yaml.load((ROOT / '.github/workflows' / workflow).read_text(), Loader=yaml.BaseLoader)
-            self.assertEqual(isolated['permissions'], {'contents': 'read'})
-            self.assertIn('unittest discover -s tools', '\n'.join(
-                s.get('run', '') for s in isolated['jobs'][job]['steps']))
-
     def test_explicitly_disabled_is_immediate_and_does_not_sleep(self):
         result, calls = self.run_wait(apps=[app({'enabled': False, 'selfHeal': True})])
         self.assert_early_failure(result, calls, 'automated.enabled=false')

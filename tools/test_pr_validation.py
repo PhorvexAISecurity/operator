@@ -114,10 +114,14 @@ class PRValidationTests(unittest.TestCase):
                 with self.subTest(key=key, state=state):
                     self.assertNotEqual(check(dict(good, **{key: state})), 0)
 
-    def test_privileged_workflow_keeps_its_main_only_pr_boundary(self):
-        ci = yaml.load((ROOT / '.github/workflows/ci.yml').read_text(), Loader=yaml.BaseLoader)
-        self.assertEqual(ci['on']['pull_request']['branches'], ['main'])
-        self.assertEqual(ci['on']['push']['branches'], ['main'])
+    def test_no_workflow_reaches_live_infrastructure(self):
+        # This repository is not a deployer: the legacy pipeline stays in
+        # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change.
+        for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
+            raw = path.read_text()
+            with self.subTest(workflow=path.name):
+                for forbidden in ('self-hosted', 'secrets.', 'id-token: write', 'aws-actions/'):
+                    self.assertNotIn(forbidden, raw)
 
 
 if __name__ == '__main__':
