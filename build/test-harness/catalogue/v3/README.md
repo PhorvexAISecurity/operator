@@ -1,7 +1,7 @@
 # Workload catalogue v3 — development suite
 
 [`suite.json`](suite.json) selects nine implemented workload mechanisms through
-15 explicit profiles. This is a development foundation for brain evaluation;
+14 explicit profiles. This is a development foundation for brain evaluation;
 it is **not a completed live benchmark or a security-coverage certificate**.
 Source tests, direct backend effects, installed-manager attribution, application
 availability and security efficacy have separate acceptance records.
@@ -22,7 +22,7 @@ controllers or installs shared CRDs.
 | Durable checkpoint | `checkpoint-local-baseline-timer` | Acknowledged progress and later durable readback on an exact owned volume, including interruptions and unverified recovery. |
 | Voice transport | `voice-stream-baseline-timer` | Numbered synthetic WebSocket frames, end marker, established-session interruption and fresh-session recovery. |
 | NATS JetStream | `nats-no-action`, `nats-member-restart`, `nats-quorum-pause` | Actual publish/consumer acknowledgements and stored-message hashes around no action, one non-client restart, or bounded two-member quorum loss with same-ID reconciliation. |
-| Installed Phorvex | `manager-session-no-action`, `manager-session-blind-timer`, `manager-session-installed` | Matched process-state/request observations with a separately attributable installed decision, refusal or action. |
+| Installed-manager session | `manager-session-no-action`, `manager-session-blind-timer` | Matched process-state/request observations around no action or one blind-timer Pod delete. The installed-Phorvex arm was removed with its audit observer. |
 | Ordinary GPU cache | `gpu-prefix-cache-reset-no-action`, `gpu-prefix-cache-reset-direct` | Actual inference/cache observations; direct logical reset, miss/repopulation and busy refusal, followed by eight exact normal-length completions and an idle metrics sample. |
 | Ordinary GPU drain | `gpu-request-drain-no-action`, `gpu-request-drain-direct` | Actual engine admission, one late-selected authenticated unfinished SSE anchor bound to an aborted engine request, explicit unknown background IDs, fresh quiescence observations and reopening. |
 | Native route rotation | `native-route-rotate` | Production `NativeActuator` route-rotate selector rekey, exact EndpointSlice membership, bounded HTTP identities and protected rollback. |
@@ -52,10 +52,9 @@ fixture package. Reusing an old namespace/Pod/volume identity is not preparation
    capability and source/digest evidence, the bounded workload schedule,
    resource limits, failure stops and cleanup authority. External GPU/storage
    fixtures require their own provisioning and cleanup supervisor; selecting a
-   profile does not create them. For the installed arm, bind the existing
-   manager and authenticated audit/material reader; do not start a controller.
-   GPU objects belong to the external fixture supervisor: use its dedicated
-   `fixture.phorvex.ai/run` label and retained creation identities. Do not mark
+   profile does not create them. GPU objects belong to the external fixture
+   supervisor: use its dedicated `fixture.phorvex.ai/run` label and retained
+   creation identities. Do not mark
    its Pod, controller or Service `r6th.io/owned=true`; that label grants ordinary
    harness cleanup ownership and the GPU scenario rejects it on these objects.
 3. Put the selected profile's exact filters and `trialsPerArm` into the reviewed
@@ -87,9 +86,11 @@ required reviewed protocol extensions is unavailable for those controls.
 
 The full comparison is no action, the applicable timer/static baseline, and
 installed Phorvex under the same source-pinned fixture, offered workload, warmup,
-observation horizon and outcome definitions. The installed session profiles are
-the current route for that attributable chain. The other direct controls are
-building blocks; calling a backend from a scenario does not test brain selection.
+observation horizon and outcome definitions. This suite currently has no
+installed-Phorvex arm: the earlier `d-phorvex-installed` arm and its audit
+observer were removed (they remain in `PhorvexSecurity/operator@65af1c99`). The
+direct controls are building blocks; calling a backend from a scenario does not
+test brain selection.
 
 Both NATS and GPU direct-control modes deliberately use `d-nomtd`: there is no
 separate defender selecting their internal protocol action. Group their rows by

@@ -27,7 +27,7 @@ func TestNATSExposureConfigOneUseContract(t *testing.T) {
 		{"missing transport marker", func(c *TargetConfig) { c.NATSExposureFixture.Transport = "" }},
 		{"kubeconfig in explicit mode", func(c *TargetConfig) { c.Kubeconfig = "/tmp/not-used" }},
 		{"missing cluster pin", func(c *TargetConfig) { c.NATSExposureFixture.ClusterUID = "" }},
-		{"other fixture", func(c *TargetConfig) { c.InstalledManagerFixture = &InstalledManagerFixtureConfig{} }},
+		{"other fixture", func(c *TargetConfig) { c.GPUFunctionalFixture = &GPUFunctionalFixtureConfig{} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			copy := base

@@ -27,7 +27,7 @@ func validateCRMCapabilityFixture(c TargetConfig) error {
 		len(c.ScenarioFilter) != 1 || (c.ScenarioFilter[0] != "c2-crm-refund-capability" && c.ScenarioFilter[0] != "c2-crm-reset-capability") {
 		return errors.New("config: CRM capability requires one exact scenario, d-nomtd arm and pinned kubeconfig")
 	}
-	if c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.InstalledManagerFixture != nil ||
+	if c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil ||
 		c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: CRM capability cannot combine with another fixture")
 	}

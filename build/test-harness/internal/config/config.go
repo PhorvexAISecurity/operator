@@ -9,7 +9,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -153,11 +152,6 @@ type TargetConfig struct {
 	GuardrailAvailabilityFixture *GuardrailAvailabilityFixtureConfig `json:"guardrailAvailabilityFixture,omitempty"`
 	// GuardrailOutputFixture selects the versioned synthetic support response case.
 	GuardrailOutputFixture *GuardrailOutputFixtureConfig `json:"guardrailOutputFixture,omitempty"`
-
-	// InstalledManagerFixture attaches one catalogue arm to an already installed
-	// manager and its existing authenticated audit API. It is a complete runtime
-	// pin; nil keeps the arm unavailable and causes no manager/CRD mutation.
-	InstalledManagerFixture *InstalledManagerFixtureConfig `json:"installedManagerFixture,omitempty"`
 
 	// GPUFunctionalFixture binds one benign functional trial to an externally
 	// provisioned, supervisor-owned ordinary-GPU vLLM fixture. The harness never
@@ -382,41 +376,6 @@ type GuardrailOutputFixtureConfig struct {
 	CleanupSeconds            int    `json:"cleanupSeconds"`
 }
 
-type InstalledManagerFixtureConfig struct {
-	ManagerNamespace           string `json:"managerNamespace"`
-	ManagerServiceAccount      string `json:"managerServiceAccount"`
-	FixtureNonce               string `json:"fixtureNonce"`
-	AuthorizationDenyNamespace string `json:"authorizationDenyNamespace"`
-	DeploymentName             string `json:"deploymentName"`
-	DeploymentUID              string `json:"deploymentUID"`
-	ReplicaSetName             string `json:"replicaSetName"`
-	ReplicaSetUID              string `json:"replicaSetUID"`
-	PodName                    string `json:"podName"`
-	PodUID                     string `json:"podUID"`
-	ContainerName              string `json:"containerName"`
-	Image                      string `json:"image"`
-	ImageID                    string `json:"imageID"`
-	StartedAt                  string `json:"startedAt"`
-	RestartCount               int32  `json:"restartCount"`
-	OCIRevision                string `json:"ociRevision"`
-	ExpectedBrainImage         string `json:"expectedBrainImage"`
-	TraceSchema                string `json:"traceSchema"`
-	PolicyCRDUID               string `json:"policyCRDUID"`
-	PolicyCRDResourceVersion   string `json:"policyCRDResourceVersion"`
-	ObserverBinary             string `json:"observerBinary"`
-	ObserverBinarySHA256       string `json:"observerBinarySHA256"`
-	AuditURL                   string `json:"auditURL"`
-	AuditServerName            string `json:"auditServerName"`
-	AuditCAFile                string `json:"auditCAFile"`
-	AuditClientCertFile        string `json:"auditClientCertFile"`
-	AuditClientKeyFile         string `json:"auditClientKeyFile"`
-	ParameterManifestID        string `json:"parameterManifestID"`
-	ParameterManifestHash      string `json:"parameterManifestHash"`
-	ObservationTimeoutSeconds  int    `json:"observationTimeoutSeconds"`
-	ObservationMaxBytes        int64  `json:"observationMaxBytes"`
-	ObservationMaxRows         int    `json:"observationMaxRows"`
-}
-
 // DefaultCredentialObservationWindowSeconds is the observation interval applied
 // when the config omits it (0). It is a deliberate, documented positive default.
 const DefaultCredentialObservationWindowSeconds = 90
@@ -590,9 +549,6 @@ func (c TargetConfig) Validate() error {
 		if err := validateGPUFunctionalFixture(c); err != nil {
 			return err
 		}
-		if err := validateInstalledManagerFixture(c); err != nil {
-			return err
-		}
 		return validateNativeRouteFixture(c)
 	}
 	if strings.TrimSpace(c.BenignCheckpointStorageClass) == "" {
@@ -635,9 +591,6 @@ func (c TargetConfig) Validate() error {
 		return err
 	}
 	if err := validateGPUFunctionalFixture(c); err != nil {
-		return err
-	}
-	if err := validateInstalledManagerFixture(c); err != nil {
 		return err
 	}
 	return validateNativeRouteFixture(c)
@@ -775,7 +728,7 @@ func validatePodBoundTokenFixture(c TargetConfig) error {
 		c.TrialsPerArm != 1 || len(c.DefenderFilter) != 0 ||
 		len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != PodBoundTokenCaseID(c.Namespace) ||
 		c.NATSExposureFixture != nil || c.MongoExposureFixture != nil ||
-		c.GuardrailStaticFixture != nil || c.GuardrailOutputFixture != nil || c.InstalledManagerFixture != nil ||
+		c.GuardrailStaticFixture != nil || c.GuardrailOutputFixture != nil ||
 		c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil ||
 		!natsExposureRunID.MatchString(f.RunID) || !natsExposureNonce.MatchString(f.Nonce) ||
 		!kubernetesUIDPattern.MatchString(f.ClusterUID) || f.Transport != "in-cluster" ||
@@ -833,7 +786,7 @@ func validateGuardrailStaticFixture(c TargetConfig) error {
 		!kubernetesUIDPattern.MatchString(f.ServiceUID) || !natsExposureDigest.MatchString(f.SourceSHA256) ||
 		f.GuardrailJournalName == "" || len(validation.IsDNS1123Subdomain(f.GuardrailJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.GuardrailJournalUID) ||
 		f.KVJournalName == "" || len(validation.IsDNS1123Subdomain(f.KVJournalName)) != 0 || !kubernetesUIDPattern.MatchString(f.KVJournalUID) ||
-		f.MaxRunSeconds != 600 || c.GuardrailAvailabilityFixture != nil || c.GuardrailOutputFixture != nil || c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.InstalledManagerFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+		f.MaxRunSeconds != 600 || c.GuardrailAvailabilityFixture != nil || c.GuardrailOutputFixture != nil || c.NATSExposureFixture != nil || c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: guardrailStaticFixture requires exact installed source and target pins, one 600-second in-cluster vLLM comparison, and no other fixture")
 	}
 	return nil
@@ -868,7 +821,7 @@ func validateNATSExposureFixture(c TargetConfig) error {
 	default:
 		return errors.New("config: NATS exposure mode unsupported")
 	}
-	if c.NATSJetStreamFixture != nil || c.InstalledManagerFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
+	if c.NATSJetStreamFixture != nil || c.GPUFunctionalFixture != nil || c.NativeRouteFixture != nil || c.BenignCheckpointLocalFixture {
 		return errors.New("config: natsExposureFixture cannot share another external fixture")
 	}
 	if !natsExposureDigest.MatchString(f.ConfigSHA256) || !natsExposureImage.MatchString(f.ObserverImage) || !natsExposureImage.MatchString(f.BrokerImageID) {
@@ -918,90 +871,6 @@ func validateNATSJetStreamFixture(c TargetConfig) error {
 			return errors.New("config: natsJetStreamFixture PV name/UID/slot/path hash authority is invalid or duplicated")
 		}
 		names[pv.Name], uids[pv.UID], slots[pv.Slot] = true, true, true
-	}
-	return nil
-}
-
-func validateInstalledManagerFixture(c TargetConfig) error {
-	fixture := c.InstalledManagerFixture
-	if fixture == nil {
-		return nil
-	}
-	if c.TrialsPerArm != 1 || len(c.ScenarioFilter) != 1 || c.ScenarioFilter[0] != "c2-installed-manager-session" || len(c.DefenderFilter) != 1 || c.DefenderFilter[0] != "d-phorvex-installed" {
-		return errors.New("config: installedManagerFixture requires one c2-installed-manager-session trial with defenderFilter=[d-phorvex-installed]")
-	}
-	for label, value := range map[string]string{
-		"managerNamespace": fixture.ManagerNamespace, "managerServiceAccount": fixture.ManagerServiceAccount, "deploymentName": fixture.DeploymentName,
-		"replicaSetName": fixture.ReplicaSetName, "podName": fixture.PodName, "containerName": fixture.ContainerName,
-		"auditServerName": fixture.AuditServerName,
-	} {
-		if value == "" || len(validation.IsDNS1123Subdomain(value)) != 0 {
-			return fmt.Errorf("config: installedManagerFixture %s must be an exact DNS subdomain", label)
-		}
-	}
-	if fixture.FixtureNonce == "" || len(validation.IsDNS1123Label(fixture.FixtureNonce)) != 0 {
-		return errors.New("config: installedManagerFixture fixtureNonce must be an exact DNS label")
-	}
-	if fixture.AuthorizationDenyNamespace == "" || fixture.AuthorizationDenyNamespace == c.Namespace || len(validation.IsDNS1123Subdomain(fixture.AuthorizationDenyNamespace)) != 0 {
-		return errors.New("config: installedManagerFixture authorizationDenyNamespace must be a distinct exact DNS namespace")
-	}
-	for label, value := range map[string]string{
-		"deploymentUID": fixture.DeploymentUID, "replicaSetUID": fixture.ReplicaSetUID,
-		"podUID": fixture.PodUID, "policyCRDUID": fixture.PolicyCRDUID,
-	} {
-		if !kubernetesUIDPattern.MatchString(value) {
-			return fmt.Errorf("config: installedManagerFixture %s must be an exact lowercase Kubernetes UUID", label)
-		}
-	}
-	if fixture.RestartCount < 0 {
-		return errors.New("config: installedManagerFixture restartCount must be non-negative")
-	}
-	if _, err := time.Parse(time.RFC3339Nano, fixture.StartedAt); err != nil {
-		return errors.New("config: installedManagerFixture startedAt must be RFC3339Nano")
-	}
-	digest := regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
-	imageID := regexp.MustCompile(`^.+@sha256:[0-9a-f]{64}$`)
-	if fixture.Image == "" || strings.TrimSpace(fixture.Image) != fixture.Image || !imageID.MatchString(fixture.ImageID) {
-		return errors.New("config: installedManagerFixture image must be exact and imageID must carry an immutable SHA-256 digest")
-	}
-	if fixture.ExpectedBrainImage != fixture.Image {
-		return errors.New("config: installedManagerFixture expectedBrainImage must equal the exact observed manager spec image")
-	}
-	if !regexp.MustCompile(`^[0-9a-f]{7,64}$`).MatchString(fixture.OCIRevision) {
-		return errors.New("config: installedManagerFixture ociRevision must be a lowercase hexadecimal revision")
-	}
-	if fixture.TraceSchema != "phorvex.decision-trace.v6" && fixture.TraceSchema != "phorvex.decision-trace.v7" {
-		return errors.New("config: installedManagerFixture traceSchema must be phorvex.decision-trace.v6 or v7")
-	}
-	if fixture.PolicyCRDResourceVersion == "" || len(fixture.PolicyCRDResourceVersion) > 128 {
-		return errors.New("config: installedManagerFixture policyCRDResourceVersion is required and bounded")
-	}
-	if fixture.ParameterManifestID == "" || len(fixture.ParameterManifestID) > 253 || !digest.MatchString(fixture.ParameterManifestHash) {
-		return errors.New("config: installedManagerFixture parameter manifest identity/hash invalid")
-	}
-	if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(fixture.ObserverBinarySHA256) {
-		return errors.New("config: installedManagerFixture observerBinarySHA256 must be an exact lowercase SHA-256")
-	}
-	for label, value := range map[string]string{
-		"observerBinary": fixture.ObserverBinary, "auditCAFile": fixture.AuditCAFile,
-		"auditClientCertFile": fixture.AuditClientCertFile, "auditClientKeyFile": fixture.AuditClientKeyFile,
-	} {
-		if value == "" || !filepath.IsAbs(value) {
-			return fmt.Errorf("config: installedManagerFixture %s must be an absolute private path", label)
-		}
-	}
-	auditURL, err := url.Parse(fixture.AuditURL)
-	if err != nil || auditURL.Scheme != "https" || auditURL.Host == "" || auditURL.User != nil || auditURL.Path != "" || auditURL.RawQuery != "" || auditURL.Fragment != "" {
-		return errors.New("config: installedManagerFixture auditURL must be a bare HTTPS origin")
-	}
-	if fixture.ObservationTimeoutSeconds < 5 || fixture.ObservationTimeoutSeconds > 30 {
-		return errors.New("config: installedManagerFixture observationTimeoutSeconds must be in [5,30]")
-	}
-	if fixture.ObservationMaxBytes < 8<<20 || fixture.ObservationMaxBytes > 64<<20 {
-		return errors.New("config: installedManagerFixture observationMaxBytes must be explicitly set in [8MiB,64MiB]")
-	}
-	if fixture.ObservationMaxRows < 64 || fixture.ObservationMaxRows > 1024 {
-		return errors.New("config: installedManagerFixture observationMaxRows must be explicitly set in [64,1024]")
 	}
 	return nil
 }
