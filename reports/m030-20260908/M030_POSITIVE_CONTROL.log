@@ -1,6 +1,0 @@
-=== RUN   TestM030EveryDeclaredVariableClassified
-    m030_completeness_test.go:75: image neither clocked-and-consumed nor explicitly declared-only
---- FAIL: TestM030EveryDeclaredVariableClassified (0.01s)
-FAIL
-FAIL	github.com/phorvex/phorvex/internal/feasibility	0.020s
-FAIL

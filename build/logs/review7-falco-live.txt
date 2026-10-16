@@ -1,8 +1,0 @@
-2026/05/31 13:31:02 Loading configuration
-2026/05/31 13:31:02 starting server, listening on port 33334
-2026/05/31 13:31:23 Creating secevent with name falco-review-pod-1-1780234500
-2026/05/31 13:31:24 secevent was successfully created
-2026/05/31 13:34:08 Creating secevent with name falco-review-victim-7bf7fb8c74-sdwdv-1780234800
-2026/05/31 13:34:08 secevent was successfully created
-2026/05/31 13:34:32 Creating secevent with name falco-review-victim-7bf7fb8c74-w4xc6-1780234920
-2026/05/31 13:34:32 secevent was successfully created

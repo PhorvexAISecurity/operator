@@ -1,3 +1,0 @@
-﻿=== go build -C phoenix-extended ./... ===
-
-BUILD_EXIT=0

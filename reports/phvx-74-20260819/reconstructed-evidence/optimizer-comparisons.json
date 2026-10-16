@@ -1,6 +1,0 @@
-{
-  "generatedAt": "2026-08-19T12:00:00Z",
-  "evidenceSource": "reconstructed_fixture_not_live",
-  "evidenceNote": "rebuilt from reported 2026-08-19 aggregate counts; per-pod rows are synthetic, and no live ready-delay or optimizer observations were available",
-  "rows": null
-}

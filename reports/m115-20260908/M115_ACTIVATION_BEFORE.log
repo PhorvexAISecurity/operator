@@ -1,6 +1,0 @@
-=== RUN   TestM115HistoricalUnapprovedClass
-    m115_activation_baseline_test.go:16: unapproved class contributes: {Name:flow-littles-law Present:true Magnitude:0.5 Reason:}
---- FAIL: TestM115HistoricalUnapprovedClass (0.00s)
-FAIL
-FAIL	github.com/phorvex/phorvex/internal/physics	0.010s
-FAIL

@@ -1,4 +1,0 @@
-﻿ok  	github.com/r6security/phoenix/api/v1beta1	1.107s
-?   	github.com/r6security/phoenix/cmd	[no test files]
-ok  	github.com/r6security/phoenix/internal/controller	0.401s
-?   	github.com/r6security/phoenix/pkg/controllers	[no test files]

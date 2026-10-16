@@ -1,8 +1,0 @@
-=== RUN   TestM100ConformanceSamples
---- PASS: TestM100ConformanceSamples (0.03s)
-PASS
-ok  	github.com/phorvex/phorvex/internal/representation	0.037s
-=== RUN   TestM100RunnerConformanceSample
---- PASS: TestM100RunnerConformanceSample (0.00s)
-PASS
-ok  	github.com/phorvex/phorvex/internal/runner	0.075s

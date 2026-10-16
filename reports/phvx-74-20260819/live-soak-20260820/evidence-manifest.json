@@ -1,5 +1,0 @@
-{
-  "generatedAt": "2026-08-20T17:27:17.762983974Z",
-  "evidenceSource": "runtime_cluster_snapshot",
-  "evidenceNote": "collected by the running operator from its Kubernetes snapshot; learned values remain shadow-only"
-}
