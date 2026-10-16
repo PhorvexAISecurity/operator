@@ -16,7 +16,10 @@ against local kube-apiserver/etcd binaries and the pinned Kubernetes controllers
   * any `skip` (including a unit test skipping for a missing prerequisite such as
     helm), `fail` or `build-fail` event, any package outside the selection, any
     malformed line and any non-zero `go test` exit fails the gate even when the
-    output otherwise looks green;
+    output otherwise looks green; the only exception is ALLOWED_SKIPS, an exact
+    list of top-level opt-in tests that replay private originals (each names the
+    variable that opts it in) and may terminate with `skip` but never `fail`;
+    they are recorded under `allowed_skips` in the summary;
   * every selected package must itself terminate with `pass`;
   * an empty report is never accepted.
 
@@ -106,8 +109,34 @@ REQUIRED = {
     ),
 }
 EXPECTED = REQUIRED  # retained name for earlier review probes
+# Opt-in fixture tests that skip by design: they replay private originals or a
+# cross-module harness output that CI never has, and run only when the named
+# variable points at that input. Only these exact top-level (package, test) pairs
+# may terminate with `skip`. A `fail` still fails, every other skip (including a
+# subtest of an entry) still fails, and an entry that is missing or passes is
+# reported in the summary without failing (the variable may legitimately be set).
+CONSOLE = 'github.com/phorvex/phorvex/internal/console'
+ALLOWED_SKIPS = {
+    (CONSOLE, 'TestNATSResponseProduceWireDecision'): {
+        'env': 'NATS_RESPONSE_WIRE_OUT',
+        'reason': 'cross-module NATS wire fixture; runs only inside the build/test-harness two-stage wire exchange',
+    },
+    (CONSOLE, 'TestPodBoundTokenActualR18Originals'): {
+        'env': 'PHORVEX_PRIOR_VOICE_ORIGINALS',
+        'reason': 'replays the private retained R18 Voice capture, which stays outside the repository',
+    },
+    (CONSOLE, 'TestCPUPostRequestOriginalRun23Shape'): {
+        'env': 'CPU_RUN23_ORIGINALS',
+        'reason': 'replays the preserved private run-23 CPU post-request originals, which stay outside the repository',
+    },
+    (CONSOLE, 'TestDrainComponentArchived399Bindings'): {
+        'env': 'PHORVEX_DRAIN_ARCHIVE_399',
+        'reason': 'replays the private archived 399 drain component release bindings supplied only by review',
+    },
+}
 # Import paths run in full; each must be a key of REQUIRED. This keeps newly added
-# envtest tests in these security-sensitive packages inside the no-skip boundary.
+# envtest tests in these security-sensitive packages inside the no-skip boundary
+# (ALLOWED_SKIPS is the only, exact exception).
 PACKAGES = ('./api/v1alpha1', './internal/actuator', './internal/runner', './internal/controller', './internal/scopedoutcome', './internal/platform', './internal/authz',
             './internal/startupauthz', './internal/console', './cmd')
 TERMINAL = ('pass', 'fail', 'skip')
@@ -128,7 +157,33 @@ def evaluate(lines, returncode):
     for a required test that never terminated; `packages` maps every selected package
     to its terminal action or 'missing'. An empty `problems` list is the only PASS.
     """
+    return evaluate_with_allowed(lines, returncode)[:3]
+
+
+def allowed_skip_rows(terminals):
+    """Summarize every ALLOWED_SKIPS entry with its observed terminal action.
+
+    `verdict` is 'skip', 'pass', 'fail' or 'missing'; `note` explains it. Only a
+    'fail' is also a gate problem.
+    """
+    rows = []
+    for (package, test), spec in sorted(ALLOWED_SKIPS.items()):
+        verdict = terminals.get((package, test), 'missing')
+        note = {
+            'skip': f'opt-in input not supplied ({spec["env"]}); skip allowed',
+            'pass': f'ran and passed ({spec["env"]} presumably supplied)',
+            'fail': 'failed; an allowlisted test may only skip',
+            'missing': 'not observed in this run',
+        }[verdict]
+        rows.append({'package': package, 'test': test, 'env': spec['env'], 'reason': spec['reason'],
+                     'verdict': verdict, 'note': note})
+    return rows
+
+
+def evaluate_with_allowed(lines, returncode):
+    """`evaluate` plus a fourth element: the `allowed_skip_rows` of ALLOWED_SKIPS."""
     problems = []
+    allowed_terminals = {}
     verdicts = {t: 'missing' for tests in REQUIRED.values() for t in tests}
     # Every observed selected parent/subtest: 'run' until its terminal action arrives.
     observed = {}
@@ -169,7 +224,9 @@ def evaluate(lines, returncode):
                 elif observed[key] != 'run':
                     problems.append(f'{package} {test}: repeated terminal event ({observed[key]} then {action})')
                 observed[key] = action
-                if action != 'pass':
+                if key in ALLOWED_SKIPS:
+                    allowed_terminals[key] = action
+                if action != 'pass' and not (action == 'skip' and key in ALLOWED_SKIPS):
                     problems.append(f'{package} {test}: {action}')
                 verdicts[test] = action
         elif action in TERMINAL:
@@ -189,7 +246,7 @@ def evaluate(lines, returncode):
             problems.append(f'package {package}: no terminal event')
     if returncode != 0:
         problems.append(f'go test exited {returncode}')
-    return problems, verdicts, packages
+    return problems, verdicts, packages, allowed_skip_rows(allowed_terminals)
 
 
 def check_assets(env):
@@ -220,13 +277,17 @@ def write_summary(path: Path, summary: dict):
 
 def report(summary: dict, problems):
     required = {t for tests in REQUIRED.values() for t in tests}
+    allowed_rows = summary.get('allowed_skips', [])
+    allowed = {row['test'] for row in allowed_rows}
     others = 0
     for test, verdict in sorted(summary['verdicts'].items()):
         if test in required:
             print(f'{verdict:>8}  {test}  (required)')
-        else:
+        elif test not in allowed:
             others += 1
     print(f'{others:>8}  other tests/subtests observed in the selected packages (verdicts in the summary file)')
+    for row in allowed_rows:
+        print(f'{row["verdict"]:>8}  {row["test"]}  (allowlisted opt-in skip: {row["note"]})')
     for package, verdict in sorted(summary['packages'].items()):
         print(f'{verdict:>8}  package {package}')
     if problems:
@@ -235,8 +296,9 @@ def report(summary: dict, problems):
             print(f'  - {problem}', file=sys.stderr)
         return 1
     observed = len(summary['verdicts'])
-    print(f'envtest gate: PASS ({observed} tests/subtests observed and passed in {len(REQUIRED)} packages, '
-          f'including the {len(required)} required)')
+    skipped = sum(row['verdict'] == 'skip' for row in allowed_rows)
+    print(f'envtest gate: PASS ({observed} tests/subtests observed in {len(REQUIRED)} packages, all passed '
+          f'except {skipped} allowlisted opt-in skips; including the {len(required)} required)')
     return 0
 
 
@@ -292,9 +354,9 @@ def cmd_run(args) -> int:
     summary['stderr_bytes'] = stderr_path.stat().st_size
     summary['stderr'] = stderr[:4096]
     with raw.open() as retained:
-        problems, verdicts, packages = evaluate(retained, returncode)
+        problems, verdicts, packages, allowed = evaluate_with_allowed(retained, returncode)
     summary.update(exit=returncode, problems=problems, verdicts=verdicts, packages=packages,
-                   result='FAIL' if problems else 'PASS')
+                   allowed_skips=allowed, result='FAIL' if problems else 'PASS')
     write_summary(Path(args.summary), summary)
     return report(summary, problems)
 
@@ -302,11 +364,12 @@ def cmd_run(args) -> int:
 def cmd_check(args) -> int:
     raw = Path(args.raw_input)
     with raw.open() as retained:
-        problems, verdicts, packages = evaluate(retained, args.exit_code)
+        problems, verdicts, packages, allowed = evaluate_with_allowed(retained, args.exit_code)
     summary = {
         'required': {p: list(t) for p, t in REQUIRED.items()},
         'raw_input': str(raw), 'exit': args.exit_code, 'problems': problems,
-        'verdicts': verdicts, 'packages': packages, 'result': 'FAIL' if problems else 'PASS',
+        'verdicts': verdicts, 'packages': packages, 'allowed_skips': allowed,
+        'result': 'FAIL' if problems else 'PASS',
         'scope': 'verdict recomputed from a retained report; not a new execution',
     }
     write_summary(Path(args.summary), summary)
