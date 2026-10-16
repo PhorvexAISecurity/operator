@@ -49,9 +49,9 @@ rotation; hybrid keeps quarantine on Phoenix while routing rotate natively.
 |----|-------------|-------|--------|
 | **FR1** | Ingest: Prometheus, SecurityEvents, K8s graph (pods/labels/NetworkPolicy/RBAC/nodes/MIG) | [internal/ingest/](internal/ingest/) (`kube.go`, `events.go`, `prometheus.go`, `metricssource.go`) | ✅ built |
 | **FR2** | Physics: feasibility set + switching-cost K per move | [internal/feasibility/](internal/feasibility/), [internal/cost/](internal/cost/) | ✅ built |
-| **FR3** | Context: CVE/value/blast-radius, kill-chain state, exposure timer, SLO headroom | [internal/ctxprov/](internal/ctxprov/), [internal/graph/](internal/graph/), [internal/exposure/](internal/exposure/), [internal/belief/](internal/belief/) | ✅ built (CVE/CVSS prior = roadmap; posture is recorded for audit; raw event severity drives P1 through kill-chain P(hold)/stage urgency) |
+| **FR3** | Context: CVE/value/blast-radius, kill-chain state, exposure timer, SLO headroom | [internal/ctxprov/](internal/ctxprov/), [internal/graph/](internal/graph/), [internal/exposure/](internal/exposure/) | ✅ built (CVE/CVSS prior = roadmap; posture is recorded for audit; raw event severity drives P1 through kill-chain P(hold)/stage urgency) |
 | **FR4** | Optimizer: argmax(E[sec] − λ·E[K]) s.t. feasibility + budget + anti-over-rotation; ranked + explainable | [internal/decision/engine.go](internal/decision/engine.go) | ✅ greedy top-B (the PRD's MVP form; mixed-strategy solver = later) |
-| **FR5** | Trigger: event-driven + proactive exposure floor (detection-independent) | [internal/belief/reconexposure.go](internal/belief/reconexposure.go), `budget.proactiveFloor` | ✅ built |
+| **FR5** | Trigger: event-driven + proactive exposure floor (detection-independent) | [internal/decision/coverage.go](internal/decision/coverage.go), [internal/killchain/](internal/killchain/), `budget.proactiveFloor` | ✅ built |
 | **FR6** | Actuation: Phoenix quarantine plus native policy-bounded rotate and advanced moves | [internal/actuator/](internal/actuator/) | ✅ built; pure Phoenix rotate refused |
 | **FR7** | Audit/dashboard: per-decision inputs, action, attribution, R6 counterfactual; Grafana heatmap | [internal/audit/](internal/audit/), [internal/metrics/](internal/metrics/), [grafana/phorvex-heatmap.json](grafana/phorvex-heatmap.json) | ✅ built |
 | **FR8** | Safety: global kill-switch; per-namespace dry-run; configurable B/λ/thresholds/window; evidence-retention guard | [internal/runner/killswitch.go](internal/runner/killswitch.go), `mode:dryRun`, `feasibility/anti-over-rotation` | ✅ built |
@@ -68,7 +68,7 @@ func init() { Registry.Register(myConstraint{}) }
 
 The decision engine reads providers back through the registry (`Default()`/`All()`),
 never by importing a concrete impl — so no core file changes. The same pattern holds
-for `physics`, `cost`, `belief`, `ctxprov`, and the `ingest.MetricsSource`.
+for `physics`, `cost`, `ctxprov`, and the `ingest.MetricsSource`.
 
 ## Build / test / run
 

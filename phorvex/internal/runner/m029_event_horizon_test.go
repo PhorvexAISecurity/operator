@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/belief"
 	"github.com/phorvex/phorvex/internal/ctxprov"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/feasibility"
@@ -100,17 +99,6 @@ func TestM029BuiltPolicyReachesEventConsumersAndTrace(t *testing.T) {
 	short := m029PublicPolicy(time.Hour, &metav1.Duration{Duration: 10 * time.Minute})
 	view := m029EventView(30 * time.Minute)
 
-	beliefEstimator, ok := belief.Registry.Get("recon-exposure")
-	if !ok {
-		t.Fatal("recon-exposure belief estimator unavailable")
-	}
-	if a, b := beliefEstimator.Belief(view, defaultA), beliefEstimator.Belief(view, defaultB); a != b || a == 0 {
-		t.Fatalf("proactive-only variation changed authenticated event belief: %g %g", a, b)
-	}
-	if got := beliefEstimator.Belief(view, short); got != 0 {
-		t.Fatalf("expired event retained belief under short horizon: %g", got)
-	}
-
 	contextProvider, ok := ctxprov.Registry.Get("sensed-context")
 	if !ok {
 		t.Fatal("sensed context provider unavailable")
@@ -134,9 +122,6 @@ func TestM029BuiltPolicyReachesEventConsumersAndTrace(t *testing.T) {
 	} {
 		if name == "missing-timestamp" {
 			noEvidence.Events[0].TimestampMissing = true
-		}
-		if got := beliefEstimator.Belief(noEvidence, short); got != 0 {
-			t.Errorf("%s retained belief=%g", name, got)
 		}
 		if got := contextProvider.Context(noEvidence, short).ThreatPosture; got != 0 {
 			t.Errorf("%s retained sensed posture=%g", name, got)
