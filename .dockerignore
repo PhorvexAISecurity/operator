@@ -18,20 +18,13 @@
 # Prebuilt local binaries — images compile from source.
 **/*.exe
 **/*.exe~
-phorvex/bin/console.exe
-phorvex/bin/*.exe
-redteam-rl.exe
 
-# Research corpus + vendored upstream repos (not part of any image).
-papers/
-products/
+# Documentation, tooling, process records and other apps (no image reads these).
+docs/
 tools/
-validation/
-repos/
-
-# Large narrative docs (images don't read these).
-PHORVEX_PRD.md
-PHORVEX_V1_MVP.md
+workflow/
+benchmark/
+End-to-End/
 
 # Harness run logs (the dashboard reads metrics.jsonl, not the *-run.log files).
 build/test-harness/**/*-run.log
