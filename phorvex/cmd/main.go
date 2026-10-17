@@ -44,6 +44,8 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/brainapi"
+	"github.com/phorvex/phorvex/internal/brainsvc"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
@@ -704,6 +706,9 @@ func main() {
 				"maxBytes", mathLabCaptureMaxBytes, "processConfigHash", mathlab.ProcessConfigHash(processConfig))
 		}
 	}
+	// The decision service runs in this process; the brain service serves the same
+	// contract over gRPC once it runs on its own (ADR-0001).
+	rmgr.Brain = brainsvc.NewLocal(rmgr.Optimizer, rmgr.MathLab)
 	if auditSourceAddr != "" {
 		server, sourceErr := (audittransport.ServerConfig{Addr: auditSourceAddr, AuditPath: auditJSON, VClusterAuditPath: auditSourceVClusterPath,
 			CertFile: auditSourceCert, KeyFile: auditSourceKey, CAFile: auditSourceCA,
@@ -790,7 +795,7 @@ func main() {
 		}
 	}
 	scopedOutcomeProducer, scopedOutcomeErr := openConfiguredScopedOutcome(
-		context.Background(), scopedOutcomeConfig, mgr.GetAPIReader(), rmgr.Optimizer, rmgr.Actuator,
+		context.Background(), scopedOutcomeConfig, mgr.GetAPIReader(), rmgr.Brain, rmgr.Actuator,
 	)
 	if scopedOutcomeErr != nil {
 		setupLog.Info("scoped outcome observer unavailable; continuing without qualified live persistence labels",
@@ -814,18 +819,17 @@ func runWithScopedOutcomeClose(start func() error, producer *scopedoutcome.Produ
 	return start()
 }
 
-func openConfiguredScopedOutcome(ctx context.Context, path string, reader client.Reader, optimizer decision.Optimizer, activeActuator actuator.Actuator) (*scopedoutcome.Producer, error) {
+func openConfiguredScopedOutcome(ctx context.Context, path string, reader client.Reader, brain brainapi.Brain, activeActuator actuator.Actuator) (*scopedoutcome.Producer, error) {
 	if path == "" {
 		return nil, nil
 	}
 	if activeActuator == nil || actuator.RouteFor(actuator.Backend(activeActuator.Name()), model.ActionRotate) != actuator.BackendNative {
 		return nil, fmt.Errorf("configured scoped outcome observer requires a native rotate route")
 	}
-	engine, ok := optimizer.(*decision.CoverageEngine)
-	if !ok || engine.ScopedOutcomeProcessEpochID() == "" {
+	if brain == nil || !brain.PersistenceObservations() || brain.ScopedOutcomeProcessEpochID() == "" {
 		return nil, fmt.Errorf("configured scoped outcome observer requires the coverage engine")
 	}
-	return scopedoutcome.OpenStartupProducer(ctx, path, reader, engine.ScopedOutcomeProcessEpochID(), time.Now)
+	return scopedoutcome.OpenStartupProducer(ctx, path, reader, brain.ScopedOutcomeProcessEpochID(), time.Now)
 }
 
 func runEPSSFeed(apply, allowPartial bool, namespace, configMapName, configMapKey, metadataKey, firstURL, trivyPath string, scanTimeout, metadataTTL time.Duration, scopeNamespaces, scopeDigests, registryAuthFile, registryAuthRegistries string) error {
