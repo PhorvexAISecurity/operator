@@ -27,9 +27,10 @@ jobs:
           persist-credentials: false
           # Evidence tests resolve reviewed release commits through git history.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Provision pinned Python 3.12 (SHA256-verified, relocatable)
+        run: |
+          bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4

@@ -27,9 +27,10 @@ jobs:
           persist-credentials: false
           # Evidence tests resolve reviewed release commits through git history.
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Provision pinned Python 3.12 (SHA256-verified, relocatable)
+        run: |
+          bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
@@ -230,9 +231,10 @@ jobs:
             phorvex/go.sum
             build/phoenix-extended/go.sum
             build/metricvalidity/go.sum
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Provision pinned Python 3.12 (SHA256-verified, relocatable)
+        run: |
+          bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
       # The actuator package's chart tests render the real Helm chart and skip
       # without helm; a skip fails the gate, so the same pinned Helm as go-unit.
       - uses: azure/setup-helm@v4
