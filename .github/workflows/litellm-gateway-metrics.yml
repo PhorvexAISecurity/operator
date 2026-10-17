@@ -6,14 +6,12 @@ on:
       - 'build/test-harness/fixtures/litellm-live/**'
       - 'build/integrations/litellm-gateway-runtime/**'
       - '.github/workflows/litellm-gateway-metrics.yml'
-      - '.github/workflows/verify-litellm-gateway-runtime.yml'
   push:
     branches: [main]
     paths:
       - 'build/test-harness/fixtures/litellm-live/**'
       - 'build/integrations/litellm-gateway-runtime/**'
       - '.github/workflows/litellm-gateway-metrics.yml'
-      - '.github/workflows/verify-litellm-gateway-runtime.yml'
 
 permissions:
   contents: read

@@ -17,10 +17,11 @@ authentication, baseline admission, a projected policy update that revokes
 only client A, and continued client C service without sending A upstream.
 Existing gateway tests cover additional request and output behavior.
 
-After this candidate is reviewed and merged to `main`, dispatch the existing
-published-image verification path with
-`gh workflow run verify-litellm-gateway-runtime.yml --ref main`. The manual
-workflow uses the repository's existing ECR read role, pulls the **existing**
+After this candidate is reviewed and merged, dispatch the existing
+published-image verification path in the legacy repository, which holds the
+isolated AWS executor this repository does not carry:
+`gh workflow run verify-litellm-gateway-runtime.yml --repo PhorvexSecurity/operator --ref main`.
+The manual workflow uses the repository's existing ECR read role, pulls the **existing**
 image by digest, and reruns the protocol tests with the source mounted
 read-only, an unwritable root filesystem, no external network, dropped
 capabilities, and UID 10001. Review its uploaded

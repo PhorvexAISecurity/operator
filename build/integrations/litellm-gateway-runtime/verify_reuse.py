@@ -88,14 +88,9 @@ def verify():
     source = (ROOT / contract["gatewaySourcePath"]).read_bytes()
     if hashlib.sha256(source).hexdigest() != contract["gatewaySourceSHA256"]:
         raise ValueError("merged gateway source moved without a new image/source review")
-    workflow = (ROOT / ".github/workflows/verify-litellm-gateway-runtime.yml").read_text()
-    if "runs-on: [self-hosted, linux, x64, phorvex-isolated-aws]" not in workflow:
-        raise ValueError("actual-image verification requires the isolated AWS executor")
-    for key, value in (("IMAGE", contract["imageByDigest"]),
-                       ("EXPECTED_SOURCE_SHA", contract["gatewaySourceSHA256"])):
-        matches = re.findall(r"^      " + key + r": (\S+)$", workflow, re.MULTILINE)
-        if matches != [value]:
-            raise ValueError("runtime verification workflow differs from candidate contract: " + key)
+    # The actual-image verification workflow needs the isolated AWS executor, so it
+    # stays in the legacy pipeline (PhorvexSecurity/operator); this repository carries
+    # no AWS workflow (ADR-0001, phase 5).
     tree = ast.parse(source)
     imported = set()
     for node in ast.walk(tree):
