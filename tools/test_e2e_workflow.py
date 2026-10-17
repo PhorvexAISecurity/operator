@@ -22,7 +22,7 @@ class E2EWorkflowTests(unittest.TestCase):
         self.assertEqual(doc['on']['push']['branches'], ['main'])
         self.assertEqual(doc['permissions'], {'contents': 'read'})
         job = doc['jobs']['e2e-contract']
-        self.assertEqual(job['runs-on'], 'ubuntu-latest')
+        self.assertEqual(job['runs-on'], ['self-hosted', 'Linux', 'X64'])
         self.assertNotIn('if', job)
         self.assertNotIn('secrets.', raw)
         runs = '\n'.join(s.get('run', '') for s in job['steps'])

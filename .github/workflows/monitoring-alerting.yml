@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   focused-alerting:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     env:
       KUBECONFIG: /dev/null

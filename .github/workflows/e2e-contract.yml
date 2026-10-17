@@ -19,7 +19,7 @@ permissions:
 jobs:
   e2e-contract:
     # These are isolated regression tests, not a live-cluster E2E verdict.
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

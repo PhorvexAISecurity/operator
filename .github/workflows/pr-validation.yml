@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   charts:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
           done
 
   go-unit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     env:
       # This job tests candidate source, never an existing cluster. Local-API and
@@ -135,7 +135,7 @@ jobs:
   # gofmt-clean. Untouched files are not reformatted wholesale: some are pinned by
   # content hash (scenario sourceSHA256, generated cover maps).
   lint:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     env:
       GOTOOLCHAIN: local
@@ -173,9 +173,10 @@ jobs:
 
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the
-  # image. Built locally and discarded; nothing is pushed.
+  # image. Built locally and discarded; nothing is pushed. The runner's Docker
+  # daemon is shared, so each build gets a per-run tag and removes it.
   images:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -186,7 +187,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Build the ${{ matrix.image }} image without pushing
-        run: docker build --file deploy/docker/${{ matrix.image }}.Dockerfile --tag phorvex-${{ matrix.image }}:candidate .
+        env:
+          TAG: operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          docker build --file deploy/docker/${{ matrix.image }}.Dockerfile --tag "$TAG" .
+          docker image rm "$TAG"
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
   # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
@@ -204,7 +209,7 @@ jobs:
   # backend, and nothing here mitigates a physical attack. Everything else in
   # go-unit is a unit test with mocks.
   go-envtest:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     env:
       # Isolated local control plane only. The job downloads pinned binaries
@@ -262,7 +267,7 @@ jobs:
           retention-days: 30
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
@@ -286,7 +291,7 @@ jobs:
     name: PR validation
     if: always()
     needs: [charts, go-unit, go-envtest, frontend, lint, images]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 1
     steps:
       - name: Require every source check to succeed
