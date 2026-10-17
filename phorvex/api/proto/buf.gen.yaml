@@ -1,0 +1,9 @@
+# Generated Go lands in phorvex/internal/<service>pb; regenerate with tools/generate-proto.sh.
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: ../..
+    opt: module=github.com/phorvex/phorvex
+  - local: protoc-gen-go-grpc
+    out: ../..
+    opt: module=github.com/phorvex/phorvex

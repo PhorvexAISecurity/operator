@@ -187,8 +187,8 @@ func TestM095ProductionSnapshotViewLifecycle(t *testing.T) {
 	view := &model.WorkloadView{Pod: first, Events: productionEvents, Phase: model.PhaseWarm, Physics: model.NeutralPhysics(), ExposureByVariable: map[string]time.Duration{model.VarAdapterEpoch: time.Hour}}
 	pol := model.Policy{Tenant: "tenant", Namespace: "ns", DryRun: true, TraceEnabled: true, MaxMovesPerTick: 1,
 		NormSparsity: .4, FlowDisruption: .6, WeightSecrets: .8, Lambda: 0.1,
-		AssetWeightFromLabels: func(map[string]string) float64 { return 1 },
-		ProactiveFloor:        time.Hour, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
+		AssetWeights:   model.AssetLabelWeights{Default: 1},
+		ProactiveFloor: time.Hour, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionAdapterRotate: true}}
 	engine := decision.NewCoverageEngine()
 	profile, ok := recon.Registry.Get("ucw-recon")
 	if !ok {

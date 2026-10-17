@@ -325,17 +325,24 @@ func TestApplyFixLifecycle_CandidateMapsAreCopies(t *testing.T) {
 	}
 }
 
-// policyFingerprint covers every data field: a map entry change is detected, and an identical policy
-// with an independent func hook fingerprints identically.
-func TestPolicyFingerprint_CoversDataNotFuncs(t *testing.T) {
+// policyFingerprint covers every data field: an identical clone fingerprints identically, and a map
+// entry change, including a nested asset weight, is detected.
+func TestPolicyFingerprint_CoversAllData(t *testing.T) {
 	a := safeBase("")
 	a.DecisionAssets = map[string]string{"k": "v"}
-	a.AssetWeightFromLabels = func(map[string]string) float64 { return 1 }
+	a.AssetWeights = model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"tier": {"gold": 1}}}
 	b := clonePolicyData(a)
-	b.AssetWeightFromLabels = func(map[string]string) float64 { return 2 }
 	if policyFingerprint(a) != policyFingerprint(b) {
-		t.Fatal("func hooks are not data; identical data must fingerprint identically")
+		t.Fatal("identical data must fingerprint identically")
 	}
+	b.AssetWeights.ByLabel["tier"]["gold"] = 2
+	if a.AssetWeights.ByLabel["tier"]["gold"] != 1 {
+		t.Fatal("clone shares asset weight maps with its source")
+	}
+	if policyFingerprint(a) == policyFingerprint(b) {
+		t.Fatal("asset weights are data and must change the fingerprint")
+	}
+	b = clonePolicyData(a)
 	b.DecisionAssets["k"] = "changed"
 	if policyFingerprint(a) == policyFingerprint(b) {
 		t.Fatal("a changed map entry must change the fingerprint")

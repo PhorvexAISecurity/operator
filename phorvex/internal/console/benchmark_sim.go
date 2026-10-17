@@ -406,15 +406,7 @@ func benchPolicy(cfg benchConfig) model.Policy {
 		MinAvailableReplicas:   cfg.MinAvailableReplicas,
 		ReactiveOnly:           cfg.ReactiveOnly,
 		EnabledActions:         enabled,
-		AssetWeightFromLabels: func(labels map[string]string) float64 {
-			if labels == nil {
-				return 0.4
-			}
-			if w, ok := dc[labels["data-class"]]; ok {
-				return w
-			}
-			return 0.4
-		},
+		AssetWeights:           model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"data-class": dc}, Default: 0.4},
 	}
 }
 

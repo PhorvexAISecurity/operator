@@ -5,8 +5,7 @@
 package decision
 
 import (
-	"errors"
-
+	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -52,7 +51,7 @@ var _ RotationObserver = (*CoverageEngine)(nil)
 // cleanup has already completed (M-140). It is not a failure of the tick: it means the tick
 // was captured before the owner was retired, and the correct action is to drop it rather
 // than price it or recreate its economic unit.
-var ErrOwnerRetired = errors.New("policy owner retired; decision rejected")
+var ErrOwnerRetired = brainapi.ErrOwnerRetired
 
 // ErrShadowCapabilityUnavailable is returned when a counterfactual evaluation is requested
 // while a T1-E capability gate is wired but its read-only counterpart is not (M-163). The
@@ -61,4 +60,4 @@ var ErrOwnerRetired = errors.New("policy owner retired; decision rejected")
 // gate observes. The engine will neither do that nor drop the gate and compare against a
 // substrate production never had, so the COMPARISON is reported unavailable for this tick.
 // Production is unaffected; the runner already treats a shadow error as "no comparison".
-var ErrShadowCapabilityUnavailable = errors.New("shadow capability gate unavailable; counterfactual comparison skipped")
+var ErrShadowCapabilityUnavailable = brainapi.ErrShadowCapabilityUnavailable

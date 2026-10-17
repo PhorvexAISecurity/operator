@@ -3568,7 +3568,7 @@ func buildPolicy(e *policyEntry) model.Policy {
 		KillChainShape:               s.EffectiveKillChainShape(),
 		ExposurePressureCap:          s.EffectiveExposurePressureCap(),
 		EnabledActions:               enabled,
-		AssetWeightFromLabels:        s.AssetWeightFromLabels,
+		AssetWeights:                 s.AssetLabelWeights(),
 	}
 }
 
