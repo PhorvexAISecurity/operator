@@ -137,14 +137,9 @@ type Exclusion struct {
 }
 
 // Eligibility is the capability gate's verdict for one (asset, action), wired into Deps
-// by the engine (which adapts capability.Reason to this, so actionset need not import
-// capability — actuator already imports actionset). nil = eligible-and-clean.
-type Eligibility struct {
-	Excluded    bool   // true = drop from ranking with Kind/Detail
-	Kind        string // capability Reason* class (only when Excluded)
-	Detail      string // exclusion detail, or the rbac-unknown note
-	RBACUnknown bool   // SSAR errored — NOT excluded, flagged (fail-open, P-NO-FREEZE)
-}
+// by the engine. It is part of the dispatcher–brain contract, so it is defined in
+// model. nil = eligible-and-clean.
+type Eligibility = model.Eligibility
 
 const emptyReconCoverReason = "recon-cover: action invalidates no facts for this asset"
 

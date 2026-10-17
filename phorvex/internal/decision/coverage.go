@@ -115,18 +115,8 @@ type alternativeContext struct {
 	budget     int
 }
 
-// Alternative is selected from the exact action set and runtime price used by
-// the original production pass. Other selected assets, including earlier
-// same-tick exchanges, stay reserved; the failed target exchanges one slot.
-type Alternative struct {
-	ObjectivePenalty               model.OptionalFloat
-	Action                         model.Action
-	Coverage, Marginal, Cost, Gain float64
-	CoverKeys                      []string
-	Attribution                    []model.AttributionTerm
-	Resources                      []model.ResourceConsumption
-	CounterfactualNote             string
-}
+// Alternative is the fallback pick for a refused dispatch; see model.Alternative.
+type Alternative = model.Alternative
 
 func (e *CoverageEngine) SelectAlternative(owner, target string, failed model.Action) (Alternative, bool) {
 	c := e.alternative
@@ -264,22 +254,13 @@ func (e *CoverageEngine) capabilityFor(mode killchain.EvalMode) (func(*model.Wor
 // CalibrationState reports, per tenant, whether the RLS has left the shipped prior and how many
 // observations it has folded in. Exposed for metrics (PHVX-10c) rather than added to the audit
 // record: the audit output is an unversioned contract and PHVX-27 owns changes to it.
-func (e *CoverageEngine) CalibrationState() map[string]struct {
-	Primed  bool
-	Updates int
-} {
-	out := map[string]struct {
-		Primed  bool
-		Updates int
-	}{}
+func (e *CoverageEngine) CalibrationState() map[string]model.CostCalibrationState {
+	out := map[string]model.CostCalibrationState{}
 	for owner, c := range e.costByOwner {
 		if c == nil || c.RLS == nil {
 			continue
 		}
-		out[owner] = struct {
-			Primed  bool
-			Updates int
-		}{Primed: c.RLS.Primed(), Updates: c.RLS.Updates()}
+		out[owner] = model.CostCalibrationState{Primed: c.RLS.Primed(), Updates: c.RLS.Updates()}
 	}
 	return out
 }
