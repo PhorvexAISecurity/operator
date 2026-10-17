@@ -22,8 +22,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Provision pinned Python 3.11 (SHA256-verified, relocatable)
+        run: |
+          bin="$(bash tools/provision-python.sh 3.11 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
       - run: python -m pip install -r workflow/requirements.txt
       - run: bash workflow/tools/check.sh

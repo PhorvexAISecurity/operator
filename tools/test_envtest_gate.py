@@ -1,7 +1,6 @@
 """Negative controls for the envtest gate: every way a green-looking report can lie must fail."""
 from pathlib import Path
 import json
-import os
 import re
 import subprocess
 import sys
@@ -11,17 +10,6 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import envtest_gate as gate  # noqa: E402
-
-
-def interpreter_env(**env):
-    """A minimal subprocess environment that can still start this interpreter.
-
-    A shared-library Python (setup-python's builds outside /opt/hostedtoolcache)
-    finds libpython only through LD_LIBRARY_PATH; nothing else is inherited.
-    """
-    if 'LD_LIBRARY_PATH' in os.environ:
-        env['LD_LIBRARY_PATH'] = os.environ['LD_LIBRARY_PATH']
-    return env
 
 ROOT = Path(__file__).resolve().parents[1]
 ACTUATOR = 'github.com/phorvex/phorvex/internal/actuator'
@@ -434,8 +422,8 @@ class CommandLineTests(unittest.TestCase):
     def run_transport(self, stderr_bytes, exit_code, lines=None, timeout=30):
         with tempfile.TemporaryDirectory() as tmp:
             go, assets, controller_manager = self.synthetic_go(tmp, stderr_bytes, exit_code, lines)
-            env = interpreter_env(**{'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
-                   'KUBE_CONTROLLER_MANAGER': str(controller_manager), 'USE_EXISTING_CLUSTER': 'false'})
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
+                   'KUBE_CONTROLLER_MANAGER': str(controller_manager), 'USE_EXISTING_CLUSTER': 'false'}
             started = time.monotonic()
             proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run', '--go', str(go),
                                    '--raw-output', f'{tmp}/out/go-test.jsonl', '--summary', f'{tmp}/out/summary.json'],
@@ -485,13 +473,13 @@ class CommandLineTests(unittest.TestCase):
 
     def test_run_mode_refuses_without_local_binaries(self):
         with tempfile.TemporaryDirectory() as tmp:
-            env = interpreter_env(**{'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': ''})
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': ''}
             proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run',
                                    '--raw-output', f'{tmp}/raw.jsonl', '--summary', f'{tmp}/summary.json'],
                                   env=env, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn('KUBEBUILDER_ASSETS is not set', proc.stderr)
-            env = interpreter_env(**{'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': tmp, 'USE_EXISTING_CLUSTER': 'true'})
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': tmp, 'USE_EXISTING_CLUSTER': 'true'}
             proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run',
                                    '--raw-output', f'{tmp}/raw.jsonl', '--summary', f'{tmp}/summary.json'],
                                   env=env, capture_output=True, text=True, timeout=30)
@@ -510,8 +498,8 @@ class CommandLineTests(unittest.TestCase):
                 (assets / name).write_text('#!/bin/sh\nexit 0\n')
                 (assets / name).chmod(0o700)
             missing = Path(tmp) / 'missing-kube-controller-manager'
-            env = interpreter_env(**{'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
-                   'KUBE_CONTROLLER_MANAGER': str(missing), 'USE_EXISTING_CLUSTER': 'false'})
+            env = {'PATH': '/usr/bin:/bin', 'KUBEBUILDER_ASSETS': str(assets),
+                   'KUBE_CONTROLLER_MANAGER': str(missing), 'USE_EXISTING_CLUSTER': 'false'}
             proc = subprocess.run([sys.executable, str(ROOT / 'tools/envtest_gate.py'), 'run',
                                    '--raw-output', f'{tmp}/raw.jsonl', '--summary', f'{tmp}/summary.json'],
                                   env=env, capture_output=True, text=True, timeout=30)

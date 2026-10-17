@@ -56,6 +56,9 @@ the `phorvex` runner on the build host, which holds no cluster or AWS credential
 with read-only permissions, and use no secrets, OIDC tokens, AWS, SSH, image
 publication, or deployment credentials. The runner also serves the legacy
 repository, so jobs queue behind each other; images use per-run tags and are
-removed after the build. The legacy release and live-E2E
+removed after the build. Python comes from `tools/provision-python.sh`, a pinned,
+SHA256-verified python-build-standalone build: `actions/setup-python` interpreters
+on a self-hosted runner need `LD_LIBRARY_PATH` and cannot start in the minimal
+environments several tests use. The legacy release and live-E2E
 pipeline stays in PhorvexSecurity/operator. Live E2E checks the deployed release;
 it is not a candidate-source validation verdict. This workflow does not replace live tests.
