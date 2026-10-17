@@ -9,6 +9,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = (ROOT / '.github/workflows/pr-validation.yml').read_text()
+# The organization's shared build runner. It holds no cluster or AWS credentials;
+# the isolated AWS runner (label phorvex-isolated-aws) must never run this repo's jobs.
+BUILD_RUNNER = ['self-hosted', 'Linux', 'X64']
 DOC = yaml.load(RAW, Loader=yaml.BaseLoader)
 
 
@@ -16,12 +19,12 @@ class PRValidationTests(unittest.TestCase):
     def test_all_pr_bases_and_drafts_get_unprivileged_checks(self):
         self.assertEqual(DOC['on']['pull_request'], '')
         self.assertEqual(DOC['permissions'], {'contents': 'read'})
-        for forbidden in ('secrets.', 'id-token:', 'self-hosted', 'pull_request_target',
+        for forbidden in ('secrets.', 'id-token:', 'phorvex-isolated-aws', 'pull_request_target',
                           'aws-actions/', 'ssh ', 'kubectl ', 'pipeline/e2e.py',
                           'continue-on-error', '|| true'):
             self.assertNotIn(forbidden, RAW)
         for name, job in DOC['jobs'].items():
-            self.assertEqual(job['runs-on'], 'ubuntu-latest')
+            self.assertEqual(job['runs-on'], BUILD_RUNNER)
             if name != 'pr-validation':
                 self.assertNotIn('if', job)
             for step in job['steps']:
@@ -148,11 +151,23 @@ class PRValidationTests(unittest.TestCase):
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
         # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change.
+        # Every job runs on the shared build runner, never on a runner with live access.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
             raw = path.read_text()
+            doc = yaml.load(raw, Loader=yaml.BaseLoader)
             with self.subTest(workflow=path.name):
-                for forbidden in ('self-hosted', 'secrets.', 'id-token: write', 'aws-actions/'):
+                for forbidden in ('phorvex-isolated-aws', 'secrets.', 'id-token: write', 'aws-actions/'):
                     self.assertNotIn(forbidden, raw)
+                for name, job in doc['jobs'].items():
+                    self.assertEqual(job['runs-on'], BUILD_RUNNER, name)
+                    self.assertNotIn('container', job, name)
+
+    def test_images_on_the_shared_daemon_are_per_run_and_removed(self):
+        step = next(s for s in DOC['jobs']['images']['steps'] if 'docker build' in s.get('run', ''))
+        self.assertEqual(step['env']['TAG'],
+                         'operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}')
+        self.assertIn('--tag "$TAG"', step['run'])
+        self.assertIn('docker image rm "$TAG"', step['run'])
 
 
 if __name__ == '__main__':

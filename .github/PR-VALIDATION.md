@@ -51,7 +51,11 @@ There is no paths filter or draft guard on these source checks:
   protected PR bases. Repository administrators must configure that policy separately;
   installing the workflow does not change protection settings or bypass plan limits.
 
-All jobs use GitHub-hosted runners and read-only permissions, with no AWS, SSH,
-image publication, or deployment credentials. The legacy release and live-E2E
+All jobs run on the organization's shared build runner (`[self-hosted, Linux, X64]`,
+the `phorvex` runner on the build host, which holds no cluster or AWS credentials)
+with read-only permissions, and use no secrets, OIDC tokens, AWS, SSH, image
+publication, or deployment credentials. The runner also serves the legacy
+repository, so jobs queue behind each other; images use per-run tags and are
+removed after the build. The legacy release and live-E2E
 pipeline stays in PhorvexSecurity/operator. Live E2E checks the deployed release;
 it is not a candidate-source validation verdict. This workflow does not replace live tests.
