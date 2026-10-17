@@ -16,13 +16,9 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// PersistenceObservationAuthority resolves immutable retained operation state.
-// AuthorizeObservation must authenticate the complete categorical result and
-// evidence hashes; knowing an operation ID or source name is insufficient.
-type PersistenceObservationAuthority interface {
-	Source() string
-	AuthorizeObservation(model.PersistenceObservation) (model.PersistenceOperationBinding, bool)
-}
+// PersistenceObservationAuthority resolves immutable retained operation state; see
+// model.PersistenceObservationAuthority.
+type PersistenceObservationAuthority = model.PersistenceObservationAuthority
 
 type scopedOutcomeCounts struct {
 	held, revoked, unknown, censored int
@@ -61,14 +57,8 @@ func newScopedOutcomeProcessEpoch() string {
 }
 
 // PersistenceObservationResult reports whether one authenticated observation
-// entered the reporting-only cohort store. Applied never means mitigation or
-// attacker-state learning.
-type PersistenceObservationResult struct {
-	Disposition string
-	Applied     bool
-	Reason      string
-	Status      model.ScopedOutcomeReport
-}
+// entered the reporting-only cohort store; see model.PersistenceObservationResult.
+type PersistenceObservationResult = model.PersistenceObservationResult
 
 // SetOwnerEpoch registers the exact current policy identity. Generation changes
 // retain replay IDs but create separate cohorts. A retired UID cannot re-enter;

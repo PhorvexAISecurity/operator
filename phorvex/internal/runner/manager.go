@@ -37,6 +37,8 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/brainapi"
+	"github.com/phorvex/phorvex/internal/brainsvc"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
@@ -156,23 +158,24 @@ func codeExecAwareEligibilityObserved(
 	return eligibilityFrom(capWit.EligibleObserved(v, a, coverKeys), authzNil, hasQualified, v)
 }
 
-// wireCapabilityGates installs BOTH T1-E collaborators on the engine from one per-tick
-// witness (M-163). They are set together, in one place, because the engine's contract is that
-// a reviewing gate without its observation-only twin makes the counterfactual comparison
-// unavailable: wiring only the first would silently disable the shadow arm, and wiring only
-// the second would disable production's real RBAC check. Extracted from the tick so the
-// pairing is unit-tested against the exact code the runtime runs.
-func wireCapabilityGates(
-	ce *decision.CoverageEngine,
+// capabilityGate builds BOTH T1-E collaborators from one per-tick witness (M-163). They are
+// built together, in one place, because the brain's contract is that a reviewing gate without
+// its observation-only twin makes the counterfactual comparison unavailable: wiring only the
+// first would silently disable the shadow arm, and wiring only the second would disable
+// production's real RBAC check. Extracted from the tick so the pairing is unit-tested against
+// the exact code the runtime runs.
+func capabilityGate(
 	capWit capability.Witness,
 	authzNil bool,
 	hasQualified func(*model.WorkloadView) bool,
-) {
-	ce.Capability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
-		return codeExecAwareEligibility(capWit, authzNil, hasQualified, v, a, coverKeys)
-	}
-	ce.ShadowCapability = func(v *model.WorkloadView, a model.Action, coverKeys []string) *actionset.Eligibility {
-		return codeExecAwareEligibilityObserved(capWit, authzNil, hasQualified, v, a, coverKeys)
+) brainapi.Gate {
+	return brainapi.Gate{
+		Capability: func(v *model.WorkloadView, a model.Action, coverKeys []string) *model.Eligibility {
+			return codeExecAwareEligibility(capWit, authzNil, hasQualified, v, a, coverKeys)
+		},
+		ShadowCapability: func(v *model.WorkloadView, a model.Action, coverKeys []string) *model.Eligibility {
+			return codeExecAwareEligibilityObserved(capWit, authzNil, hasQualified, v, a, coverKeys)
+		},
 	}
 }
 
@@ -293,7 +296,9 @@ type Manager struct {
 	// startup; disabling the trace is used only for non-interference tests.
 	DecisionTraceEnabled bool
 	// MathLab records allowlisted policy ticks as replayable snapshots. nil = off.
-	MathLab    *mathlab.Recorder
+	MathLab *mathlab.Recorder
+	// Brain is the decision service. nil serves Optimizer in process (with MathLab).
+	Brain      brainapi.Brain
 	BrainImage string
 	GitSHA     string
 
@@ -867,10 +872,6 @@ func (m *Manager) publishOwnership() {
 // (late rotation feedback, a stale tick) that reaches the engine for an absent owner is then
 // dropped instead of lazily recreating that owner's bucket at the DEFAULT seed.
 func (m *Manager) syncOwnerLiveness() {
-	ce, ok := m.Optimizer.(*decision.CoverageEngine)
-	if !ok {
-		return
-	}
 	m.mu.RLock()
 	epochs := make([]model.PolicyEpoch, 0, len(m.policies))
 	for _, e := range m.policies {
@@ -879,7 +880,7 @@ func (m *Manager) syncOwnerLiveness() {
 		}
 	}
 	m.mu.RUnlock()
-	registerCoverageOwnerEpochs(ce, epochs)
+	m.brain().RegisterOwnerEpochs(epochs)
 }
 
 func (m *Manager) drainScopedOutcomes(limit int) []model.ScopedOutcomeDelivery {
@@ -892,15 +893,11 @@ func (m *Manager) drainScopedOutcomes(limit int) []model.ScopedOutcomeDelivery {
 // registerCoverageOwnerEpochs is shared by the controller sync seam and the
 // actual tick snapshot. A future observed-outcome adapter therefore cannot see
 // a different policy identity depending on which manager path established it.
-func registerCoverageOwnerEpochs(ce *decision.CoverageEngine, epochs []model.PolicyEpoch) {
-	for _, epoch := range epochs {
-		// Preserve the established lifecycle guard even for directly constructed
-		// offline fixtures with incomplete epochs. Stored API objects have complete
-		// identity and positive generation, so production also registers the exact
-		// observed-outcome epoch.
-		ce.SetOwnerLive(epoch.Owner(), true)
-		_ = ce.SetOwnerEpoch(epoch, true)
+func (m *Manager) brain() brainapi.Brain {
+	if m.Brain != nil {
+		return m.Brain
 	}
+	return brainsvc.NewLocal(m.Optimizer, m.MathLab)
 }
 
 // DrainLifecycle completes every enqueued ownership transition. It runs at the top of each
@@ -939,10 +936,7 @@ func (m *Manager) DrainLifecycle() {
 			lifecycle.RetirePolicyBinding(ev.uid)
 			stores++
 		}
-		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-			ce.ForgetOwner(ev.owner) // cost bucket + belief prior + stage clock + alias retirement
-			stores += 3
-		}
+		stores += m.brain().ForgetOwner(ev.owner)
 		if m.Clock != nil {
 			m.Clock.RetainOwner(ev.owner, nil)
 			stores++
@@ -1231,16 +1225,16 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	}
 	m.mu.Unlock()
 	sortDuePolicies(due)
-	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		registerCoverageOwnerEpochs(ce, liveEpochs)
+	if brain := m.brain(); brain.PersistenceObservations() {
+		brain.RegisterOwnerEpochs(liveEpochs)
 		if m.ScopedOutcomeProducer != nil {
-			ce.PersistenceAuthority = m.ScopedOutcomeProducer
+			brain.SetPersistenceAuthority(m.ScopedOutcomeProducer)
 		}
 		for _, delivery := range m.drainScopedOutcomes(32) {
 			if delivery.Observation != nil {
-				ce.AdmitPersistenceObservation(*delivery.Observation)
+				brain.AdmitPersistenceObservation(*delivery.Observation)
 			} else {
-				ce.RecordScopedOutcomeUnavailable(delivery.Policy, delivery.Reason)
+				brain.RecordScopedOutcomeUnavailable(delivery.Policy, delivery.Reason)
 			}
 		}
 	}
@@ -1259,9 +1253,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	// not be read; hold the current state rather than discard every tenant's calibration on a
 	// transient API error.
 	if frozen, ok := m.KillSwitch.CalibrationFrozen(ctx); ok {
-		if ce, isCoverage := m.Optimizer.(*decision.CoverageEngine); isCoverage {
-			ce.SetCostCalibrationFrozen(frozen)
-		}
+		m.brain().SetCostCalibrationFrozen(frozen)
 	}
 
 	// [PHVX-10c] Publish calibrator state after applying the switch, including explicit zeroes when
@@ -1357,12 +1349,10 @@ func (m *Manager) publishRLSMetrics() {
 		pendingByTenant[p.tenant]++
 	}
 
-	if ce, isCoverage := m.Optimizer.(*decision.CoverageEngine); isCoverage {
-		for tenant, st := range ce.CalibrationState() {
-			metrics.SetRLSState(tenant, st.Primed, st.Updates)
-			metrics.SetRotationsPending(tenant, pendingByTenant[tenant])
-			delete(pendingByTenant, tenant)
-		}
+	for tenant, st := range m.brain().CalibrationState() {
+		metrics.SetRLSState(tenant, st.Primed, st.Updates)
+		metrics.SetRotationsPending(tenant, pendingByTenant[tenant])
+		delete(pendingByTenant, tenant)
 	}
 	// A pending rotation can be registered before its tenant bucket is visible. Publish those too;
 	// they will move through the calibrated-state loop on subsequent ticks.
@@ -1410,7 +1400,7 @@ func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.Workl
 }
 
 func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time, result actuator.Result, decisionID string) bool {
-	_, costObserver := m.Optimizer.(decision.RotationObserver)
+	costObserver := m.brain().LearnsRotationCost()
 	if (result.Actuator != "phoenix" && !costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
 		return false
 	}
@@ -1550,7 +1540,8 @@ func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, a
 // disruption ledger is enabled, tracking continues so an outage lasting longer
 // than that modelling window is not permanently undercounted at 800 seconds.
 func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
-	observer, costObserver := m.Optimizer.(decision.RotationObserver)
+	brain := m.brain()
+	costObserver := brain.LearnsRotationCost()
 	if snap == nil || len(m.pendingRotations) == 0 {
 		return
 	}
@@ -1712,7 +1703,7 @@ func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
 				// [M-140 R1.2] Drop feedback whose owner is gone or has been replaced since
 				// the rotation was emitted, rather than training the successor on it.
 				if m.ownerCurrent(p.owner, p.epoch) {
-					observer.ObserveRotation(p.owner, &p.view, measuredFlow)
+					brain.ObserveRotation(p.owner, &p.view, measuredFlow)
 				}
 			}
 			if m.Calibration != nil {
@@ -2114,15 +2105,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		WithOperatorNamespace(m.OperatorNamespace).
 		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
-	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		wireCapabilityGates(ce, capWit, m.Authz == nil,
-			func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
+	brain := m.brain()
+	gate := capabilityGate(capWit, m.Authz == nil,
+		func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
+	if brain.GatesCandidates() {
 		m.Failures.retain(pol.Owner(), failureKeep)
 		failureNow := snap.Now
 		if m.FailureNow != nil {
 			failureNow = m.FailureNow()
 		}
-		ce.FailureExclusion = func(vv *model.WorkloadView, a model.Action) (string, bool) {
+		gate.FailureExclusion = func(vv *model.WorkloadView, a model.Action) (string, bool) {
 			return m.Failures.exclusion(failureKey{pol.Owner(), vv.Pod.Namespace, vv.Pod.UID, a}, failureNow)
 		}
 	}
@@ -2147,9 +2139,9 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	shadowAvailable := false
 	if m.Calibration != nil {
 		if shadowViews, ok := m.Calibration.ShadowViews(views); ok {
-			if shadow, supported := m.Optimizer.(decision.ShadowCheckedOptimizer); supported {
-				var shadowErr error
-				shadowDecisions, shadowErr = shadow.DecideShadowChecked(shadowViews, pol)
+			decisions, supported, shadowErr := brain.DecideShadow(brainapi.DecideRequest{Views: shadowViews, Policy: pol, Gate: gate})
+			if supported {
+				shadowDecisions = decisions
 				shadowAvailable = shadowErr == nil
 				if shadowErr != nil {
 					m.Log.Error(shadowErr, "shadow scale optimizer comparison unavailable", "tenant", pol.Tenant)
@@ -2161,23 +2153,19 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// the production audit sibling store. Persistence failure follows the audit
 	// degradation contract and never changes defensive selection or actuation;
 	// Logger.Record marks every affected row unavailable/failed explicitly.
-	if m.Audit != nil && m.Optimizer.Name() == "p1-coverage" {
+	if m.Audit != nil && brain.Name() == "p1-coverage" {
 		ref, manifest, overrides, provenanceErr := decision.ParameterSetForPolicy(pol)
 		if provenanceErr == nil {
 			_ = m.Audit.RetainParameterSet(pol.Tenant, ref, manifest, overrides)
 		}
 	}
 
-	// Math Lab: an allowlisted policy's tick is recorded for offline replay. The capture
-	// copies inputs before the engine runs and the raw decisions right after; it never
+	// Math Lab: the brain records an allowlisted policy's tick for offline replay. It copies
+	// inputs before the engine runs and the raw decisions right after; the recording never
 	// changes a decision and drops its own snapshot rather than delaying the tick.
-	var capture *mathlab.TickCapture
-	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		capture = m.MathLab.Begin(ce, e.spec, views, pol, snap.Now)
-	}
-	defer capture.Close()
-	decisions, err := decideTick(m.Optimizer, views, pol)
-	capture.Decided(decisions, err)
+	decisions, recording, err := brain.Decide(brainapi.DecideRequest{Views: views, Policy: pol, Gate: gate,
+		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: snap.Now}})
+	defer recording.Close()
 	if ctx.Err() != nil {
 		return
 	}
@@ -2196,7 +2184,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		dur := time.Since(start)
 		metrics.PublishRejectedTick(pol.Tenant, pol.PolicyName, len(views), dur.Seconds(), reason)
 		m.Log.Error(err, "action set rejected; decisions and actuation suppressed for tick",
-			"tenant", pol.Tenant, "optimizer", m.Optimizer.Name(), "reason", string(reason))
+			"tenant", pol.Tenant, "optimizer", brain.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
 		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), snap.Now)
@@ -2218,9 +2206,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		m.updateRejectedStatusObserved(ctx, e, len(views), killState.observation, time.Now(), reason, actionsSupport)
 		m.Clock.RetainOwner(pol.Owner(), keep)
 		m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
-		if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-			ce.RetainStageClock(pol.Owner(), keep)
-		}
+		brain.RetainStageClock(pol.Owner(), keep)
 		m.creditCadence(ctx, e, snap.Now)
 		return
 	}
@@ -2332,7 +2318,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			infeasible++
 		}
 	}
-	capture.Finalize(decisions)
+	recording.Finalize(decisions)
 	for i := range m.fallbackDecisions {
 		m.fallbackDecisions[i].Claim = &claim
 		if m.fallbackDecisions[i].Trace != nil {
@@ -2366,9 +2352,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		finalKillObservation.Engaged, string(finalKillObservation.Cause))
 	m.Clock.RetainOwner(pol.Owner(), keep)
 	m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
-	if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
-		ce.RetainStageClock(pol.Owner(), keep)
-	}
+	brain.RetainStageClock(pol.Owner(), keep)
 	inventory := outcomeInventory(evidenceEvents, pol)
 	if inventory != nil {
 		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
@@ -2408,13 +2392,6 @@ func checkedSelectionRejectionReason(err error) (metrics.TickRejectionReason, bo
 		return metrics.RejectCrossBlockCollision, true
 	}
 	return metrics.RejectDecisionContractError, true
-}
-
-func decideTick(optimizer decision.Optimizer, views []*model.WorkloadView, pol model.Policy) ([]model.Decision, error) {
-	if checked, ok := optimizer.(decision.CheckedOptimizer); ok {
-		return checked.DecideChecked(views, pol)
-	}
-	return optimizer.Decide(views, pol), nil
 }
 
 func selectedDecisionKeys(decisions []model.Decision) []string {
@@ -3379,10 +3356,10 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			if !fallbackBlocked && allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
 				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
 				disposition == actuator.NoEffectRefused {
-				if ce, ok := m.Optimizer.(*decision.CoverageEngine); ok {
+				if brain := m.brain(); brain.GatesCandidates() {
 					targetKey := v.Pod.Namespace + "/" + v.Pod.Name
-					if alternative, ok := ce.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
-						if !ce.ReserveAlternative(pol.Owner(), targetKey, decisions[i].Action, alternative.Action) {
+					if alternative, ok := brain.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
+						if !brain.ReserveAlternative(pol.Owner(), targetKey, decisions[i].Action, alternative.Action) {
 							decisions[i].DispatchReason += "; alternative-deferred-reservation-changed"
 							if decisions[i].Trace != nil {
 								decisions[i].Trace.DispatchReason = decisions[i].DispatchReason
