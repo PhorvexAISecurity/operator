@@ -1,5 +1,7 @@
 package model
 
+import "fmt"
+
 // Types the dispatcher and the brain exchange (ADR-0001). They live here, in the
 // shared domain, so the brain contract (internal/brainapi) needs no brain package.
 
@@ -48,4 +50,19 @@ type PersistenceObservationResult struct {
 	Applied     bool
 	Reason      string
 	Status      ScopedOutcomeReport
+}
+
+// CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
+// Reuse by multiple actions inside one block is legal under the partition constraint;
+// reuse across blocks breaks modularity and voids the exact-optimality guarantee. A
+// committing evaluation whose action set has one is rejected with this error.
+type CrossBlockCollision struct {
+	Key              string
+	ExistingBlock    string
+	ConflictingBlock string
+}
+
+func (c CrossBlockCollision) Error() string {
+	return fmt.Sprintf("cross-block recon-key collision: key %q belongs to both %q and %q",
+		c.Key, c.ExistingBlock, c.ConflictingBlock)
 }

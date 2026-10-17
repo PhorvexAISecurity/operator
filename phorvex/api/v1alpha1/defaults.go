@@ -292,18 +292,26 @@ func (s *PhorvexPolicySpec) ActionEnabled(a ActionType) bool {
 	return false
 }
 
-// AssetWeightFromLabels returns the maximum configured weight matching any of the
-// pod's labels (0 if none match).
-func (s *PhorvexPolicySpec) AssetWeightFromLabels(labels map[string]string) float64 {
-	best := 0.0
+// AssetLabelWeights resolves the configured label weights. An asset is worth the
+// maximum weight matching any of its labels, and 0 if none match: a weight that
+// does not parse, or is not positive, can never raise that maximum, so it is left
+// out.
+func (s *PhorvexPolicySpec) AssetLabelWeights() model.AssetLabelWeights {
+	var out model.AssetLabelWeights
 	for key, valueWeights := range s.AssetValue.FromLabels {
-		if v, ok := labels[key]; ok {
-			if w := ParseDecimal(valueWeights[v], 0); w > best {
-				best = w
+		for value, raw := range valueWeights {
+			if w := ParseDecimal(raw, 0); w > 0 {
+				if out.ByLabel == nil {
+					out.ByLabel = map[string]map[string]float64{}
+				}
+				if out.ByLabel[key] == nil {
+					out.ByLabel[key] = map[string]float64{}
+				}
+				out.ByLabel[key][value] = w
 			}
 		}
 	}
-	return best
+	return out
 }
 
 // SourceAllowed reports whether a SecurityEvent source feeds the kill-chain belief

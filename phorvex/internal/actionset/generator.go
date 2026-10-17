@@ -86,19 +86,9 @@ func cloneFacts(in []recon.Fact) []recon.Fact {
 	return out
 }
 
-// CrossBlockCollision is one recon key claimed by two distinct pod decision blocks.
-// Reuse by multiple actions inside one block is legal under the partition constraint;
-// reuse across blocks breaks modularity and voids the exact-optimality guarantee.
-type CrossBlockCollision struct {
-	Key              string
-	ExistingBlock    string
-	ConflictingBlock string
-}
-
-func (c CrossBlockCollision) Error() string {
-	return fmt.Sprintf("cross-block recon-key collision: key %q belongs to both %q and %q",
-		c.Key, c.ExistingBlock, c.ConflictingBlock)
-}
+// CrossBlockCollision is one recon key claimed by two distinct pod decision blocks; see
+// model.CrossBlockCollision.
+type CrossBlockCollision = model.CrossBlockCollision
 
 // CollisionError returns the first structural error that rejected this set.
 func (s ActionSet) CollisionError() error {

@@ -193,6 +193,10 @@ func main() {
 		mathLabCaptureDir                string
 		mathLabCaptureMaxBytes           int64
 		mathLabMaxSnapshotBytes          int
+		brainEndpoint                    string
+		brainConnectTimeout              time.Duration
+		brainCallTimeout                 time.Duration
+		brainDecideTimeout               time.Duration
 	)
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
@@ -286,6 +290,10 @@ func main() {
 	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
 	flag.Int64Var(&mathLabCaptureMaxBytes, "math-lab-capture-max-bytes", 1<<30, "[math-lab-capture-policies] byte bound of the snapshot store; the oldest snapshots are evicted first.")
 	flag.IntVar(&mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot; larger ticks are dropped and counted.")
+	flag.StringVar(&brainEndpoint, "brain-endpoint", "", "gRPC address of the brain service (ADR-0001). Empty (default) runs the decision engine in this process. The connection is plaintext: restrict the brain with a NetworkPolicy.")
+	flag.DurationVar(&brainConnectTimeout, "brain-connect-timeout", 2*time.Minute, "[brain-endpoint] how long startup waits for the brain service to accept the handshake.")
+	flag.DurationVar(&brainCallTimeout, "brain-call-timeout", 5*time.Second, "[brain-endpoint] deadline of each brain call other than an evaluation.")
+	flag.DurationVar(&brainDecideTimeout, "brain-decide-timeout", time.Minute, "[brain-endpoint] deadline of one evaluation, capability questions included; an evaluation that misses it rejects the tick.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -349,6 +357,10 @@ func main() {
 	}
 	if err := cost.ConfigureGPUEnvelopeMax(gpuEnvelopeMax); err != nil {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
+		os.Exit(2)
+	}
+	if brainEndpoint != "" && strings.TrimSpace(mathLabCapturePolicies) != "" {
+		setupLog.Error(fmt.Errorf("math-lab capture records on the brain service"), "set --math-lab-capture-policies on the brain, not the manager, when --brain-endpoint is set")
 		os.Exit(2)
 	}
 	if supportDebounce < 1 {
@@ -706,9 +718,24 @@ func main() {
 				"maxBytes", mathLabCaptureMaxBytes, "processConfigHash", mathlab.ProcessConfigHash(processConfig))
 		}
 	}
-	// The decision service runs in this process; the brain service serves the same
-	// contract over gRPC once it runs on its own (ADR-0001).
-	rmgr.Brain = brainsvc.NewLocal(rmgr.Optimizer, rmgr.MathLab)
+	// The decision service runs in this process unless --brain-endpoint names the
+	// brain service, which serves the same contract over gRPC (ADR-0001).
+	if brainEndpoint == "" {
+		rmgr.Brain = brainsvc.NewLocal(rmgr.Optimizer, rmgr.MathLab)
+	} else {
+		remote, conn, brainErr := connectBrain(brainEndpoint, rmgr.Optimizer, gpuEnvelopeMax, flowClasses,
+			brainConnectTimeout, brainCallTimeout, brainDecideTimeout)
+		if brainErr != nil {
+			setupLog.Error(brainErr, "refusing to start without the brain service", "endpoint", brainEndpoint)
+			os.Exit(1)
+		}
+		defer func() {
+			remote.Flush()
+			_ = conn.Close()
+		}()
+		rmgr.Brain = remote
+		setupLog.Info("decision brain: remote service", "endpoint", brainEndpoint, "engine", remote.Name())
+	}
 	if auditSourceAddr != "" {
 		server, sourceErr := (audittransport.ServerConfig{Addr: auditSourceAddr, AuditPath: auditJSON, VClusterAuditPath: auditSourceVClusterPath,
 			CertFile: auditSourceCert, KeyFile: auditSourceKey, CAFile: auditSourceCA,

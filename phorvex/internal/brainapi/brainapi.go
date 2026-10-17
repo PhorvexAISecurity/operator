@@ -6,11 +6,22 @@
 package brainapi
 
 import (
+	"errors"
 	"time"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
 )
+
+// ErrOwnerRetired is returned when a decision arrives for a policy identity whose lifecycle
+// cleanup has already completed (M-140). It is not a failure of the tick: the tick was
+// captured before the owner was retired, and the dispatcher drops it.
+var ErrOwnerRetired = errors.New("policy owner retired; decision rejected")
+
+// ErrShadowCapabilityUnavailable is returned when a counterfactual evaluation is requested
+// while a capability gate is wired but its read-only counterpart is not (M-163). Production
+// is unaffected; the dispatcher treats it as "no comparison" for the tick.
+var ErrShadowCapabilityUnavailable = errors.New("shadow capability gate unavailable; counterfactual comparison skipped")
 
 // Gate answers the brain's per-candidate questions during one evaluation. The
 // brain asks once per (asset, action) that survives its structural filters, in

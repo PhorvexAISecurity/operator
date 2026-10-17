@@ -62,7 +62,7 @@ func TestM100CurrentInventoryCannotBecomeThreatEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 		view := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, MountedSecrets: []string{"secret"}}, Phase: model.PhaseWarm, Events: byPod["ns/pod"], ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: time.Minute, model.VarNodePlacement: time.Minute, model.VarSession: time.Minute}}
-		policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1, DryRun: true, Lambda: 0.05, MaxMovesPerTick: 1, ProactiveFloor: 15 * time.Minute, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionRotate: true}, AssetWeightFromLabels: func(map[string]string) float64 { return 1 }}
+		policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1, DryRun: true, Lambda: 0.05, MaxMovesPerTick: 1, ProactiveFloor: 15 * time.Minute, AntiOverRotationWindow: time.Minute, EnabledActions: map[model.Action]bool{model.ActionRotate: true}, AssetWeights: model.AssetLabelWeights{Default: 1}}
 		assessment := killchain.NewModel().Assess(view, policy, 60, policy.ProactiveFloor.Seconds())
 		decisions := decision.NewCoverageEngine().Decide([]*model.WorkloadView{view}, policy)
 		return assessment, decisions, all
@@ -153,12 +153,8 @@ func TestM026ObservationProvenanceFromIngestionToSelection(t *testing.T) {
 			pol := model.Policy{Tenant: "m026-" + tc.name, DryRun: true, Lambda: 0, NormSparsity: .4, FlowDisruption: .6,
 				WeightSecrets: .8, BlastRadiusFromGraph: true, MaxMovesPerTick: 1, ProactiveFloor: floor,
 				AntiOverRotationWindow: 90 * time.Second, EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
-				AssetWeightFromLabels: func(labels map[string]string) float64 {
-					if labels["role"] == "physics" {
-						return 160
-					}
-					return 40
-				}, TraceEnabled: true}
+				AssetWeights: model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"role": {"physics": 160}}, Default: 40},
+				TraceEnabled: true}
 			engine := decision.NewCoverageEngine()
 			_, _ = engine.AssembleSet([]*model.WorkloadView{physics, due}, pol)
 			assessment := killchain.NewModel().Assess(physics, pol, 90, floor.Seconds())

@@ -150,11 +150,11 @@ func clonePolicyData(p model.Policy) model.Policy {
 	p.DecisionAssets = maps.Clone(p.DecisionAssets)
 	p.KillChainSojournScaleSeconds = maps.Clone(p.KillChainSojournScaleSeconds)
 	p.EnabledActions = maps.Clone(p.EnabledActions)
+	p.AssetWeights = p.AssetWeights.Clone()
 	return p
 }
 
-// policyFingerprint digests EVERY data field of a candidate (maps included, in key order; the one
-// func-typed hook is not data). The approval-time stale-base check compares the whole candidate the
+// policyFingerprint digests EVERY data field of a candidate (maps included, in key order). The approval-time stale-base check compares the whole candidate the
 // gate saw and the applier would write — not a hand-picked subset that silently drifts as Policy grows.
 func policyFingerprint(p model.Policy) string {
 	v := reflect.ValueOf(p)

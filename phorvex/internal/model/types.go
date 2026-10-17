@@ -882,7 +882,7 @@ type VoiceMemoryObservation struct {
 	TargetPodUID, DeploymentUID            string
 	ConfigMapUID, ConfigMapResourceVersion string
 	RuleSHA256, SourceSHA256               string
-	CallerID                               string `json:"-"` // actuation-only; never serialize caller in decision evidence
+	CallerID                               string `json:"-" cbor:"CallerID"` // actuation-only; never in decision evidence JSON, but the brain service reads it
 	NoteSHA256                             string
 	PolicyName, PolicyUID                  string
 	PolicyGeneration                       int64
@@ -1257,7 +1257,7 @@ type Policy struct {
 	EventAgeHorizon       time.Duration
 	ExposurePressureScale time.Duration
 	EnabledActions        map[Action]bool
-	AssetWeightFromLabels func(labels map[string]string) float64
+	AssetWeights          AssetLabelWeights
 
 	// Policy identity binds both post-selection native dispatch and observed-outcome
 	// admission to the exact current policy epoch; optimizer scoring ignores it.

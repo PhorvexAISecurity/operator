@@ -67,6 +67,9 @@ func (l *Local) Decide(req brainapi.DecideRequest) ([]model.Decision, brainapi.R
 		capture = l.recorder.Begin(l.ce, req.Capture.Spec, req.Views, req.Policy, req.Capture.CapturedAt)
 	}
 	decisions, err := l.ce.DecideChecked(req.Views, req.Policy)
+	if capture == nil {
+		return decisions, noRecording{}, err
+	}
 	capture.Decided(decisions, err)
 	return decisions, capture, err
 }

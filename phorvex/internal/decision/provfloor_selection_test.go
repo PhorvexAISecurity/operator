@@ -32,12 +32,7 @@ func decoyScenario(t *testing.T, decoyWeight float64) (decoySelected, realSelect
 	pol.DryRun = true
 	pol.ProactiveFloor = 15 * time.Minute         // live tenant value
 	pol.AntiOverRotationWindow = 90 * time.Second // live tenant value
-	pol.AssetWeightFromLabels = func(l map[string]string) float64 {
-		if l["role"] == "decoy" {
-			return decoyWeight
-		}
-		return 40
-	}
+	pol.AssetWeights = model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"role": {"decoy": decoyWeight}}, Default: 40}
 	// Fresh, UNACTUATED pods: only the always-on clocks (M-28 fail-opens on the absent epoch
 	// clocks, so the provenance floor — not the cadence cap — governs their first move; the cap
 	// still vetoes the podIdentity/session-clocked actions on the fresh decoy).

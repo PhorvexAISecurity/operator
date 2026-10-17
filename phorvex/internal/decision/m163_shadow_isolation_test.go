@@ -124,7 +124,7 @@ func m163Policy() model.Policy {
 		EnabledActions: map[model.Action]bool{
 			model.ActionRotate: true, model.ActionQuarantine: true,
 		},
-		AssetWeightFromLabels: func(map[string]string) float64 { return 1 },
+		AssetWeights: model.AssetLabelWeights{Default: 1},
 	}
 }
 

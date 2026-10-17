@@ -89,8 +89,10 @@ set, its order and the decisions stay identical to the single binary, which
 
 Rules:
 
-- Contracts live in `libs/proto` and are versioned with buf lint and
-  breaking-change checks. Every call carries a deadline.
+- Contracts live in `phorvex/api/proto` (the services share one Go module) and
+  generate into `phorvex/internal/<service>pb`. CI runs buf lint and fails when
+  the generated code is stale; breaking-change checks start with a contract's
+  first release. Every call carries a deadline.
 - **Fail closed.** If any dependency errors or times out, the tick actuates
   nothing, records why in the audit stream, and exports a metric. The kill
   switch stays in the dispatcher and is evaluated before any call.
@@ -186,6 +188,13 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   time. The refactor keeps this behaviour so decision parity stays testable; fix it
   after the split, for example by answering the shadow pass from the production
   pass's per-tick support answers.
+
+- **Brain transport security.** Phase 4a-2 connects the manager to the brain
+  over plaintext gRPC behind `--brain-endpoint`, off by default. Before phase 5
+  deploys the brain, add mTLS and the NetworkPolicy above.
+- **Math Lab snapshots of a remote brain.** With `--brain-endpoint` the brain
+  records the snapshots, so the manager's audit source no longer serves them.
+  Phase 5 gives the brain its own snapshot source for the console.
 
 ## Consequences
 
