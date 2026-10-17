@@ -61,7 +61,12 @@ func TestAvailabilityRuntimeReadAuthenticatesOnlyRawLoopbackModels(t *testing.T)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "python3", "-B", "-c", program)
-			cmd.Env = append([]string{"PATH=" + os.Getenv("PATH")}, "VLLM_API_KEY="+tc.key)
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "VLLM_API_KEY=" + tc.key}
+			// A shared-library Python (setup-python outside /opt/hostedtoolcache) needs
+			// its loader path to start; nothing else is inherited.
+			if libraryPath, ok := os.LookupEnv("LD_LIBRARY_PATH"); ok {
+				cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH="+libraryPath)
+			}
 			output, err := cmd.Output()
 			if err != nil {
 				t.Fatalf("fixed Python probe failed: %v", err)

@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// m168TestWindow is the attack window of the arms-worker tests. It must outlast the
+// fsynced stimulus-intent record written after the window opens: 500ms still expired
+// on the CI build host while envtest's etcd saturated the disk.
+const m168TestWindow = 2 * time.Second
+
 type fakeExperimentCluster struct {
 	mu              sync.Mutex
 	live            experimentPolicy
@@ -374,9 +379,7 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	defer resetM168AttackMemory()
 	dir := t.TempDir()
 	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
-	// The window must outlast the fsynced stimulus-intent record written after it opens;
-	// a few milliseconds fail the acceptance check under load.
-	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: 2 * time.Millisecond, BlindRotationDelay: 8 * time.Millisecond}
+	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: m168TestWindow, AttackWatchInterval: 2 * time.Millisecond, BlindRotationDelay: 8 * time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
 	op := experimentEvent{Operation: "op-all", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	if err := s.appendExperiment(op); err != nil {
@@ -503,7 +506,7 @@ func TestM168ArmsWorkerRejectsDeploymentReplacementBetweenArms(t *testing.T) {
 	defer resetM168AttackMemory()
 	dir := t.TempDir()
 	f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true, replaceAtRead: 4}
-	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: 10 * time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+	cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: m168TestWindow, AttackWatchInterval: 10 * time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: f}
 	op := experimentEvent{Operation: "op-replaced-deploy", Phase: "prepared", Actor: "tester", Namespace: "voice", Attack: "foothold", Deployment: "voice", DeploymentUID: "deploy-uid", Policy: f.live, OriginalMode: "active", OwnedMode: "active", OwnedSpecHash: f.live.SpecHash, OwnedMetadataHash: f.live.MetadataHash}
 	if err := s.appendExperiment(op); err != nil {
@@ -538,9 +541,7 @@ func TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker(t *testing.T) {
 			dir := t.TempDir()
 			f := &fakeExperimentCluster{live: testExperimentPolicy("active", "rv-1", ""), podUID: "pod-uid-1", podFound: true}
 			failed := false
-			// The window must outlast the fsynced stimulus-intent record written after it
-			// opens; a few milliseconds fail the acceptance check under load.
-			cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: 500 * time.Millisecond, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
+			cfg := Config{StateDir: dir, Exec: f.exec, AttackWatchDuration: m168TestWindow, AttackWatchInterval: time.Millisecond, BlindRotationDelay: 4 * time.Millisecond}
 			cfg.StateAppend = func(path string, record []byte) error {
 				if !failed && tc.failResult && path == armsPath(cfg) {
 					failed = true
