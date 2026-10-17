@@ -373,7 +373,7 @@ func Replay(s *Snapshot, opts ReplayOptions) ([]ArmResult, error) {
 		var baseline *armContext
 		for i, a := range opts.Arms {
 			pol := s.Inputs.Policy
-			pol.AssetWeightFromLabels = spec.AssetWeightFromLabels
+			pol.AssetWeights = spec.AssetLabelWeights()
 			diffs, armErr := applyArm(&pol, a)
 			res := ArmResult{Schema: ReplaySchema, Snapshot: s.ref(), ArmID: a.ID, Overrides: a.Overrides, PolicyDiff: diffs}
 			if armErr != nil {

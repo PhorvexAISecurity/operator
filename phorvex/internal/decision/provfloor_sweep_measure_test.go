@@ -44,12 +44,7 @@ func measureSweep(t *testing.T, exposure time.Duration, floor, antiOver time.Dur
 	pol.DryRun = true
 	pol.ProactiveFloor = floor
 	pol.AntiOverRotationWindow = antiOver
-	pol.AssetWeightFromLabels = func(l map[string]string) float64 {
-		if l["role"] == "decoy" {
-			return decoyWeight
-		}
-		return 40
-	}
+	pol.AssetWeights = model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"role": {"decoy": decoyWeight}}, Default: 40}
 	decoy := covView("decoy", true, exposure, false)
 	decoy.Pod.Labels = map[string]string{"role": "decoy"}
 	decoy.Neighbors = []model.NeighborRef{{Key: "ns/decoy-nb", Value: 5.0}}

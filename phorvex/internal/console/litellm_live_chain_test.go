@@ -191,7 +191,7 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 			NormSparsity: .4, FlowDisruption: .6, WeightSecrets: .8, Lambda: .4, CostCeiling: model.DefaultCostCeiling,
 			MinAvailableReplicas: 1, ProactiveFloor: 15 * time.Minute, ExposurePressureScale: 15 * time.Minute,
 			AntiOverRotationWindow: 90 * time.Second, TickInterval: 10 * time.Second, EventAgeHorizon: time.Hour,
-			EventDriven: true, ReactiveOnly: true, AssetWeightFromLabels: func(map[string]string) float64 { return .4 },
+			EventDriven: true, ReactiveOnly: true, AssetWeights: model.AssetLabelWeights{Default: .4},
 			EnabledActions: map[model.Action]bool{model.ActionLiteLLMClientRevoke: true, model.ActionRotate: true, model.ActionQuarantine: true}}
 		engine := decision.NewCoverageEngine()
 		engine.Now = func() time.Time { return at }

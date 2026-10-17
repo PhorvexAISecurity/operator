@@ -272,22 +272,34 @@ func TestInvalidKillChainOverridesFallBackDefensively(t *testing.T) {
 	}
 }
 
-func TestAssetWeightFromLabels(t *testing.T) {
+func TestAssetLabelWeights(t *testing.T) {
 	s := PhorvexPolicySpec{
 		AssetValue: AssetValueSpec{
 			FromLabels: map[string]LabelValueWeights{
-				"data-class": {"restricted": "1.0", "internal": "0.4", "public": "0.1"},
+				"data-class": {"restricted": "1.0", "internal": "0.4", "public": "0.1", "junk": "x", "negative": "-2"},
+				"tier":       {"gold": "0.7", "none": "0"},
 			},
 		},
 	}
-	if got := s.AssetWeightFromLabels(map[string]string{"data-class": "restricted"}); got != 1.0 {
-		t.Errorf("restricted weight = %v, want 1.0", got)
-	}
-	if got := s.AssetWeightFromLabels(map[string]string{"data-class": "public"}); got != 0.1 {
-		t.Errorf("public weight = %v, want 0.1", got)
-	}
-	if got := s.AssetWeightFromLabels(map[string]string{"unrelated": "x"}); got != 0 {
-		t.Errorf("unmatched weight = %v, want 0", got)
+	weights := s.AssetLabelWeights()
+	for _, tc := range []struct {
+		labels map[string]string
+		want   float64
+	}{
+		{map[string]string{"data-class": "restricted"}, 1.0},
+		{map[string]string{"data-class": "public"}, 0.1},
+		{map[string]string{"unrelated": "x"}, 0},
+		{nil, 0},
+		{map[string]string{"data-class": "junk"}, 0},
+		{map[string]string{"data-class": "negative"}, 0},
+		{map[string]string{"data-class": "negative", "tier": "gold"}, 0.7},
+		{map[string]string{"data-class": "public", "tier": "gold"}, 0.7},
+		{map[string]string{"data-class": "restricted", "tier": "gold"}, 1.0},
+		{map[string]string{"tier": "none"}, 0},
+	} {
+		if got := weights.Weight(tc.labels); got != tc.want {
+			t.Errorf("Weight(%v) = %v, want %v", tc.labels, got, tc.want)
+		}
 	}
 }
 

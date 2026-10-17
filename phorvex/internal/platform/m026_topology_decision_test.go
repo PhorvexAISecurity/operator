@@ -47,12 +47,8 @@ func TestM150NamespaceDispersionCannotSupplyGPUThreatEvidence(t *testing.T) {
 	pol := model.Policy{Tenant: "m026-derived-topology", Namespace: "m026-fixture-policy", DryRun: true, Lambda: 0, NormSparsity: .4, FlowDisruption: .6,
 		WeightSecrets: .8, BlastRadiusFromGraph: true, MaxMovesPerTick: 1, ProactiveFloor: floor,
 		AntiOverRotationWindow: 90 * time.Second, EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
-		AssetWeightFromLabels: func(l map[string]string) float64 {
-			if l["role"] == "physics" {
-				return 120
-			}
-			return 40
-		}, TraceEnabled: true}
+		AssetWeights: model.AssetLabelWeights{ByLabel: map[string]map[string]float64{"role": {"physics": 120}}, Default: 40},
+		TraceEnabled: true}
 	a := killchain.NewModel().Assess(physics, pol, 90, floor.Seconds())
 	if a.HasEvidence || a.HasEventEvidence || a.AIStageName != "" || a.Stage != killchain.StageRecon {
 		t.Fatalf("derived namespace topology must not produce GPU threat evidence: %+v", a)

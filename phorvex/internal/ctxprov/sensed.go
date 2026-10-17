@@ -96,10 +96,7 @@ func (sensed) Name() string { return "sensed-context" }
 
 func (sensed) Context(view *model.WorkloadView, pol model.Policy) model.ContextSignals {
 	// (1) Asset value.
-	asset := 0.0
-	if pol.AssetWeightFromLabels != nil {
-		asset = pol.AssetWeightFromLabels(view.Pod.Labels)
-	}
+	asset := pol.AssetWeights.Weight(view.Pod.Labels)
 	asset += pol.WeightSecrets * float64(len(view.Pod.MountedSecrets))
 	if pol.BlastRadiusFromGraph {
 		asset += view.BlastRadius // graph score already normalized [0,1]

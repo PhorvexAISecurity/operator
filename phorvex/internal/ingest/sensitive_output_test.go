@@ -162,8 +162,8 @@ func testSensitiveOutputDecisionAtAge(t *testing.T, age time.Duration) {
 		CostCeiling: model.DefaultCostCeiling, MinAvailableReplicas: 1, ProactiveFloor: 15 * time.Minute,
 		ExposurePressureScale: 15 * time.Minute, AntiOverRotationWindow: 90 * time.Second, TickInterval: 10 * time.Second,
 		EventAgeHorizon: time.Hour, EventDriven: true, ReactiveOnly: true, BlastRadiusFromGraph: true,
-		AssetWeightFromLabels: func(map[string]string) float64 { return .4 },
-		EnabledActions:        map[model.Action]bool{model.ActionSensitiveOutputPolicyActivate: true, model.ActionRotate: true, model.ActionQuarantine: true}}
+		AssetWeights:   model.AssetLabelWeights{Default: .4},
+		EnabledActions: map[model.Action]bool{model.ActionSensitiveOutputPolicyActivate: true, model.ActionRotate: true, model.ActionQuarantine: true}}
 	clock := exposure.NewClock()
 	clock.Observe(exposure.Observation{Owner: pol.Owner(), Namespace: p.Namespace, Pod: p.Name,
 		StartedAt: p.StartedAt, Fingerprints: model.ExposureFingerprints(*p)}, now)
