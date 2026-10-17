@@ -52,7 +52,7 @@ var domains = map[string]string{
 
 	"runner": dispatcher, "controller": dispatcher, "capability": dispatcher,
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
-	"exposure": dispatcher, "scopedoutcome": dispatcher,
+	"exposure": dispatcher, "scopedoutcome": dispatcher, "brainclient": dispatcher,
 
 	"actuator": actuator, "podresources": actuator, "startupauthz": actuator,
 
