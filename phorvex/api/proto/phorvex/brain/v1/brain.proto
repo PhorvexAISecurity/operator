@@ -1,0 +1,292 @@
+syntax = "proto3";
+
+package phorvex.brain.v1;
+
+option go_package = "github.com/phorvex/phorvex/internal/brainpb;brainpb";
+
+// BrainService serves the dispatcher-brain contract (phorvex/internal/brainapi)
+// when the brain runs as its own service (ADR-0001).
+//
+// Domain values travel as CBOR (RFC 8949) encodings of the shared model package
+// (phorvex/internal/model): both ends are built from one module, the values carry
+// NaN and infinities that JSON cannot represent, and CBOR keeps empty and nil
+// collections distinct so decisions audit identically on either side. This file
+// fixes the calls, the Decide stream protocol and the contract version; Hello
+// refuses a client built against another version or running another decision
+// configuration.
+service BrainService {
+  // Hello checks the contract version and the decision configuration and reports
+  // the brain's capabilities. A client calls it before anything else.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+
+  // Decide runs one evaluation. The client opens with `start`; while the brain
+  // generates candidates it asks capability and failure questions in generation
+  // order, and the client answers each before the brain continues; the server
+  // ends the stream with `result`.
+  rpc Decide(stream DecideRequest) returns (stream DecideResponse);
+
+  // CloseRecording records the decisions as audited after dispatch, when the
+  // dispatcher finalized them, and hands the recording to the brain's Math Lab
+  // store.
+  rpc CloseRecording(CloseRecordingRequest) returns (CloseRecordingResponse);
+
+  // SelectAlternative picks the fallback for a refused dispatch from the last
+  // committing evaluation's already-gated candidates.
+  rpc SelectAlternative(SelectAlternativeRequest) returns (SelectAlternativeResponse);
+  // ReserveAlternative records a chosen fallback against the tick's resources.
+  rpc ReserveAlternative(ReserveAlternativeRequest) returns (ReserveAlternativeResponse);
+
+  // ObserveRotation feeds one measured rotation outcome to the cost learner.
+  rpc ObserveRotation(ObserveRotationRequest) returns (ObserveRotationResponse);
+  // GetCalibrationState reports each tenant's cost-learner state.
+  rpc GetCalibrationState(GetCalibrationStateRequest) returns (GetCalibrationStateResponse);
+  // SetCostCalibrationFrozen applies the calibration off-switch to every tenant.
+  rpc SetCostCalibrationFrozen(SetCostCalibrationFrozenRequest) returns (SetCostCalibrationFrozenResponse);
+
+  // RegisterOwnerEpochs marks the current policy identities live.
+  rpc RegisterOwnerEpochs(RegisterOwnerEpochsRequest) returns (RegisterOwnerEpochsResponse);
+  // ForgetOwner drops every store an owner holds after its policy is removed.
+  rpc ForgetOwner(ForgetOwnerRequest) returns (ForgetOwnerResponse);
+  // RetainStageClock keeps kill-chain stage state only for the given assets.
+  rpc RetainStageClock(RetainStageClockRequest) returns (RetainStageClockResponse);
+
+  // SetPersistenceAuthority names the observed-outcome authority the dispatcher
+  // holds; scoped-outcome reports carry its source. The dispatcher resolves the
+  // authority's answer for each observation it admits.
+  rpc SetPersistenceAuthority(SetPersistenceAuthorityRequest) returns (SetPersistenceAuthorityResponse);
+  // AdmitPersistenceObservation enters one pre-authorized observation into the
+  // reporting-only scoped-outcome store.
+  rpc AdmitPersistenceObservation(AdmitPersistenceObservationRequest) returns (AdmitPersistenceObservationResponse);
+  // RecordScopedOutcomeUnavailable records why no observation arrived.
+  rpc RecordScopedOutcomeUnavailable(RecordScopedOutcomeUnavailableRequest) returns (RecordScopedOutcomeUnavailableResponse);
+}
+
+message HelloRequest {
+  // Contract version the client was built against.
+  uint32 contract_version = 1;
+  // SHA-256 of the client's decision configuration (engine, recon profile, GPU
+  // envelope, flow-residual classes, decision parameters).
+  string decision_config_sha256 = 2;
+}
+
+message HelloResponse {
+  uint32 contract_version = 1;
+  string decision_config_sha256 = 2;
+  string name = 3;
+  bool gates_candidates = 4;
+  bool learns_rotation_cost = 5;
+  bool persistence_observations = 6;
+  string scoped_outcome_process_epoch_id = 7;
+}
+
+message DecideRequest {
+  oneof message {
+    DecideStart start = 1;
+    CapabilityAnswer capability = 2;
+    FailureAnswer failure = 3;
+  }
+}
+
+message DecideStart {
+  // True for a counterfactual (shadow) evaluation.
+  bool shadow = 1;
+  // CBOR []*model.WorkloadView
+  bytes views = 2;
+  // CBOR model.Policy
+  bytes policy = 3;
+  // Which gate questions the client can answer; an unwired gate is nil in the brain.
+  bool capability_gate = 4;
+  bool shadow_capability_gate = 5;
+  bool failure_gate = 6;
+  // CBOR brainapi.Capture; empty when the evaluation is not recorded.
+  bytes capture = 7;
+}
+
+message DecideResponse {
+  oneof message {
+    CapabilityQuestion capability = 1;
+    FailureQuestion failure = 2;
+    DecideResult result = 3;
+  }
+}
+
+message CapabilityQuestion {
+  uint64 id = 1;
+  // True when the shadow (read-only) gate must answer.
+  bool shadow = 2;
+  // Index into DecideStart.views; the brain may have stamped has_event_evidence.
+  uint32 view_index = 3;
+  bool has_event_evidence = 4;
+  string action = 5;
+  repeated string cover_keys = 6;
+}
+
+message CapabilityAnswer {
+  uint64 id = 1;
+  // nil eligibility means eligible and clean.
+  bool clean = 2;
+  bool excluded = 3;
+  string kind = 4;
+  string detail = 5;
+  bool rbac_unknown = 6;
+}
+
+message FailureQuestion {
+  uint64 id = 1;
+  uint32 view_index = 2;
+  bool has_event_evidence = 3;
+  string action = 4;
+}
+
+message FailureAnswer {
+  uint64 id = 1;
+  string detail = 2;
+  bool excluded = 3;
+}
+
+message DecideResult {
+  // CBOR []model.Decision
+  bytes decisions = 1;
+  // False when the brain has no shadow evaluation.
+  bool supported = 2;
+  // Identifies the Math Lab recording; empty when nothing is recorded.
+  string recording_id = 3;
+  // Event-evidence stamps a committing evaluation wrote on each input view, in
+  // view order. The client applies them to its own views.
+  repeated bool has_event_evidence = 4;
+  DecideError error = 5;
+}
+
+message DecideError {
+  DecideErrorKind kind = 1;
+  string message = 2;
+  // Set for DECIDE_ERROR_KIND_CROSS_BLOCK_COLLISION.
+  string collision_key = 3;
+  string collision_existing_block = 4;
+  string collision_conflicting_block = 5;
+}
+
+enum DecideErrorKind {
+  DECIDE_ERROR_KIND_UNSPECIFIED = 0;
+  DECIDE_ERROR_KIND_OWNER_RETIRED = 1;
+  DECIDE_ERROR_KIND_SHADOW_CAPABILITY_UNAVAILABLE = 2;
+  DECIDE_ERROR_KIND_CROSS_BLOCK_COLLISION = 3;
+  DECIDE_ERROR_KIND_OTHER = 4;
+}
+
+message CloseRecordingRequest {
+  string recording_id = 1;
+  // True when the dispatcher finalized the decisions.
+  bool finalized = 2;
+  // CBOR []model.Decision as audited after dispatch.
+  bytes decisions = 3;
+}
+
+message CloseRecordingResponse {}
+
+message SelectAlternativeRequest {
+  string owner = 1;
+  string target = 2;
+  string failed_action = 3;
+}
+
+message SelectAlternativeResponse {
+  bool found = 1;
+  // CBOR model.Alternative
+  bytes alternative = 2;
+}
+
+message ReserveAlternativeRequest {
+  string owner = 1;
+  string target = 2;
+  string failed_action = 3;
+  string chosen_action = 4;
+}
+
+message ReserveAlternativeResponse {
+  bool reserved = 1;
+}
+
+message ObserveRotationRequest {
+  string owner = 1;
+  // CBOR model.WorkloadView
+  bytes view = 2;
+  double measured_flow = 3;
+}
+
+message ObserveRotationResponse {}
+
+message GetCalibrationStateRequest {}
+
+message GetCalibrationStateResponse {
+  map<string, CostCalibrationState> tenants = 1;
+}
+
+message CostCalibrationState {
+  bool primed = 1;
+  int64 updates = 2;
+}
+
+message SetCostCalibrationFrozenRequest {
+  bool frozen = 1;
+}
+
+message SetCostCalibrationFrozenResponse {}
+
+message RegisterOwnerEpochsRequest {
+  // CBOR []model.PolicyEpoch
+  bytes epochs = 1;
+}
+
+message RegisterOwnerEpochsResponse {}
+
+message ForgetOwnerRequest {
+  string owner = 1;
+}
+
+message ForgetOwnerResponse {
+  int64 stores_cleared = 1;
+}
+
+message RetainStageClockRequest {
+  string owner = 1;
+  repeated string keep = 2;
+}
+
+message RetainStageClockResponse {}
+
+message SetPersistenceAuthorityRequest {
+  // False removes the authority.
+  bool present = 1;
+  string source = 2;
+}
+
+message SetPersistenceAuthorityResponse {}
+
+message AdmitPersistenceObservationRequest {
+  // CBOR model.PersistenceObservation
+  bytes observation = 1;
+  // The dispatcher-side authority's answer for exactly this observation, resolved
+  // before the call because the authority lives with the dispatcher. resolved is
+  // false when the dispatcher holds no authority.
+  bool resolved = 2;
+  bool authorized = 3;
+  // CBOR model.PersistenceOperationBinding
+  bytes binding = 4;
+}
+
+message AdmitPersistenceObservationResponse {
+  // CBOR model.PersistenceObservationResult
+  bytes result = 1;
+}
+
+message RecordScopedOutcomeUnavailableRequest {
+  // CBOR model.PolicyEpoch
+  bytes policy = 1;
+  string reason = 2;
+}
+
+message RecordScopedOutcomeUnavailableResponse {
+  // CBOR model.PersistenceObservationResult
+  bytes result = 1;
+}

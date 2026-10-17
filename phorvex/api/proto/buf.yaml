@@ -1,0 +1,10 @@
+# Service contracts between the Phorvex services (ADR-0001).
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
