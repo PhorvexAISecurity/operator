@@ -10,6 +10,7 @@ import (
 	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 // authorityProbe records what the installed authority answers during admission and
@@ -41,11 +42,11 @@ func TestAuthorityAnswersOnlyForTheAdmittedObservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	observation := model.PersistenceObservation{EvidenceID: "evidence-1", Source: model.ScopedSessionCapability}
-	raw, err := brainpb.Encode(observation)
+	raw, err := wire.Encode(observation)
 	if err != nil {
 		t.Fatal(err)
 	}
-	binding, err := brainpb.Encode(model.PersistenceOperationBinding{OperationID: "op-1"})
+	binding, err := wire.Encode(model.PersistenceOperationBinding{OperationID: "op-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestAuthorityAnswersOnlyForTheAdmittedObservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var result model.PersistenceObservationResult
-	if err := brainpb.Decode(resp.GetResult(), &result); err != nil || result.Reason != model.ScopedSessionCapability {
+	if err := wire.Decode(resp.GetResult(), &result); err != nil || result.Reason != model.ScopedSessionCapability {
 		t.Fatalf("authority source not reported: %+v %v", result, err)
 	}
 	if probe.during[0] != true || probe.during[1] != false {

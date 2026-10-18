@@ -14,6 +14,7 @@ import (
 	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 // recordingTTL bounds how long the server keeps a recording the dispatcher never
@@ -79,16 +80,16 @@ func (s *Server) Decide(stream brainpb.BrainService_DecideServer) error {
 	}
 	var views []*model.WorkloadView
 	var pol model.Policy
-	if err := brainpb.Decode(start.GetViews(), &views); err != nil {
+	if err := wire.Decode(start.GetViews(), &views); err != nil {
 		return status.Errorf(codes.InvalidArgument, "views: %v", err)
 	}
-	if err := brainpb.Decode(start.GetPolicy(), &pol); err != nil {
+	if err := wire.Decode(start.GetPolicy(), &pol); err != nil {
 		return status.Errorf(codes.InvalidArgument, "policy: %v", err)
 	}
 	req := brainapi.DecideRequest{Views: views, Policy: pol}
 	if raw := start.GetCapture(); len(raw) > 0 {
 		var capture brainapi.Capture
-		if err := brainpb.Decode(raw, &capture); err != nil {
+		if err := wire.Decode(raw, &capture); err != nil {
 			return status.Errorf(codes.InvalidArgument, "capture: %v", err)
 		}
 		req.Capture = &capture
@@ -127,7 +128,7 @@ func (s *Server) Decide(stream brainpb.BrainService_DecideServer) error {
 		// The client is gone; every question after the failure was answered closed.
 		return asker.err
 	}
-	if result.Decisions, err = brainpb.Encode(decisions); err != nil {
+	if result.Decisions, err = wire.Encode(decisions); err != nil {
 		s.release(result.RecordingId)
 		return status.Errorf(codes.Internal, "decisions: %v", err)
 	}
@@ -303,7 +304,7 @@ func (s *Server) release(id string) {
 func (s *Server) CloseRecording(_ context.Context, req *brainpb.CloseRecordingRequest) (*brainpb.CloseRecordingResponse, error) {
 	var decisions []model.Decision
 	if req.GetFinalized() {
-		if err := brainpb.Decode(req.GetDecisions(), &decisions); err != nil {
+		if err := wire.Decode(req.GetDecisions(), &decisions); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "decisions: %v", err)
 		}
 	}
@@ -322,7 +323,7 @@ func (s *Server) SelectAlternative(_ context.Context, req *brainpb.SelectAlterna
 	alternative, found := s.brain.SelectAlternative(req.GetOwner(), req.GetTarget(), model.Action(req.GetFailedAction()))
 	out := &brainpb.SelectAlternativeResponse{Found: found}
 	if found {
-		raw, err := brainpb.Encode(alternative)
+		raw, err := wire.Encode(alternative)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "alternative: %v", err)
 		}
@@ -338,7 +339,7 @@ func (s *Server) ReserveAlternative(_ context.Context, req *brainpb.ReserveAlter
 
 func (s *Server) ObserveRotation(_ context.Context, req *brainpb.ObserveRotationRequest) (*brainpb.ObserveRotationResponse, error) {
 	var view *model.WorkloadView
-	if err := brainpb.Decode(req.GetView(), &view); err != nil {
+	if err := wire.Decode(req.GetView(), &view); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "view: %v", err)
 	}
 	s.brain.ObserveRotation(req.GetOwner(), view, req.GetMeasuredFlow())
@@ -363,7 +364,7 @@ func (s *Server) SetCostCalibrationFrozen(_ context.Context, req *brainpb.SetCos
 
 func (s *Server) RegisterOwnerEpochs(_ context.Context, req *brainpb.RegisterOwnerEpochsRequest) (*brainpb.RegisterOwnerEpochsResponse, error) {
 	var epochs []model.PolicyEpoch
-	if err := brainpb.Decode(req.GetEpochs(), &epochs); err != nil {
+	if err := wire.Decode(req.GetEpochs(), &epochs); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "epochs: %v", err)
 	}
 	s.brain.RegisterOwnerEpochs(epochs)
@@ -398,13 +399,13 @@ func (s *Server) SetPersistenceAuthority(_ context.Context, req *brainpb.SetPers
 
 func (s *Server) AdmitPersistenceObservation(_ context.Context, req *brainpb.AdmitPersistenceObservationRequest) (*brainpb.AdmitPersistenceObservationResponse, error) {
 	var observation model.PersistenceObservation
-	if err := brainpb.Decode(req.GetObservation(), &observation); err != nil {
+	if err := wire.Decode(req.GetObservation(), &observation); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "observation: %v", err)
 	}
 	var answer *resolvedAnswer
 	if req.GetResolved() {
 		answer = &resolvedAnswer{observation: observation, authorized: req.GetAuthorized()}
-		if err := brainpb.Decode(req.GetBinding(), &answer.binding); err != nil {
+		if err := wire.Decode(req.GetBinding(), &answer.binding); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "binding: %v", err)
 		}
 	}
@@ -417,7 +418,7 @@ func (s *Server) AdmitPersistenceObservation(_ context.Context, req *brainpb.Adm
 		s.authority.answer = nil
 	}
 	s.authorityMu.Unlock()
-	raw, err := brainpb.Encode(result)
+	raw, err := wire.Encode(result)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "result: %v", err)
 	}
@@ -426,10 +427,10 @@ func (s *Server) AdmitPersistenceObservation(_ context.Context, req *brainpb.Adm
 
 func (s *Server) RecordScopedOutcomeUnavailable(_ context.Context, req *brainpb.RecordScopedOutcomeUnavailableRequest) (*brainpb.RecordScopedOutcomeUnavailableResponse, error) {
 	var policy model.PolicyEpoch
-	if err := brainpb.Decode(req.GetPolicy(), &policy); err != nil {
+	if err := wire.Decode(req.GetPolicy(), &policy); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "policy: %v", err)
 	}
-	raw, err := brainpb.Encode(s.brain.RecordScopedOutcomeUnavailable(policy, req.GetReason()))
+	raw, err := wire.Encode(s.brain.RecordScopedOutcomeUnavailable(policy, req.GetReason()))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "result: %v", err)
 	}

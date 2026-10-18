@@ -1,4 +1,6 @@
-package brainpb
+// Package wire is the codec the services use for domain values inside their
+// protobuf messages (ADR-0001), and the check that a type survives it.
+package wire
 
 import (
 	"github.com/fxamacker/cbor/v2"
@@ -31,12 +33,13 @@ func mustDecMode() cbor.DecMode {
 	return mode
 }
 
-// Encode serializes one domain value for a bytes field (see brain.proto).
+// Encode serializes one domain value for a bytes field of a service message.
 func Encode(v any) ([]byte, error) { return encMode.Marshal(v) }
 
 // Decode deserializes a bytes field into v, which must be a pointer.
 func Decode(raw []byte, v any) error { return decMode.Unmarshal(raw, v) }
 
-// MaxMessageBytes bounds one brain service message. A Decide start carries every
-// view of a tenant tick, which exceeds gRPC's 4 MiB default on large fleets.
+// MaxMessageBytes bounds one service message. A brain Decide start carries every
+// view of a tenant tick and a sensor observation the whole cluster, which exceed
+// gRPC's 4 MiB default on large fleets.
 const MaxMessageBytes = 64 << 20
