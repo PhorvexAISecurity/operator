@@ -14,6 +14,7 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/sensorapi"
 )
 
 func m009Pending(t *testing.T, m *Manager, started time.Time) pendingRotation {
@@ -59,7 +60,7 @@ func TestM009LegacyAcceptedEventWithoutReceiptDoesNotTrain(t *testing.T) {
 		RuleSource: amtdv1beta1.PhorvexRuleSource, Emitted: true,
 	}
 	p := m009PendingResult(t, m, started, result)
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: started.Add(2 * cost.ReadyDelayReference), PhoenixReceiptInventoryComplete: true,
 		PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{},
 		Pods:            []model.Pod{{Namespace: "ns", Name: "new", UID: "external-rollout", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true, ReadyAt: started.Add(time.Minute)}},
@@ -81,7 +82,7 @@ func TestM009ExactReceiptAndReadyReplacementTrain(t *testing.T) {
 	started := time.Unix(1_800_000_000, 0).UTC()
 	p := m009Pending(t, m, started)
 	receipt := m009Receipt(p, started.Add(2*time.Second))
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: started.Add(30 * time.Second), PhoenixReceiptInventoryComplete: true,
 		PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{receipt.EventName: receipt},
 		Pods:            []model.Pod{{Namespace: "ns", Name: "new", UID: "replacement", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true, ReadyAt: started.Add(20 * time.Second)}},
@@ -124,7 +125,7 @@ func TestM009WrongReceiptFieldsNeverConfirm(t *testing.T) {
 		p := m009Pending(t, m, started)
 		r := m009Receipt(p, started.Add(time.Second))
 		mutate(&r)
-		if phoenixRotationReceiptConfirmed(p, &ingest.Snapshot{Now: started.Add(3 * time.Second), PhoenixReceiptInventoryComplete: true, PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{p.phoenixEventName: r}}) {
+		if phoenixRotationReceiptConfirmed(p, &sensorapi.Observation{Now: started.Add(3 * time.Second), PhoenixReceiptInventoryComplete: true, PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{p.phoenixEventName: r}}) {
 			t.Fatalf("invalid receipt confirmed: %+v", r)
 		}
 	}
@@ -137,12 +138,12 @@ func TestM009ReceiptUsesKubernetesTimestampPrecisionAndRejectsFuture(t *testing.
 	r := m009Receipt(p, started.Truncate(time.Second).Add(time.Second))
 	snap := &ingest.Snapshot{Now: started.Add(2 * time.Second), PhoenixReceiptInventoryComplete: true,
 		PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{r.EventName: r}}
-	if !phoenixRotationReceiptConfirmed(p, snap) {
+	if !phoenixRotationReceiptConfirmed(p, observationOf(snap)) {
 		t.Fatal("same-wire-second receipt was rejected against nanosecond dispatch time")
 	}
 	r.ProcessedAt = snap.Now.Add(time.Second)
 	snap.PhoenixReceipts[r.EventName] = r
-	if phoenixRotationReceiptConfirmed(p, snap) {
+	if phoenixRotationReceiptConfirmed(p, observationOf(snap)) {
 		t.Fatal("future receipt timestamp was accepted")
 	}
 }
@@ -152,7 +153,7 @@ func TestM009IncompleteReceiptInventoryNeverConfirms(t *testing.T) {
 	m := &Manager{Log: logr.Discard()}
 	p := m009Pending(t, m, started)
 	r := m009Receipt(p, started.Add(time.Second))
-	if phoenixRotationReceiptConfirmed(p, &ingest.Snapshot{Now: started.Add(2 * time.Second), PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{r.EventName: r}}) {
+	if phoenixRotationReceiptConfirmed(p, &sensorapi.Observation{Now: started.Add(2 * time.Second), PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{r.EventName: r}}) {
 		t.Fatal("receipt confirmed while cluster-wide event inventory was unavailable")
 	}
 }
@@ -163,7 +164,7 @@ func TestM009PhoenixObservationRunsWithoutLearningConsumers(t *testing.T) {
 	started := time.Unix(1_800_000_000, 0).UTC()
 	p := m009Pending(t, m, started)
 	r := m009Receipt(p, started.Add(time.Second))
-	m.observeReadyRotations(&ingest.Snapshot{Now: started.Add(2 * time.Second), PhoenixReceiptInventoryComplete: true,
+	m.observeReadyRotations(&sensorapi.Observation{Now: started.Add(2 * time.Second), PhoenixReceiptInventoryComplete: true,
 		PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{r.EventName: r}, Pods: []model.Pod{{Namespace: "ns", UID: "new", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true, ReadyAt: started.Add(time.Second)}}})
 	if !strings.Contains(out.String(), `"kind":"phorvex.actuation-observation"`) {
 		t.Fatalf("observer-disabled path omitted audit: %s", out.String())

@@ -11,8 +11,8 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/cost"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/sensorapi"
 	"github.com/phorvex/phorvex/internal/slo"
 )
 
@@ -56,7 +56,7 @@ func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 
 	// A replacement candidate is not complete while the rotation target is still
 	// alive and the candidate has not reached Ready.
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(30 * time.Second), Pods: []model.Pod{
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(30 * time.Second), Pods: []model.Pod{
 		{Namespace: "ns", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true},
 		{Namespace: "ns", UID: "sibling-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true},
 		{Namespace: "ns", UID: "replacement-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: false},
@@ -66,7 +66,7 @@ func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 	}
 
 	readyAt := startedAt.Add(60 * time.Second)
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{
 		{Namespace: "ns", UID: "sibling-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true},
 		{Namespace: "ns", UID: "replacement-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true, ReadyAt: readyAt},
 	}})
@@ -93,7 +93,7 @@ func TestSameSecondReadyTimestampIsAcceptedAtKubernetesPrecision(t *testing.T) {
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
 
 	// A candidate from an earlier whole timestamp second still predates the action.
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(100 * time.Millisecond), Pods: []model.Pod{{
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(100 * time.Millisecond), Pods: []model.Pod{{
 		Namespace: "ns", UID: "stale-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
 		ReadyAt: startedAt.Truncate(time.Second).Add(-time.Second),
 	}}})
@@ -104,7 +104,7 @@ func TestSameSecondReadyTimestampIsAcceptedAtKubernetesPrecision(t *testing.T) {
 	// The Kubernetes API rounds this genuine sub-second recovery down to the same
 	// whole second as the action. It must be accepted, with the negative rounding
 	// artifact clamped to the model's zero-cost boundary.
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(500 * time.Millisecond), Pods: []model.Pod{{
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(500 * time.Millisecond), Pods: []model.Pod{{
 		Namespace: "ns", UID: "replacement-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
 		ReadyAt: startedAt.Truncate(time.Second),
 	}}})
@@ -130,7 +130,7 @@ func TestUnresolvedRotationUsesCensoredMaximum(t *testing.T) {
 			t.Fatalf("repeated emit reset recovery clock to %s; want first emit %s", pending.startedAt, startedAt)
 		}
 	}
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 	if len(opt.observations) != 1 || opt.observations[0].flow != 2 {
 		t.Fatalf("censored observation = %+v, want one flow=2 record", opt.observations)
 	}
@@ -165,14 +165,14 @@ func TestShadowCalibrationReceivesObservedCensoredAndInvalidRotations(t *testing
 
 	observed := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
 	observed.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
-	observed.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{{
+	observed.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{{
 		Namespace: "ns", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
 		ReadyAt: startedAt.Add(60 * time.Second),
 	}}})
 
 	censored := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
 	censored.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-b"), "tenant-b", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
-	censored.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
+	censored.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 
 	invalid := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
 	invalid.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-c"), "tenant-c", &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "ownerless"}}, nil, startedAt)
@@ -203,7 +203,7 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 	}}
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
 
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(800 * time.Second)})
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(800 * time.Second)})
 	if got := ledger.Consumed("tenant-a", startedAt); got != 800 {
 		t.Fatalf("first censored floor = %v, want 800 replica-seconds", got)
 	}
@@ -211,7 +211,7 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 		t.Fatal("ledger-enabled censored rotation was retired before recovery")
 	}
 
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(1200 * time.Second)})
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(1200 * time.Second)})
 	if got := ledger.Consumed("tenant-a", startedAt); got != 1200 {
 		t.Fatalf("extended censored floor = %v, want 1200 replica-seconds", got)
 	}
@@ -219,7 +219,7 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 		t.Fatalf("RLS censoring was counted %d times, want once", len(opt.observations))
 	}
 
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: startedAt.Add(1400 * time.Second),
 		Pods: []model.Pod{{
 			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -248,7 +248,7 @@ func TestRecoveryAfterFrozenDeadlineIsCensoredForCalibrationButMeasuredForLedger
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
 	}}
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: startedAt.Add(900 * time.Second),
 		Pods: []model.Pod{{
 			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -280,7 +280,7 @@ func TestEmittedButUnexecutedRotationDoesNotTrain(t *testing.T) {
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
 	}}
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference), Pods: []model.Pod{{
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference), Pods: []model.Pod{{
 		Namespace: "ns", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
 	}}})
 	if len(opt.observations) != 0 {
@@ -301,7 +301,7 @@ func TestRotationLedgerRecordsAvailabilityBreachSeparately(t *testing.T) {
 		ReadyReplicas: 1,
 	}}
 	m.trackRotationWithFloor(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, 1, startedAt)
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: startedAt.Add(30 * time.Second),
 		Pods: []model.Pod{{
 			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -393,7 +393,7 @@ func TestRotationLedgerWorksWithoutRLSTrainingObserver(t *testing.T) {
 	if !m.trackRotationWithFloor(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, 1, startedAt) {
 		t.Fatal("ledger-only rotation was not tracked")
 	}
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: startedAt.Add(15 * time.Second),
 		Pods: []model.Pod{{
 			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",

@@ -1,4 +1,4 @@
-package runner
+package sensorsvc
 
 import (
 	"testing"
@@ -19,11 +19,11 @@ func TestPodBoundAPIAuthOffPodBearerDoesNotInfectNeighbors(t *testing.T) {
 		ConsoleTargetPodUID: "pod-uid", ResolvedTargets: []string{"owned/source"}}
 	snap := &ingest.Snapshot{PodByKey: map[string]*model.Pod{"owned/source": &pod},
 		EventByPod: map[string][]model.SecurityEventInfo{"owned/source": {event}}}
-	if infected := buildInfectedSet(snap); infected["owned/source"] || infectionFrontier([]string{"owned/source"}, infected) != 1 {
+	if infected := infectedSet(snap.EventByPod); infected["owned/source"] || infectionFrontier([]string{"owned/source"}, infected) != 1 {
 		t.Fatal("off-Pod bearer exposure incorrectly infected a neighbor")
 	}
 	snap.EventByPod["owned/source"] = []model.SecurityEventInfo{{Type: "existing-alert", ThreatLevel: "critical"}}
-	if !buildInfectedSet(snap)["owned/source"] {
+	if !infectedSet(snap.EventByPod)["owned/source"] {
 		t.Fatal("generic high-severity frontier behavior changed")
 	}
 }

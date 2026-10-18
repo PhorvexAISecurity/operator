@@ -44,6 +44,7 @@ import (
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/scaleprobe"
+	"github.com/phorvex/phorvex/internal/sensorsvc"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -1011,7 +1012,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	if err := managerClient.List(ctx, &cachedPods); err != nil || len(cachedPods.Items) != cfg.pods {
 		t.Fatalf("cache convergence pods=%d err=%v", len(cachedPods.Items), err)
 	}
-	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, managerClient, time.Now(), genericAssetValue, direct, direct, func(*corev1.Pod) bool { return true })
+	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, managerClient, time.Now(), sensorsvc.GenericAssetValue, direct, direct, func(*corev1.Pod) bool { return true })
 	if err != nil {
 		t.Fatal(err)
 	}
