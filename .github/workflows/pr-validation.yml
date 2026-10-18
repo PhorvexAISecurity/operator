@@ -169,8 +169,8 @@ jobs:
       - name: Service contracts lint and their generated code is current
         run: |
           tools/generate-proto.sh
-          git diff --exit-code -- phorvex/internal/brainpb
-          test -z "$(git status --porcelain -- phorvex/internal/brainpb)"
+          git diff --exit-code -- phorvex/internal/brainpb phorvex/internal/sensorpb
+          test -z "$(git status --porcelain -- phorvex/internal/brainpb phorvex/internal/sensorpb)"
 
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the
