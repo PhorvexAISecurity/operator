@@ -17,6 +17,8 @@
 package graph
 
 import (
+	"sort"
+
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -118,6 +120,9 @@ func Build(in Input) *Graph {
 		for nb := range set {
 			g.neighbors1[k] = append(g.neighbors1[k], nb)
 		}
+		// Map iteration order is random; a stable order keeps every view of the same
+		// cluster identical (neighbour lists and their events) from tick to tick.
+		sort.Strings(g.neighbors1[k])
 	}
 
 	// Blast radius via hop-decayed BFS over the union edge set.
