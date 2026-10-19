@@ -655,7 +655,7 @@ func (d denySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview
 func TestCapableAndAuthorized(t *testing.T) {
 	capable := model.Pod{Namespace: "denied", HasGPU: true, ServingEndpointReady: true}
 	az := authz.NewCheckerWithClient(denySSAR{denyNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
-	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, az, localActuator(okActuator{}))
+	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, CheckerAccess(az), localActuator(okActuator{}))
 
 	// Capable but RBAC-denied -> the condition sees a no-rbac gap (M-160).
 	if ok, why := wit.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); ok || !strings.HasPrefix(why, "no-rbac:") {
@@ -663,7 +663,7 @@ func TestCapableAndAuthorized(t *testing.T) {
 	}
 	// Capable AND authorized (different ns) -> supported.
 	okPod := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: true}
-	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, az, localActuator(okActuator{}))
+	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, CheckerAccess(az), localActuator(okActuator{}))
 	if ok, _ := witA.CapableAndAuthorized(&model.WorkloadView{Pod: okPod}, model.ActionKVReset); !ok {
 		t.Fatal("capable + authorized must be supported")
 	}
@@ -674,7 +674,7 @@ func TestCapableAndAuthorized(t *testing.T) {
 	}
 	// RBAC-unknown fails OPEN (never a status gap; criterion 3).
 	azErr := authz.NewCheckerWithClient(denySSAR{errNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
-	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, localActuator(okActuator{}))
+	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, CheckerAccess(azErr), localActuator(okActuator{}))
 	if ok, _ := witE.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); !ok {
 		t.Fatal("rbac-unknown must fail open (ok=true)")
 	}
@@ -706,7 +706,7 @@ func TestEndpointLeaseRuntimeAuthorizationUsesOperatorNamespace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			reviews := &endpointLeaseScopeSSAR{allowJournalNS: tc.allowedNS}
 			w := base.WithOperatorNamespace(tc.operatorNS)
-			w.az = authz.NewCheckerWithClient(reviews, time.Minute)
+			w.az = CheckerAccess(authz.NewCheckerWithClient(reviews, time.Minute))
 			ok, why := w.CapableAndAuthorized(view, model.ActionEndpointLeaseRevoke)
 			if ok != tc.wantAllowed {
 				t.Fatalf("status allowed=%t want=%t: %s", ok, tc.wantAllowed, why)
@@ -744,7 +744,7 @@ func TestEndpointLeaseRuntimeAuthorizationUsesOperatorNamespace(t *testing.T) {
 func TestEndpointLeaseJournalAuthorizationCacheIsolatedByOperatorNamespace(t *testing.T) {
 	view, base := endpointLeaseCapableFixture()
 	reviews := &endpointLeaseScopeSSAR{allowJournalNS: "operator-a"}
-	base.az = authz.NewCheckerWithClient(reviews, time.Minute)
+	base.az = CheckerAccess(authz.NewCheckerWithClient(reviews, time.Minute))
 	for _, tc := range []struct {
 		ns      string
 		allowed bool
@@ -774,7 +774,7 @@ func TestEndpointLeaseMissingOperatorNamespaceExcludesBeforeAuthorization(t *tes
 	view, base := endpointLeaseCapableFixture()
 	reviews := &endpointLeaseScopeSSAR{allowJournalNS: "vllm"}
 	w := base.WithOperatorNamespace("")
-	w.az = authz.NewCheckerWithClient(reviews, time.Minute)
+	w.az = CheckerAccess(authz.NewCheckerWithClient(reviews, time.Minute))
 	if ok, why := w.CapableAndAuthorized(view, model.ActionEndpointLeaseRevoke); ok || !strings.Contains(why, "operator journal namespace") {
 		t.Fatalf("status accepted missing namespace: ok=%t why=%q", ok, why)
 	}

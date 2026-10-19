@@ -316,7 +316,7 @@ func TestConditionSurfacesNoRBAC(t *testing.T) {
 	pod := model.Pod{Namespace: "denied", Name: "p", HasGPU: true, ServingEndpointReady: true}
 	az := authz.NewCheckerWithClient(runnerDenySSAR{deny: true}, authz.DefaultTTL)
 	// Explicit support double so the BACKEND leg cannot mask the RBAC leg under test.
-	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, localActuator(supportsAll{}))
+	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, capability.CheckerAccess(az), localActuator(supportsAll{}))
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 
 	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)

@@ -26,7 +26,7 @@ func (c *m001CaptureSSAR) Create(_ context.Context, review *authorizationv1.Self
 func TestM001NativeRuntimeReviewsNativeRotatePermission(t *testing.T) {
 	reviews := &m001CaptureSSAR{}
 	checker := authz.NewCheckerWithClient(reviews, time.Minute)
-	witness := BuildWitness(t.Context(), BuildIndex(nil, nil, nil), nil, checker, localActuator(actuator.NewNativeActuator(nil)))
+	witness := BuildWitness(t.Context(), BuildIndex(nil, nil, nil), nil, CheckerAccess(checker), localActuator(actuator.NewNativeActuator(nil)))
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: "tenant", Name: "target"}}
 	if reason := witness.Eligible(view, model.ActionRotate, []string{"cover"}); reason != nil {
 		t.Fatalf("native rotate excluded: %+v", reason)

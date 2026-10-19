@@ -4,8 +4,8 @@
 //
 // It keeps the in-process contract and fails closed. An unanswered capability
 // question reads as unsupported, an unanswered fence as unresolved, unanswered
-// capacity as unknown, and an unanswered route preparation or standing-policy
-// call as a refusal of the routes the backend owns. An Actuate the service did
+// capacity and access as unknown, and an unanswered route preparation or
+// standing-policy call as a refusal of the routes the backend owns. An Actuate the service did
 // not answer may have reached the backend: it reports the backend invoked, with
 // an error that is never a refusal without effect.
 package actuatorclient
@@ -44,6 +44,7 @@ type Client struct {
 	timeout                 time.Duration
 	backend                 actuatorapi.Backend
 	maintainsStandingPolicy bool
+	reviewsAccess           bool
 	requiredVerbs           map[model.Action][]authz.Verb
 }
 
@@ -67,6 +68,7 @@ func New(ctx context.Context, conn grpc.ClientConnInterface, opt Options) (*Clie
 	}
 	c.backend = actuatorapi.Backend(hello.GetBackend())
 	c.maintainsStandingPolicy = hello.GetMaintainsStandingPolicy()
+	c.reviewsAccess = hello.GetReviewsAccess()
 	return c, nil
 }
 
@@ -81,6 +83,33 @@ func (c *Client) RequiredVerbs(a model.Action) []authz.Verb {
 }
 
 func (c *Client) MaintainsStandingPolicy() bool { return c.maintainsStandingPolicy }
+
+func (c *Client) ReviewsAccess() bool { return c.reviewsAccess }
+
+func (c *Client) AccessAllowed(ctx context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return c.reviewAccess(ctx, namespace, verbs, true)
+}
+
+func (c *Client) AccessObserved(ctx context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return c.reviewAccess(ctx, namespace, verbs, false)
+}
+
+// reviewAccess reports an unanswered review as unknown, which the gate flags
+// without excluding, as it does a failed review in process. The move itself
+// still fails closed on the actuator's real authorization.
+func (c *Client) reviewAccess(ctx context.Context, namespace string, verbs []authz.Verb, review bool) (bool, bool, string) {
+	raw, err := wire.Encode(verbs)
+	if err != nil {
+		return false, true, "authorization-unavailable: actuator service: verbs: " + err.Error()
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+	resp, err := c.rpc.ReviewAccess(ctx, &actuatorpb.ReviewAccessRequest{Namespace: namespace, Verbs: raw, Review: review})
+	if err != nil {
+		return false, true, "authorization-unavailable: " + callFailed(ctx, "review-access", err).Error()
+	}
+	return resp.GetAllowed(), resp.GetUnknown(), resp.GetWhy()
+}
 
 func (c *Client) SupportsAction(ctx context.Context, a model.Action, t actuatorapi.Target) (bool, string) {
 	target, err := wire.Encode(t)

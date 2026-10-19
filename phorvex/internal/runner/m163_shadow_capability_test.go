@@ -66,7 +66,7 @@ func (m163SupportedBackend) SupportsAction(context.Context, model.Action, actuat
 func m163AuthzWitness(sar authz.SSARClient) capability.Witness {
 	az := authz.NewCheckerWithClient(sar, time.Hour)
 	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
-		nil, az, localActuator(m163SupportedBackend{}))
+		nil, capability.CheckerAccess(az), localActuator(m163SupportedBackend{}))
 }
 
 func m163RotateView() *model.WorkloadView {

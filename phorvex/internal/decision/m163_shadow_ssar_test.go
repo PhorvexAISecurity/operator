@@ -90,7 +90,7 @@ func (m163SupportedBackend) SupportsAction(context.Context, model.Action, actuat
 // and the explicit support double above.
 func m163Witness(az *authz.Checker) capability.Witness {
 	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
-		nil, az, localActuator(m163SupportedBackend{}))
+		nil, capability.CheckerAccess(az), localActuator(m163SupportedBackend{}))
 }
 
 // m163WireGate composes the engine's two gate collaborators from ONE real per-tick witness,

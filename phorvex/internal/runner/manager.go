@@ -267,9 +267,11 @@ type Manager struct {
 	// SharedCapacity is the durable cross-policy CAS ledger for hard resources
 	// whose effects can outlive a tick or this process.
 	SharedCapacity *sharedcapacity.Store
-	// Authz is the T1-E SSAR capability checker (cached). nil disables the RBAC leg of the
-	// gate (installability + cover + runtime-capability still apply); the boot layer wires
-	// it from the cluster clientset so no-rbac exclusions become live.
+	// Authz is the T1-E SSAR capability checker (cached) of this process's identity, which
+	// the in-process actuator acts as. nil disables the RBAC leg of the gate (installability
+	// + cover + runtime-capability still apply); the boot layer wires it from the cluster
+	// clientset so no-rbac exclusions become live. A remote actuator (ActuatorService)
+	// reviews its own identity instead.
 	Authz *authz.Checker
 	// CodeExec is the M-6 code-exec admission-capability verifier. nil disables the code-exec
 	// leg (debugger/custom-inject then fall through the other gates); the boot layer wires a
@@ -920,7 +922,17 @@ func (m *Manager) actuation() actuatorapi.Actuator {
 	if m.Actuator == nil {
 		return nil
 	}
-	return &actuatorsvc.Local{Actuator: m.Actuator, Capacity: m.QuarantineCapacity, Reader: m.BoundaryReader, OperatorNamespace: m.OperatorNamespace}
+	return &actuatorsvc.Local{Actuator: m.Actuator, Capacity: m.QuarantineCapacity, Reader: m.BoundaryReader, OperatorNamespace: m.OperatorNamespace,
+		Access: m.Authz}
+}
+
+// access is the authorization the capability gate reviews: the acting identity's,
+// answered by the actuator. It is nil when the actuator reviews none.
+func (m *Manager) access() capability.Access {
+	if act := m.actuation(); act != nil && act.ReviewsAccess() {
+		return act
+	}
+	return nil
 }
 
 // quarantineCapacity reports the namespace's retained-quarantine capacity.
@@ -2063,21 +2075,22 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	// T1-E: build ONE per-tick capability witness (the single predicate home) and use it
 	// for BOTH the ActionsSupported status (capability leg only, via Capable) AND the
 	// generator's pre-scoring gate (full Eligible incl. installability + RBAC) — so the
-	// two can never drift into the M-20 mirror. m.Authz is nil until the boot layer wires
-	// the SSAR checker (then no-rbac becomes live). Unknown discovery supplies no
+	// two can never drift into the M-20 mirror. The access leg is absent until the actuator
+	// reviews its identity's access (then no-rbac becomes live). Unknown discovery supplies no
 	// invented absent actions and is published separately as unverified evidence.
 	vocabulary := m.VocabularySnapshot()
 	var absent model.InstallSet
 	if vocabulary.Known {
 		absent = vocabulary.NotInstallable
 	}
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(obs.Pods, obs.Nodes, obs.Services), absent, m.Authz, m.actuation()).
+	access := m.access()
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(obs.Pods, obs.Nodes, obs.Services), absent, access, m.actuation()).
 		WithCodeExec(m.CodeExec, obs.NamespaceLabels).
 		WithOperatorNamespace(m.OperatorNamespace).
 		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	brain := m.brain()
-	gate := capabilityGate(capWit, m.Authz == nil,
+	gate := capabilityGate(capWit, access == nil,
 		func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
 	if brain.GatesCandidates() {
 		m.Failures.retain(pol.Owner(), failureKeep)
