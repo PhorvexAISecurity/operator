@@ -162,6 +162,9 @@ func main() {
 		brainEndpoint                  string
 		sensorFlags                    sensorconfig.Flags
 		sensorEndpoint                 string
+		actuatorEndpoint               string
+		actuatorConnectTimeout         time.Duration
+		actuatorCallTimeout            time.Duration
 		sensorConnectTimeout           time.Duration
 		sensorCallTimeout              time.Duration
 		brainConnectTimeout            time.Duration
@@ -232,6 +235,9 @@ func main() {
 	flag.StringVar(&sensorEndpoint, "sensor-endpoint", "", "gRPC address of the sensor service (ADR-0001). Empty (default) observes the cluster in this process. The connection is plaintext: restrict the sensor with a NetworkPolicy.")
 	flag.DurationVar(&sensorConnectTimeout, "sensor-connect-timeout", 2*time.Minute, "[sensor-endpoint] how long startup waits for the sensor service to accept the handshake.")
 	flag.DurationVar(&sensorCallTimeout, "sensor-call-timeout", 30*time.Second, "[sensor-endpoint] deadline of one observation or telemetry read; a missed observation skips the tick.")
+	flag.StringVar(&actuatorEndpoint, "actuator-endpoint", "", "gRPC address of the actuator service (ADR-0001). Empty (default) acts in this process. The actuator then holds the actuation RBAC, runs the startup authorization preflight and reads the actuator flags; the connection is plaintext: restrict the actuator with a NetworkPolicy.")
+	flag.DurationVar(&actuatorConnectTimeout, "actuator-connect-timeout", 2*time.Minute, "[actuator-endpoint] how long startup waits for the actuator service to accept the handshake.")
+	flag.DurationVar(&actuatorCallTimeout, "actuator-call-timeout", 30*time.Second, "[actuator-endpoint] deadline of one capability, access, fence or capacity question; an actuation keeps the tick's own deadline.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -395,20 +401,26 @@ func main() {
 		os.Exit(1)
 	}
 	cs, csErr := kubernetes.NewForConfig(restConfig)
-	var bootReviews startupauthz.SSARClient
-	if csErr == nil {
-		bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+	// The identity that acts must hold the actuation RBAC. In process that is this
+	// manager's; a separate actuator service checks its own before it serves.
+	if actuatorEndpoint == "" {
+		var bootReviews startupauthz.SSARClient
+		if csErr == nil {
+			bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+		}
+		bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews,
+			actuatorFlags.Preflight(actuatorSettings, backend.Backend, operatorNS))
+		if bootErr != nil {
+			setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
+			os.Exit(1)
+		}
+		setupLog.Info("startup authorization preflight passed",
+			"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
+			"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
+			"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
+	} else {
+		setupLog.Info("startup authorization preflight runs on the actuator service", "endpoint", actuatorEndpoint)
 	}
-	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews,
-		actuatorFlags.Preflight(actuatorSettings, backend.Backend, operatorNS))
-	if bootErr != nil {
-		setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
-		os.Exit(1)
-	}
-	setupLog.Info("startup authorization preflight passed",
-		"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
-		"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
-		"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
 
 	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
 	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
@@ -420,18 +432,35 @@ func main() {
 	}
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
-	quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, actuatorFlags.MaxRetainedQuarantines)
-	if capacityErr != nil {
-		setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
-		os.Exit(1)
+	// The manager acts in this process unless --actuator-endpoint names the actuator
+	// service, which serves the same contract over gRPC (ADR-0001) and owns the
+	// backends, their journals, the quarantine ledger and the actuation RBAC.
+	if actuatorEndpoint == "" {
+		quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, actuatorFlags.MaxRetainedQuarantines)
+		if capacityErr != nil {
+			setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
+			os.Exit(1)
+		}
+		rmgr.QuarantineCapacity = quarantineCapacity
+		voiceAdmissionEnabled, voiceAdmissionErr := actuatorconfig.VoiceAdmissionEnabled()
+		if voiceAdmissionErr != nil {
+			setupLog.Error(voiceAdmissionErr, "invalid Voice admission feature flag")
+			os.Exit(1)
+		}
+		actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
+	} else {
+		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, actuatorconfig.Shared(operatorNS, sensorFlags.Trust),
+			actuatorConnectTimeout, actuatorCallTimeout)
+		if actuatorErr != nil {
+			setupLog.Error(actuatorErr, "refusing to start without the actuator service", "endpoint", actuatorEndpoint)
+			os.Exit(1)
+		}
+		defer func() { _ = conn.Close() }()
+		rmgr.Actuator = nil
+		rmgr.ActuatorService = remote
+		setupLog.Info("actuator: remote service", "endpoint", actuatorEndpoint, "backend", string(remote.Backend()),
+			"reviewsAccess", remote.ReviewsAccess())
 	}
-	rmgr.QuarantineCapacity = quarantineCapacity
-	voiceAdmissionEnabled, voiceAdmissionErr := actuatorconfig.VoiceAdmissionEnabled()
-	if voiceAdmissionErr != nil {
-		setupLog.Error(voiceAdmissionErr, "invalid Voice admission feature flag")
-		os.Exit(1)
-	}
-	actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS
 	rmgr.EndpointLeaseAuthorityEnabled = sensorFlags.EndpointLeaseApprovedSource != ""
@@ -458,22 +487,25 @@ func main() {
 	// T1-E: wire the SSAR capability checker so the gate's no-rbac leg is live. A
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
-	// unpermitted action: the actuation itself still fails closed on real RBAC).
-	if csErr == nil {
-		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
-	} else {
-		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
-	}
-	if actuatorFlags.MIG.Enabled {
-		if csErr != nil {
-			setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
-			os.Exit(2)
+	// unpermitted action: the actuation itself still fails closed on real RBAC). A
+	// remote actuator reviews its own identity, so neither is wired here.
+	if actuatorEndpoint == "" {
+		if csErr == nil {
+			rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
+		} else {
+			setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
 		}
-		if err := actuatorFlags.MIG.Wire(restConfig, cs); err != nil {
-			setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
-			os.Exit(2)
+		if actuatorFlags.MIG.Enabled {
+			if csErr != nil {
+				setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
+				os.Exit(2)
+			}
+			if err := actuatorFlags.MIG.Wire(restConfig, cs); err != nil {
+				setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
+				os.Exit(2)
+			}
+			setupLog.Info("trusted MIG node-exec transport wired", "namespace", actuatorFlags.MIG.Namespace, "daemonSet", actuatorFlags.MIG.DaemonSet)
 		}
-		setupLog.Info("trusted MIG node-exec transport wired", "namespace", actuatorFlags.MIG.Namespace, "daemonSet", actuatorFlags.MIG.DaemonSet)
 	}
 	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
 	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and
