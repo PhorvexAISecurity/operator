@@ -239,6 +239,7 @@ func TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry(t *testin
 					return out, err
 				}}
 			s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+			t.Cleanup(s.attackWatchers.Wait)
 			response := httptest.NewRecorder()
 			s.vllmAttack(response, httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"poison"}`)))
 			var reconciledRecord *attackRecord

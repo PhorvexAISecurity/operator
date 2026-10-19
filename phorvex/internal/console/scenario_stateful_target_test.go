@@ -119,7 +119,7 @@ func TestStatefulExactCatalogueProducerBindsCurrentPodAndOwner(t *testing.T) {
 		!strings.Contains(manifests[0], `phorvex.ai/console-target-pod-uid: "owned-uid"`) {
 		t.Fatalf("wrong event creation: %v", manifests)
 	}
-	rec := waitCatalogueSignal(t, response.AttackID)
+	rec := waitCatalogueSignal(t, s, response.AttackID)
 	if rec == nil || rec.TargetUID != "owned-uid" || rec.OwnerKind != "StatefulSet" || rec.OwnerUID != "set-uid" ||
 		rec.UptimeBefore != 50 || rec.UptimeAfter != 50 || rec.StimulusEvidence == nil ||
 		rec.StimulusEvidence.BehavioralExecuted || rec.Outcome != "" || !rec.Stateful {

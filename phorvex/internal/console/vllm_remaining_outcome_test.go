@@ -514,6 +514,9 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 			fixture := &remainingHandlerFixture{t: t, serverURL: server.URL, events: map[string]string{}}
 			cfg := Config{StateDir: t.TempDir(), Exec: fixture.exec, AttackWatchDuration: 5 * time.Millisecond, AttackWatchInterval: time.Millisecond}
 			s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+			// The watcher persists the finished record after publishing it; the state
+			// directory must outlive that write.
+			t.Cleanup(s.attackWatchers.Wait)
 			request := httptest.NewRequest(http.MethodPost, "/api/vllm/attack", strings.NewReader(`{"action":"`+action+`"}`))
 			response := httptest.NewRecorder()
 			s.vllmAttack(response, request)
