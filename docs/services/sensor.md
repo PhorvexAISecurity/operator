@@ -63,7 +63,9 @@ replicas would compute them over the wrong interval.
 | `--trusted-detectors`, `--trusted-loss-observers`, `--trusted-current-inventory-observers`, `--endpoint-lease-approved-*` | as the manager | must match the manager, or the handshake refuses it |
 | `--prometheus-url`, `--pcie-class-table`, `--epss-*` | as the manager | telemetry, the GPU witness and the EPSS feed now read here |
 
-`phorvex/cmd/internal/sensorconfig` defines these flags for both binaries.
+`phorvex/cmd/internal/sensorconfig` defines these flags for both binaries; the
+detector trust and endpoint lease flags come from `cmd/internal/trustconfig`,
+which the actuator registers too.
 Manager flags for remote mode: `--sensor-endpoint`, `--sensor-connect-timeout`
 (startup waits this long for the handshake, default 2m) and
 `--sensor-call-timeout` (30s per observation or telemetry read).

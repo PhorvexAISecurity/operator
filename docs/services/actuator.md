@@ -10,8 +10,8 @@ workloads, and every live re-read before a mutation happens inside it. See
 The dispatcher reaches it through one contract, `phorvex/internal/actuatorapi`.
 `actuatorsvc.Local` implements it in process. `actuatorsvc.Server` serves the
 same adapter over gRPC (`phorvex.actuator.v1.ActuatorService`), and
-`actuatorclient.Client` is the dispatcher's side of it. The `cmd/actuator`
-binary and the manager's `--actuator-endpoint` follow in phase 4c-3.
+`actuatorclient.Client` is the dispatcher's side of it. `cmd/actuator` runs it
+as its own service, which the manager reaches with `--actuator-endpoint`.
 
 ## Contract
 
@@ -77,6 +77,42 @@ cancellation reach the actuator.
 | `QuarantineCapacity` | a configured bound of unknown use, which admits no new quarantine |
 | `PendingOperation` | unresolved, which fences the dispatch |
 | `Actuate` | possibly enacted: the backend counts as invoked and the error is never a refusal without effect |
+
+## Running
+
+```sh
+PHORVEX_ACTUATOR=hybrid go -C phorvex run ./cmd/actuator --listen=:9090 \
+  --operator-namespace=phorvex-system --trusted-detectors=vllm/detector-adapter-inv
+```
+
+The actuator needs the actuation RBAC the selected backend uses (the manager's
+today) under its own ServiceAccount; before it serves it runs the startup
+authorization preflight (`startupauthz`) against that identity and refuses to
+start without a known allow for every permission an active policy may use. Run
+one replica, replaced with the Recreate strategy: the native backend keeps its
+policy bindings in memory, and the manager re-establishes them through
+standing-policy maintenance after a restart. The journals and the quarantine
+ledger are durable ConfigMaps.
+
+| Flag or variable | Default | Meaning |
+|---|---|---|
+| `--listen` | `:9090` | gRPC address; the gRPC health service is also served |
+| `--metrics-bind-address`, `--health-probe-bind-address` | `:8080`, `:8081` | metrics (the actuation metrics now publish here) and probes |
+| `--operator-namespace` | `$POD_NAMESPACE` | journals and quarantine ledger; must match the manager |
+| `--trusted-detectors`, `--endpoint-lease-approved-*` | as the manager | must match the manager, or the handshake refuses it |
+| `--serving-security-*`, `--lora-clean-sources-file`, `--mig-profiles-file`, `--mig-*`, `--voice-mcp-approved-image`, `--max-retained-quarantines-per-namespace` | as the manager | the backends' configuration now reads here |
+| `PHORVEX_ACTUATOR`, `PHORVEX_VOICE_ADMISSION_ENABLED` | as the manager | the backend and the Voice admission flag |
+
+`phorvex/cmd/internal/actuatorconfig` defines the backend flags and
+`phorvex/cmd/internal/trustconfig` the shared trust flags, for both binaries;
+`actuatorconfig.Shared` derives the handshake configuration on both sides.
+
+Manager flags for remote mode: `--actuator-endpoint`, `--actuator-connect-timeout`
+(startup waits this long for the handshake, default 2m) and
+`--actuator-call-timeout` (30s per question; an actuation keeps the tick's own
+deadline). With `--actuator-endpoint` the manager builds no backend, quarantine
+ledger, MIG transport or SSAR checker, skips the startup preflight, and needs no
+actuation RBAC; the backend flags are read by the actuator instead.
 
 ## Whose access the gate reviews
 
