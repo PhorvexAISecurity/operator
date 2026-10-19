@@ -926,6 +926,10 @@ func (m *Manager) actuation() actuatorapi.Actuator {
 		Access: m.Authz}
 }
 
+// Actuation returns the actuator the manager acts through: the remote service
+// when one is set, else the in-process backend; nil when neither is wired.
+func (m *Manager) Actuation() actuatorapi.Actuator { return m.actuation() }
+
 // access is the authorization the capability gate reviews: the acting identity's,
 // answered by the actuator. It is nil when the actuator reviews none.
 func (m *Manager) access() capability.Access {
