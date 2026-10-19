@@ -241,6 +241,9 @@ func TestStartupReconcileRetainsUnknownVoiceEffectAfterVerifiedCleanup(t *testin
 				t.Fatal(err)
 			}
 			rm.cfg.CatalogueV1.Executable = worker
+			// NewRunManager's own reconciliation can run this pending run too; the
+			// state directory must outlive its last write.
+			t.Cleanup(rm.startupReconcile.Wait)
 			rm.mu.Lock()
 			st := rm.runs["v1run-1"]
 			st.State = "partial"

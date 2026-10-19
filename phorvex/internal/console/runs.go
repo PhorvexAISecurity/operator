@@ -142,13 +142,20 @@ type RunManager struct {
 	// but never supplies Kubernetes or audit authority.
 	natsResponse          func(context.Context, string, string) error
 	podBoundTokenResponse func(context.Context, string, string) error
+	// startupReconcile tracks the interrupted-run reconciliation NewRunManager
+	// starts, so a caller can wait for its last status write.
+	startupReconcile sync.WaitGroup
 }
 
 func NewRunManager(cfg Config) *RunManager {
 	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}}
 	rm.loadErr = rm.loadStatuses()
 	if rm.loadErr == nil {
-		go rm.reconcileInterruptedFunctional()
+		rm.startupReconcile.Add(1)
+		go func() {
+			defer rm.startupReconcile.Done()
+			rm.reconcileInterruptedFunctional()
+		}()
 	}
 	return rm
 }
