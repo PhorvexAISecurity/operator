@@ -16,19 +16,17 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// Backend names an actuator implementation a deployment may select.
-type Backend string
+// Backend names an actuator backend; see actuatorapi.Backend.
+type Backend = actuatorapi.Backend
 
 const (
-	// BackendPhoenix drives UNMODIFIED Phoenix through SecurityEvent + AMTD CRs.
-	BackendPhoenix Backend = "phoenix"
-	// BackendNative enacts directly through client-go (Phorvex's own hands).
-	BackendNative Backend = "native"
-	// BackendHybrid routes each action to whichever of the two actually implements it.
-	BackendHybrid Backend = "hybrid"
+	BackendPhoenix = actuatorapi.BackendPhoenix
+	BackendNative  = actuatorapi.BackendNative
+	BackendHybrid  = actuatorapi.BackendHybrid
 )
 
 // DefaultBackend is the ESTABLISHED, source-backed default. M-21 deliberately preserves
@@ -173,17 +171,10 @@ func quoteBounded(v string) string {
 // capability gate records them as its exclusion detail, and the ActionsSupported message
 // renders them, so a condition and a decision record can never disagree about why.
 const (
-	// ReasonBackendUnsupported: the SELECTED backend does not implement the action.
-	ReasonBackendUnsupported = "backend-unsupported"
-	// ReasonBackendUnavailable: no backend is wired, so nothing can establish support.
-	ReasonBackendUnavailable = "backend-unavailable"
-	// ReasonTransportUnwired: the backend implements the action but a runtime transport
-	// prerequisite is absent (M-79 node-exec). Retained verbatim from the pre-M-21 code.
-	ReasonTransportUnwired = "transport-unwired"
-	// ReasonParallelGroupUnavailable is the stable capability and dispatch reason for
-	// grouped model-shard replacement until a trusted distributed-readiness witness,
-	// atomic activation, and controller-owned replenishment protocol exist.
-	ReasonParallelGroupUnavailable = "parallel-group-unavailable: distributed readiness, atomic activation and replenishment are unverified"
+	ReasonBackendUnsupported       = actuatorapi.ReasonBackendUnsupported
+	ReasonBackendUnavailable       = actuatorapi.ReasonBackendUnavailable
+	ReasonTransportUnwired         = actuatorapi.ReasonTransportUnwired
+	ReasonParallelGroupUnavailable = actuatorapi.ReasonParallelGroupUnavailable
 
 	// detailSentinel: the value is a control sentinel, never an emitted move.
 	detailSentinel = "control sentinel, not an emitted move"
@@ -270,19 +261,8 @@ func nativeAccepts(a model.Action) (bool, string) {
 }
 
 // RouteFor reports which backend would actually receive a dispatch of action a under
-// backend b. For hybrid it is the SAME predicate HybridActuator.Actuate routes on — never
-// a union of both backends and never a fallback to the other one.
-func RouteFor(b Backend, a model.Action) Backend {
-	if b != BackendHybrid {
-		return b
-	}
-	// Hybrid owns a native client-go path that can enforce the current-policy
-	// grace contract. Pure Phoenix cannot, so bounded rotate is routed native.
-	if a != model.ActionRotate && a != model.ActionVoiceMemoryNoteRevoke && RuleTypeFor(a) != "" {
-		return BackendPhoenix
-	}
-	return BackendNative
-}
+// backend b; see actuatorapi.RouteFor.
+func RouteFor(b Backend, a model.Action) Backend { return actuatorapi.RouteFor(b, a) }
 
 // RepertoireVersion is the schema version of the PUBLISHED repertoire matrix. Bump it
 // when the meaning of a column changes, so a reader can tell an old copy from a current
