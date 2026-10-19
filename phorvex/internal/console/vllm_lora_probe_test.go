@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -203,7 +204,18 @@ func TestLoRARouteRequiresExactServingAndRemovalStatus(t *testing.T) {
 	html404 := false
 	wrong404 := false
 	wrongModel := false
+	// The handler runs on the server's goroutines; the test changes the fixture
+	// between probes, so both sides hold mu.
+	var mu sync.Mutex
+	set := func(change func()) {
+		mu.Lock()
+		defer mu.Unlock()
+		change()
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		status, malformed, html404, wrong404, wrongModel := status, malformed, html404, wrong404, wrongModel
+		mu.Unlock()
 		var request struct {
 			Model string `json:"model"`
 		}
@@ -243,29 +255,29 @@ func TestLoRARouteRequiresExactServingAndRemovalStatus(t *testing.T) {
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err != nil {
 		t.Fatal(err)
 	}
-	html404 = true
+	set(func() { html404 = true })
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
 		t.Fatal("HTML transport 404 misreported as adapter removal")
 	}
-	html404 = false
-	wrong404 = true
+	set(func() { html404 = false })
+	set(func() { wrong404 = true })
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
 		t.Fatal("404 for another model misreported as adapter removal")
 	}
-	wrong404 = false
-	status = http.StatusForbidden
+	set(func() { wrong404 = false })
+	set(func() { status = http.StatusForbidden })
 	if err := probeLoRARoute(execIn, "phorvex-probe-aabbccddeeff0011", false); err == nil {
 		t.Fatal("403 misreported as adapter removal")
 	}
 	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err != nil {
 		t.Fatal(err)
 	}
-	wrongModel = true
+	set(func() { wrongModel = true })
 	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err == nil {
 		t.Fatal("completion for another model misreported as serving")
 	}
-	wrongModel = false
-	malformed = true
+	set(func() { wrongModel = false })
+	set(func() { malformed = true })
 	if err := probeLoRARoute(execIn, liveLoRABaseModel, true); err == nil {
 		t.Fatal("null completion choice misreported as serving")
 	}
