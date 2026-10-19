@@ -11,8 +11,8 @@ import (
 
 	"github.com/phorvex/phorvex/cmd/internal/decisionconfig"
 	"github.com/phorvex/phorvex/internal/brainclient"
-	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 // connectBrain opens the brain service and completes its handshake: the brain
@@ -25,7 +25,7 @@ func connectBrain(endpoint string, optimizer decision.Optimizer, gpuEnvelopeMax 
 	}
 	conn, err := grpc.NewClient(endpoint,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(brainpb.MaxMessageBytes), grpc.MaxCallSendMsgSize(brainpb.MaxMessageBytes)),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(wire.MaxMessageBytes), grpc.MaxCallSendMsgSize(wire.MaxMessageBytes)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: 30 * time.Second, Timeout: 10 * time.Second, PermitWithoutStream: true}))
 	if err != nil {
 		return nil, nil, err

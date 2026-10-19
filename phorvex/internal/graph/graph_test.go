@@ -98,3 +98,23 @@ func TestBlastRadiusRanksHighValueReach(t *testing.T) {
 func mustSel(m map[string]string) labels.Selector {
 	return labels.SelectorFromSet(labels.Set(m))
 }
+
+func TestNeighborsAreListedInAStableOrder(t *testing.T) {
+	var pods []PodNode
+	for _, name := range []string{"e", "b", "d", "a", "c", "f", "h", "g"} {
+		pods = append(pods, PodNode{Namespace: "ns", Name: name, AssetValue: 1})
+	}
+	first := Build(Input{Pods: pods}).Neighbors("ns", "a")
+	want := []string{"ns/b", "ns/c", "ns/d", "ns/e", "ns/f", "ns/g", "ns/h"}
+	for i := 0; i < 20; i++ {
+		got := Build(Input{Pods: pods}).Neighbors("ns", "a")
+		if len(got) != len(want) {
+			t.Fatalf("neighbours = %v", got)
+		}
+		for j := range want {
+			if got[j] != want[j] || first[j] != want[j] {
+				t.Fatalf("build %d listed neighbours %v, want %v", i, got, want)
+			}
+		}
+	}
+}

@@ -24,6 +24,7 @@ import (
 	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 const (
@@ -143,14 +144,14 @@ func (c *Client) decide(req brainapi.DecideRequest, shadow bool) ([]model.Decisi
 		FailureGate:          req.Gate.FailureExclusion != nil,
 	}
 	var err error
-	if start.Views, err = brainpb.Encode(req.Views); err != nil {
+	if start.Views, err = wire.Encode(req.Views); err != nil {
 		return nil, nil, fmt.Errorf("brain service: views: %w", err)
 	}
-	if start.Policy, err = brainpb.Encode(req.Policy); err != nil {
+	if start.Policy, err = wire.Encode(req.Policy); err != nil {
 		return nil, nil, fmt.Errorf("brain service: policy: %w", err)
 	}
 	if req.Capture != nil {
-		if start.Capture, err = brainpb.Encode(req.Capture); err != nil {
+		if start.Capture, err = wire.Encode(req.Capture); err != nil {
 			return nil, nil, fmt.Errorf("brain service: capture: %w", err)
 		}
 	}
@@ -181,7 +182,7 @@ func (c *Client) decide(req brainapi.DecideRequest, shadow bool) ([]model.Decisi
 		case *brainpb.DecideResponse_Result:
 			_ = stream.CloseSend()
 			var decisions []model.Decision
-			if err := brainpb.Decode(m.Result.GetDecisions(), &decisions); err != nil {
+			if err := wire.Decode(m.Result.GetDecisions(), &decisions); err != nil {
 				c.closeRecording(m.Result.GetRecordingId(), nil, false)
 				return nil, nil, fmt.Errorf("brain service: decisions: %w", err)
 			}
@@ -297,7 +298,7 @@ func (r *recording) Finalize(decisions []model.Decision) {
 	if r.closed || r.finalized {
 		return
 	}
-	raw, err := brainpb.Encode(decisions)
+	raw, err := wire.Encode(decisions)
 	if err != nil {
 		r.c.opt.Log.Error(err, "math lab recording not finalized", "recording", r.id)
 		return
@@ -348,7 +349,7 @@ func (c *Client) SelectAlternative(owner, target string, failed model.Action) (m
 		return model.Alternative{}, false
 	}
 	var alternative model.Alternative
-	if err := brainpb.Decode(resp.GetAlternative(), &alternative); err != nil {
+	if err := wire.Decode(resp.GetAlternative(), &alternative); err != nil {
 		c.opt.Log.Error(err, "brain service: no alternative selected", "owner", owner, "target", target)
 		return model.Alternative{}, false
 	}
@@ -369,7 +370,7 @@ func (c *Client) ReserveAlternative(owner, target string, failed, chosen model.A
 }
 
 func (c *Client) ObserveRotation(owner string, view *model.WorkloadView, measuredFlow float64) {
-	raw, err := brainpb.Encode(view)
+	raw, err := wire.Encode(view)
 	if err == nil {
 		ctx, cancel := c.call()
 		defer cancel()
@@ -407,7 +408,7 @@ func (c *Client) SetCostCalibrationFrozen(frozen bool) {
 }
 
 func (c *Client) RegisterOwnerEpochs(epochs []model.PolicyEpoch) {
-	raw, err := brainpb.Encode(epochs)
+	raw, err := wire.Encode(epochs)
 	if err == nil {
 		ctx, cancel := c.call()
 		defer cancel()
@@ -491,7 +492,7 @@ func (c *Client) SetPersistenceAuthority(authority model.PersistenceObservationA
 }
 
 func (c *Client) AdmitPersistenceObservation(observation model.PersistenceObservation) model.PersistenceObservationResult {
-	raw, err := brainpb.Encode(observation)
+	raw, err := wire.Encode(observation)
 	if err != nil {
 		return unavailable(observation, err)
 	}
@@ -502,7 +503,7 @@ func (c *Client) AdmitPersistenceObservation(observation model.PersistenceObserv
 	if authority != nil {
 		binding, authorized := authority.AuthorizeObservation(observation)
 		req.Resolved, req.Authorized = true, authorized
-		if req.Binding, err = brainpb.Encode(binding); err != nil {
+		if req.Binding, err = wire.Encode(binding); err != nil {
 			return unavailable(observation, err)
 		}
 	}
@@ -513,14 +514,14 @@ func (c *Client) AdmitPersistenceObservation(observation model.PersistenceObserv
 		return unavailable(observation, err)
 	}
 	var result model.PersistenceObservationResult
-	if err := brainpb.Decode(resp.GetResult(), &result); err != nil {
+	if err := wire.Decode(resp.GetResult(), &result); err != nil {
 		return unavailable(observation, err)
 	}
 	return result
 }
 
 func (c *Client) RecordScopedOutcomeUnavailable(policy model.PolicyEpoch, reason string) model.PersistenceObservationResult {
-	raw, err := brainpb.Encode(policy)
+	raw, err := wire.Encode(policy)
 	if err != nil {
 		return model.PersistenceObservationResult{Disposition: model.PersistenceDispositionRejected, Reason: err.Error()}
 	}
@@ -532,7 +533,7 @@ func (c *Client) RecordScopedOutcomeUnavailable(policy model.PolicyEpoch, reason
 		return model.PersistenceObservationResult{Disposition: model.PersistenceDispositionRejected, Reason: "brain service unavailable: " + err.Error()}
 	}
 	var result model.PersistenceObservationResult
-	if err := brainpb.Decode(resp.GetResult(), &result); err != nil {
+	if err := wire.Decode(resp.GetResult(), &result); err != nil {
 		return model.PersistenceObservationResult{Disposition: model.PersistenceDispositionRejected, Reason: err.Error()}
 	}
 	return result

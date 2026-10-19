@@ -40,6 +40,7 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 type config struct {
@@ -109,8 +110,8 @@ func run(ctx context.Context, cfg config, lis net.Listener, logger *slog.Logger)
 	}
 
 	server := grpc.NewServer(
-		grpc.MaxRecvMsgSize(brainpb.MaxMessageBytes),
-		grpc.MaxSendMsgSize(brainpb.MaxMessageBytes),
+		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
+		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 	)
 	brainpb.RegisterBrainServiceServer(server, brainsvc.NewServer(brainsvc.NewLocal(optimizer, recorder), decisionConfig.SHA256()))

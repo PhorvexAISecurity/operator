@@ -48,10 +48,11 @@ Manager flags for remote mode: `--brain-endpoint`, `--brain-connect-timeout`
 `phorvex/api/proto/phorvex/brain/v1/brain.proto` defines `BrainService`.
 Regenerate with `tools/generate-proto.sh`; CI fails when the generated code in
 `phorvex/internal/brainpb` is stale. Domain values cross the wire as CBOR
-encodings of the shared `model` types (`brainpb.Encode`/`Decode`): CBOR carries
-NaN and infinities and keeps empty and nil collections apart, so decisions audit
-the same on both sides. `brainpb/codec_test.go` fails on any field of a wire type
-CBOR would drop.
+encodings of the shared `model` types (`wire.Encode`/`Decode`, shared with the
+sensor service): CBOR carries NaN and infinities and keeps empty and nil
+collections apart, so decisions audit the same on both sides.
+`brainpb/codec_test.go` runs `wire.Problems` over every brain wire type and
+fails on any field CBOR would drop.
 
 **Handshake.** `Hello` carries the contract version (`brainapi.ContractVersion`)
 and the SHA-256 of the decision configuration (`brainapi.DecisionConfig`: engine,

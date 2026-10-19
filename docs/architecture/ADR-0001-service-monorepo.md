@@ -114,7 +114,9 @@ Rules:
   snapshots via `mathlab` are a later option.
 - **actuator:** one active replica. Its operation journals already persist in
   ConfigMaps.
-- **sensor:** stateless apart from caches, so it can run more than one replica.
+- **sensor:** stateless apart from caches and the telemetry source's previous
+  samples, which its rates are derived from. One replica, unless the telemetry
+  source's rate state moves out of the process.
 
 ### Repository layout
 
@@ -193,9 +195,11 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   after the split, for example by answering the shadow pass from the production
   pass's per-tick support answers.
 
-- **Brain transport security.** Phase 4a-2 connects the manager to the brain
-  over plaintext gRPC behind `--brain-endpoint`, off by default. Before phase 5
-  deploys the brain, add mTLS and the NetworkPolicy above.
+- **Service transport security.** Phases 4a-2 and 4b-2 connect the manager to the
+  brain and the sensor over plaintext gRPC behind `--brain-endpoint` and
+  `--sensor-endpoint`, both off by default. Before phase 5 deploys either, add mTLS
+  and the NetworkPolicy above. The sensor reads Secrets for its bindings, so its
+  RBAC must stay read-only and its endpoint reachable only from the dispatcher.
 - **Math Lab snapshots of a remote brain.** With `--brain-endpoint` the brain
   records the snapshots, so the manager's audit source no longer serves them.
   Phase 5 gives the brain its own snapshot source for the console.
@@ -206,6 +210,10 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   completed-disclosure and current-inventory admission. Each moves to a shared
   package or behind the sensor contract before the dispatcher's sensor imports
   can be forbidden.
+- **Graph neighbour order was random.** The reachability graph listed each Pod's
+  neighbours in map order, so a view's neighbours and neighbour events changed
+  order from tick to tick. Phase 4b-2 sorts them; floating-point sums over a
+  view's neighbours are now reproducible.
 - **Calibration has no single owner.** `calib` samples the sensor's fleet, learns
   from the dispatcher's rotation outcomes and produces the brain's shadow views.
   It is classified as sensor today; decide its service before phase 5.

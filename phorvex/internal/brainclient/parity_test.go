@@ -30,6 +30,7 @@ import (
 	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
+	"github.com/phorvex/phorvex/internal/wire"
 )
 
 var testConfig = brainapi.DecisionConfig{Engine: "p1-coverage", ReconProfile: "ucw-recon", GPUEnvelopeMax: 1}
@@ -245,7 +246,7 @@ func recordingContent(t *testing.T, stream []byte) []byte {
 			t.Fatalf("recording stream: %v", err)
 		}
 	}
-	raw, err := brainpb.Encode([]any{inputs, outcome, final})
+	raw, err := wire.Encode([]any{inputs, outcome, final})
 	if err != nil {
 		t.Fatal(err)
 	}

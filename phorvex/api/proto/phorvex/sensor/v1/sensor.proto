@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package phorvex.sensor.v1;
+
+option go_package = "github.com/phorvex/phorvex/internal/sensorpb;sensorpb";
+
+// SensorService serves the dispatcher-sensor contract (phorvex/internal/sensorapi)
+// when the sensor runs as its own service (ADR-0001).
+//
+// Domain values travel as CBOR encodings of the shared types (phorvex/internal/wire),
+// as on the brain service. Hello refuses a client built against another contract
+// version or configured with other trust.
+service SensorService {
+  // Hello checks the contract version and the shared configuration. A client
+  // calls it before anything else.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+
+  // Observe takes one tick's observation of the cluster for the due policies.
+  rpc Observe(ObserveRequest) returns (ObserveResponse);
+
+  // Telemetry reads one policy's Pods' telemetry, best effort.
+  rpc Telemetry(TelemetryRequest) returns (TelemetryResponse);
+}
+
+message HelloRequest {
+  // Contract version the client was built against.
+  uint32 contract_version = 1;
+  // SHA-256 of the client's sensorapi.Config (detector and observer trust,
+  // endpoint lease authority).
+  string config_sha256 = 2;
+}
+
+message HelloResponse {
+  uint32 contract_version = 1;
+  string config_sha256 = 2;
+  // Name of the telemetry source; empty when none is configured.
+  string telemetry_source = 3;
+}
+
+message ObserveRequest {
+  // CBOR sensorapi.ObserveRequest
+  bytes request = 1;
+}
+
+message ObserveResponse {
+  // CBOR sensorapi.Observation
+  bytes observation = 1;
+}
+
+message TelemetryRequest {
+  string namespace = 1;
+  repeated string pods = 2;
+}
+
+message TelemetryResponse {
+  // False when no telemetry source is configured; nothing else is set.
+  bool configured = 1;
+  // CBOR map[string]model.Telemetry, keyed by Pod name.
+  bytes telemetry = 2;
+  // CBOR model.SourceHealth
+  bytes health = 3;
+  // A failed or partial read.
+  string error = 4;
+}

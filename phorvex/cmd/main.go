@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
@@ -95,108 +96,93 @@ func init() {
 
 func main() {
 	var (
-		metricsAddr                      string
-		probeAddr                        string
-		enableLeader                     bool
-		baseInterval                     time.Duration
-		promURL                          string
-		epssCachePath                    string
-		epssCacheRefresh                 time.Duration
-		epssAuthoritative                bool
-		epssMetadataPath                 string
-		epssCacheKey                     string
-		epssConfigMapNamespace           string
-		epssConfigMapName                string
-		epssMetadataKey                  string
-		epssAuthoritativeTimeout         time.Duration
-		epssAuthoritativeNamespaces      string
-		epssAuthoritativeDigests         string
-		epssFeed                         bool
-		epssFeedApply                    bool
-		epssFeedPartial                  bool
-		epssFeedNS                       string
-		epssFeedCM                       string
-		epssFeedKey                      string
-		epssFeedFIRSTURL                 string
-		epssFeedTrivy                    string
-		epssFeedTimeout                  time.Duration
-		epssFeedScopeNamespaces          string
-		epssFeedScopeDigests             string
-		epssFeedMetadataTTL              time.Duration
-		epssFeedRegistryAuthFile         string
-		epssFeedRegistryAuthRegistries   string
-		killSwitch                       bool
-		auditJSON                        string
-		operatorNS                       string
-		integrationEmit                  bool
-		emitNamespace                    string
-		emitPod                          string
-		emitAction                       string
-		emitTenant                       string
-		emitMatchLabels                  string
-		engineName                       string
-		ablation                         bool
-		ablationNS                       string
-		ablationSelector                 string
-		ablationBudget                   int
-		ablationSeeds                    int
-		scan                             bool
-		scanNS                           string
-		kubeContext                      string
-		auditMaxBytes                    int64
-		auditMaxBackups                  int
-		gpuEnvelopeMax                   float64
-		supportDebounce                  int
-		calibrationShadow                bool
-		calibrationRefresh               time.Duration
-		calibrationSample                time.Duration
-		calibrationLookback              time.Duration
-		calibrationExportDir             string
-		admissionWebhook                 bool
-		webhookPort                      int
-		webhookCertDir                   string
-		pcieClassTableRaw                string
-		flowClasses                      string
-		trustedDetectors                 string
-		trustedLossObservers             string
-		trustedCurrentInventoryObservers string
-		lossHistoryDir                   string
-		auditSourceAddr                  string
-		auditSourceCert                  string
-		auditSourceKey                   string
-		auditSourceCA                    string
-		auditSourceClientDNS             string
-		auditSourceVClusterPath          string
-		loraCleanSourcesFile             string
-		migProfilesFile                  string
-		servingSecurityFile              string
-		servingSecurityMode              string
-		voiceMCPApprovedImage            string
-		endpointLeaseApprovedSource      string
-		endpointLeaseApprovedProxyImage  string
-		endpointLeaseApprovedEngineImage string
-		migNodeExec                      bool
-		migAgentNamespace                string
-		migAgentServiceAccounts          string
-		migAgentDaemonSet                string
-		migAgentGPUContainer             string
-		migAgentHelperContainer          string
-		migAllocationHelper              string
-		migAllocationSocket              string
-		migExecTimeout                   time.Duration
-		migAllocationReadTimeout         time.Duration
-		migReleaseTimeout                time.Duration
-		migExclusiveMaintenance          bool
-		maxRetainedQuarantines           int
-		scopedOutcomeConfig              string
-		mathLabCapturePolicies           string
-		mathLabCaptureDir                string
-		mathLabCaptureMaxBytes           int64
-		mathLabMaxSnapshotBytes          int
-		brainEndpoint                    string
-		brainConnectTimeout              time.Duration
-		brainCallTimeout                 time.Duration
-		brainDecideTimeout               time.Duration
+		metricsAddr                    string
+		probeAddr                      string
+		enableLeader                   bool
+		baseInterval                   time.Duration
+		epssFeed                       bool
+		epssFeedApply                  bool
+		epssFeedPartial                bool
+		epssFeedNS                     string
+		epssFeedCM                     string
+		epssFeedKey                    string
+		epssFeedFIRSTURL               string
+		epssFeedTrivy                  string
+		epssFeedTimeout                time.Duration
+		epssFeedScopeNamespaces        string
+		epssFeedScopeDigests           string
+		epssFeedMetadataTTL            time.Duration
+		epssFeedRegistryAuthFile       string
+		epssFeedRegistryAuthRegistries string
+		killSwitch                     bool
+		auditJSON                      string
+		operatorNS                     string
+		integrationEmit                bool
+		emitNamespace                  string
+		emitPod                        string
+		emitAction                     string
+		emitTenant                     string
+		emitMatchLabels                string
+		engineName                     string
+		ablation                       bool
+		ablationNS                     string
+		ablationSelector               string
+		ablationBudget                 int
+		ablationSeeds                  int
+		scan                           bool
+		scanNS                         string
+		kubeContext                    string
+		auditMaxBytes                  int64
+		auditMaxBackups                int
+		gpuEnvelopeMax                 float64
+		supportDebounce                int
+		calibrationShadow              bool
+		calibrationRefresh             time.Duration
+		calibrationSample              time.Duration
+		calibrationLookback            time.Duration
+		calibrationExportDir           string
+		admissionWebhook               bool
+		webhookPort                    int
+		webhookCertDir                 string
+		flowClasses                    string
+		lossHistoryDir                 string
+		auditSourceAddr                string
+		auditSourceCert                string
+		auditSourceKey                 string
+		auditSourceCA                  string
+		auditSourceClientDNS           string
+		auditSourceVClusterPath        string
+		loraCleanSourcesFile           string
+		migProfilesFile                string
+		servingSecurityFile            string
+		servingSecurityMode            string
+		voiceMCPApprovedImage          string
+		migNodeExec                    bool
+		migAgentNamespace              string
+		migAgentServiceAccounts        string
+		migAgentDaemonSet              string
+		migAgentGPUContainer           string
+		migAgentHelperContainer        string
+		migAllocationHelper            string
+		migAllocationSocket            string
+		migExecTimeout                 time.Duration
+		migAllocationReadTimeout       time.Duration
+		migReleaseTimeout              time.Duration
+		migExclusiveMaintenance        bool
+		maxRetainedQuarantines         int
+		scopedOutcomeConfig            string
+		mathLabCapturePolicies         string
+		mathLabCaptureDir              string
+		mathLabCaptureMaxBytes         int64
+		mathLabMaxSnapshotBytes        int
+		brainEndpoint                  string
+		sensorFlags                    sensorconfig.Flags
+		sensorEndpoint                 string
+		sensorConnectTimeout           time.Duration
+		sensorCallTimeout              time.Duration
+		brainConnectTimeout            time.Duration
+		brainCallTimeout               time.Duration
+		brainDecideTimeout             time.Duration
 	)
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
@@ -207,7 +193,7 @@ func main() {
 	flag.StringVar(&ablationSelector, "ablation-selector", "", "[ablation] label selector, e.g. app=demo.")
 	flag.IntVar(&ablationBudget, "ablation-budget", 2, "[ablation] move budget B per arm.")
 	flag.IntVar(&ablationSeeds, "ablation-seeds", 40, "[ablation] number of random-arm seeds.")
-	flag.StringVar(&pcieClassTableRaw, "pcie-class-table", os.Getenv("PHORVEX_PCIE_CLASS_TABLE"), "JSON map of DCGM modelName -> {gen,width} used as the PCIe capacity fallback when the exporter publishes no link gen/width (M-114). Merged over the shipped default {\"Tesla T4\":{\"gen\":3,\"width\":16}}.")
+	sensorFlags.Register(flag.CommandLine)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "Address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "Address the health probe binds to.")
 	flag.BoolVar(&enableLeader, "leader-elect", true, "Enable leader election (single active controller). Set --leader-elect=false only for an explicitly isolated single-instance run.")
@@ -215,18 +201,12 @@ func main() {
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "TLS port for the validating admission webhook.")
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
-	flag.StringVar(&trustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
-	flag.StringVar(&trustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
-	flag.StringVar(&trustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
 	flag.StringVar(&lossHistoryDir, "loss-history-dir", os.Getenv("PHORVEX_LOSS_HISTORY_DIR"), "Private durable directory for immutable completed-disclosure history. Empty keeps M100 history unavailable.")
 	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
 	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
 	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
 	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "Serving control mode: secure-required (default) or explicit legacy-plaintext migration compatibility.")
 	flag.StringVar(&voiceMCPApprovedImage, "voice-mcp-approved-image", os.Getenv("PHORVEX_VOICE_MCP_APPROVED_IMAGE"), "Reviewed immutable MCP repo@sha256 required for Voice MCP pinning; empty disables that action.")
-	flag.StringVar(&endpointLeaseApprovedSource, "endpoint-lease-approved-source-sha256", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_SOURCE_SHA256"), "Reviewed endpoint lease proxy source SHA-256; empty disables lease-revoke.")
-	flag.StringVar(&endpointLeaseApprovedProxyImage, "endpoint-lease-approved-proxy-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_PROXY_IMAGE"), "Reviewed immutable endpoint lease proxy repo@sha256; empty disables lease-revoke.")
-	flag.StringVar(&endpointLeaseApprovedEngineImage, "endpoint-lease-approved-engine-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE"), "Reviewed immutable endpoint lease engine repo@sha256; empty disables lease-revoke.")
 	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
 	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
 	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
@@ -246,19 +226,7 @@ func main() {
 	flag.DurationVar(&calibrationSample, "calibration-sample", calib.DefaultSampleInterval, "Snapshot sampling interval used by walk-forward cadence evaluation.")
 	flag.DurationVar(&calibrationLookback, "calibration-lookback", calib.DefaultLookback, "Maximum age of calibration samples and ready-delay outcomes.")
 	flag.StringVar(&calibrationExportDir, "calibration-export-dir", "", "Directory for raw calibration CSV/JSON evidence (empty disables file export; metrics remain enabled).")
-	flag.StringVar(&promURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	flag.Float64Var(&gpuEnvelopeMax, "gpu-envelope-max", cost.DefaultGPUEnvelopeMax, "Normalized [0,1] GPU reload/warm-up envelope measured on the deployed hardware (default 1.0 is conservative/unconfigured).")
-	flag.StringVar(&epssCachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
-	flag.DurationVar(&epssCacheRefresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
-	flag.BoolVar(&epssAuthoritative, "epss-authoritative", false, "Require mounted EPSS cache and metadata to match the current ConfigMap API object before use.")
-	flag.StringVar(&epssMetadataPath, "epss-metadata", "", "[epss-authoritative] path to canonical provenance metadata beside --epss-cache.")
-	flag.StringVar(&epssCacheKey, "epss-cache-key", "epss-cache.json", "[epss-authoritative] source ConfigMap cache data key.")
-	flag.StringVar(&epssConfigMapNamespace, "epss-configmap-namespace", os.Getenv("POD_NAMESPACE"), "[epss-authoritative] namespace of the source ConfigMap.")
-	flag.StringVar(&epssConfigMapName, "epss-configmap-name", "phorvex-epss", "[epss-authoritative] source ConfigMap name.")
-	flag.StringVar(&epssMetadataKey, "epss-metadata-key", "epss-metadata.json", "EPSS provenance metadata ConfigMap key.")
-	flag.DurationVar(&epssAuthoritativeTimeout, "epss-authoritative-timeout", 5*time.Second, "Bound for each authoritative EPSS API verification.")
-	flag.StringVar(&epssAuthoritativeNamespaces, "epss-authoritative-scope-namespaces", "", "[epss-authoritative] exact namespace authority used by the producer.")
-	flag.StringVar(&epssAuthoritativeDigests, "epss-authoritative-scope-digests", "", "[epss-authoritative] exact digest authority used by the producer.")
 	flag.BoolVar(&epssFeed, "epss-feed", false, "One-shot: scan running images with Trivy, resolve CVEs through FIRST EPSS, and refresh the EPSS ConfigMap.")
 	flag.BoolVar(&epssFeedApply, "epss-feed-apply", false, "[epss-feed] apply the generated cache; false is a non-mutating dry-run.")
 	flag.BoolVar(&epssFeedPartial, "epss-feed-allow-partial", false, "[epss-feed] permit apply when an image scan fails; the default rejects partial refreshes.")
@@ -294,6 +262,9 @@ func main() {
 	flag.DurationVar(&brainConnectTimeout, "brain-connect-timeout", 2*time.Minute, "[brain-endpoint] how long startup waits for the brain service to accept the handshake.")
 	flag.DurationVar(&brainCallTimeout, "brain-call-timeout", 5*time.Second, "[brain-endpoint] deadline of each brain call other than an evaluation.")
 	flag.DurationVar(&brainDecideTimeout, "brain-decide-timeout", time.Minute, "[brain-endpoint] deadline of one evaluation, capability questions included; an evaluation that misses it rejects the tick.")
+	flag.StringVar(&sensorEndpoint, "sensor-endpoint", "", "gRPC address of the sensor service (ADR-0001). Empty (default) observes the cluster in this process. The connection is plaintext: restrict the sensor with a NetworkPolicy.")
+	flag.DurationVar(&sensorConnectTimeout, "sensor-connect-timeout", 2*time.Minute, "[sensor-endpoint] how long startup waits for the sensor service to accept the handshake.")
+	flag.DurationVar(&sensorCallTimeout, "sensor-call-timeout", 30*time.Second, "[sensor-endpoint] deadline of one observation or telemetry read; a missed observation skips the tick.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -320,22 +291,22 @@ func main() {
 		setupLog.Error(fmt.Errorf("invalid reviewed MCP image reference"), "voice MCP image configuration invalid")
 		os.Exit(1)
 	}
-	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(endpointLeaseApprovedSource, endpointLeaseApprovedProxyImage, endpointLeaseApprovedEngineImage); err != nil {
+	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(sensorFlags.EndpointLeaseApprovedSource, sensorFlags.EndpointLeaseApprovedProxyImage, sensorFlags.EndpointLeaseApprovedEngineImage); err != nil {
 		setupLog.Error(err, "endpoint lease source configuration invalid")
 		os.Exit(1)
 	}
-	if parsed, err := ingest.ParsePCIeClassTable(pcieClassTableRaw); err != nil {
+	if parsed, err := ingest.ParsePCIeClassTable(sensorFlags.PCIeClassTable); err != nil {
 		setupLog.Error(err, "invalid --pcie-class-table; refusing to start with an unparseable PCIe capacity table")
 		os.Exit(1)
 	} else {
 		pcieClasses = parsed
 	}
 	physics.ConfigureFlowActivation(strings.Split(flowClasses, ","))
-	detectors := ingest.NewTrustedDetectors(strings.Split(trustedDetectors, ","))
+	detectors := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedDetectors, ","))
 	ingest.ConfigureEventTrust(detectors)
-	lossObservers := ingest.NewTrustedDetectors(strings.Split(trustedLossObservers, ","))
+	lossObservers := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedLossObservers, ","))
 	ingest.ConfigureCompletedDisclosureTrust(lossObservers)
-	currentObservers := ingest.NewTrustedDetectors(strings.Split(trustedCurrentInventoryObservers, ","))
+	currentObservers := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedCurrentInventoryObservers, ","))
 	ingest.ConfigureCurrentInventoryTrust(currentObservers)
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	if detectors.Empty() {
@@ -416,7 +387,7 @@ func main() {
 	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
 
 	if epssFeed {
-		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, epssMetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests, epssFeedRegistryAuthFile, epssFeedRegistryAuthRegistries); err != nil {
+		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, sensorFlags.EPSS.MetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests, epssFeedRegistryAuthFile, epssFeedRegistryAuthRegistries); err != nil {
 			setupLog.Error(err, "epss-feed failed; inspect the emitted result mode for the cache outcome")
 			os.Exit(1)
 		}
@@ -426,22 +397,9 @@ func main() {
 	// Seed the exploitability (EPSS/CVSS) cache from the scanner export, if wired. This makes the
 	// EPSS physics leg data-driven for BOTH the --scan path and the live operator loop; a missing/empty
 	// path leaves EPSS honest-absent (1.0). One package-level cache, seeded once at startup.
-	if epssAuthoritative {
-		if epssCachePath == "" || epssMetadataPath == "" || epssCacheKey == "" || epssMetadataKey == "" || epssCacheKey == epssMetadataKey || epssConfigMapNamespace == "" || epssConfigMapName == "" || epssCacheRefresh <= 0 || epssAuthoritativeTimeout <= 0 {
-			setupLog.Error(fmt.Errorf("incomplete authoritative EPSS configuration"), "refusing to start")
-			os.Exit(2)
-		}
-		if _, err := (epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)}).Canonical(); err != nil {
-			setupLog.Error(err, "invalid authoritative EPSS scope; refusing to start")
-			os.Exit(2)
-		}
-		platform.ConfigureAuthoritativeEPSSUnavailable()
-	} else {
-		if err := platform.LoadEPSSFromFile(epssCachePath); err != nil {
-			setupLog.Error(err, "epss-cache load failed (continuing with EPSS honest-absent)", "path", epssCachePath)
-		} else if n := platform.EPSSLoaded(); n > 0 {
-			setupLog.Info("epss: exploitability cache seeded", "images", n, "path", epssCachePath)
-		}
+	if err := sensorFlags.EPSS.Configure(setupLog); err != nil {
+		setupLog.Error(err, "refusing to start")
+		os.Exit(2)
 	}
 
 	if integrationEmit {
@@ -461,7 +419,7 @@ func main() {
 	}
 
 	if scan {
-		if err := runScan(scanNS, promURL, kubeContext, backend); err != nil {
+		if err := runScan(scanNS, sensorFlags.PrometheusURL, kubeContext, backend); err != nil {
 			setupLog.Error(err, "scan failed")
 			os.Exit(1)
 		}
@@ -536,9 +494,9 @@ func main() {
 		native.SetServingSecurity(servingSecurity)
 		native.VoiceMCPApprovedImage = voiceMCPApprovedImage
 		native.VoiceAdmissionEnabled = voiceAdmissionEnabled
-		native.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
-		native.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
-		native.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)
+		native.SetEndpointLeaseApprovedSourceSHA256(sensorFlags.EndpointLeaseApprovedSource)
+		native.SetEndpointLeaseApprovedProxyImage(sensorFlags.EndpointLeaseApprovedProxyImage)
+		native.SetEndpointLeaseApprovedEngineImage(sensorFlags.EndpointLeaseApprovedEngineImage)
 	}
 	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
 		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
@@ -547,13 +505,13 @@ func main() {
 		hybrid.SetServingSecurity(servingSecurity)
 		hybrid.SetVoiceMCPApprovedImage(voiceMCPApprovedImage)
 		hybrid.SetVoiceAdmissionEnabled(voiceAdmissionEnabled)
-		hybrid.SetEndpointLeaseApprovedSourceSHA256(endpointLeaseApprovedSource)
-		hybrid.SetEndpointLeaseApprovedProxyImage(endpointLeaseApprovedProxyImage)
-		hybrid.SetEndpointLeaseApprovedEngineImage(endpointLeaseApprovedEngineImage)
+		hybrid.SetEndpointLeaseApprovedSourceSHA256(sensorFlags.EndpointLeaseApprovedSource)
+		hybrid.SetEndpointLeaseApprovedProxyImage(sensorFlags.EndpointLeaseApprovedProxyImage)
+		hybrid.SetEndpointLeaseApprovedEngineImage(sensorFlags.EndpointLeaseApprovedEngineImage)
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS
-	rmgr.EndpointLeaseAuthorityEnabled = endpointLeaseApprovedSource != ""
+	rmgr.EndpointLeaseAuthorityEnabled = sensorFlags.EndpointLeaseApprovedSource != ""
 	rmgr.LossHistoryReader = mgr.GetAPIReader()
 	if lossHistoryDir != "" {
 		lossStore, storeErr := losshistory.New(lossHistoryDir)
@@ -652,11 +610,11 @@ func main() {
 	rmgr.SharedCapacity = sharedCapacity
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
-	rmgr.PromURL = promURL         // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
-	rmgr.PCIeClasses = pcieClasses // M-114: PCIe capacity class fallback (chart value)
-	if promURL != "" {
-		rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
-		setupLog.Info("telemetry: prometheus", "url", promURL)
+	rmgr.PromURL = sensorFlags.PrometheusURL // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
+	rmgr.PCIeClasses = pcieClasses           // M-114: PCIe capacity class fallback (chart value)
+	if sensorFlags.PrometheusURL != "" {
+		rmgr.MetricsSource = ingest.NewPromHTTP(sensorFlags.PrometheusURL, nil)
+		setupLog.Info("telemetry: prometheus", "url", sensorFlags.PrometheusURL)
 	} else {
 		setupLog.Info("telemetry: none (K8s-only signals; metrics not fabricated)")
 	}
@@ -691,14 +649,14 @@ func main() {
 	if strings.TrimSpace(mathLabCapturePolicies) != "" {
 		processConfig := map[string]string{
 			"engine": engineName, "base-interval": baseInterval.String(), "gpu-envelope-max": strconv.FormatFloat(gpuEnvelopeMax, 'g', -1, 64),
-			"pcie-class-table": pcieClassTableRaw, "serving-security-mode": servingSecurityMode,
+			"pcie-class-table": sensorFlags.PCIeClassTable, "serving-security-mode": servingSecurityMode,
 			"max-retained-quarantines-per-namespace": strconv.Itoa(maxRetainedQuarantines),
 			"trusted-detectors":                      strings.Join(detectors.List(), ","), "actions-supported-debounce": strconv.Itoa(supportDebounce),
-			"prometheus-configured": strconv.FormatBool(promURL != ""), "epss-cache": epssCachePath, "epss-authoritative": strconv.FormatBool(epssAuthoritative),
+			"prometheus-configured": strconv.FormatBool(sensorFlags.PrometheusURL != ""), "epss-cache": sensorFlags.EPSS.CachePath, "epss-authoritative": strconv.FormatBool(sensorFlags.EPSS.Authoritative),
 			"flow-residual-classes": flowClasses, "scoped-outcome-config": scopedOutcomeConfig, "calibration-shadow": strconv.FormatBool(calibrationShadow),
 			"lora-clean-sources-file": loraCleanSourcesFile, "mig-profiles-file": migProfilesFile, "global-kill-switch": strconv.FormatBool(killSwitch),
-			"voice-mcp-approved-image": voiceMCPApprovedImage, "endpoint-lease-approved-source-sha256": endpointLeaseApprovedSource,
-			"endpoint-lease-approved-proxy-image": endpointLeaseApprovedProxyImage, "endpoint-lease-approved-engine-image": endpointLeaseApprovedEngineImage,
+			"voice-mcp-approved-image": voiceMCPApprovedImage, "endpoint-lease-approved-source-sha256": sensorFlags.EndpointLeaseApprovedSource,
+			"endpoint-lease-approved-proxy-image": sensorFlags.EndpointLeaseApprovedProxyImage, "endpoint-lease-approved-engine-image": sensorFlags.EndpointLeaseApprovedEngineImage,
 		}
 		store, storeErr := mathlab.OpenStore(mathLabCaptureDir, mathLabCaptureMaxBytes, 4, func(st mathlab.StoreStats) {
 			metrics.RecordMathLabStore(st.Files, st.Bytes, st.Evicted, st.Failed)
@@ -736,6 +694,18 @@ func main() {
 		rmgr.Brain = remote
 		setupLog.Info("decision brain: remote service", "endpoint", brainEndpoint, "engine", remote.Name())
 	}
+	// The cluster is observed in this process unless --sensor-endpoint names the
+	// sensor service, which serves the same contract over gRPC (ADR-0001).
+	if sensorEndpoint != "" {
+		remote, conn, sensorErr := connectSensor(sensorEndpoint, sensorFlags.Describe(), sensorConnectTimeout, sensorCallTimeout)
+		if sensorErr != nil {
+			setupLog.Error(sensorErr, "refusing to start without the sensor service", "endpoint", sensorEndpoint)
+			os.Exit(1)
+		}
+		defer func() { _ = conn.Close() }()
+		rmgr.Sensor = remote
+		setupLog.Info("cluster sensor: remote service", "endpoint", sensorEndpoint)
+	}
 	if auditSourceAddr != "" {
 		server, sourceErr := (audittransport.ServerConfig{Addr: auditSourceAddr, AuditPath: auditJSON, VClusterAuditPath: auditSourceVClusterPath,
 			CertFile: auditSourceCert, KeyFile: auditSourceKey, CAFile: auditSourceCA,
@@ -772,39 +742,11 @@ func main() {
 	// Re-read the exploitability cache while running. Off by default: with a hand-curated
 	// ConfigMap there is nothing to observe, and a startup-only read is the honest description
 	// of that. It is turned on where a scanner pipeline owns the file (PHVX-14b).
-	if epssAuthoritative && epssCachePath != "" && epssCacheRefresh > 0 {
-		refresher := &platform.AuthoritativeEPSSRefresher{CachePath: epssCachePath, MetadataPath: epssMetadataPath,
-			Namespace: epssConfigMapNamespace, ConfigMapName: epssConfigMapName, CacheKey: epssCacheKey, MetadataKey: epssMetadataKey,
-			Scope:  epssmeta.Scope{Namespaces: splitNonempty(epssAuthoritativeNamespaces), Digests: splitNonempty(epssAuthoritativeDigests)},
-			Reader: mgr.GetAPIReader(), Interval: epssCacheRefresh, Timeout: epssAuthoritativeTimeout,
-			OnReload: func(entries int, changed bool) {
-				if changed {
-					setupLog.Info("epss: authoritative snapshot published", "images", entries)
-				}
-			},
-			OnError: func(err error) { setupLog.Error(err, "epss: authoritative refresh unavailable") }}
+	if refresher := sensorFlags.EPSS.Refresher(mgr.GetAPIReader(), setupLog); refresher != nil {
 		if err = mgr.Add(refresher); err != nil {
-			setupLog.Error(err, "unable to add authoritative epss refresher")
+			setupLog.Error(err, "unable to add the epss refresher")
 			os.Exit(1)
 		}
-	} else if epssCachePath != "" && epssCacheRefresh > 0 {
-		refresher := &platform.EPSSRefresher{
-			Path:     epssCachePath,
-			Interval: epssCacheRefresh,
-			OnReload: func(entries int, changed bool) {
-				if changed {
-					setupLog.Info("epss: exploitability cache reloaded", "images", entries, "path", epssCachePath)
-				}
-			},
-			OnError: func(err error) {
-				setupLog.Error(err, "epss-cache refresh failed (previous cache kept in force)", "path", epssCachePath)
-			},
-		}
-		if err = mgr.Add(refresher); err != nil {
-			setupLog.Error(err, "unable to add the epss cache refresher")
-			os.Exit(1)
-		}
-		setupLog.Info("epss: cache refresh enabled", "interval", epssCacheRefresh, "path", epssCachePath)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
