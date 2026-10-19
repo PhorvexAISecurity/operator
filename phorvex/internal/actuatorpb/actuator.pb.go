@@ -160,6 +160,8 @@ type HelloResponse struct {
 	// CBOR map[model.Action][]authz.Verb: the access each known action needs. An
 	// action that is absent needs none.
 	RequiredVerbs []byte `protobuf:"bytes,5,opt,name=required_verbs,json=requiredVerbs,proto3" json:"required_verbs,omitempty"`
+	// Whether the actuator reviews its own identity's access.
+	ReviewsAccess bool `protobuf:"varint,6,opt,name=reviews_access,json=reviewsAccess,proto3" json:"reviews_access,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -227,6 +229,13 @@ func (x *HelloResponse) GetRequiredVerbs() []byte {
 		return x.RequiredVerbs
 	}
 	return nil
+}
+
+func (x *HelloResponse) GetReviewsAccess() bool {
+	if x != nil {
+		return x.ReviewsAccess
+	}
+	return false
 }
 
 type SupportsActionRequest struct {
@@ -431,6 +440,130 @@ func (x *CapabilityAdvisoryResponse) GetAdvisory() string {
 	return ""
 }
 
+type ReviewAccessRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Namespace string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	// CBOR []authz.Verb
+	Verbs []byte `protobuf:"bytes,2,opt,name=verbs,proto3" json:"verbs,omitempty"`
+	// False answers only from reviews already made and issues none.
+	Review        bool `protobuf:"varint,3,opt,name=review,proto3" json:"review,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReviewAccessRequest) Reset() {
+	*x = ReviewAccessRequest{}
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReviewAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReviewAccessRequest) ProtoMessage() {}
+
+func (x *ReviewAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReviewAccessRequest.ProtoReflect.Descriptor instead.
+func (*ReviewAccessRequest) Descriptor() ([]byte, []int) {
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ReviewAccessRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *ReviewAccessRequest) GetVerbs() []byte {
+	if x != nil {
+		return x.Verbs
+	}
+	return nil
+}
+
+func (x *ReviewAccessRequest) GetReview() bool {
+	if x != nil {
+		return x.Review
+	}
+	return false
+}
+
+type ReviewAccessResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Allowed bool                   `protobuf:"varint,1,opt,name=allowed,proto3" json:"allowed,omitempty"`
+	// No answer could be established.
+	Unknown bool `protobuf:"varint,2,opt,name=unknown,proto3" json:"unknown,omitempty"`
+	// The first denied or unknown verb.
+	Why           string `protobuf:"bytes,3,opt,name=why,proto3" json:"why,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReviewAccessResponse) Reset() {
+	*x = ReviewAccessResponse{}
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReviewAccessResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReviewAccessResponse) ProtoMessage() {}
+
+func (x *ReviewAccessResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReviewAccessResponse.ProtoReflect.Descriptor instead.
+func (*ReviewAccessResponse) Descriptor() ([]byte, []int) {
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *ReviewAccessResponse) GetAllowed() bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return false
+}
+
+func (x *ReviewAccessResponse) GetUnknown() bool {
+	if x != nil {
+		return x.Unknown
+	}
+	return false
+}
+
+func (x *ReviewAccessResponse) GetWhy() string {
+	if x != nil {
+		return x.Why
+	}
+	return ""
+}
+
 type RouteMaintenance struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	State         string                 `protobuf:"bytes,1,opt,name=state,proto3" json:"state,omitempty"`
@@ -441,7 +574,7 @@ type RouteMaintenance struct {
 
 func (x *RouteMaintenance) Reset() {
 	*x = RouteMaintenance{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[7]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -453,7 +586,7 @@ func (x *RouteMaintenance) String() string {
 func (*RouteMaintenance) ProtoMessage() {}
 
 func (x *RouteMaintenance) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[7]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -466,7 +599,7 @@ func (x *RouteMaintenance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteMaintenance.ProtoReflect.Descriptor instead.
 func (*RouteMaintenance) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{7}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RouteMaintenance) GetState() string {
@@ -495,7 +628,7 @@ type RoutePreparation struct {
 
 func (x *RoutePreparation) Reset() {
 	*x = RoutePreparation{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[8]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +640,7 @@ func (x *RoutePreparation) String() string {
 func (*RoutePreparation) ProtoMessage() {}
 
 func (x *RoutePreparation) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[8]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +653,7 @@ func (x *RoutePreparation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoutePreparation.ProtoReflect.Descriptor instead.
 func (*RoutePreparation) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{8}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RoutePreparation) GetPhoenixError() *Error {
@@ -563,7 +696,7 @@ type PolicyMaintenanceResult struct {
 
 func (x *PolicyMaintenanceResult) Reset() {
 	*x = PolicyMaintenanceResult{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[9]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -575,7 +708,7 @@ func (x *PolicyMaintenanceResult) String() string {
 func (*PolicyMaintenanceResult) ProtoMessage() {}
 
 func (x *PolicyMaintenanceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[9]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -588,7 +721,7 @@ func (x *PolicyMaintenanceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyMaintenanceResult.ProtoReflect.Descriptor instead.
 func (*PolicyMaintenanceResult) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{9}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PolicyMaintenanceResult) GetPreparation() *RoutePreparation {
@@ -622,7 +755,7 @@ type ObserveStandingPolicyRequest struct {
 
 func (x *ObserveStandingPolicyRequest) Reset() {
 	*x = ObserveStandingPolicyRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[10]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -634,7 +767,7 @@ func (x *ObserveStandingPolicyRequest) String() string {
 func (*ObserveStandingPolicyRequest) ProtoMessage() {}
 
 func (x *ObserveStandingPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[10]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -647,7 +780,7 @@ func (x *ObserveStandingPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveStandingPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ObserveStandingPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{10}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ObserveStandingPolicyRequest) GetTarget() []byte {
@@ -666,7 +799,7 @@ type ObserveStandingPolicyResponse struct {
 
 func (x *ObserveStandingPolicyResponse) Reset() {
 	*x = ObserveStandingPolicyResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[11]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +811,7 @@ func (x *ObserveStandingPolicyResponse) String() string {
 func (*ObserveStandingPolicyResponse) ProtoMessage() {}
 
 func (x *ObserveStandingPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[11]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +824,7 @@ func (x *ObserveStandingPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveStandingPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ObserveStandingPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{11}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ObserveStandingPolicyResponse) GetResult() *PolicyMaintenanceResult {
@@ -711,7 +844,7 @@ type ReconcileStandingPolicyRequest struct {
 
 func (x *ReconcileStandingPolicyRequest) Reset() {
 	*x = ReconcileStandingPolicyRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[12]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -723,7 +856,7 @@ func (x *ReconcileStandingPolicyRequest) String() string {
 func (*ReconcileStandingPolicyRequest) ProtoMessage() {}
 
 func (x *ReconcileStandingPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[12]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -736,7 +869,7 @@ func (x *ReconcileStandingPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileStandingPolicyRequest.ProtoReflect.Descriptor instead.
 func (*ReconcileStandingPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{12}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ReconcileStandingPolicyRequest) GetTarget() []byte {
@@ -755,7 +888,7 @@ type ReconcileStandingPolicyResponse struct {
 
 func (x *ReconcileStandingPolicyResponse) Reset() {
 	*x = ReconcileStandingPolicyResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[13]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -767,7 +900,7 @@ func (x *ReconcileStandingPolicyResponse) String() string {
 func (*ReconcileStandingPolicyResponse) ProtoMessage() {}
 
 func (x *ReconcileStandingPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[13]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -780,7 +913,7 @@ func (x *ReconcileStandingPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconcileStandingPolicyResponse.ProtoReflect.Descriptor instead.
 func (*ReconcileStandingPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{13}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ReconcileStandingPolicyResponse) GetResult() *PolicyMaintenanceResult {
@@ -800,7 +933,7 @@ type PrepareRoutesRequest struct {
 
 func (x *PrepareRoutesRequest) Reset() {
 	*x = PrepareRoutesRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[14]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -812,7 +945,7 @@ func (x *PrepareRoutesRequest) String() string {
 func (*PrepareRoutesRequest) ProtoMessage() {}
 
 func (x *PrepareRoutesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[14]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -825,7 +958,7 @@ func (x *PrepareRoutesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRoutesRequest.ProtoReflect.Descriptor instead.
 func (*PrepareRoutesRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{14}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PrepareRoutesRequest) GetTarget() []byte {
@@ -845,7 +978,7 @@ type PrepareRoutesResponse struct {
 
 func (x *PrepareRoutesResponse) Reset() {
 	*x = PrepareRoutesResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[15]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -857,7 +990,7 @@ func (x *PrepareRoutesResponse) String() string {
 func (*PrepareRoutesResponse) ProtoMessage() {}
 
 func (x *PrepareRoutesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[15]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -870,7 +1003,7 @@ func (x *PrepareRoutesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareRoutesResponse.ProtoReflect.Descriptor instead.
 func (*PrepareRoutesResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{15}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *PrepareRoutesResponse) GetPreparation() *RoutePreparation {
@@ -896,7 +1029,7 @@ type RetirePolicyBindingRequest struct {
 
 func (x *RetirePolicyBindingRequest) Reset() {
 	*x = RetirePolicyBindingRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[16]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -908,7 +1041,7 @@ func (x *RetirePolicyBindingRequest) String() string {
 func (*RetirePolicyBindingRequest) ProtoMessage() {}
 
 func (x *RetirePolicyBindingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[16]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -921,7 +1054,7 @@ func (x *RetirePolicyBindingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetirePolicyBindingRequest.ProtoReflect.Descriptor instead.
 func (*RetirePolicyBindingRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{16}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RetirePolicyBindingRequest) GetPolicyUid() string {
@@ -941,7 +1074,7 @@ type RetirePolicyBindingResponse struct {
 
 func (x *RetirePolicyBindingResponse) Reset() {
 	*x = RetirePolicyBindingResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[17]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -953,7 +1086,7 @@ func (x *RetirePolicyBindingResponse) String() string {
 func (*RetirePolicyBindingResponse) ProtoMessage() {}
 
 func (x *RetirePolicyBindingResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[17]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -966,7 +1099,7 @@ func (x *RetirePolicyBindingResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetirePolicyBindingResponse.ProtoReflect.Descriptor instead.
 func (*RetirePolicyBindingResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{17}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RetirePolicyBindingResponse) GetRetained() bool {
@@ -992,7 +1125,7 @@ type RecoverOperationsRequest struct {
 
 func (x *RecoverOperationsRequest) Reset() {
 	*x = RecoverOperationsRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[18]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1004,7 +1137,7 @@ func (x *RecoverOperationsRequest) String() string {
 func (*RecoverOperationsRequest) ProtoMessage() {}
 
 func (x *RecoverOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[18]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1017,7 +1150,7 @@ func (x *RecoverOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoverOperationsRequest.ProtoReflect.Descriptor instead.
 func (*RecoverOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{18}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RecoverOperationsRequest) GetGlobalKill() bool {
@@ -1047,7 +1180,7 @@ type RecoveryEvent struct {
 
 func (x *RecoveryEvent) Reset() {
 	*x = RecoveryEvent{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[19]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1059,7 +1192,7 @@ func (x *RecoveryEvent) String() string {
 func (*RecoveryEvent) ProtoMessage() {}
 
 func (x *RecoveryEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[19]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1072,7 +1205,7 @@ func (x *RecoveryEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoveryEvent.ProtoReflect.Descriptor instead.
 func (*RecoveryEvent) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{19}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RecoveryEvent) GetReceipt() string {
@@ -1171,7 +1304,7 @@ type RecoverOperationsResponse struct {
 
 func (x *RecoverOperationsResponse) Reset() {
 	*x = RecoverOperationsResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[20]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1183,7 +1316,7 @@ func (x *RecoverOperationsResponse) String() string {
 func (*RecoverOperationsResponse) ProtoMessage() {}
 
 func (x *RecoverOperationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[20]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1196,7 +1329,7 @@ func (x *RecoverOperationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecoverOperationsResponse.ProtoReflect.Descriptor instead.
 func (*RecoverOperationsResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{20}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RecoverOperationsResponse) GetSupported() bool {
@@ -1229,7 +1362,7 @@ type QuarantineCapacityRequest struct {
 
 func (x *QuarantineCapacityRequest) Reset() {
 	*x = QuarantineCapacityRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[21]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1241,7 +1374,7 @@ func (x *QuarantineCapacityRequest) String() string {
 func (*QuarantineCapacityRequest) ProtoMessage() {}
 
 func (x *QuarantineCapacityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[21]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1254,7 +1387,7 @@ func (x *QuarantineCapacityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuarantineCapacityRequest.ProtoReflect.Descriptor instead.
 func (*QuarantineCapacityRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{21}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *QuarantineCapacityRequest) GetNamespace() string {
@@ -1277,7 +1410,7 @@ type QuarantineCapacityResponse struct {
 
 func (x *QuarantineCapacityResponse) Reset() {
 	*x = QuarantineCapacityResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[22]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1289,7 +1422,7 @@ func (x *QuarantineCapacityResponse) String() string {
 func (*QuarantineCapacityResponse) ProtoMessage() {}
 
 func (x *QuarantineCapacityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[22]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1302,7 +1435,7 @@ func (x *QuarantineCapacityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuarantineCapacityResponse.ProtoReflect.Descriptor instead.
 func (*QuarantineCapacityResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{22}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *QuarantineCapacityResponse) GetConfigured() bool {
@@ -1352,7 +1485,7 @@ type PendingOperationRequest struct {
 
 func (x *PendingOperationRequest) Reset() {
 	*x = PendingOperationRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[23]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1364,7 +1497,7 @@ func (x *PendingOperationRequest) String() string {
 func (*PendingOperationRequest) ProtoMessage() {}
 
 func (x *PendingOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[23]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1377,7 +1510,7 @@ func (x *PendingOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingOperationRequest.ProtoReflect.Descriptor instead.
 func (*PendingOperationRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{23}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PendingOperationRequest) GetKind() string {
@@ -1418,7 +1551,7 @@ type PendingOperationResponse struct {
 
 func (x *PendingOperationResponse) Reset() {
 	*x = PendingOperationResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[24]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1430,7 +1563,7 @@ func (x *PendingOperationResponse) String() string {
 func (*PendingOperationResponse) ProtoMessage() {}
 
 func (x *PendingOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[24]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1443,7 +1576,7 @@ func (x *PendingOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PendingOperationResponse.ProtoReflect.Descriptor instead.
 func (*PendingOperationResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{24}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *PendingOperationResponse) GetPending() bool {
@@ -1470,7 +1603,7 @@ type ActuateRequest struct {
 
 func (x *ActuateRequest) Reset() {
 	*x = ActuateRequest{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[25]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1482,7 +1615,7 @@ func (x *ActuateRequest) String() string {
 func (*ActuateRequest) ProtoMessage() {}
 
 func (x *ActuateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[25]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1495,7 +1628,7 @@ func (x *ActuateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActuateRequest.ProtoReflect.Descriptor instead.
 func (*ActuateRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{25}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ActuateRequest) GetRequest() []byte {
@@ -1518,7 +1651,7 @@ type ActuateResponse struct {
 
 func (x *ActuateResponse) Reset() {
 	*x = ActuateResponse{}
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[26]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1530,7 +1663,7 @@ func (x *ActuateResponse) String() string {
 func (*ActuateResponse) ProtoMessage() {}
 
 func (x *ActuateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[26]
+	mi := &file_phorvex_actuator_v1_actuator_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1543,7 +1676,7 @@ func (x *ActuateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActuateResponse.ProtoReflect.Descriptor instead.
 func (*ActuateResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{26}
+	return file_phorvex_actuator_v1_actuator_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ActuateResponse) GetResult() []byte {
@@ -1579,13 +1712,14 @@ const file_phorvex_actuator_v1_actuator_proto_rawDesc = "" +
 	"\bcanceled\x18\x04 \x01(\bR\bcanceled\"^\n" +
 	"\fHelloRequest\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\rR\x0fcontractVersion\x12#\n" +
-	"\rconfig_sha256\x18\x02 \x01(\tR\fconfigSha256\"\xdc\x01\n" +
+	"\rconfig_sha256\x18\x02 \x01(\tR\fconfigSha256\"\x83\x02\n" +
 	"\rHelloResponse\x12)\n" +
 	"\x10contract_version\x18\x01 \x01(\rR\x0fcontractVersion\x12#\n" +
 	"\rconfig_sha256\x18\x02 \x01(\tR\fconfigSha256\x12\x18\n" +
 	"\abackend\x18\x03 \x01(\tR\abackend\x12:\n" +
 	"\x19maintains_standing_policy\x18\x04 \x01(\bR\x17maintainsStandingPolicy\x12%\n" +
-	"\x0erequired_verbs\x18\x05 \x01(\fR\rrequiredVerbs\"G\n" +
+	"\x0erequired_verbs\x18\x05 \x01(\fR\rrequiredVerbs\x12%\n" +
+	"\x0ereviews_access\x18\x06 \x01(\bR\rreviewsAccess\"G\n" +
 	"\x15SupportsActionRequest\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\fR\x06target\":\n" +
@@ -1596,7 +1730,15 @@ const file_phorvex_actuator_v1_actuator_proto_rawDesc = "" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\fR\x06target\"8\n" +
 	"\x1aCapabilityAdvisoryResponse\x12\x1a\n" +
-	"\badvisory\x18\x01 \x01(\tR\badvisory\"@\n" +
+	"\badvisory\x18\x01 \x01(\tR\badvisory\"a\n" +
+	"\x13ReviewAccessRequest\x12\x1c\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x14\n" +
+	"\x05verbs\x18\x02 \x01(\fR\x05verbs\x12\x16\n" +
+	"\x06review\x18\x03 \x01(\bR\x06review\"\\\n" +
+	"\x14ReviewAccessResponse\x12\x18\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x18\n" +
+	"\aunknown\x18\x02 \x01(\bR\aunknown\x12\x10\n" +
+	"\x03why\x18\x03 \x01(\tR\x03why\"@\n" +
 	"\x10RouteMaintenance\x12\x14\n" +
 	"\x05state\x18\x01 \x01(\tR\x05state\x12\x16\n" +
 	"\x06detail\x18\x02 \x01(\tR\x06detail\"\xe2\x01\n" +
@@ -1676,11 +1818,13 @@ const file_phorvex_actuator_v1_actuator_proto_rawDesc = "" +
 	"\x0fActuateResponse\x12\x16\n" +
 	"\x06result\x18\x01 \x01(\fR\x06result\x12\x18\n" +
 	"\ainvoked\x18\x02 \x01(\bR\ainvoked\x120\n" +
-	"\x05error\x18\x03 \x01(\v2\x1a.phorvex.actuator.v1.ErrorR\x05error2\xde\t\n" +
+	"\x05error\x18\x03 \x01(\v2\x1a.phorvex.actuator.v1.ErrorR\x05error2\xc3\n" +
+	"\n" +
 	"\x0fActuatorService\x12N\n" +
 	"\x05Hello\x12!.phorvex.actuator.v1.HelloRequest\x1a\".phorvex.actuator.v1.HelloResponse\x12i\n" +
 	"\x0eSupportsAction\x12*.phorvex.actuator.v1.SupportsActionRequest\x1a+.phorvex.actuator.v1.SupportsActionResponse\x12u\n" +
-	"\x12CapabilityAdvisory\x12..phorvex.actuator.v1.CapabilityAdvisoryRequest\x1a/.phorvex.actuator.v1.CapabilityAdvisoryResponse\x12~\n" +
+	"\x12CapabilityAdvisory\x12..phorvex.actuator.v1.CapabilityAdvisoryRequest\x1a/.phorvex.actuator.v1.CapabilityAdvisoryResponse\x12c\n" +
+	"\fReviewAccess\x12(.phorvex.actuator.v1.ReviewAccessRequest\x1a).phorvex.actuator.v1.ReviewAccessResponse\x12~\n" +
 	"\x15ObserveStandingPolicy\x121.phorvex.actuator.v1.ObserveStandingPolicyRequest\x1a2.phorvex.actuator.v1.ObserveStandingPolicyResponse\x12\x84\x01\n" +
 	"\x17ReconcileStandingPolicy\x123.phorvex.actuator.v1.ReconcileStandingPolicyRequest\x1a4.phorvex.actuator.v1.ReconcileStandingPolicyResponse\x12f\n" +
 	"\rPrepareRoutes\x12).phorvex.actuator.v1.PrepareRoutesRequest\x1a*.phorvex.actuator.v1.PrepareRoutesResponse\x12x\n" +
@@ -1702,7 +1846,7 @@ func file_phorvex_actuator_v1_actuator_proto_rawDescGZIP() []byte {
 	return file_phorvex_actuator_v1_actuator_proto_rawDescData
 }
 
-var file_phorvex_actuator_v1_actuator_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_phorvex_actuator_v1_actuator_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_phorvex_actuator_v1_actuator_proto_goTypes = []any{
 	(*Error)(nil),                           // 0: phorvex.actuator.v1.Error
 	(*HelloRequest)(nil),                    // 1: phorvex.actuator.v1.HelloRequest
@@ -1711,67 +1855,71 @@ var file_phorvex_actuator_v1_actuator_proto_goTypes = []any{
 	(*SupportsActionResponse)(nil),          // 4: phorvex.actuator.v1.SupportsActionResponse
 	(*CapabilityAdvisoryRequest)(nil),       // 5: phorvex.actuator.v1.CapabilityAdvisoryRequest
 	(*CapabilityAdvisoryResponse)(nil),      // 6: phorvex.actuator.v1.CapabilityAdvisoryResponse
-	(*RouteMaintenance)(nil),                // 7: phorvex.actuator.v1.RouteMaintenance
-	(*RoutePreparation)(nil),                // 8: phorvex.actuator.v1.RoutePreparation
-	(*PolicyMaintenanceResult)(nil),         // 9: phorvex.actuator.v1.PolicyMaintenanceResult
-	(*ObserveStandingPolicyRequest)(nil),    // 10: phorvex.actuator.v1.ObserveStandingPolicyRequest
-	(*ObserveStandingPolicyResponse)(nil),   // 11: phorvex.actuator.v1.ObserveStandingPolicyResponse
-	(*ReconcileStandingPolicyRequest)(nil),  // 12: phorvex.actuator.v1.ReconcileStandingPolicyRequest
-	(*ReconcileStandingPolicyResponse)(nil), // 13: phorvex.actuator.v1.ReconcileStandingPolicyResponse
-	(*PrepareRoutesRequest)(nil),            // 14: phorvex.actuator.v1.PrepareRoutesRequest
-	(*PrepareRoutesResponse)(nil),           // 15: phorvex.actuator.v1.PrepareRoutesResponse
-	(*RetirePolicyBindingRequest)(nil),      // 16: phorvex.actuator.v1.RetirePolicyBindingRequest
-	(*RetirePolicyBindingResponse)(nil),     // 17: phorvex.actuator.v1.RetirePolicyBindingResponse
-	(*RecoverOperationsRequest)(nil),        // 18: phorvex.actuator.v1.RecoverOperationsRequest
-	(*RecoveryEvent)(nil),                   // 19: phorvex.actuator.v1.RecoveryEvent
-	(*RecoverOperationsResponse)(nil),       // 20: phorvex.actuator.v1.RecoverOperationsResponse
-	(*QuarantineCapacityRequest)(nil),       // 21: phorvex.actuator.v1.QuarantineCapacityRequest
-	(*QuarantineCapacityResponse)(nil),      // 22: phorvex.actuator.v1.QuarantineCapacityResponse
-	(*PendingOperationRequest)(nil),         // 23: phorvex.actuator.v1.PendingOperationRequest
-	(*PendingOperationResponse)(nil),        // 24: phorvex.actuator.v1.PendingOperationResponse
-	(*ActuateRequest)(nil),                  // 25: phorvex.actuator.v1.ActuateRequest
-	(*ActuateResponse)(nil),                 // 26: phorvex.actuator.v1.ActuateResponse
+	(*ReviewAccessRequest)(nil),             // 7: phorvex.actuator.v1.ReviewAccessRequest
+	(*ReviewAccessResponse)(nil),            // 8: phorvex.actuator.v1.ReviewAccessResponse
+	(*RouteMaintenance)(nil),                // 9: phorvex.actuator.v1.RouteMaintenance
+	(*RoutePreparation)(nil),                // 10: phorvex.actuator.v1.RoutePreparation
+	(*PolicyMaintenanceResult)(nil),         // 11: phorvex.actuator.v1.PolicyMaintenanceResult
+	(*ObserveStandingPolicyRequest)(nil),    // 12: phorvex.actuator.v1.ObserveStandingPolicyRequest
+	(*ObserveStandingPolicyResponse)(nil),   // 13: phorvex.actuator.v1.ObserveStandingPolicyResponse
+	(*ReconcileStandingPolicyRequest)(nil),  // 14: phorvex.actuator.v1.ReconcileStandingPolicyRequest
+	(*ReconcileStandingPolicyResponse)(nil), // 15: phorvex.actuator.v1.ReconcileStandingPolicyResponse
+	(*PrepareRoutesRequest)(nil),            // 16: phorvex.actuator.v1.PrepareRoutesRequest
+	(*PrepareRoutesResponse)(nil),           // 17: phorvex.actuator.v1.PrepareRoutesResponse
+	(*RetirePolicyBindingRequest)(nil),      // 18: phorvex.actuator.v1.RetirePolicyBindingRequest
+	(*RetirePolicyBindingResponse)(nil),     // 19: phorvex.actuator.v1.RetirePolicyBindingResponse
+	(*RecoverOperationsRequest)(nil),        // 20: phorvex.actuator.v1.RecoverOperationsRequest
+	(*RecoveryEvent)(nil),                   // 21: phorvex.actuator.v1.RecoveryEvent
+	(*RecoverOperationsResponse)(nil),       // 22: phorvex.actuator.v1.RecoverOperationsResponse
+	(*QuarantineCapacityRequest)(nil),       // 23: phorvex.actuator.v1.QuarantineCapacityRequest
+	(*QuarantineCapacityResponse)(nil),      // 24: phorvex.actuator.v1.QuarantineCapacityResponse
+	(*PendingOperationRequest)(nil),         // 25: phorvex.actuator.v1.PendingOperationRequest
+	(*PendingOperationResponse)(nil),        // 26: phorvex.actuator.v1.PendingOperationResponse
+	(*ActuateRequest)(nil),                  // 27: phorvex.actuator.v1.ActuateRequest
+	(*ActuateResponse)(nil),                 // 28: phorvex.actuator.v1.ActuateResponse
 }
 var file_phorvex_actuator_v1_actuator_proto_depIdxs = []int32{
 	0,  // 0: phorvex.actuator.v1.RoutePreparation.phoenix_error:type_name -> phorvex.actuator.v1.Error
 	0,  // 1: phorvex.actuator.v1.RoutePreparation.native_error:type_name -> phorvex.actuator.v1.Error
-	8,  // 2: phorvex.actuator.v1.PolicyMaintenanceResult.preparation:type_name -> phorvex.actuator.v1.RoutePreparation
-	7,  // 3: phorvex.actuator.v1.PolicyMaintenanceResult.phoenix:type_name -> phorvex.actuator.v1.RouteMaintenance
-	7,  // 4: phorvex.actuator.v1.PolicyMaintenanceResult.native:type_name -> phorvex.actuator.v1.RouteMaintenance
-	9,  // 5: phorvex.actuator.v1.ObserveStandingPolicyResponse.result:type_name -> phorvex.actuator.v1.PolicyMaintenanceResult
-	9,  // 6: phorvex.actuator.v1.ReconcileStandingPolicyResponse.result:type_name -> phorvex.actuator.v1.PolicyMaintenanceResult
-	8,  // 7: phorvex.actuator.v1.PrepareRoutesResponse.preparation:type_name -> phorvex.actuator.v1.RoutePreparation
+	10, // 2: phorvex.actuator.v1.PolicyMaintenanceResult.preparation:type_name -> phorvex.actuator.v1.RoutePreparation
+	9,  // 3: phorvex.actuator.v1.PolicyMaintenanceResult.phoenix:type_name -> phorvex.actuator.v1.RouteMaintenance
+	9,  // 4: phorvex.actuator.v1.PolicyMaintenanceResult.native:type_name -> phorvex.actuator.v1.RouteMaintenance
+	11, // 5: phorvex.actuator.v1.ObserveStandingPolicyResponse.result:type_name -> phorvex.actuator.v1.PolicyMaintenanceResult
+	11, // 6: phorvex.actuator.v1.ReconcileStandingPolicyResponse.result:type_name -> phorvex.actuator.v1.PolicyMaintenanceResult
+	10, // 7: phorvex.actuator.v1.PrepareRoutesResponse.preparation:type_name -> phorvex.actuator.v1.RoutePreparation
 	0,  // 8: phorvex.actuator.v1.PrepareRoutesResponse.error:type_name -> phorvex.actuator.v1.Error
 	0,  // 9: phorvex.actuator.v1.RetirePolicyBindingResponse.error:type_name -> phorvex.actuator.v1.Error
 	0,  // 10: phorvex.actuator.v1.RecoveryEvent.error:type_name -> phorvex.actuator.v1.Error
-	19, // 11: phorvex.actuator.v1.RecoverOperationsResponse.events:type_name -> phorvex.actuator.v1.RecoveryEvent
+	21, // 11: phorvex.actuator.v1.RecoverOperationsResponse.events:type_name -> phorvex.actuator.v1.RecoveryEvent
 	0,  // 12: phorvex.actuator.v1.RecoverOperationsResponse.error:type_name -> phorvex.actuator.v1.Error
 	0,  // 13: phorvex.actuator.v1.PendingOperationResponse.error:type_name -> phorvex.actuator.v1.Error
 	0,  // 14: phorvex.actuator.v1.ActuateResponse.error:type_name -> phorvex.actuator.v1.Error
 	1,  // 15: phorvex.actuator.v1.ActuatorService.Hello:input_type -> phorvex.actuator.v1.HelloRequest
 	3,  // 16: phorvex.actuator.v1.ActuatorService.SupportsAction:input_type -> phorvex.actuator.v1.SupportsActionRequest
 	5,  // 17: phorvex.actuator.v1.ActuatorService.CapabilityAdvisory:input_type -> phorvex.actuator.v1.CapabilityAdvisoryRequest
-	10, // 18: phorvex.actuator.v1.ActuatorService.ObserveStandingPolicy:input_type -> phorvex.actuator.v1.ObserveStandingPolicyRequest
-	12, // 19: phorvex.actuator.v1.ActuatorService.ReconcileStandingPolicy:input_type -> phorvex.actuator.v1.ReconcileStandingPolicyRequest
-	14, // 20: phorvex.actuator.v1.ActuatorService.PrepareRoutes:input_type -> phorvex.actuator.v1.PrepareRoutesRequest
-	16, // 21: phorvex.actuator.v1.ActuatorService.RetirePolicyBinding:input_type -> phorvex.actuator.v1.RetirePolicyBindingRequest
-	18, // 22: phorvex.actuator.v1.ActuatorService.RecoverOperations:input_type -> phorvex.actuator.v1.RecoverOperationsRequest
-	21, // 23: phorvex.actuator.v1.ActuatorService.QuarantineCapacity:input_type -> phorvex.actuator.v1.QuarantineCapacityRequest
-	23, // 24: phorvex.actuator.v1.ActuatorService.PendingOperation:input_type -> phorvex.actuator.v1.PendingOperationRequest
-	25, // 25: phorvex.actuator.v1.ActuatorService.Actuate:input_type -> phorvex.actuator.v1.ActuateRequest
-	2,  // 26: phorvex.actuator.v1.ActuatorService.Hello:output_type -> phorvex.actuator.v1.HelloResponse
-	4,  // 27: phorvex.actuator.v1.ActuatorService.SupportsAction:output_type -> phorvex.actuator.v1.SupportsActionResponse
-	6,  // 28: phorvex.actuator.v1.ActuatorService.CapabilityAdvisory:output_type -> phorvex.actuator.v1.CapabilityAdvisoryResponse
-	11, // 29: phorvex.actuator.v1.ActuatorService.ObserveStandingPolicy:output_type -> phorvex.actuator.v1.ObserveStandingPolicyResponse
-	13, // 30: phorvex.actuator.v1.ActuatorService.ReconcileStandingPolicy:output_type -> phorvex.actuator.v1.ReconcileStandingPolicyResponse
-	15, // 31: phorvex.actuator.v1.ActuatorService.PrepareRoutes:output_type -> phorvex.actuator.v1.PrepareRoutesResponse
-	17, // 32: phorvex.actuator.v1.ActuatorService.RetirePolicyBinding:output_type -> phorvex.actuator.v1.RetirePolicyBindingResponse
-	20, // 33: phorvex.actuator.v1.ActuatorService.RecoverOperations:output_type -> phorvex.actuator.v1.RecoverOperationsResponse
-	22, // 34: phorvex.actuator.v1.ActuatorService.QuarantineCapacity:output_type -> phorvex.actuator.v1.QuarantineCapacityResponse
-	24, // 35: phorvex.actuator.v1.ActuatorService.PendingOperation:output_type -> phorvex.actuator.v1.PendingOperationResponse
-	26, // 36: phorvex.actuator.v1.ActuatorService.Actuate:output_type -> phorvex.actuator.v1.ActuateResponse
-	26, // [26:37] is the sub-list for method output_type
-	15, // [15:26] is the sub-list for method input_type
+	7,  // 18: phorvex.actuator.v1.ActuatorService.ReviewAccess:input_type -> phorvex.actuator.v1.ReviewAccessRequest
+	12, // 19: phorvex.actuator.v1.ActuatorService.ObserveStandingPolicy:input_type -> phorvex.actuator.v1.ObserveStandingPolicyRequest
+	14, // 20: phorvex.actuator.v1.ActuatorService.ReconcileStandingPolicy:input_type -> phorvex.actuator.v1.ReconcileStandingPolicyRequest
+	16, // 21: phorvex.actuator.v1.ActuatorService.PrepareRoutes:input_type -> phorvex.actuator.v1.PrepareRoutesRequest
+	18, // 22: phorvex.actuator.v1.ActuatorService.RetirePolicyBinding:input_type -> phorvex.actuator.v1.RetirePolicyBindingRequest
+	20, // 23: phorvex.actuator.v1.ActuatorService.RecoverOperations:input_type -> phorvex.actuator.v1.RecoverOperationsRequest
+	23, // 24: phorvex.actuator.v1.ActuatorService.QuarantineCapacity:input_type -> phorvex.actuator.v1.QuarantineCapacityRequest
+	25, // 25: phorvex.actuator.v1.ActuatorService.PendingOperation:input_type -> phorvex.actuator.v1.PendingOperationRequest
+	27, // 26: phorvex.actuator.v1.ActuatorService.Actuate:input_type -> phorvex.actuator.v1.ActuateRequest
+	2,  // 27: phorvex.actuator.v1.ActuatorService.Hello:output_type -> phorvex.actuator.v1.HelloResponse
+	4,  // 28: phorvex.actuator.v1.ActuatorService.SupportsAction:output_type -> phorvex.actuator.v1.SupportsActionResponse
+	6,  // 29: phorvex.actuator.v1.ActuatorService.CapabilityAdvisory:output_type -> phorvex.actuator.v1.CapabilityAdvisoryResponse
+	8,  // 30: phorvex.actuator.v1.ActuatorService.ReviewAccess:output_type -> phorvex.actuator.v1.ReviewAccessResponse
+	13, // 31: phorvex.actuator.v1.ActuatorService.ObserveStandingPolicy:output_type -> phorvex.actuator.v1.ObserveStandingPolicyResponse
+	15, // 32: phorvex.actuator.v1.ActuatorService.ReconcileStandingPolicy:output_type -> phorvex.actuator.v1.ReconcileStandingPolicyResponse
+	17, // 33: phorvex.actuator.v1.ActuatorService.PrepareRoutes:output_type -> phorvex.actuator.v1.PrepareRoutesResponse
+	19, // 34: phorvex.actuator.v1.ActuatorService.RetirePolicyBinding:output_type -> phorvex.actuator.v1.RetirePolicyBindingResponse
+	22, // 35: phorvex.actuator.v1.ActuatorService.RecoverOperations:output_type -> phorvex.actuator.v1.RecoverOperationsResponse
+	24, // 36: phorvex.actuator.v1.ActuatorService.QuarantineCapacity:output_type -> phorvex.actuator.v1.QuarantineCapacityResponse
+	26, // 37: phorvex.actuator.v1.ActuatorService.PendingOperation:output_type -> phorvex.actuator.v1.PendingOperationResponse
+	28, // 38: phorvex.actuator.v1.ActuatorService.Actuate:output_type -> phorvex.actuator.v1.ActuateResponse
+	27, // [27:39] is the sub-list for method output_type
+	15, // [15:27] is the sub-list for method input_type
 	15, // [15:15] is the sub-list for extension type_name
 	15, // [15:15] is the sub-list for extension extendee
 	0,  // [0:15] is the sub-list for field type_name
@@ -1788,7 +1936,7 @@ func file_phorvex_actuator_v1_actuator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_phorvex_actuator_v1_actuator_proto_rawDesc), len(file_phorvex_actuator_v1_actuator_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
