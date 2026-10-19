@@ -14,10 +14,10 @@ import (
 
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/killchain"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/platform"
+	"github.com/phorvex/phorvex/internal/sensorapi"
+	"github.com/phorvex/phorvex/internal/sensorsvc"
 )
 
 // ContextRow is one pod's live kill-chain context (P-CONTEXT proof).
@@ -62,27 +62,27 @@ func (m *Manager) ContextScan(ctx context.Context, namespace string, sel labels.
 // the live platform scan. Shared by the per-dollar ablation and the scarcity A/B.
 func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel labels.Selector) ([]*model.WorkloadView, string, error) {
 	now := time.Now()
-	snap, err := ingest.CollectSnapshot(ctx, m.Client, now, genericAssetValue)
+	// A read-only sensor over the cached client alone: no owner, receipt or binding reads.
+	sensor := &sensorsvc.Local{Client: m.Client, PromURL: m.PromURL, PCIeClasses: m.PCIeClasses}
+	obs, err := sensor.Observe(ctx, sensorapi.ObserveRequest{Now: now,
+		Scopes: []sensorapi.Scope{{Namespace: namespace, Selector: selectorString(sel)}}})
 	if err != nil {
 		return nil, "", err
 	}
-	// The ablation builds a fresh snapshot, so it must populate that same snapshot from
-	// the configured live DCGM feed before platform.Derive. Otherwise --scan can print a
-	// real GPU witness while its subsequent scarcity A/B silently runs GPU-neutral.
-	if m.PromURL != "" {
-		if err := ingest.PopulateGPUWitness(ctx, snap, m.PromURL, m.PCIeClasses); err != nil {
-			return nil, "", fmt.Errorf("GPU/DCGM witness ingest: %w", err)
-		}
+	// The ablation builds a fresh observation, so the GPU witness must come from the
+	// configured live DCGM feed. Otherwise --scan can print a real GPU witness while its
+	// subsequent scarcity A/B silently runs GPU-neutral.
+	if obs.GPUWitnessError != "" {
+		return nil, "", fmt.Errorf("GPU/DCGM witness ingest: %s", obs.GPUWitnessError)
 	}
-	platformName, physByKey := platform.Derive(snap)
-	infected := buildInfectedSet(snap)
+	platformName := obs.Platform
 	clock := exposure.NewClock()
 	// [M-140] The offline ablation has no API object, so it uses the name-kind owner
 	// fallback — the same key ablationPolicy(namespace, ...).Owner() produces.
 	owner := model.OwnerKey(model.OwnerKindName, namespace)
 	var views []*model.WorkloadView
-	for i := range snap.Pods {
-		p := &snap.Pods[i]
+	for i := range obs.Pods {
+		p := &obs.Pods[i]
 		if p.Namespace != namespace {
 			continue
 		}
@@ -94,36 +94,23 @@ func (m *Manager) buildAblationViews(ctx context.Context, namespace string, sel 
 			Fingerprints: map[string]string{model.VarPodIdentity: p.UID},
 		}, now)
 		exp := clock.Since(owner, p.Namespace, p.Name, now)
-
-		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
-		neighbors := make([]model.NeighborRef, 0, len(nbKeys))
-		events := append([]model.SecurityEventInfo{}, snap.EventByPod[p.Namespace+"/"+p.Name]...)
-		for _, nb := range nbKeys {
-			for _, ne := range snap.EventByPod[nb] {
-				ne.TargetsPod = false
-				events = append(events, ne)
-			}
-			val := 0.0
-			if np, ok := snap.PodByKey[nb]; ok {
-				val = genericAssetValue(np)
-			}
-			neighbors = append(neighbors, model.NeighborRef{Key: nb, Value: val})
-		}
-		ph, ok := physByKey[p.Namespace+"/"+p.Name]
+		podContext := observedContext(obs, p)
+		ph, ok := obs.Physics[p.Namespace+"/"+p.Name]
 		if !ok {
 			ph = model.NeutralPhysics()
 		}
+		phase, phaseReason := model.ClassifyPhase(*p, model.Telemetry{})
 		views = append(views, &model.WorkloadView{
 			Pod:                *p,
-			Phase:              ingest.PhaseOf(*p, model.Telemetry{}),
-			PhaseReason:        ingest.PhaseReasonOf(*p, model.Telemetry{}),
-			BlastRadius:        snap.Graph.BlastRadius(p.Namespace, p.Name),
-			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
-			Neighbors:          neighbors,
-			Events:             events,
+			Phase:              phase,
+			PhaseReason:        phaseReason,
+			BlastRadius:        podContext.BlastRadius,
+			NeighborCount:      podContext.NeighborCount,
+			Neighbors:          podContext.Neighbors,
+			Events:             podContext.Events,
 			ExposureByVariable: exp,
 			Physics:            ph,
-			InfectionFrontier:  infectionFrontier(nbKeys, infected),
+			InfectionFrontier:  podContext.InfectionFrontier,
 		})
 	}
 	return views, platformName, nil

@@ -10,9 +10,9 @@ import (
 
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/sensorapi"
 )
 
 // rls_match_rate_test.go — PHVX-10c / PHORVEXSEC-98.
@@ -92,7 +92,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
-		m.observeReadyRotations(&ingest.Snapshot{
+		m.observeReadyRotations(&sensorapi.Observation{
 			Now: startedAt.Add(30 * time.Second),
 			Pods: []model.Pod{{
 				Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -110,7 +110,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
-		m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
+		m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 		if got := outcomeCount(t, tenant, "censored") - before; got != 1 {
 			t.Fatalf("censored counter moved by %v, want 1", got)
 		}
@@ -122,7 +122,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
-		m.observeReadyRotations(&ingest.Snapshot{
+		m.observeReadyRotations(&sensorapi.Observation{
 			Now: startedAt.Add(2 * cost.ReadyDelayReference),
 			Pods: []model.Pod{{
 				Namespace: "ns", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
@@ -150,7 +150,7 @@ func TestOutcomeIsCountedOncePerRotationNotPerTick(t *testing.T) {
 
 	// Three ticks while the rotation is still unresolved and inside the window: no outcome yet.
 	for _, d := range []time.Duration{time.Second, 10 * time.Second, 30 * time.Second} {
-		m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(d)})
+		m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(d)})
 	}
 	total := outcomeCount(t, tenant, "matched") + outcomeCount(t, tenant, "censored") + outcomeCount(t, tenant, "abandoned")
 	if total != 0 {
@@ -159,7 +159,7 @@ func TestOutcomeIsCountedOncePerRotationNotPerTick(t *testing.T) {
 	}
 
 	// Now let it resolve.
-	m.observeReadyRotations(&ingest.Snapshot{
+	m.observeReadyRotations(&sensorapi.Observation{
 		Now: startedAt.Add(time.Minute),
 		Pods: []model.Pod{{
 			Namespace: "ns", Name: "new", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -170,7 +170,7 @@ func TestOutcomeIsCountedOncePerRotationNotPerTick(t *testing.T) {
 		t.Fatalf("resolved rotation recorded %v matched outcomes, want exactly 1", got)
 	}
 	// And further ticks must not keep counting it.
-	m.observeReadyRotations(&ingest.Snapshot{Now: startedAt.Add(2 * time.Minute)})
+	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * time.Minute)})
 	if got := outcomeCount(t, tenant, "matched"); got != 1 {
 		t.Fatalf("a retired rotation was counted again on a later tick (%v)", got)
 	}

@@ -67,7 +67,11 @@ may only shrink.
 
 Each tick, per tenant:
 
-1. `Sensor.Snapshot(tenant)` returns workloads, physics witnesses and context features.
+1. `Sensor.Observe(tick)` returns one observation of the cluster for every due
+   policy: inventories, events, graph and event context per Pod, physics
+   witnesses. `Sensor.Telemetry(policy)` then reads each policy's telemetry. The
+   dispatcher builds the views from them and from the state it owns (exposure
+   clocks, emit intents, failure cooldowns).
 2. `Brain.Decide(snapshot)` is one bidirectional stream. While the brain generates
    candidates it asks a capability question for each (asset, action) that
    survives its structural filters; the dispatcher answers each one from the same
@@ -195,6 +199,16 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
 - **Math Lab snapshots of a remote brain.** With `--brain-endpoint` the brain
   records the snapshots, so the manager's audit source no longer serves them.
   Phase 5 gives the brain its own snapshot source for the console.
+
+- **Sensor packages the dispatcher still imports.** After phase 4b-1 the tick
+  observes through `sensorapi`, but the runner still uses `ingest` for the
+  detector trust configuration, the existential admission-boundary check and the
+  completed-disclosure and current-inventory admission. Each moves to a shared
+  package or behind the sensor contract before the dispatcher's sensor imports
+  can be forbidden.
+- **Calibration has no single owner.** `calib` samples the sensor's fleet, learns
+  from the dispatcher's rotation outcomes and produces the brain's shadow views.
+  It is classified as sensor today; decide its service before phase 5.
 
 ## Consequences
 

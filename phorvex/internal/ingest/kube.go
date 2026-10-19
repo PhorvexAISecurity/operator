@@ -7,7 +7,6 @@ package ingest
 import (
 	"context"
 	appsv1 "k8s.io/api/apps/v1"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -86,26 +85,12 @@ type Snapshot struct {
 	GPUWitness map[string]model.PhysicsWitness
 }
 
-// NodeInfo is the conservation-law substrate per node (allocatable vs the pods bound to
-// it). GPU/MIG resource counts are integer device-plugin resources (measurable on kind
-// with the device plugin; absent => 0).
-type NodeInfo struct {
-	Name                string
-	AllocatableCPUMilli int64
-	AllocatableMemBytes int64
-	AllocatableGPU      int64
-	MIGResources        map[string]int64  // nvidia.com/mig-* -> count (legal-partition geometry)
-	Labels              map[string]string // node labels (instance-type / cloud markers; within the existing `list nodes` RBAC — no privilege delta)
-	Schedulable         bool              // Ready and not spec.unschedulable
-}
-
-// ServiceInfo is the minimum read-only Service projection needed by capability status.
-type ServiceInfo struct {
-	Namespace string
-	Name      string
-	UID       string
-	Selector  map[string]string
-}
+// NodeInfo and ServiceInfo are the node and Service projections the sensor shares
+// with the dispatcher; see model.NodeInfo and model.ServiceInfo.
+type (
+	NodeInfo    = model.NodeInfo
+	ServiceInfo = model.ServiceInfo
+)
 
 // PDBInfo is a live PodDisruptionBudget projection (Layer-A availability law, replacing
 // the static policy proxy as an ADDITIVE veto).
@@ -1029,90 +1014,23 @@ func projectNetRule(peers []networkingv1.NetworkPolicyPeer, allowAll bool) graph
 
 // PhaseOf derives the cost-relevant workload phase from pod status + telemetry.
 func PhaseOf(p model.Pod, t model.Telemetry) model.WorkloadPhase {
-	ph, _ := classifyPhase(p, t)
+	ph, _ := model.ClassifyPhase(p, t)
 	return ph
 }
 
-// Phase reason strings recorded alongside the phase. The Warm enum covers measured activity,
-// absence and uncertain app telemetry; the reason disambiguates them.
+// Phase reason strings recorded alongside the phase; see model.ClassifyPhase.
 const (
-	PhaseReasonColdStart     = "coldstart"
-	PhaseReasonUnknown       = "unknown"
-	PhaseReasonDraining      = "draining"
-	PhaseReasonIdleMeasured  = "idle-measured"
-	PhaseReasonWarmNoApp     = "warm-no-app-signal"
-	PhaseReasonWarmUncertain = "warm-uncertain-app-signal"
-	PhaseReasonBusyMeasured  = "busy-measured"
+	PhaseReasonColdStart     = model.PhaseReasonColdStart
+	PhaseReasonUnknown       = model.PhaseReasonUnknown
+	PhaseReasonDraining      = model.PhaseReasonDraining
+	PhaseReasonIdleMeasured  = model.PhaseReasonIdleMeasured
+	PhaseReasonWarmNoApp     = model.PhaseReasonWarmNoApp
+	PhaseReasonWarmUncertain = model.PhaseReasonWarmUncertain
+	PhaseReasonBusyMeasured  = model.PhaseReasonBusyMeasured
 )
 
 // PhaseReasonOf returns the auditable reason for PhaseOf's verdict on the same inputs.
 func PhaseReasonOf(p model.Pod, t model.Telemetry) string {
-	_, reason := classifyPhase(p, t)
+	_, reason := model.ClassifyPhase(p, t)
 	return reason
-}
-
-// classifyPhase is the SINGLE decision tree behind PhaseOf and PhaseReasonOf, so the phase and
-// its recorded reason can never drift (K3 P3 F3).
-func classifyPhase(p model.Pod, t model.Telemetry) (model.WorkloadPhase, string) {
-	if p.Phase == string(corev1.PodSucceeded) || p.Phase == string(corev1.PodFailed) {
-		return model.PhaseDraining, PhaseReasonDraining
-	}
-	if !p.Ready {
-		// Young + not ready => still warming; older + not ready => unknown/unhealthy.
-		if p.Age < 2*time.Minute {
-			return model.PhaseColdStarting, PhaseReasonColdStart
-		}
-		return model.PhaseUnknown, PhaseReasonUnknown
-	}
-	if appActivityUncertain(t) {
-		// Stale/error and invalid Present samples are unknown, not measured zero. They cannot
-		// support the cheap Idle classification even when request rate is otherwise low.
-		return model.PhaseWarm, PhaseReasonWarmUncertain
-	}
-	if !t.AppLevelPresent() {
-		// Ready, no APP-LEVEL signal: assume warm (rotating costs the warm-load). Keyed on
-		// AppLevelPresent (not any-signal), so a pod exporting only universal cAdvisor metrics
-		// stays Warm for its whole life instead of collapsing to Idle — the M-142 fix.
-		return model.PhaseWarm, PhaseReasonWarmNoApp
-	}
-	if appActivityMeasured(t) {
-		return model.PhaseWarm, PhaseReasonBusyMeasured
-	}
-	if !t.ReqRate.Usable() {
-		// Optional zero-valued signals do not prove the request path is idle. This is distinct
-		// from the no-app fallback above: some app telemetry exists, but it is insufficient to
-		// establish measured inactivity.
-		return model.PhaseWarm, PhaseReasonWarmUncertain
-	}
-	return model.PhaseIdle, PhaseReasonIdleMeasured
-}
-
-// appActivityUncertain identifies application activity inputs that cannot be interpreted as
-// measured inactivity. Absent optional signals are allowed; explicit Stale/Error and invalid
-// Present values are not. Prometheus normally types non-finite samples as Error, while the
-// finite check also protects direct/internal Telemetry producers.
-func appActivityUncertain(t model.Telemetry) bool {
-	for _, s := range []model.Signal{t.ReqRate, t.GPUUtil, t.QueueDepth, t.TokensPerSec} {
-		switch s.State {
-		case model.Absent:
-			continue
-		case model.Present:
-			if math.IsNaN(s.Value) || math.IsInf(s.Value, 0) || s.Value < 0 {
-				return true
-			}
-		default:
-			return true
-		}
-	}
-	return false
-}
-
-// appActivityMeasured applies only the existing request/GPU thresholds. Queue depth and token
-// throughput have no calibrated phase thresholds, so any positive measured value conservatively
-// vetoes Idle without assigning a new cost or phase vocabulary.
-func appActivityMeasured(t model.Telemetry) bool {
-	return (t.ReqRate.Usable() && t.ReqRate.Value > 0.001) ||
-		(t.GPUUtil.Usable() && t.GPUUtil.Value > 0.01) ||
-		(t.QueueDepth.Usable() && t.QueueDepth.Value > 0) ||
-		(t.TokensPerSec.Usable() && t.TokensPerSec.Value > 0)
 }

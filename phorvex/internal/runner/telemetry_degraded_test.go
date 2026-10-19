@@ -17,6 +17,7 @@ import (
 	v1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/sensorapi"
 )
 
 // telemetry_degraded_test.go — PHORVEXSEC-200 / M-113 (c)(d)(f): a whole-source outage is a
@@ -59,7 +60,7 @@ func TestSourceOutageLogsOnceAndSetsCondition(t *testing.T) {
 	src.err = errors.New("reqRate: 500\nconnCount: 500")
 	src.health = ingest.SourceHealth{Source: src.name, Total: 2, Failed: 2, Reason: model.ReasonSourceUnreachable}
 	for i := 0; i < 100; i++ {
-		m.observeSourceHealth(e, src.err)
+		m.observeSourceHealth(e, m.sensor().Telemetry(context.Background(), sensorapi.TelemetryRequest{Namespace: e.namespace}))
 	}
 	if errLines != 1 {
 		t.Fatalf("ERROR lines over 100 failed ticks = %d, want exactly 1 (old code: one per tick)", errLines)
@@ -81,8 +82,8 @@ func TestSourceOutageLogsOnceAndSetsCondition(t *testing.T) {
 	// (d) recovery → cleared, exactly one recovery line; a partial failure afterwards is not an outage.
 	src.err = nil
 	src.health = ingest.SourceHealth{Source: src.name, Total: 2, Failed: 0}
-	m.observeSourceHealth(e, nil)
-	m.observeSourceHealth(e, nil)
+	m.observeSourceHealth(e, m.sensor().Telemetry(context.Background(), sensorapi.TelemetryRequest{Namespace: e.namespace}))
+	m.observeSourceHealth(e, m.sensor().Telemetry(context.Background(), sensorapi.TelemetryRequest{Namespace: e.namespace}))
 	if infoLines != 1 {
 		t.Fatalf("recovery lines = %d, want exactly 1", infoLines)
 	}
@@ -99,7 +100,7 @@ func TestSourceOutageLogsOnceAndSetsCondition(t *testing.T) {
 	}
 	src.err = errors.New("reqRate: 500")
 	src.health = ingest.SourceHealth{Source: src.name, Total: 2, Failed: 1}
-	m.observeSourceHealth(e, src.err)
+	m.observeSourceHealth(e, m.sensor().Telemetry(context.Background(), sensorapi.TelemetryRequest{Namespace: e.namespace}))
 	if _, st := m.sourceOutageState(); st.Down || errLines != 1 {
 		t.Fatalf("a partial failure must not be an outage: down=%v errLines=%d", st.Down, errLines)
 	}

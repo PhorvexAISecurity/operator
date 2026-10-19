@@ -226,12 +226,20 @@ func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]mode
 	if r == nil || snap == nil {
 		return RefreshResult{}, false, fmt.Errorf("calibration snapshot is nil")
 	}
-	now := snap.Now
+	return r.ObserveFleet(fleetOf(snap), witness)
+}
+
+// ObserveFleet is ObserveSnapshot over the fleet the sensor observed.
+func (r *Runtime) ObserveFleet(f Fleet, witness map[string]model.PhysicsWitness) (RefreshResult, bool, error) {
+	if r == nil {
+		return RefreshResult{}, false, fmt.Errorf("calibration snapshot is nil")
+	}
+	now := f.Now
 	if now.IsZero() {
 		return RefreshResult{}, false, fmt.Errorf("calibration snapshot has no observation time")
 	}
-	nodes := NodesFromSnapshot(snap)
-	assets := AssetsFromSnapshot(snap, witness)
+	nodes := NodesFromFleet(f)
+	assets := AssetsFromFleet(f, witness)
 
 	r.mu.Lock()
 	if !r.lastSample.IsZero() && now.Before(r.lastSample.Add(r.config.SampleInterval)) {
@@ -287,7 +295,7 @@ func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]mode
 		Cadence:    EvaluateCadence(history, DefaultCadences, r.config.CoPercentile, r.config.DispPercentile, r.config.MinObservations, r.config.SaturationLimit),
 	}
 	r.tracker.ObserveScaleWithInvalid(joint.CoResidency, now, len(nodes)-joint.CoResidency.Clip.N)
-	r.tracker.ObserveScaleWithInvalid(joint.Dispersion, now, len(snap.Pods)-len(assets))
+	r.tracker.ObserveScaleWithInvalid(joint.Dispersion, now, len(f.Pods)-len(assets))
 	r.tracker.ObserveReadyDelay(ready, now)
 
 	r.mu.Lock()

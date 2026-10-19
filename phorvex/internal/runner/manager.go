@@ -25,7 +25,6 @@ import (
 
 	"github.com/go-logr/logr"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -54,8 +53,9 @@ import (
 	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/recon"
+	"github.com/phorvex/phorvex/internal/sensorapi"
+	"github.com/phorvex/phorvex/internal/sensorsvc"
 	"github.com/phorvex/phorvex/internal/slo"
 )
 
@@ -249,6 +249,9 @@ type Manager struct {
 	Optimizer                 decision.Optimizer
 	Audit                     *audit.Logger
 	MetricsSource             ingest.MetricsSource
+	// Sensor observes the cluster and its telemetry. Nil runs the in-process sensor
+	// over this manager's readers, PromURL and MetricsSource.
+	Sensor sensorapi.Sensor
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
@@ -313,7 +316,9 @@ type Manager struct {
 	// logged ONCE on transition (down / recovered), surfaced as a policy condition and
 	// counted — never one ERROR line per tick (PHORVEXSEC-200 / M-113, P-LOUD-OUTAGE).
 	degraded map[string]*sourceOutage
-	policies map[string]*policyEntry
+	// telemetrySource names the source of the last telemetry read.
+	telemetrySource string
+	policies        map[string]*policyEntry
 	// untrustedEvents is the last tick's count of SecurityEvents that supplied no belief
 	// evidence because their creator was not an allowlisted detector (M-94). It exists so the
 	// stream is reported ONCE per transition instead of every tick.
@@ -900,6 +905,33 @@ func (m *Manager) brain() brainapi.Brain {
 	return brainsvc.NewLocal(m.Optimizer, m.MathLab)
 }
 
+// sensor returns the sensor the tick observes the cluster through.
+func (m *Manager) sensor() sensorapi.Sensor {
+	if m.Sensor != nil {
+		return m.Sensor
+	}
+	return &sensorsvc.Local{Client: m.Client, OwnershipReader: m.OwnershipReader, BoundaryReader: m.BoundaryReader,
+		PromURL: m.PromURL, PCIeClasses: m.PCIeClasses, Metrics: m.MetricsSource}
+}
+
+// selectorString is a policy selector in the form sensorapi.Scope carries; nil
+// selects every Pod.
+func selectorString(sel labels.Selector) string {
+	if sel == nil {
+		return ""
+	}
+	return sel.String()
+}
+
+// observedContext is a Pod's graph and event context. The sensor builds it for
+// every Pod a due policy selects; a Pod it lacks has no neighbours and no events.
+func observedContext(obs *sensorapi.Observation, p *model.Pod) sensorapi.PodContext {
+	if c, ok := obs.Context[p.Namespace+"/"+p.Name]; ok {
+		return c
+	}
+	return sensorapi.PodContext{Neighbors: []model.NeighborRef{}, Events: []model.SecurityEventInfo{}, InfectionFrontier: 1}
+}
+
 // DrainLifecycle completes every enqueued ownership transition. It runs at the top of each
 // tick, INCLUDING ticks with no due policy, so a removal is never stranded behind an idle
 // tenant. This is the point at which removal is complete; the audit records that point,
@@ -1277,19 +1309,13 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 		return tickNoSnapshot
 	}
 
-	var ownerReader client.Reader
-	if actuatorUsesNativeRotate(m.Actuator) {
-		ownerReader = m.OwnershipReader
+	scopes := make([]sensorapi.Scope, 0, len(due))
+	for _, row := range due {
+		scopes = append(scopes, sensorapi.Scope{Namespace: row.entry.namespace, Selector: selectorString(row.entry.selector)})
 	}
-	snap, err := ingest.CollectSnapshotForRotationTargetsWithReceiptReader(ctx, m.Client, now, genericAssetValue, ownerReader, m.BoundaryReader, func(p *corev1.Pod) bool {
-		for _, row := range due {
-			e := row.entry
-			if p.Namespace == e.namespace && (e.selector == nil || e.selector.Matches(labels.Set(p.Labels))) {
-				return true
-			}
-		}
-		return false
-	})
+	// The sensor reads owner evidence only for the due policies' Pods, and only when
+	// native rotation consumes it.
+	obs, err := m.sensor().Observe(ctx, sensorapi.ObserveRequest{Now: now, Scopes: scopes, ResolveOwners: actuatorUsesNativeRotate(m.Actuator)})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		if ctx.Err() != nil {
@@ -1301,25 +1327,18 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 		return tickInterrupted
 	}
 
-	m.observeEventTrust(snap.Events)
-
-	// GPU-half physics on the LIVE tick (not just --scan): fill the DCGM-via-Prometheus witness so
-	// VRAMFraction/SMOccupancy/LinkBandwidth/GPUPresent feed the live decision engine when a Prometheus
-	// feed is wired. Honest-absent (leaves the neutral witness) when PromURL is empty or DCGM has no data.
-	if m.PromURL != "" {
-		ingest.PopulateGPUWitness(ctx, snap, m.PromURL, m.PCIeClasses)
-	}
+	m.observeEventTrust(obs.Events)
 
 	// Complete post-action feedback before making this tick's decisions. This is
 	// non-blocking: recovery is measured from the Kubernetes snapshots the runner
 	// already collects, never by waiting inside Actuate.
-	m.observeReadyRotations(snap)
+	m.observeReadyRotations(obs)
 
-	// Derive the full-cluster witness once. It is shared by every tenant and by the
-	// shadow calibrator; repeated derivation would make refresh cost grow with tenant count.
-	_, physicsByKey := platform.Derive(snap)
+	// The sensor derives the full-cluster witness once. It is shared by every tenant and
+	// by the shadow calibrator; repeated derivation would make refresh cost grow with
+	// tenant count.
 	if calibrationDue {
-		if _, _, err := m.Calibration.ObserveSnapshot(snap, physicsByKey); err != nil {
+		if _, _, err := m.Calibration.ObserveFleet(calib.Fleet{Now: obs.Now, Pods: obs.Pods, Nodes: obs.Nodes}, obs.Physics); err != nil {
 			m.Log.Error(err, "shadow calibration export failed; metrics and in-memory result remain available")
 		}
 	}
@@ -1334,7 +1353,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 		if !m.ownerCurrent(row.owner, row.epoch) {
 			continue
 		}
-		m.processTenantWithPhysicsObserved(ctx, snap, row.entry, &killObservation, physicsByKey)
+		m.processTenantObserved(ctx, obs, row.entry, &killObservation)
 		metrics.SetKillSwitch(killObservation.Engaged)
 		if ctx.Err() != nil {
 			return tickInterrupted
@@ -1359,17 +1378,6 @@ func (m *Manager) publishRLSMetrics() {
 	for tenant, n := range pendingByTenant {
 		metrics.SetRotationsPending(tenant, n)
 	}
-}
-
-// genericAssetValue is the tenant-INDEPENDENT pod value used to weight the shared
-// blast-radius graph (per-tenant label weights are applied later in the context
-// provider). It values mounted secrets and stateful pods, with a small baseline.
-func genericAssetValue(p *model.Pod) float64 {
-	v := 0.1 + 0.8*float64(len(p.MountedSecrets))
-	if p.Stateful {
-		v += 0.3
-	}
-	return v
 }
 
 // rotationObservationKey keys a pending rotation by its OWNER (M-140) so two policies
@@ -1453,7 +1461,7 @@ func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.Workloa
 	return true
 }
 
-func phoenixRotationReceiptConfirmed(p pendingRotation, snap *ingest.Snapshot) bool {
+func phoenixRotationReceiptConfirmed(p pendingRotation, snap *sensorapi.Observation) bool {
 	if p.phoenixEventName == "" || p.phoenixEventUID == "" || p.phoenixTargetUID == "" || snap == nil || !snap.PhoenixReceiptInventoryComplete {
 		return false
 	}
@@ -1539,7 +1547,7 @@ func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, a
 // recovery produces one truthful right-censored RLS outcome (C_flow=2). When the
 // disruption ledger is enabled, tracking continues so an outage lasting longer
 // than that modelling window is not permanently undercounted at 800 seconds.
-func (m *Manager) observeReadyRotations(snap *ingest.Snapshot) {
+func (m *Manager) observeReadyRotations(snap *sensorapi.Observation) {
 	brain := m.brain()
 	costObserver := brain.LearnsRotationCost()
 	if snap == nil || len(m.pendingRotations) == 0 {
@@ -1843,54 +1851,6 @@ func (m *Manager) recordRotationObservation(p pendingRotation, outcome string, e
 	}
 }
 
-// buildInfectedSet (P-CONTEXT live-beta Tier-1) reconstructs the per-tick infected set:
-// pods with a high/critical TargetsPod event (an exploit+ foothold). It is a lossy
-// LOWER bound (under-counts — the safe direction, never inflates cover). Empty => no
-// frontier lift => byte-identical to the pre-P-CONTEXT decision.
-func buildInfectedSet(snap *ingest.Snapshot) map[string]bool {
-	inf := map[string]bool{}
-	for key, evs := range snap.EventByPod {
-		for i := range evs {
-			// A copied Pod-bound bearer may be usable off-Pod. It identifies an
-			// exact source for credential response, but does not establish an
-			// exploit foothold on that Pod or its graph neighbors.
-			if evs[i].Type == model.AttackVectorPodBoundAPIAuth {
-				continue
-			}
-			if isHighSeverity(evs[i].ThreatLevel) {
-				inf[key] = true
-				break
-			}
-		}
-	}
-	return inf
-}
-
-func isHighSeverity(tl string) bool {
-	switch tl {
-	case "high", "High", "HIGH", "critical", "Critical", "CRITICAL":
-		return true
-	}
-	return false
-}
-
-// infectionFrontier returns 1 + kappa (kappa=0.5) when any graph-neighbor is in the
-// infected set, else 1.0 (honest-absent).
-func infectionFrontier(nbKeys []string, infected map[string]bool) float64 {
-	for _, nb := range nbKeys {
-		if infected[nb] {
-			return 1.5
-		}
-	}
-	return 1.0
-}
-
-func (m *Manager) processTenant(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool) {
-	_, physicsByKey := platform.Derive(snap)
-	observation := legacyKillSwitchObservation(killEngaged)
-	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
-}
-
 // creditCadence advances only the identity admitted in this tick. An in-flight
 // predecessor must never stamp its admission time onto a replacement UID.
 func (m *Manager) creditCadence(ctx context.Context, e *policyEntry, admittedAt time.Time) {
@@ -1904,11 +1864,6 @@ func (m *Manager) creditCadence(ctx context.Context, e *policyEntry, admittedAt 
 	}
 }
 
-func (m *Manager) processTenantWithPhysics(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killEngaged bool, physicsByKey map[string]model.PhysicsWitness) {
-	observation := legacyKillSwitchObservation(killEngaged)
-	m.processTenantWithPhysicsObserved(ctx, snap, e, &observation, physicsByKey)
-}
-
 // actuatorUsesNativeRotate reports whether rotate reaches the native eviction
 // handler for the configured actuator. Hybrid routes rotate to native so it
 // must apply the same owner-identity feasibility law as the native backend.
@@ -1919,7 +1874,8 @@ func actuatorUsesNativeRotate(a actuator.Actuator) bool {
 	return actuator.RouteFor(actuator.Backend(a.Name()), model.ActionRotate) == actuator.BackendNative
 }
 
-func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *ingest.Snapshot, e *policyEntry, killObservation *KillSwitchObservation, physicsByKey map[string]model.PhysicsWitness) {
+// processTenantObserved runs one policy's tick on the sensor's observation.
+func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Observation, e *policyEntry, killObservation *KillSwitchObservation) {
 	if ctx.Err() != nil {
 		return
 	}
@@ -1968,17 +1924,16 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
-	pol.TickID = deterministicTraceID("tick", snap.Now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
+	pol.TickID = deterministicTraceID("tick", obs.Now.UTC().Format(time.RFC3339Nano), pol.PolicyUID, pol.Tenant)
 
-	// P-PHYSICS (UCW): the caller derives one discovered witness map for the shared snapshot.
-	// Honest-absent (NeutralPhysics) when no scan answers.
-	infected := buildInfectedSet(snap) // P-CONTEXT live-beta Tier-1 frontier
-	evidenceEvents := ingest.EvidenceEvents(snap.Events)
+	// P-PHYSICS (UCW): the sensor derives one discovered witness map for the shared
+	// observation. Honest-absent (NeutralPhysics) when no scan answers.
+	evidenceEvents := obs.EvidenceEvents
 
 	// Select this tenant's pods.
 	var selPods []*model.Pod
-	for i := range snap.Pods {
-		p := &snap.Pods[i]
+	for i := range obs.Pods {
+		p := &obs.Pods[i]
 		if p.Namespace != e.namespace {
 			continue
 		}
@@ -1993,15 +1948,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		names = append(names, p.Name)
 	}
 	tele := map[string]model.Telemetry{}
-	if m.MetricsSource != nil {
+	if read := m.sensor().Telemetry(ctx, sensorapi.TelemetryRequest{Namespace: e.namespace, Pods: names}); read.Configured {
 		// M-130/M-113: use the BEST-EFFORT map even on a partial scrape failure (dropping the
 		// whole tick's telemetry was the silent-outage bug). A source failure is surfaced as a
 		// metric + an error log, and per-signal State=Error keeps absence distinguishable.
-		t, err := m.MetricsSource.PodMetrics(ctx, e.namespace, names)
-		if t != nil {
-			tele = t
+		if read.Telemetry != nil {
+			tele = read.Telemetry
 		}
-		m.observeSourceHealth(e, err)
+		m.observeSourceHealth(e, read)
 		if ctx.Err() != nil {
 			return
 		}
@@ -2039,35 +1993,22 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			Pod:          p.Name,
 			StartedAt:    p.StartedAt,
 			Fingerprints: model.ExposureFingerprints(*p),
-		}, snap.Now)
+		}, obs.Now)
 		keep[exposure.SlotKey(pol.Owner(), p.Namespace, p.Name)] = struct{}{}
 		failureKeep[p.Namespace+"\x00"+p.UID] = struct{}{}
-		exp := m.Clock.Since(pol.Owner(), p.Namespace, p.Name, snap.Now)
+		exp := m.Clock.Since(pol.Owner(), p.Namespace, p.Name, obs.Now)
 		// Per-action emit intent (M-23): the most recent EMISSION per variable, stamped at the
 		// emit boundary before the observed epoch catches up. The guard takes min(exp, intent).
-		intent := m.Intents.Since(pol.Owner(), p.Namespace, p.Name, snap.Now)
+		intent := m.Intents.Since(pol.Owner(), p.Namespace, p.Name, obs.Now)
 
-		events := append([]model.SecurityEventInfo{}, snap.EventByPod[p.Namespace+"/"+p.Name]...)
-		nbKeys := snap.Graph.Neighbors(p.Namespace, p.Name)
-		neighbors := make([]model.NeighborRef, 0, len(nbKeys))
-		for _, nb := range nbKeys {
-			for _, ne := range snap.EventByPod[nb] {
-				ne.TargetsPod = false
-				events = append(events, ne)
-			}
-			val := 0.0
-			if np, ok := snap.PodByKey[nb]; ok {
-				val = genericAssetValue(np)
-			}
-			neighbors = append(neighbors, model.NeighborRef{Key: nb, Value: val})
-		}
-
-		ph, okPh := physicsByKey[p.Namespace+"/"+p.Name]
+		podContext := observedContext(obs, p)
+		ph, okPh := obs.Physics[p.Namespace+"/"+p.Name]
 		if !okPh {
 			ph = model.NeutralPhysics()
 		}
 		viewPod := *p
-		viewPod.RouteServiceReady = declaredRouteServiceExists(p, snap.Services)
+		viewPod.RouteServiceReady = declaredRouteServiceExists(p, obs.Services)
+		phase, phaseReason := model.ClassifyPhase(*p, t)
 		if pol.P99Ms > 0 && !t.P99Ms.Usable() {
 			// SLO latency headroom unmeasurable: the gate is skipped (never blocks, P-NO-FREEZE)
 			// and counted, instead of passing as a silent full-headroom 1.0 (B-3).
@@ -2076,17 +2017,17 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		views = append(views, &model.WorkloadView{
 			Pod:                viewPod,
 			Telemetry:          t,
-			Phase:              ingest.PhaseOf(*p, t),
-			PhaseReason:        ingest.PhaseReasonOf(*p, t),
-			BlastRadius:        snap.Graph.BlastRadius(p.Namespace, p.Name),
-			NeighborCount:      snap.Graph.NeighborCount(p.Namespace, p.Name),
-			Neighbors:          neighbors,
-			Events:             events,
+			Phase:              phase,
+			PhaseReason:        phaseReason,
+			BlastRadius:        podContext.BlastRadius,
+			NeighborCount:      podContext.NeighborCount,
+			Neighbors:          podContext.Neighbors,
+			Events:             podContext.Events,
 			OutcomeEvents:      evidenceEvents,
 			ExposureByVariable: exp,
 			IntentByVariable:   intent,
 			Physics:            ph,
-			InfectionFrontier:  infectionFrontier(nbKeys, infected),
+			InfectionFrontier:  podContext.InfectionFrontier,
 		})
 	}
 	// T1-E: build ONE per-tick capability witness (the single predicate home) and use it
@@ -2100,8 +2041,8 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	if vocabulary.Known {
 		absent = vocabulary.NotInstallable
 	}
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), absent, m.Authz, m.Actuator).
-		WithCodeExec(m.CodeExec, snap.NamespaceLabels).
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(obs.Pods, obs.Nodes, obs.Services), absent, m.Authz, m.Actuator).
+		WithCodeExec(m.CodeExec, obs.NamespaceLabels).
 		WithOperatorNamespace(m.OperatorNamespace).
 		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
@@ -2110,7 +2051,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
 	if brain.GatesCandidates() {
 		m.Failures.retain(pol.Owner(), failureKeep)
-		failureNow := snap.Now
+		failureNow := obs.Now
 		if m.FailureNow != nil {
 			failureNow = m.FailureNow()
 		}
@@ -2122,7 +2063,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// Standing route state belongs to the policy tick, not to a selected move.
 	// Observe it before selection so zero-Pod, zero-selection and rejected ticks
 	// all retain the same owned configuration evidence.
-	namespaceObservation := snap.NamespaceDryRun[e.namespace]
+	namespaceObservation := obs.NamespaceDryRun[e.namespace]
 	if namespaceObservation.Cause == "" {
 		namespaceObservation = actuationbrake.Namespace(nil)
 	}
@@ -2164,7 +2105,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// inputs before the engine runs and the raw decisions right after; the recording never
 	// changes a decision and drops its own snapshot rather than delaying the tick.
 	decisions, recording, err := brain.Decide(brainapi.DecideRequest{Views: views, Policy: pol, Gate: gate,
-		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: snap.Now}})
+		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: obs.Now}})
 	defer recording.Close()
 	if ctx.Err() != nil {
 		return
@@ -2187,7 +2128,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 			"tenant", pol.Tenant, "optimizer", brain.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
-		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), snap.Now)
+		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), obs.Now)
 		if provenanceErr != nil {
 			m.Log.Error(provenanceErr, "rejected decision parameter provenance unavailable", "tenant", pol.Tenant)
 			return
@@ -2197,7 +2138,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		}
 		inventory := outcomeInventory(evidenceEvents, pol)
 		if inventory != nil {
-			m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
+			m.Audit.RecordOutcomeInventory(pol.Tenant, obs.Now, inventory)
 		}
 		if len(rejected) > 0 || inventory != nil {
 			m.updateExistentialStatus(ctx, e, rejected, inventory)
@@ -2207,13 +2148,13 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 		m.Clock.RetainOwner(pol.Owner(), keep)
 		m.Intents.RetainOwner(pol.Owner(), keep) // M-23: GC emit intent with the exposure clock
 		brain.RetainStageClock(pol.Owner(), keep)
-		m.creditCadence(ctx, e, snap.Now)
+		m.creditCadence(ctx, e, obs.Now)
 		return
 	}
 	if shadowAvailable {
 		availabilityViolations, sloViolations := shadowSafetyViolations(shadowDecisions, views, pol)
 		m.Calibration.ObserveValidation(calib.SelectionComparison{
-			At:               snap.Now,
+			At:               obs.Now,
 			Tenant:           pol.Tenant,
 			Production:       selectedDecisionKeys(decisions),
 			Shadow:           selectedDecisionKeys(shadowDecisions),
@@ -2270,7 +2211,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	// No effect has been attempted yet. Stop promptly while preparing the
 	// immutable reporting inputs rather than carrying an expired tick into
 	// actuation. After an attempt, the audit loop below must drain completely.
-	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, evidenceEvents, snap.Now)
+	representationInputs, historyInputs, complete := m.prepareRepresentationSnapshots(ctx, decisions, pol, versions, reportClaim, representationInventory, evidenceEvents, obs.Now)
 	if !complete {
 		return
 	}
@@ -2300,7 +2241,7 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	finalKillObservation := killState.observation
 	finalNamespaceObservation := brakeState.namespace
 
-	assessmentInput := colocationInput(snap, e)
+	assessmentInput := colocationInput(obs, e)
 	selected, infeasible := 0, 0
 	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
@@ -2355,14 +2296,14 @@ func (m *Manager) processTenantWithPhysicsObserved(ctx context.Context, snap *in
 	brain.RetainStageClock(pol.Owner(), keep)
 	inventory := outcomeInventory(evidenceEvents, pol)
 	if inventory != nil {
-		m.Audit.RecordOutcomeInventory(pol.Tenant, snap.Now, inventory)
+		m.Audit.RecordOutcomeInventory(pol.Tenant, obs.Now, inventory)
 	}
 	m.updateExistentialStatus(ctx, e, decisions, inventory)
 	actionsSupport.preparation = currentPreparation
 	actionsSupport.namespaceDryRun = finalNamespaceObservation
 	m.updateStatusObserved(ctx, e, len(views), selected, 0, finalKillObservation, time.Now(), actionsSupport)
 
-	m.creditCadence(ctx, e, snap.Now)
+	m.creditCadence(ctx, e, obs.Now)
 }
 
 func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) bool {
@@ -3598,19 +3539,16 @@ type sourceOutage struct {
 // check, not an inference from "all signals errored"), logs ERROR exactly once when the source
 // goes down and once when it recovers, and keeps the outage state for updateStatus to publish
 // as the TelemetryDegraded condition. What absence means for phase or cost is T1-C's table.
-func (m *Manager) observeSourceHealth(e *policyEntry, err error) {
-	if m.MetricsSource == nil {
-		return
-	}
-	source := m.MetricsSource.Name()
-	health := ingest.SourceHealth{Source: source}
-	if hr, ok := m.MetricsSource.(ingest.HealthReporter); ok {
-		health = hr.LastHealth()
-	} else if err != nil {
-		health = ingest.SourceHealth{Source: source, Total: 1, Failed: 1}
+func (m *Manager) observeSourceHealth(e *policyEntry, read sensorapi.TelemetryResult) {
+	health := read.Health
+	source := health.Source
+	var err error
+	if read.Error != "" {
+		err = errors.New(read.Error)
 	}
 	now := time.Now()
 	m.mu.Lock()
+	m.telemetrySource = source
 	if m.degraded == nil {
 		m.degraded = map[string]*sourceOutage{}
 	}
@@ -3663,17 +3601,15 @@ func failedSignals(err error) []string {
 	return out
 }
 
-// sourceOutageState returns a copy of the configured source's outage state.
+// sourceOutageState returns a copy of the telemetry source's outage state, as of
+// the last telemetry read.
 func (m *Manager) sourceOutageState() (string, sourceOutage) {
-	if m.MetricsSource == nil {
-		return "", sourceOutage{}
-	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	if st := m.degraded[m.MetricsSource.Name()]; st != nil {
-		return m.MetricsSource.Name(), *st
+	if st := m.degraded[m.telemetrySource]; st != nil {
+		return m.telemetrySource, *st
 	}
-	return m.MetricsSource.Name(), sourceOutage{}
+	return m.telemetrySource, sourceOutage{}
 }
 
 // observeEventTrust reports the SecurityEvent stream's trust verdicts (PHORVEXSEC-193 / M-94).

@@ -6,6 +6,7 @@ package calib
 
 import (
 	"sort"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -16,6 +17,18 @@ import (
 // snapshot.go is the ONLY file in this package that knows about cluster types. Everything else
 // works on plain observations, so the calibration arithmetic can be tested and reviewed without
 // a cluster, and so this package has exactly one seam to audit for coupling.
+
+// Fleet is the part of a cluster observation calibration samples: the Pods and
+// Nodes at one instant.
+type Fleet struct {
+	Now   time.Time
+	Pods  []model.Pod
+	Nodes []model.NodeInfo
+}
+
+func fleetOf(snap *ingest.Snapshot) Fleet {
+	return Fleet{Now: snap.Now, Pods: snap.Pods, Nodes: snap.Nodes}
+}
 
 func isRunningCalibrationPod(p *model.Pod) bool {
 	return p != nil && p.Phase == string(corev1.PodRunning)
@@ -31,10 +44,15 @@ func NodesFromSnapshot(snap *ingest.Snapshot) []NodeObservation {
 	if snap == nil {
 		return nil
 	}
+	return NodesFromFleet(fleetOf(snap))
+}
+
+// NodesFromFleet is NodesFromSnapshot over the fleet the sensor observed.
+func NodesFromFleet(f Fleet) []NodeObservation {
 	tenants := map[string]map[string]struct{}{}
 	pods := map[string]int{}
-	for i := range snap.Pods {
-		p := &snap.Pods[i]
+	for i := range f.Pods {
+		p := &f.Pods[i]
 		if !isRunningCalibrationPod(p) || p.Node == "" {
 			continue // unscheduled: belongs to no node's tenancy yet
 		}
@@ -45,9 +63,9 @@ func NodesFromSnapshot(snap *ingest.Snapshot) []NodeObservation {
 		pods[p.Node]++
 	}
 
-	out := make([]NodeObservation, 0, len(snap.Nodes))
-	for i := range snap.Nodes {
-		n := &snap.Nodes[i]
+	out := make([]NodeObservation, 0, len(f.Nodes))
+	for i := range f.Nodes {
+		n := &f.Nodes[i]
 		out = append(out, NodeObservation{
 			Name:        n.Name,
 			Namespaces:  len(tenants[n.Name]),
@@ -72,9 +90,14 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 	if snap == nil {
 		return nil
 	}
+	return AssetsFromFleet(fleetOf(snap), witness)
+}
+
+// AssetsFromFleet is AssetsFromSnapshot over the fleet the sensor observed.
+func AssetsFromFleet(f Fleet, witness map[string]model.PhysicsWitness) []AssetObservation {
 	tenants := map[string]map[string]struct{}{}
-	for i := range snap.Pods {
-		p := &snap.Pods[i]
+	for i := range f.Pods {
+		p := &f.Pods[i]
 		if !isRunningCalibrationPod(p) || p.Node == "" {
 			continue
 		}
@@ -84,9 +107,9 @@ func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsW
 		tenants[p.Node][p.Namespace] = struct{}{}
 	}
 
-	out := make([]AssetObservation, 0, len(snap.Pods))
-	for i := range snap.Pods {
-		p := &snap.Pods[i]
+	out := make([]AssetObservation, 0, len(f.Pods))
+	for i := range f.Pods {
+		p := &f.Pods[i]
 		if !isRunningCalibrationPod(p) {
 			continue
 		}

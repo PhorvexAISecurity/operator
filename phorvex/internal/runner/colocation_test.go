@@ -26,14 +26,14 @@ func TestColocationJoinsPolicySelectorAndKeepsDecisionBytes(t *testing.T) {
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "a"}, Spec: v1alpha1.PhorvexPolicySpec{Tenant: "A", Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "a"}}}},
 			{ObjectMeta: metav1.ObjectMeta{Namespace: "b"}, Spec: v1alpha1.PhorvexPolicySpec{Tenant: "B", Selector: metav1.LabelSelector{MatchLabels: map[string]string{"app": "b"}}}},
 		}}
-	in := colocationInput(snap, e)
+	in := colocationInput(observationOf(snap), e)
 	in.Target = p
 	in.TargetKnown = true
 	if a := recon.AssessColocation(in); a.State != "present" {
 		t.Fatalf("joined inventory: %+v", a)
 	}
 	e.spec.Trust.PeerPolicies = []string{"B"}
-	in = colocationInput(snap, e)
+	in = colocationInput(observationOf(snap), e)
 	in.Target = p
 	in.TargetKnown = true
 	if a := recon.AssessColocation(in); a.State != "absent" {

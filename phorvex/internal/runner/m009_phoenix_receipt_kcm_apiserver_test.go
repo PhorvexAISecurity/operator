@@ -183,7 +183,7 @@ func TestM009ActualNativeReceiptSnapshotRunnerAndReplicaSetController(t *testing
 		snapshot = current
 		return true, nil
 	})
-	manager.observeReadyRotations(snapshot)
+	manager.observeReadyRotations(observationOf(snapshot))
 	if len(opt.observations) != 1 || len(manager.pendingRotations) != 0 {
 		t.Fatalf("exact native request/replacement did not resolve runner: observations=%v pending=%d", opt.observations, len(manager.pendingRotations))
 	}
