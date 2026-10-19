@@ -22,10 +22,10 @@ package actuator
 
 import (
 	"context"
-	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -103,29 +103,8 @@ func (h *HybridActuator) EnsurePolicy(ctx context.Context, target TenantTarget) 
 	return h.native.EnsurePolicy(ctx, target)
 }
 
-// RoutePreparation is local to one runner preparation call. It cannot retain a
-// refusal from another policy, namespace, generation, or tick.
-type RoutePreparation struct {
-	PhoenixErr     error
-	NativeErr      error
-	PhoenixSkipped bool
-	NativeSkipped  bool
-}
-
-// ForAction reports the preparation result for the backend that will dispatch
-// this action. The caller must check it before attempting Actuate.
-func (p RoutePreparation) ForAction(a model.Action) error {
-	if RouteFor(BackendHybrid, a) == BackendPhoenix {
-		if p.PhoenixSkipped {
-			return fmt.Errorf("Phoenix route was not prepared for action %q", a)
-		}
-		return p.PhoenixErr
-	}
-	if p.NativeSkipped {
-		return fmt.Errorf("native route was not prepared for action %q", a)
-	}
-	return p.NativeErr
-}
+// RoutePreparation is defined in internal/actuatorapi.
+type RoutePreparation = actuatorapi.RoutePreparation
 
 // PrepareRoutes prepares both backends independently. An unsupported Phoenix
 // selector leaves native actions available, while a Phoenix-routed action sees

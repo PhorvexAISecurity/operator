@@ -26,7 +26,7 @@ func TestDefaultKVMigrationExcludedBeforeDecisionWhileKVResetRemainsEligible(t *
 	native.JournalNamespace = "phorvex-system"
 	native.SetServingSecurity(security)
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: "vllm", Name: "serving", UID: "exact-pod-uid", Ready: true, ServingEndpointReady: true}}
-	witness := BuildWitness(t.Context(), BuildIndex(nil, nil, nil), nil, nil, native).WithPolicyIdentity("vllm-defense", "policy-uid")
+	witness := BuildWitness(t.Context(), BuildIndex(nil, nil, nil), nil, nil, localActuator(native)).WithPolicyIdentity("vllm-defense", "policy-uid")
 	reason := witness.Eligible(view, model.ActionKVMigrateInvalidate, []string{"session-cache"})
 	if reason == nil || !reason.Excluded || reason.Kind != ReasonCapability || reason.Detail != actuator.ReasonKVMigrationConnectorUnavailable {
 		t.Fatalf("migration candidate was not excluded before decision: %+v", reason)

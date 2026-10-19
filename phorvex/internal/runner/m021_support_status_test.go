@@ -36,7 +36,7 @@ import (
 // backendWitness wires a REAL selected actuator into the REAL per-tick witness — exactly
 // what the production tick does with m.Actuator.
 func backendWitness(fleet []model.Pod, act actuator.Actuator) capability.Witness {
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, act)
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, localActuator(act))
 }
 
 func phoenixBackend() actuator.Actuator {
@@ -134,7 +134,7 @@ func TestNonAIActionsConsultTheBackend(t *testing.T) {
 				"app": "web", "phorvex.ai/route-key": "old",
 			}}
 			query = []*model.WorkloadView{{Pod: routePod}}
-			witness = capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{routePod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, backend)
+			witness = capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{routePod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, localActuator(backend))
 		}
 		rep := capabilityGaps(pol, query, witness)
 		if len(rep.gaps) != 1 || rep.gaps[0].action != a {
@@ -192,7 +192,7 @@ func TestSupportedActionsRemainSupported(t *testing.T) {
 	service := ingest.ServiceInfo{Namespace: "ns", Name: "app-route", Selector: map[string]string{
 		"app": "web", "phorvex.ai/route-key": "old",
 	}}
-	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, backend)
+	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod, peer}, nil, []ingest.ServiceInfo{service}), nil, nil, localActuator(backend))
 	rep := capabilityGaps(pol, views, witness)
 	if len(rep.gaps) != 0 {
 		t.Fatalf("native implements configured kv-reset, route-rotate and rotate; want no gaps, got %+v", rep.gaps)
@@ -427,7 +427,7 @@ func TestBackendResolvedOnceAndShared(t *testing.T) {
 	pod := model.Pod{Namespace: "ns", Name: "p", HasGPU: true, ServingEndpointReady: true}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}},
-		capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, nil, m.Actuator))
+		capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, nil, localActuator(m.Actuator)))
 	if len(rec.asked) == 0 {
 		t.Fatal("the support check never consulted m.Actuator")
 	}
@@ -463,7 +463,7 @@ func TestM093ExplicitLegacyModeIsVisibleInActionsSupported(t *testing.T) {
 	}
 	native.SetServingSecurity(legacy)
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: "tenant", Name: "model-0", UID: "pod-uid", ServiceAccount: "model-sa", ModelID: "model", Ready: true, ServingDeclared: true, ServingEndpointReady: true}}
-	witness := capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{view.Pod}, nil, nil), nil, nil, native).WithPolicyIdentity("policy", "policy-uid")
+	witness := capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{view.Pod}, nil, nil), nil, nil, localActuator(native)).WithPolicyIdentity("policy", "policy-uid")
 	report := capabilityGaps(model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}, []*model.WorkloadView{view}, witness)
 	manager, entry := newEntryManager(t, "legacy-serving")
 	var status actionsSupportStatus

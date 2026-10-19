@@ -11,14 +11,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// RecoveryEvent describes one administrative attempt, including refusals and partial effects.
-type RecoveryEvent struct {
-	Receipt, Kind, Phase, Tenant, PolicyNamespace, PolicyName, PolicyUID, TargetName, TargetUID, Outcome, Effect string
-	Err                                                                                                          error
-}
+// RecoveryEvent is defined in internal/actuatorapi.
+type RecoveryEvent = actuatorapi.RecoveryEvent
 
 // RecoverOperations reads only the protected administrative journal. It never scans
 // tenant labels for candidates. Each record is revalidated against live API objects.

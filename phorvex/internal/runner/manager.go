@@ -34,6 +34,8 @@ import (
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
+	"github.com/phorvex/phorvex/internal/actuatorsvc"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/brainapi"
@@ -224,7 +226,7 @@ type Manager struct {
 	// reporting never delays or suppresses defensive dispatch.
 	ScopedOutcomeProducer interface {
 		decision.PersistenceObservationAuthority
-		RecordNativeRotate(model.Policy, *model.WorkloadView, actuator.Request, actuator.Result, time.Time) bool
+		RecordNativeRotate(model.Policy, *model.WorkloadView, actuatorapi.Request, actuatorapi.Result, time.Time) bool
 		Drain(int) []model.ScopedOutcomeDelivery
 	}
 	// LossHistoryReader performs optional completed-disclosure authority and
@@ -252,6 +254,9 @@ type Manager struct {
 	// Sensor observes the cluster and its telemetry. Nil runs the in-process sensor
 	// over this manager's readers, PromURL and MetricsSource.
 	Sensor sensorapi.Sensor
+	// ActuatorService acts on the cluster. Nil runs the in-process actuator over
+	// Actuator, QuarantineCapacity and BoundaryReader.
+	ActuatorService actuatorapi.Actuator
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
 	PromURL  string
@@ -600,9 +605,9 @@ func NewManagerWithBackend(c client.Client, log logr.Logger, res actuator.Backen
 // (the Phoenix default) resolved in silence and a typo resolved the same silent way.
 func backendPurpose(b actuator.Backend) string {
 	switch b {
-	case actuator.BackendNative:
+	case actuatorapi.BackendNative:
 		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
-	case actuator.BackendHybrid:
+	case actuatorapi.BackendHybrid:
 		return "native for policy-bounded rotate and AI-native moves; Phoenix for quarantine"
 	default:
 		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
@@ -905,6 +910,27 @@ func (m *Manager) brain() brainapi.Brain {
 	return brainsvc.NewLocal(m.Optimizer, m.MathLab)
 }
 
+// actuation returns the actuator the tick acts through, nil when none is wired:
+// ActuatorService when set, else the in-process actuator over this manager's
+// backend, quarantine-capacity ledger and boundary reader.
+func (m *Manager) actuation() actuatorapi.Actuator {
+	if m.ActuatorService != nil {
+		return m.ActuatorService
+	}
+	if m.Actuator == nil {
+		return nil
+	}
+	return &actuatorsvc.Local{Actuator: m.Actuator, Capacity: m.QuarantineCapacity, Reader: m.BoundaryReader, OperatorNamespace: m.OperatorNamespace}
+}
+
+// quarantineCapacity reports the namespace's retained-quarantine capacity.
+func (m *Manager) quarantineCapacity(ctx context.Context, namespace string) actuatorapi.QuarantineCapacity {
+	if act := m.actuation(); act != nil {
+		return act.QuarantineCapacity(ctx, namespace)
+	}
+	return actuatorapi.QuarantineCapacity{}
+}
+
 // sensor returns the sensor the tick observes the cluster through.
 func (m *Manager) sensor() sensorapi.Sensor {
 	if m.Sensor != nil {
@@ -964,8 +990,7 @@ func (m *Manager) DrainLifecycle() {
 			continue
 		}
 		stores := 0
-		if lifecycle, ok := m.Actuator.(actuator.PolicyBindingLifecycle); ok && ev.uid != "" {
-			lifecycle.RetirePolicyBinding(ev.uid)
+		if act := m.actuation(); act != nil && ev.uid != "" && act.RetirePolicyBinding(ev.uid) {
 			stores++
 		}
 		stores += m.brain().ForgetOwner(ev.owner)
@@ -1171,13 +1196,14 @@ func (m *Manager) reconcileWedged(ctx context.Context, initial KillSwitchObserva
 			"killSwitchEngaged", true, "killSwitchCause", string(observation.Cause))
 		return observation
 	}
-	recoverer, ok := m.Actuator.(interface {
-		RecoverOperations(context.Context, bool) ([]actuator.RecoveryEvent, error)
-	})
-	if !ok {
+	act := m.actuation()
+	if act == nil {
 		return observation
 	}
-	events, err := recoverer.RecoverOperations(ctx, false)
+	events, supported, err := act.RecoverOperations(ctx, false)
+	if !supported {
+		return observation
+	}
 	if err != nil {
 		m.Log.Error(err, "operation journal maintenance failed")
 		metrics.RecordMaintenanceAttempt("journal", "refused")
@@ -1296,7 +1322,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	// [P4b] converge crash-WEDGED actuator state (double-leader warm-swap; orphaned quarantine
 	// NetworkPolicy) EVERY tick, independent of tenant cadence — unless the kill-switch is
 	// engaged (a deliberate global freeze) or actuation is unavailable.
-	if !killObservation.Engaged && m.Actuator != nil {
+	if !killObservation.Engaged && m.actuation() != nil {
 		killObservation = m.reconcileWedged(ctx, killObservation)
 		metrics.SetKillSwitch(killObservation.Engaged)
 	}
@@ -1315,7 +1341,7 @@ func (m *Manager) tick(ctx context.Context) (result tickResult) {
 	}
 	// The sensor reads owner evidence only for the due policies' Pods, and only when
 	// native rotation consumes it.
-	obs, err := m.sensor().Observe(ctx, sensorapi.ObserveRequest{Now: now, Scopes: scopes, ResolveOwners: actuatorUsesNativeRotate(m.Actuator)})
+	obs, err := m.sensor().Observe(ctx, sensorapi.ObserveRequest{Now: now, Scopes: scopes, ResolveOwners: actuatorUsesNativeRotate(m.actuation())})
 	if err != nil {
 		m.Log.Error(err, "ingest snapshot failed; skipping tick")
 		if ctx.Err() != nil {
@@ -1404,10 +1430,10 @@ func (m *Manager) trackRotation(owner, tenant string, view *model.WorkloadView, 
 // start so the disruption ledger can record breach-seconds separately from
 // replica-seconds. A negative floor means the threshold was unavailable.
 func (m *Manager) trackRotationWithFloor(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time) bool {
-	return m.trackRotationReceipt(owner, tenant, view, allViews, minAvailableReplicas, startedAt, actuator.Result{}, "")
+	return m.trackRotationReceipt(owner, tenant, view, allViews, minAvailableReplicas, startedAt, actuatorapi.Result{}, "")
 }
 
-func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time, result actuator.Result, decisionID string) bool {
+func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.WorkloadView, allViews map[string]*model.WorkloadView, minAvailableReplicas int, startedAt time.Time, result actuatorapi.Result, decisionID string) bool {
 	costObserver := m.brain().LearnsRotationCost()
 	if (result.Actuator != "phoenix" && !costObserver && m.Calibration == nil && m.Disruption == nil) || view == nil {
 		return false
@@ -1867,11 +1893,11 @@ func (m *Manager) creditCadence(ctx context.Context, e *policyEntry, admittedAt 
 // actuatorUsesNativeRotate reports whether rotate reaches the native eviction
 // handler for the configured actuator. Hybrid routes rotate to native so it
 // must apply the same owner-identity feasibility law as the native backend.
-func actuatorUsesNativeRotate(a actuator.Actuator) bool {
+func actuatorUsesNativeRotate(a actuatorapi.Actuator) bool {
 	if a == nil {
 		return false
 	}
-	return actuator.RouteFor(actuator.Backend(a.Name()), model.ActionRotate) == actuator.BackendNative
+	return actuatorapi.RouteFor(a.Backend(), model.ActionRotate) == actuatorapi.BackendNative
 }
 
 // processTenantObserved runs one policy's tick on the sensor's observation.
@@ -1891,16 +1917,14 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	killEngaged := killState.observation.Engaged
 	pol := buildPolicy(e)
 	admittedOwnerEpoch := m.capturedEpoch(pol.Owner())
-	if m.QuarantineCapacity != nil {
+	if capacity := m.quarantineCapacity(ctx, e.namespace); capacity.Configured {
 		pol.QuarantineCapacityConfigured = true
-		pol.QuarantineCapacityLimit = m.QuarantineCapacity.Limit()
-		inventory, inventoryErr := m.QuarantineCapacity.Inventory(ctx, e.namespace)
-		if inventoryErr != nil {
-			pol.QuarantineCapacityKnown = false
-			pol.QuarantineCapacityReason = inventoryErr.Error()
+		pol.QuarantineCapacityLimit = capacity.Limit
+		pol.QuarantineCapacityKnown = capacity.Known
+		if capacity.Known {
+			pol.QuarantineCapacityUsed = capacity.Used
 		} else {
-			pol.QuarantineCapacityKnown = true
-			pol.QuarantineCapacityUsed = inventory.Used
+			pol.QuarantineCapacityReason = capacity.Reason
 		}
 		if ctx.Err() != nil {
 			return
@@ -1920,7 +1944,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 			return
 		}
 	}
-	pol.NativeRotate = actuatorUsesNativeRotate(m.Actuator)
+	pol.NativeRotate = actuatorUsesNativeRotate(m.actuation())
 	pol.TraceEnabled = m.DecisionTraceEnabled
 	pol.BrainImage = m.BrainImage
 	pol.GitSHA = m.GitSHA
@@ -2041,7 +2065,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	if vocabulary.Known {
 		absent = vocabulary.NotInstallable
 	}
-	capWit := capability.BuildWitness(ctx, capability.BuildIndex(obs.Pods, obs.Nodes, obs.Services), absent, m.Authz, m.Actuator).
+	capWit := capability.BuildWitness(ctx, capability.BuildIndex(obs.Pods, obs.Nodes, obs.Services), absent, m.Authz, m.actuation()).
 		WithCodeExec(m.CodeExec, obs.NamespaceLabels).
 		WithOperatorNamespace(m.OperatorNamespace).
 		WithPolicyIdentity(pol.PolicyName, pol.PolicyUID)
@@ -2219,11 +2243,11 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	// Actuate FIRST (active mode) so the audit + metrics reflect what ACTUALLY fired
 	// (actuate marks decisions[i].Actuated on a successful emit).
 	m.fallbackDecisions = nil
-	var currentPreparation *actuator.RoutePreparation
+	var currentPreparation *actuatorapi.RoutePreparation
 	if standingPolicy.observed {
 		currentPreparation = &standingPolicy.result.Preparation
 	}
-	if standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && m.Actuator != nil && hasPermittedTarget(decisions, views) {
+	if standingPolicy.dispatchAllowed && !effectiveDryRun && !killEngaged && m.actuation() != nil && hasPermittedTarget(decisions, views) {
 		viewByKey := make(map[string]*model.WorkloadView, len(views))
 		for _, v := range views {
 			viewByKey[v.Pod.Namespace+"/"+v.Pod.Name] = v
@@ -2393,7 +2417,7 @@ func (m *Manager) actuate(ctx context.Context, e *policyEntry, pol model.Policy,
 	return count
 }
 
-func cleanNoEffectResult(r actuator.Result) bool {
+func cleanNoEffectResult(r actuatorapi.Result) bool {
 	return !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" && (r.MutationKind == "" || r.MutationKind == "none") &&
 		r.AMTDName == "" && r.EventName == "" && r.EventUID == ""
 }
@@ -2401,44 +2425,44 @@ func cleanNoEffectResult(r actuator.Result) bool {
 // noEffectDisposition accepts only the closed actuator vocabulary on a result
 // with no contradictory effect evidence. The legacy typed refusal remains a
 // supported producer when its result is structurally clean.
-func noEffectDisposition(r actuator.Result, err error) actuator.NoEffectDisposition {
+func noEffectDisposition(r actuatorapi.Result, err error) actuatorapi.NoEffectDisposition {
 	switch r.NoEffect {
-	case actuator.NoEffectRefused:
-		if cleanNoEffectResult(r) && (err == nil || actuator.IsNoEffectRefusal(err)) {
+	case actuatorapi.NoEffectRefused:
+		if cleanNoEffectResult(r) && (err == nil || actuatorapi.IsNoEffectRefusal(err)) {
 			return r.NoEffect
 		}
-		return actuator.NoEffectUnknown
-	case actuator.NoEffectSatisfied:
+		return actuatorapi.NoEffectUnknown
+	case actuatorapi.NoEffectSatisfied:
 		if err == nil && cleanNoEffectResult(r) {
 			return r.NoEffect
 		}
-		return actuator.NoEffectUnknown
-	case actuator.NoEffectReconciled:
+		return actuatorapi.NoEffectUnknown
+	case actuatorapi.NoEffectReconciled:
 		if err == nil && !r.Emitted && (r.MutationKind == "" || r.MutationKind == "none") &&
 			r.EventName == "" && r.EventUID == "" {
 			return r.NoEffect
 		}
-		return actuator.NoEffectUnknown
-	case actuator.NoEffectDeclared:
+		return actuatorapi.NoEffectUnknown
+	case actuatorapi.NoEffectDeclared:
 		if err == nil && !r.Emitted && len(r.ObjectsTouched) == 0 && r.RollbackRef == "" &&
 			r.MutationKind == "declared" && r.EventName == "" && r.EventUID == "" {
 			return r.NoEffect
 		}
-		return actuator.NoEffectUnknown
-	case actuator.NoEffectUnknown:
-		if actuator.IsNoEffectRefusal(err) && cleanNoEffectResult(r) {
-			return actuator.NoEffectRefused
+		return actuatorapi.NoEffectUnknown
+	case actuatorapi.NoEffectUnknown:
+		if actuatorapi.IsNoEffectRefusal(err) && cleanNoEffectResult(r) {
+			return actuatorapi.NoEffectRefused
 		}
 	}
-	return actuator.NoEffectUnknown
+	return actuatorapi.NoEffectUnknown
 }
 
 // contradictoryNoEffectResult distinguishes an absent disposition from a
 // producer that supplied a closed disposition alongside incompatible result
 // evidence. The latter must never fall through to emitted-success accounting
 // merely because the disposition validator correctly reduced it to unknown.
-func contradictoryNoEffectResult(r actuator.Result, err error) bool {
-	return r.NoEffect != actuator.NoEffectUnknown && noEffectDisposition(r, err) == actuator.NoEffectUnknown
+func contradictoryNoEffectResult(r actuatorapi.Result, err error) bool {
+	return r.NoEffect != actuatorapi.NoEffectUnknown && noEffectDisposition(r, err) == actuatorapi.NoEffectUnknown
 }
 
 func stampDispatchEvidence(d *model.Decision, outcome, reason string) {
@@ -2612,26 +2636,26 @@ func fallbackDecision(original model.Decision, a decision.Alternative) model.Dec
 	return d
 }
 
-func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuator.RoutePreparation) {
+func (m *Manager) actuatePrepared(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView) (int, *actuatorapi.RoutePreparation) {
 	state := &killSwitchTickState{observation: KillSwitchObservation{Cause: KillSwitchStaticOnly}}
 	brakeState := &actuationBrakeTickState{namespace: actuationbrake.Namespace(nil)}
 	return m.actuatePreparedWithKillSwitch(ctx, e, pol, decisions, tickViewByKey, state, brakeState)
 }
 
-func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation) {
+func (m *Manager) actuatePreparedWithKillSwitch(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuatorapi.RoutePreparation) {
 	count, preparation, _ := m.actuatePreparedWithKillSwitchObserved(ctx, e, pol, decisions, tickViewByKey, state, brakeState)
 	return count, preparation
 }
 
-func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuator.RoutePreparation, bool) {
+func (m *Manager) actuatePreparedWithKillSwitchObserved(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, state *killSwitchTickState, brakeState *actuationBrakeTickState) (int, *actuatorapi.RoutePreparation, bool) {
 	return m.actuatePreparedMode(ctx, e, pol, decisions, tickViewByKey, true, state, brakeState, nil)
 }
 
-func actuationAttemptOutcome(res actuator.Result, err error, disposition actuator.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
+func actuationAttemptOutcome(res actuatorapi.Result, err error, disposition actuatorapi.NoEffectDisposition, contradictory bool) metrics.ActuationAttemptOutcome {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return metrics.AttemptDeadline
 	}
-	if disposition == actuator.NoEffectRefused && !contradictory {
+	if disposition == actuatorapi.NoEffectRefused && !contradictory {
 		return metrics.AttemptRefused
 	}
 	if err != nil {
@@ -2644,11 +2668,11 @@ func actuationAttemptOutcome(res actuator.Result, err error, disposition actuato
 		return metrics.AttemptAccepted
 	}
 	switch disposition {
-	case actuator.NoEffectSatisfied:
+	case actuatorapi.NoEffectSatisfied:
 		return metrics.AttemptSatisfied
-	case actuator.NoEffectReconciled:
+	case actuatorapi.NoEffectReconciled:
 		return metrics.AttemptReconciled
-	case actuator.NoEffectDeclared:
+	case actuatorapi.NoEffectDeclared:
 		return metrics.AttemptDeclared
 	default:
 		return metrics.AttemptUnknown
@@ -2701,11 +2725,11 @@ func releaseSharedCapacityNoEffect(ctx context.Context, store *sharedcapacity.St
 	return store.ReleaseNoEffect(releaseCtx, reservation)
 }
 
-func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
+func (m *Manager) actuatePreparedMode(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, prepared *actuatorapi.RoutePreparation) (int, *actuatorapi.RoutePreparation, bool) {
 	return m.actuatePreparedModeWithCapacity(ctx, e, pol, decisions, tickViewByKey, allowFallback, state, brakeState, nil, prepared)
 }
 
-func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation, prepared *actuator.RoutePreparation) (int, *actuator.RoutePreparation, bool) {
+func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policyEntry, pol model.Policy, decisions []model.Decision, tickViewByKey map[string]*model.WorkloadView, allowFallback bool, state *killSwitchTickState, brakeState *actuationBrakeTickState, inheritedReservation *sharedcapacity.Reservation, prepared *actuatorapi.RoutePreparation) (int, *actuatorapi.RoutePreparation, bool) {
 	attempted := false
 	inheritedHandled := inheritedReservation == nil
 	defer func() {
@@ -2763,7 +2787,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			"actuationBrakeCause", namespaceObservation.Cause)
 		return 0, nil, attempted
 	}
-	target := actuator.TenantTarget{
+	target := actuatorapi.TenantTarget{
 		Tenant:         pol.Tenant,
 		Namespace:      e.namespace,
 		PolicyName:     e.key.Name,
@@ -2772,26 +2796,16 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		Selector:       e.spec.Selector.DeepCopy(),
 		EnabledActions: pol.EnabledActions,
 	}
-	var preparation actuator.RoutePreparation
+	var preparation actuatorapi.RoutePreparation
 	var err error
 	if prepared != nil {
 		preparation = *prepared
-	} else if routed, ok := m.Actuator.(interface {
-		PrepareRoutes(context.Context, actuator.TenantTarget) actuator.RoutePreparation
-	}); ok {
-		preparation = routed.PrepareRoutes(ctx, target)
+	} else if preparation, err = m.actuation().PrepareRoutes(ctx, target); err == nil {
 		if preparation.PhoenixErr != nil {
 			m.Log.Error(preparation.PhoenixErr, "Phoenix route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
 		}
 		if preparation.NativeErr != nil {
 			m.Log.Error(preparation.NativeErr, "native route preparation refused", "tenant", pol.Tenant, "namespace", e.namespace)
-		}
-	} else {
-		err = m.Actuator.EnsurePolicy(ctx, target)
-		if m.Actuator.Name() == "native" {
-			preparation.NativeErr = err
-		} else {
-			preparation.PhoenixErr = err
 		}
 	}
 	if ctx.Err() != nil {
@@ -2990,8 +3004,11 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			continue
 		}
 		if m.OperatorNamespace != "" && m.BoundaryReader != nil && v.Pod.UID != "" {
-			pendingLease, leaseFenceErr := actuator.PendingEndpointLeaseOperation(ctx, m.BoundaryReader,
-				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			fence := func(kind actuatorapi.PendingKind) (bool, error) {
+				return m.actuation().PendingOperation(ctx, actuatorapi.PendingOperation{Kind: kind,
+					Namespace: decisions[i].Namespace, Pod: decisions[i].Pod, PodUID: v.Pod.UID})
+			}
+			pendingLease, leaseFenceErr := fence(actuatorapi.PendingEndpointLease)
 			if leaseFenceErr != nil || pendingLease {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "protected-endpoint-lease-operation-unresolved")
@@ -3000,8 +3017,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					"action", decisions[i].Action, "error", leaseFenceErr)
 				continue
 			}
-			pendingClient, clientFenceErr := actuator.PendingLiteLLMClientOperation(ctx, m.BoundaryReader,
-				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			pendingClient, clientFenceErr := fence(actuatorapi.PendingLiteLLMClient)
 			if clientFenceErr != nil || pendingClient {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "protected-owned-client-operation-unresolved")
@@ -3010,22 +3026,20 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					"action", decisions[i].Action, "error", clientFenceErr)
 				continue
 			}
-			pendingAdmission, admissionFenceErr := actuator.PendingVoiceAdmissionOperation(ctx, m.BoundaryReader, m.OperatorNamespace, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+			pendingAdmission, admissionFenceErr := fence(actuatorapi.PendingVoiceAdmission)
 			if admissionFenceErr != nil || pendingAdmission {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "protected-voice-admission-operation-unresolved")
 				continue
 			}
 
-			pendingVoiceOutput, voiceOutputFenceErr := actuator.PendingVoiceOutputOperation(ctx, m.BoundaryReader,
-				m.OperatorNamespace, decisions[i].Namespace, decisions[i].Pod, v.Pod.UID)
+			pendingVoiceOutput, voiceOutputFenceErr := fence(actuatorapi.PendingVoiceOutput)
 			if voiceOutputFenceErr != nil || pendingVoiceOutput {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "protected-voice-output-operation-unresolved")
 				continue
 			}
-			pending, fenceErr := actuator.PendingOutputPolicyOperation(ctx, m.BoundaryReader,
-				m.OperatorNamespace, decisions[i].Namespace, v.Pod.UID)
+			pending, fenceErr := fence(actuatorapi.PendingOutputPolicy)
 			if fenceErr != nil || pending {
 				recordExistentialEffect(&decisions[i], false)
 				stampDispatch(model.DispatchNotAttempted, "protected-output-policy-operation-unresolved")
@@ -3098,7 +3112,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		}
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
-		request := actuator.Request{
+		request := actuatorapi.Request{
 			AdapterObservation:        v.Pod.AdapterObservation,
 			OutputPolicyObservation:   v.Pod.OutputPolicyObservation,
 			VoiceMemoryObservation:    v.Pod.VoiceMemoryObservation,
@@ -3122,7 +3136,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			CoverageValue:             coverageValue,
 			TargetUID:                 v.Pod.UID,
 			TickID:                    pol.TickID,
-			ServingObservation: &actuator.ServingSelectionObservation{
+			ServingObservation: &actuatorapi.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
 			},
@@ -3140,7 +3154,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				request.OperationID = decisions[i].Trace.DecisionID
 			}
 		}
-		var res actuator.Result
+		var res actuatorapi.Result
 		var err error
 		backendInvoked := true
 		if ctx.Err() != nil {
@@ -3153,15 +3167,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			stampDispatch(model.DispatchNotAttempted, "context-cancelled")
 			return actuated, &preparation, attempted
 		}
-		if m.QuarantineCapacity != nil {
-			var provenance actuator.QuarantineCapacityProvenance
-			res, provenance, err = m.QuarantineCapacity.ActuateWithProvenance(ctx, m.Actuator, request)
-			backendInvoked = provenance.BackendInvoked
-			attempted = attempted || backendInvoked
-		} else {
-			attempted = true
-			res, err = m.Actuator.Actuate(ctx, request)
-		}
+		res, backendInvoked, err = m.actuation().Actuate(ctx, request)
+		attempted = attempted || backendInvoked
 		if !backendInvoked {
 			if capacityReservation != nil && m.SharedCapacity != nil {
 				if releaseErr := releaseSharedCapacityNoEffect(ctx, m.SharedCapacity, capacityReservation); releaseErr != nil {
@@ -3193,7 +3200,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		decisions[i].Phoenix = phoenixForensics(res, decisions[i].Namespace)
 		disposition := noEffectDisposition(res, err)
 		contradictoryDisposition := contradictoryNoEffectResult(res, err)
-		definiteNoEffect := !contradictoryDisposition && (disposition == actuator.NoEffectRefused || disposition == actuator.NoEffectSatisfied || disposition == actuator.NoEffectReconciled || disposition == actuator.NoEffectDeclared)
+		definiteNoEffect := !contradictoryDisposition && (disposition == actuatorapi.NoEffectRefused || disposition == actuatorapi.NoEffectSatisfied || disposition == actuatorapi.NoEffectReconciled || disposition == actuatorapi.NoEffectDeclared)
 		metrics.RecordActuationAttempt(pol.Tenant, string(decisions[i].Action), actuationAttemptOutcome(res, err, disposition, contradictoryDisposition))
 		// M-11 emission-window bookkeeping remains conservative about any producer that
 		// reports an attempted emission. Success, intent and learning accounting below
@@ -3201,16 +3208,16 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		if res.Emitted {
 			m.emissionWindow(e, 1, time.Now())
 		}
-		if err == nil && res.Emitted && !contradictoryDisposition && disposition == actuator.NoEffectUnknown &&
+		if err == nil && res.Emitted && !contradictoryDisposition && disposition == actuatorapi.NoEffectUnknown &&
 			res.MutationKind == "forward-only" && res.RollbackRef == "" && len(res.ObjectsTouched) == 1 &&
 			res.ObjectsTouched[0] == "Pod/"+request.Namespace+"/"+request.Pod && decisions[i].Action == model.ActionRotate &&
-			actuatorUsesNativeRotate(m.Actuator) && m.ScopedOutcomeProducer != nil {
+			actuatorUsesNativeRotate(m.actuation()) && m.ScopedOutcomeProducer != nil {
 			// The producer hook only binds a previously authenticated synthetic
 			// session. It queues work without network or durable I/O on this tick.
 			m.ScopedOutcomeProducer.RecordNativeRotate(pol, v, request, res, time.Now())
 		}
 		m.notifyActuation(eventTarget, decisions[i].Action, res, err)
-		if err != nil || disposition == actuator.NoEffectRefused || contradictoryDisposition {
+		if err != nil || disposition == actuatorapi.NoEffectRefused || contradictoryDisposition {
 			fallbackObservation := state.observe(ctx, m.KillSwitch)
 			fallbackBlocked := fallbackObservation.Engaged
 			fallbackBrake := brakeState.observeNamespace(ctx, m, decisions[i].Namespace)
@@ -3248,7 +3255,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			// still counts toward later-tick feedback, but cannot license an
 			// immediate different mutation. Partial effects enter neither gate.
 			if !fallbackBlocked && !contradictoryDisposition && cleanNoEffectResult(res) && ctx.Err() == nil &&
-				disposition != actuator.NoEffectSatisfied && disposition != actuator.NoEffectReconciled && disposition != actuator.NoEffectDeclared &&
+				disposition != actuatorapi.NoEffectSatisfied && disposition != actuatorapi.NoEffectReconciled && disposition != actuatorapi.NoEffectDeclared &&
 				m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) {
 				failureNow := time.Now()
 				if m.FailureNow != nil {
@@ -3267,7 +3274,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
 			dispatchReason := "outcome-unknown"
-			if disposition == actuator.NoEffectRefused {
+			if disposition == actuatorapi.NoEffectRefused {
 				outcome = slo.OutcomeNotEmitted
 				dispatchOutcome = model.DispatchRefused
 				dispatchReason = "definite-no-effect-refusal"
@@ -3288,7 +3295,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
 			if err != nil {
 				m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
-			} else if disposition == actuator.NoEffectRefused {
+			} else if disposition == actuatorapi.NoEffectRefused {
 				m.Log.Info("actuator refused without effect", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
 			} else {
 				m.Log.Error(nil, "actuator returned contradictory result evidence", "pod", decisions[i].Namespace+"/"+decisions[i].Pod, "action", decisions[i].Action)
@@ -3296,7 +3303,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			reservationTransferred := false
 			if !fallbackBlocked && allowFallback && m.ownerCurrent(pol.Owner(), m.tickEpochs[pol.Owner()]) &&
 				ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) &&
-				disposition == actuator.NoEffectRefused {
+				disposition == actuatorapi.NoEffectRefused {
 				if brain := m.brain(); brain.GatesCandidates() {
 					targetKey := v.Pod.Namespace + "/" + v.Pod.Name
 					if alternative, ok := brain.SelectAlternative(pol.Owner(), targetKey, decisions[i].Action); ok {
@@ -3399,11 +3406,11 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
 			switch disposition {
-			case actuator.NoEffectSatisfied:
+			case actuatorapi.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")
-			case actuator.NoEffectReconciled:
+			case actuatorapi.NoEffectReconciled:
 				stampDispatch(model.DispatchReconciled, "reconciled-prior-operation")
-			case actuator.NoEffectDeclared:
+			case actuatorapi.NoEffectDeclared:
 				stampDispatch(model.DispatchDeclared, "declared-without-implementation")
 			default:
 				stampDispatch(model.DispatchEmittedFalse, "outcome-unknown")
@@ -3423,14 +3430,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 
 // phoenixForensics maps the adapter's forensic identifiers into an owned, per-decision
 // payload (M-18). EXPLICIT FIELD MAPPING ONLY — never a struct dump, so a field added to
-// actuator.Result later cannot silently widen the public audit record.
+// actuatorapi.Result later cannot silently widen the public audit record.
 //
 // namespace is the namespace of the request this result answers. The AMTD is namespaced
 // and EnsurePolicy maintains it for exactly that namespace/tenant pair, so the namespace
 // is attached only when an AMTD name actually exists; it is never guessed, and no AMTD
 // UID is invented (the adapter does not read one back). Returns nil when the adapter
 // supplied nothing at all, so a record shows honest absence instead of empty strings.
-func phoenixForensics(res actuator.Result, namespace string) *model.PhoenixForensics {
+func phoenixForensics(res actuatorapi.Result, namespace string) *model.PhoenixForensics {
 	p := model.PhoenixForensics{
 		AMTDName:        res.AMTDName,
 		EventName:       res.EventName,

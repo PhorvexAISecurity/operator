@@ -66,7 +66,7 @@ func (m163SupportedBackend) SupportsAction(context.Context, model.Action, actuat
 func m163AuthzWitness(sar authz.SSARClient) capability.Witness {
 	az := authz.NewCheckerWithClient(sar, time.Hour)
 	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
-		nil, az, m163SupportedBackend{})
+		nil, az, localActuator(m163SupportedBackend{}))
 }
 
 func m163RotateView() *model.WorkloadView {
@@ -85,7 +85,7 @@ func m163RequireRotateReachesRBAC(t *testing.T) {
 		t.Fatal("fixture stale: rotate declares no required verbs, so the RBAC leg cannot fire")
 	}
 	w := capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil),
-		nil, nil, m163SupportedBackend{})
+		nil, nil, localActuator(m163SupportedBackend{}))
 	v := m163RotateView()
 	if ok, why := w.Capable(v, model.ActionRotate); !ok {
 		t.Fatalf("fixture stale: the capability leg excludes rotate (%q), so the RBAC leg is unreachable", why)

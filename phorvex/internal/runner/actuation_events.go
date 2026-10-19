@@ -5,7 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -19,7 +19,7 @@ func actuationEventTarget(v *model.WorkloadView) *corev1.Pod {
 // notifyActuation is called exactly once after Actuate, never on selection or
 // pre-dispatch exclusion. The recorder queues best-effort output, not audit proof.
 // Deliberately omit raw errors/notes, tenant/policy IDs, scores and transport data.
-func (m *Manager) notifyActuation(target *corev1.Pod, action model.Action, res actuator.Result, err error) {
+func (m *Manager) notifyActuation(target *corev1.Pod, action model.Action, res actuatorapi.Result, err error) {
 	if m.ActuationRecorder == nil {
 		return
 	}
@@ -39,13 +39,13 @@ func (m *Manager) notifyActuation(target *corev1.Pod, action model.Action, res a
 		eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationEmitted", "request reported emitted for this target; effect unconfirmed"
 	} else {
 		switch noEffectDisposition(res, err) {
-		case actuator.NoEffectRefused:
+		case actuatorapi.NoEffectRefused:
 			reason, message = "PhorvexActuationNotEmitted", "request definitely refused before effect; no mutation credited"
-		case actuator.NoEffectSatisfied:
+		case actuatorapi.NoEffectSatisfied:
 			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationAlreadySatisfied", "no new mutation; current evidence says the requested state was already satisfied"
-		case actuator.NoEffectReconciled:
+		case actuatorapi.NoEffectReconciled:
 			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationReconciled", "no new mutation was submitted; a prior operation or observation was reconciled without claiming availability or effect"
-		case actuator.NoEffectDeclared:
+		case actuatorapi.NoEffectDeclared:
 			eventType, reason, message = corev1.EventTypeNormal, "PhorvexActuationDeclaredOnly", "no mutation was submitted; this administrative action is declared without an implementation"
 		}
 	}

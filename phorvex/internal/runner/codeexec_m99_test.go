@@ -29,7 +29,7 @@ func unverifiedCodeExecWitness() capability.Witness {
 	// UNVERIFIED for the labelled namespace. The backend is an EXPLICIT support double
 	// (M-21): these tests isolate the code-exec and M99 no-rbac legs, and an absent
 	// backend would now exclude every action first, for the wrong reason.
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, nil, supportsAll{}).
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(nil, nil, nil), nil, nil, localActuator(supportsAll{})).
 		WithCodeExec(
 			fakeAdmission{ok: false, reason: capability.ReasonCodeExec + ": not verified"},
 			map[string]map[string]string{"ns": {"phorvex.ai/codeexec-managed": "true"}},

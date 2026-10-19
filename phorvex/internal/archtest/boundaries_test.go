@@ -35,7 +35,7 @@ var domains = map[string]string{
 
 	// Shared libraries: domain types, contracts written by one service and read by
 	// another, and platform code. They import nothing outside shared.
-	"model": shared, "brainapi": shared, "brainpb": shared, "sensorapi": shared, "sensorpb": shared, "wire": shared, "registry": shared, "metrics": shared, "buildinfo": shared,
+	"model": shared, "brainapi": shared, "brainpb": shared, "sensorapi": shared, "sensorpb": shared, "wire": shared, "actuatorapi": shared, "registry": shared, "metrics": shared, "buildinfo": shared,
 	"audit": shared, "audittransport": shared, "authz": shared, "representation": shared,
 	"disclosure": shared, "losshistory": shared, "currentinventory": shared,
 	"gpudevice": shared, "servingcontext": shared, "ownership": shared,
@@ -54,7 +54,7 @@ var domains = map[string]string{
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
 	"exposure": dispatcher, "scopedoutcome": dispatcher, "brainclient": dispatcher, "sensorclient": dispatcher,
 
-	"actuator": actuator, "podresources": actuator, "startupauthz": actuator,
+	"actuator": actuator, "podresources": actuator, "startupauthz": actuator, "actuatorsvc": actuator,
 
 	"cataloguev1": attacks, "lossobserver": attacks, "currentobserver": attacks,
 
