@@ -394,6 +394,11 @@ func TestM168ArmsWorkerUsesProductionSignalWatcherAndLedger(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(strings.TrimSpace(string(b))) == 0 {
+		// The worker stopped before recording a result; its last event says why.
+		events, _ := retainedExperimentEvents(cfg)
+		t.Fatalf("arms worker recorded no result: last event %+v", events[op.Operation])
+	}
 	var run armExperiment
 	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
 		if err = json.Unmarshal([]byte(line), &run); err != nil {
