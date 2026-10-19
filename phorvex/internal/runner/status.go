@@ -164,10 +164,10 @@ func (m *Manager) updateTickStatusObserved(ctx context.Context, e *policyEntry, 
 		if rejected == nil {
 			if actions.preparation != nil && e.generation != p.Generation {
 				prepReason, prepMessage = "StalePreparation", fmt.Sprintf("preparation was for generation %d; current policy generation is %d", e.generation, p.Generation)
-			} else if actions.preparation != nil && m.Actuator != nil {
+			} else if actions.preparation != nil && m.actuation() != nil {
 				prepStatus, prepReason, prepMessage = metav1.ConditionTrue, "Prepared", "standing actuator route prepared or observed this tick"
 				prep := actions.preparation
-				switch m.Actuator.Name() {
+				switch string(m.actuation().Backend()) {
 				case "hybrid":
 					if prep.PhoenixSkipped && prep.NativeSkipped {
 						prepStatus, prepReason, prepMessage = metav1.ConditionUnknown, "NoEnabledRoutes", "no enabled action route required preparation this tick"

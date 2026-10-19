@@ -98,7 +98,7 @@ func TestAbsentActionReachesCandidateStatus(t *testing.T) {
 	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("subset", "rotate", "noop")), Log: logr.Discard()}
 	observed := m.refreshVocabulary(context.Background(), time.Now())
 	pod := model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"secret-ref"}}
-	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), observed.NotInstallable, nil, supportsAll{})
+	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), observed.NotInstallable, nil, localActuator(supportsAll{}))
 	ce := decision.NewCoverageEngine()
 	exposure := map[string]time.Duration{}
 	for _, variable := range model.LiveExposureVariables {

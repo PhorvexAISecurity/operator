@@ -9,14 +9,14 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
-	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
 const ConditionStandingPolicy = "StandingPolicy"
 
 type standingPolicyTickStatus struct {
-	result          actuator.PolicyMaintenanceResult
+	result          actuatorapi.PolicyMaintenanceResult
 	observed        bool
 	blockedCause    string
 	dispatchAllowed bool
@@ -45,8 +45,8 @@ func (m *Manager) policyEntryCurrent(e *policyEntry) bool {
 		current.namespace == e.namespace && current.tenant == e.tenant
 }
 
-func policyMaintenanceTarget(e *policyEntry, pol model.Policy, ownerCount int) actuator.TenantTarget {
-	return actuator.TenantTarget{
+func policyMaintenanceTarget(e *policyEntry, pol model.Policy, ownerCount int) actuatorapi.TenantTarget {
+	return actuatorapi.TenantTarget{
 		Tenant:           pol.Tenant,
 		Namespace:        e.namespace,
 		PolicyName:       e.key.Name,
@@ -58,9 +58,9 @@ func policyMaintenanceTarget(e *policyEntry, pol model.Policy, ownerCount int) a
 	}
 }
 
-func (m *Manager) observeStandingPolicy(ctx context.Context, maintainer actuator.StandingPolicyMaintainer, target actuator.TenantTarget, blockedCause string) standingPolicyTickStatus {
+func (m *Manager) observeStandingPolicy(ctx context.Context, act actuatorapi.Actuator, target actuatorapi.TenantTarget, blockedCause string) standingPolicyTickStatus {
 	return standingPolicyTickStatus{
-		result:       maintainer.ObserveStandingPolicy(ctx, target),
+		result:       act.ObserveStandingPolicy(ctx, target),
 		observed:     true,
 		blockedCause: blockedCause,
 	}
@@ -78,8 +78,8 @@ func (m *Manager) maintainStandingPolicy(
 	killState *killSwitchTickState,
 	brakeState *actuationBrakeTickState,
 ) (standingPolicyTickStatus, bool) {
-	maintainer, ok := m.Actuator.(actuator.StandingPolicyMaintainer)
-	if !ok {
+	maintainer := m.actuation()
+	if maintainer == nil || !maintainer.MaintainsStandingPolicy() {
 		return standingPolicyTickStatus{dispatchAllowed: true}, true
 	}
 	target := policyMaintenanceTarget(e, pol, m.policyOwnerCount(e.namespace, pol.Tenant))
@@ -156,13 +156,13 @@ func (m *Manager) maintainStandingPolicy(
 	}, true
 }
 
-func standingPolicyRouteSummary(result actuator.PolicyMaintenanceResult) (states []actuator.PolicyMaintenanceState, detail string) {
+func standingPolicyRouteSummary(result actuatorapi.PolicyMaintenanceResult) (states []actuatorapi.PolicyMaintenanceState, detail string) {
 	parts := make([]string, 0, 2)
-	if result.Phoenix.State != actuator.PolicyMaintenanceNotRequired && result.Phoenix.State != "" {
+	if result.Phoenix.State != actuatorapi.PolicyMaintenanceNotRequired && result.Phoenix.State != "" {
 		states = append(states, result.Phoenix.State)
 		parts = append(parts, fmt.Sprintf("Phoenix=%s (%s)", result.Phoenix.State, result.Phoenix.Detail))
 	}
-	if result.Native.State != actuator.PolicyMaintenanceNotRequired && result.Native.State != "" {
+	if result.Native.State != actuatorapi.PolicyMaintenanceNotRequired && result.Native.State != "" {
 		states = append(states, result.Native.State)
 		parts = append(parts, fmt.Sprintf("native=%s (%s)", result.Native.State, result.Native.Detail))
 	}
@@ -186,7 +186,7 @@ func standingPolicyCondition(status *standingPolicyTickStatus, generation int64)
 		condition.Message = "no enabled action route requires a standing policy; no defense effect is claimed"
 		return condition
 	}
-	has := func(want actuator.PolicyMaintenanceState) bool {
+	has := func(want actuatorapi.PolicyMaintenanceState) bool {
 		for _, state := range states {
 			if state == want {
 				return true
@@ -196,16 +196,16 @@ func standingPolicyCondition(status *standingPolicyTickStatus, generation int64)
 	}
 	suffix := "; standing route configuration only; no defense effect is claimed"
 	switch {
-	case has(actuator.PolicyMaintenanceOwnershipRefused):
+	case has(actuatorapi.PolicyMaintenanceOwnershipRefused):
 		condition.Status, condition.Reason = metav1.ConditionFalse, "OwnershipRefused"
-	case has(actuator.PolicyMaintenanceUnknown):
+	case has(actuatorapi.PolicyMaintenanceUnknown):
 		condition.Status, condition.Reason = metav1.ConditionUnknown, "ObservationUnavailable"
-	case status.blockedCause != "" && (has(actuator.PolicyMaintenanceMissing) || has(actuator.PolicyMaintenanceDrifted)):
+	case status.blockedCause != "" && (has(actuatorapi.PolicyMaintenanceMissing) || has(actuatorapi.PolicyMaintenanceDrifted)):
 		condition.Status, condition.Reason = metav1.ConditionFalse, "BrakedWithDrift"
 		detail += "; mutation prohibited by " + status.blockedCause
-	case has(actuator.PolicyMaintenanceRepaired):
+	case has(actuatorapi.PolicyMaintenanceRepaired):
 		condition.Status, condition.Reason = metav1.ConditionTrue, "Repaired"
-	case has(actuator.PolicyMaintenanceMissing) || has(actuator.PolicyMaintenanceDrifted):
+	case has(actuatorapi.PolicyMaintenanceMissing) || has(actuatorapi.PolicyMaintenanceDrifted):
 		condition.Status, condition.Reason = metav1.ConditionFalse, "DriftUnrepaired"
 	default:
 		condition.Status, condition.Reason = metav1.ConditionTrue, "InSync"

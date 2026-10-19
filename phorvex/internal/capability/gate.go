@@ -22,7 +22,7 @@ package capability
 import (
 	"context"
 
-	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/codeexec"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -193,7 +193,7 @@ type Witness struct {
 	idx        Index
 	notInstall model.InstallSet
 	az         *authz.Checker
-	act        actuator.Actuator
+	act        Actuator
 	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
 	// per-namespace label sets (already GET-derived observation substrate) so the scope
 	// check is O(1) and needs no per-candidate network read.
@@ -205,7 +205,15 @@ type Witness struct {
 }
 
 // BuildWitness assembles the per-tick witness.
-func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az *authz.Checker, act actuator.Actuator) Witness {
+// Actuator answers the capability questions the witness puts to the actuator
+// (actuatorapi.Actuator satisfies it).
+type Actuator interface {
+	SupportsAction(ctx context.Context, a model.Action, t actuatorapi.Target) (ok bool, why string)
+	CapabilityAdvisory(a model.Action, t actuatorapi.Target) string
+	RequiredVerbs(a model.Action) []authz.Verb
+}
+
+func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az *authz.Checker, act Actuator) Witness {
 	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
 }
 
@@ -397,7 +405,7 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 	// is nothing that could enact the move, so the honest answer is "no", never a
 	// default-true. Tests isolating the other legs wire an explicit support double.
 	if w.act == nil {
-		return false, actuator.ReasonBackendUnavailable + ": no actuator is wired to answer for this action"
+		return false, actuatorapi.ReasonBackendUnavailable + ": no actuator is wired to answer for this action"
 	}
 	if ok, why := w.act.SupportsAction(w.ctx, action, w.targetFrom(v)); !ok {
 		return false, why
@@ -464,29 +472,15 @@ func (w Witness) Advisory(v *model.WorkloadView, action model.Action) string {
 	if w.act == nil || v == nil {
 		return ""
 	}
-	advisory, ok := w.act.(interface {
-		CapabilityAdvisory(model.Action, actuator.Target) string
-	})
-	if !ok {
-		return ""
-	}
-	return advisory.CapabilityAdvisory(action, w.targetFrom(v))
+	return w.act.CapabilityAdvisory(action, w.targetFrom(v))
 }
 
-// requiredVerbs follows the backend that this witness will actually dispatch through. The
-// hybrid fallback preserves compatibility for small test actuators whose Name is not a
-// production backend; every production actuator has one of the three exact backend names.
+// requiredVerbs follows the backend that this witness will actually dispatch through.
 func (w Witness) requiredVerbs(action model.Action) []authz.Verb {
-	backend := actuator.BackendHybrid
-	if w.act != nil {
-		for _, candidate := range actuator.Backends() {
-			if w.act.Name() == string(candidate) {
-				backend = candidate
-				break
-			}
-		}
+	if w.act == nil {
+		return nil
 	}
-	verbs := actuator.RequiredVerbsForBackend(backend, action)
+	verbs := w.act.RequiredVerbs(action)
 	resolved := make([]authz.Verb, len(verbs))
 	copy(resolved, verbs)
 	for i := range resolved {
@@ -627,7 +621,7 @@ func (w Witness) shardPoolWhy(pod *model.Pod) string {
 		return "pod declares no model-shard"
 	}
 	if parallel := pod.Labels[labelParallelGroup]; parallel != "" {
-		return actuator.ReasonParallelGroupUnavailable
+		return actuatorapi.ReasonParallelGroupUnavailable
 	} else if !w.idx.shardShadow[poolKey(pod.Namespace, shard)] {
 		return "no Ready warm shadow exists for a matching model-shard pool"
 	}
@@ -682,8 +676,8 @@ func selectorMatches(selector, podLabels map[string]string) bool {
 	return true
 }
 
-func (w Witness) targetFrom(v *model.WorkloadView) actuator.Target {
-	return actuator.Target{
+func (w Witness) targetFrom(v *model.WorkloadView) actuatorapi.Target {
+	return actuatorapi.Target{
 		Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID,
 		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU, MIGResource: v.Pod.MIGDevice,
 		PolicyName: w.policyName, PolicyUID: w.policyUID, ServiceAccount: v.Pod.ServiceAccount,

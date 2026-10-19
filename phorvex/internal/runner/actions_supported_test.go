@@ -40,7 +40,7 @@ func (supportsAll) SupportsAction(context.Context, model.Action, actuator.Target
 
 func capWitness(fleet []model.Pod) capability.Witness {
 	// explicit support double (backend leg neutralised), no rbac/installable — config leg only.
-	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, supportsAll{})
+	return capability.BuildWitness(context.Background(), capability.BuildIndex(fleet, nil, nil), nil, nil, localActuator(supportsAll{}))
 }
 
 // report wraps a synthetic gap list with an observation context for the debounce tests
@@ -316,7 +316,7 @@ func TestConditionSurfacesNoRBAC(t *testing.T) {
 	pod := model.Pod{Namespace: "denied", Name: "p", HasGPU: true, ServingEndpointReady: true}
 	az := authz.NewCheckerWithClient(runnerDenySSAR{deny: true}, authz.DefaultTTL)
 	// Explicit support double so the BACKEND leg cannot mask the RBAC leg under test.
-	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, supportsAll{})
+	wit := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, az, localActuator(supportsAll{}))
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 
 	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}}, wit)

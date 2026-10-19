@@ -22,7 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -259,9 +259,9 @@ func (p *Producer) Prepare(ctx context.Context, config PrepareConfig) error {
 // RecordNativeRotate binds only a previously proved session to the exact
 // coherent native result. It performs no network or durable I/O and never
 // blocks when the bounded queue is full.
-func (p *Producer) RecordNativeRotate(policy model.Policy, view *model.WorkloadView, request actuator.Request, result actuator.Result, acknowledgedAt time.Time) bool {
+func (p *Producer) RecordNativeRotate(policy model.Policy, view *model.WorkloadView, request actuatorapi.Request, result actuatorapi.Result, acknowledgedAt time.Time) bool {
 	if view == nil || acknowledgedAt.IsZero() || request.Action != model.ActionRotate || result.Handler != string(model.ActionRotate) ||
-		!result.Emitted || result.Actuator != "native" || result.NoEffect != actuator.NoEffectUnknown || result.MutationKind != "forward-only" ||
+		!result.Emitted || result.Actuator != "native" || result.NoEffect != actuatorapi.NoEffectUnknown || result.MutationKind != "forward-only" ||
 		result.RollbackRef != "" || len(result.ObjectsTouched) != 1 || result.ObjectsTouched[0] != "Pod/"+request.Namespace+"/"+request.Pod ||
 		request.TargetUID == "" || request.TargetUID != view.Pod.UID ||
 		request.PolicyUID != policy.PolicyUID || request.PolicyName != policy.PolicyName || request.Namespace != view.Pod.Namespace || request.Pod != view.Pod.Name {
@@ -613,12 +613,12 @@ func validateEndpoint(endpoint SessionEndpoint) error {
 	return nil
 }
 
-func canonicalActionEvidence(request actuator.Request, result actuator.Result, acknowledgedAt time.Time) ([]byte, error) {
+func canonicalActionEvidence(request actuatorapi.Request, result actuatorapi.Result, acknowledgedAt time.Time) ([]byte, error) {
 	return json.Marshal(struct {
-		SchemaVersion  string           `json:"schemaVersion"`
-		AcknowledgedAt time.Time        `json:"acknowledgedAt"`
-		Request        actuator.Request `json:"request"`
-		Result         actuator.Result  `json:"result"`
+		SchemaVersion  string              `json:"schemaVersion"`
+		AcknowledgedAt time.Time           `json:"acknowledgedAt"`
+		Request        actuatorapi.Request `json:"request"`
+		Result         actuatorapi.Result  `json:"result"`
 	}{SchemaVersion: "phorvex.native-rotate-ack.v1", AcknowledgedAt: acknowledgedAt, Request: request, Result: result})
 }
 

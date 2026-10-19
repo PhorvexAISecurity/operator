@@ -11,7 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -52,7 +52,7 @@ type actionsSupportStatus struct {
 	status          metav1.ConditionStatus
 	reason          string
 	message         string
-	preparation     *actuator.RoutePreparation
+	preparation     *actuatorapi.RoutePreparation
 	standingPolicy  *standingPolicyTickStatus
 	namespaceDryRun model.ActuationBrakeObservation
 }

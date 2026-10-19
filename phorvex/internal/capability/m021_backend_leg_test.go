@@ -22,7 +22,7 @@ import (
 )
 
 func phoenixWitness() Witness {
-	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, actuator.NewPhoenixActuator(nil))
+	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, localActuator(actuator.NewPhoenixActuator(nil)))
 }
 
 func nativeWitness() Witness {
@@ -31,7 +31,7 @@ func nativeWitness() Witness {
 	native.SetServingSecurity(legacy)
 	native.SetBoundaryReader(fake.NewClientBuilder().Build())
 	native.JournalNamespace = "operator"
-	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, native)
+	return BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, localActuator(native))
 }
 
 // TestCapableConsultsBackendForNonAIActions: the old `if !AICapabilityActions[action]
@@ -56,8 +56,8 @@ func TestCapableConsultsBackendForNonAIActions(t *testing.T) {
 			}}
 			index := BuildIndex([]model.Pod{target, peer}, nil, []ingest.ServiceInfo{service})
 			query = &model.WorkloadView{Pod: target}
-			phoenix = BuildWitness(context.Background(), index, nil, nil, actuator.NewPhoenixActuator(nil))
-			native = BuildWitness(context.Background(), index, nil, nil, actuator.NewNativeActuator(nil))
+			phoenix = BuildWitness(context.Background(), index, nil, nil, localActuator(actuator.NewPhoenixActuator(nil)))
+			native = BuildWitness(context.Background(), index, nil, nil, localActuator(actuator.NewNativeActuator(nil)))
 		}
 		if ok, why := phoenix.Capable(query, a); ok {
 			t.Fatalf("phoenix cannot enact %s; Capable must say so (why=%q)", a, why)
@@ -161,7 +161,7 @@ func TestEligibleAttributesTheBackendExclusion(t *testing.T) {
 // DOES implement debugger, the admission leg is still the thing that excludes it when the
 // deny-policy is unverified.
 func TestCodeExecLegStillReachableOnACapableBackend(t *testing.T) {
-	w := BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, actuator.NewNativeActuator(nil)).
+	w := BuildWitness(context.Background(), BuildIndex(nil, nil, nil), nil, nil, localActuator(actuator.NewNativeActuator(nil))).
 		WithCodeExec(unverifiedAdmission{}, map[string]map[string]string{"ns": {"managed": "true"}})
 	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "p"}}
 	got := w.Eligible(v, model.ActionDebugger, []string{"cover-key"})

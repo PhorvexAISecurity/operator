@@ -406,7 +406,7 @@ func TestM054HybridRotateUsesOwnerFeasibility(t *testing.T) {
 		Ready: true, DesiredReplicas: 2, ReadyReplicas: 2,
 	}}
 	pol := model.Policy{
-		NativeRotate:         actuatorUsesNativeRotate(actuator.NewHybridActuator(nil)),
+		NativeRotate:         actuatorUsesNativeRotate(localActuation(actuator.NewHybridActuator(nil))),
 		MinAvailableReplicas: 1,
 	}
 	if !pol.NativeRotate {
@@ -423,7 +423,7 @@ func TestM054HybridRotateUsesOwnerFeasibility(t *testing.T) {
 	if verdict := feasibility.Evaluate(view, move, pol); !verdict.Feasible {
 		t.Fatalf("eligible hybrid owner was refused: %+v", verdict)
 	}
-	if actuatorUsesNativeRotate(actuator.NewPhoenixActuator(nil)) {
+	if actuatorUsesNativeRotate(localActuation(actuator.NewPhoenixActuator(nil))) {
 		t.Fatal("pure Phoenix rotate was incorrectly classified as native")
 	}
 }

@@ -135,7 +135,7 @@ func m079DefaultComposition(t *testing.T) {
 		t.Fatalf("default direct capability ok=%v why=%q", ok, why)
 	}
 	view := m079View()
-	witness := capability.BuildWitness(t.Context(), capability.BuildIndex(nil, nil, nil), nil, nil, native)
+	witness := capability.BuildWitness(t.Context(), capability.BuildIndex(nil, nil, nil), nil, nil, localActuator(native))
 	if ok, why := witness.Capable(view, model.ActionMIGRebind); ok || why != actuator.ReasonTransportUnwired {
 		t.Fatalf("default witness capability ok=%v why=%q", ok, why)
 	}
@@ -221,7 +221,7 @@ func m079EnabledComposition(t *testing.T) {
 	}
 	view := m079View()
 	view.Pod.UID, view.Pod.ServiceAccount = string(targetPod.UID), targetPod.Spec.ServiceAccountName
-	witness := capability.BuildWitness(t.Context(), capability.BuildIndex(nil, nil, nil), nil, nil, native).WithPolicyIdentity(phorvexPolicy.Name, string(phorvexPolicy.UID))
+	witness := capability.BuildWitness(t.Context(), capability.BuildIndex(nil, nil, nil), nil, nil, localActuator(native)).WithPolicyIdentity(phorvexPolicy.Name, string(phorvexPolicy.UID))
 	if reason := witness.Eligible(view, model.ActionMIGRebind, []string{"gpu-contention"}); reason != nil {
 		t.Fatalf("enabled generator exclusion=%+v", reason)
 	}

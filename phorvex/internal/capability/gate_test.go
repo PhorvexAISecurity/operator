@@ -57,7 +57,7 @@ func capFleet() ([]*model.WorkloadView, Witness) {
 	views := []*model.WorkloadView{{Pod: leader}, {Pod: swap}, {Pod: shard}}
 	nodes := []ingest.NodeInfo{{Name: "gpu-a", Schedulable: true, AllocatableGPU: 1}, {Name: "gpu-b", Schedulable: true, AllocatableGPU: 1}}
 	svcs := []ingest.ServiceInfo{{Namespace: "ns", Name: "infer", Selector: map[string]string{"app": "infer", labelServing: "true", labelWarmRole: "leader", labelSwapGroup: "swap-a", labelModelShard: "shard-a"}}}
-	wit := BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, okActuator{})
+	wit := BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, localActuator(okActuator{}))
 	return views, wit
 }
 
@@ -76,7 +76,7 @@ func mcpCapableFixture() (*model.WorkloadView, Witness) {
 		MCPConfigMapUID: "99999999-9999-4999-8999-999999999999", MCPSourceSHA256: voicemcppolicy.ReviewedMCPSourceSHA256,
 		PolicyName: "voice-defense", PolicyUID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", PolicyGeneration: 1}
 	view := &model.WorkloadView{Pod: p}
-	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, localActuator(okActuator{})).
 		WithPolicyIdentity("voice-defense", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 	return view, witness
 }
@@ -97,7 +97,7 @@ func endpointLeaseCapableFixture() (*model.WorkloadView, Witness) {
 		ObservedAt: time.Now().UTC(),
 	}
 	view := &model.WorkloadView{Pod: p}
-	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+	witness := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, localActuator(okActuator{})).
 		WithOperatorNamespace("phorvex-system").
 		WithPolicyIdentity("vllm-defense", p.EndpointLeaseObservation.PolicyUID)
 	return view, witness
@@ -170,7 +170,7 @@ func TestSensitiveOutputCapabilityRequiresExactPolicyObservation(t *testing.T) {
 		OutputPolicyConfigMap: "policy-cm", OutputPolicyRuleSHA256: "rule", OutputProxySourceSHA256: "proxy",
 		OutputSupportSourceSHA256: "support", OutputEventCreator: "creator"}
 	v := &model.WorkloadView{Pod: p}
-	w := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, okActuator{}).
+	w := BuildWitness(context.Background(), BuildIndex([]model.Pod{p}, nil, nil), nil, nil, localActuator(okActuator{})).
 		WithPolicyIdentity("guardrail-output-fixture", "policy-uid")
 	if ok, _ := w.Capable(v, model.ActionSensitiveOutputPolicyActivate); ok {
 		t.Fatal("missing event accepted")
@@ -196,7 +196,7 @@ func TestM033RouteCapabilityRequiresActualServiceContract(t *testing.T) {
 	peer.Name = "peer"
 	service := ingest.ServiceInfo{Namespace: "ns", Name: "route", Selector: map[string]string{"app": "web", "phorvex.ai/route-key": "old"}}
 	check := func(target model.Pod, fleet []model.Pod, services []ingest.ServiceInfo) (bool, string) {
-		w := BuildWitness(context.Background(), BuildIndex(fleet, nil, services), nil, nil, okActuator{})
+		w := BuildWitness(context.Background(), BuildIndex(fleet, nil, services), nil, nil, localActuator(okActuator{}))
 		return w.Capable(&model.WorkloadView{Pod: target}, model.ActionRouteRotate)
 	}
 	if ok, why := check(base, []model.Pod{base, peer}, []ingest.ServiceInfo{service}); !ok {
@@ -260,7 +260,7 @@ func TestM033RouteCapabilityRequiresEmptySelectorLabelPresence(t *testing.T) {
 			if idx.readyByService[poolKey("ns", "route")] != want {
 				t.Fatalf("Ready selected backends=%d, want %d", idx.readyByService[poolKey("ns", "route")], want)
 			}
-			w := BuildWitness(context.Background(), idx, nil, nil, okActuator{})
+			w := BuildWitness(context.Background(), idx, nil, nil, localActuator(okActuator{}))
 			ok, why := w.Capable(&model.WorkloadView{Pod: target}, model.ActionRouteRotate)
 			if present && (!ok || why != "") {
 				t.Fatalf("present-empty selected target capable=%v why=%q", ok, why)
@@ -299,7 +299,7 @@ func TestCapable_ConfigPredicates(t *testing.T) {
 			tc.mutate(leader, &nodes)
 			fleet[0] = *leader
 			svcs := []ingest.ServiceInfo{{Namespace: "ns", Name: "infer", Selector: map[string]string{"app": "infer", labelServing: "true"}}}
-			wit := BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, okActuator{})
+			wit := BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, localActuator(okActuator{}))
 			if ok, _ := wit.Capable(&model.WorkloadView{Pod: *leader}, tc.action); ok {
 				t.Fatalf("%s: leader still capable for %s after breaking %s", tc.name, tc.action, tc.name)
 			}
@@ -323,7 +323,7 @@ func TestEligible_CheapestFirstOrder(t *testing.T) {
 	}
 	// (a) not-installable beats no-cover (cheapest-first): even with empty cover, an
 	// uninstallable action reports not-installable.
-	niWit := BuildWitness(context.Background(), wit.idx, model.InstallSet{model.ActionRotate: {}}, nil, okActuator{})
+	niWit := BuildWitness(context.Background(), wit.idx, model.InstallSet{model.ActionRotate: {}}, nil, localActuator(okActuator{}))
 	if r := niWit.Eligible(v, action, nil); r == nil || r.Kind != ReasonNotInstallable {
 		t.Fatalf("not-installable must win over no-cover: got %+v", r)
 	}
@@ -335,7 +335,7 @@ func TestEligible_CheapestFirstOrder(t *testing.T) {
 }
 
 func witOver(fleet []model.Pod, nodes []ingest.NodeInfo, svcs []ingest.ServiceInfo) Witness {
-	return BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, okActuator{})
+	return BuildWitness(context.Background(), BuildIndex(fleet, nodes, svcs), nil, nil, localActuator(okActuator{}))
 }
 
 func twoGPUNodes() []ingest.NodeInfo {
@@ -410,7 +410,7 @@ func TestM034ConfiguredPoolReconCapabilityAndOptimizer(t *testing.T) {
 	leader, shadow := views[0].Pod, views[1].Pod
 	leader.HasGPU, leader.MIGDevice, leader.Node = false, "", "cpu-a"
 	shadow.HasGPU, shadow.Node = false, "cpu-a"
-	cpuWit := BuildWitness(context.Background(), BuildIndex([]model.Pod{leader, shadow}, []ingest.NodeInfo{{Name: "cpu-a", Schedulable: true}}, nil), nil, nil, okActuator{})
+	cpuWit := BuildWitness(context.Background(), BuildIndex([]model.Pod{leader, shadow}, []ingest.NodeInfo{{Name: "cpu-a", Schedulable: true}}, nil), nil, nil, localActuator(okActuator{}))
 	if ok, why := cpuWit.Capable(&model.WorkloadView{Pod: leader}, model.ActionWarmSwap); !ok {
 		t.Fatalf("CPU served-model one-node pool rejected: %s", why)
 	}
@@ -632,7 +632,7 @@ func TestTransportUnwired_M79(t *testing.T) {
 	native := actuator.NewNativeActuator(nil)
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
-	wit := BuildWitness(context.Background(), base.idx, nil, nil, native) // NodeExecWired()==false by default
+	wit := BuildWitness(context.Background(), base.idx, nil, nil, localActuator(native)) // NodeExecWired()==false by default
 	ok, why := wit.Capable(views[0], model.ActionMIGRebind)
 	if ok || !strings.Contains(why, "transport-unwired") {
 		t.Fatalf("mig-rebind with unwired transport: want capability-unsupported transport-unwired, got ok=%v why=%q", ok, why)
@@ -655,7 +655,7 @@ func (d denySSAR) Create(_ context.Context, sar *authzv1.SelfSubjectAccessReview
 func TestCapableAndAuthorized(t *testing.T) {
 	capable := model.Pod{Namespace: "denied", HasGPU: true, ServingEndpointReady: true}
 	az := authz.NewCheckerWithClient(denySSAR{denyNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
-	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, az, okActuator{})
+	wit := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, az, localActuator(okActuator{}))
 
 	// Capable but RBAC-denied -> the condition sees a no-rbac gap (M-160).
 	if ok, why := wit.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); ok || !strings.HasPrefix(why, "no-rbac:") {
@@ -663,7 +663,7 @@ func TestCapableAndAuthorized(t *testing.T) {
 	}
 	// Capable AND authorized (different ns) -> supported.
 	okPod := model.Pod{Namespace: "allowed", HasGPU: true, ServingEndpointReady: true}
-	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, az, okActuator{})
+	witA := BuildWitness(context.Background(), BuildIndex([]model.Pod{okPod}, nil, nil), nil, az, localActuator(okActuator{}))
 	if ok, _ := witA.CapableAndAuthorized(&model.WorkloadView{Pod: okPod}, model.ActionKVReset); !ok {
 		t.Fatal("capable + authorized must be supported")
 	}
@@ -674,7 +674,7 @@ func TestCapableAndAuthorized(t *testing.T) {
 	}
 	// RBAC-unknown fails OPEN (never a status gap; criterion 3).
 	azErr := authz.NewCheckerWithClient(denySSAR{errNS: map[string]bool{"denied": true}}, authz.DefaultTTL)
-	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, okActuator{})
+	witE := BuildWitness(context.Background(), BuildIndex([]model.Pod{capable}, nil, nil), nil, azErr, localActuator(okActuator{}))
 	if ok, _ := witE.CapableAndAuthorized(&model.WorkloadView{Pod: capable}, model.ActionKVReset); !ok {
 		t.Fatal("rbac-unknown must fail open (ok=true)")
 	}

@@ -97,7 +97,7 @@ func TestM124SnapshotOptOutExcludesWithoutCapabilityFailure(t *testing.T) {
 		{Pod: model.Pod{Name: "blocked", OptOut: model.ActuationBrakeObservation{Engaged: true, Cause: actuationbrake.PodOptOutEngaged}}},
 		{Pod: model.Pod{Name: "peer"}},
 	}
-	wit := capability.BuildWitness(context.Background(), capability.Index{}, model.InstallSet{}, nil, &fakeActuator{})
+	wit := capability.BuildWitness(context.Background(), capability.Index{}, model.InstallSet{}, nil, localActuator(&fakeActuator{}))
 	report := capabilityGaps(model.Policy{EnabledActions: map[model.Action]bool{model.ActionRotate: true}}, views, wit)
 	if report.observed != 1 || len(report.gaps) != 0 {
 		t.Fatalf("opt-out changed capability status: %+v", report)
@@ -161,7 +161,7 @@ func TestM124OptedOutPodConsumesNoBudgetAndPeerRemainsSelectable(t *testing.T) {
 	peerValue := *seedViews[0]
 	peerValue.Pod = *peerPod
 	ce := decision.NewCoverageEngine()
-	witness := capability.BuildWitness(context.Background(), capability.Index{}, model.InstallSet{}, nil, &fakeActuator{})
+	witness := capability.BuildWitness(context.Background(), capability.Index{}, model.InstallSet{}, nil, localActuator(&fakeActuator{}))
 	wireCapabilityGates(ce, witness, false, func(*model.WorkloadView) bool { return false })
 	decisions, err := ce.DecideChecked([]*model.WorkloadView{&blockedValue, &peerValue}, pol)
 	if err != nil {

@@ -668,7 +668,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		t.Fatalf("all-empty phase requests=%v, want exact authenticated readiness pairs=%v", emptyCalls, wantEmptyCalls)
 	}
 	recording := &m034RecordingActuator{inner: native}
-	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, native).
+	wit := capability.BuildWitness(ctx, capability.BuildIndex(snap.Pods, snap.Nodes, snap.Services), nil, nil, localActuator(native)).
 		WithPolicyIdentity(policy.Name, string(policy.UID))
 	engine := decision.NewCoverageEngine()
 	wireCapabilityGates(engine, wit, true, func(*model.WorkloadView) bool { return false })
