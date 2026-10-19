@@ -514,7 +514,10 @@ func runGPUHarness(ctx context.Context, job Job, runtime GPUFixtureRuntime, conf
 	}
 	result.Stdout, result.Stderr = stdout.Bytes(), stderr.Bytes()
 	result.OutputOverflow = stdout.overflow || stderr.overflow
-	result.ProcessGroupGone = !linuxProcessGroupExists(cmd.Process.Pid)
+	// Members of the group can still be exiting, or awaiting their reaper, when the
+	// leader's exit is reported. They get a bounded moment; one that remains is an
+	// unresolved group, never a clean exit.
+	result.ProcessGroupGone = waitGPUProcessGroupGone(cmd.Process.Pid, gpuGroupExitGrace)
 	if !result.ProcessGroupGone {
 		result.Err = errors.Join(result.Err, errors.New("GPU harness process group remains after leader exit"))
 	}
