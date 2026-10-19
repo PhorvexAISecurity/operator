@@ -50,10 +50,14 @@ type Server struct {
 	liveWriteBudget time.Duration
 	liveReadBudget  time.Duration
 	// One shared reader per remote audit path for every /api/live subscriber (live_tail.go).
-	liveTailMu     sync.Mutex
-	liveTailers    map[string]*liveTailer
-	liveTailDone   chan struct{}
-	runs           *RunManager
+	liveTailMu   sync.Mutex
+	liveTailers  map[string]*liveTailer
+	liveTailDone chan struct{}
+	runs         *RunManager
+	// attackWatchers tracks the watchers startAttackRecordAt launches. A watcher
+	// publishes its finished record before it persists it, so waiting on this is
+	// how a caller knows the record's last state write has returned.
+	attackWatchers sync.WaitGroup
 	history        *historyStore
 	historyInitErr string
 	// Runtime optimizer parameters (optimizer_runtime.go); nil uses the cluster and the audit tail.

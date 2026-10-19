@@ -744,7 +744,11 @@ func (s *Server) startAttackRecordAtKind(ctxName, service, ns, pod, attack, atta
 	if interval <= 0 {
 		interval = 3 * time.Second
 	}
-	go s.watchAttackUntil(ctxName, r, deadline, interval)
+	s.attackWatchers.Add(1)
+	go func() {
+		defer s.attackWatchers.Done()
+		s.watchAttackUntil(ctxName, r, deadline, interval)
+	}()
 	return r.ID
 }
 

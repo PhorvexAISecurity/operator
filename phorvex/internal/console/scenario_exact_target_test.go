@@ -183,7 +183,7 @@ func TestExactCatalogueTargetUsesOwnedPodAndDeployment(t *testing.T) {
 	if len(manifests) != 1 || !strings.Contains(manifests[0], `targets: ["voice/owned-0"]`) || !strings.Contains(manifests[0], `phorvex.ai/console-target-pod-uid: "owned-uid"`) || strings.Contains(manifests[0], "voice-bot-0") {
 		t.Fatalf("wrong serialized SecurityEvent: %v", manifests)
 	}
-	rec := waitCatalogueSignal(t, response.AttackID)
+	rec := waitCatalogueSignal(t, s, response.AttackID)
 	if rec == nil || rec.Pod != "owned-0" || rec.TargetUID != "owned-uid" || rec.Deploy != "owned" || rec.UptimeBefore != 100 || rec.StimulusEvidence == nil || rec.StimulusEvidence.BehavioralExecuted || rec.Outcome != "" {
 		t.Fatalf("wrong owned case baseline: %+v", rec)
 	}

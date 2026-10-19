@@ -131,6 +131,10 @@ func terminateRecordedGPUProcessGroup(pgid int, prefix string) string {
 	return prefix + "-process-group-still-present"
 }
 
+// gpuGroupExitGrace bounds how long a harness's process group may take to finish
+// exiting after its leader has.
+const gpuGroupExitGrace = time.Second
+
 func waitGPUProcessGroupGone(pgid int, bound time.Duration) bool {
 	deadline := time.Now().Add(bound)
 	for time.Now().Before(deadline) {

@@ -26,7 +26,29 @@ type realThreeMemberCluster struct {
 	members []*realClusterMember
 }
 
+// startRealThreeMemberCluster starts three in-process members routed to each other.
+// Route ports are reserved by closing a probe listener, so on a busy host another
+// process can take one before its member binds it; a cluster whose member cannot
+// start is shut down and started again on fresh ports.
 func startRealThreeMemberCluster(t *testing.T) *realThreeMemberCluster {
+	t.Helper()
+	const attempts = 3
+	for attempt := 1; ; attempt++ {
+		cluster, err := tryStartRealThreeMemberCluster(t)
+		if err == nil {
+			waitForExactRoutes(t, cluster, 4, 10*time.Second)
+			waitForJetStreamMetaLeader(t, cluster, 10*time.Second)
+			t.Cleanup(func() { cluster.shutdown() })
+			return cluster
+		}
+		if attempt == attempts {
+			t.Fatal(err)
+		}
+		t.Logf("cluster start attempt %d: %v; retrying on fresh route ports", attempt, err)
+	}
+}
+
+func tryStartRealThreeMemberCluster(t *testing.T) (*realThreeMemberCluster, error) {
 	t.Helper()
 	const clusterName = "post25-js-durability"
 	routePorts := []int{reserveLocalPort(t), reserveLocalPort(t), reserveLocalPort(t)}
@@ -67,13 +89,13 @@ func startRealThreeMemberCluster(t *testing.T) *realThreeMemberCluster {
 			},
 			Routes: routes,
 		}
-		startRealClusterMember(t, member)
+		if err := startClusterMember(member); err != nil {
+			cluster.shutdown()
+			return nil, err
+		}
 		cluster.members = append(cluster.members, member)
 	}
-	waitForExactRoutes(t, cluster, 4, 10*time.Second)
-	waitForJetStreamMetaLeader(t, cluster, 10*time.Second)
-	t.Cleanup(func() { cluster.shutdown() })
-	return cluster
+	return cluster, nil
 }
 
 func waitForJetStreamMetaLeader(t *testing.T, cluster *realThreeMemberCluster, timeout time.Duration) {
@@ -111,18 +133,25 @@ func reserveLocalPort(t *testing.T) int {
 
 func startRealClusterMember(t *testing.T, member *realClusterMember) {
 	t.Helper()
+	if err := startClusterMember(member); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func startClusterMember(member *realClusterMember) error {
 	opts := *member.opts
 	opts.Routes = append([]*url.URL(nil), member.opts.Routes...)
 	srv, err := server.NewServer(&opts)
 	if err != nil {
-		t.Fatalf("create %s: %v", member.name, err)
+		return fmt.Errorf("create %s: %w", member.name, err)
 	}
 	go srv.Start()
 	if !srv.ReadyForConnections(5 * time.Second) {
 		srv.Shutdown()
-		t.Fatalf("%s did not become ready", member.name)
+		return fmt.Errorf("%s did not become ready", member.name)
 	}
 	member.srv = srv
+	return nil
 }
 
 func waitForExactRoutes(t *testing.T, cluster *realThreeMemberCluster, want int, timeout time.Duration) {

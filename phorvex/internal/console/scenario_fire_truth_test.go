@@ -133,11 +133,13 @@ func launchCatalogueSignal(t *testing.T, s *Server, body string) *httptest.Respo
 	return w
 }
 
-func waitCatalogueSignal(t *testing.T, id string) *attackRecord {
+func waitCatalogueSignal(t *testing.T, s *Server, id string) *attackRecord {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if rec := attackSnapshotByID(id); rec != nil && rec.Status != "running" {
+			// The watcher persists the finished record after publishing it.
+			s.attackWatchers.Wait()
 			return rec
 		}
 		time.Sleep(5 * time.Millisecond)
@@ -168,7 +170,7 @@ func TestCatalogueSignalRouteIsUnscoredAndObservationOptIn(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &launch); err != nil || launch.AttackID == "" {
 		t.Fatalf("launch=%s err=%v", w.Body.String(), err)
 	}
-	rec := waitCatalogueSignal(t, launch.AttackID)
+	rec := waitCatalogueSignal(t, s, launch.AttackID)
 	if rec.Outcome != "" || rec.Actuated || rec.Containment != "" || rec.DwellSec != 0 || rec.EvidenceKind != "catalogue-signal" {
 		t.Fatalf("signal received security outcome: %+v", rec)
 	}
