@@ -214,11 +214,11 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   neighbours in map order, so a view's neighbours and neighbour events changed
   order from tick to tick. Phase 4b-2 sorts them; floating-point sums over a
   view's neighbours are now reproducible.
-- **The capability RBAC check runs as the dispatcher.** The witness issues the
-  SelfSubjectAccessReview for the verbs `actuatorapi.Actuator.RequiredVerbs` names,
-  so it asks whether the *dispatcher's* identity may act. Once the actuator runs
-  under its own ServiceAccount (phase 4c-3, deployed in phase 5) that answer must
-  come from the actuator's identity instead.
+- **The capability RBAC check ran as the dispatcher.** The witness issued the
+  SelfSubjectAccessReview itself, so it asked whether the *dispatcher's* identity
+  may act. Since phase 4c-3 the gate asks the actuator (`AccessAllowed`,
+  `AccessObserved`), which reviews the identity it acts as: this process's in
+  process, its own ServiceAccount once it runs separately.
 - **Calibration has no single owner.** `calib` samples the sensor's fleet, learns
   from the dispatcher's rotation outcomes and produces the brain's shadow views.
   It is classified as sensor today; decide its service before phase 5.
