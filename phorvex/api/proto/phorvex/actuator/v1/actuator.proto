@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package phorvex.actuator.v1;
+
+option go_package = "github.com/phorvex/phorvex/internal/actuatorpb;actuatorpb";
+
+// ActuatorService serves the dispatcher-actuator contract
+// (phorvex/internal/actuatorapi) when the actuator runs as its own service
+// (ADR-0001).
+//
+// Domain values travel as CBOR encodings of the shared types
+// (phorvex/internal/wire), as on the brain and sensor services. Errors travel as
+// Error, which keeps the identities the dispatcher branches on. Hello refuses a
+// client built against another contract version or configured differently.
+service ActuatorService {
+  // Hello checks the contract version and the shared configuration, and returns
+  // the backend's fixed answers. A client calls it before anything else.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+
+  // SupportsAction reports whether an action's runtime fixtures are present on a
+  // target.
+  rpc SupportsAction(SupportsActionRequest) returns (SupportsActionResponse);
+
+  // CapabilityAdvisory reports local configuration posture for an action on a
+  // target.
+  rpc CapabilityAdvisory(CapabilityAdvisoryRequest) returns (CapabilityAdvisoryResponse);
+
+  // ObserveStandingPolicy reports route drift without changing anything.
+  rpc ObserveStandingPolicy(ObserveStandingPolicyRequest) returns (ObserveStandingPolicyResponse);
+
+  // ReconcileStandingPolicy repairs route drift.
+  rpc ReconcileStandingPolicy(ReconcileStandingPolicyRequest) returns (ReconcileStandingPolicyResponse);
+
+  // PrepareRoutes prepares dispatch routes for a backend without standing-policy
+  // maintenance.
+  rpc PrepareRoutes(PrepareRoutesRequest) returns (PrepareRoutesResponse);
+
+  // RetirePolicyBinding forgets a removed policy's local authorization.
+  rpc RetirePolicyBinding(RetirePolicyBindingRequest) returns (RetirePolicyBindingResponse);
+
+  // RecoverOperations runs journal-driven operation maintenance.
+  rpc RecoverOperations(RecoverOperationsRequest) returns (RecoverOperationsResponse);
+
+  // QuarantineCapacity reports a namespace's retained-quarantine capacity.
+  rpc QuarantineCapacity(QuarantineCapacityRequest) returns (QuarantineCapacityResponse);
+
+  // PendingOperation reports whether a protected operation is unresolved for a
+  // Pod.
+  rpc PendingOperation(PendingOperationRequest) returns (PendingOperationResponse);
+
+  // Actuate performs one move.
+  rpc Actuate(ActuateRequest) returns (ActuateResponse);
+}
+
+// Error is an error the actuator returned: its text, and whether it is a
+// positively established refusal without effect or a context expiry. Any other
+// identity is lost; the dispatcher branches on no other.
+message Error {
+  string message = 1;
+  // The error is or wraps an actuatorapi.NoEffectRefusal.
+  bool no_effect_refusal = 2;
+  // The error is or wraps context.DeadlineExceeded.
+  bool deadline_exceeded = 3;
+  // The error is or wraps context.Canceled.
+  bool canceled = 4;
+}
+
+message HelloRequest {
+  // Contract version the client was built against.
+  uint32 contract_version = 1;
+  // SHA-256 of the client's actuatorapi.Config.
+  string config_sha256 = 2;
+}
+
+message HelloResponse {
+  uint32 contract_version = 1;
+  string config_sha256 = 2;
+  // The configured backend.
+  string backend = 3;
+  // Whether the backend keeps standing route policy.
+  bool maintains_standing_policy = 4;
+  // CBOR map[model.Action][]authz.Verb: the access each known action needs. An
+  // action that is absent needs none.
+  bytes required_verbs = 5;
+}
+
+message SupportsActionRequest {
+  string action = 1;
+  // CBOR actuatorapi.Target
+  bytes target = 2;
+}
+
+message SupportsActionResponse {
+  bool ok = 1;
+  string why = 2;
+}
+
+message CapabilityAdvisoryRequest {
+  string action = 1;
+  // CBOR actuatorapi.Target
+  bytes target = 2;
+}
+
+message CapabilityAdvisoryResponse {
+  string advisory = 1;
+}
+
+message RouteMaintenance {
+  string state = 1;
+  string detail = 2;
+}
+
+message RoutePreparation {
+  Error phoenix_error = 1;
+  Error native_error = 2;
+  bool phoenix_skipped = 3;
+  bool native_skipped = 4;
+}
+
+// PolicyMaintenanceResult is one tick's standing-policy result on both routes.
+message PolicyMaintenanceResult {
+  RoutePreparation preparation = 1;
+  RouteMaintenance phoenix = 2;
+  RouteMaintenance native = 3;
+}
+
+message ObserveStandingPolicyRequest {
+  // CBOR actuatorapi.TenantTarget
+  bytes target = 1;
+}
+
+message ObserveStandingPolicyResponse {
+  PolicyMaintenanceResult result = 1;
+}
+
+message ReconcileStandingPolicyRequest {
+  // CBOR actuatorapi.TenantTarget
+  bytes target = 1;
+}
+
+message ReconcileStandingPolicyResponse {
+  PolicyMaintenanceResult result = 1;
+}
+
+message PrepareRoutesRequest {
+  // CBOR actuatorapi.TenantTarget
+  bytes target = 1;
+}
+
+message PrepareRoutesResponse {
+  RoutePreparation preparation = 1;
+  Error error = 2;
+}
+
+message RetirePolicyBindingRequest {
+  string policy_uid = 1;
+}
+
+message RetirePolicyBindingResponse {
+  bool retained = 1;
+  Error error = 2;
+}
+
+message RecoverOperationsRequest {
+  bool global_kill = 1;
+}
+
+message RecoveryEvent {
+  string receipt = 1;
+  string kind = 2;
+  string phase = 3;
+  string tenant = 4;
+  string policy_namespace = 5;
+  string policy_name = 6;
+  string policy_uid = 7;
+  string target_name = 8;
+  string target_uid = 9;
+  string outcome = 10;
+  string effect = 11;
+  Error error = 12;
+}
+
+message RecoverOperationsResponse {
+  // False when the backend keeps no operation journals; nothing else is set.
+  bool supported = 1;
+  repeated RecoveryEvent events = 2;
+  Error error = 3;
+}
+
+message QuarantineCapacityRequest {
+  string namespace = 1;
+}
+
+message QuarantineCapacityResponse {
+  bool configured = 1;
+  int64 limit = 2;
+  bool known = 3;
+  int64 used = 4;
+  string reason = 5;
+}
+
+message PendingOperationRequest {
+  string kind = 1;
+  string namespace = 2;
+  string pod = 3;
+  string pod_uid = 4;
+}
+
+message PendingOperationResponse {
+  bool pending = 1;
+  Error error = 2;
+}
+
+message ActuateRequest {
+  // CBOR actuatorapi.Request
+  bytes request = 1;
+}
+
+message ActuateResponse {
+  // CBOR actuatorapi.Result. A result may accompany an error.
+  bytes result = 1;
+  // False when the actuator refused the move before reaching the backend.
+  bool invoked = 2;
+  Error error = 3;
+}
