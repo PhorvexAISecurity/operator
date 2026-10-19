@@ -59,7 +59,10 @@ func (f *fullBackend) CapabilityAdvisory(model.Action, actuator.Target) string {
 func TestLocalDiscoversOptionalCapabilitiesAsTheRunnerDid(t *testing.T) {
 	ctx := context.Background()
 	plain := &Local{Actuator: &plainBackend{name: "plain"}}
-	if plain.MaintainsStandingPolicy() || plain.RetirePolicyBinding("uid") || plain.CapabilityAdvisory(model.ActionRotate, actuatorapi.Target{}) != "" {
+	if retained, err := plain.RetirePolicyBinding(ctx, "uid"); retained || err != nil {
+		t.Fatalf("a plain backend retired a binding: %v %v", retained, err)
+	}
+	if plain.MaintainsStandingPolicy() || plain.CapabilityAdvisory(ctx, model.ActionRotate, actuatorapi.Target{}) != "" {
 		t.Fatal("a plain backend reported optional capabilities")
 	}
 	if events, supported, err := plain.RecoverOperations(ctx, false); supported || events != nil || err != nil {
@@ -80,14 +83,14 @@ func TestLocalDiscoversOptionalCapabilitiesAsTheRunnerDid(t *testing.T) {
 	if got := full.ReconcileStandingPolicy(ctx, actuatorapi.TenantTarget{}).Phoenix.State; got != actuatorapi.PolicyMaintenanceRepaired {
 		t.Fatalf("reconcile = %s", got)
 	}
-	if !full.RetirePolicyBinding("uid-1") || !reflect.DeepEqual(backend.retired, []string{"uid-1"}) {
-		t.Fatalf("binding retirement not delegated: %v", backend.retired)
+	if retained, err := full.RetirePolicyBinding(ctx, "uid-1"); !retained || err != nil || !reflect.DeepEqual(backend.retired, []string{"uid-1"}) {
+		t.Fatalf("binding retirement not delegated: %v %v %v", retained, err, backend.retired)
 	}
 	events, supported, err := full.RecoverOperations(ctx, true)
 	if !supported || err != nil || len(events) != 1 || events[0].Receipt != "r1" || !reflect.DeepEqual(backend.kill, []bool{true}) {
 		t.Fatalf("recovery = %v %v %v kill=%v", events, supported, err, backend.kill)
 	}
-	if full.CapabilityAdvisory(model.ActionRotate, actuatorapi.Target{}) != "advice" {
+	if full.CapabilityAdvisory(ctx, model.ActionRotate, actuatorapi.Target{}) != "advice" {
 		t.Fatal("advisory not delegated")
 	}
 }

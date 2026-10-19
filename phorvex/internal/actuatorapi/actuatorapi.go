@@ -24,8 +24,8 @@ type Actuator interface {
 	// on target t. Some answers read the cluster or probe the workload.
 	SupportsAction(ctx context.Context, a model.Action, t Target) (ok bool, why string)
 	// CapabilityAdvisory reports local configuration posture for a on t. It
-	// performs no read.
-	CapabilityAdvisory(a model.Action, t Target) string
+	// performs no cluster read.
+	CapabilityAdvisory(ctx context.Context, a model.Action, t Target) string
 
 	// MaintainsStandingPolicy reports whether the backend keeps standing route
 	// policy, observed or reconciled every policy tick.
@@ -37,9 +37,9 @@ type Actuator interface {
 	// PrepareRoutes prepares dispatch routes for a backend without standing-policy
 	// maintenance. A non-nil error refuses every dispatch of the tick.
 	PrepareRoutes(ctx context.Context, target TenantTarget) (RoutePreparation, error)
-	// RetirePolicyBinding forgets a removed policy's local authorization and reports
-	// whether the backend keeps such bindings.
-	RetirePolicyBinding(policyUID string) bool
+	// RetirePolicyBinding forgets a removed policy's local authorization. retained
+	// reports whether the backend keeps such bindings and forgot this one.
+	RetirePolicyBinding(ctx context.Context, policyUID string) (retained bool, err error)
 
 	// RecoverOperations runs journal-driven operation maintenance. supported is
 	// false when the backend keeps no operation journals.

@@ -990,8 +990,14 @@ func (m *Manager) DrainLifecycle() {
 			continue
 		}
 		stores := 0
-		if act := m.actuation(); act != nil && ev.uid != "" && act.RetirePolicyBinding(ev.uid) {
-			stores++
+		if act := m.actuation(); act != nil && ev.uid != "" {
+			retained, err := act.RetirePolicyBinding(context.Background(), ev.uid)
+			if err != nil {
+				m.Log.Error(err, "actuator policy binding retirement failed", "policyUID", ev.uid)
+			}
+			if retained {
+				stores++
+			}
 		}
 		stores += m.brain().ForgetOwner(ev.owner)
 		if m.Clock != nil {

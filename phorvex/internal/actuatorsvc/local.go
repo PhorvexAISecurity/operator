@@ -51,7 +51,7 @@ func (l *Local) SupportsAction(ctx context.Context, a model.Action, t actuatorap
 	return l.Actuator.SupportsAction(ctx, a, t)
 }
 
-func (l *Local) CapabilityAdvisory(a model.Action, t actuatorapi.Target) string {
+func (l *Local) CapabilityAdvisory(_ context.Context, a model.Action, t actuatorapi.Target) string {
 	advisory, ok := l.Actuator.(interface {
 		CapabilityAdvisory(model.Action, actuator.Target) string
 	})
@@ -100,13 +100,13 @@ func (l *Local) PrepareRoutes(ctx context.Context, target actuatorapi.TenantTarg
 	return preparation, err
 }
 
-func (l *Local) RetirePolicyBinding(policyUID string) bool {
+func (l *Local) RetirePolicyBinding(_ context.Context, policyUID string) (bool, error) {
 	lifecycle, ok := l.Actuator.(actuator.PolicyBindingLifecycle)
 	if !ok {
-		return false
+		return false, nil
 	}
 	lifecycle.RetirePolicyBinding(policyUID)
-	return true
+	return true, nil
 }
 
 func (l *Local) RecoverOperations(ctx context.Context, globalKill bool) ([]actuatorapi.RecoveryEvent, bool, error) {
