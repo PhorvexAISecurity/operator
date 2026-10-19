@@ -54,7 +54,7 @@ var domains = map[string]string{
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
 	"exposure": dispatcher, "scopedoutcome": dispatcher, "brainclient": dispatcher, "sensorclient": dispatcher,
 
-	"actuator": actuator, "podresources": actuator, "startupauthz": actuator,
+	"actuator": actuator, "podresources": actuator, "startupauthz": actuator, "actuatorsvc": actuator,
 
 	"cataloguev1": attacks, "lossobserver": attacks, "currentobserver": attacks,
 
