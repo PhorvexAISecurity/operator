@@ -209,7 +209,7 @@ type Witness struct {
 // (actuatorapi.Actuator satisfies it).
 type Actuator interface {
 	SupportsAction(ctx context.Context, a model.Action, t actuatorapi.Target) (ok bool, why string)
-	CapabilityAdvisory(a model.Action, t actuatorapi.Target) string
+	CapabilityAdvisory(ctx context.Context, a model.Action, t actuatorapi.Target) string
 	RequiredVerbs(a model.Action) []authz.Verb
 }
 
@@ -472,7 +472,7 @@ func (w Witness) Advisory(v *model.WorkloadView, action model.Action) string {
 	if w.act == nil || v == nil {
 		return ""
 	}
-	return w.act.CapabilityAdvisory(action, w.targetFrom(v))
+	return w.act.CapabilityAdvisory(w.ctx, action, w.targetFrom(v))
 }
 
 // requiredVerbs follows the backend that this witness will actually dispatch through.

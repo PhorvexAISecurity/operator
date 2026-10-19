@@ -217,7 +217,7 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
 - **The capability RBAC check runs as the dispatcher.** The witness issues the
   SelfSubjectAccessReview for the verbs `actuatorapi.Actuator.RequiredVerbs` names,
   so it asks whether the *dispatcher's* identity may act. Once the actuator runs
-  under its own ServiceAccount (phase 4c-2, deployed in phase 5) that answer must
+  under its own ServiceAccount (phase 4c-3, deployed in phase 5) that answer must
   come from the actuator's identity instead.
 - **Calibration has no single owner.** `calib` samples the sensor's fleet, learns
   from the dispatcher's rotation outcomes and produces the brain's shadow views.

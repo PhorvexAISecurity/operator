@@ -8,8 +8,10 @@ workloads, and every live re-read before a mutation happens inside it. See
 [ADR-0001](../architecture/ADR-0001-service-monorepo.md) for the service split.
 
 The dispatcher reaches it through one contract, `phorvex/internal/actuatorapi`.
-Phase 4c-1 implements it in process (`actuatorsvc.Local`); phase 4c-2 serves the
-same adapter over gRPC.
+`actuatorsvc.Local` implements it in process. `actuatorsvc.Server` serves the
+same adapter over gRPC (`phorvex.actuator.v1.ActuatorService`), and
+`actuatorclient.Client` is the dispatcher's side of it. The `cmd/actuator`
+binary and the manager's `--actuator-endpoint` follow in phase 4c-3.
 
 ## Contract
 
@@ -35,6 +37,44 @@ policy, policy bindings, operation recovery, route preparation, advisories) the
 way the runner did, so test doubles that implement only the base interface keep
 working.
 
+## Over gRPC
+
+Domain values (`Target`, `TenantTarget`, `Request`, `Result`) travel as CBOR
+(`phorvex/internal/wire`), as on the brain and sensor services. Errors travel as
+`actuatorpb.Error`: the text, and whether the error was a `NoEffectRefusal` or
+wrapped `context.DeadlineExceeded` or `context.Canceled`. Those are the only
+identities the dispatcher branches on; it reads every other error by its text.
+The route preparation, standing-policy results and recovery events carry their
+errors the same way.
+
+**Handshake.** `Hello` carries the contract version (`actuatorapi.ContractVersion`)
+and the SHA-256 of `actuatorapi.Config`: the operator namespace, the trusted
+detector identities (compared as a set) and the endpoint lease authority. It
+returns the answers that are fixed for a backend: its name, whether it keeps
+standing policy, and the access every known action needs, so `Backend`,
+`MaintainsStandingPolicy` and `RequiredVerbs` cost no call.
+
+**Deadlines.** Questions (support, advisory, standing-policy observation,
+capacity, fences, binding retirement) are bounded by the client's call timeout.
+Calls that may mutate (`Actuate`, `ReconcileStandingPolicy`, `PrepareRoutes`,
+`RecoverOperations`) are bounded only by the caller's context, as in process, so
+the client never cancels a mutation halfway. The caller's deadline and
+cancellation reach the actuator.
+
+**Failure semantics.** Every unanswered call fails closed:
+
+| Call | Unanswered reads as |
+|---|---|
+| `SupportsAction` | unsupported, `backend-unavailable: actuator service: ...` |
+| `CapabilityAdvisory` | no advisory (posture only) |
+| `ObserveStandingPolicy`, `ReconcileStandingPolicy` | the backend's routes `unknown` and refused for the tick |
+| `PrepareRoutes` | an error, which refuses every dispatch of the tick |
+| `RetirePolicyBinding` | not retired, with the error logged |
+| `RecoverOperations` | a failed journal read, logged and audited |
+| `QuarantineCapacity` | a configured bound of unknown use, which admits no new quarantine |
+| `PendingOperation` | unresolved, which fences the dispatch |
+| `Actuate` | possibly enacted: the backend counts as invoked and the error is never a refusal without effect |
+
 ## What stays with the dispatcher
 
 The kill switch and namespace brakes, the decision of what to act on, failure
@@ -46,5 +86,10 @@ cancellation) to decide fallbacks.
 ## Testing
 
 ```sh
-go -C phorvex test ./internal/actuatorsvc ./internal/capability ./internal/runner
+go -C phorvex test -race ./internal/actuatorpb ./internal/actuatorsvc ./internal/actuatorclient ./internal/capability ./internal/runner
 ```
+
+`actuatorclient`'s parity tests run a scripted contract behind the real server
+and client. They check every answer and argument for parity, error identities
+included. They also check that each unanswered call fails closed, and that a
+mutation keeps the caller's deadline while a question keeps the call timeout.
