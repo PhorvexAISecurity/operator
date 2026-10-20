@@ -31,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/actuatorapi"
@@ -44,7 +43,6 @@ import (
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
-	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/endpointlease"
@@ -135,9 +133,9 @@ func codeExecAwareEligibility(
 	authzNil bool,
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView, a model.Action, coverKeys []string,
-) *actionset.Eligibility {
+) *model.Eligibility {
 	if v != nil && v.Pod.OptOut.Engaged {
-		return &actionset.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
+		return &model.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
 	}
 	return eligibilityFrom(capWit.Eligible(v, a, coverKeys), authzNil, hasQualified, v)
 }
@@ -153,9 +151,9 @@ func codeExecAwareEligibilityObserved(
 	authzNil bool,
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView, a model.Action, coverKeys []string,
-) *actionset.Eligibility {
+) *model.Eligibility {
 	if v != nil && v.Pod.OptOut.Engaged {
-		return &actionset.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
+		return &model.Eligibility{Excluded: true, Kind: model.ExclusionOperatorOptOut, Detail: "operator Pod opt-out: " + v.Pod.OptOut.Cause}
 	}
 	return eligibilityFrom(capWit.EligibleObserved(v, a, coverKeys), authzNil, hasQualified, v)
 }
@@ -188,14 +186,14 @@ func eligibilityFrom(
 	authzNil bool,
 	hasQualified func(*model.WorkloadView) bool,
 	v *model.WorkloadView,
-) *actionset.Eligibility {
+) *model.Eligibility {
 	if r == nil {
 		if authzNil && hasQualified(v) {
-			return &actionset.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
+			return &model.Eligibility{Excluded: true, Kind: capability.ReasonNoRBAC, Detail: "m99: RBAC checker unavailable"}
 		}
 		return nil
 	}
-	return &actionset.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
+	return &model.Eligibility{Excluded: r.Excluded, Kind: r.Kind, Detail: r.Detail, RBACUnknown: r.RBACUnknown}
 }
 
 type Manager struct {
@@ -225,7 +223,7 @@ type Manager struct {
 	// observer. Its operation hook and Drain are nonblocking; unavailable or full
 	// reporting never delays or suppresses defensive dispatch.
 	ScopedOutcomeProducer interface {
-		decision.PersistenceObservationAuthority
+		model.PersistenceObservationAuthority
 		RecordNativeRotate(model.Policy, *model.WorkloadView, actuatorapi.Request, actuatorapi.Result, time.Time) bool
 		Drain(int) []model.ScopedOutcomeDelivery
 	}
@@ -1467,8 +1465,8 @@ func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.Workloa
 				Tenant: tenant, Namespace: view.Pod.Namespace, Pod: view.Pod.Name, Action: string(model.ActionRotate),
 				StartedAt: startedAt, RecordedAt: startedAt, Outcome: calib.OutcomeInvalid,
 				InvalidReason:    "controller owner or pod UID unavailable; replacement cannot be matched",
-				ReferenceAtStart: cost.ReadyDelayReference,
-				CensorDeadline:   startedAt.Add(2 * cost.ReadyDelayReference),
+				ReferenceAtStart: model.ReadyDelayReference,
+				CensorDeadline:   startedAt.Add(2 * model.ReadyDelayReference),
 			})
 		}
 		return false
@@ -1490,8 +1488,8 @@ func (m *Manager) trackRotationReceipt(owner, tenant string, view *model.Workloa
 	m.pendingRotations[key] = pendingRotation{
 		owner: owner, epoch: m.capturedEpoch(owner), tenant: tenant,
 		ledgerID: rotationLedgerID(tenant, view), startedAt: startedAt,
-		referenceAtStart:     cost.ReadyDelayReference,
-		censorDeadline:       startedAt.Add(2 * cost.ReadyDelayReference),
+		referenceAtStart:     model.ReadyDelayReference,
+		censorDeadline:       startedAt.Add(2 * model.ReadyDelayReference),
 		view:                 *view,
 		knownUIDs:            known,
 		minAvailableReplicas: minAvailableReplicas,
@@ -2353,7 +2351,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	m.creditCadence(ctx, e, obs.Now)
 }
 
-func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) bool {
+func declaredRouteServiceExists(p *model.Pod, services []model.ServiceInfo) bool {
 	if p == nil || p.RouteService == "" {
 		return false
 	}
@@ -2368,14 +2366,14 @@ func declaredRouteServiceExists(p *model.Pod, services []ingest.ServiceInfo) boo
 // checkedSelectionRejectionReason separates a stale lifecycle refusal from a
 // failure of the current policy and bounds every externally published reason.
 func checkedSelectionRejectionReason(err error) (metrics.TickRejectionReason, bool) {
-	if errors.Is(err, decision.ErrOwnerRetired) {
+	if errors.Is(err, brainapi.ErrOwnerRetired) {
 		return "", false
 	}
-	var collision actionset.CrossBlockCollision
+	var collision model.CrossBlockCollision
 	if errors.As(err, &collision) {
 		return metrics.RejectCrossBlockCollision, true
 	}
-	var collisionPointer *actionset.CrossBlockCollision
+	var collisionPointer *model.CrossBlockCollision
 	if errors.As(err, &collisionPointer) {
 		return metrics.RejectCrossBlockCollision, true
 	}
@@ -2519,7 +2517,7 @@ func cloneExistential(in *model.ExistentialDecision) *model.ExistentialDecision 
 	return &out
 }
 
-func fallbackDecision(original model.Decision, a decision.Alternative) model.Decision {
+func fallbackDecision(original model.Decision, a model.Alternative) model.Decision {
 	d := original
 	if original.Economics != nil {
 		economics := *original.Economics

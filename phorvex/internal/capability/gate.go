@@ -25,7 +25,6 @@ import (
 	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/codeexec"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -97,7 +96,7 @@ type Index struct {
 	shardShadow       map[string]bool // "ns\x00shard" -> a ready promotable shadow exists (independent shard)
 	scalarPoolShadows map[string]bool // ns/group/RS UID/Service -> configured ready scalar member
 	parallelRanks     map[string]int  // "ns\x00shard\x00parallel" -> distinct ready shadow ranks
-	servingByNS       map[string][]ingest.ServiceInfo
+	servingByNS       map[string][]model.ServiceInfo
 	readyByService    map[string]int
 	schedulableGPU    int
 }
@@ -114,13 +113,13 @@ func poolKey(parts ...string) string {
 }
 
 // BuildIndex precomputes the fleet/pool indices from the tick snapshot ONCE (R1).
-func BuildIndex(fleet []model.Pod, nodes []ingest.NodeInfo, services []ingest.ServiceInfo) Index {
+func BuildIndex(fleet []model.Pod, nodes []model.NodeInfo, services []model.ServiceInfo) Index {
 	idx := Index{
 		warmShadowGroups:  map[string]bool{},
 		shardShadow:       map[string]bool{},
 		scalarPoolShadows: map[string]bool{},
 		parallelRanks:     map[string]int{},
-		servingByNS:       map[string][]ingest.ServiceInfo{},
+		servingByNS:       map[string][]model.ServiceInfo{},
 		readyByService:    map[string]int{},
 	}
 	readyByNS := map[string][]model.Pod{}
@@ -692,7 +691,7 @@ func capabilityTarget(pod *model.Pod) bool {
 	return pod != nil && pod.Labels[labelWarmRole] != warmShadowRole && pod.HasServingDeclaration()
 }
 
-func hasAllocatableGPU(node ingest.NodeInfo) bool {
+func hasAllocatableGPU(node model.NodeInfo) bool {
 	if node.AllocatableGPU > 0 {
 		return true
 	}
