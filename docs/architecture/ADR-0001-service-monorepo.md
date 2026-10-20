@@ -186,14 +186,17 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
 
 ## Follow-ups
 
-- **Shadow evaluation probes live workloads.** `ShadowCapability` is documented as
-  free of externally visible effects, but `capability.Witness.EligibleObserved`
-  only swaps the RBAC leg to the cache; it still calls `actuator.SupportsAction`,
-  which for request drain issues the authenticated v11 readiness HTTP probe and
-  reads journals. A calibration-enabled tick therefore probes workloads a second
-  time. The refactor keeps this behaviour so decision parity stays testable; fix it
-  after the split, for example by answering the shadow pass from the production
-  pass's per-tick support answers.
+- **Shadow evaluation probed live workloads (fixed after phase 4).**
+  `ShadowCapability` is documented as free of externally visible effects, but
+  `capability.Witness.EligibleObserved` only swapped the RBAC leg to the cache. It
+  still called `SupportsAction`, which for request drain issues the authenticated
+  v11 readiness HTTP probe and reads journals, so a calibration-enabled tick probed
+  workloads a second time. The witness now records every support answer the
+  tick's reviewing passes get from the actuator (the ActionsSupported status asks
+  about every enabled action on every allocatable Pod before the brain runs), and
+  the shadow answers from those records only. A question nobody asked excludes
+  with a `capability-unobserved` detail; calibration's shadow views keep the
+  production Pods, so a live tick never meets one.
 
 - **Service transport security.** Phases 4a-2 and 4b-2 connect the manager to the
   brain and the sensor over plaintext gRPC behind `--brain-endpoint` and
