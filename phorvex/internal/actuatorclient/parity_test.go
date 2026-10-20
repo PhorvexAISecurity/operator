@@ -90,7 +90,14 @@ type scripted struct {
 	tenants  []actuatorapi.TenantTarget
 	requests []actuatorapi.Request
 	pending  []actuatorapi.PendingOperation
+	reviews  []accessReview
 	canceled int
+}
+
+type accessReview struct {
+	namespace string
+	verbs     []authz.Verb
+	review    bool
 }
 
 var _ actuatorapi.Actuator = (*scripted)(nil)
@@ -133,6 +140,25 @@ func (s *scripted) SupportsAction(ctx context.Context, a model.Action, target ac
 }
 func (s *scripted) CapabilityAdvisory(_ context.Context, a model.Action, target actuatorapi.Target) string {
 	return "advice-" + string(a) + "-" + target.NodeName
+}
+func (s *scripted) ReviewsAccess() bool { return true }
+func (s *scripted) AccessAllowed(_ context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return s.access(namespace, verbs, true)
+}
+func (s *scripted) AccessObserved(_ context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return s.access(namespace, verbs, false)
+}
+func (s *scripted) access(namespace string, verbs []authz.Verb, review bool) (bool, bool, string) {
+	s.mu.Lock()
+	s.reviews = append(s.reviews, accessReview{namespace, verbs, review})
+	s.mu.Unlock()
+	switch namespace {
+	case "locked":
+		return false, false, fmt.Sprintf("%s denied (review=%v)", verbs[0], review)
+	case "unreviewed":
+		return false, true, "authorization-unobserved: " + verbs[0].String()
+	}
+	return true, false, ""
 }
 func (s *scripted) MaintainsStandingPolicy() bool { return true }
 func (s *scripted) maintenance(target actuatorapi.TenantTarget, state actuatorapi.PolicyMaintenanceState) actuatorapi.PolicyMaintenanceResult {
@@ -265,16 +291,34 @@ func TestClientAnswersAsTheActuatorDoes(t *testing.T) {
 	got := &scripted{backend: actuatorapi.BackendHybrid}
 	client, _ := connect(t, got, actuatorclient.Options{})
 
-	if client.Backend() != actuatorapi.BackendHybrid || !client.MaintainsStandingPolicy() {
-		t.Fatalf("hello answers: backend=%s maintains=%v", client.Backend(), client.MaintainsStandingPolicy())
+	if client.Backend() != actuatorapi.BackendHybrid || !client.MaintainsStandingPolicy() || !client.ReviewsAccess() {
+		t.Fatalf("hello answers: backend=%s maintains=%v reviews=%v", client.Backend(), client.MaintainsStandingPolicy(), client.ReviewsAccess())
+	}
+	verbs := []authz.Verb{{Resource: "configmaps", Name: "journal", Verb: "update", OperatorScoped: true, Namespace: "phorvex-system"},
+		{Group: "apps", Resource: "deployments", Verb: "get", ClusterScoped: true}}
+	for _, ns := range []string{"vllm", "locked", "unreviewed"} {
+		for _, review := range []bool{true, false} {
+			gotAccess, wantAccess := client.AccessObserved, want.AccessObserved
+			if review {
+				gotAccess, wantAccess = client.AccessAllowed, want.AccessAllowed
+			}
+			gotAllowed, gotUnknown, gotWhy := gotAccess(ctx, ns, verbs)
+			wantAllowed, wantUnknown, wantWhy := wantAccess(ctx, ns, verbs)
+			if gotAllowed != wantAllowed || gotUnknown != wantUnknown || gotWhy != wantWhy {
+				t.Fatalf("access %s review=%v = %v %v %q, want %v %v %q", ns, review, gotAllowed, gotUnknown, gotWhy, wantAllowed, wantUnknown, wantWhy)
+			}
+		}
+	}
+	if !reflect.DeepEqual(got.reviews, want.reviews) {
+		t.Fatalf("access reviews reached the actuator as %+v, want %+v", got.reviews, want.reviews)
 	}
 	for _, a := range append([]model.Action{model.ActionNoop, model.ActionDisable, "future-action"}, model.MutatingActions...) {
 		if g, w := client.RequiredVerbs(a), want.RequiredVerbs(a); len(g) != len(w) || len(w) > 0 && !reflect.DeepEqual(g, w) {
 			t.Fatalf("required verbs for %s = %+v, want %+v", a, g, w)
 		}
 	}
-	verbs := client.RequiredVerbs(model.ActionRotate)
-	verbs[0].Verb = "mutated"
+	required := client.RequiredVerbs(model.ActionRotate)
+	required[0].Verb = "mutated"
 	if client.RequiredVerbs(model.ActionRotate)[0].Verb != "create" {
 		t.Fatal("a caller's change to the verbs reached the client's table")
 	}
@@ -414,6 +458,14 @@ func TestUnansweredCallsFailClosed(t *testing.T) {
 			if advisory := client.CapabilityAdvisory(ctx, model.ActionRotate, actuatorapi.Target{}); advisory != "" {
 				t.Fatalf("unanswered advisory = %q", advisory)
 			}
+			verbs := []authz.Verb{{Resource: "pods", Verb: "delete"}}
+			for name, review := range map[string]func(context.Context, string, []authz.Verb) (bool, bool, string){
+				"review": client.AccessAllowed, "observation": client.AccessObserved,
+			} {
+				if allowed, unknown, why := review(ctx, "vllm", verbs); allowed || !unknown || !strings.HasPrefix(why, "authorization-unavailable: ") {
+					t.Fatalf("unanswered access %s = %v %v %q", name, allowed, unknown, why)
+				}
+			}
 			for name, result := range map[string]actuatorapi.PolicyMaintenanceResult{
 				"observe": client.ObserveStandingPolicy(ctx, tenant), "reconcile": client.ReconcileStandingPolicy(ctx, tenant),
 			} {
@@ -488,8 +540,9 @@ func TestActuationKeepsTheCallersDeadline(t *testing.T) {
 func TestLocalBackendServedRemotely(t *testing.T) {
 	backend := &recordingBackend{}
 	client, _ := connect(t, &actuatorsvc.Local{Actuator: backend}, actuatorclient.Options{})
-	if client.Backend() != actuatorapi.BackendNative || !reflect.DeepEqual(client.RequiredVerbs(model.ActionRotate), (&actuatorsvc.Local{Actuator: backend}).RequiredVerbs(model.ActionRotate)) {
-		t.Fatalf("hello answers: backend=%s", client.Backend())
+	if client.Backend() != actuatorapi.BackendNative || client.ReviewsAccess() ||
+		!reflect.DeepEqual(client.RequiredVerbs(model.ActionRotate), (&actuatorsvc.Local{Actuator: backend}).RequiredVerbs(model.ActionRotate)) {
+		t.Fatalf("hello answers: backend=%s reviews=%v", client.Backend(), client.ReviewsAccess())
 	}
 	res, invoked, err := client.Actuate(context.Background(), actuatorapi.Request{Action: model.ActionRotate, Namespace: "vllm", Pod: "web-0", CoverageValue: &coverage})
 	if err != nil || !invoked || !res.Emitted || len(backend.requests) != 1 || *backend.requests[0].CoverageValue != coverage {

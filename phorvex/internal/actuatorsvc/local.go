@@ -28,6 +28,9 @@ type Local struct {
 	// through, in OperatorNamespace.
 	Reader            client.Reader
 	OperatorNamespace string
+	// Access reviews this process's identity, the one the backend acts as; nil
+	// reviews nothing.
+	Access *authz.Checker
 }
 
 var _ actuatorapi.Actuator = (*Local)(nil)
@@ -59,6 +62,16 @@ func (l *Local) CapabilityAdvisory(_ context.Context, a model.Action, t actuator
 		return ""
 	}
 	return advisory.CapabilityAdvisory(a, t)
+}
+
+func (l *Local) ReviewsAccess() bool { return l.Access != nil }
+
+func (l *Local) AccessAllowed(ctx context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return l.Access.Allowed(ctx, namespace, verbs)
+}
+
+func (l *Local) AccessObserved(_ context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return l.Access.Observed(namespace, verbs)
 }
 
 func (l *Local) MaintainsStandingPolicy() bool {

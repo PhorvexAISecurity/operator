@@ -19,6 +19,7 @@ binary and the manager's `--actuator-endpoint` follow in phase 4c-3.
 |---|---|---|
 | `Backend`, `RequiredVerbs` | per question | the configured backend and the access each action needs; pure |
 | `SupportsAction`, `CapabilityAdvisory` | per candidate, during the brain's gate questions and the ActionsSupported status | runtime-fixture checks; some read the cluster or probe the workload (request drain, voice and endpoint-lease readbacks, MIG node agent) |
+| `ReviewsAccess`, `AccessAllowed`, `AccessObserved` | per candidate, the capability gate's RBAC leg (last) | whether the identity the actuator acts as may use the action's verbs; `AccessObserved` answers from reviews already made and issues none |
 | `MaintainsStandingPolicy`, `ObserveStandingPolicy`, `ReconcileStandingPolicy` | every policy tick | observe route drift, or repair it after fresh owner and brake checks |
 | `PrepareRoutes` | dispatch, for a backend without standing-policy maintenance | prepares routes; an error refuses the tick |
 | `RetirePolicyBinding` | lifecycle drain | forgets a removed policy's authorization; reports whether the backend keeps one |
@@ -51,8 +52,9 @@ errors the same way.
 and the SHA-256 of `actuatorapi.Config`: the operator namespace, the trusted
 detector identities (compared as a set) and the endpoint lease authority. It
 returns the answers that are fixed for a backend: its name, whether it keeps
-standing policy, and the access every known action needs, so `Backend`,
-`MaintainsStandingPolicy` and `RequiredVerbs` cost no call.
+standing policy, whether it reviews access, and the access every known action
+needs, so `Backend`, `MaintainsStandingPolicy`, `ReviewsAccess` and
+`RequiredVerbs` cost no call.
 
 **Deadlines.** Questions (support, advisory, standing-policy observation,
 capacity, fences, binding retirement) are bounded by the client's call timeout.
@@ -67,6 +69,7 @@ cancellation reach the actuator.
 |---|---|
 | `SupportsAction` | unsupported, `backend-unavailable: actuator service: ...` |
 | `CapabilityAdvisory` | no advisory (posture only) |
+| `AccessAllowed`, `AccessObserved` | unknown, which the gate flags without excluding, as a failed review in process; the move itself still fails on real authorization |
 | `ObserveStandingPolicy`, `ReconcileStandingPolicy` | the backend's routes `unknown` and refused for the tick |
 | `PrepareRoutes` | an error, which refuses every dispatch of the tick |
 | `RetirePolicyBinding` | not retired, with the error logged |
@@ -74,6 +77,15 @@ cancellation reach the actuator.
 | `QuarantineCapacity` | a configured bound of unknown use, which admits no new quarantine |
 | `PendingOperation` | unresolved, which fences the dispatch |
 | `Actuate` | possibly enacted: the backend counts as invoked and the error is never a refusal without effect |
+
+## Whose access the gate reviews
+
+The capability gate's RBAC leg asks the actuator, because the actuator's identity
+is the one that acts. In process `Local` reviews with this process's own checker
+(`Manager.Authz`), so nothing changes. A remote actuator reviews its own
+ServiceAccount, and the dispatcher's checker is never consulted for it. An
+actuator that reviews no access leaves the gate without an RBAC leg; the M99
+fallback then still excludes candidates with a qualified outcome.
 
 ## What stays with the dispatcher
 

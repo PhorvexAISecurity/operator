@@ -22,6 +22,7 @@ const (
 	ActuatorService_Hello_FullMethodName                   = "/phorvex.actuator.v1.ActuatorService/Hello"
 	ActuatorService_SupportsAction_FullMethodName          = "/phorvex.actuator.v1.ActuatorService/SupportsAction"
 	ActuatorService_CapabilityAdvisory_FullMethodName      = "/phorvex.actuator.v1.ActuatorService/CapabilityAdvisory"
+	ActuatorService_ReviewAccess_FullMethodName            = "/phorvex.actuator.v1.ActuatorService/ReviewAccess"
 	ActuatorService_ObserveStandingPolicy_FullMethodName   = "/phorvex.actuator.v1.ActuatorService/ObserveStandingPolicy"
 	ActuatorService_ReconcileStandingPolicy_FullMethodName = "/phorvex.actuator.v1.ActuatorService/ReconcileStandingPolicy"
 	ActuatorService_PrepareRoutes_FullMethodName           = "/phorvex.actuator.v1.ActuatorService/PrepareRoutes"
@@ -54,6 +55,9 @@ type ActuatorServiceClient interface {
 	// CapabilityAdvisory reports local configuration posture for an action on a
 	// target.
 	CapabilityAdvisory(ctx context.Context, in *CapabilityAdvisoryRequest, opts ...grpc.CallOption) (*CapabilityAdvisoryResponse, error)
+	// ReviewAccess reports whether the actuator's identity may use verbs in a
+	// namespace.
+	ReviewAccess(ctx context.Context, in *ReviewAccessRequest, opts ...grpc.CallOption) (*ReviewAccessResponse, error)
 	// ObserveStandingPolicy reports route drift without changing anything.
 	ObserveStandingPolicy(ctx context.Context, in *ObserveStandingPolicyRequest, opts ...grpc.CallOption) (*ObserveStandingPolicyResponse, error)
 	// ReconcileStandingPolicy repairs route drift.
@@ -106,6 +110,16 @@ func (c *actuatorServiceClient) CapabilityAdvisory(ctx context.Context, in *Capa
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CapabilityAdvisoryResponse)
 	err := c.cc.Invoke(ctx, ActuatorService_CapabilityAdvisory_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *actuatorServiceClient) ReviewAccess(ctx context.Context, in *ReviewAccessRequest, opts ...grpc.CallOption) (*ReviewAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReviewAccessResponse)
+	err := c.cc.Invoke(ctx, ActuatorService_ReviewAccess_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -214,6 +228,9 @@ type ActuatorServiceServer interface {
 	// CapabilityAdvisory reports local configuration posture for an action on a
 	// target.
 	CapabilityAdvisory(context.Context, *CapabilityAdvisoryRequest) (*CapabilityAdvisoryResponse, error)
+	// ReviewAccess reports whether the actuator's identity may use verbs in a
+	// namespace.
+	ReviewAccess(context.Context, *ReviewAccessRequest) (*ReviewAccessResponse, error)
 	// ObserveStandingPolicy reports route drift without changing anything.
 	ObserveStandingPolicy(context.Context, *ObserveStandingPolicyRequest) (*ObserveStandingPolicyResponse, error)
 	// ReconcileStandingPolicy repairs route drift.
@@ -250,6 +267,9 @@ func (UnimplementedActuatorServiceServer) SupportsAction(context.Context, *Suppo
 }
 func (UnimplementedActuatorServiceServer) CapabilityAdvisory(context.Context, *CapabilityAdvisoryRequest) (*CapabilityAdvisoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CapabilityAdvisory not implemented")
+}
+func (UnimplementedActuatorServiceServer) ReviewAccess(context.Context, *ReviewAccessRequest) (*ReviewAccessResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReviewAccess not implemented")
 }
 func (UnimplementedActuatorServiceServer) ObserveStandingPolicy(context.Context, *ObserveStandingPolicyRequest) (*ObserveStandingPolicyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ObserveStandingPolicy not implemented")
@@ -346,6 +366,24 @@ func _ActuatorService_CapabilityAdvisory_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ActuatorServiceServer).CapabilityAdvisory(ctx, req.(*CapabilityAdvisoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ActuatorService_ReviewAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReviewAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ActuatorServiceServer).ReviewAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ActuatorService_ReviewAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ActuatorServiceServer).ReviewAccess(ctx, req.(*ReviewAccessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -512,6 +550,10 @@ var ActuatorService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CapabilityAdvisory",
 			Handler:    _ActuatorService_CapabilityAdvisory_Handler,
+		},
+		{
+			MethodName: "ReviewAccess",
+			Handler:    _ActuatorService_ReviewAccess_Handler,
 		},
 		{
 			MethodName: "ObserveStandingPolicy",

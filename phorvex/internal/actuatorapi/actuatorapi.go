@@ -27,6 +27,18 @@ type Actuator interface {
 	// performs no cluster read.
 	CapabilityAdvisory(ctx context.Context, a model.Action, t Target) string
 
+	// ReviewsAccess reports whether the actuator reviews its own identity's
+	// access. When it does not, the capability gate has no access leg.
+	ReviewsAccess() bool
+	// AccessAllowed reports whether the actuator's identity may use every verb in
+	// namespace, reviewing it when no current answer is held. unknown means no
+	// answer could be established; why names the first denied or unknown verb.
+	AccessAllowed(ctx context.Context, namespace string, verbs []authz.Verb) (allowed, unknown bool, why string)
+	// AccessObserved answers the same question from reviews already made. It never
+	// issues a review, so a counterfactual evaluation cannot change what the next
+	// real gate observes.
+	AccessObserved(ctx context.Context, namespace string, verbs []authz.Verb) (allowed, unknown bool, why string)
+
 	// MaintainsStandingPolicy reports whether the backend keeps standing route
 	// policy, observed or reconciled every policy tick.
 	MaintainsStandingPolicy() bool

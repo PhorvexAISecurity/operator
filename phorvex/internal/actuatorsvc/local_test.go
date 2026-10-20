@@ -6,9 +6,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	authorizationv1 "k8s.io/api/authorization/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/actuatorapi"
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -147,5 +152,42 @@ func TestUnknownPendingOperationKindIsNeverClear(t *testing.T) {
 	pending, err := (&Local{Actuator: &plainBackend{}}).PendingOperation(context.Background(), actuatorapi.PendingOperation{Kind: "future-journal"})
 	if !pending || err == nil || !strings.Contains(err.Error(), "future-journal") {
 		t.Fatalf("unknown journal kind = %v, %v", pending, err)
+	}
+}
+
+// namespaceReviews allows every verb outside the denied namespace.
+type namespaceReviews struct {
+	denied string
+	calls  int
+}
+
+func (r *namespaceReviews) Create(_ context.Context, sar *authorizationv1.SelfSubjectAccessReview, _ metav1.CreateOptions) (*authorizationv1.SelfSubjectAccessReview, error) {
+	r.calls++
+	sar.Status.Allowed = sar.Spec.ResourceAttributes.Namespace != r.denied
+	return sar, nil
+}
+
+func TestLocalReviewsAccessWithItsOwnChecker(t *testing.T) {
+	ctx := context.Background()
+	if (&Local{Actuator: &plainBackend{}}).ReviewsAccess() {
+		t.Fatal("a Local without a checker reviews access")
+	}
+	reviews := &namespaceReviews{denied: "locked"}
+	l := &Local{Actuator: &plainBackend{}, Access: authz.NewCheckerWithClient(reviews, time.Minute)}
+	verbs := []authz.Verb{{Resource: "pods", Verb: "delete"}}
+	if !l.ReviewsAccess() {
+		t.Fatal("a Local with a checker does not review access")
+	}
+	if _, unknown, _ := l.AccessObserved(ctx, "vllm", verbs); !unknown || reviews.calls != 0 {
+		t.Fatalf("an observation without a held review must be unknown and issue none: unknown=%v calls=%d", unknown, reviews.calls)
+	}
+	if allowed, unknown, _ := l.AccessAllowed(ctx, "vllm", verbs); !allowed || unknown || reviews.calls != 1 {
+		t.Fatalf("review = allowed %v unknown %v calls %d", allowed, unknown, reviews.calls)
+	}
+	if allowed, unknown, _ := l.AccessObserved(ctx, "vllm", verbs); !allowed || unknown || reviews.calls != 1 {
+		t.Fatalf("observation of a held review = allowed %v unknown %v calls %d", allowed, unknown, reviews.calls)
+	}
+	if allowed, unknown, why := l.AccessAllowed(ctx, "locked", verbs); allowed || unknown || why == "" {
+		t.Fatalf("denied review = allowed %v unknown %v why %q", allowed, unknown, why)
 	}
 }

@@ -62,7 +62,23 @@ func (s *Server) Hello(_ context.Context, req *actuatorpb.HelloRequest) (*actuat
 		Backend:                 string(s.actuator.Backend()),
 		MaintainsStandingPolicy: s.actuator.MaintainsStandingPolicy(),
 		RequiredVerbs:           s.requiredVerbs,
+		ReviewsAccess:           s.actuator.ReviewsAccess(),
 	}, nil
+}
+
+func (s *Server) ReviewAccess(ctx context.Context, req *actuatorpb.ReviewAccessRequest) (*actuatorpb.ReviewAccessResponse, error) {
+	var verbs []authz.Verb
+	if err := wire.Decode(req.GetVerbs(), &verbs); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "verbs: %v", err)
+	}
+	var allowed, unknown bool
+	var why string
+	if req.GetReview() {
+		allowed, unknown, why = s.actuator.AccessAllowed(ctx, req.GetNamespace(), verbs)
+	} else {
+		allowed, unknown, why = s.actuator.AccessObserved(ctx, req.GetNamespace(), verbs)
+	}
+	return &actuatorpb.ReviewAccessResponse{Allowed: allowed, Unknown: unknown, Why: why}, nil
 }
 
 func (s *Server) SupportsAction(ctx context.Context, req *actuatorpb.SupportsActionRequest) (*actuatorpb.SupportsActionResponse, error) {

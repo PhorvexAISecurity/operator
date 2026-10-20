@@ -192,7 +192,7 @@ type Witness struct {
 	ctx        context.Context
 	idx        Index
 	notInstall model.InstallSet
-	az         *authz.Checker
+	az         Access
 	act        Actuator
 	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
 	// per-namespace label sets (already GET-derived observation substrate) so the scope
@@ -204,7 +204,6 @@ type Witness struct {
 	operatorNamespace string
 }
 
-// BuildWitness assembles the per-tick witness.
 // Actuator answers the capability questions the witness puts to the actuator
 // (actuatorapi.Actuator satisfies it).
 type Actuator interface {
@@ -213,7 +212,34 @@ type Actuator interface {
 	RequiredVerbs(a model.Action) []authz.Verb
 }
 
-func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az *authz.Checker, act Actuator) Witness {
+// Access reviews the authorization of the identity that acts: the actuator's.
+// actuatorapi.Actuator satisfies it; CheckerAccess adapts a checker.
+type Access interface {
+	AccessAllowed(ctx context.Context, namespace string, verbs []authz.Verb) (allowed, unknown bool, why string)
+	AccessObserved(ctx context.Context, namespace string, verbs []authz.Verb) (allowed, unknown bool, why string)
+}
+
+// CheckerAccess reviews access with c, the acting process's own checker. A nil
+// checker gives no access leg.
+func CheckerAccess(c *authz.Checker) Access {
+	if c == nil {
+		return nil
+	}
+	return checkerAccess{c}
+}
+
+type checkerAccess struct{ c *authz.Checker }
+
+func (a checkerAccess) AccessAllowed(ctx context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return a.c.Allowed(ctx, namespace, verbs)
+}
+
+func (a checkerAccess) AccessObserved(_ context.Context, namespace string, verbs []authz.Verb) (bool, bool, string) {
+	return a.c.Observed(namespace, verbs)
+}
+
+// BuildWitness assembles the per-tick witness. A nil az gives no access leg.
+func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az Access, act Actuator) Witness {
 	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
 }
 
@@ -358,9 +384,9 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 				why     string
 			)
 			if review {
-				allowed, unknown, why = w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+				allowed, unknown, why = w.az.AccessAllowed(w.ctx, v.Pod.Namespace, verbs)
 			} else {
-				allowed, unknown, why = w.az.Observed(v.Pod.Namespace, verbs)
+				allowed, unknown, why = w.az.AccessObserved(w.ctx, v.Pod.Namespace, verbs)
 			}
 			if unknown {
 				return &Reason{RBACUnknown: true, Detail: why} // fail-open: NOT excluded, flagged
@@ -458,7 +484,7 @@ func (w Witness) CapableAndAuthorized(v *model.WorkloadView, action model.Action
 	}
 	if w.az != nil {
 		if verbs := w.requiredVerbs(action); len(verbs) > 0 {
-			allowed, unknown, why := w.az.Allowed(w.ctx, v.Pod.Namespace, verbs)
+			allowed, unknown, why := w.az.AccessAllowed(w.ctx, v.Pod.Namespace, verbs)
 			if !unknown && !allowed {
 				return false, ReasonNoRBAC + ": " + why
 			}
