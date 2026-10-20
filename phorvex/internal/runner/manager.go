@@ -2141,9 +2141,8 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	// degradation contract and never changes defensive selection or actuation;
 	// Logger.Record marks every affected row unavailable/failed explicitly.
 	if m.Audit != nil && brain.Name() == "p1-coverage" {
-		ref, manifest, overrides, provenanceErr := decision.ParameterSetForPolicy(pol)
-		if provenanceErr == nil {
-			_ = m.Audit.RetainParameterSet(pol.Tenant, ref, manifest, overrides)
+		if set, provenanceErr := brain.ParameterSet(pol); provenanceErr == nil {
+			_ = m.Audit.RetainParameterSet(pol.Tenant, set.Reference, set.Manifest, set.Overrides)
 		}
 	}
 
@@ -2174,7 +2173,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 			"tenant", pol.Tenant, "optimizer", brain.Name(), "reason", string(reason))
 		m.Audit.RejectedTickSummary(pol.Tenant, pol.Namespace, pol.PolicyName, pol.PolicyUID, len(views), dur, pol.Mode, string(reason),
 			killState.observation.Engaged, string(killState.observation.Cause))
-		rejected, provenanceErr := decision.ExistentialRejectedDecisionsChecked(views, pol, string(reason), obs.Now)
+		rejected, provenanceErr := brain.RejectedDecisions(brainapi.RejectedTick{Views: views, Policy: pol, Reason: string(reason), Now: obs.Now})
 		if provenanceErr != nil {
 			m.Log.Error(provenanceErr, "rejected decision parameter provenance unavailable", "tenant", pol.Tenant)
 			return

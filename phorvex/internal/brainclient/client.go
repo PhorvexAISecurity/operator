@@ -337,6 +337,52 @@ type noRecording struct{}
 func (noRecording) Finalize([]model.Decision) {}
 func (noRecording) Close()                    {}
 
+// ParameterSet is an error when the brain cannot be asked; the dispatcher then
+// retains no provenance for the tick, as for an invalid policy.
+func (c *Client) ParameterSet(p model.Policy) (brainapi.ParameterSet, error) {
+	raw, err := wire.Encode(p)
+	if err != nil {
+		return brainapi.ParameterSet{}, fmt.Errorf("brain service: policy: %w", err)
+	}
+	ctx, cancel := c.call()
+	defer cancel()
+	resp, err := c.rpc.ParameterSet(ctx, &brainpb.ParameterSetRequest{Policy: raw})
+	if err != nil {
+		return brainapi.ParameterSet{}, fmt.Errorf("brain service: parameter set: %w", err)
+	}
+	if resp.GetError() != "" {
+		return brainapi.ParameterSet{}, errors.New(resp.GetError())
+	}
+	var set brainapi.ParameterSet
+	if err := wire.Decode(resp.GetParameterSet(), &set); err != nil {
+		return brainapi.ParameterSet{}, fmt.Errorf("brain service: parameter set: %w", err)
+	}
+	return set, nil
+}
+
+// RejectedDecisions is an error when the brain cannot be asked; the dispatcher
+// then records no M99 rows for the rejected tick, as for an invalid policy.
+func (c *Client) RejectedDecisions(t brainapi.RejectedTick) ([]model.Decision, error) {
+	raw, err := wire.Encode(t)
+	if err != nil {
+		return nil, fmt.Errorf("brain service: rejected tick: %w", err)
+	}
+	ctx, cancel := c.call()
+	defer cancel()
+	resp, err := c.rpc.RejectedDecisions(ctx, &brainpb.RejectedDecisionsRequest{Tick: raw})
+	if err != nil {
+		return nil, fmt.Errorf("brain service: rejected decisions: %w", err)
+	}
+	if resp.GetError() != "" {
+		return nil, errors.New(resp.GetError())
+	}
+	var decisions []model.Decision
+	if err := wire.Decode(resp.GetDecisions(), &decisions); err != nil {
+		return nil, fmt.Errorf("brain service: rejected decisions: %w", err)
+	}
+	return decisions, nil
+}
+
 func (c *Client) SelectAlternative(owner, target string, failed model.Action) (model.Alternative, bool) {
 	ctx, cancel := c.call()
 	defer cancel()

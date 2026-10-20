@@ -14,6 +14,8 @@ var wireTypes = []any{
 	[]*model.WorkloadView(nil),
 	model.Policy{},
 	brainapi.Capture{},
+	brainapi.ParameterSet{},
+	brainapi.RejectedTick{},
 	[]model.Decision(nil),
 	model.Alternative{},
 	[]model.PolicyEpoch(nil),

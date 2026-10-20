@@ -337,6 +337,38 @@ func (s *Server) ReserveAlternative(_ context.Context, req *brainpb.ReserveAlter
 	return &brainpb.ReserveAlternativeResponse{Reserved: reserved}, nil
 }
 
+func (s *Server) ParameterSet(_ context.Context, req *brainpb.ParameterSetRequest) (*brainpb.ParameterSetResponse, error) {
+	var policy model.Policy
+	if err := wire.Decode(req.GetPolicy(), &policy); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "policy: %v", err)
+	}
+	set, err := s.brain.ParameterSet(policy)
+	if err != nil {
+		return &brainpb.ParameterSetResponse{Error: err.Error()}, nil
+	}
+	raw, err := wire.Encode(set)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "parameter set: %v", err)
+	}
+	return &brainpb.ParameterSetResponse{ParameterSet: raw}, nil
+}
+
+func (s *Server) RejectedDecisions(_ context.Context, req *brainpb.RejectedDecisionsRequest) (*brainpb.RejectedDecisionsResponse, error) {
+	var tick brainapi.RejectedTick
+	if err := wire.Decode(req.GetTick(), &tick); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "tick: %v", err)
+	}
+	decisions, err := s.brain.RejectedDecisions(tick)
+	if err != nil {
+		return &brainpb.RejectedDecisionsResponse{Error: err.Error()}, nil
+	}
+	raw, err := wire.Encode(decisions)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "decisions: %v", err)
+	}
+	return &brainpb.RejectedDecisionsResponse{Decisions: raw}, nil
+}
+
 func (s *Server) ObserveRotation(_ context.Context, req *brainpb.ObserveRotationRequest) (*brainpb.ObserveRotationResponse, error) {
 	var view *model.WorkloadView
 	if err := wire.Decode(req.GetView(), &view); err != nil {
