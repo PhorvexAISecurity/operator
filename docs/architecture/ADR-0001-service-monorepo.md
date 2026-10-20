@@ -209,24 +209,13 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   records the snapshots, so the manager's audit source no longer serves them.
   Phase 5 gives the brain its own snapshot source for the console.
 
-- **Sensor packages the dispatcher still imports.** After phase 4b-1 the tick
-  observes through `sensorapi`, but the runner still uses `ingest` for the
+- **Sensor packages the dispatcher still imported.** After phase 4b-1 the tick
+  observed through `sensorapi`, but the runner still used `ingest` for the
   detector trust configuration, the existential admission-boundary check and the
-  completed-disclosure and current-inventory admission. Each moves to a shared
-  package or behind the sensor contract; archtest lists each as debt.
-- **Graph neighbour order was random.** The reachability graph listed each Pod's
-  neighbours in map order, so a view's neighbours and neighbour events changed
-  order from tick to tick. Phase 4b-2 sorts them; floating-point sums over a
-  view's neighbours are now reproducible.
-- **The capability RBAC check ran as the dispatcher.** The witness issued the
-  SelfSubjectAccessReview itself, so it asked whether the *dispatcher's* identity
-  may act. Since phase 4c-3 the gate asks the actuator (`AccessAllowed`,
-  `AccessObserved`), which reviews the identity it acts as: this process's in
-  process, its own ServiceAccount once it runs separately.
-- **Calibration has no single owner (decided after phase 4).** `calib` samples
-  the fleet the tick observes, learns from the dispatcher's rotation outcomes and
-  produces the brain's shadow views. It belongs to the dispatcher, which drives
-  all three; the brain receives the shadow views through its contract.
+  completed-disclosure and current-inventory admission. The trust boundary is now
+  the shared `eventtrust` package, and each admission lives beside its ledger
+  (`losshistory.Admit`, `currentinventory.Admit`). The runner's remaining `ingest`
+  use is the in-process sensor's telemetry wiring.
 
 ## Consequences
 
