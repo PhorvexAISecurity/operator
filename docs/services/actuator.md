@@ -85,6 +85,15 @@ PHORVEX_ACTUATOR=hybrid go -C phorvex run ./cmd/actuator --listen=:9090 \
   --operator-namespace=phorvex-system --trusted-detectors=vllm/detector-adapter-inv
 ```
 
+The `phorvex-actuator` image is built from `deploy/docker/service.Dockerfile`:
+
+```sh
+docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=actuator -t phorvex-actuator .
+```
+
+It holds the one binary as `/service` on distroless nonroot. PR validation builds
+it, without pushing, beside the manager and console images.
+
 The actuator needs the actuation RBAC the selected backend uses (the manager's
 today) under its own ServiceAccount; before it serves it runs the startup
 authorization preflight (`startupauthz`) against that identity and refuses to
