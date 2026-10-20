@@ -222,9 +222,10 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   may act. Since phase 4c-3 the gate asks the actuator (`AccessAllowed`,
   `AccessObserved`), which reviews the identity it acts as: this process's in
   process, its own ServiceAccount once it runs separately.
-- **Calibration has no single owner.** `calib` samples the sensor's fleet, learns
-  from the dispatcher's rotation outcomes and produces the brain's shadow views.
-  It is classified as sensor today; decide its service before phase 5.
+- **Calibration has no single owner (decided after phase 4).** `calib` samples
+  the fleet the tick observes, learns from the dispatcher's rotation outcomes and
+  produces the brain's shadow views. It belongs to the dispatcher, which drives
+  all three; the brain receives the shadow views through its contract.
 
 ## Consequences
 

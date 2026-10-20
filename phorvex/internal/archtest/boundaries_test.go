@@ -45,7 +45,7 @@ var domains = map[string]string{
 	"voiceoutputpolicy": shared, "voicerefundpolicy": shared,
 
 	"ingest": sensor, "graph": sensor, "platform": sensor, "physics": sensor,
-	"ctxprov": sensor, "calib": sensor, "epssfeed": sensor, "sensorsvc": sensor,
+	"ctxprov": sensor, "epssfeed": sensor, "sensorsvc": sensor,
 
 	"decision": brain, "actionset": brain, "recon": brain, "cost": brain,
 	"feasibility": brain, "killchain": brain, "mathlab": brain, "brainsvc": brain,
@@ -53,6 +53,10 @@ var domains = map[string]string{
 	"runner": dispatcher, "controller": dispatcher, "capability": dispatcher,
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
 	"exposure": dispatcher, "scopedoutcome": dispatcher, "brainclient": dispatcher, "sensorclient": dispatcher, "actuatorclient": dispatcher,
+
+	// calib learns scales from the fleet the tick observes and the rotation outcomes
+	// the dispatcher measures, and hands the brain its shadow views.
+	"calib": dispatcher,
 
 	"actuator": actuator, "podresources": actuator, "startupauthz": actuator, "actuatorsvc": actuator,
 

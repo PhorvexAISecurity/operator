@@ -12,7 +12,6 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -221,15 +220,8 @@ func retainAndRelease[T any](values []T, keep func(T) bool) []T {
 	return retained
 }
 
-// ObserveSnapshot samples history and, when due, performs a 30-minute shadow refresh.
-func (r *Runtime) ObserveSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsWitness) (RefreshResult, bool, error) {
-	if r == nil || snap == nil {
-		return RefreshResult{}, false, fmt.Errorf("calibration snapshot is nil")
-	}
-	return r.ObserveFleet(fleetOf(snap), witness)
-}
-
-// ObserveFleet is ObserveSnapshot over the fleet the sensor observed.
+// ObserveFleet samples history from the fleet the sensor observed and, when due,
+// performs a 30-minute shadow refresh.
 func (r *Runtime) ObserveFleet(f Fleet, witness map[string]model.PhysicsWitness) (RefreshResult, bool, error) {
 	if r == nil {
 		return RefreshResult{}, false, fmt.Errorf("calibration snapshot is nil")

@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -26,28 +25,16 @@ type Fleet struct {
 	Nodes []model.NodeInfo
 }
 
-func fleetOf(snap *ingest.Snapshot) Fleet {
-	return Fleet{Now: snap.Now, Pods: snap.Pods, Nodes: snap.Nodes}
-}
-
 func isRunningCalibrationPod(p *model.Pod) bool {
 	return p != nil && p.Phase == string(corev1.PodRunning)
 }
 
-// NodesFromSnapshot projects a cluster snapshot into co-residency observations.
+// NodesFromFleet projects the fleet the sensor observed into co-residency observations.
 //
-// Nodes come from snap.Nodes rather than from the pods, so a schedulable node carrying no pods
+// Nodes come from f.Nodes rather than from the pods, so a schedulable node carrying no pods
 // is still counted at X=0. Deriving the node set from pods instead would silently drop empty
 // nodes and bias the distribution upward — the fleet would look more tenant-dense than it is,
 // which is the direction that hides the problem this ticket is about.
-func NodesFromSnapshot(snap *ingest.Snapshot) []NodeObservation {
-	if snap == nil {
-		return nil
-	}
-	return NodesFromFleet(fleetOf(snap))
-}
-
-// NodesFromFleet is NodesFromSnapshot over the fleet the sensor observed.
 func NodesFromFleet(f Fleet) []NodeObservation {
 	tenants := map[string]map[string]struct{}{}
 	pods := map[string]int{}
@@ -77,7 +64,7 @@ func NodesFromFleet(f Fleet) []NodeObservation {
 	return out
 }
 
-// AssetsFromSnapshot projects the fleet into dispersion observations, using the physics witness a
+// AssetsFromFleet projects the fleet into dispersion observations, using the physics witness a
 // platform adapter derived plus the RAW node tenancy.
 //
 // witness is keyed "namespace/name", matching platform.Derive's output.
@@ -86,14 +73,6 @@ func NodesFromFleet(f Fleet) []NodeObservation {
 // already computed at the SHIPPED cap, so a percentile taken from products containing it would be
 // a percentile of an already-clipped distribution — exactly what the spec forbids. The raw
 // namespace count is carried instead so the term can be recomputed at a candidate scale.
-func AssetsFromSnapshot(snap *ingest.Snapshot, witness map[string]model.PhysicsWitness) []AssetObservation {
-	if snap == nil {
-		return nil
-	}
-	return AssetsFromFleet(fleetOf(snap), witness)
-}
-
-// AssetsFromFleet is AssetsFromSnapshot over the fleet the sensor observed.
 func AssetsFromFleet(f Fleet, witness map[string]model.PhysicsWitness) []AssetObservation {
 	tenants := map[string]map[string]struct{}{}
 	for i := range f.Pods {
