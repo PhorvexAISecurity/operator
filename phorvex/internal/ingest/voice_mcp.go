@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
@@ -191,7 +192,7 @@ func bindVoiceMCPObservation(ctx context.Context, reader client.Reader, pod *mod
 	var payload voiceMCPPayload
 	for i := range events {
 		event := &events[i]
-		if event.Trust != TrustTrusted || !event.TargetsPod || event.Type != model.AttackVectorVoiceMCP || event.CreatorIdentity == "" ||
+		if event.Trust != eventtrust.TrustTrusted || !event.TargetsPod || event.Type != model.AttackVectorVoiceMCP || event.CreatorIdentity == "" ||
 			event.Name == "" || event.UID == "" || event.TimestampMissing || event.Age < 0 || event.Age >= voiceMCPHorizon || event.ConsoleTargetPodUID != pod.UID {
 			continue
 		}

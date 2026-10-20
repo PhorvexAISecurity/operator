@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceoutputpolicy"
 )
@@ -68,7 +69,7 @@ func TestVoiceOutputPayloadExactAndCurrentOwnerBinding(t *testing.T) {
 			t.Fatal("malformed alias/duplicate/trailing accepted")
 		}
 	}
-	event := model.SecurityEventInfo{Name: "voice-output-event", UID: "66666666-6666-4666-8666-666666666666", Type: model.AttackVectorVoiceOutput, Trust: TrustTrusted, TargetsPod: true, CreatorIdentity: creator, ConsoleTargetPodUID: string(podUID), CreatedAt: now, Age: time.Second, VoiceOutputRaw: string(raw)}
+	event := model.SecurityEventInfo{Name: "voice-output-event", UID: "66666666-6666-4666-8666-666666666666", Type: model.AttackVectorVoiceOutput, Trust: eventtrust.TrustTrusted, TargetsPod: true, CreatorIdentity: creator, ConsoleTargetPodUID: string(podUID), CreatedAt: now, Age: time.Second, VoiceOutputRaw: string(raw)}
 	bindVoiceOutputObservation(ctx, c, &view, []model.SecurityEventInfo{event})
 	if !view.HasBoundVoiceOutputObservation() {
 		t.Fatalf("exact observed rule did not bind: %+v", view.VoiceOutputObservation)

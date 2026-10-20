@@ -1,25 +1,27 @@
-package ingest
+package losshistory
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"github.com/go-logr/logr"
+	admission "k8s.io/api/admissionregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/disclosure"
-	"github.com/phorvex/phorvex/internal/losshistory"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
-// AdmitCompletedDisclosures is the dedicated producer-to-ledger transaction.
+// Admit is the dedicated completed-disclosure producer-to-ledger transaction.
 // Every authority input is API-observed; malformed or forged evidence remains
 // an explicit gap and never disables unrelated selection or actuation.
-func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store losshistory.Ledger, events []model.SecurityEventInfo, p model.Policy, now time.Time, log logr.Logger) []string {
+func Admit(ctx context.Context, reader client.Reader, store Ledger, events []model.SecurityEventInfo, p model.Policy, now time.Time, log logr.Logger) []string {
 	if store == nil {
 		return []string{"retained-loss-history-source-unavailable"}
 	}
-	boundary, reason := CheckCompletedDisclosureBoundary(ctx, reader)
+	boundary, reason := CheckBoundary(ctx, reader)
 	if reason != "ready" {
 		return []string{reason}
 	}
@@ -63,7 +65,7 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 			gaps = append(gaps, "completed-disclosure-observation-time-unbound")
 			continue
 		}
-		if !CompletedDisclosureTrust().Allows(event.CreatorIdentity) {
+		if !eventtrust.CompletedDisclosureTrust().Allows(event.CreatorIdentity) {
 			gaps = append(gaps, "completed-disclosure-creator-untrusted")
 			continue
 		}
@@ -87,4 +89,69 @@ func AdmitCompletedDisclosures(ctx context.Context, reader client.Reader, store 
 		}
 	}
 	return gaps
+}
+
+const CompletedDisclosureMatch = "(has(object.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in object.metadata.annotations) || (request.operation == 'UPDATE' && has(oldObject.metadata.annotations) && 'phorvex.ai/completed-disclosure-v1' in oldObject.metadata.annotations)"
+
+// CheckBoundary verifies the independent fail-closed M100
+// webhook. The generic detector boundary does not authorize loss evidence.
+func CheckBoundary(ctx context.Context, c client.Reader) (model.DisclosureTrustBoundary, string) {
+	if eventtrust.CompletedDisclosureTrust().Empty() {
+		return model.DisclosureTrustBoundary{}, "no-loss-observer-allowlist"
+	}
+	if c == nil {
+		return model.DisclosureTrustBoundary{}, "loss-boundary-reader-unavailable"
+	}
+	var list admission.MutatingWebhookConfigurationList
+	if err := c.List(ctx, &list); err != nil {
+		return model.DisclosureTrustBoundary{}, "loss-webhook-configuration-unavailable"
+	}
+	for i := range list.Items {
+		cfg := &list.Items[i]
+		for j := range cfg.Webhooks {
+			w := &cfg.Webhooks[j]
+			if w.Name != "stamp-completed-disclosures.phorvex.ai" {
+				continue
+			}
+			if cfg.UID == "" || cfg.ResourceVersion == "" || cfg.CreationTimestamp.IsZero() {
+				return model.DisclosureTrustBoundary{}, "loss-boundary-identity-unavailable"
+			}
+			if cfg.Annotations[disclosure.BoundaryContractAnnotation] != disclosure.BoundaryContract {
+				return model.DisclosureTrustBoundary{}, "loss-boundary-contract-unverified"
+			}
+			if w.FailurePolicy == nil || *w.FailurePolicy != admission.Fail {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-not-fail-closed"
+			}
+			if w.ObjectSelector != nil && (len(w.ObjectSelector.MatchLabels) != 0 || len(w.ObjectSelector.MatchExpressions) != 0) {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-object-selector-gap"
+			}
+			if w.NamespaceSelector != nil && (len(w.NamespaceSelector.MatchLabels) != 0 || len(w.NamespaceSelector.MatchExpressions) != 0) {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-namespace-selector-gap"
+			}
+			if len(w.MatchConditions) != 1 || w.MatchConditions[0].Expression != CompletedDisclosureMatch {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-match-condition-gap"
+			}
+			svc := w.ClientConfig.Service
+			if svc == nil || svc.Path == nil || *svc.Path != eventtrust.StampWebhookPath || len(w.ClientConfig.CABundle) == 0 {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-endpoint-unverified"
+			}
+			create, update := false, false
+			for _, rule := range w.Rules {
+				if !slices.Contains(rule.APIGroups, "amtd.r6security.com") || !slices.Contains(rule.APIVersions, "v1beta1") ||
+					!slices.Contains(rule.Resources, "securityevents") || (rule.Scope != nil && *rule.Scope == admission.NamespacedScope) {
+					continue
+				}
+				create = create || slices.Contains(rule.Operations, admission.Create)
+				update = update || slices.Contains(rule.Operations, admission.Update)
+			}
+			if !create || !update {
+				return model.DisclosureTrustBoundary{}, "loss-stamp-operation-gap"
+			}
+			return model.DisclosureTrustBoundary{
+				ConfigurationUID: string(cfg.UID), ConfigurationResourceVersion: cfg.ResourceVersion,
+				ActivationTime: cfg.CreationTimestamp.Time, ContractVersion: disclosure.BoundaryContract,
+			}, "ready"
+		}
+	}
+	return model.DisclosureTrustBoundary{}, "loss-stamp-missing"
 }

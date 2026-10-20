@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-logr/logr/funcr"
 
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -17,8 +17,8 @@ func TestUntrustedEventStreamIsReportedOncePerTransition(t *testing.T) {
 	m := &Manager{Log: funcr.New(func(prefix, args string) { lines = append(lines, args) }, funcr.Options{})}
 
 	forged := []model.SecurityEventInfo{
-		{Name: "v10-forged", Source: "K3Detector", Trust: ingest.TrustUnstamped},
-		{Name: "kv-1", Source: "kv-canary", Trust: ingest.TrustTrusted},
+		{Name: "v10-forged", Source: "K3Detector", Trust: eventtrust.TrustUnstamped},
+		{Name: "kv-1", Source: "kv-canary", Trust: eventtrust.TrustTrusted},
 	}
 	for i := 0; i < 100; i++ {
 		m.observeEventTrust(forged)
@@ -37,8 +37,8 @@ func TestUntrustedEventStreamIsReportedOncePerTransition(t *testing.T) {
 	}
 
 	before := len(lines)
-	m.observeEventTrust([]model.SecurityEventInfo{{Name: "kv-1", Trust: ingest.TrustTrusted}})
-	m.observeEventTrust([]model.SecurityEventInfo{{Name: "kv-1", Trust: ingest.TrustTrusted}})
+	m.observeEventTrust([]model.SecurityEventInfo{{Name: "kv-1", Trust: eventtrust.TrustTrusted}})
+	m.observeEventTrust([]model.SecurityEventInfo{{Name: "kv-1", Trust: eventtrust.TrustTrusted}})
 	cleared := 0
 	for _, l := range lines[before:] {
 		if strings.Contains(l, "fully attributed again") {

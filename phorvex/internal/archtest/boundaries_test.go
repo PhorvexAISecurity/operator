@@ -37,7 +37,7 @@ var domains = map[string]string{
 	// another, and platform code. They import nothing outside shared.
 	"model": shared, "brainapi": shared, "brainpb": shared, "sensorapi": shared, "sensorpb": shared, "wire": shared, "actuatorapi": shared, "actuatorpb": shared, "registry": shared, "metrics": shared, "buildinfo": shared,
 	"audit": shared, "audittransport": shared, "authz": shared, "representation": shared,
-	"disclosure": shared, "losshistory": shared, "currentinventory": shared,
+	"disclosure": shared, "losshistory": shared, "currentinventory": shared, "eventtrust": shared,
 	"gpudevice": shared, "servingcontext": shared, "ownership": shared,
 	"actuationbrake": shared, "epssmeta": shared, "pendinggate": shared, "scaleprobe": shared,
 	"crmrefund": shared, "endpointlease": shared, "litellmclient": shared, "outputpolicy": shared,
@@ -101,11 +101,10 @@ var debt = map[edge]string{
 	{"runner", "actuator"}:    "the runner constructs the backend and holds the quarantine ledger; the composition moves to cmd",
 	{"runner", "mathlab"}:     "the runner holds the in-process brain's Math Lab recorder; the composition moves to cmd",
 	{"runner", "killchain"}:   "the one-shot ablation builds a kill-chain model; it moves to the brain with the ablation",
-	// Brain and sensor logic the dispatcher still runs itself.
-	{"runner", "decision"}:   "the runner builds the default engine, runs the one-shot ablations, and computes qualified outcomes, parameter provenance and rejected-tick decisions in process; they move behind the brain contract",
-	{"runner", "recon"}:      "the runner sets the default recon profile, validates cover keys and assesses colocation in process; they move behind the brain contract",
-	{"runner", "ingest"}:     "the runner reads detector trust, reads the telemetry registry and admits completed-disclosure and current-inventory evidence with the projection's code; they move to shared packages or behind the sensor contract",
-	{"controller", "ingest"}: "the SecurityEvent webhook reads the creator-identity annotation and the observer trust from the projection; they move to a shared trust package",
+	{"runner", "ingest"}:      "the runner holds the in-process sensor's telemetry source and PCIe class table; the composition moves to cmd",
+	// Brain logic the dispatcher still runs itself.
+	{"runner", "decision"}: "the runner builds the default engine, runs the one-shot ablations, and computes qualified outcomes, parameter provenance and rejected-tick decisions in process; they move behind the brain contract",
+	{"runner", "recon"}:    "the runner sets the default recon profile, validates cover keys and assesses colocation in process; they move behind the brain contract",
 }
 
 func moduleRoot(t *testing.T) string {

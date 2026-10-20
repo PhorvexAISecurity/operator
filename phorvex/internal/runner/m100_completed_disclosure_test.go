@@ -21,7 +21,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/disclosure"
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/representation"
@@ -72,7 +72,7 @@ func m100Boundary(at time.Time) *admissionv1.MutatingWebhookConfiguration {
 	return &admissionv1.MutatingWebhookConfiguration{ObjectMeta: metav1.ObjectMeta{Name: "loss-boundary", UID: "mwc-uid", ResourceVersion: "7", CreationTimestamp: metav1.NewTime(at),
 		Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract}},
 		Webhooks: []admissionv1.MutatingWebhook{{Name: "stamp-completed-disclosures.phorvex.ai", FailurePolicy: &fail,
-			MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: ingest.CompletedDisclosureMatch}},
+			MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: losshistory.CompletedDisclosureMatch}},
 			ClientConfig:    admissionv1.WebhookClientConfig{CABundle: []byte("ca"), Service: &admissionv1.ServiceReference{Namespace: "system", Name: "webhook", Path: &path}},
 			Rules:           []admissionv1.RuleWithOperations{{Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update}, Rule: admissionv1.Rule{APIGroups: []string{"amtd.r6security.com"}, APIVersions: []string{"v1beta1"}, Resources: []string{"securityevents"}}}},
 		}},
@@ -119,9 +119,9 @@ func TestM100AdmittedHistorySurvivesPodAndReplicaSetReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := &Manager{BoundaryReader: c, LossHistory: store}
-	observer := ingest.NewTrustedDetectors([]string{"ns/observer"})
-	ingest.ConfigureCompletedDisclosureTrust(observer)
-	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
+	observer := eventtrust.NewTrustedDetectors([]string{"ns/observer"})
+	eventtrust.ConfigureCompletedDisclosureTrust(observer)
+	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
 	_, event := m100PayloadAndEvent(t, now)
 	// Admission attested generation 3. A same-UID policy update before the first
 	// ledger tick must not erase the completed observation.
@@ -264,8 +264,8 @@ func TestM100BlockedDurableRetentionDoesNotDisableSelectedActuation(t *testing.T
 	fakeActuator := &dispatchFakeActuator{emit: true}
 	m := &Manager{BoundaryReader: reader, LossHistoryReader: reader, LossHistory: blocking, LossHistoryReadTimeout: 10 * time.Millisecond,
 		Actuator: fakeActuator, Log: logr.Discard()}
-	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{"ns/observer"}))
-	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{"ns/observer"}))
+	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
 	_, event := m100PayloadAndEvent(t, now)
 	decision := tracedSelectedDecision()
 	decision[0].Namespace, decision[0].Pod, decision[0].Tenant = "ns", "old-pod", "tenant"
@@ -319,8 +319,8 @@ func TestM100AdmissionRejectsUnboundCurrentState(t *testing.T) {
 	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "old-rs", UID: "old-rs-uid", OwnerReferences: []metav1.OwnerReference{m100OwnerRef("Deployment", "app", "dep-uid")}}}
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "old-pod", UID: "old-uid", OwnerReferences: []metav1.OwnerReference{m100OwnerRef("ReplicaSet", "old-rs", "old-rs-uid")}}}
 	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, rs, pod, m100Boundary(now.Add(-time.Minute))).Build()
-	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{"ns/observer", "ns/other"}))
-	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{"ns/observer", "ns/other"}))
+	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
 	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 3}
 
 	cases := []struct {

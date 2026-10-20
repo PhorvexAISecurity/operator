@@ -46,6 +46,7 @@ import (
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -2014,7 +2015,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 			pol.TrustBoundaryReason = "uncached-boundary-reader-unavailable"
 			if m.BoundaryReader != nil {
 				boundaryCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				pol.TrustBoundaryReady, pol.TrustBoundaryReason, pol.TrustBoundarySince = ingest.CheckExistentialBoundary(boundaryCtx, m.BoundaryReader)
+				pol.TrustBoundaryReady, pol.TrustBoundaryReason, pol.TrustBoundarySince = eventtrust.CheckExistentialBoundary(boundaryCtx, m.BoundaryReader)
 				cancel()
 			}
 			break
@@ -2247,7 +2248,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	// M100: admit the dedicated evidence stream and freeze the reporting source
 	// BEFORE actuation; no later resnapshot or
 	// shared map/slice can rewrite the evidence used for this claim.
-	reportClaim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
+	reportClaim := model.NewClaimScope(eventtrust.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	representationInventory := outcomeInventory(evidenceEvents, pol)
 	versions := make(map[string]string, len(views))
 	for _, v := range views {
@@ -2288,7 +2289,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 
 	assessmentInput := colocationInput(obs, e)
 	selected, infeasible := 0, 0
-	claim := model.NewClaimScope(ingest.EventTrust().List(), true, m.BrainImage, m.GitSHA)
+	claim := model.NewClaimScope(eventtrust.EventTrust().List(), true, m.BrainImage, m.GitSHA)
 	for i := range decisions {
 		decisions[i].Claim = &claim
 		if decisions[i].Trace != nil {
@@ -3650,7 +3651,7 @@ func (m *Manager) observeEventTrust(events []model.SecurityEventInfo) {
 	unresolved := 0
 	for _, e := range events {
 		unresolved += len(e.UnresolvedTargets)
-		if e.Trust == ingest.TrustTrusted {
+		if e.Trust == eventtrust.TrustTrusted {
 			continue
 		}
 		untrusted++
@@ -3670,7 +3671,7 @@ func (m *Manager) observeEventTrust(events []model.SecurityEventInfo) {
 	switch {
 	case untrusted > 0 && was == 0:
 		m.Log.Error(nil, "SecurityEvents from unallowlisted or unstamped creators are present; they carry NO belief evidence (M-94)",
-			"untrusted", untrusted, "trustedDetectors", ingest.EventTrust().List(), "samples", samples, "unresolvedTargets", unresolved)
+			"untrusted", untrusted, "trustedDetectors", eventtrust.EventTrust().List(), "samples", samples, "unresolvedTargets", unresolved)
 	case untrusted == 0 && was > 0:
 		m.Log.Info("SecurityEvent stream is fully attributed again: every event carries an allowlisted creator", "previouslyUntrusted", was)
 	}

@@ -2,7 +2,12 @@
  * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD.
  */
 
-package ingest
+// Package eventtrust is the SecurityEvent trust boundary every service shares: the
+// creator-identity stamp, the allowlists of authenticated identities whose events
+// are evidence, and the check that the stamp is enforced. The sensor classifies
+// events with it, the dispatcher admits completed-disclosure and current-inventory
+// evidence with it, and the admission webhook stamps and checks the same identities.
+package eventtrust
 
 import (
 	"sort"
@@ -20,7 +25,7 @@ import (
 // The trust boundary is therefore drawn on the AUTHENTICATED creator identity, which only the
 // API server knows: the admission stamp (internal/controller) writes the admission request's
 // UserInfo into the CreatorIdentityAnnotation on CREATE and UPDATE, overwriting whatever the
-// client sent, and ingest believes an event only when that stamp names an allowlisted detector.
+// client sent, and the sensor believes an event only when that stamp names an allowlisted detector.
 //
 // That stamp is worth trusting only because a second, server-side control enforces it. The
 // mutating webhook is failurePolicy=Ignore (it must never block the cluster's event flow), and
@@ -168,8 +173,8 @@ func CurrentInventoryTrust() TrustedDetectors {
 	return trustedCurrentInventoryActors
 }
 
-// classifyEvent returns the trust verdict for an event's stamped creator identity.
-func classifyEvent(identity string) string {
+// Classify returns the trust verdict for an event's stamped creator identity.
+func Classify(identity string) string {
 	allow := EventTrust()
 	switch {
 	case allow.Empty():

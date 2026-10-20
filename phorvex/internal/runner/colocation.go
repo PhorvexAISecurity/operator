@@ -1,7 +1,7 @@
 package runner
 
 import (
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 	"github.com/phorvex/phorvex/internal/sensorapi"
@@ -17,7 +17,7 @@ func colocationInput(obs *sensorapi.Observation, e *policyEntry) recon.Colocatio
 		Membership: make(map[string][]string, len(obs.PolicyMembership)),
 	}
 	for _, ev := range obs.EvidenceEvents {
-		if ev.Trust == ingest.TrustTrusted && len(ev.UnresolvedTargets) > 0 {
+		if ev.Trust == eventtrust.TrustTrusted && len(ev.UnresolvedTargets) > 0 {
 			in.UnresolvedEventTargets = true
 		}
 	}

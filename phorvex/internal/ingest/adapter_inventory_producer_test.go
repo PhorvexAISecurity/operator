@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -41,7 +42,7 @@ func TestAdapterInventoryProducerBindsOnlyAuthenticatedExactPod(t *testing.T) {
 	}{
 		{name: "admitted producer envelope", want: true},
 		{name: "wrong Pod UID", change: func(e *amtdv1beta1.SecurityEvent) { e.Annotations[AdapterTargetUIDAnnotation] = "other-uid" }},
-		{name: "missing authenticated stamp", change: func(e *amtdv1beta1.SecurityEvent) { delete(e.Annotations, CreatorIdentityAnnotation) }},
+		{name: "missing authenticated stamp", change: func(e *amtdv1beta1.SecurityEvent) { delete(e.Annotations, eventtrust.CreatorIdentityAnnotation) }},
 		{name: "wrong rule type", change: func(e *amtdv1beta1.SecurityEvent) { e.Spec.Rule.Type = "lora.unauthorized_adapter" }},
 		{name: "stale API creation", change: func(e *amtdv1beta1.SecurityEvent) { e.CreationTimestamp = metav1.NewTime(now.Add(-16 * time.Minute)) }},
 	} {

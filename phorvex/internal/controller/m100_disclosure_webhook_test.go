@@ -19,7 +19,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/disclosure"
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -56,7 +56,7 @@ func m100Admission(t *testing.T, op admissionv1.Operation, user, payload string,
 		oldEvent.Annotations[disclosure.Annotation] = oldPayload
 		oldEvent.Annotations[disclosure.AdmissionTimeAnnotation] = time.Unix(102, 500_000_000).UTC().Format(time.RFC3339Nano)
 		oldEvent.Annotations[disclosure.AdmissionContractAnnotation] = disclosure.BoundaryContract
-		oldEvent.Annotations[ingest.CreatorIdentityAnnotation] = "system:serviceaccount:ns:loss-observer"
+		oldEvent.Annotations[eventtrust.CreatorIdentityAnnotation] = "system:serviceaccount:ns:loss-observer"
 		old.Raw, _ = json.Marshal(oldEvent)
 	}
 	if mutate != nil {
@@ -82,8 +82,8 @@ func m100Admission(t *testing.T, op admissionv1.Operation, user, payload string,
 
 func TestM100DisclosureAdmissionIsDedicatedFailClosedAndImmutable(t *testing.T) {
 	observer := "system:serviceaccount:ns:loss-observer"
-	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{observer}))
-	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{observer}))
+	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
 	payload := m100Payload(t)
 	if resp := m100Admission(t, admissionv1.Create, observer, payload, nil, ""); !resp.Allowed {
 		t.Fatalf("valid observation denied: %+v", resp.Result)
@@ -92,7 +92,7 @@ func TestM100DisclosureAdmissionIsDedicatedFailClosedAndImmutable(t *testing.T) 
 		t.Fatal("generally trusted detector acquired completed-loss authority")
 	}
 	otherObserver := "system:serviceaccount:ns:other-observer"
-	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{observer, otherObserver}))
+	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{observer, otherObserver}))
 	if resp := m100Admission(t, admissionv1.Create, otherObserver, payload, nil, ""); resp.Allowed {
 		t.Fatal("allowed creator substituted payload observer identity")
 	}

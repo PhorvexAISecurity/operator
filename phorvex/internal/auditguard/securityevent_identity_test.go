@@ -58,6 +58,7 @@ import (
 
 	pxv1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/controller"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -258,15 +259,15 @@ func seEvent(name string, annotations map[string]string) object {
 // sees, and exactly the case the policy admits.
 func seClaim(event object) string {
 	annotations, _ := event["metadata"].(object)["annotations"].(object)
-	claim, _ := annotations[ingest.CreatorIdentityAnnotation].(string)
+	claim, _ := annotations[eventtrust.CreatorIdentityAnnotation].(string)
 	return claim
 }
 
 func seTrustFixture(t *testing.T) {
 	t.Helper()
-	previous := ingest.EventTrust()
-	t.Cleanup(func() { ingest.ConfigureEventTrust(previous) })
-	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{"vllm/detector-kv-canary"}))
+	previous := eventtrust.EventTrust()
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(previous) })
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors([]string{"vllm/detector-kv-canary"}))
 }
 
 // seStamp runs the REAL shipped mutating handler and applies its patch, i.e. what the API
@@ -482,17 +483,17 @@ func TestSecurityEventIdentityPolicyResourceMatching(t *testing.T) {
 func TestSecurityEventIdentityPolicyCEL(t *testing.T) {
 	policy := seGuardDoc(t, seRender(t, "phorvex", "phorvex-system"), "ValidatingAdmissionPolicy")
 
-	forged := seEvent("forged", map[string]string{ingest.CreatorIdentityAnnotation: seTrustedSA})
+	forged := seEvent("forged", map[string]string{eventtrust.CreatorIdentityAnnotation: seTrustedSA})
 	unannotated := seEvent("unannotated", nil)
 	emptyAnnotations := seEvent("empty-annotations", map[string]string{})
-	emptyClaim := seEvent("empty-claim", map[string]string{ingest.CreatorIdentityAnnotation: ""})
+	emptyClaim := seEvent("empty-claim", map[string]string{eventtrust.CreatorIdentityAnnotation: ""})
 	otherAnnotation := seEvent("other-annotation", map[string]string{"phorvex.ai/protected-outcomes-v1": "[]"})
-	selfClaim := seEvent("self-claim", map[string]string{ingest.CreatorIdentityAnnotation: seAttackSA})
-	trustedSelfClaim := seEvent("trusted-self-claim", map[string]string{ingest.CreatorIdentityAnnotation: seTrustedSA})
+	selfClaim := seEvent("self-claim", map[string]string{eventtrust.CreatorIdentityAnnotation: seAttackSA})
+	trustedSelfClaim := seEvent("trusted-self-claim", map[string]string{eventtrust.CreatorIdentityAnnotation: seTrustedSA})
 
 	// A full-resource UPDATE that keeps the stamp byte-identical but rewrites the payload.
 	// This is the counterexample that got the "unchanged foreign stamp" exception rejected.
-	rewritten := seEvent("rewritten", map[string]string{ingest.CreatorIdentityAnnotation: seTrustedSA})
+	rewritten := seEvent("rewritten", map[string]string{eventtrust.CreatorIdentityAnnotation: seTrustedSA})
 	rewritten["spec"].(object)["description"] = "attacker rewrote the trusted event payload"
 	rewritten["spec"].(object)["targets"] = []any{"vllm/vllm-1"}
 	rewritten["spec"].(object)["rule"] = object{"type": "Exfiltration", "threatLevel": "critical", "source": "K3Detector"}
@@ -569,8 +570,8 @@ func TestSecurityEventIdentityGuardAdmissionChain(t *testing.T) {
 	docs := seRender(t, "phorvex", "phorvex-system")
 	policy := seGuardDoc(t, docs, "ValidatingAdmissionPolicy")
 
-	forged := map[string]string{ingest.CreatorIdentityAnnotation: seTrustedSA}
-	own := map[string]string{ingest.CreatorIdentityAnnotation: seAttackSA}
+	forged := map[string]string{eventtrust.CreatorIdentityAnnotation: seTrustedSA}
+	own := map[string]string{eventtrust.CreatorIdentityAnnotation: seAttackSA}
 
 	for _, tc := range []struct {
 		name        string
@@ -584,28 +585,28 @@ func TestSecurityEventIdentityGuardAdmissionChain(t *testing.T) {
 		why         string
 	}{
 		{"positive-control-real-detector-webhook-up", nil, seTrustedSA, true, "CREATE",
-			true, ingest.TrustTrusted, 1,
+			true, eventtrust.TrustTrusted, 1,
 			"POSITIVE CONTROL: the allowlisted detector reaches trusted belief evidence"},
 		{"positive-control-real-detector-webhook-down", nil, seTrustedSA, false, "CREATE",
-			true, ingest.TrustUnstamped, 0,
+			true, eventtrust.TrustUnstamped, 0,
 			"the honest detector is still admitted during the outage; it just carries no evidence"},
 		{"forged-during-outage", forged, seAttackSA, false, "CREATE",
 			false, "", 0,
 			"THE DEFECT, CLOSED: the request never reaches storage, so ingest never sees it"},
 		{"forged-while-webhook-up", forged, seAttackSA, true, "CREATE",
-			true, ingest.TrustUntrusted, 0,
+			true, eventtrust.TrustUntrusted, 0,
 			"unchanged behaviour: the stamp is overwritten with the real creator"},
 		{"stranger-unstamped-during-outage", nil, seAttackSA, false, "CREATE",
-			true, ingest.TrustUnstamped, 0,
+			true, eventtrust.TrustUnstamped, 0,
 			"honest no-evidence behaviour is preserved: admitted, recorded, no belief"},
 		{"self-claim-during-outage", own, seAttackSA, false, "CREATE",
-			true, ingest.TrustUntrusted, 0,
+			true, eventtrust.TrustUntrusted, 0,
 			"asserting your own identity is allowed and buys nothing"},
 		{"payload-rewrite-under-foreign-stamp-during-outage", forged, seAttackSA, false, "UPDATE",
 			false, "", 0,
 			"the rejected carry-over exception's attack: denied here"},
 		{"owner-update-during-outage", forged, seTrustedSA, false, "UPDATE",
-			true, ingest.TrustTrusted, 1,
+			true, eventtrust.TrustTrusted, 1,
 			"the detector updating its own event keeps working while the endpoint is down"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

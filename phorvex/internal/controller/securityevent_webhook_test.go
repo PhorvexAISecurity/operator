@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 // securityevent_webhook_test.go — PHORVEXSEC-193 / M-94: the creator identity is written by
@@ -69,7 +69,7 @@ func TestStampWritesAuthenticatedCreator(t *testing.T) {
 		t.Fatalf("stamp rejected the event: %+v", resp.Result)
 	}
 	got := patchValues(resp)
-	if !strings.Contains(got, canaryUser) || !strings.Contains(got, ingest.CreatorIdentityAnnotation) {
+	if !strings.Contains(got, canaryUser) || !strings.Contains(got, eventtrust.CreatorIdentityAnnotation) {
 		t.Fatalf("no creator stamp in the patch:\n%s", got)
 	}
 }
@@ -77,7 +77,7 @@ func TestStampWritesAuthenticatedCreator(t *testing.T) {
 // The self-declared claim is overwritten — this is the whole trust boundary.
 func TestStampOverwritesClientSuppliedIdentity(t *testing.T) {
 	resp := stampReq(t, admissionv1.Create, canaryUser,
-		map[string]string{ingest.CreatorIdentityAnnotation: "system:serviceaccount:vllm:detector-kv-canary-IMPOSTER"})
+		map[string]string{eventtrust.CreatorIdentityAnnotation: "system:serviceaccount:vllm:detector-kv-canary-IMPOSTER"})
 	got := patchValues(resp)
 	if strings.Contains(got, "IMPOSTER") && !strings.Contains(got, canaryUser) {
 		t.Fatalf("client claim survived admission:\n%s", got)
@@ -90,7 +90,7 @@ func TestStampOverwritesClientSuppliedIdentity(t *testing.T) {
 // An UPDATE is stamped too: an event cannot be edited later to acquire a trusted creator.
 func TestStampAppliesOnUpdate(t *testing.T) {
 	resp := stampReq(t, admissionv1.Update, "system:serviceaccount:evil:squatter",
-		map[string]string{ingest.CreatorIdentityAnnotation: canaryUser})
+		map[string]string{eventtrust.CreatorIdentityAnnotation: canaryUser})
 	got := patchValues(resp)
 	if !strings.Contains(got, "evil:squatter") {
 		t.Fatalf("update did not re-stamp the editing identity:\n%s", got)
@@ -99,7 +99,7 @@ func TestStampAppliesOnUpdate(t *testing.T) {
 
 // With no authenticated user the claim is removed, never left standing.
 func TestStampRemovesClaimWhenUnauthenticated(t *testing.T) {
-	resp := stampReq(t, admissionv1.Create, "", map[string]string{ingest.CreatorIdentityAnnotation: canaryUser})
+	resp := stampReq(t, admissionv1.Create, "", map[string]string{eventtrust.CreatorIdentityAnnotation: canaryUser})
 	got := patchValues(resp)
 	if strings.Contains(got, "add") && strings.Contains(got, canaryUser) {
 		t.Fatalf("unauthenticated request kept a creator claim:\n%s", got)
@@ -121,7 +121,7 @@ func TestStampIgnoresDelete(t *testing.T) {
 
 // Idempotence: stamping an already-correctly-stamped object changes nothing.
 func TestStampIsIdempotent(t *testing.T) {
-	resp := stampReq(t, admissionv1.Create, canaryUser, map[string]string{ingest.CreatorIdentityAnnotation: canaryUser})
+	resp := stampReq(t, admissionv1.Create, canaryUser, map[string]string{eventtrust.CreatorIdentityAnnotation: canaryUser})
 	if len(resp.Patches) != 0 {
 		t.Fatalf("re-stamping an identical object produced a patch: %s", patchValues(resp))
 	}

@@ -4,6 +4,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -34,7 +35,7 @@ func bindAdapterObservation(p *model.Pod, events []model.SecurityEventInfo) {
 	}
 	var observations []model.AdapterObservation
 	for _, e := range events {
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorAdapter ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorAdapter ||
 			e.CreatorIdentity == "" || e.UID == "" || e.Name == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= adapterEvidenceHorizon ||
 			e.AdapterTargetUID != p.UID || !validAdapterName(e.AdapterName) {

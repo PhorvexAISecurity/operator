@@ -13,6 +13,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -76,7 +77,7 @@ func TestM153ActualIngestionReconDecisionSerializedTrace(t *testing.T) {
 		t.Fatalf("steering=%+v", steering)
 	}
 	ref := steering.Events[0]
-	if ref.EventName != "trusted" || ref.EventUID != "uid-trusted" || ref.DeclaredSource != "declared-trusted" || ref.TrustVerdict != TrustTrusted || ref.CreatorIdentity != trustedIdentity {
+	if ref.EventName != "trusted" || ref.EventUID != "uid-trusted" || ref.DeclaredSource != "declared-trusted" || ref.TrustVerdict != eventtrust.TrustTrusted || ref.CreatorIdentity != trustedIdentity {
 		t.Fatalf("actual event identity lost: %+v", ref)
 	}
 	raw, err := json.Marshal(decisions[0].Trace)

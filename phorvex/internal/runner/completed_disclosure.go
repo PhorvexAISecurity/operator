@@ -12,7 +12,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/currentinventory"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
@@ -32,7 +31,7 @@ func (m *Manager) admitCompletedDisclosures(ctx context.Context, events []model.
 }
 
 func (m *Manager) admitCompletedDisclosuresWithReader(ctx context.Context, reader client.Reader, events []model.SecurityEventInfo, p model.Policy, now time.Time) []string {
-	return ingest.AdmitCompletedDisclosures(ctx, reader, m.LossHistory, events, p, now, m.Log)
+	return losshistory.Admit(ctx, reader, m.LossHistory, events, p, now, m.Log)
 }
 
 type representationHistoryInput struct {
@@ -79,10 +78,10 @@ func (c *lossHistoryCoordinator) submit(job lossHistoryJob) bool {
 	// goroutines or blocking defensive dispatch behind the same filesystem lock.
 	go func() {
 		workCtx, cancel := context.WithTimeout(context.Background(), job.timeout)
-		gaps := ingest.AdmitCompletedDisclosures(workCtx, job.reader, job.store, job.events, job.policy, job.now, job.log)
+		gaps := losshistory.Admit(workCtx, job.reader, job.store, job.events, job.policy, job.now, job.log)
 		var currentGaps []string
 		if job.currentStore != nil {
-			currentGaps = ingest.AdmitCurrentInventory(workCtx, job.reader, job.currentStore, job.events, job.policy, job.now, job.log)
+			currentGaps = currentinventory.Admit(workCtx, job.reader, job.currentStore, job.events, job.policy, job.now, job.log)
 		}
 		histories := representationHistoryInputsWithStores(workCtx, job.reader, job.store, job.currentStore, job.decisions, job.versions, job.policy, gaps, job.now)
 		for key, entry := range histories {

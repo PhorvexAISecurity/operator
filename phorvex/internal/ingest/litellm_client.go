@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -29,7 +30,7 @@ func bindLiteLLMClientObservation(ctx context.Context, reader client.Reader, p *
 	var payload litellmclient.Observation
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorLiteLLMClientAbuse ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorLiteLLMClientAbuse ||
 			e.CreatorIdentity != litellmConsoleCreator || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= litellmClientHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue

@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/platform"
 )
 
@@ -29,7 +29,7 @@ func TestDescribeNormalizesTheTrustedIdentities(t *testing.T) {
 	if a.Describe().SHA256() != b.Describe().SHA256() {
 		t.Fatalf("the same identities describe differently: %+v vs %+v", a.Describe(), b.Describe())
 	}
-	if got := a.Describe().TrustedDetectors; strings.Join(got, ",") != strings.Join(ingest.NewTrustedDetectors([]string{"vllm/a", "vllm/b"}).List(), ",") {
+	if got := a.Describe().TrustedDetectors; strings.Join(got, ",") != strings.Join(eventtrust.NewTrustedDetectors([]string{"vllm/a", "vllm/b"}).List(), ",") {
 		t.Fatalf("detectors = %v", got)
 	}
 	c := parse(t, "--trusted-detectors=vllm/a,vllm/b")
@@ -43,7 +43,7 @@ func TestApplyTrustInstallsWhatItDescribes(t *testing.T) {
 	if err := f.ApplyTrust(); err != nil {
 		t.Fatal(err)
 	}
-	if got := ingest.EventTrust().List(); strings.Join(got, ",") != strings.Join(f.Describe().TrustedDetectors, ",") {
+	if got := eventtrust.EventTrust().List(); strings.Join(got, ",") != strings.Join(f.Describe().TrustedDetectors, ",") {
 		t.Fatalf("installed detectors %v, described %v", got, f.Describe().TrustedDetectors)
 	}
 	bad := parse(t, "--endpoint-lease-approved-source-sha256=not-a-digest")

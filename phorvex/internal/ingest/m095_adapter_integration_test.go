@@ -17,6 +17,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -42,7 +43,7 @@ func m95Event(name, uid, creator, typ, targetUID, adapter string, created time.T
 	e.UID = types.UID(uid)
 	e.Spec.Rule.Type = typ
 	e.CreationTimestamp = metav1.NewTime(created)
-	e.Annotations = map[string]string{CreatorIdentityAnnotation: creator, AdapterTargetUIDAnnotation: targetUID, AdapterNameAnnotation: adapter}
+	e.Annotations = map[string]string{eventtrust.CreatorIdentityAnnotation: creator, AdapterTargetUIDAnnotation: targetUID, AdapterNameAnnotation: adapter}
 	return e
 }
 
@@ -106,18 +107,18 @@ func TestM095AdapterObservationRejectsControlsAndConflict(t *testing.T) {
 	trustEvents(t, "ns/detector")
 	now := time.Date(2026, 9, 6, 12, 0, 0, 0, time.UTC)
 	creator := "system:serviceaccount:ns:detector"
-	good := model.SecurityEventInfo{Name: "good", UID: "e1", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
+	good := model.SecurityEventInfo{Name: "good", UID: "e1", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
 		TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", CreatedAt: now.Add(-time.Minute), Age: time.Minute}
 	controls := []model.SecurityEventInfo{
-		{Name: "self", UID: "e0", Trust: TrustSelf, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
-		{Name: "unstamped", UID: "e00", Trust: TrustUnstamped, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
-		{Name: "untrusted", UID: "e2", Trust: TrustUntrusted, CreatorIdentity: "evil", Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
-		{Name: "generic", UID: "e3", Trust: TrustTrusted, CreatorIdentity: creator, Type: "Persistence", TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
-		{Name: "wrong namespace", UID: "e31", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: false, AdapterName: "a", AdapterTargetUID: "pod-1"},
-		{Name: "wrongUID", UID: "e4", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-2"},
-		{Name: "missingTime", UID: "e5", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", TimestampMissing: true},
-		{Name: "stale", UID: "e6", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", Age: 15 * time.Minute},
-		{Name: "invalid", UID: "e7", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a/b", AdapterTargetUID: "pod-1"},
+		{Name: "self", UID: "e0", Trust: eventtrust.TrustSelf, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
+		{Name: "unstamped", UID: "e00", Trust: eventtrust.TrustUnstamped, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
+		{Name: "untrusted", UID: "e2", Trust: eventtrust.TrustUntrusted, CreatorIdentity: "evil", Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
+		{Name: "generic", UID: "e3", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: "Persistence", TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1"},
+		{Name: "wrong namespace", UID: "e31", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: false, AdapterName: "a", AdapterTargetUID: "pod-1"},
+		{Name: "wrongUID", UID: "e4", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-2"},
+		{Name: "missingTime", UID: "e5", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", TimestampMissing: true},
+		{Name: "stale", UID: "e6", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", Age: 15 * time.Minute},
+		{Name: "invalid", UID: "e7", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "a/b", AdapterTargetUID: "pod-1"},
 	}
 	for _, e := range controls {
 		p := model.Pod{Namespace: "ns", Name: "serve", UID: "pod-1"}
@@ -127,7 +128,7 @@ func TestM095AdapterObservationRejectsControlsAndConflict(t *testing.T) {
 		}
 	}
 	p := model.Pod{Namespace: "ns", Name: "serve", UID: "pod-1"}
-	bindAdapterObservation(&p, []model.SecurityEventInfo{good, {Name: "conflict", UID: "e8", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "b", AdapterTargetUID: "pod-1", Age: time.Minute}})
+	bindAdapterObservation(&p, []model.SecurityEventInfo{good, {Name: "conflict", UID: "e8", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter, TargetsPod: true, AdapterName: "b", AdapterTargetUID: "pod-1", Age: time.Minute}})
 	if p.AdapterObservation != nil {
 		t.Fatal("conflicting adapter identities accepted")
 	}
@@ -136,9 +137,9 @@ func TestM095AdapterObservationRejectsControlsAndConflict(t *testing.T) {
 func TestM071AdapterObservationSelectsFreshestSameAdapterEvent(t *testing.T) {
 	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
 	creator := "system:serviceaccount:ns:detector"
-	old := model.SecurityEventInfo{Name: "a-old", UID: "old", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
+	old := model.SecurityEventInfo{Name: "a-old", UID: "old", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
 		TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", CreatedAt: now.Add(-2 * time.Minute), Age: 2 * time.Minute}
-	fresh := model.SecurityEventInfo{Name: "z-fresh", UID: "fresh", Trust: TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
+	fresh := model.SecurityEventInfo{Name: "z-fresh", UID: "fresh", Trust: eventtrust.TrustTrusted, CreatorIdentity: creator, Type: model.AttackVectorAdapter,
 		TargetsPod: true, AdapterName: "a", AdapterTargetUID: "pod-1", CreatedAt: now.Add(-time.Minute), Age: time.Minute}
 	p := model.Pod{Namespace: "ns", Name: "serve", UID: "pod-1"}
 	bindAdapterObservation(&p, []model.SecurityEventInfo{old, fresh})

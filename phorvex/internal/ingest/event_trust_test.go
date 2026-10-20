@@ -10,6 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 // event_trust_test.go — PHORVEXSEC-193 / M-94.
@@ -25,15 +27,15 @@ const (
 
 func trustEvents(t *testing.T, ids ...string) {
 	t.Helper()
-	prev := EventTrust()
-	t.Cleanup(func() { ConfigureEventTrust(prev) })
-	ConfigureEventTrust(NewTrustedDetectors(ids))
+	prev := eventtrust.EventTrust()
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(prev) })
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors(ids))
 }
 
 func seEvent(name, identity, source string, targets ...string) *amtdv1beta1.SecurityEvent {
 	meta := metav1.ObjectMeta{Name: name, CreationTimestamp: metav1.NewTime(time.Date(2026, 9, 6, 11, 59, 0, 0, time.UTC))}
 	if identity != "" {
-		meta.Annotations = map[string]string{CreatorIdentityAnnotation: identity}
+		meta.Annotations = map[string]string{eventtrust.CreatorIdentityAnnotation: identity}
 	}
 	return &amtdv1beta1.SecurityEvent{
 		ObjectMeta: meta,
@@ -82,11 +84,11 @@ func TestForgedEventSuppliesNoEvidenceWhileTrustedDetectorStillDoes(t *testing.T
 	for _, v := range verdicts {
 		got[v.Name] = v.Trust
 	}
-	if got["v10-forged"] != TrustUnstamped {
-		t.Fatalf("forged event trust = %q, want %q", got["v10-forged"], TrustUnstamped)
+	if got["v10-forged"] != eventtrust.TrustUnstamped {
+		t.Fatalf("forged event trust = %q, want %q", got["v10-forged"], eventtrust.TrustUnstamped)
 	}
-	if got["kv-canary-1"] != TrustTrusted {
-		t.Fatalf("trusted detector event trust = %q, want %q", got["kv-canary-1"], TrustTrusted)
+	if got["kv-canary-1"] != eventtrust.TrustTrusted {
+		t.Fatalf("trusted detector event trust = %q, want %q", got["kv-canary-1"], eventtrust.TrustTrusted)
 	}
 	if len(verdicts) != 2 {
 		t.Fatalf("both events must still be INGESTED and recorded (an injection attempt stays visible); got %d", len(verdicts))
@@ -106,8 +108,8 @@ func TestStampedButUnallowlistedIdentityIsUntrusted(t *testing.T) {
 func TestEmptyAllowlistIsFailClosed(t *testing.T) {
 	trustEvents(t)
 	verdicts, counts := collect(t, seEvent("any", trustedSA, "kv-canary", "vllm/vllm-0"))
-	if counts["vllm/vllm-0"] != 0 || len(verdicts) != 1 || verdicts[0].Trust != TrustNoAllowed {
-		t.Fatalf("empty allowlist: evidence=%d verdicts=%+v, want 0 evidence and %q", counts["vllm/vllm-0"], verdicts, TrustNoAllowed)
+	if counts["vllm/vllm-0"] != 0 || len(verdicts) != 1 || verdicts[0].Trust != eventtrust.TrustNoAllowed {
+		t.Fatalf("empty allowlist: evidence=%d verdicts=%+v, want 0 evidence and %q", counts["vllm/vllm-0"], verdicts, eventtrust.TrustNoAllowed)
 	}
 }
 
@@ -149,15 +151,15 @@ func TestClusterScopedTargetIsRecordedNotSilentlyDropped(t *testing.T) {
 // The allowlist accepts the spellings a chart value and the API server each use.
 func TestIdentitySpellingsAreEquivalent(t *testing.T) {
 	for _, spelling := range []string{"vllm/detector-kv-canary", "vllm:detector-kv-canary", trustedSA} {
-		if got := NormalizeIdentity(spelling); got != trustedSA {
-			t.Fatalf("NormalizeIdentity(%q) = %q, want %q", spelling, got, trustedSA)
+		if got := eventtrust.NormalizeIdentity(spelling); got != trustedSA {
+			t.Fatalf("eventtrust.NormalizeIdentity(%q) = %q, want %q", spelling, got, trustedSA)
 		}
 	}
-	allow := NewTrustedDetectors([]string{" vllm/detector-kv-canary , ", ""})
+	allow := eventtrust.NewTrustedDetectors([]string{" vllm/detector-kv-canary , ", ""})
 	if !allow.Allows(trustedSA) || allow.Allows(untrustedSA) || allow.Empty() {
 		t.Fatalf("allowlist behaviour wrong: %v", allow.List())
 	}
-	if !NewTrustedDetectors([]string{"alice@example.com"}).Allows("alice@example.com") {
+	if !eventtrust.NewTrustedDetectors([]string{"alice@example.com"}).Allows("alice@example.com") {
 		t.Fatal("a non-ServiceAccount username must be matchable verbatim, not rewritten")
 	}
 }

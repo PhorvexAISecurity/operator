@@ -10,6 +10,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
@@ -132,9 +133,9 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 		}
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
-	priorTrust := ingest.EventTrust()
-	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{"phorvex-system/phorvex-phorvex-console"}))
-	t.Cleanup(func() { ingest.ConfigureEventTrust(priorTrust) })
+	priorTrust := eventtrust.EventTrust()
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors([]string{"phorvex-system/phorvex-phorvex-console"}))
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(priorTrust) })
 	server := NewServer(Config{StateDir: t.TempDir(), Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
 		if bin != "kubectl" || len(args) != 5 || args[0] != "create" || args[1] != "-f" || args[3] != "-o" || args[4] != "json" {
 			t.Fatalf("unexpected event transport %s %q", bin, args)
@@ -152,7 +153,7 @@ func liteLiveProducedEventFeedsNormalDecision(t *testing.T, sourceFile string) {
 		}
 		event.UID = "event-uid"
 		event.CreationTimestamp = metav1.NewTime(now.Add(-time.Second))
-		event.Annotations[ingest.CreatorIdentityAnnotation] = creator
+		event.Annotations[eventtrust.CreatorIdentityAnnotation] = creator
 		if err = c.Create(ctx, &event); err != nil {
 			return "", err
 		}
