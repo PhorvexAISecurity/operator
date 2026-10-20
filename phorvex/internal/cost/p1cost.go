@@ -359,10 +359,10 @@ func (c *P1Cost) ObserveRotation(view *model.WorkloadView, measuredFlow float64)
 }
 
 // ReadyDelayReference is the existing declared upper end of the 60-400 second
-// GPU/LLM warm-load range used by the flow-cost prior. A 400-second recovery maps
-// to C_flow=1; slower recoveries remain distinguishable up to the RLS model's
-// documented maximum of 2.
-const ReadyDelayReference = 400 * time.Second
+// GPU/LLM warm-load range used by the flow-cost prior (model.ReadyDelayReference).
+// A 400-second recovery maps to C_flow=1; slower recoveries remain
+// distinguishable up to the RLS model's documented maximum of 2.
+const ReadyDelayReference = model.ReadyDelayReference
 
 // NormalizeReadyDelay maps a measured replacement Ready delay into the same [0,2]
 // domain as RLS.Predict. It contains no workload guess: the input is the Kubernetes

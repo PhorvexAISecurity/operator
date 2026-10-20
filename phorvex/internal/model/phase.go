@@ -83,3 +83,9 @@ func appActivityMeasured(t Telemetry) bool {
 		(t.QueueDepth.Usable() && t.QueueDepth.Value > 0) ||
 		(t.TokensPerSec.Usable() && t.TokensPerSec.Value > 0)
 }
+
+// ReadyDelayReference is the declared upper end of the 60-400 second GPU/LLM
+// warm-load range. The brain's flow-cost prior maps a 400-second recovery to
+// C_flow=1, and the dispatcher measures rotation ready delays against the same
+// reference.
+const ReadyDelayReference = 400 * time.Second

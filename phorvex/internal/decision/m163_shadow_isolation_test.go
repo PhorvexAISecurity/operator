@@ -95,10 +95,10 @@ func m163StaleRuntime(t *testing.T, snap *ingest.Snapshot, physicsByKey map[stri
 	previous.Nodes = append(append([]ingest.NodeInfo(nil), snap.Nodes...),
 		ingest.NodeInfo{Name: "n2", Schedulable: true})
 	_, previousPhysics := platform.Derive(&previous)
-	if _, refreshed, err := rt.ObserveSnapshot(&previous, previousPhysics); err != nil || !refreshed {
+	if _, refreshed, err := rt.ObserveFleet(calib.Fleet{Now: previous.Now, Pods: previous.Pods, Nodes: previous.Nodes}, previousPhysics); err != nil || !refreshed {
 		t.Fatalf("fixture: initial calibration refresh did not happen: refreshed=%v err=%v", refreshed, err)
 	}
-	if _, refreshed, err := rt.ObserveSnapshot(snap, physicsByKey); err != nil || refreshed {
+	if _, refreshed, err := rt.ObserveFleet(calib.Fleet{Now: snap.Now, Pods: snap.Pods, Nodes: snap.Nodes}, physicsByKey); err != nil || refreshed {
 		t.Fatalf("fixture: current snapshot must be retained under the default cadence: refreshed=%v err=%v", refreshed, err)
 	}
 	return rt
