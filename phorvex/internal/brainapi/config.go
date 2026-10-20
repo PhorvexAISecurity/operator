@@ -10,7 +10,7 @@ import (
 
 // ContractVersion is the dispatcher-brain contract a build speaks. A brain refuses
 // a client built against another version.
-const ContractVersion = 1
+const ContractVersion = 2
 
 // DecisionConfig is the process configuration that changes decisions. The
 // dispatcher and a separate brain must agree on it, or a tick would be decided

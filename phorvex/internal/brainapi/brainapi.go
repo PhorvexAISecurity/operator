@@ -65,6 +65,22 @@ type Recording interface {
 	Close()
 }
 
+// ParameterSet is the decision parameter set a policy is decided with, as the
+// audit's provenance store retains it.
+type ParameterSet struct {
+	Reference *model.ParameterSetReference
+	Manifest  model.DecisionParameterManifest
+	Overrides model.EffectivePolicyOverrides
+}
+
+// RejectedTick is a tenant tick whose action set the brain rejected.
+type RejectedTick struct {
+	Views  []*model.WorkloadView
+	Policy model.Policy
+	Reason string
+	Now    time.Time
+}
+
 // Brain is the decision service as the dispatcher sees it.
 type Brain interface {
 	// Name identifies the decision engine (for example "p1-coverage").
@@ -79,6 +95,15 @@ type Brain interface {
 	// DecideShadow evaluates the same substrate without persisting learning state.
 	// supported is false when the brain has no counterfactual evaluation.
 	DecideShadow(req DecideRequest) (decisions []model.Decision, supported bool, err error)
+
+	// ParameterSet reports the parameter set the brain decides policy with. An
+	// invalid policy is an error.
+	ParameterSet(policy model.Policy) (ParameterSet, error)
+	// RejectedDecisions builds the M99 records of a rejected tick: every view with
+	// a qualified outcome is recorded uncontainable, with its parameter
+	// provenance. An invalid policy is an error, so no record carries unavailable
+	// provenance.
+	RejectedDecisions(tick RejectedTick) ([]model.Decision, error)
 
 	// SelectAlternative picks the fallback for a target whose dispatch the
 	// actuator refused without effect, from the last committing evaluation's

@@ -30,6 +30,13 @@ service BrainService {
   // store.
   rpc CloseRecording(CloseRecordingRequest) returns (CloseRecordingResponse);
 
+  // ParameterSet reports the decision parameter set a policy is decided with,
+  // for the audit's provenance store.
+  rpc ParameterSet(ParameterSetRequest) returns (ParameterSetResponse);
+  // RejectedDecisions builds the M99 records of a tick whose action set the
+  // brain rejected.
+  rpc RejectedDecisions(RejectedDecisionsRequest) returns (RejectedDecisionsResponse);
+
   // SelectAlternative picks the fallback for a refused dispatch from the last
   // committing evaluation's already-gated candidates.
   rpc SelectAlternative(SelectAlternativeRequest) returns (SelectAlternativeResponse);
@@ -183,6 +190,30 @@ message CloseRecordingRequest {
 }
 
 message CloseRecordingResponse {}
+
+message ParameterSetRequest {
+  // CBOR model.Policy
+  bytes policy = 1;
+}
+
+message ParameterSetResponse {
+  // CBOR brainapi.ParameterSet; empty when error is set.
+  bytes parameter_set = 1;
+  // Why the policy has no parameter set (an invalid policy).
+  string error = 2;
+}
+
+message RejectedDecisionsRequest {
+  // CBOR brainapi.RejectedTick
+  bytes tick = 1;
+}
+
+message RejectedDecisionsResponse {
+  // CBOR []model.Decision; empty when error is set.
+  bytes decisions = 1;
+  // Why no record could be built (an invalid policy).
+  string error = 2;
+}
 
 message SelectAlternativeRequest {
   string owner = 1;

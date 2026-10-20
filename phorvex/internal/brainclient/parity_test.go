@@ -500,3 +500,53 @@ func TestUnacknowledgedOwnerRemovalIsReplayedBeforeTheNextEvaluation(t *testing.
 		t.Fatalf("calls = %v, want %v", calls, want)
 	}
 }
+
+// TestProvenanceAndRejectedRecordsMatchInProcess pins the two audit calls: the
+// parameter provenance and a rejected tick's M99 records come from the brain,
+// and read the same remotely as in process, a policy's refusal included.
+func TestProvenanceAndRejectedRecordsMatchInProcess(t *testing.T) {
+	_, _, local := newEngineSide(t)
+	client := connect(t, local, nil)
+	pol := fixturePolicy()
+	invalid := fixturePolicy()
+	invalid.WeightSecrets = -1
+
+	for name, p := range map[string]model.Policy{"valid": pol, "invalid": invalid} {
+		got, gotErr := client.ParameterSet(p)
+		want, wantErr := local.ParameterSet(p)
+		if errorText(gotErr) != errorText(wantErr) || !bytes.Equal(mustJSON(t, got), mustJSON(t, want)) {
+			t.Fatalf("%s parameter set = %s (%v), want %s (%v)", name, mustJSON(t, got), gotErr, mustJSON(t, want), wantErr)
+		}
+	}
+	if set, err := client.ParameterSet(pol); err != nil || set.Reference == nil {
+		t.Fatalf("a valid policy has no parameter set: %+v, %v", set, err)
+	}
+
+	// A view carrying a qualified M99 outcome is recorded uncontainable.
+	protected := fleet()[0]
+	pol.TrustBoundaryReady = true
+	key := protected.Pod.Namespace + "/" + protected.Pod.Name
+	outcome := model.ProtectedOutcome{ID: "r", PolicyUID: pol.PolicyUID, DecisionAsset: key, DecisionAssetUID: protected.Pod.UID,
+		ProtectedAsset: "dataset", Version: "v1", Portion: "undisclosed-records", Property: "confidentiality", Outcome: "unauthorized-disclosure",
+		ClassBasis: "protected customer data", ScopeBasis: "this scope contains every relevant copy", LossState: "at-risk",
+		StateBasis: "trusted detector confirms preventable exfiltration", RequiredKeys: []string{"e"}, MappingComplete: true,
+		MappingBasis: "invalidation interrupts this scoped channel"}
+	protected.OutcomeEvents = []model.SecurityEventInfo{{Name: "detector-evidence", Trust: "trusted", CreatorIdentity: "system:serviceaccount:vllm:detector",
+		ResolvedTargets: []string{key}, TargetsPod: true, Outcomes: []model.ProtectedOutcome{outcome}}}
+	if !model.HasQualifiedOutcome(protected, pol) {
+		t.Fatal("fixture: the view carries no qualified outcome")
+	}
+	now := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
+	for name, p := range map[string]model.Policy{"valid": pol, "invalid": invalid} {
+		tick := brainapi.RejectedTick{Views: []*model.WorkloadView{protected, fleet()[1]}, Policy: p, Reason: "cross-block-collision", Now: now}
+		got, gotErr := client.RejectedDecisions(tick)
+		want, wantErr := local.RejectedDecisions(tick)
+		if errorText(gotErr) != errorText(wantErr) || !bytes.Equal(mustJSON(t, got), mustJSON(t, want)) {
+			t.Fatalf("%s rejected records = %s (%v), want %s (%v)", name, mustJSON(t, got), gotErr, mustJSON(t, want), wantErr)
+		}
+	}
+	records, err := client.RejectedDecisions(brainapi.RejectedTick{Views: []*model.WorkloadView{protected}, Policy: pol, Reason: "cross-block-collision", Now: now})
+	if err != nil || len(records) != 1 || records[0].Existential == nil || records[0].Existential.Result != "uncontainable" || records[0].ParameterSet == nil {
+		t.Fatalf("rejected records = %+v, %v", records, err)
+	}
+}

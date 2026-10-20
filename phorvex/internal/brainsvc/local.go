@@ -39,6 +39,18 @@ func (l *Local) Name() string { return l.opt.Name() }
 
 func (l *Local) GatesCandidates() bool { return l.ce != nil }
 
+// ParameterSet reports the production parameter set with the policy's overrides.
+// It reads no engine state.
+func (l *Local) ParameterSet(p model.Policy) (brainapi.ParameterSet, error) {
+	ref, manifest, overrides, err := decision.ParameterSetForPolicy(p)
+	return brainapi.ParameterSet{Reference: ref, Manifest: manifest, Overrides: overrides}, err
+}
+
+// RejectedDecisions reads no engine state.
+func (l *Local) RejectedDecisions(t brainapi.RejectedTick) ([]model.Decision, error) {
+	return decision.ExistentialRejectedDecisionsChecked(t.Views, t.Policy, t.Reason, t.Now)
+}
+
 // withGate installs one request's gate on the engine and returns the restore.
 func (l *Local) withGate(g brainapi.Gate) func() {
 	if l.ce == nil {
