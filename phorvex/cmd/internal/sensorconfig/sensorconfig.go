@@ -17,20 +17,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/phorvex/phorvex/cmd/internal/trustconfig"
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 )
 
-// Flags is the projection's configuration.
+// Flags is the projection's configuration. The detector trust and the endpoint
+// lease authority are shared with the actuator (trustconfig).
 type Flags struct {
-	TrustedDetectors                 string
+	trustconfig.Trust
 	TrustedLossObservers             string
 	TrustedCurrentInventoryObservers string
-	EndpointLeaseApprovedSource      string
-	EndpointLeaseApprovedProxyImage  string
-	EndpointLeaseApprovedEngineImage string
 	PrometheusURL                    string
 	PCIeClassTable                   string
 	EPSS                             EPSS
@@ -54,12 +53,9 @@ type EPSS struct {
 // Register defines the flags on fs.
 func (f *Flags) Register(fs *flag.FlagSet) {
 	fs.StringVar(&f.PCIeClassTable, "pcie-class-table", os.Getenv("PHORVEX_PCIE_CLASS_TABLE"), "JSON map of DCGM modelName -> {gen,width} used as the PCIe capacity fallback when the exporter publishes no link gen/width (M-114). Merged over the shipped default {\"Tesla T4\":{\"gen\":3,\"width\":16}}.")
-	fs.StringVar(&f.TrustedDetectors, "trusted-detectors", os.Getenv("PHORVEX_TRUSTED_DETECTORS"), "Comma-separated allowlist of detector identities whose SecurityEvents may become belief evidence (M-94), e.g. \"vllm/detector-kv-canary,vllm/detector-adapter-inv\". Matched against the admission-stamped authenticated creator, never against the self-declared spec.rule.source. Empty = no external detector is trusted (fail-closed).")
+	f.Trust.Register(fs)
 	fs.StringVar(&f.TrustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
 	fs.StringVar(&f.TrustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
-	fs.StringVar(&f.EndpointLeaseApprovedSource, "endpoint-lease-approved-source-sha256", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_SOURCE_SHA256"), "Reviewed endpoint lease proxy source SHA-256; empty disables lease-revoke.")
-	fs.StringVar(&f.EndpointLeaseApprovedProxyImage, "endpoint-lease-approved-proxy-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_PROXY_IMAGE"), "Reviewed immutable endpoint lease proxy repo@sha256; empty disables lease-revoke.")
-	fs.StringVar(&f.EndpointLeaseApprovedEngineImage, "endpoint-lease-approved-engine-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE"), "Reviewed immutable endpoint lease engine repo@sha256; empty disables lease-revoke.")
 	fs.StringVar(&f.PrometheusURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
 	e := &f.EPSS
 	fs.StringVar(&e.CachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")

@@ -39,9 +39,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/cmd/internal/actuatorconfig"
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/actuatorapi"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
@@ -67,7 +69,6 @@ import (
 	"github.com/phorvex/phorvex/internal/runner"
 	"github.com/phorvex/phorvex/internal/scopedoutcome"
 	"github.com/phorvex/phorvex/internal/startupauthz"
-	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	"phorvex.ai/libs/logging"
 )
@@ -152,24 +153,7 @@ func main() {
 		auditSourceCA                  string
 		auditSourceClientDNS           string
 		auditSourceVClusterPath        string
-		loraCleanSourcesFile           string
-		migProfilesFile                string
-		servingSecurityFile            string
-		servingSecurityMode            string
-		voiceMCPApprovedImage          string
-		migNodeExec                    bool
-		migAgentNamespace              string
-		migAgentServiceAccounts        string
-		migAgentDaemonSet              string
-		migAgentGPUContainer           string
-		migAgentHelperContainer        string
-		migAllocationHelper            string
-		migAllocationSocket            string
-		migExecTimeout                 time.Duration
-		migAllocationReadTimeout       time.Duration
-		migReleaseTimeout              time.Duration
-		migExclusiveMaintenance        bool
-		maxRetainedQuarantines         int
+		actuatorFlags                  actuatorconfig.Flags
 		scopedOutcomeConfig            string
 		mathLabCapturePolicies         string
 		mathLabCaptureDir              string
@@ -178,6 +162,9 @@ func main() {
 		brainEndpoint                  string
 		sensorFlags                    sensorconfig.Flags
 		sensorEndpoint                 string
+		actuatorEndpoint               string
+		actuatorConnectTimeout         time.Duration
+		actuatorCallTimeout            time.Duration
 		sensorConnectTimeout           time.Duration
 		sensorCallTimeout              time.Duration
 		brainConnectTimeout            time.Duration
@@ -202,23 +189,7 @@ func main() {
 	flag.StringVar(&webhookCertDir, "webhook-cert-dir", "/tmp/k8s-webhook-server/serving-certs", "Directory containing tls.crt and tls.key for the validating admission webhook.")
 	flag.StringVar(&flowClasses, "flow-residual-classes", os.Getenv("PHORVEX_FLOW_RESIDUAL_CLASSES"), "Comma-separated workload classes (namespaces) whose Little's-law flow residual is ACTIVATED (M-115). Availability of the inputs is not activation: the per-class verdict belongs to the math ruling. Empty (default) = no class active; the component is absent with reason class-not-activated and enters no aggregate and no fact.")
 	flag.StringVar(&lossHistoryDir, "loss-history-dir", os.Getenv("PHORVEX_LOSS_HISTORY_DIR"), "Private durable directory for immutable completed-disclosure history. Empty keeps M100 history unavailable.")
-	flag.StringVar(&loraCleanSourcesFile, "lora-clean-sources-file", "", "Operator-owned JSON mapping exact namespace and adapter identities to serving-local reload paths. Empty disables reload.")
-	flag.StringVar(&migProfilesFile, "mig-profiles-file", "", "Operator-owned JSON mapping exact namespace and MIG resource classes to approved profiles. Empty disables mig-rebind.")
-	flag.StringVar(&servingSecurityFile, "serving-security-file", "", "Operator-owned versioned exact policy/workload binding configuration for serving TLS credentials.")
-	flag.StringVar(&servingSecurityMode, "serving-security-mode", string(actuator.ServingSecuritySecureRequired), "Serving control mode: secure-required (default) or explicit legacy-plaintext migration compatibility.")
-	flag.StringVar(&voiceMCPApprovedImage, "voice-mcp-approved-image", os.Getenv("PHORVEX_VOICE_MCP_APPROVED_IMAGE"), "Reviewed immutable MCP repo@sha256 required for Voice MCP pinning; empty disables that action.")
-	flag.BoolVar(&migNodeExec, "mig-node-exec", false, "Enable the explicitly configured trusted MIG node-agent transport.")
-	flag.StringVar(&migAgentNamespace, "mig-agent-namespace", "", "Exact namespace of the trusted MIG node-agent DaemonSet.")
-	flag.StringVar(&migAgentServiceAccounts, "mig-agent-service-accounts", "", "Comma-separated exact ServiceAccount allowlist for the trusted MIG node agent.")
-	flag.StringVar(&migAgentDaemonSet, "mig-agent-daemonset", "", "Exact trusted MIG node-agent DaemonSet name.")
-	flag.StringVar(&migAgentGPUContainer, "mig-agent-gpu-container", "", "Exact GPU tooling container name in the trusted agent.")
-	flag.StringVar(&migAgentHelperContainer, "mig-agent-helper-container", "", "Exact PodResources helper container name in the trusted agent.")
-	flag.StringVar(&migAllocationHelper, "mig-allocation-helper", "/phorvex-mig-allocation-helper", "Fixed absolute helper path inside the trusted helper container.")
-	flag.StringVar(&migAllocationSocket, "mig-allocation-socket", "/var/lib/kubelet/pod-resources/kubelet.sock", "Fixed kubelet PodResources Unix socket path inside the trusted helper container.")
-	flag.DurationVar(&migExecTimeout, "mig-agent-exec-timeout", 5*time.Second, "Deadline for each trusted-agent read or GPU command.")
-	flag.DurationVar(&migAllocationReadTimeout, "mig-allocation-read-timeout", 3*time.Second, "Deadline for each kubelet PodResources helper request (maximum 30s).")
-	flag.DurationVar(&migReleaseTimeout, "mig-allocation-release-timeout", 45*time.Second, "Deadline to observe target PodResources allocation release after UID-bound deletion.")
-	flag.BoolVar(&migExclusiveMaintenance, "mig-exclusive-maintenance", false, "Declare that MIG repartition runs only under an externally controlled exclusive-maintenance scheduling contract.")
+	actuatorFlags.Register(flag.CommandLine)
 	flag.DurationVar(&baseInterval, "base-interval", 10*time.Second, "Base tick interval for the decision loop.")
 	flag.IntVar(&supportDebounce, "actions-supported-debounce", runner.DefaultActionsSupportedDebounceTicks, "Consecutive unsupported capability ticks before ActionsSupported becomes False.")
 	flag.BoolVar(&calibrationShadow, "calibration-shadow", true, "Run cluster scale calibration in shadow; learned values are never applied to production scoring.")
@@ -252,7 +223,6 @@ func main() {
 	flag.Int64Var(&auditMaxBytes, "audit-max-bytes", defaultAuditMaxBytes, "[audit-json] target live-segment size in bytes (0 = unbounded). Whole records are preserved, so a segment may exceed this nominal cap. Default 512 MiB.")
 	flag.IntVar(&auditMaxBackups, "audit-max-backups", defaultAuditMaxBackups, "[audit-json] number of rotated segments to keep. Nominal budget is max-bytes*(backups+1); oversized records and pre-existing files can exceed it.")
 	flag.StringVar(&operatorNS, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the kill-switch ConfigMap.")
-	flag.IntVar(&maxRetainedQuarantines, "max-retained-quarantines-per-namespace", 1, fmt.Sprintf("Hard namespace-wide bound on retained or pending Phorvex quarantines (0 disables new quarantine, maximum %d).", actuator.MaxRetainedQuarantinesUpperBound))
 	flag.StringVar(&scopedOutcomeConfig, "scoped-outcome-config", "", "Absolute path to one strict, preregistered synthetic-session observer configuration. Empty keeps qualified live persistence outcomes unavailable.")
 	flag.StringVar(&mathLabCapturePolicies, "math-lab-capture-policies", "", "Comma-separated namespace/name PhorvexPolicies whose decision ticks are recorded as replayable Math Lab snapshots. Empty (default) records nothing. Recording never changes a decision.")
 	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
@@ -265,6 +235,9 @@ func main() {
 	flag.StringVar(&sensorEndpoint, "sensor-endpoint", "", "gRPC address of the sensor service (ADR-0001). Empty (default) observes the cluster in this process. The connection is plaintext: restrict the sensor with a NetworkPolicy.")
 	flag.DurationVar(&sensorConnectTimeout, "sensor-connect-timeout", 2*time.Minute, "[sensor-endpoint] how long startup waits for the sensor service to accept the handshake.")
 	flag.DurationVar(&sensorCallTimeout, "sensor-call-timeout", 30*time.Second, "[sensor-endpoint] deadline of one observation or telemetry read; a missed observation skips the tick.")
+	flag.StringVar(&actuatorEndpoint, "actuator-endpoint", "", "gRPC address of the actuator service (ADR-0001). Empty (default) acts in this process. The actuator then holds the actuation RBAC, runs the startup authorization preflight and reads the actuator flags; the connection is plaintext: restrict the actuator with a NetworkPolicy.")
+	flag.DurationVar(&actuatorConnectTimeout, "actuator-connect-timeout", 2*time.Minute, "[actuator-endpoint] how long startup waits for the actuator service to accept the handshake.")
+	flag.DurationVar(&actuatorCallTimeout, "actuator-call-timeout", 30*time.Second, "[actuator-endpoint] deadline of one capability, access, fence or capacity question; an actuation keeps the tick's own deadline.")
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -287,8 +260,8 @@ func main() {
 	slog.SetDefault(logger)
 	ctrl.SetLogger(logging.Logr(logger))
 	klog.SetLogger(logging.Logr(logger).WithName("client-go"))
-	if voiceMCPApprovedImage != "" && !voicemcppolicy.ValidApprovedImage(voiceMCPApprovedImage) {
-		setupLog.Error(fmt.Errorf("invalid reviewed MCP image reference"), "voice MCP image configuration invalid")
+	if err := actuatorFlags.ValidateImage(); err != nil {
+		setupLog.Error(err, "voice MCP image configuration invalid")
 		os.Exit(1)
 	}
 	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(sensorFlags.EndpointLeaseApprovedSource, sensorFlags.EndpointLeaseApprovedProxyImage, sensorFlags.EndpointLeaseApprovedEngineImage); err != nil {
@@ -338,8 +311,8 @@ func main() {
 		setupLog.Error(fmt.Errorf("must be at least 1"), "invalid actions-supported-debounce", "value", supportDebounce)
 		os.Exit(2)
 	}
-	if maxRetainedQuarantines < 0 || maxRetainedQuarantines > actuator.MaxRetainedQuarantinesUpperBound {
-		setupLog.Error(fmt.Errorf("must be in [0,%d]", actuator.MaxRetainedQuarantinesUpperBound), "invalid max-retained-quarantines-per-namespace", "value", maxRetainedQuarantines)
+	if err := actuatorFlags.ValidateBound(); err != nil {
+		setupLog.Error(err, "invalid max-retained-quarantines-per-namespace", "value", actuatorFlags.MaxRetainedQuarantines)
 		os.Exit(2)
 	}
 	if calibrationShadow && (calibrationRefresh <= 0 || calibrationSample <= 0 || calibrationLookback <= 0 || calibrationSample > calibrationRefresh) {
@@ -364,27 +337,12 @@ func main() {
 	// at which every entrypoint reports what was configured and where it came from.
 	setupLog.Info("actuator configuration resolved",
 		"actuator", string(backend.Backend), "source", backend.Origin())
-	adapterSources, sourceErr := actuator.LoadAdapterSourcesFile(loraCleanSourcesFile)
-	if sourceErr != nil {
-		setupLog.Error(sourceErr, "invalid adapter reload source configuration; refusing to start")
+	actuatorSettings, settingsErr := actuatorFlags.Load(operatorNS)
+	if settingsErr != nil {
+		setupLog.Error(settingsErr, "invalid actuator configuration; refusing to start")
 		os.Exit(2)
 	}
-	migProfiles, migProfilesErr := actuator.LoadMIGProfilesFile(migProfilesFile)
-	if migProfilesErr != nil {
-		setupLog.Error(migProfilesErr, "invalid MIG profile authority configuration; refusing to start")
-		os.Exit(2)
-	}
-	securityMode, securityModeErr := actuator.ParseServingSecurityMode(servingSecurityMode)
-	if securityModeErr != nil {
-		setupLog.Error(securityModeErr, "invalid serving security mode; refusing to start")
-		os.Exit(2)
-	}
-	servingSecurity, servingSecurityErr := actuator.LoadServingSecurityFile(servingSecurityFile, securityMode, operatorNS)
-	if servingSecurityErr != nil {
-		setupLog.Error(servingSecurityErr, "invalid serving security configuration; refusing to start")
-		os.Exit(2)
-	}
-	setupLog.Info("serving control security configured", "mode", securityMode, "bindings", len(servingSecurity.Bindings))
+	setupLog.Info("serving control security configured", "mode", actuatorSettings.SecurityMode, "bindings", len(actuatorSettings.ServingSecurity.Bindings))
 
 	if epssFeed {
 		if err := runEPSSFeed(epssFeedApply, epssFeedPartial, epssFeedNS, epssFeedCM, epssFeedKey, sensorFlags.EPSS.MetadataKey, epssFeedFIRSTURL, epssFeedTrivy, epssFeedTimeout, epssFeedMetadataTTL, epssFeedScopeNamespaces, epssFeedScopeDigests, epssFeedRegistryAuthFile, epssFeedRegistryAuthRegistries); err != nil {
@@ -443,26 +401,26 @@ func main() {
 		os.Exit(1)
 	}
 	cs, csErr := kubernetes.NewForConfig(restConfig)
-	var bootReviews startupauthz.SSARClient
-	if csErr == nil {
-		bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+	// The identity that acts must hold the actuation RBAC. In process that is this
+	// manager's; a separate actuator service checks its own before it serves.
+	if actuatorEndpoint == "" {
+		var bootReviews startupauthz.SSARClient
+		if csErr == nil {
+			bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
+		}
+		bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews,
+			actuatorFlags.Preflight(actuatorSettings, backend.Backend, operatorNS))
+		if bootErr != nil {
+			setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
+			os.Exit(1)
+		}
+		setupLog.Info("startup authorization preflight passed",
+			"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
+			"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
+			"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
+	} else {
+		setupLog.Info("startup authorization preflight runs on the actuator service", "endpoint", actuatorEndpoint)
 	}
-	bootConfig := startupauthz.Config{
-		Backend: backend.Backend, OperatorNamespace: operatorNS,
-		ServingSecurity: servingSecurity,
-	}
-	if migNodeExec {
-		bootConfig.MIGAgent = &startupauthz.MIGAgentAccess{Namespace: migAgentNamespace, DaemonSet: migAgentDaemonSet}
-	}
-	bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews, bootConfig)
-	if bootErr != nil {
-		setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
-		os.Exit(1)
-	}
-	setupLog.Info("startup authorization preflight passed",
-		"policies", bootReport.Policies, "activePolicies", bootReport.ActivePolicies,
-		"dryRunPolicies", bootReport.DryRunPolicies, "namespaces", bootReport.Namespaces,
-		"requirements", bootReport.Requirements, "noPolicies", bootReport.NoPolicies)
 
 	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
 	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
@@ -472,42 +430,36 @@ func main() {
 		setupLog.Error(err, "cannot construct the resolved actuator; refusing to start")
 		os.Exit(1)
 	}
-	quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, maxRetainedQuarantines)
-	if capacityErr != nil {
-		setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
-		os.Exit(1)
-	}
-	rmgr.QuarantineCapacity = quarantineCapacity
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
-	voiceAdmissionMode := os.Getenv("PHORVEX_VOICE_ADMISSION_ENABLED")
-	if voiceAdmissionMode != "" && voiceAdmissionMode != "true" && voiceAdmissionMode != "false" {
-		setupLog.Error(fmt.Errorf("invalid PHORVEX_VOICE_ADMISSION_ENABLED"), "invalid Voice admission feature flag")
-		os.Exit(1)
-	}
-	voiceAdmissionEnabled := voiceAdmissionMode == "true"
-	if native, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
-		native.SetBoundaryReader(mgr.GetAPIReader())
-		native.JournalNamespace = operatorNS
-		native.SetAdapterSources(adapterSources)
-		native.SetMIGProfiles(migProfiles)
-		native.SetServingSecurity(servingSecurity)
-		native.VoiceMCPApprovedImage = voiceMCPApprovedImage
-		native.VoiceAdmissionEnabled = voiceAdmissionEnabled
-		native.SetEndpointLeaseApprovedSourceSHA256(sensorFlags.EndpointLeaseApprovedSource)
-		native.SetEndpointLeaseApprovedProxyImage(sensorFlags.EndpointLeaseApprovedProxyImage)
-		native.SetEndpointLeaseApprovedEngineImage(sensorFlags.EndpointLeaseApprovedEngineImage)
-	}
-	if hybrid, ok := rmgr.Actuator.(*actuator.HybridActuator); ok {
-		hybrid.ConfigureNativeJournal(mgr.GetAPIReader(), operatorNS)
-		hybrid.SetAdapterSources(adapterSources)
-		hybrid.SetMIGProfiles(migProfiles)
-		hybrid.SetServingSecurity(servingSecurity)
-		hybrid.SetVoiceMCPApprovedImage(voiceMCPApprovedImage)
-		hybrid.SetVoiceAdmissionEnabled(voiceAdmissionEnabled)
-		hybrid.SetEndpointLeaseApprovedSourceSHA256(sensorFlags.EndpointLeaseApprovedSource)
-		hybrid.SetEndpointLeaseApprovedProxyImage(sensorFlags.EndpointLeaseApprovedProxyImage)
-		hybrid.SetEndpointLeaseApprovedEngineImage(sensorFlags.EndpointLeaseApprovedEngineImage)
+	// The manager acts in this process unless --actuator-endpoint names the actuator
+	// service, which serves the same contract over gRPC (ADR-0001) and owns the
+	// backends, their journals, the quarantine ledger and the actuation RBAC.
+	if actuatorEndpoint == "" {
+		quarantineCapacity, capacityErr := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), operatorNS, actuatorFlags.MaxRetainedQuarantines)
+		if capacityErr != nil {
+			setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
+			os.Exit(1)
+		}
+		rmgr.QuarantineCapacity = quarantineCapacity
+		voiceAdmissionEnabled, voiceAdmissionErr := actuatorconfig.VoiceAdmissionEnabled()
+		if voiceAdmissionErr != nil {
+			setupLog.Error(voiceAdmissionErr, "invalid Voice admission feature flag")
+			os.Exit(1)
+		}
+		actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
+	} else {
+		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, actuatorconfig.Shared(operatorNS, sensorFlags.Trust),
+			actuatorConnectTimeout, actuatorCallTimeout)
+		if actuatorErr != nil {
+			setupLog.Error(actuatorErr, "refusing to start without the actuator service", "endpoint", actuatorEndpoint)
+			os.Exit(1)
+		}
+		defer func() { _ = conn.Close() }()
+		rmgr.Actuator = nil
+		rmgr.ActuatorService = remote
+		setupLog.Info("actuator: remote service", "endpoint", actuatorEndpoint, "backend", string(remote.Backend()),
+			"reviewsAccess", remote.ReviewsAccess())
 	}
 	rmgr.BoundaryReader = mgr.GetAPIReader()
 	rmgr.OperatorNamespace = operatorNS
@@ -535,28 +487,25 @@ func main() {
 	// T1-E: wire the SSAR capability checker so the gate's no-rbac leg is live. A
 	// failure here leaves rmgr.Authz nil — the gate then still enforces installability,
 	// cover and runtime capability, just not RBAC (never a silent actuation of an
-	// unpermitted action: the actuation itself still fails closed on real RBAC).
-	if csErr == nil {
-		rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
-	} else {
-		setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
-	}
-	if migNodeExec {
-		if csErr != nil {
-			setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
-			os.Exit(2)
+	// unpermitted action: the actuation itself still fails closed on real RBAC). A
+	// remote actuator reviews its own identity, so neither is wired here.
+	if actuatorEndpoint == "" {
+		if csErr == nil {
+			rmgr.Authz = authz.NewChecker(cs, authz.DefaultTTL)
+		} else {
+			setupLog.Error(csErr, "SSAR checker unavailable; capability-gate RBAC leg disabled")
 		}
-		serviceAccounts := strings.Split(migAgentServiceAccounts, ",")
-		if err := actuator.WireRemoteNodeExec(actuator.RemoteExecConfig{Config: restConfig, Clientset: cs, Agent: actuator.MIGAgentPolicy{
-			Namespace: migAgentNamespace, ServiceAccounts: serviceAccounts, DaemonSet: migAgentDaemonSet,
-			Container: migAgentGPUContainer, AllocationContainer: migAgentHelperContainer,
-			AllocationHelper: migAllocationHelper, AllocationSocket: migAllocationSocket,
-			ExecTimeout: migExecTimeout, AllocationReadTimeout: migAllocationReadTimeout, AllocationReleaseTimeout: migReleaseTimeout, ExclusiveMaintenance: migExclusiveMaintenance,
-		}}); err != nil {
-			setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
-			os.Exit(2)
+		if actuatorFlags.MIG.Enabled {
+			if csErr != nil {
+				setupLog.Error(csErr, "MIG node-exec enabled but clientset is unavailable; refusing to start")
+				os.Exit(2)
+			}
+			if err := actuatorFlags.MIG.Wire(restConfig, cs); err != nil {
+				setupLog.Error(err, "invalid MIG node-exec configuration; refusing to start")
+				os.Exit(2)
+			}
+			setupLog.Info("trusted MIG node-exec transport wired", "namespace", actuatorFlags.MIG.Namespace, "daemonSet", actuatorFlags.MIG.DaemonSet)
 		}
-		setupLog.Info("trusted MIG node-exec transport wired", "namespace", migAgentNamespace, "daemonSet", migAgentDaemonSet)
 	}
 	// M-6: the code-exec admission-capability verifier. It is ALWAYS wired (never nil at
 	// runtime), starts UNAVAILABLE (fail-closed until the first successful verification), and
@@ -649,13 +598,13 @@ func main() {
 	if strings.TrimSpace(mathLabCapturePolicies) != "" {
 		processConfig := map[string]string{
 			"engine": engineName, "base-interval": baseInterval.String(), "gpu-envelope-max": strconv.FormatFloat(gpuEnvelopeMax, 'g', -1, 64),
-			"pcie-class-table": sensorFlags.PCIeClassTable, "serving-security-mode": servingSecurityMode,
-			"max-retained-quarantines-per-namespace": strconv.Itoa(maxRetainedQuarantines),
+			"pcie-class-table": sensorFlags.PCIeClassTable, "serving-security-mode": actuatorFlags.ServingSecurityMode,
+			"max-retained-quarantines-per-namespace": strconv.Itoa(actuatorFlags.MaxRetainedQuarantines),
 			"trusted-detectors":                      strings.Join(detectors.List(), ","), "actions-supported-debounce": strconv.Itoa(supportDebounce),
 			"prometheus-configured": strconv.FormatBool(sensorFlags.PrometheusURL != ""), "epss-cache": sensorFlags.EPSS.CachePath, "epss-authoritative": strconv.FormatBool(sensorFlags.EPSS.Authoritative),
 			"flow-residual-classes": flowClasses, "scoped-outcome-config": scopedOutcomeConfig, "calibration-shadow": strconv.FormatBool(calibrationShadow),
-			"lora-clean-sources-file": loraCleanSourcesFile, "mig-profiles-file": migProfilesFile, "global-kill-switch": strconv.FormatBool(killSwitch),
-			"voice-mcp-approved-image": voiceMCPApprovedImage, "endpoint-lease-approved-source-sha256": sensorFlags.EndpointLeaseApprovedSource,
+			"lora-clean-sources-file": actuatorFlags.LoRACleanSourcesFile, "mig-profiles-file": actuatorFlags.MIGProfilesFile, "global-kill-switch": strconv.FormatBool(killSwitch),
+			"voice-mcp-approved-image": actuatorFlags.VoiceMCPApprovedImage, "endpoint-lease-approved-source-sha256": sensorFlags.EndpointLeaseApprovedSource,
 			"endpoint-lease-approved-proxy-image": sensorFlags.EndpointLeaseApprovedProxyImage, "endpoint-lease-approved-engine-image": sensorFlags.EndpointLeaseApprovedEngineImage,
 		}
 		store, storeErr := mathlab.OpenStore(mathLabCaptureDir, mathLabCaptureMaxBytes, 4, func(st mathlab.StoreStats) {
@@ -763,8 +712,12 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	var activeBackend actuatorapi.Backend
+	if act := rmgr.Actuation(); act != nil {
+		activeBackend = act.Backend()
+	}
 	scopedOutcomeProducer, scopedOutcomeErr := openConfiguredScopedOutcome(
-		context.Background(), scopedOutcomeConfig, mgr.GetAPIReader(), rmgr.Brain, rmgr.Actuator,
+		context.Background(), scopedOutcomeConfig, mgr.GetAPIReader(), rmgr.Brain, activeBackend,
 	)
 	if scopedOutcomeErr != nil {
 		setupLog.Info("scoped outcome observer unavailable; continuing without qualified live persistence labels",
@@ -788,11 +741,13 @@ func runWithScopedOutcomeClose(start func() error, producer *scopedoutcome.Produ
 	return start()
 }
 
-func openConfiguredScopedOutcome(ctx context.Context, path string, reader client.Reader, brain brainapi.Brain, activeActuator actuator.Actuator) (*scopedoutcome.Producer, error) {
+// openConfiguredScopedOutcome opens the observer when a path is configured. backend
+// is the active actuator's backend, empty when none is wired.
+func openConfiguredScopedOutcome(ctx context.Context, path string, reader client.Reader, brain brainapi.Brain, backend actuatorapi.Backend) (*scopedoutcome.Producer, error) {
 	if path == "" {
 		return nil, nil
 	}
-	if activeActuator == nil || actuator.RouteFor(actuator.Backend(activeActuator.Name()), model.ActionRotate) != actuator.BackendNative {
+	if backend == "" || actuatorapi.RouteFor(backend, model.ActionRotate) != actuatorapi.BackendNative {
 		return nil, fmt.Errorf("configured scoped outcome observer requires a native rotate route")
 	}
 	if brain == nil || !brain.PersistenceObservations() || brain.ScopedOutcomeProcessEpochID() == "" {
