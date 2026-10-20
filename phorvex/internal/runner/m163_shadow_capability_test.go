@@ -75,6 +75,15 @@ func m163RotateView() *model.WorkloadView {
 
 func noQualified(*model.WorkloadView) bool { return false }
 
+// m163ReviewSupport records the witness's support answers for v the way the tick's
+// ActionsSupported status pass does before the brain runs. It reviews no authorization, so
+// a shadow that follows meets support evidence and no authorization evidence.
+func m163ReviewSupport(w capability.Witness, v *model.WorkloadView, actions ...model.Action) {
+	for _, a := range actions {
+		w.Capable(v, a)
+	}
+}
+
 // m163RequireRotateReachesRBAC fails loudly if any leg BEFORE authorization decides rotate on
 // this witness, so a gate change cannot quietly turn the tests below into assertions about
 // some other leg. The witness under test carries a live SSAR checker, so the probe uses an
@@ -102,6 +111,7 @@ func TestM163_ObservedEligibilityIssuesNoReview(t *testing.T) {
 	m163RequireRotateReachesRBAC(t)
 	sar := &m163CountingSAR{allowed: true}
 	wit := m163AuthzWitness(sar)
+	m163ReviewSupport(wit, m163RotateView(), model.ActionRotate)
 
 	got := codeExecAwareEligibilityObserved(wit, false, noQualified, m163RotateView(), model.ActionRotate, []string{"cover-key"})
 	if sar.calls != 0 {
@@ -160,6 +170,7 @@ func TestM163_ObservedEligibilityKeepsTheLocalLegsAndM99Precedence(t *testing.T)
 	wit := unverifiedCodeExecWitness()
 	v := &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "victim"}}
 	qualified := func(*model.WorkloadView) bool { return true }
+	m163ReviewSupport(wit, v, model.ActionDebugger, model.ActionCustomInject, model.ActionRotate)
 
 	for _, action := range []model.Action{model.ActionDebugger, model.ActionCustomInject} {
 		got := codeExecAwareEligibilityObserved(wit, true, qualified, v, action, []string{"cover-key"})
@@ -197,6 +208,7 @@ func TestM163_TickWiresBothCapabilityGates(t *testing.T) {
 	}
 
 	v := m163RotateView()
+	m163ReviewSupport(wit, v, model.ActionRotate)
 	if got := ce.ShadowCapability(v, model.ActionRotate, []string{"cover-key"}); got == nil || !got.RBACUnknown {
 		t.Fatalf("the wired shadow gate is not the observation-only one: %+v", got)
 	}

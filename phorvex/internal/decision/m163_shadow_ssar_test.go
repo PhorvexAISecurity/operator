@@ -96,7 +96,7 @@ func m163Witness(az *authz.Checker) capability.Witness {
 // m163WireGate composes the engine's two gate collaborators from ONE real per-tick witness,
 // exactly as the runtime tick does: the reviewing gate for production, the observation-only
 // gate for the counterfactual.
-func m163WireGate(e *CoverageEngine, az *authz.Checker) {
+func m163WireGate(e *CoverageEngine, az *authz.Checker) capability.Witness {
 	w := m163Witness(az)
 	adapt := func(r *capability.Reason) *actionset.Eligibility {
 		if r == nil {
@@ -109,6 +109,21 @@ func m163WireGate(e *CoverageEngine, az *authz.Checker) {
 	}
 	e.ShadowCapability = func(v *model.WorkloadView, a model.Action, keys []string) *actionset.Eligibility {
 		return adapt(w.EligibleObserved(v, a, keys))
+	}
+	return w
+}
+
+// m163ReviewSupport records the witness's support answers the way the tick's
+// ActionsSupported status pass does before the brain runs: every enabled action on every
+// view. It reviews no authorization, so a shadow that follows meets support evidence and no
+// authorization evidence.
+func m163ReviewSupport(w capability.Witness, views []*model.WorkloadView, pol model.Policy) {
+	for _, v := range views {
+		for _, a := range model.MutatingActions {
+			if model.ActionEnabled(pol, a) {
+				w.Capable(v, a)
+			}
+		}
 	}
 }
 
@@ -286,7 +301,8 @@ func TestM163_ShadowVerdictAcrossCacheStates(t *testing.T) {
 	t.Run("absent-evidence-is-unknown-not-an-invented-allow", func(t *testing.T) {
 		sar := &m163SSAR{allowed: true}
 		e := m163Engine(t)
-		m163WireGate(e, authz.NewCheckerWithClient(sar, time.Hour))
+		w := m163WireGate(e, authz.NewCheckerWithClient(sar, time.Hour))
+		m163ReviewSupport(w, m163Views(t, snap), pol)
 
 		shadow, err := e.DecideShadowChecked(m163Views(t, snap), pol)
 		if err != nil {
