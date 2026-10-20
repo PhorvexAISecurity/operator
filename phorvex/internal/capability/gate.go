@@ -194,6 +194,8 @@ type Witness struct {
 	notInstall model.InstallSet
 	az         Access
 	act        Actuator
+	// supports records the tick's backend support answers; see support.
+	supports *supportAnswers
 	// M-6 code-exec admission leg (optional; nil = skipped). nsLabels are the tick's
 	// per-namespace label sets (already GET-derived observation substrate) so the scope
 	// check is O(1) and needs no per-candidate network read.
@@ -240,7 +242,7 @@ func (a checkerAccess) AccessObserved(_ context.Context, namespace string, verbs
 
 // BuildWitness assembles the per-tick witness. A nil az gives no access leg.
 func BuildWitness(ctx context.Context, idx Index, notInstall model.InstallSet, az Access, act Actuator) Witness {
-	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act}
+	return Witness{ctx: ctx, idx: idx, notInstall: notInstall, az: az, act: act, supports: newSupportAnswers()}
 }
 
 // WithCodeExec returns a copy of the witness with the M-6 code-exec admission leg wired.
@@ -289,6 +291,12 @@ func (w Witness) Eligible(v *model.WorkloadView, action model.Action, coverKeys 
 // an invented allow. A cached deny still excludes. The shadow's comparison is therefore
 // weaker EVIDENCE than production's on exactly those (namespace, verb) pairs production has
 // not reviewed recently, and the record says so.
+//
+// The backend support leg is external authority too: SupportsAction may read the cluster,
+// read protected journals and probe the workload. The shadow answers it from the answers
+// the tick's reviewing passes recorded (the ActionsSupported status asks about every
+// enabled action on every allocatable Pod before the brain runs). A question nobody asked
+// excludes with a capability-unobserved detail; the shadow never asks the actuator itself.
 func (w Witness) EligibleObserved(v *model.WorkloadView, action model.Action, coverKeys []string) *Reason {
 	return w.eligible(v, action, coverKeys, false)
 }
@@ -361,7 +369,7 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "endpoint-lease-revoke: event policy identity differs from current policy"}
 		}
 	}
-	if ok, why := w.Capable(v, action); !ok {
+	if ok, why := w.capable(v, action, review); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
 	}
 	// M-6 code-exec admission leg: a debugger/custom-inject move is offered ONLY if the
@@ -401,8 +409,15 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 
 // Capable is the CAPABILITY leg alone (runtime fixtures), per (pod, action). Used by the
 // gate (step 3) and by the runner's ActionsSupported status (∃-aggregation). ok=true for
-// any non-AI-capability action. why is the specific missing-fixture reason.
+// any non-AI-capability action. why is the specific missing-fixture reason. It asks the
+// actuator and records its answer for the tick's counterfactual evaluations.
 func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, string) {
+	return w.capable(v, action, true)
+}
+
+// capable is Capable; with review false the backend support leg answers from the
+// answers recorded this tick instead of asking the actuator (see support).
+func (w Witness) capable(v *model.WorkloadView, action model.Action, review bool) (bool, string) {
 	// AI-capability actions carry per-target CONFIG predicates; the rest do not. Cheapest
 	// local checks first, unchanged.
 	if AICapabilityActions[action] {
@@ -433,7 +448,7 @@ func (w Witness) Capable(v *model.WorkloadView, action model.Action) (bool, stri
 	if w.act == nil {
 		return false, actuatorapi.ReasonBackendUnavailable + ": no actuator is wired to answer for this action"
 	}
-	if ok, why := w.act.SupportsAction(w.ctx, action, w.targetFrom(v)); !ok {
+	if ok, why := w.support(action, w.targetFrom(v), review); !ok {
 		return false, why
 	}
 	return true, ""
