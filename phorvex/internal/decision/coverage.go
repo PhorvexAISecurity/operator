@@ -683,7 +683,7 @@ func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Poli
 	mayRelax := map[string]bool{}
 	if pol.MayBreachSLO {
 		for _, v := range views {
-			mayRelax[v.Pod.Namespace+"/"+v.Pod.Name] = assessOutcomes(v, pol).Present
+			mayRelax[v.Pod.Namespace+"/"+v.Pod.Name] = model.AssessOutcomes(v, pol).Present
 		}
 	}
 	deps := actionset.Deps{
@@ -812,7 +812,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 
 	existential := map[string]*model.ExistentialDecision{}
 	for _, v := range views {
-		existential[v.Pod.Namespace+"/"+v.Pod.Name] = assessOutcomes(v, pol)
+		existential[v.Pod.Namespace+"/"+v.Pod.Name] = model.AssessOutcomes(v, pol)
 	}
 	candsByAsset := map[string][]int{}
 	for i := range set.Candidates {

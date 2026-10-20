@@ -2094,7 +2094,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	actionsSupport := m.debounceActionsSupported(e, capabilityGaps(pol, views, capWit))
 	brain := m.brain()
 	gate := capabilityGate(capWit, access == nil,
-		func(vv *model.WorkloadView) bool { return decision.HasQualifiedOutcome(vv, pol) })
+		func(vv *model.WorkloadView) bool { return model.HasQualifiedOutcome(vv, pol) })
 	if brain.GatesCandidates() {
 		m.Failures.retain(pol.Owner(), failureKeep)
 		failureNow := obs.Now

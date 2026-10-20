@@ -3,14 +3,13 @@ package runner
 import (
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/recon"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 )
 
 // colocationInput joins actual policy selectors, namespace declarations and the
 // authenticated M-94 event projection. It does not use the namespace-count scalar.
-func colocationInput(obs *sensorapi.Observation, e *policyEntry) recon.ColocationInput {
-	in := recon.ColocationInput{Tenant: e.tenant, PolicyUID: e.uid, PolicyKey: e.key.String(), Peers: e.spec.Trust.PeerPolicies,
+func colocationInput(obs *sensorapi.Observation, e *policyEntry) model.ColocationInput {
+	in := model.ColocationInput{Tenant: e.tenant, PolicyUID: e.uid, PolicyKey: e.key.String(), Peers: e.spec.Trust.PeerPolicies,
 		Now: obs.Now, Pods: obs.Pods, NamespaceLabels: obs.NamespaceLabels, Events: obs.EventByPod,
 		PodsComplete: obs.PodInventoryComplete, PoliciesComplete: obs.PolicyInventoryComplete && obs.PolicySelectorsValid,
 		EventsComplete: obs.EventInventoryComplete, CoverEnabled: e.spec.Cover.WarmSwap.Enabled,
@@ -27,7 +26,7 @@ func colocationInput(obs *sensorapi.Observation, e *policyEntry) recon.Colocatio
 	return in
 }
 
-func (m *Manager) recordColocation(in recon.ColocationInput, d model.Decision, pol model.Policy) {
+func (m *Manager) recordColocation(in model.ColocationInput, d model.Decision, pol model.Policy) {
 	if m.Audit == nil {
 		return
 	}
@@ -38,7 +37,7 @@ func (m *Manager) recordColocation(in recon.ColocationInput, d model.Decision, p
 			break
 		}
 	}
-	a := recon.AssessColocation(in)
+	a := model.AssessColocation(in)
 	a.GitSHA = pol.GitSHA
 	a.BrainImage = pol.BrainImage
 	a.TickID = pol.TickID

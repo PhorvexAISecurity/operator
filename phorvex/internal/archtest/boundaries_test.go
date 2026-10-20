@@ -102,9 +102,9 @@ var debt = map[edge]string{
 	{"runner", "mathlab"}:     "the runner holds the in-process brain's Math Lab recorder; the composition moves to cmd",
 	{"runner", "killchain"}:   "the one-shot ablation builds a kill-chain model; it moves to the brain with the ablation",
 	{"runner", "ingest"}:      "the runner holds the in-process sensor's telemetry source and PCIe class table; the composition moves to cmd",
+	{"runner", "recon"}:       "the runner sets the in-process brain's default recon profile and validates its cover keys; the composition moves to cmd",
 	// Brain logic the dispatcher still runs itself.
-	{"runner", "decision"}: "the runner builds the default engine, runs the one-shot ablations, and computes qualified outcomes, parameter provenance and rejected-tick decisions in process; they move behind the brain contract",
-	{"runner", "recon"}:    "the runner sets the default recon profile, validates cover keys and assesses colocation in process; they move behind the brain contract",
+	{"runner", "decision"}: "the runner builds the default engine, runs the one-shot ablations, and computes parameter provenance and rejected-tick decisions in process; they move behind the brain contract",
 }
 
 func moduleRoot(t *testing.T) string {
