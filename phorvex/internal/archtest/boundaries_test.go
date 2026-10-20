@@ -43,12 +43,15 @@ var domains = map[string]string{
 	"crmrefund": shared, "endpointlease": shared, "litellmclient": shared, "outputpolicy": shared,
 	"voiceadmissionpolicy": shared, "voicemcppolicy": shared, "voicememorypolicy": shared,
 	"voiceoutputpolicy": shared, "voicerefundpolicy": shared,
+	// feasibility is the pure SLO and disruption predicate the brain applies when it
+	// selects and the dispatcher re-applies at the emit boundary.
+	"feasibility": shared,
 
 	"ingest": sensor, "graph": sensor, "platform": sensor, "physics": sensor,
 	"ctxprov": sensor, "epssfeed": sensor, "sensorsvc": sensor,
 
 	"decision": brain, "actionset": brain, "recon": brain, "cost": brain,
-	"feasibility": brain, "killchain": brain, "mathlab": brain, "brainsvc": brain,
+	"killchain": brain, "mathlab": brain, "brainsvc": brain,
 
 	"runner": dispatcher, "controller": dispatcher, "capability": dispatcher,
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
@@ -65,14 +68,14 @@ var domains = map[string]string{
 	"console": console,
 }
 
-// allowed lists the domains each domain may import besides its own. The
-// dispatcher drives sensor, brain and actuator in-process until phase 4 puts
-// gRPC between them.
+// allowed lists the domains each domain may import besides its own. Since phase 4
+// the dispatcher reaches sensor, brain and actuator only through their contracts;
+// the crossings that remain are debt.
 var allowed = map[string][]string{
 	shared:     {},
 	sensor:     {shared},
 	brain:      {shared},
-	dispatcher: {shared, sensor, brain, actuator},
+	dispatcher: {shared},
 	actuator:   {shared},
 	attacks:    {shared},
 	console:    {shared},
@@ -90,6 +93,19 @@ var debt = map[edge]string{
 	{"console", "mathlab"}:     "the console replays Math Lab snapshots in-process; phase 4 calls the brain API",
 	{"console", "actuator"}:    "the console introspects the actuator handler registry; phase 4 reads it from the actuator API",
 	{"console", "cataloguev1"}: "the console runs catalogue jobs in-process; phase 6 moves them to the attacks service",
+
+	// The in-process composition: the runner builds the Local adapters and their parts.
+	{"runner", "brainsvc"}:    "the runner builds the in-process brain adapter; the composition moves to cmd",
+	{"runner", "sensorsvc"}:   "the runner builds the in-process sensor adapter and the ablation snapshot; the composition moves to cmd",
+	{"runner", "actuatorsvc"}: "the runner builds the in-process actuator adapter; the composition moves to cmd",
+	{"runner", "actuator"}:    "the runner constructs the backend and holds the quarantine ledger; the composition moves to cmd",
+	{"runner", "mathlab"}:     "the runner holds the in-process brain's Math Lab recorder; the composition moves to cmd",
+	{"runner", "killchain"}:   "the one-shot ablation builds a kill-chain model; it moves to the brain with the ablation",
+	// Brain and sensor logic the dispatcher still runs itself.
+	{"runner", "decision"}:   "the runner builds the default engine, runs the one-shot ablations, and computes qualified outcomes, parameter provenance and rejected-tick decisions in process; they move behind the brain contract",
+	{"runner", "recon"}:      "the runner sets the default recon profile, validates cover keys and assesses colocation in process; they move behind the brain contract",
+	{"runner", "ingest"}:     "the runner reads detector trust, reads the telemetry registry and admits completed-disclosure and current-inventory evidence with the projection's code; they move to shared packages or behind the sensor contract",
+	{"controller", "ingest"}: "the SecurityEvent webhook reads the creator-identity annotation and the observer trust from the projection; they move to a shared trust package",
 }
 
 func moduleRoot(t *testing.T) string {

@@ -58,10 +58,12 @@ Phoenix `api/v1beta1` package, beside the type it extends. The extended Phoenix
 operator stays a separate third-party component with its own chart.
 
 `phorvex/internal/archtest` enforces this table while the services share one
-module: every package has a domain, a domain imports only shared code (the
-dispatcher may also drive sensor, brain and actuator until phase 4), and each
-remaining crossing is listed as debt with the phase that removes it. The list
-may only shrink.
+module: every package has a domain, a domain imports only shared code, and each
+remaining crossing is listed as debt with what removes it. The list may only
+shrink. Since phase 4 this holds for the dispatcher too: it reaches the other
+services through their contracts, and its remaining in-process crossings (the
+Local adapters it composes, and brain and sensor logic it still runs itself) are
+listed individually.
 
 ### Communication: gRPC with protobuf, driven by the dispatcher
 
@@ -211,8 +213,7 @@ parity on live ticks, and rollback to the current `phorvex-stack` Application.
   observes through `sensorapi`, but the runner still uses `ingest` for the
   detector trust configuration, the existential admission-boundary check and the
   completed-disclosure and current-inventory admission. Each moves to a shared
-  package or behind the sensor contract before the dispatcher's sensor imports
-  can be forbidden.
+  package or behind the sensor contract; archtest lists each as debt.
 - **Graph neighbour order was random.** The reachability graph listed each Pod's
   neighbours in map order, so a view's neighbours and neighbour events changed
   order from tick to tick. Phase 4b-2 sorts them; floating-point sums over a
