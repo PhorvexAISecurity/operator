@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phorvex-brain.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-brain.labels" . | nindent 4 }}
+spec:
+  # One brain: its cost learner, kill-chain stage clocks and retired owners live in
+  # memory (ADR-0001). Recreate never runs two at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "phorvex-brain.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "phorvex-brain.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "phorvex-brain.fullname" . }}
+      # The brain reads no Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: brain
+        image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --listen=:9090
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --engine={{ .Values.engine }}
+        - --gpu-envelope-max={{ .Values.gpuEnvelopeMax }}
+        - --flow-residual-classes={{ .Values.flowResidualClasses }}
+        - --shutdown-grace={{ .Values.shutdownGrace }}
+        - --log-level={{ .Values.log.level }}
+        - --log-format={{ .Values.log.format }}
+        {{- if .Values.mathLab.capturePolicies }}
+        - --math-lab-capture-policies={{ .Values.mathLab.capturePolicies }}
+        - --math-lab-capture-dir=/var/lib/phorvex/math-lab
+        - --math-lab-capture-max-bytes={{ int64 .Values.mathLab.maxBytes }}
+        {{- end }}
+        ports:
+        - name: grpc
+          containerPort: 9090
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- if .Values.mathLab.capturePolicies }}
+        volumeMounts:
+        - name: math-lab
+          mountPath: /var/lib/phorvex/math-lab
+        {{- end }}
+      {{- if .Values.mathLab.capturePolicies }}
+      volumes:
+      - name: math-lab
+        {{- if .Values.mathLab.existingClaim }}
+        persistentVolumeClaim:
+          claimName: {{ .Values.mathLab.existingClaim }}
+        {{- else }}
+        emptyDir: {}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

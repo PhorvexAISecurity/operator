@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "phorvex-brain.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-brain.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "phorvex-brain.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: grpc
+    port: 9090
+    targetPort: grpc
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "phorvex-brain.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-brain.labels" . | nindent 4 }}
+automountServiceAccountToken: false

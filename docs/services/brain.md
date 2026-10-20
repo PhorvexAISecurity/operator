@@ -35,6 +35,12 @@ docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=brain -t ph
 It holds the one binary as `/service` on distroless nonroot. PR validation builds
 it, without pushing, beside the manager and console images.
 
+`deploy/charts/phorvex-brain` deploys it: one replica replaced with the Recreate
+strategy, a ServiceAccount with no token mounted and no RBAC, and a NetworkPolicy
+that admits the gRPC port only from the manager's pods and allows no egress. The
+decision values (`engine`, `gpuEnvelopeMax`, `flowResidualClasses`) must match the
+manager's flags.
+
 | Flag | Default | Meaning |
 |---|---|---|
 | `--listen` | `:9090` | gRPC address |

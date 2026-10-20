@@ -1,0 +1,38 @@
+# Only the manager reaches the brain (ADR-0001). The gRPC connection is
+# plaintext until mTLS, so this policy is its only access control.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "phorvex-brain.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-brain.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "phorvex-brain.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ default .Release.Namespace .Values.dispatcher.namespace }}
+      podSelector:
+        matchLabels:
+          {{- toYaml .Values.dispatcher.podLabels | nindent 10 }}
+    ports:
+    - port: grpc
+  # Kubelet probes arrive from the node, outside any namespace; the health port
+  # answers readiness only.
+  - ports:
+    - port: health
+  {{- range .Values.metricsScraperNamespaces }}
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: {{ . }}
+    ports:
+    - port: metrics
+  {{- end }}
+  # The brain calls nothing; it only answers.
+  egress: []
