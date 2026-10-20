@@ -29,6 +29,10 @@ type quorumHelperConfig struct {
 	RoutePorts                []int
 }
 
+// helperStartup bounds one NATS helper process's start, from exec to accepting
+// connections.
+const helperStartup = 20 * time.Second
+
 func TestNATSQuorumServerProcess(t *testing.T) {
 	raw := os.Getenv(quorumHelperEnv)
 	if raw == "" {
@@ -55,7 +59,9 @@ func TestNATSQuorumServerProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	go srv.Start()
-	if !srv.ReadyForConnections(5 * time.Second) {
+	// A helper is a fresh test binary starting JetStream; on a shared CI runner that
+	// can take longer than a few seconds. The wait bounds only a real failure.
+	if !srv.ReadyForConnections(helperStartup) {
 		t.Fatal("helper server did not become ready")
 	}
 	if err := os.WriteFile(cfg.ReadyFile, []byte(srv.ID()), 0600); err != nil {
@@ -97,7 +103,7 @@ func startQuorumProcessCluster(t *testing.T) []*quorumProcessMember {
 			_ = cmd.Process.Kill()
 			_, _ = cmd.Process.Wait()
 		})
-		deadline := time.Now().Add(8 * time.Second)
+		deadline := time.Now().Add(helperStartup + 10*time.Second)
 		for time.Now().Before(deadline) {
 			value, readErr := os.ReadFile(ready)
 			if readErr == nil && len(value) > 0 {
