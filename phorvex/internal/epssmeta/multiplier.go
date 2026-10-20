@@ -2,7 +2,7 @@
  * Phorvex — the deterministic intelligence layer for R6/Phoenix AMTD.
  */
 
-package recon
+package epssmeta
 
 import "math"
 

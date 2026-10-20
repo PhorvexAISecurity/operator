@@ -19,12 +19,11 @@ import (
 
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/metrics"
-	"github.com/phorvex/phorvex/internal/recon"
 )
 
 // epss.go realizes the PRD context signal #1 (CVE/CVSS posture from image-scan + NVD)
 // as a DETERMINISTIC, OFFLINE, honest-absent cache of RAW (epss, cvss) pairs. Since M-104
-// the value multiplier itself lives in recon.EPSSMultiplier (the one consumption layer);
+// the value multiplier itself lives in epssmeta.EPSSMultiplier (the one consumption layer);
 // this file only looks the pair up. Rather than
 // wrapping the default ctxprov 'sensed-context' provider (which computes AssetValue
 // itself — the non-additivity the decision flagged), the exploitability prior enters the
@@ -84,7 +83,7 @@ const (
 )
 
 // EPSSLookup is the typed answer of the exploitability cache for one running image. It
-// carries RAW values only: the value multiplier is computed by recon.EPSSMultiplier, the
+// carries RAW values only: the value multiplier is computed by epssmeta.EPSSMultiplier, the
 // single EPSS consumption layer (M-104).
 type EPSSLookup struct {
 	EPSS, CVSS    float64 // raw cache values; 0 on a miss
@@ -290,10 +289,10 @@ func EPSSLoaded() int {
 }
 
 // epssMultiplier returns the M-104 value multiplier for a running image digest — computed by
-// recon.EPSSMultiplier, the one consumption layer — or exactly 1.0 (honest-absent) on a miss.
+// epssmeta.EPSSMultiplier, the one consumption layer — or exactly 1.0 (honest-absent) on a miss.
 func epssMultiplier(imageID string) float64 {
 	lk := lookupEPSS(imageID)
-	m, _, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+	m, _, _ := epssmeta.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
 	return m
 }
 
@@ -301,7 +300,7 @@ func epssMultiplier(imageID string) float64 {
 // decision trace can distinguish the honest-neutral default from measured zero.
 func epssInputs(imageID string) (multiplier, epss, cvss float64, present bool) {
 	lk := lookupEPSS(imageID)
-	m, ok, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+	m, ok, _ := epssmeta.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
 	return m, lk.EPSS, lk.CVSS, ok
 }
 

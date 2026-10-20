@@ -47,11 +47,14 @@ var domains = map[string]string{
 	// selects and the dispatcher re-applies at the emit boundary.
 	"feasibility": shared,
 
-	"ingest": sensor, "graph": sensor, "platform": sensor, "physics": sensor,
-	"ctxprov": sensor, "epssfeed": sensor, "sensorsvc": sensor,
+	"ingest": sensor, "graph": sensor, "platform": sensor,
+	"epssfeed": sensor, "sensorsvc": sensor,
 
 	"decision": brain, "actionset": brain, "recon": brain, "cost": brain,
 	"killchain": brain, "mathlab": brain, "brainsvc": brain,
+	// The flow physics and context providers are the brain's: it scores and
+	// records with them, and no sensor package reads them.
+	"physics": brain, "ctxprov": brain,
 
 	"runner": dispatcher, "controller": dispatcher, "capability": dispatcher,
 	"capacity": dispatcher, "slo": dispatcher, "codeexec": dispatcher,
@@ -85,9 +88,6 @@ type edge struct{ from, to string }
 
 // debt lists the boundary crossings that exist today and the phase that removes them.
 var debt = map[edge]string{
-	{"platform", "recon"}:      "the sensor precomputes the brain's EPSS value multiplier; phase 3b ships raw EPSS/CVSS and the brain computes it",
-	{"decision", "ctxprov"}:    "the brain computes context in-process; phase 3b ships context features in the sensor snapshot",
-	{"decision", "physics"}:    "the brain reads flow physics in-process; phase 3b ships physics features in the sensor snapshot",
 	{"console", "actionset"}:   "the console embeds brain code (apply-fix gate); phase 4 calls the brain API",
 	{"console", "decision"}:    "the console embeds brain code (apply-fix gate, benchmark simulation); phase 4 calls the brain API",
 	{"console", "mathlab"}:     "the console replays Math Lab snapshots in-process; phase 4 calls the brain API",
