@@ -1,8 +1,10 @@
 # Brain service
 
 The brain chooses defensive actions. It owns the decision engine (`decision`,
-`actionset`, `recon`, `cost`, `feasibility`, `killchain`) and its learning state,
-and records Math Lab snapshots (`mathlab`). It holds no Kubernetes credentials.
+`actionset`, `recon`, `cost`, `killchain`) and its learning state, and records
+Math Lab snapshots (`mathlab`). The SLO predicate it selects under (`feasibility`)
+and the M99 outcome assessment (`model.AssessOutcomes`) are shared: the
+dispatcher re-applies both at its gate and emit boundary. It holds no Kubernetes credentials.
 See [ADR-0001](../architecture/ADR-0001-service-monorepo.md) for the service split.
 
 The manager runs the brain in one of two ways, behind one contract
@@ -75,6 +77,12 @@ configuration with `phorvex/cmd/internal/decisionconfig`.
    stamps of a committing evaluation (the manager applies them to its views), the
    Math Lab recording id and any evaluation error.
 
+**Audit provenance.** `ParameterSet` returns the decision parameter set a policy
+is decided with, which the audit retains once per content hash, and
+`RejectedDecisions` builds the M99 records of a tick whose action set the brain
+rejected. Both come from the brain, so with a remote brain the audit names the
+parameters of the build that decided. They were added in contract version 2.
+
 **Errors keep their identity.** `ErrOwnerRetired`, `ErrShadowCapabilityUnavailable`
 and `model.CrossBlockCollision` return to the manager as the same values with the
 same messages, so the runner's rejection reasons and audit rows do not change.
@@ -88,6 +96,8 @@ same messages, so the runner's rejection reasons and audit rows do not change.
   those decisions.
 - An owner removal the brain did not acknowledge is replayed before the next
   evaluation, and evaluations fail closed until it is.
+- `ParameterSet` and `RejectedDecisions` fail like an invalid policy: the tick
+  retains no parameter set or records no M99 rows, and the manager logs why.
 - Calls whose contract has no error (calibration, owner epochs, stage clocks,
   rotation feedback) log the failure; each is repeated by the next tick.
   `SelectAlternative` fails to "no alternative".
