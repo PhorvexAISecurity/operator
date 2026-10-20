@@ -40,6 +40,8 @@ jobs:
           diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml
           bash tools/check-vendored-chart.sh
           helm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --api-versions monitoring.coreos.com/v1/PodMonitor --include-crds > /dev/null
+          # One chart per service (ADR-0001); tools/test_service_charts.py renders them.
+          for chart in deploy/charts/*/; do helm lint --strict "$chart"; done
           python tools/check-claim-language.py
       - name: Tracked paths portable to case-insensitive checkouts
         run: python tools/check-path-case-collisions.py

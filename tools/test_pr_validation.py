@@ -46,6 +46,7 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('diff -u phorvex/config/crd/bases/', runs['charts'])
         self.assertIn('bash tools/check-vendored-chart.sh', runs['charts'])
         self.assertIn('helm template phorvex deploy/helm/phorvex-stack', runs['charts'])
+        self.assertIn('for chart in deploy/charts/*/; do helm lint --strict "$chart"; done', runs['charts'])
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')
