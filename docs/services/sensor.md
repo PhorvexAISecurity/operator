@@ -1,8 +1,9 @@
 # Sensor service
 
 The sensor observes the cluster. It owns the inventory projection (`ingest`), the
-reachability graph (`graph`), the physics witnesses (`platform`, `physics`), the
-EPSS feed (`epssfeed`) and the telemetry source with its cross-tick cache. It
+reachability graph (`graph`), the physics witnesses (`platform`), the EPSS feed
+(`epssfeed`) and the telemetry source with its cross-tick cache. The witnesses
+apply the shared EPSS multiplier (`epssmeta`). It
 reads the cluster and never writes it. See
 [ADR-0001](../architecture/ADR-0001-service-monorepo.md) for the service split.
 
