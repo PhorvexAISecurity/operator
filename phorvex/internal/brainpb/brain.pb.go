@@ -1071,6 +1071,204 @@ func (*CloseRecordingResponse) Descriptor() ([]byte, []int) {
 	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{12}
 }
 
+type ParameterSetRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// CBOR model.Policy
+	Policy        []byte `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParameterSetRequest) Reset() {
+	*x = ParameterSetRequest{}
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParameterSetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParameterSetRequest) ProtoMessage() {}
+
+func (x *ParameterSetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParameterSetRequest.ProtoReflect.Descriptor instead.
+func (*ParameterSetRequest) Descriptor() ([]byte, []int) {
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ParameterSetRequest) GetPolicy() []byte {
+	if x != nil {
+		return x.Policy
+	}
+	return nil
+}
+
+type ParameterSetResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// CBOR brainapi.ParameterSet; empty when error is set.
+	ParameterSet []byte `protobuf:"bytes,1,opt,name=parameter_set,json=parameterSet,proto3" json:"parameter_set,omitempty"`
+	// Why the policy has no parameter set (an invalid policy).
+	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParameterSetResponse) Reset() {
+	*x = ParameterSetResponse{}
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParameterSetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParameterSetResponse) ProtoMessage() {}
+
+func (x *ParameterSetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParameterSetResponse.ProtoReflect.Descriptor instead.
+func (*ParameterSetResponse) Descriptor() ([]byte, []int) {
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ParameterSetResponse) GetParameterSet() []byte {
+	if x != nil {
+		return x.ParameterSet
+	}
+	return nil
+}
+
+func (x *ParameterSetResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+type RejectedDecisionsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// CBOR brainapi.RejectedTick
+	Tick          []byte `protobuf:"bytes,1,opt,name=tick,proto3" json:"tick,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RejectedDecisionsRequest) Reset() {
+	*x = RejectedDecisionsRequest{}
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RejectedDecisionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RejectedDecisionsRequest) ProtoMessage() {}
+
+func (x *RejectedDecisionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RejectedDecisionsRequest.ProtoReflect.Descriptor instead.
+func (*RejectedDecisionsRequest) Descriptor() ([]byte, []int) {
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RejectedDecisionsRequest) GetTick() []byte {
+	if x != nil {
+		return x.Tick
+	}
+	return nil
+}
+
+type RejectedDecisionsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// CBOR []model.Decision; empty when error is set.
+	Decisions []byte `protobuf:"bytes,1,opt,name=decisions,proto3" json:"decisions,omitempty"`
+	// Why no record could be built (an invalid policy).
+	Error         string `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RejectedDecisionsResponse) Reset() {
+	*x = RejectedDecisionsResponse{}
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RejectedDecisionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RejectedDecisionsResponse) ProtoMessage() {}
+
+func (x *RejectedDecisionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RejectedDecisionsResponse.ProtoReflect.Descriptor instead.
+func (*RejectedDecisionsResponse) Descriptor() ([]byte, []int) {
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RejectedDecisionsResponse) GetDecisions() []byte {
+	if x != nil {
+		return x.Decisions
+	}
+	return nil
+}
+
+func (x *RejectedDecisionsResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 type SelectAlternativeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Owner         string                 `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
@@ -1082,7 +1280,7 @@ type SelectAlternativeRequest struct {
 
 func (x *SelectAlternativeRequest) Reset() {
 	*x = SelectAlternativeRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[13]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1094,7 +1292,7 @@ func (x *SelectAlternativeRequest) String() string {
 func (*SelectAlternativeRequest) ProtoMessage() {}
 
 func (x *SelectAlternativeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[13]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1107,7 +1305,7 @@ func (x *SelectAlternativeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectAlternativeRequest.ProtoReflect.Descriptor instead.
 func (*SelectAlternativeRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{13}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SelectAlternativeRequest) GetOwner() string {
@@ -1142,7 +1340,7 @@ type SelectAlternativeResponse struct {
 
 func (x *SelectAlternativeResponse) Reset() {
 	*x = SelectAlternativeResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[14]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1154,7 +1352,7 @@ func (x *SelectAlternativeResponse) String() string {
 func (*SelectAlternativeResponse) ProtoMessage() {}
 
 func (x *SelectAlternativeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[14]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1167,7 +1365,7 @@ func (x *SelectAlternativeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SelectAlternativeResponse.ProtoReflect.Descriptor instead.
 func (*SelectAlternativeResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{14}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *SelectAlternativeResponse) GetFound() bool {
@@ -1196,7 +1394,7 @@ type ReserveAlternativeRequest struct {
 
 func (x *ReserveAlternativeRequest) Reset() {
 	*x = ReserveAlternativeRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[15]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1208,7 +1406,7 @@ func (x *ReserveAlternativeRequest) String() string {
 func (*ReserveAlternativeRequest) ProtoMessage() {}
 
 func (x *ReserveAlternativeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[15]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1221,7 +1419,7 @@ func (x *ReserveAlternativeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReserveAlternativeRequest.ProtoReflect.Descriptor instead.
 func (*ReserveAlternativeRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{15}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ReserveAlternativeRequest) GetOwner() string {
@@ -1261,7 +1459,7 @@ type ReserveAlternativeResponse struct {
 
 func (x *ReserveAlternativeResponse) Reset() {
 	*x = ReserveAlternativeResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[16]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1273,7 +1471,7 @@ func (x *ReserveAlternativeResponse) String() string {
 func (*ReserveAlternativeResponse) ProtoMessage() {}
 
 func (x *ReserveAlternativeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[16]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1286,7 +1484,7 @@ func (x *ReserveAlternativeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReserveAlternativeResponse.ProtoReflect.Descriptor instead.
 func (*ReserveAlternativeResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{16}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ReserveAlternativeResponse) GetReserved() bool {
@@ -1308,7 +1506,7 @@ type ObserveRotationRequest struct {
 
 func (x *ObserveRotationRequest) Reset() {
 	*x = ObserveRotationRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[17]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1320,7 +1518,7 @@ func (x *ObserveRotationRequest) String() string {
 func (*ObserveRotationRequest) ProtoMessage() {}
 
 func (x *ObserveRotationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[17]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1333,7 +1531,7 @@ func (x *ObserveRotationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveRotationRequest.ProtoReflect.Descriptor instead.
 func (*ObserveRotationRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{17}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ObserveRotationRequest) GetOwner() string {
@@ -1365,7 +1563,7 @@ type ObserveRotationResponse struct {
 
 func (x *ObserveRotationResponse) Reset() {
 	*x = ObserveRotationResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[18]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1377,7 +1575,7 @@ func (x *ObserveRotationResponse) String() string {
 func (*ObserveRotationResponse) ProtoMessage() {}
 
 func (x *ObserveRotationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[18]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1390,7 +1588,7 @@ func (x *ObserveRotationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveRotationResponse.ProtoReflect.Descriptor instead.
 func (*ObserveRotationResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{18}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{22}
 }
 
 type GetCalibrationStateRequest struct {
@@ -1401,7 +1599,7 @@ type GetCalibrationStateRequest struct {
 
 func (x *GetCalibrationStateRequest) Reset() {
 	*x = GetCalibrationStateRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[19]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1413,7 +1611,7 @@ func (x *GetCalibrationStateRequest) String() string {
 func (*GetCalibrationStateRequest) ProtoMessage() {}
 
 func (x *GetCalibrationStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[19]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1426,7 +1624,7 @@ func (x *GetCalibrationStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCalibrationStateRequest.ProtoReflect.Descriptor instead.
 func (*GetCalibrationStateRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{19}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{23}
 }
 
 type GetCalibrationStateResponse struct {
@@ -1438,7 +1636,7 @@ type GetCalibrationStateResponse struct {
 
 func (x *GetCalibrationStateResponse) Reset() {
 	*x = GetCalibrationStateResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[20]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1450,7 +1648,7 @@ func (x *GetCalibrationStateResponse) String() string {
 func (*GetCalibrationStateResponse) ProtoMessage() {}
 
 func (x *GetCalibrationStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[20]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1463,7 +1661,7 @@ func (x *GetCalibrationStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCalibrationStateResponse.ProtoReflect.Descriptor instead.
 func (*GetCalibrationStateResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{20}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *GetCalibrationStateResponse) GetTenants() map[string]*CostCalibrationState {
@@ -1483,7 +1681,7 @@ type CostCalibrationState struct {
 
 func (x *CostCalibrationState) Reset() {
 	*x = CostCalibrationState{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[21]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1495,7 +1693,7 @@ func (x *CostCalibrationState) String() string {
 func (*CostCalibrationState) ProtoMessage() {}
 
 func (x *CostCalibrationState) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[21]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1508,7 +1706,7 @@ func (x *CostCalibrationState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CostCalibrationState.ProtoReflect.Descriptor instead.
 func (*CostCalibrationState) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{21}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CostCalibrationState) GetPrimed() bool {
@@ -1534,7 +1732,7 @@ type SetCostCalibrationFrozenRequest struct {
 
 func (x *SetCostCalibrationFrozenRequest) Reset() {
 	*x = SetCostCalibrationFrozenRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[22]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1546,7 +1744,7 @@ func (x *SetCostCalibrationFrozenRequest) String() string {
 func (*SetCostCalibrationFrozenRequest) ProtoMessage() {}
 
 func (x *SetCostCalibrationFrozenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[22]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1559,7 +1757,7 @@ func (x *SetCostCalibrationFrozenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCostCalibrationFrozenRequest.ProtoReflect.Descriptor instead.
 func (*SetCostCalibrationFrozenRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{22}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SetCostCalibrationFrozenRequest) GetFrozen() bool {
@@ -1577,7 +1775,7 @@ type SetCostCalibrationFrozenResponse struct {
 
 func (x *SetCostCalibrationFrozenResponse) Reset() {
 	*x = SetCostCalibrationFrozenResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[23]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1589,7 +1787,7 @@ func (x *SetCostCalibrationFrozenResponse) String() string {
 func (*SetCostCalibrationFrozenResponse) ProtoMessage() {}
 
 func (x *SetCostCalibrationFrozenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[23]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1602,7 +1800,7 @@ func (x *SetCostCalibrationFrozenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetCostCalibrationFrozenResponse.ProtoReflect.Descriptor instead.
 func (*SetCostCalibrationFrozenResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{23}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{27}
 }
 
 type RegisterOwnerEpochsRequest struct {
@@ -1615,7 +1813,7 @@ type RegisterOwnerEpochsRequest struct {
 
 func (x *RegisterOwnerEpochsRequest) Reset() {
 	*x = RegisterOwnerEpochsRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[24]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1627,7 +1825,7 @@ func (x *RegisterOwnerEpochsRequest) String() string {
 func (*RegisterOwnerEpochsRequest) ProtoMessage() {}
 
 func (x *RegisterOwnerEpochsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[24]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1640,7 +1838,7 @@ func (x *RegisterOwnerEpochsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterOwnerEpochsRequest.ProtoReflect.Descriptor instead.
 func (*RegisterOwnerEpochsRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{24}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RegisterOwnerEpochsRequest) GetEpochs() []byte {
@@ -1658,7 +1856,7 @@ type RegisterOwnerEpochsResponse struct {
 
 func (x *RegisterOwnerEpochsResponse) Reset() {
 	*x = RegisterOwnerEpochsResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[25]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1670,7 +1868,7 @@ func (x *RegisterOwnerEpochsResponse) String() string {
 func (*RegisterOwnerEpochsResponse) ProtoMessage() {}
 
 func (x *RegisterOwnerEpochsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[25]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1683,7 +1881,7 @@ func (x *RegisterOwnerEpochsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterOwnerEpochsResponse.ProtoReflect.Descriptor instead.
 func (*RegisterOwnerEpochsResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{25}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{29}
 }
 
 type ForgetOwnerRequest struct {
@@ -1695,7 +1893,7 @@ type ForgetOwnerRequest struct {
 
 func (x *ForgetOwnerRequest) Reset() {
 	*x = ForgetOwnerRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[26]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1707,7 +1905,7 @@ func (x *ForgetOwnerRequest) String() string {
 func (*ForgetOwnerRequest) ProtoMessage() {}
 
 func (x *ForgetOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[26]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1720,7 +1918,7 @@ func (x *ForgetOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForgetOwnerRequest.ProtoReflect.Descriptor instead.
 func (*ForgetOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{26}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *ForgetOwnerRequest) GetOwner() string {
@@ -1739,7 +1937,7 @@ type ForgetOwnerResponse struct {
 
 func (x *ForgetOwnerResponse) Reset() {
 	*x = ForgetOwnerResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[27]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1751,7 +1949,7 @@ func (x *ForgetOwnerResponse) String() string {
 func (*ForgetOwnerResponse) ProtoMessage() {}
 
 func (x *ForgetOwnerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[27]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1764,7 +1962,7 @@ func (x *ForgetOwnerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForgetOwnerResponse.ProtoReflect.Descriptor instead.
 func (*ForgetOwnerResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{27}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ForgetOwnerResponse) GetStoresCleared() int64 {
@@ -1784,7 +1982,7 @@ type RetainStageClockRequest struct {
 
 func (x *RetainStageClockRequest) Reset() {
 	*x = RetainStageClockRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[28]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1796,7 +1994,7 @@ func (x *RetainStageClockRequest) String() string {
 func (*RetainStageClockRequest) ProtoMessage() {}
 
 func (x *RetainStageClockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[28]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1809,7 +2007,7 @@ func (x *RetainStageClockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetainStageClockRequest.ProtoReflect.Descriptor instead.
 func (*RetainStageClockRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{28}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *RetainStageClockRequest) GetOwner() string {
@@ -1834,7 +2032,7 @@ type RetainStageClockResponse struct {
 
 func (x *RetainStageClockResponse) Reset() {
 	*x = RetainStageClockResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[29]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1846,7 +2044,7 @@ func (x *RetainStageClockResponse) String() string {
 func (*RetainStageClockResponse) ProtoMessage() {}
 
 func (x *RetainStageClockResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[29]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1859,7 +2057,7 @@ func (x *RetainStageClockResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetainStageClockResponse.ProtoReflect.Descriptor instead.
 func (*RetainStageClockResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{29}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{33}
 }
 
 type SetPersistenceAuthorityRequest struct {
@@ -1873,7 +2071,7 @@ type SetPersistenceAuthorityRequest struct {
 
 func (x *SetPersistenceAuthorityRequest) Reset() {
 	*x = SetPersistenceAuthorityRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[30]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1885,7 +2083,7 @@ func (x *SetPersistenceAuthorityRequest) String() string {
 func (*SetPersistenceAuthorityRequest) ProtoMessage() {}
 
 func (x *SetPersistenceAuthorityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[30]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1898,7 +2096,7 @@ func (x *SetPersistenceAuthorityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPersistenceAuthorityRequest.ProtoReflect.Descriptor instead.
 func (*SetPersistenceAuthorityRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{30}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *SetPersistenceAuthorityRequest) GetPresent() bool {
@@ -1923,7 +2121,7 @@ type SetPersistenceAuthorityResponse struct {
 
 func (x *SetPersistenceAuthorityResponse) Reset() {
 	*x = SetPersistenceAuthorityResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[31]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1935,7 +2133,7 @@ func (x *SetPersistenceAuthorityResponse) String() string {
 func (*SetPersistenceAuthorityResponse) ProtoMessage() {}
 
 func (x *SetPersistenceAuthorityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[31]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1948,7 +2146,7 @@ func (x *SetPersistenceAuthorityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetPersistenceAuthorityResponse.ProtoReflect.Descriptor instead.
 func (*SetPersistenceAuthorityResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{31}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{35}
 }
 
 type AdmitPersistenceObservationRequest struct {
@@ -1968,7 +2166,7 @@ type AdmitPersistenceObservationRequest struct {
 
 func (x *AdmitPersistenceObservationRequest) Reset() {
 	*x = AdmitPersistenceObservationRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[32]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1980,7 +2178,7 @@ func (x *AdmitPersistenceObservationRequest) String() string {
 func (*AdmitPersistenceObservationRequest) ProtoMessage() {}
 
 func (x *AdmitPersistenceObservationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[32]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1993,7 +2191,7 @@ func (x *AdmitPersistenceObservationRequest) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use AdmitPersistenceObservationRequest.ProtoReflect.Descriptor instead.
 func (*AdmitPersistenceObservationRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{32}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *AdmitPersistenceObservationRequest) GetObservation() []byte {
@@ -2034,7 +2232,7 @@ type AdmitPersistenceObservationResponse struct {
 
 func (x *AdmitPersistenceObservationResponse) Reset() {
 	*x = AdmitPersistenceObservationResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[33]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2046,7 +2244,7 @@ func (x *AdmitPersistenceObservationResponse) String() string {
 func (*AdmitPersistenceObservationResponse) ProtoMessage() {}
 
 func (x *AdmitPersistenceObservationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[33]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2059,7 +2257,7 @@ func (x *AdmitPersistenceObservationResponse) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use AdmitPersistenceObservationResponse.ProtoReflect.Descriptor instead.
 func (*AdmitPersistenceObservationResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{33}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *AdmitPersistenceObservationResponse) GetResult() []byte {
@@ -2080,7 +2278,7 @@ type RecordScopedOutcomeUnavailableRequest struct {
 
 func (x *RecordScopedOutcomeUnavailableRequest) Reset() {
 	*x = RecordScopedOutcomeUnavailableRequest{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[34]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2092,7 +2290,7 @@ func (x *RecordScopedOutcomeUnavailableRequest) String() string {
 func (*RecordScopedOutcomeUnavailableRequest) ProtoMessage() {}
 
 func (x *RecordScopedOutcomeUnavailableRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[34]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2105,7 +2303,7 @@ func (x *RecordScopedOutcomeUnavailableRequest) ProtoReflect() protoreflect.Mess
 
 // Deprecated: Use RecordScopedOutcomeUnavailableRequest.ProtoReflect.Descriptor instead.
 func (*RecordScopedOutcomeUnavailableRequest) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{34}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *RecordScopedOutcomeUnavailableRequest) GetPolicy() []byte {
@@ -2132,7 +2330,7 @@ type RecordScopedOutcomeUnavailableResponse struct {
 
 func (x *RecordScopedOutcomeUnavailableResponse) Reset() {
 	*x = RecordScopedOutcomeUnavailableResponse{}
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[35]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2144,7 +2342,7 @@ func (x *RecordScopedOutcomeUnavailableResponse) String() string {
 func (*RecordScopedOutcomeUnavailableResponse) ProtoMessage() {}
 
 func (x *RecordScopedOutcomeUnavailableResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[35]
+	mi := &file_phorvex_brain_v1_brain_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2157,7 +2355,7 @@ func (x *RecordScopedOutcomeUnavailableResponse) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use RecordScopedOutcomeUnavailableResponse.ProtoReflect.Descriptor instead.
 func (*RecordScopedOutcomeUnavailableResponse) Descriptor() ([]byte, []int) {
-	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{35}
+	return file_phorvex_brain_v1_brain_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RecordScopedOutcomeUnavailableResponse) GetResult() []byte {
@@ -2247,7 +2445,17 @@ const file_phorvex_brain_v1_brain_proto_rawDesc = "" +
 	"\frecording_id\x18\x01 \x01(\tR\vrecordingId\x12\x1c\n" +
 	"\tfinalized\x18\x02 \x01(\bR\tfinalized\x12\x1c\n" +
 	"\tdecisions\x18\x03 \x01(\fR\tdecisions\"\x18\n" +
-	"\x16CloseRecordingResponse\"m\n" +
+	"\x16CloseRecordingResponse\"-\n" +
+	"\x13ParameterSetRequest\x12\x16\n" +
+	"\x06policy\x18\x01 \x01(\fR\x06policy\"Q\n" +
+	"\x14ParameterSetResponse\x12#\n" +
+	"\rparameter_set\x18\x01 \x01(\fR\fparameterSet\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\".\n" +
+	"\x18RejectedDecisionsRequest\x12\x12\n" +
+	"\x04tick\x18\x01 \x01(\fR\x04tick\"O\n" +
+	"\x19RejectedDecisionsResponse\x12\x1c\n" +
+	"\tdecisions\x18\x01 \x01(\fR\tdecisions\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\"m\n" +
 	"\x18SelectAlternativeRequest\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12#\n" +
@@ -2313,11 +2521,13 @@ const file_phorvex_brain_v1_brain_proto_rawDesc = "" +
 	"\x1fDECIDE_ERROR_KIND_OWNER_RETIRED\x10\x01\x123\n" +
 	"/DECIDE_ERROR_KIND_SHADOW_CAPABILITY_UNAVAILABLE\x10\x02\x12+\n" +
 	"'DECIDE_ERROR_KIND_CROSS_BLOCK_COLLISION\x10\x03\x12\x1b\n" +
-	"\x17DECIDE_ERROR_KIND_OTHER\x10\x042\xab\f\n" +
+	"\x17DECIDE_ERROR_KIND_OTHER\x10\x042\xf8\r\n" +
 	"\fBrainService\x12H\n" +
 	"\x05Hello\x12\x1e.phorvex.brain.v1.HelloRequest\x1a\x1f.phorvex.brain.v1.HelloResponse\x12O\n" +
 	"\x06Decide\x12\x1f.phorvex.brain.v1.DecideRequest\x1a .phorvex.brain.v1.DecideResponse(\x010\x01\x12c\n" +
-	"\x0eCloseRecording\x12'.phorvex.brain.v1.CloseRecordingRequest\x1a(.phorvex.brain.v1.CloseRecordingResponse\x12l\n" +
+	"\x0eCloseRecording\x12'.phorvex.brain.v1.CloseRecordingRequest\x1a(.phorvex.brain.v1.CloseRecordingResponse\x12]\n" +
+	"\fParameterSet\x12%.phorvex.brain.v1.ParameterSetRequest\x1a&.phorvex.brain.v1.ParameterSetResponse\x12l\n" +
+	"\x11RejectedDecisions\x12*.phorvex.brain.v1.RejectedDecisionsRequest\x1a+.phorvex.brain.v1.RejectedDecisionsResponse\x12l\n" +
 	"\x11SelectAlternative\x12*.phorvex.brain.v1.SelectAlternativeRequest\x1a+.phorvex.brain.v1.SelectAlternativeResponse\x12o\n" +
 	"\x12ReserveAlternative\x12+.phorvex.brain.v1.ReserveAlternativeRequest\x1a,.phorvex.brain.v1.ReserveAlternativeResponse\x12f\n" +
 	"\x0fObserveRotation\x12(.phorvex.brain.v1.ObserveRotationRequest\x1a).phorvex.brain.v1.ObserveRotationResponse\x12r\n" +
@@ -2343,7 +2553,7 @@ func file_phorvex_brain_v1_brain_proto_rawDescGZIP() []byte {
 }
 
 var file_phorvex_brain_v1_brain_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_phorvex_brain_v1_brain_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_phorvex_brain_v1_brain_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_phorvex_brain_v1_brain_proto_goTypes = []any{
 	(DecideErrorKind)(0),                           // 0: phorvex.brain.v1.DecideErrorKind
 	(*HelloRequest)(nil),                           // 1: phorvex.brain.v1.HelloRequest
@@ -2359,30 +2569,34 @@ var file_phorvex_brain_v1_brain_proto_goTypes = []any{
 	(*DecideError)(nil),                            // 11: phorvex.brain.v1.DecideError
 	(*CloseRecordingRequest)(nil),                  // 12: phorvex.brain.v1.CloseRecordingRequest
 	(*CloseRecordingResponse)(nil),                 // 13: phorvex.brain.v1.CloseRecordingResponse
-	(*SelectAlternativeRequest)(nil),               // 14: phorvex.brain.v1.SelectAlternativeRequest
-	(*SelectAlternativeResponse)(nil),              // 15: phorvex.brain.v1.SelectAlternativeResponse
-	(*ReserveAlternativeRequest)(nil),              // 16: phorvex.brain.v1.ReserveAlternativeRequest
-	(*ReserveAlternativeResponse)(nil),             // 17: phorvex.brain.v1.ReserveAlternativeResponse
-	(*ObserveRotationRequest)(nil),                 // 18: phorvex.brain.v1.ObserveRotationRequest
-	(*ObserveRotationResponse)(nil),                // 19: phorvex.brain.v1.ObserveRotationResponse
-	(*GetCalibrationStateRequest)(nil),             // 20: phorvex.brain.v1.GetCalibrationStateRequest
-	(*GetCalibrationStateResponse)(nil),            // 21: phorvex.brain.v1.GetCalibrationStateResponse
-	(*CostCalibrationState)(nil),                   // 22: phorvex.brain.v1.CostCalibrationState
-	(*SetCostCalibrationFrozenRequest)(nil),        // 23: phorvex.brain.v1.SetCostCalibrationFrozenRequest
-	(*SetCostCalibrationFrozenResponse)(nil),       // 24: phorvex.brain.v1.SetCostCalibrationFrozenResponse
-	(*RegisterOwnerEpochsRequest)(nil),             // 25: phorvex.brain.v1.RegisterOwnerEpochsRequest
-	(*RegisterOwnerEpochsResponse)(nil),            // 26: phorvex.brain.v1.RegisterOwnerEpochsResponse
-	(*ForgetOwnerRequest)(nil),                     // 27: phorvex.brain.v1.ForgetOwnerRequest
-	(*ForgetOwnerResponse)(nil),                    // 28: phorvex.brain.v1.ForgetOwnerResponse
-	(*RetainStageClockRequest)(nil),                // 29: phorvex.brain.v1.RetainStageClockRequest
-	(*RetainStageClockResponse)(nil),               // 30: phorvex.brain.v1.RetainStageClockResponse
-	(*SetPersistenceAuthorityRequest)(nil),         // 31: phorvex.brain.v1.SetPersistenceAuthorityRequest
-	(*SetPersistenceAuthorityResponse)(nil),        // 32: phorvex.brain.v1.SetPersistenceAuthorityResponse
-	(*AdmitPersistenceObservationRequest)(nil),     // 33: phorvex.brain.v1.AdmitPersistenceObservationRequest
-	(*AdmitPersistenceObservationResponse)(nil),    // 34: phorvex.brain.v1.AdmitPersistenceObservationResponse
-	(*RecordScopedOutcomeUnavailableRequest)(nil),  // 35: phorvex.brain.v1.RecordScopedOutcomeUnavailableRequest
-	(*RecordScopedOutcomeUnavailableResponse)(nil), // 36: phorvex.brain.v1.RecordScopedOutcomeUnavailableResponse
-	nil, // 37: phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry
+	(*ParameterSetRequest)(nil),                    // 14: phorvex.brain.v1.ParameterSetRequest
+	(*ParameterSetResponse)(nil),                   // 15: phorvex.brain.v1.ParameterSetResponse
+	(*RejectedDecisionsRequest)(nil),               // 16: phorvex.brain.v1.RejectedDecisionsRequest
+	(*RejectedDecisionsResponse)(nil),              // 17: phorvex.brain.v1.RejectedDecisionsResponse
+	(*SelectAlternativeRequest)(nil),               // 18: phorvex.brain.v1.SelectAlternativeRequest
+	(*SelectAlternativeResponse)(nil),              // 19: phorvex.brain.v1.SelectAlternativeResponse
+	(*ReserveAlternativeRequest)(nil),              // 20: phorvex.brain.v1.ReserveAlternativeRequest
+	(*ReserveAlternativeResponse)(nil),             // 21: phorvex.brain.v1.ReserveAlternativeResponse
+	(*ObserveRotationRequest)(nil),                 // 22: phorvex.brain.v1.ObserveRotationRequest
+	(*ObserveRotationResponse)(nil),                // 23: phorvex.brain.v1.ObserveRotationResponse
+	(*GetCalibrationStateRequest)(nil),             // 24: phorvex.brain.v1.GetCalibrationStateRequest
+	(*GetCalibrationStateResponse)(nil),            // 25: phorvex.brain.v1.GetCalibrationStateResponse
+	(*CostCalibrationState)(nil),                   // 26: phorvex.brain.v1.CostCalibrationState
+	(*SetCostCalibrationFrozenRequest)(nil),        // 27: phorvex.brain.v1.SetCostCalibrationFrozenRequest
+	(*SetCostCalibrationFrozenResponse)(nil),       // 28: phorvex.brain.v1.SetCostCalibrationFrozenResponse
+	(*RegisterOwnerEpochsRequest)(nil),             // 29: phorvex.brain.v1.RegisterOwnerEpochsRequest
+	(*RegisterOwnerEpochsResponse)(nil),            // 30: phorvex.brain.v1.RegisterOwnerEpochsResponse
+	(*ForgetOwnerRequest)(nil),                     // 31: phorvex.brain.v1.ForgetOwnerRequest
+	(*ForgetOwnerResponse)(nil),                    // 32: phorvex.brain.v1.ForgetOwnerResponse
+	(*RetainStageClockRequest)(nil),                // 33: phorvex.brain.v1.RetainStageClockRequest
+	(*RetainStageClockResponse)(nil),               // 34: phorvex.brain.v1.RetainStageClockResponse
+	(*SetPersistenceAuthorityRequest)(nil),         // 35: phorvex.brain.v1.SetPersistenceAuthorityRequest
+	(*SetPersistenceAuthorityResponse)(nil),        // 36: phorvex.brain.v1.SetPersistenceAuthorityResponse
+	(*AdmitPersistenceObservationRequest)(nil),     // 37: phorvex.brain.v1.AdmitPersistenceObservationRequest
+	(*AdmitPersistenceObservationResponse)(nil),    // 38: phorvex.brain.v1.AdmitPersistenceObservationResponse
+	(*RecordScopedOutcomeUnavailableRequest)(nil),  // 39: phorvex.brain.v1.RecordScopedOutcomeUnavailableRequest
+	(*RecordScopedOutcomeUnavailableResponse)(nil), // 40: phorvex.brain.v1.RecordScopedOutcomeUnavailableResponse
+	nil, // 41: phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry
 }
 var file_phorvex_brain_v1_brain_proto_depIdxs = []int32{
 	4,  // 0: phorvex.brain.v1.DecideRequest.start:type_name -> phorvex.brain.v1.DecideStart
@@ -2393,38 +2607,42 @@ var file_phorvex_brain_v1_brain_proto_depIdxs = []int32{
 	10, // 5: phorvex.brain.v1.DecideResponse.result:type_name -> phorvex.brain.v1.DecideResult
 	11, // 6: phorvex.brain.v1.DecideResult.error:type_name -> phorvex.brain.v1.DecideError
 	0,  // 7: phorvex.brain.v1.DecideError.kind:type_name -> phorvex.brain.v1.DecideErrorKind
-	37, // 8: phorvex.brain.v1.GetCalibrationStateResponse.tenants:type_name -> phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry
-	22, // 9: phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry.value:type_name -> phorvex.brain.v1.CostCalibrationState
+	41, // 8: phorvex.brain.v1.GetCalibrationStateResponse.tenants:type_name -> phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry
+	26, // 9: phorvex.brain.v1.GetCalibrationStateResponse.TenantsEntry.value:type_name -> phorvex.brain.v1.CostCalibrationState
 	1,  // 10: phorvex.brain.v1.BrainService.Hello:input_type -> phorvex.brain.v1.HelloRequest
 	3,  // 11: phorvex.brain.v1.BrainService.Decide:input_type -> phorvex.brain.v1.DecideRequest
 	12, // 12: phorvex.brain.v1.BrainService.CloseRecording:input_type -> phorvex.brain.v1.CloseRecordingRequest
-	14, // 13: phorvex.brain.v1.BrainService.SelectAlternative:input_type -> phorvex.brain.v1.SelectAlternativeRequest
-	16, // 14: phorvex.brain.v1.BrainService.ReserveAlternative:input_type -> phorvex.brain.v1.ReserveAlternativeRequest
-	18, // 15: phorvex.brain.v1.BrainService.ObserveRotation:input_type -> phorvex.brain.v1.ObserveRotationRequest
-	20, // 16: phorvex.brain.v1.BrainService.GetCalibrationState:input_type -> phorvex.brain.v1.GetCalibrationStateRequest
-	23, // 17: phorvex.brain.v1.BrainService.SetCostCalibrationFrozen:input_type -> phorvex.brain.v1.SetCostCalibrationFrozenRequest
-	25, // 18: phorvex.brain.v1.BrainService.RegisterOwnerEpochs:input_type -> phorvex.brain.v1.RegisterOwnerEpochsRequest
-	27, // 19: phorvex.brain.v1.BrainService.ForgetOwner:input_type -> phorvex.brain.v1.ForgetOwnerRequest
-	29, // 20: phorvex.brain.v1.BrainService.RetainStageClock:input_type -> phorvex.brain.v1.RetainStageClockRequest
-	31, // 21: phorvex.brain.v1.BrainService.SetPersistenceAuthority:input_type -> phorvex.brain.v1.SetPersistenceAuthorityRequest
-	33, // 22: phorvex.brain.v1.BrainService.AdmitPersistenceObservation:input_type -> phorvex.brain.v1.AdmitPersistenceObservationRequest
-	35, // 23: phorvex.brain.v1.BrainService.RecordScopedOutcomeUnavailable:input_type -> phorvex.brain.v1.RecordScopedOutcomeUnavailableRequest
-	2,  // 24: phorvex.brain.v1.BrainService.Hello:output_type -> phorvex.brain.v1.HelloResponse
-	5,  // 25: phorvex.brain.v1.BrainService.Decide:output_type -> phorvex.brain.v1.DecideResponse
-	13, // 26: phorvex.brain.v1.BrainService.CloseRecording:output_type -> phorvex.brain.v1.CloseRecordingResponse
-	15, // 27: phorvex.brain.v1.BrainService.SelectAlternative:output_type -> phorvex.brain.v1.SelectAlternativeResponse
-	17, // 28: phorvex.brain.v1.BrainService.ReserveAlternative:output_type -> phorvex.brain.v1.ReserveAlternativeResponse
-	19, // 29: phorvex.brain.v1.BrainService.ObserveRotation:output_type -> phorvex.brain.v1.ObserveRotationResponse
-	21, // 30: phorvex.brain.v1.BrainService.GetCalibrationState:output_type -> phorvex.brain.v1.GetCalibrationStateResponse
-	24, // 31: phorvex.brain.v1.BrainService.SetCostCalibrationFrozen:output_type -> phorvex.brain.v1.SetCostCalibrationFrozenResponse
-	26, // 32: phorvex.brain.v1.BrainService.RegisterOwnerEpochs:output_type -> phorvex.brain.v1.RegisterOwnerEpochsResponse
-	28, // 33: phorvex.brain.v1.BrainService.ForgetOwner:output_type -> phorvex.brain.v1.ForgetOwnerResponse
-	30, // 34: phorvex.brain.v1.BrainService.RetainStageClock:output_type -> phorvex.brain.v1.RetainStageClockResponse
-	32, // 35: phorvex.brain.v1.BrainService.SetPersistenceAuthority:output_type -> phorvex.brain.v1.SetPersistenceAuthorityResponse
-	34, // 36: phorvex.brain.v1.BrainService.AdmitPersistenceObservation:output_type -> phorvex.brain.v1.AdmitPersistenceObservationResponse
-	36, // 37: phorvex.brain.v1.BrainService.RecordScopedOutcomeUnavailable:output_type -> phorvex.brain.v1.RecordScopedOutcomeUnavailableResponse
-	24, // [24:38] is the sub-list for method output_type
-	10, // [10:24] is the sub-list for method input_type
+	14, // 13: phorvex.brain.v1.BrainService.ParameterSet:input_type -> phorvex.brain.v1.ParameterSetRequest
+	16, // 14: phorvex.brain.v1.BrainService.RejectedDecisions:input_type -> phorvex.brain.v1.RejectedDecisionsRequest
+	18, // 15: phorvex.brain.v1.BrainService.SelectAlternative:input_type -> phorvex.brain.v1.SelectAlternativeRequest
+	20, // 16: phorvex.brain.v1.BrainService.ReserveAlternative:input_type -> phorvex.brain.v1.ReserveAlternativeRequest
+	22, // 17: phorvex.brain.v1.BrainService.ObserveRotation:input_type -> phorvex.brain.v1.ObserveRotationRequest
+	24, // 18: phorvex.brain.v1.BrainService.GetCalibrationState:input_type -> phorvex.brain.v1.GetCalibrationStateRequest
+	27, // 19: phorvex.brain.v1.BrainService.SetCostCalibrationFrozen:input_type -> phorvex.brain.v1.SetCostCalibrationFrozenRequest
+	29, // 20: phorvex.brain.v1.BrainService.RegisterOwnerEpochs:input_type -> phorvex.brain.v1.RegisterOwnerEpochsRequest
+	31, // 21: phorvex.brain.v1.BrainService.ForgetOwner:input_type -> phorvex.brain.v1.ForgetOwnerRequest
+	33, // 22: phorvex.brain.v1.BrainService.RetainStageClock:input_type -> phorvex.brain.v1.RetainStageClockRequest
+	35, // 23: phorvex.brain.v1.BrainService.SetPersistenceAuthority:input_type -> phorvex.brain.v1.SetPersistenceAuthorityRequest
+	37, // 24: phorvex.brain.v1.BrainService.AdmitPersistenceObservation:input_type -> phorvex.brain.v1.AdmitPersistenceObservationRequest
+	39, // 25: phorvex.brain.v1.BrainService.RecordScopedOutcomeUnavailable:input_type -> phorvex.brain.v1.RecordScopedOutcomeUnavailableRequest
+	2,  // 26: phorvex.brain.v1.BrainService.Hello:output_type -> phorvex.brain.v1.HelloResponse
+	5,  // 27: phorvex.brain.v1.BrainService.Decide:output_type -> phorvex.brain.v1.DecideResponse
+	13, // 28: phorvex.brain.v1.BrainService.CloseRecording:output_type -> phorvex.brain.v1.CloseRecordingResponse
+	15, // 29: phorvex.brain.v1.BrainService.ParameterSet:output_type -> phorvex.brain.v1.ParameterSetResponse
+	17, // 30: phorvex.brain.v1.BrainService.RejectedDecisions:output_type -> phorvex.brain.v1.RejectedDecisionsResponse
+	19, // 31: phorvex.brain.v1.BrainService.SelectAlternative:output_type -> phorvex.brain.v1.SelectAlternativeResponse
+	21, // 32: phorvex.brain.v1.BrainService.ReserveAlternative:output_type -> phorvex.brain.v1.ReserveAlternativeResponse
+	23, // 33: phorvex.brain.v1.BrainService.ObserveRotation:output_type -> phorvex.brain.v1.ObserveRotationResponse
+	25, // 34: phorvex.brain.v1.BrainService.GetCalibrationState:output_type -> phorvex.brain.v1.GetCalibrationStateResponse
+	28, // 35: phorvex.brain.v1.BrainService.SetCostCalibrationFrozen:output_type -> phorvex.brain.v1.SetCostCalibrationFrozenResponse
+	30, // 36: phorvex.brain.v1.BrainService.RegisterOwnerEpochs:output_type -> phorvex.brain.v1.RegisterOwnerEpochsResponse
+	32, // 37: phorvex.brain.v1.BrainService.ForgetOwner:output_type -> phorvex.brain.v1.ForgetOwnerResponse
+	34, // 38: phorvex.brain.v1.BrainService.RetainStageClock:output_type -> phorvex.brain.v1.RetainStageClockResponse
+	36, // 39: phorvex.brain.v1.BrainService.SetPersistenceAuthority:output_type -> phorvex.brain.v1.SetPersistenceAuthorityResponse
+	38, // 40: phorvex.brain.v1.BrainService.AdmitPersistenceObservation:output_type -> phorvex.brain.v1.AdmitPersistenceObservationResponse
+	40, // 41: phorvex.brain.v1.BrainService.RecordScopedOutcomeUnavailable:output_type -> phorvex.brain.v1.RecordScopedOutcomeUnavailableResponse
+	26, // [26:42] is the sub-list for method output_type
+	10, // [10:26] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name
 	10, // [10:10] is the sub-list for extension extendee
 	0,  // [0:10] is the sub-list for field type_name
@@ -2451,7 +2669,7 @@ func file_phorvex_brain_v1_brain_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_phorvex_brain_v1_brain_proto_rawDesc), len(file_phorvex_brain_v1_brain_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   37,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

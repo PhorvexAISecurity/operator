@@ -22,6 +22,8 @@ const (
 	BrainService_Hello_FullMethodName                          = "/phorvex.brain.v1.BrainService/Hello"
 	BrainService_Decide_FullMethodName                         = "/phorvex.brain.v1.BrainService/Decide"
 	BrainService_CloseRecording_FullMethodName                 = "/phorvex.brain.v1.BrainService/CloseRecording"
+	BrainService_ParameterSet_FullMethodName                   = "/phorvex.brain.v1.BrainService/ParameterSet"
+	BrainService_RejectedDecisions_FullMethodName              = "/phorvex.brain.v1.BrainService/RejectedDecisions"
 	BrainService_SelectAlternative_FullMethodName              = "/phorvex.brain.v1.BrainService/SelectAlternative"
 	BrainService_ReserveAlternative_FullMethodName             = "/phorvex.brain.v1.BrainService/ReserveAlternative"
 	BrainService_ObserveRotation_FullMethodName                = "/phorvex.brain.v1.BrainService/ObserveRotation"
@@ -62,6 +64,12 @@ type BrainServiceClient interface {
 	// dispatcher finalized them, and hands the recording to the brain's Math Lab
 	// store.
 	CloseRecording(ctx context.Context, in *CloseRecordingRequest, opts ...grpc.CallOption) (*CloseRecordingResponse, error)
+	// ParameterSet reports the decision parameter set a policy is decided with,
+	// for the audit's provenance store.
+	ParameterSet(ctx context.Context, in *ParameterSetRequest, opts ...grpc.CallOption) (*ParameterSetResponse, error)
+	// RejectedDecisions builds the M99 records of a tick whose action set the
+	// brain rejected.
+	RejectedDecisions(ctx context.Context, in *RejectedDecisionsRequest, opts ...grpc.CallOption) (*RejectedDecisionsResponse, error)
 	// SelectAlternative picks the fallback for a refused dispatch from the last
 	// committing evaluation's already-gated candidates.
 	SelectAlternative(ctx context.Context, in *SelectAlternativeRequest, opts ...grpc.CallOption) (*SelectAlternativeResponse, error)
@@ -125,6 +133,26 @@ func (c *brainServiceClient) CloseRecording(ctx context.Context, in *CloseRecord
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CloseRecordingResponse)
 	err := c.cc.Invoke(ctx, BrainService_CloseRecording_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *brainServiceClient) ParameterSet(ctx context.Context, in *ParameterSetRequest, opts ...grpc.CallOption) (*ParameterSetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ParameterSetResponse)
+	err := c.cc.Invoke(ctx, BrainService_ParameterSet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *brainServiceClient) RejectedDecisions(ctx context.Context, in *RejectedDecisionsRequest, opts ...grpc.CallOption) (*RejectedDecisionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RejectedDecisionsResponse)
+	err := c.cc.Invoke(ctx, BrainService_RejectedDecisions_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -268,6 +296,12 @@ type BrainServiceServer interface {
 	// dispatcher finalized them, and hands the recording to the brain's Math Lab
 	// store.
 	CloseRecording(context.Context, *CloseRecordingRequest) (*CloseRecordingResponse, error)
+	// ParameterSet reports the decision parameter set a policy is decided with,
+	// for the audit's provenance store.
+	ParameterSet(context.Context, *ParameterSetRequest) (*ParameterSetResponse, error)
+	// RejectedDecisions builds the M99 records of a tick whose action set the
+	// brain rejected.
+	RejectedDecisions(context.Context, *RejectedDecisionsRequest) (*RejectedDecisionsResponse, error)
 	// SelectAlternative picks the fallback for a refused dispatch from the last
 	// committing evaluation's already-gated candidates.
 	SelectAlternative(context.Context, *SelectAlternativeRequest) (*SelectAlternativeResponse, error)
@@ -312,6 +346,12 @@ func (UnimplementedBrainServiceServer) Decide(grpc.BidiStreamingServer[DecideReq
 }
 func (UnimplementedBrainServiceServer) CloseRecording(context.Context, *CloseRecordingRequest) (*CloseRecordingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CloseRecording not implemented")
+}
+func (UnimplementedBrainServiceServer) ParameterSet(context.Context, *ParameterSetRequest) (*ParameterSetResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ParameterSet not implemented")
+}
+func (UnimplementedBrainServiceServer) RejectedDecisions(context.Context, *RejectedDecisionsRequest) (*RejectedDecisionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RejectedDecisions not implemented")
 }
 func (UnimplementedBrainServiceServer) SelectAlternative(context.Context, *SelectAlternativeRequest) (*SelectAlternativeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SelectAlternative not implemented")
@@ -406,6 +446,42 @@ func _BrainService_CloseRecording_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BrainServiceServer).CloseRecording(ctx, req.(*CloseRecordingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BrainService_ParameterSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ParameterSetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrainServiceServer).ParameterSet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BrainService_ParameterSet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrainServiceServer).ParameterSet(ctx, req.(*ParameterSetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BrainService_RejectedDecisions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RejectedDecisionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrainServiceServer).RejectedDecisions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BrainService_RejectedDecisions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrainServiceServer).RejectedDecisions(ctx, req.(*RejectedDecisionsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -622,6 +698,14 @@ var BrainService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CloseRecording",
 			Handler:    _BrainService_CloseRecording_Handler,
+		},
+		{
+			MethodName: "ParameterSet",
+			Handler:    _BrainService_ParameterSet_Handler,
+		},
+		{
+			MethodName: "RejectedDecisions",
+			Handler:    _BrainService_RejectedDecisions_Handler,
 		},
 		{
 			MethodName: "SelectAlternative",
