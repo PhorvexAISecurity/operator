@@ -63,8 +63,9 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('python build/integrations/epss-ecr-auth-runtime/verify_recipe.py', runs['charts'])
         self.assertIn('python3 tools/check-go-format.py "$BASE"', runs['lint'])
         self.assertIn('go -C "$module" vet ./...', runs['lint'])
-        self.assertEqual(jobs['images']['strategy']['matrix']['image'], ['operator', 'console'])
-        self.assertIn('docker build --file deploy/docker/${{ matrix.image }}.Dockerfile', runs['images'])
+        self.assertEqual(jobs['images']['strategy']['matrix']['image'], ['operator', 'console', 'brain', 'sensor', 'actuator'])
+        self.assertIn('docker build --file "deploy/docker/$IMAGE.Dockerfile"', runs['images'])
+        self.assertIn('docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE"', runs['images'])
         for forbidden in ('docker push', 'docker login', '--push'):
             self.assertNotIn(forbidden, runs['images'])
 
@@ -168,6 +169,26 @@ class PRValidationTests(unittest.TestCase):
                          'operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}')
         self.assertIn('--tag "$TAG"', step['run'])
         self.assertIn('docker image rm "$TAG"', step['run'])
+
+    def test_every_service_contract_has_an_image_and_current_generated_code(self):
+        # ADR-0001: each service with a contract is its own binary and image, and its
+        # generated code is checked against the proto. A new service must join both.
+        services = sorted(p.name for p in (ROOT / 'phorvex/api/proto/phorvex').iterdir() if p.is_dir())
+        self.assertEqual(services, ['actuator', 'brain', 'sensor'])
+        for service in services:
+            self.assertTrue((ROOT / 'phorvex/cmd' / service / 'main.go').is_file(), service)
+            self.assertTrue((ROOT / 'phorvex/internal' / (service + 'pb')).is_dir(), service)
+            self.assertIn(service, DOC['jobs']['images']['strategy']['matrix']['image'])
+        contract = next(s['run'] for s in DOC['jobs']['lint']['steps'] if 'generate-proto.sh' in s.get('run', ''))
+        self.assertIn("git diff --exit-code -- 'phorvex/internal/*pb'", contract)
+        self.assertIn("git status --porcelain -- 'phorvex/internal/*pb'", contract)
+
+    def test_service_images_build_only_a_known_service(self):
+        dockerfile = (ROOT / 'deploy/docker/service.Dockerfile').read_text()
+        self.assertIn('brain|sensor|actuator) ;;', dockerfile)
+        self.assertIn('-o /service ./cmd/${SERVICE}', dockerfile)
+        self.assertIn('FROM gcr.io/distroless/static:nonroot', dockerfile)
+        self.assertIn('USER 65532:65532', dockerfile)
 
 
 if __name__ == '__main__':
