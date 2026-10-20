@@ -10,6 +10,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 // PHORVEXSEC-186 / M-27: ingest records the per-event age and flags a CR without a usable
@@ -32,7 +34,7 @@ func TestCollectEventsRecordsAgeAndMissingTimestamp(t *testing.T) {
 	// age fixtures now carry the stamp this fleet's detector would get.
 	trustEvents(t, "vllm/detector-kv-canary")
 	for _, se := range []*amtdv1beta1.SecurityEvent{aged, noStamp} {
-		se.Annotations = map[string]string{CreatorIdentityAnnotation: "system:serviceaccount:vllm:detector-kv-canary"}
+		se.Annotations = map[string]string{eventtrust.CreatorIdentityAnnotation: "system:serviceaccount:vllm:detector-kv-canary"}
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(aged, noStamp).Build()
 	_, byPod, err := collectEvents(context.Background(), c, now)

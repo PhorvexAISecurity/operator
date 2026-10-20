@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voicerefundpolicy"
 )
@@ -71,7 +72,7 @@ func TestVoiceRefundBinderRechecksCurrentOwnedRule(t *testing.T) {
 		"deploymentUID": string(depUID), "podUID": string(podUID), "sourceSHA256": source, "policyName": "voice-defense", "policyUID": polUID, "policyGeneration": int64(1),
 		"observedAt": now.Add(-time.Second).Format(time.RFC3339Nano), "evidenceSource": "TEST_INJECTED", "modelCallbackObserved": true, "crmSideEffectObserved": true}
 	raw, _ := json.Marshal(payload)
-	event := model.SecurityEventInfo{Name: "voice-refund-event", UID: "66666666-6666-4666-8666-666666666666", Type: model.AttackVectorVoiceRefund, Trust: TrustTrusted,
+	event := model.SecurityEventInfo{Name: "voice-refund-event", UID: "66666666-6666-4666-8666-666666666666", Type: model.AttackVectorVoiceRefund, Trust: eventtrust.TrustTrusted,
 		TargetsPod: true, CreatorIdentity: creator, ConsoleTargetPodUID: string(podUID), CreatedAt: now, Age: time.Second, VoiceRefundRaw: string(raw)}
 	bindVoiceRefundObservation(ctx, c, &view, []model.SecurityEventInfo{event})
 	if !view.HasBoundVoiceRefundObservation() || view.VoiceRefundObservation.ConfigMapUID != string(cmUID) {

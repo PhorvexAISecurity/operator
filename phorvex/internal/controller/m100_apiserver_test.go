@@ -39,6 +39,7 @@ import (
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/currentobserver"
 	"github.com/phorvex/phorvex/internal/disclosure"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/lossobserver"
@@ -66,13 +67,13 @@ func m100InstalledWebhook() *admissionv1.MutatingWebhookConfiguration {
 		ObjectMeta: metav1.ObjectMeta{Name: "m100-completed-disclosure", Annotations: map[string]string{disclosure.BoundaryContractAnnotation: disclosure.BoundaryContract, currentinventory.BoundaryContractAnnotation: currentinventory.BoundaryContract}},
 		Webhooks: []admissionv1.MutatingWebhook{{
 			Name: "stamp-completed-disclosures.phorvex.ai", FailurePolicy: &failure, SideEffects: &sideEffects,
-			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: ingest.CompletedDisclosureMatch}},
+			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "completed", Expression: losshistory.CompletedDisclosureMatch}},
 			ClientConfig: admissionv1.WebhookClientConfig{Service: &admissionv1.ServiceReference{Namespace: "system", Name: "phorvex-webhook", Path: &path}},
 			Rules: []admissionv1.RuleWithOperations{{Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update},
 				Rule: admissionv1.Rule{APIGroups: []string{"amtd.r6security.com"}, APIVersions: []string{"v1beta1"}, Resources: []string{"securityevents"}, Scope: &scope}}},
 		}, {
 			Name: "stamp-current-protected-inventory.phorvex.ai", FailurePolicy: &failure, SideEffects: &sideEffects,
-			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "current", Expression: ingest.CurrentInventoryMatch}},
+			AdmissionReviewVersions: []string{"v1"}, MatchConditions: []admissionv1.MatchCondition{{Name: "current", Expression: currentinventory.CurrentInventoryMatch}},
 			ClientConfig: admissionv1.WebhookClientConfig{Service: &admissionv1.ServiceReference{Namespace: "system", Name: "phorvex-webhook", Path: &path}},
 			Rules:        []admissionv1.RuleWithOperations{{Operations: []admissionv1.OperationType{admissionv1.Create, admissionv1.Update}, Rule: admissionv1.Rule{APIGroups: []string{"amtd.r6security.com"}, APIVersions: []string{"v1beta1"}, Resources: []string{"securityevents"}, Scope: &scope}}},
 		},
@@ -143,14 +144,14 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	}
 	observerIdentity := "system:serviceaccount:ns:loss-observer"
 	currentObserverIdentity := "system:serviceaccount:ns:current-observer"
-	ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors([]string{observerIdentity, "system:serviceaccount:ns:other-observer"}))
-	t.Cleanup(func() { ingest.ConfigureCompletedDisclosureTrust(ingest.NewTrustedDetectors(nil)) })
-	ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors([]string{currentObserverIdentity}))
-	t.Cleanup(func() { ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{observerIdentity, "system:serviceaccount:ns:other-observer"}))
+	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCurrentInventoryTrust(eventtrust.NewTrustedDetectors([]string{currentObserverIdentity}))
+	t.Cleanup(func() { eventtrust.ConfigureCurrentInventoryTrust(eventtrust.NewTrustedDetectors(nil)) })
 	// Deliberately overlap the generic detector allowlist. Dedicated inventory
 	// evidence must remain report-only despite this operator misconfiguration.
-	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{currentObserverIdentity}))
-	t.Cleanup(func() { ingest.ConfigureEventTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors([]string{currentObserverIdentity}))
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors(nil)) })
 
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{clientgoscheme.AddToScheme, v1alpha1.AddToScheme, amtdv1beta1.AddToScheme} {
@@ -284,7 +285,7 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if event.UID == "" || event.CreationTimestamp.IsZero() || event.Annotations[ingest.CreatorIdentityAnnotation] != observerIdentity ||
+	if event.UID == "" || event.CreationTimestamp.IsZero() || event.Annotations[eventtrust.CreatorIdentityAnnotation] != observerIdentity ||
 		event.Annotations[disclosure.AdmissionContractAnnotation] != disclosure.BoundaryContract {
 		t.Fatalf("API/admission identity missing: uid=%q created=%v annotations=%v", event.UID, event.CreationTimestamp, event.Annotations)
 	}
@@ -362,7 +363,7 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: string(policyObject.UID), PolicyGeneration: policyObject.Generation}
-	if gaps := ingest.AdmitCompletedDisclosures(ctx, reader, store, snapshot.Events, policy, time.Now().Add(2*time.Second), logr.Discard()); len(gaps) != 0 {
+	if gaps := losshistory.Admit(ctx, reader, store, snapshot.Events, policy, time.Now().Add(2*time.Second), logr.Discard()); len(gaps) != 0 {
 		t.Fatalf("actual producer admission gaps: %v", gaps)
 	}
 	result := store.Query(policy.PolicyUID, string(dep.UID))
@@ -427,7 +428,7 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	// separately admitted, exact current observation into a global authority gap.
 	currentSnapshot.Events = append(currentSnapshot.Events, model.SecurityEventInfo{Name: "malformed-unrelated-current", CurrentInventoryRaw: "{"})
 	currentStore := currentinventory.NewStore()
-	if gaps := ingest.AdmitCurrentInventory(ctx, reader, currentStore, currentSnapshot.Events, policy, time.Now(), logr.Discard()); len(gaps) != 0 {
+	if gaps := currentinventory.Admit(ctx, reader, currentStore, currentSnapshot.Events, policy, time.Now(), logr.Discard()); len(gaps) != 0 {
 		t.Fatalf("actual current inventory gaps: %v", gaps)
 	}
 	currentResult := currentStore.Query(policy.PolicyUID, string(dep.UID), time.Now())

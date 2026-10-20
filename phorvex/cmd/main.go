@@ -59,6 +59,7 @@ import (
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/epssfeed"
 	"github.com/phorvex/phorvex/internal/epssmeta"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/mathlab"
@@ -275,12 +276,12 @@ func main() {
 		pcieClasses = parsed
 	}
 	physics.ConfigureFlowActivation(strings.Split(flowClasses, ","))
-	detectors := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedDetectors, ","))
-	ingest.ConfigureEventTrust(detectors)
-	lossObservers := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedLossObservers, ","))
-	ingest.ConfigureCompletedDisclosureTrust(lossObservers)
-	currentObservers := ingest.NewTrustedDetectors(strings.Split(sensorFlags.TrustedCurrentInventoryObservers, ","))
-	ingest.ConfigureCurrentInventoryTrust(currentObservers)
+	detectors := eventtrust.NewTrustedDetectors(strings.Split(sensorFlags.TrustedDetectors, ","))
+	eventtrust.ConfigureEventTrust(detectors)
+	lossObservers := eventtrust.NewTrustedDetectors(strings.Split(sensorFlags.TrustedLossObservers, ","))
+	eventtrust.ConfigureCompletedDisclosureTrust(lossObservers)
+	currentObservers := eventtrust.NewTrustedDetectors(strings.Split(sensorFlags.TrustedCurrentInventoryObservers, ","))
+	eventtrust.ConfigureCurrentInventoryTrust(currentObservers)
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	if detectors.Empty() {
 		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")

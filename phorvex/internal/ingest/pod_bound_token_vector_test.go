@@ -9,6 +9,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 	amtd "github.com/r6security/phoenix/api/v1beta1"
@@ -77,7 +78,7 @@ func tokenVectorSnapshot(t *testing.T, edit func(*corev1.Pod, *corev1.ServiceAcc
 	event := &amtd.SecurityEvent{
 		ObjectMeta: metav1.ObjectMeta{Name: "observed", UID: types.UID("event-uid"),
 			CreationTimestamp: metav1.NewTime(tokenVectorNow.Add(-8 * time.Minute)),
-			Annotations: map[string]string{CreatorIdentityAnnotation: "system:serviceaccount:owned:detector",
+			Annotations: map[string]string{eventtrust.CreatorIdentityAnnotation: "system:serviceaccount:owned:detector",
 				ConsoleTargetPodUIDAnnotation: "pod-uid"}},
 		Spec: amtd.SecurityEventSpec{Targets: []string{"owned/source"},
 			Description: "synthetic bound API bearer observed",
@@ -156,7 +157,7 @@ func TestPodBoundTokenVectorActualProducerToDecisionTrace(t *testing.T) {
 	ref := fact.SteeredBy.Events[0]
 	if ref.EventName != "observed" || ref.EventUID != "event-uid" ||
 		ref.CreatorIdentity != "system:serviceaccount:owned:detector" ||
-		ref.TrustVerdict != TrustTrusted || ref.TargetPodUID != "pod-uid" {
+		ref.TrustVerdict != eventtrust.TrustTrusted || ref.TargetPodUID != "pod-uid" {
 		t.Fatalf("attribution lost exact admitted event: %+v", ref)
 	}
 	if len(fact.CoveringActions) != 1 || fact.CoveringActions[0] != string(model.ActionRotate) {
@@ -213,11 +214,11 @@ func TestPodBoundTokenVectorProducerRefusesUnsafeInputs(t *testing.T) {
 	}{
 		{"no allowlist", nil, false, false},
 		{"forged source", func(_ *corev1.Pod, _ *corev1.ServiceAccount, e *amtd.SecurityEvent) {
-			e.Annotations[CreatorIdentityAnnotation] = "system:serviceaccount:foreign:detector"
+			e.Annotations[eventtrust.CreatorIdentityAnnotation] = "system:serviceaccount:foreign:detector"
 			e.Spec.Rule.Source = "owned-detector"
 		}, true, false},
 		{"unstamped", func(_ *corev1.Pod, _ *corev1.ServiceAccount, e *amtd.SecurityEvent) {
-			delete(e.Annotations, CreatorIdentityAnnotation)
+			delete(e.Annotations, eventtrust.CreatorIdentityAnnotation)
 		}, true, false},
 		{"missing UID", func(_ *corev1.Pod, _ *corev1.ServiceAccount, e *amtd.SecurityEvent) {
 			e.UID = ""

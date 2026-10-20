@@ -11,6 +11,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/crmrefund"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -30,7 +31,7 @@ func bindCRMRefundObservation(ctx context.Context, reader client.Reader, p *mode
 	var payload crmrefund.Observation
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorCRMRefundAbuse ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorCRMRefundAbuse ||
 			e.CreatorIdentity != crmConsoleCreator || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= crmRefundHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue

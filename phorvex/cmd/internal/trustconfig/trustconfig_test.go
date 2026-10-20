@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 func TestRegisterAndNormalize(t *testing.T) {
@@ -16,7 +16,7 @@ func TestRegisterAndNormalize(t *testing.T) {
 		"--endpoint-lease-approved-proxy-image=proxy", "--endpoint-lease-approved-engine-image=engine"}); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.Join(trust.Detectors().List(), ","), strings.Join(ingest.NewTrustedDetectors([]string{"vllm/a", "vllm/b"}).List(), ","); got != want {
+	if got, want := strings.Join(trust.Detectors().List(), ","), strings.Join(eventtrust.NewTrustedDetectors([]string{"vllm/a", "vllm/b"}).List(), ","); got != want {
 		t.Fatalf("detectors = %s, want %s", got, want)
 	}
 	if trust.EndpointLeaseApprovedSource != "src" || trust.EndpointLeaseApprovedProxyImage != "proxy" || trust.EndpointLeaseApprovedEngineImage != "engine" {

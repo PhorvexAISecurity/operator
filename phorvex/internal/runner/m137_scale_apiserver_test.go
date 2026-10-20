@@ -41,6 +41,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/scaleprobe"
@@ -475,7 +476,7 @@ func m137CreateFixture(t *testing.T, ctx context.Context, c client.Client, cfg m
 	create(&rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "m137-scale"}, RoleRef: rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "m137-scale"}, Subjects: []rbacv1.Subject{{Kind: "ServiceAccount", Namespace: "m137-00", Name: "scale"}}})
 
 	score := "0.95"
-	trusted := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.eventName, Annotations: map[string]string{ingest.CreatorIdentityAnnotation: "system:serviceaccount:m137-00:detector"}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.firstPod.String()}, Rule: amtdv1beta1.Rule{Type: "Panic", ThreatLevel: "high", Source: "m137-source-shaped-detector"}, Description: "source-shaped synthetic scale fixture; no admission chain installed", AnomalyScore: &score}}
+	trusted := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.eventName, Annotations: map[string]string{eventtrust.CreatorIdentityAnnotation: "system:serviceaccount:m137-00:detector"}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.firstPod.String()}, Rule: amtdv1beta1.Rule{Type: "Panic", ThreatLevel: "high", Source: "m137-source-shaped-detector"}, Description: "source-shaped synthetic scale fixture; no admission chain installed", AnomalyScore: &score}}
 	create(trusted)
 	receipt := &amtdv1beta1.SecurityEvent{ObjectMeta: metav1.ObjectMeta{Name: fixture.receiptName, Annotations: map[string]string{amtdv1beta1.PhorvexRotateTargetUIDAnnotation: fixture.receiptTargetUID}}, Spec: amtdv1beta1.SecurityEventSpec{Targets: []string{fixture.receiptPod.String()}, Rule: amtdv1beta1.Rule{Type: amtdv1beta1.PhorvexRuleTypeRotate, ThreatLevel: "high", Source: amtdv1beta1.PhorvexRuleSource}, Description: "real receipt structure scale fixture distinct from the trusted incident target"}}
 	create(receipt)
@@ -879,9 +880,9 @@ func TestM137ScaleHarness(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 	defer cancel()
-	previousTrust := ingest.EventTrust()
-	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{"system:serviceaccount:m137-00:detector"}))
-	t.Cleanup(func() { ingest.ConfigureEventTrust(previousTrust) })
+	previousTrust := eventtrust.EventTrust()
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors([]string{"system:serviceaccount:m137-00:detector"}))
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(previousTrust) })
 	fixture := m137CreateFixture(t, ctx, fixtureClient, cfg)
 
 	cacheREST := m137CountedConfig(base, "cache", counts)
@@ -1018,7 +1019,7 @@ func TestM137ScaleHarness(t *testing.T) {
 	}
 	trustedPresent, receiptPresent := false, false
 	for _, event := range snap.Events {
-		trustedPresent = trustedPresent || event.Name == fixture.eventName && event.Trust == ingest.TrustTrusted
+		trustedPresent = trustedPresent || event.Name == fixture.eventName && event.Trust == eventtrust.TrustTrusted
 	}
 	if receipt, ok := snap.PhoenixReceipts[fixture.receiptName]; ok {
 		receiptPresent = snap.PhoenixReceiptInventoryComplete && receipt.EventName == fixture.receiptName && receipt.EventUID == fixture.receiptUID &&

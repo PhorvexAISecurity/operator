@@ -17,6 +17,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/disclosure"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -66,7 +67,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 	for i := range seList.Items {
 		se := &seList.Items[i]
 		if se.Spec.Rule.Source == amtdv1beta1.PhorvexRuleSource {
-			metrics.RecordSecurityEvent(TrustSelf)
+			metrics.RecordSecurityEvent(eventtrust.TrustSelf)
 			// A finalizer-retained deleting event is no longer durable execution
 			// evidence. Keep it outside belief, but do not project a receipt that could
 			// authorize learning or cost attribution after deletion began.
@@ -82,8 +83,8 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			}
 			continue // skip Phorvex's own emitted events
 		}
-		identity := se.Annotations[CreatorIdentityAnnotation]
-		trust := classifyEvent(identity)
+		identity := se.Annotations[eventtrust.CreatorIdentityAnnotation]
+		trust := eventtrust.Classify(identity)
 		metrics.RecordSecurityEvent(trust)
 		score := -1.0
 		if se.Spec.AnomalyScore != nil {
@@ -143,7 +144,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			key, ok := normalizeTarget(target)
 			if !ok {
 				base.UnresolvedTargets = append(base.UnresolvedTargets, strings.TrimSpace(target))
-				metrics.RecordSecurityEvent(TargetUnresolvd)
+				metrics.RecordSecurityEvent(eventtrust.TargetUnresolvd)
 				continue
 			}
 			resolved = append(resolved, key)
@@ -182,7 +183,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 		if base.CurrentInventoryRaw != "" && base.Type == model.CurrentInventoryRuleType && base.Source == model.CurrentInventorySource {
 			continue
 		}
-		if trust != TrustTrusted || base.TargetBindingReason != "" {
+		if trust != eventtrust.TrustTrusted || base.TargetBindingReason != "" {
 			continue // recorded above; an unauthenticated detector supplies no belief evidence
 		}
 		for _, key := range resolved {

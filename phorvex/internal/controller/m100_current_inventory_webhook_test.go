@@ -21,7 +21,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/currentinventory"
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -47,7 +47,7 @@ func m100CurrentAdmission(t *testing.T, op admissionv1.Operation, user, payload,
 		oldEvent.Annotations[currentinventory.Annotation] = oldPayload
 		oldEvent.Annotations[currentinventory.AdmissionTimeAnnotation] = time.Unix(102, 500_000_000).UTC().Format(time.RFC3339Nano)
 		oldEvent.Annotations[currentinventory.AdmissionContractAnnotation] = currentinventory.BoundaryContract
-		oldEvent.Annotations[ingest.CreatorIdentityAnnotation] = "system:serviceaccount:ns:current-observer"
+		oldEvent.Annotations[eventtrust.CreatorIdentityAnnotation] = "system:serviceaccount:ns:current-observer"
 		old.Raw, _ = json.Marshal(oldEvent)
 	}
 	if mutate != nil {
@@ -70,8 +70,8 @@ func m100CurrentAdmission(t *testing.T, op admissionv1.Operation, user, payload,
 
 func TestM100CurrentInventoryAdmissionIsIndependentCurrentAndImmutable(t *testing.T) {
 	observer := "system:serviceaccount:ns:current-observer"
-	ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors([]string{observer}))
-	t.Cleanup(func() { ingest.ConfigureCurrentInventoryTrust(ingest.NewTrustedDetectors(nil)) })
+	eventtrust.ConfigureCurrentInventoryTrust(eventtrust.NewTrustedDetectors([]string{observer}))
+	t.Cleanup(func() { eventtrust.ConfigureCurrentInventoryTrust(eventtrust.NewTrustedDetectors(nil)) })
 	payload := m100CurrentPayload(t)
 	if r := m100CurrentAdmission(t, admissionv1.Create, observer, payload, "", nil); !r.Allowed {
 		t.Fatalf("valid current inventory denied: %+v", r.Result)

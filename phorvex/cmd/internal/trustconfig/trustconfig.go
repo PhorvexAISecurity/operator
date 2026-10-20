@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 // Trust is the shared trust configuration.
@@ -30,6 +30,6 @@ func (t *Trust) Register(fs *flag.FlagSet) {
 }
 
 // Detectors is the trusted detector allowlist, normalized.
-func (t Trust) Detectors() ingest.TrustedDetectors {
-	return ingest.NewTrustedDetectors(strings.Split(t.TrustedDetectors, ","))
+func (t Trust) Detectors() eventtrust.TrustedDetectors {
+	return eventtrust.NewTrustedDetectors(strings.Split(t.TrustedDetectors, ","))
 }

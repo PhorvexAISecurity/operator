@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
@@ -94,7 +95,7 @@ func bindSensitiveOutputObservation(ctx context.Context, reader client.Reader, p
 	var payload sensitiveOutputPayload
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorSensitiveOutput ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorSensitiveOutput ||
 			e.CreatorIdentity == "" || e.CreatorIdentity != p.OutputEventCreator || e.Name == "" || e.UID == "" || e.TimestampMissing ||
 			e.Age < 0 || e.Age >= sensitiveOutputHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
@@ -168,7 +169,7 @@ func bindLiteOutputObservation(ctx context.Context, reader client.Reader, p *mod
 	var assertion outputpolicy.LiteObservation
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorSensitiveOutput ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorSensitiveOutput ||
 			e.CreatorIdentity != litellmConsoleCreator || e.Name == "" || e.UID == "" || e.TimestampMissing ||
 			e.Age < 0 || e.Age >= sensitiveOutputHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue

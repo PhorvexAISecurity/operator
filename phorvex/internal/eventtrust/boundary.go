@@ -1,4 +1,4 @@
-package ingest
+package eventtrust
 
 import (
 	"context"
@@ -8,6 +8,10 @@ import (
 	admission "k8s.io/api/admissionregistration/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// StampWebhookPath is the admission endpoint that stamps SecurityEvent creator
+// identities, as the installed webhook configurations must name it.
+const StampWebhookPath = "/stamp-amtd-r6security-com-v1beta1-securityevent"
 
 const ProtectedOutcomeMatch = "has(object.metadata.annotations) && 'phorvex.ai/protected-outcomes-v1' in object.metadata.annotations"
 
@@ -40,7 +44,7 @@ func CheckExistentialBoundary(ctx context.Context, c client.Reader) (bool, strin
 				return false, "stamp-match-condition-gap", time.Time{}
 			}
 			svc := w.ClientConfig.Service
-			if svc == nil || svc.Path == nil || *svc.Path != "/stamp-amtd-r6security-com-v1beta1-securityevent" || len(w.ClientConfig.CABundle) == 0 {
+			if svc == nil || svc.Path == nil || *svc.Path != StampWebhookPath || len(w.ClientConfig.CABundle) == 0 {
 				return false, "stamp-endpoint-unverified", time.Time{}
 			}
 			create, update := false, false

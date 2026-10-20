@@ -15,6 +15,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -66,7 +67,7 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 		}
 		return string(raw)
 	}
-	event := model.SecurityEventInfo{CreatedAt: now, Age: 0, Trust: TrustTrusted, TargetsPod: true,
+	event := model.SecurityEventInfo{CreatedAt: now, Age: 0, Trust: eventtrust.TrustTrusted, TargetsPod: true,
 		Type: endpointlease.RuleType, Source: "redteam", CreatorIdentity: endpointLeaseConsoleCreator,
 		Name: "lease-event", UID: "66666666-6666-4666-8666-666666666666", ConsoleTargetPodUID: podUID,
 		EndpointLeaseRaw: encode(observation)}
@@ -115,7 +116,7 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 	old.Age = 61 * time.Second
 	check("stale", old, live, false)
 	untrusted := event
-	untrusted.Trust = TrustUntrusted
+	untrusted.Trust = eventtrust.TrustUntrusted
 	check("untrusted", untrusted, live, false)
 	changedState := live
 	changedState.State.Revision = 1

@@ -12,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	"github.com/phorvex/phorvex/internal/voicerefundpolicy"
@@ -109,7 +110,7 @@ func bindVoiceRefundObservation(ctx context.Context, reader client.Reader, p *mo
 	var payload voiceRefundPayload
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceRefund ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceRefund ||
 			e.CreatorIdentity == "" || e.Name == "" || e.UID == "" || e.TimestampMissing ||
 			e.Age < 0 || e.Age >= voiceRefundHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue

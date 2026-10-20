@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
@@ -61,7 +62,7 @@ func TestSensitiveOutputProducerBoundary(t *testing.T) {
 	}{
 		{name: "exact admitted event and inactive owner rule", want: true},
 		{name: "untrusted creator", change: func(_ *corev1.Pod, _ *corev1.ConfigMap, e *amtdv1beta1.SecurityEvent) {
-			e.Annotations[CreatorIdentityAnnotation] = "system:serviceaccount:vllm:other"
+			e.Annotations[eventtrust.CreatorIdentityAnnotation] = "system:serviceaccount:vllm:other"
 		}},
 		{name: "wrong target UID", change: func(_ *corev1.Pod, _ *corev1.ConfigMap, e *amtdv1beta1.SecurityEvent) {
 			e.Annotations[ConsoleTargetPodUIDAnnotation] = "other"

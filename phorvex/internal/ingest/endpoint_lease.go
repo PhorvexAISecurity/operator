@@ -11,6 +11,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -37,7 +38,7 @@ func bindEndpointLeaseObservationWithValidator(ctx context.Context, reader clien
 	var payload endpointlease.Observation
 	for i := range events {
 		e := &events[i]
-		if e.Trust != TrustTrusted || !e.TargetsPod || e.Type != endpointlease.RuleType ||
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != endpointlease.RuleType ||
 			e.Source != "redteam" || e.CreatorIdentity != endpointLeaseConsoleCreator || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= endpointLeaseHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue

@@ -24,7 +24,7 @@ import (
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/currentinventory"
 	"github.com/phorvex/phorvex/internal/disclosure"
-	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -109,7 +109,7 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 		annotations[disclosure.Annotation] = canonical
 		annotations[disclosure.AdmissionTimeAnnotation] = admittedAt.Format(time.RFC3339Nano)
 		annotations[disclosure.AdmissionContractAnnotation] = disclosure.BoundaryContract
-		annotations[ingest.CreatorIdentityAnnotation] = creator
+		annotations[eventtrust.CreatorIdentityAnnotation] = creator
 	} else if currentPresent {
 		canonical, admittedAt, creator, err := s.validateCurrentInventoryAdmission(ctx, req, currentRaw, oldEvent, oldCurrentPresent)
 		if err != nil {
@@ -118,15 +118,15 @@ func (s SecurityEventStamper) Handle(ctx context.Context, req admission.Request)
 		annotations[currentinventory.Annotation] = canonical
 		annotations[currentinventory.AdmissionTimeAnnotation] = admittedAt.Format(time.RFC3339Nano)
 		annotations[currentinventory.AdmissionContractAnnotation] = currentinventory.BoundaryContract
-		annotations[ingest.CreatorIdentityAnnotation] = creator
+		annotations[eventtrust.CreatorIdentityAnnotation] = creator
 	} else if user := req.UserInfo.Username; user != "" {
-		annotations[ingest.CreatorIdentityAnnotation] = user
+		annotations[eventtrust.CreatorIdentityAnnotation] = user
 	} else {
 		// No authenticated user on the request: remove any client-supplied claim rather than
 		// leave one standing. The event is then unstamped, i.e. untrusted at ingest. The
 		// admission policy makes the same call independently — a missing username never
 		// authorises a non-empty claim.
-		delete(annotations, ingest.CreatorIdentityAnnotation)
+		delete(annotations, eventtrust.CreatorIdentityAnnotation)
 	}
 	obj.SetAnnotations(annotations)
 	patched, err := json.Marshal(&obj)
@@ -158,13 +158,13 @@ func (s SecurityEventStamper) validateCurrentInventoryAdmission(ctx context.Cont
 			return "", time.Time{}, "", errors.New("current-inventory evidence is immutable")
 		}
 		admittedAt, err := time.Parse(time.RFC3339Nano, oldEvent.Annotations[currentinventory.AdmissionTimeAnnotation])
-		creator := oldEvent.Annotations[ingest.CreatorIdentityAnnotation]
-		if err != nil || oldEvent.Annotations[currentinventory.AdmissionContractAnnotation] != currentinventory.BoundaryContract || creator == "" || creator != payload.Classification.ObserverIdentity || !ingest.CurrentInventoryTrust().Allows(creator) || req.UserInfo.Username != creator {
+		creator := oldEvent.Annotations[eventtrust.CreatorIdentityAnnotation]
+		if err != nil || oldEvent.Annotations[currentinventory.AdmissionContractAnnotation] != currentinventory.BoundaryContract || creator == "" || creator != payload.Classification.ObserverIdentity || !eventtrust.CurrentInventoryTrust().Allows(creator) || req.UserInfo.Username != creator {
 			return "", time.Time{}, "", errors.New("current-inventory admission authority is invalid")
 		}
 		return string(canonical), admittedAt, creator, nil
 	}
-	if !ingest.CurrentInventoryTrust().Allows(req.UserInfo.Username) || payload.Classification.ObserverIdentity != req.UserInfo.Username || s.Reader == nil {
+	if !eventtrust.CurrentInventoryTrust().Allows(req.UserInfo.Username) || payload.Classification.ObserverIdentity != req.UserInfo.Username || s.Reader == nil {
 		return "", time.Time{}, "", errors.New("authenticated creator is not an allowed current inventory observer")
 	}
 	var policy v1alpha1.PhorvexPolicy
@@ -241,8 +241,8 @@ func (s SecurityEventStamper) validateCompletedDisclosureAdmission(ctx context.C
 		if err != nil || oldEvent.Annotations[disclosure.AdmissionContractAnnotation] != disclosure.BoundaryContract {
 			return "", time.Time{}, "", errors.New("completed-disclosure admission authority is missing")
 		}
-		creator := oldEvent.Annotations[ingest.CreatorIdentityAnnotation]
-		if creator == "" || creator != payload.Classification.ObserverIdentity || !ingest.CompletedDisclosureTrust().Allows(creator) {
+		creator := oldEvent.Annotations[eventtrust.CreatorIdentityAnnotation]
+		if creator == "" || creator != payload.Classification.ObserverIdentity || !eventtrust.CompletedDisclosureTrust().Allows(creator) {
 			return "", time.Time{}, "", errors.New("completed-disclosure creator authority is invalid")
 		}
 		if req.UserInfo.Username != creator {
@@ -250,7 +250,7 @@ func (s SecurityEventStamper) validateCompletedDisclosureAdmission(ctx context.C
 		}
 		return string(canonical), admittedAt, creator, nil
 	}
-	if !ingest.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {
+	if !eventtrust.CompletedDisclosureTrust().Allows(req.UserInfo.Username) {
 		return "", time.Time{}, "", errors.New("authenticated creator is not an allowed loss observer")
 	}
 	if payload.Classification.ObserverIdentity != req.UserInfo.Username {

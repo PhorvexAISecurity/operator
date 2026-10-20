@@ -16,6 +16,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
@@ -83,9 +84,9 @@ func TestVoiceMemoryConsoleEventToNativeRuleReadback(t *testing.T) {
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(dep, rs, pod, cm, policy, secret,
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "voice"}}, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "operator"}}).Build()
-	priorTrust := ingest.EventTrust()
-	ingest.ConfigureEventTrust(ingest.NewTrustedDetectors([]string{"phorvex-system/phorvex-phorvex-console"}))
-	t.Cleanup(func() { ingest.ConfigureEventTrust(priorTrust) })
+	priorTrust := eventtrust.EventTrust()
+	eventtrust.ConfigureEventTrust(eventtrust.NewTrustedDetectors([]string{"phorvex-system/phorvex-phorvex-console"}))
+	t.Cleanup(func() { eventtrust.ConfigureEventTrust(priorTrust) })
 	server := NewServer(Config{StateDir: t.TempDir(), Exec: func(_ time.Duration, bin string, args ...string) (string, error) {
 		if bin != "kubectl" || len(args) != 5 || args[0] != "create" || args[1] != "-f" || args[3] != "-o" || args[4] != "json" {
 			t.Fatalf("unexpected event transport %s %q", bin, args)

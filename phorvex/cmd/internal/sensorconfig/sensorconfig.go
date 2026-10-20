@@ -19,6 +19,7 @@ import (
 
 	"github.com/phorvex/phorvex/cmd/internal/trustconfig"
 	"github.com/phorvex/phorvex/internal/epssmeta"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/sensorapi"
@@ -90,14 +91,14 @@ func (f Flags) ApplyTrust() error {
 	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(f.EndpointLeaseApprovedSource, f.EndpointLeaseApprovedProxyImage, f.EndpointLeaseApprovedEngineImage); err != nil {
 		return fmt.Errorf("endpoint lease source configuration invalid: %w", err)
 	}
-	ingest.ConfigureEventTrust(identities(f.TrustedDetectors))
-	ingest.ConfigureCompletedDisclosureTrust(identities(f.TrustedLossObservers))
-	ingest.ConfigureCurrentInventoryTrust(identities(f.TrustedCurrentInventoryObservers))
+	eventtrust.ConfigureEventTrust(identities(f.TrustedDetectors))
+	eventtrust.ConfigureCompletedDisclosureTrust(identities(f.TrustedLossObservers))
+	eventtrust.ConfigureCurrentInventoryTrust(identities(f.TrustedCurrentInventoryObservers))
 	return nil
 }
 
-func identities(list string) ingest.TrustedDetectors {
-	return ingest.NewTrustedDetectors(strings.Split(list, ","))
+func identities(list string) eventtrust.TrustedDetectors {
+	return eventtrust.NewTrustedDetectors(strings.Split(list, ","))
 }
 
 // Configure validates the feed and seeds the exploitability cache. A missing or
