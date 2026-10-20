@@ -1,11 +1,9 @@
-package recon
+package model
 
 import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/phorvex/phorvex/internal/model"
 )
 
 // FactColocation is M-34's untrusted colocation relation, distinct from the
@@ -15,24 +13,24 @@ const FactColocation = "colocation"
 // ColocationInput is the joined snapshot for observational fact recording only.
 // The scorer never sees this inventory or the unresolved weight.
 type ColocationInput struct {
-	Target                       model.Pod
+	Target                       Pod
 	TargetKnown                  bool
 	Tenant, PolicyUID, PolicyKey string
 	Peers                        []string
-	Pods                         []model.Pod
+	Pods                         []Pod
 	// Membership values are effective tenant keys until M-140. Multiple policy
 	// matches remain ambiguous even if their tenant strings happen to coincide.
 	Membership                                     map[string][]string
 	NamespaceLabels                                map[string]map[string]string
-	Events                                         map[string][]model.SecurityEventInfo
+	Events                                         map[string][]SecurityEventInfo
 	PodsComplete, PoliciesComplete, EventsComplete bool
 	UnresolvedEventTargets                         bool
 	Now                                            time.Time
 	CoverEnabled                                   bool
 }
 
-func AssessColocation(in ColocationInput) model.ColocationAssessment {
-	out := model.ColocationAssessment{
+func AssessColocation(in ColocationInput) ColocationAssessment {
+	out := ColocationAssessment{
 		SchemaVersion: "phorvex.colocation.v1", Kind: "colocation-assessment",
 		SnapshotTime: in.Now, Tenant: in.Tenant, PolicyUID: in.PolicyUID, PolicyKey: in.PolicyKey,
 		IdentityBasis: "effective-tenant-until-M140", PeerPolicies: append([]string{}, in.Peers...),
@@ -40,8 +38,8 @@ func AssessColocation(in ColocationInput) model.ColocationAssessment {
 		Fact: FactColocation, State: "unknown", Reason: "target-placement-unavailable",
 		ObservabilityBasis: "assumption", ThreatModel: "TM-1/TM-2/2026-09-06",
 		PodInventoryComplete: in.PodsComplete, PolicyInventoryComplete: in.PoliciesComplete, EventInventoryComplete: in.EventsComplete,
-		Neighbors: []model.ColocationNeighbor{}, Witnesses: []string{},
-		Weight: model.UnresolvedColocationWeight{Status: "UNRESOLVED"}, ScoringReason: "weight-unresolved",
+		Neighbors: []ColocationNeighbor{}, Witnesses: []string{},
+		Weight: UnresolvedColocationWeight{Status: "UNRESOLVED"}, ScoringReason: "weight-unresolved",
 		CoverEnabled: in.CoverEnabled, CoverCondition: "unknown", CoverReason: "leader-shadow-binding-unavailable",
 		Prerequisites:    []string{"T3-calibration-unresolved", "P-06-unverified", "P-03-unverified"},
 		ExecutionOutcome: "not-admitted", EventAgeBinding: "eventHalfLife-unbound-to-current-linear-EventAgeHorizon",
@@ -91,9 +89,9 @@ func AssessColocation(in ColocationInput) model.ColocationAssessment {
 	return out
 }
 
-func classifyColocationNeighbor(in ColocationInput, p model.Pod) model.ColocationNeighbor {
+func classifyColocationNeighbor(in ColocationInput, p Pod) ColocationNeighbor {
 	key := p.Namespace + "/" + p.Name
-	n := model.ColocationNeighbor{PodKey: key, PodUID: p.UID, Node: p.Node, Class: "unknown", Reason: "policy-membership-unavailable", OwnerKind: p.OwnerKind, Policies: append([]string{}, in.Membership[key]...), Events: []model.ColocationEvent{}}
+	n := ColocationNeighbor{PodKey: key, PodUID: p.UID, Node: p.Node, Class: "unknown", Reason: "policy-membership-unavailable", OwnerKind: p.OwnerKind, Policies: append([]string{}, in.Membership[key]...), Events: []ColocationEvent{}}
 	sort.Strings(n.Policies)
 	ns, nsKnown := in.NamespaceLabels[p.Namespace]
 	n.NamespaceTrustDeclaration = ns["phorvex.ai/trust-class"]
@@ -110,7 +108,7 @@ func classifyColocationNeighbor(in ColocationInput, p model.Pod) model.Colocatio
 		if e.TimestampMissing {
 			why = "event-age-unavailable"
 		}
-		n.Events = append(n.Events, model.ColocationEvent{Name: e.Name, Source: e.Source, Target: key, AgeSeconds: e.Age.Seconds(), AgePresent: !e.TimestampMissing, Trust: e.Trust, Override: why})
+		n.Events = append(n.Events, ColocationEvent{Name: e.Name, Source: e.Source, Target: key, AgeSeconds: e.Age.Seconds(), AgePresent: !e.TimestampMissing, Trust: e.Trust, Override: why})
 	}
 	sort.Slice(n.Events, func(i, j int) bool {
 		a, b := n.Events[i], n.Events[j]
@@ -165,7 +163,7 @@ func classifyColocationNeighbor(in ColocationInput, p model.Pod) model.Colocatio
 // from labels or a successful Delete call. The current runner supplies no binding.
 type WarmSwapObservation struct {
 	BindingKnown   bool
-	Leader, Shadow model.Pod
+	Leader, Shadow Pod
 	ShadowReady    bool
 	// TriggerKnown distinguishes a verified event-free path from missing data.
 	TriggerKnown, EventFree bool

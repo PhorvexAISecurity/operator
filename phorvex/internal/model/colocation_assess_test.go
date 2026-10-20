@@ -1,18 +1,17 @@
-package recon
+package model
 
 import (
 	"encoding/json"
-	"github.com/phorvex/phorvex/internal/model"
 	"testing"
 	"time"
 )
 
 func colocFixture() ColocationInput {
-	p := model.Pod{Namespace: "a", Name: "leader", UID: "a1", Node: "n1"}
-	q := model.Pod{Namespace: "b", Name: "neighbor", UID: "b1", Node: "n1"}
-	return ColocationInput{Target: p, TargetKnown: true, Tenant: "A", Pods: []model.Pod{p, q},
+	p := Pod{Namespace: "a", Name: "leader", UID: "a1", Node: "n1"}
+	q := Pod{Namespace: "b", Name: "neighbor", UID: "b1", Node: "n1"}
+	return ColocationInput{Target: p, TargetKnown: true, Tenant: "A", Pods: []Pod{p, q},
 		Membership:      map[string][]string{"a/leader": {"A"}, "b/neighbor": {"B"}},
-		NamespaceLabels: map[string]map[string]string{"a": {}, "b": {}}, Events: map[string][]model.SecurityEventInfo{},
+		NamespaceLabels: map[string]map[string]string{"a": {}, "b": {}}, Events: map[string][]SecurityEventInfo{},
 		PodsComplete: true, PoliciesComplete: true, EventsComplete: true, Now: time.Unix(123, 0)}
 }
 func TestColocationFactTrustInventory(t *testing.T) {
@@ -66,7 +65,7 @@ func TestColocationDoesNotGuessEventHalfLife(t *testing.T) {
 		for _, missing := range []bool{false, true} {
 			x := colocFixture()
 			x.Pods[1].OwnerKind = "DaemonSet"
-			x.Events["b/neighbor"] = []model.SecurityEventInfo{{Name: "det", Trust: "trusted", TargetsPod: true, Age: age, TimestampMissing: missing}}
+			x.Events["b/neighbor"] = []SecurityEventInfo{{Name: "det", Trust: "trusted", TargetsPod: true, Age: age, TimestampMissing: missing}}
 			if a := AssessColocation(x); a.State != "unknown" {
 				t.Fatalf("age=%v missing=%v -> %s", age, missing, a.State)
 			}
@@ -74,7 +73,7 @@ func TestColocationDoesNotGuessEventHalfLife(t *testing.T) {
 	}
 	x := colocFixture()
 	x.Peers = []string{"B"}
-	x.Events["b/neighbor"] = []model.SecurityEventInfo{{Trust: "unstamped", TargetsPod: true}}
+	x.Events["b/neighbor"] = []SecurityEventInfo{{Trust: "unstamped", TargetsPod: true}}
 	if AssessColocation(x).State != "absent" {
 		t.Fatal("untrusted detector affected classification")
 	}
@@ -98,7 +97,7 @@ func TestColocationUnresolvedWeightAndDeterminism(t *testing.T) {
 }
 func TestColocationObservedDestinationConditions(t *testing.T) {
 	x := colocFixture()
-	s := model.Pod{Namespace: "a", Name: "shadow", UID: "s", Node: "n2"}
+	s := Pod{Namespace: "a", Name: "shadow", UID: "s", Node: "n2"}
 	x.Pods = append(x.Pods, s)
 	x.Membership["a/shadow"] = []string{"A"}
 	bind := WarmSwapObservation{BindingKnown: true, Leader: x.Target, Shadow: s, ShadowReady: true, TriggerKnown: true, TriggerNode: "n1"}
@@ -125,7 +124,7 @@ func TestColocationObservedDestinationConditions(t *testing.T) {
 	x.Membership["a/shadow"] = []string{"B"}
 	check("false")
 	x.Membership["a/shadow"] = []string{"A"}
-	x.Events["a/shadow"] = []model.SecurityEventInfo{{Trust: "trusted", TargetsPod: true}}
+	x.Events["a/shadow"] = []SecurityEventInfo{{Trust: "trusted", TargetsPod: true}}
 	check("unknown")
 	delete(x.Events, "a/shadow")
 	bind.BindingKnown = false

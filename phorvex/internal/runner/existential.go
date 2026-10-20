@@ -11,7 +11,6 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -121,7 +120,7 @@ func outcomeInventory(events []model.SecurityEventInfo, p model.Policy) *model.E
 // rechecks all retained laws against the same tick view. It does not refresh state.
 func existentialEmitVerdict(d model.Decision, v *model.WorkloadView, p model.Policy) feasibility.Verdict {
 	move := model.Move{Action: d.Action}
-	if p.MayBreachSLO && d.Existential != nil && d.Existential.Present && decision.HasQualifiedOutcome(v, p) {
+	if p.MayBreachSLO && d.Existential != nil && d.Existential.Present && model.HasQualifiedOutcome(v, p) {
 		for _, c := range d.Existential.Candidates {
 			if c.Action == d.Action && c.Contains && c.SLORelaxed {
 				verdict, _ := feasibility.EvaluateWithSLOSeparation(v, move, p)

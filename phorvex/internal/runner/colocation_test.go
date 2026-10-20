@@ -12,7 +12,6 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/recon"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -29,14 +28,14 @@ func TestColocationJoinsPolicySelectorAndKeepsDecisionBytes(t *testing.T) {
 	in := colocationInput(observationOf(snap), e)
 	in.Target = p
 	in.TargetKnown = true
-	if a := recon.AssessColocation(in); a.State != "present" {
+	if a := model.AssessColocation(in); a.State != "present" {
 		t.Fatalf("joined inventory: %+v", a)
 	}
 	e.spec.Trust.PeerPolicies = []string{"B"}
 	in = colocationInput(observationOf(snap), e)
 	in.Target = p
 	in.TargetKnown = true
-	if a := recon.AssessColocation(in); a.State != "absent" {
+	if a := model.AssessColocation(in); a.State != "absent" {
 		t.Fatalf("peer declaration: %+v", a)
 	}
 	var legacy bytes.Buffer

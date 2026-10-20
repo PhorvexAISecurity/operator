@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 )
 
@@ -159,4 +160,90 @@ type OutcomeAssertion struct {
 	EventTrust string           `json:"eventTrust"`
 	Outcome    ProtectedOutcome `json:"outcome"`
 	Reasons    []string         `json:"reasons,omitempty"`
+}
+
+// AssessOutcomes reads the full authenticated-event inventory, before projection
+// through FactWeights. Conflicting records are retained, never last-writer-wins.
+func AssessOutcomes(v *WorkloadView, p Policy) *ExistentialDecision {
+	d := &ExistentialDecision{TrustBoundaryReady: p.TrustBoundaryReady, TrustBoundaryReason: p.TrustBoundaryReason, TrustBoundarySince: p.TrustBoundarySince, Result: "inactive", EffectStatus: "not-attempted", MayBreachSLO: p.MayBreachSLO, Order: "baseline"}
+	key := v.Pod.Namespace + "/" + v.Pod.Name
+	horizon := p.EffectiveEventAgeHorizon()
+	for _, ev := range v.OutcomeEvents {
+		if ev.TargetBindingReason != "" {
+			continue
+		}
+		if ev.OutcomeParseError != "" {
+			d.Reasons = append(d.Reasons, ev.OutcomeParseError)
+		}
+		for _, r := range ev.Outcomes {
+			// Another policy's inventory cannot constrain this one.
+			if r.PolicyUID != "" && r.PolicyUID != p.PolicyUID {
+				continue
+			}
+			if r.DecisionAsset != "" && r.DecisionAsset != key && p.DecisionAssets[r.DecisionAsset] != "" {
+				continue
+			}
+			e := OutcomeEvidence{Outcome: r, Event: ev.Name, Class: OutcomeClass(r), EventTrust: ev.Trust, CreatorIdentity: ev.CreatorIdentity, EventCreatedAt: ev.CreatedAt, EventAgeSeconds: ev.Age.Seconds(), EvidenceHorizonSeconds: horizon.Seconds(), TimestampPresent: !ev.TimestampMissing}
+			scope := r.ID != "" && r.PolicyUID != "" && r.PolicyUID == p.PolicyUID && r.DecisionAsset == key && r.DecisionAssetUID != "" && r.DecisionAssetUID == v.Pod.UID && r.ProtectedAsset != "" && r.Version != "" && r.Portion != "" && r.Property != "" && r.ScopeBasis != ""
+			relevant := scope && slices.Contains(ev.ResolvedTargets, key)
+			e.TrustedEvidence = relevant && ev.Trust == "trusted" && ev.CreatorIdentity != "" && !ev.TimestampMissing && EventAgeWeight(ev.Age, horizon) > 0
+			if !scope {
+				e.Reasons = append(e.Reasons, "scope-unresolved")
+				d.Reasons = append(d.Reasons, "scope-unresolved:"+r.ID)
+			}
+			if !e.TrustedEvidence {
+				e.Reasons = append(e.Reasons, "no-valid-scoped-trusted-support")
+			}
+			boundaryValid := p.TrustBoundaryReady && (p.TrustBoundarySince.IsZero() || !ev.CreatedAt.Before(p.TrustBoundarySince))
+			e.BoundaryEnforced = boundaryValid
+			e.TrustedEvidence = e.TrustedEvidence && boundaryValid
+			if !boundaryValid {
+				e.Reasons = append(e.Reasons, "m94-boundary-not-ready-or-event-predates-enforcement:"+p.TrustBoundaryReason)
+			}
+			if e.Class == "unresolved" {
+				e.Reasons = append(e.Reasons, "class-unresolved")
+			}
+			if (r.LossState != "at-risk" && r.LossState != "already-lost") || r.StateBasis == "" {
+				e.Reasons = append(e.Reasons, "loss-state-unknown")
+			}
+			e.Qualified = scope && e.TrustedEvidence && boundaryValid && e.Class == "irreversible-catastrophic" && r.LossState == "at-risk" && r.StateBasis != ""
+			d.Evidence = append(d.Evidence, e)
+			d.TrustedEvidence = d.TrustedEvidence || e.TrustedEvidence
+			d.Present = d.Present || e.Qualified
+		}
+	}
+	d.Present = false
+	for i := range d.Evidence {
+		risk := &d.Evidence[i]
+		if !risk.Qualified {
+			continue
+		}
+		for _, other := range d.Evidence {
+			if other.TrustedEvidence && other.BoundaryEnforced && other.Class == "irreversible-catastrophic" && other.Outcome.LossState == "already-lost" && other.Outcome.StateBasis != "" && sameOutcomeScope(risk.Outcome, other.Outcome) {
+				risk.Qualified = false
+				risk.Reasons = append(risk.Reasons, "accepted-established-loss-no-prevention-credit")
+				break
+			}
+		}
+		d.Present = d.Present || risk.Qualified
+	}
+	d.ConstraintApplied = d.Present
+	if d.Present {
+		d.Order = "existential>λ"
+		if p.MayBreachSLO {
+			d.Order = "existential>SLO>λ"
+		}
+	}
+	return d
+}
+
+func sameOutcomeScope(a, b ProtectedOutcome) bool {
+	return a.PolicyUID == b.PolicyUID && a.ProtectedAsset == b.ProtectedAsset && a.Version == b.Version && a.Portion == b.Portion && a.Property == b.Property && a.Outcome == b.Outcome
+}
+
+// HasQualifiedOutcome reports whether v carries a qualified M99 outcome. The
+// dispatcher retains an unavailable capability checker as a veto specifically for
+// it, without changing the ordinary fail-open path.
+func HasQualifiedOutcome(v *WorkloadView, p Policy) bool {
+	return AssessOutcomes(v, p).Present
 }

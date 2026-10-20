@@ -37,7 +37,7 @@ func pickM99(set actionset.ActionSet, states map[string]*model.ExistentialDecisi
 
 func TestM99RulingNumericCounterexample(t *testing.T) {
 	v, p := m99Fixture()
-	active := assessOutcomes(v, p)
+	active := model.AssessOutcomes(v, p)
 	set := actionset.ActionSet{FactWeights: map[string]float64{"u": 100, "e": 10}, Candidates: []actionset.Candidate{
 		{Key: "ns/protected", Action: model.ActionQuarantine, CoverKeys: []string{"u"}, ECost: 1},
 		{Key: "ns/protected", Action: model.ActionRotate, CoverKeys: []string{"u", "e"}, ECost: 5, GenerationRank: 1}}}
@@ -118,7 +118,7 @@ func TestM99EvidenceClassificationAndBinding(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			v, p := m99Fixture()
 			tt.mutate(v, &p)
-			d := assessOutcomes(v, p)
+			d := model.AssessOutcomes(v, p)
 			if d.Present != tt.active || d.TrustedEvidence != tt.trusted {
 				t.Fatalf("got %+v", d)
 			}
@@ -140,7 +140,7 @@ func TestM99MixedLossCannotSuppressRisk(t *testing.T) {
 	forged.Outcomes[0].LossState = "already-lost"
 	forged.Trust = "untrusted-identity"
 	v.OutcomeEvents = append(v.OutcomeEvents, forged)
-	d := assessOutcomes(v, p)
+	d := model.AssessOutcomes(v, p)
 	if !d.Present || len(d.Evidence) != 4 {
 		t.Fatalf("lost/unknown erased remaining risk: %+v", d)
 	}
@@ -164,7 +164,7 @@ func TestM99PartialAuditOnlyAndEmptyMapping(t *testing.T) {
 			case "unmapped":
 				r.MappingComplete = false
 			}
-			d := assessOutcomes(v, p)
+			d := model.AssessOutcomes(v, p)
 			set := actionset.ActionSet{FactWeights: map[string]float64{"e": 100, "f": 1}, Candidates: []actionset.Candidate{{Key: "ns/protected", CoverKeys: []string{"e"}}, {Key: "ns/protected", CoverKeys: []string{"f"}}}}
 			if !d.Present || pickM99(set, map[string]*model.ExistentialDecision{"ns/protected": d}, 0, nil, nil) != -1 {
 				t.Fatal("missing/partial representation received containment")
@@ -179,7 +179,7 @@ func TestM99PartialAuditOnlyAndEmptyMapping(t *testing.T) {
 
 func TestM99SharedBudgetSLOTiesAndPredictedCover(t *testing.T) {
 	v, p := m99Fixture()
-	d := assessOutcomes(v, p)
+	d := model.AssessOutcomes(v, p)
 	states := map[string]*model.ExistentialDecision{"ns/protected": d, "ordinary": {}}
 	set := actionset.ActionSet{FactWeights: map[string]float64{"e": 10, "ordinary": 10000}, Candidates: []actionset.Candidate{{Key: "ordinary", CoverKeys: []string{"ordinary"}}, {Key: "ns/protected", CoverKeys: []string{"e"}, ECost: 50, GenerationRank: 1}}}
 	if pickM99(set, states, 10, nil, nil) != 1 {
@@ -288,7 +288,7 @@ func TestM99InactiveProductionControl(t *testing.T) {
 	// Physics/severity do not create an outcome record.
 	v.OutcomeEvents = nil
 	v.Physics = model.NeutralPhysics()
-	if assessOutcomes(v, p).Present {
+	if model.AssessOutcomes(v, p).Present {
 		t.Fatal("physics-only trigger")
 	}
 }
@@ -299,18 +299,18 @@ func TestM99EstablishedLossAndPreBoundaryForgery(t *testing.T) {
 	lost.Outcomes = append([]model.ProtectedOutcome(nil), lost.Outcomes...)
 	lost.Outcomes[0].LossState = "already-lost"
 	v.OutcomeEvents = append(v.OutcomeEvents, lost)
-	d := assessOutcomes(v, p)
+	d := model.AssessOutcomes(v, p)
 	if d.Present {
 		t.Fatal("established loss got prevention credit")
 	}
 	v, p = m99Fixture()
 	p.TrustBoundarySince = time.Unix(100, 0)
 	v.OutcomeEvents[0].CreatedAt = time.Unix(99, 0)
-	if assessOutcomes(v, p).Present {
+	if model.AssessOutcomes(v, p).Present {
 		t.Fatal("pre-boundary event could carry forged stamp")
 	}
 	v.OutcomeEvents[0].CreatedAt = time.Unix(101, 0)
-	if !assessOutcomes(v, p).Present {
+	if !model.AssessOutcomes(v, p).Present {
 		t.Fatal("post-boundary supported event inactive")
 	}
 }
