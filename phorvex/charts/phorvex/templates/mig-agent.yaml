@@ -76,6 +76,7 @@ spec:
       tolerations:
 {{ toYaml . | indent 8 }}
       {{- end }}
+{{- if not .Values.phorvex.services.actuator.endpoint }}
 ---
 # Exact agent-namespace permission for the manager. No other namespace receives exec.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -108,4 +109,5 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}

@@ -141,6 +141,16 @@ deadline). With `--actuator-endpoint` the manager builds no backend, quarantine
 ledger, MIG transport or SSAR checker, skips the startup preflight, and needs no
 actuation RBAC; the backend flags are read by the actuator instead.
 
+The manager chart passes `--actuator-endpoint` from
+`phorvex.services.actuator.endpoint`. It then binds the manager only to the
+dispatcher's share of the access (`templates/dispatcher-rbac.yaml`), under the
+names of the in-process RBAC objects it replaces. It no longer mounts the
+actuator's files (adapter reload sources, MIG profiles, serving security
+bindings) or the LiteLLM status credential, nor passes their flags or the MIG
+node-agent flags. It refuses `codeExecAdmission`, whose policy admits only the
+manager's identity. `tools/test_service_charts.py` checks that the manager, sensor
+and actuator charts together hold exactly the in-process manager's access.
+
 ## Whose access the gate reviews
 
 The capability gate's RBAC leg asks the actuator, because the actuator's identity

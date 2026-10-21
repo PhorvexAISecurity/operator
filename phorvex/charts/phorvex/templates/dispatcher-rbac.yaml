@@ -1,0 +1,18 @@
+{{- /*
+With a remote actuator (ADR-0001) the manager is the dispatcher: it holds only the
+dispatcher's share of the services' access (phorvex-common), under the names of
+the in-process objects it replaces (rbac.yaml). The actuator chart holds the
+actuation access and the sensor chart the sensor's reads.
+*/}}
+{{- if .Values.phorvex.services.actuator.endpoint }}
+{{- $fullname := include "phorvex.fullname" . }}
+{{- include "phorvex-common.rbac.objects" (dict
+  "service" "dispatcher"
+  "values" .Values.phorvex
+  "releaseNamespace" .Release.Namespace
+  "serviceAccountName" (include "phorvex.serviceAccountName" .)
+  "clusterRoleName" (printf "%s-manager-role" $fullname)
+  "clusterRoleBindingName" (printf "%s-manager-rolebinding" $fullname)
+  "rolePrefix" $fullname
+  "labels" (include "phorvex.labels" .)) }}
+{{- end }}

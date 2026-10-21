@@ -1,4 +1,4 @@
-{{- if and (eq .Values.phorvex.servingSecurity.mode "secure-required") (has .Values.phorvex.actuator (list "native" "hybrid")) .Values.phorvex.servingSecurity.bindings }}
+{{- if and (eq .Values.phorvex.servingSecurity.mode "secure-required") (has .Values.phorvex.actuator (list "native" "hybrid")) .Values.phorvex.servingSecurity.bindings (not .Values.phorvex.services.actuator.endpoint) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

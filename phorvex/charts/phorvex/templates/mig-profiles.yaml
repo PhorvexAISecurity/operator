@@ -1,4 +1,4 @@
-{{- if .Values.phorvex.mig.profiles.content }}
+{{- if and .Values.phorvex.mig.profiles.content (not .Values.phorvex.services.actuator.endpoint) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

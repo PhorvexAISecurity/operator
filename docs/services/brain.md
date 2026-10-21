@@ -62,7 +62,10 @@ every tick, so a restarted brain is usable from the next tick on.
 
 Manager flags for remote mode: `--brain-endpoint`, `--brain-connect-timeout`
 (startup waits this long for the handshake, default 2m), `--brain-call-timeout`
-(5s) and `--brain-decide-timeout` (1m).
+(5s) and `--brain-decide-timeout` (1m). The manager chart passes
+`--brain-endpoint` from `phorvex.services.brain.endpoint`, and then no Math Lab
+capture flags, which the manager refuses with a remote brain: the brain chart
+reads the same `phorvex.mathLab` keys and records the snapshots.
 
 ## Contract
 

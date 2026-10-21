@@ -7,3 +7,9 @@ description: >-
 type: application
 version: 0.1.4
 appVersion: "0.1.0-p0"
+dependencies:
+# The services' shared access and trust (ADR-0001); remote mode binds the
+# dispatcher's share. Vendored as charts/phorvex-common-*.tgz.
+- name: phorvex-common
+  version: 0.1.0
+  repository: file://../../../deploy/charts/phorvex-common

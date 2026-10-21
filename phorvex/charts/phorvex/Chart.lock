@@ -1,0 +1,6 @@
+dependencies:
+- name: phorvex-common
+  repository: file://../../../deploy/charts/phorvex-common
+  version: 0.1.0
+digest: sha256:205229ebe43ae3e16a6f02d26c6cd8d85f0257a22fa5662689f1827a65b70f3c
+generated: "2026-10-21T16:43:37.09896311Z"
