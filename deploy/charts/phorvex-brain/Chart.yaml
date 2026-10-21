@@ -1,0 +1,8 @@
+apiVersion: v2
+name: phorvex-brain
+description: >-
+  The Phorvex brain service (ADR-0001): the decision engine and its learning
+  state, served over gRPC to the manager. It holds no Kubernetes credentials.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

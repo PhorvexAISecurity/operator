@@ -1,0 +1,46 @@
+image:
+  repository: phorvex-brain
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Decision configuration. Each value must match the manager's flag of the same
+# name, or the brain refuses the manager at the handshake.
+engine: p1
+gpuEnvelopeMax: 1
+flowResidualClasses: ""
+
+# Math Lab snapshots of the listed namespace/name policies. In remote mode the
+# brain records them, so configure capture here, not on the manager.
+mathLab:
+  capturePolicies: ""
+  maxBytes: 1073741824
+  # An existing claim keeps snapshots across restarts; empty uses an emptyDir.
+  existingClaim: ""
+
+shutdownGrace: 20s
+log:
+  level: info
+  format: json
+
+# Only the manager reaches the gRPC port (ADR-0001). Its pods are selected by
+# these labels in the namespace below (empty: the release namespace).
+dispatcher:
+  namespace: ""
+  podLabels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/component: manager
+
+# Namespaces whose Prometheus may scrape the metrics port; empty allows none.
+metricsScraperNamespaces: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
