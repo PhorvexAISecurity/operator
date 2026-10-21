@@ -5,6 +5,7 @@ description: >-
   between the services is defined once. `phorvex-common.rbac.objects` is their
   Kubernetes access: the manager acting in process holds all of it; split, the
   sensor holds only reads, the actuator the workload writes and the dispatcher
-  its own writes.
+  its own writes. The trust templates derive the identities and the lease
+  authority the service handshakes compare.
 type: library
 version: 0.1.0

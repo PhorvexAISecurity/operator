@@ -1,0 +1,122 @@
+image:
+  repository: phorvex-sensor
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The manager release's fullname; empty is the manager chart's own,
+# <release>-phorvex. Its detector and observer ServiceAccounts are trusted by name.
+managerFullname: ""
+
+# The manager chart's keys, under the same name, so one environment file
+# configures both charts. The sensor reads the trust, telemetry and EPSS keys,
+# and the features that decide its Kubernetes access. Every default equals the
+# manager chart's (tools/test_service_charts.py), and the trust must match the
+# manager's, or the manager refuses the sensor at the handshake.
+phorvex:
+  trustedDetectors:
+  - vllm/detector-kv-canary
+  - vllm/detector-adapter-inv
+  - phorvex-system/operator-controller-manager
+  e2eDetector:
+    enabled: false
+  console:
+    podBoundTokenCPU:
+      enabled: false
+  lossHistory:
+    enabled: false
+    trustedObservers: []
+    observer:
+      enabled: false
+    currentInventory:
+      enabled: false
+      trustedObservers: []
+      observer:
+        enabled: false
+  endpointLease:
+    enabled: false
+    approvedSourceSHA256: ""
+    approvedProxyImage: ""
+    approvedEngineImage: ""
+
+  prometheusUrl: ""
+  pcieClassCapacity:
+    Tesla T4:
+      gen: 3
+      width: 16
+  epss:
+    enabled: false
+    configMapName: phorvex-epss
+    mountPath: /etc/phorvex
+    fileName: epss-cache.json
+    authoritative: false
+    metadataFileName: epss-metadata.json
+    authoritativeTimeout: 5s
+    refreshInterval: 30s
+    feed:
+      scopeNamespaces: []
+      scopeDigests: []
+
+  # Access (phorvex-common.rbac.objects): the sensor receives the read verbs.
+  operatorNamespace: ""
+  actuator: ""
+  actuatorNamespaces: []
+  servingSecurity:
+    mode: secure-required
+    bindings: []
+  codeExecAdmission:
+    enabled: false
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
+  litellmClientRevoke:
+    enabled: false
+  crmRefundRevoke:
+    enabled: false
+  voiceMemory:
+    enabled: false
+  voiceOutput:
+    enabled: false
+  voiceRefund:
+    enabled: false
+  voiceMCP:
+    enabled: false
+  litellmOutput:
+    enabled: false
+  voiceAdmission:
+    enabled: false
+    sourceConfigMapName: ""
+    legacyConfigMapName: ""
+  mig:
+    nodeExec:
+      enabled: false
+      namespace: ""
+      daemonSetName: ""
+
+shutdownGrace: 20s
+log:
+  level: info
+  format: json
+
+# Only the manager reaches the gRPC port (ADR-0001). Its pods are selected by
+# these labels in the namespace below (empty: the release namespace).
+dispatcher:
+  namespace: ""
+  podLabels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/component: manager
+
+# Namespaces whose Prometheus may scrape the metrics port; empty allows none.
+metricsScraperNamespaces: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

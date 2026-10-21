@@ -1,0 +1,11 @@
+{{- /* The sensor's share of the services' access: the read verbs only. */}}
+{{- $fullname := include "phorvex-sensor.fullname" . }}
+{{- include "phorvex-common.rbac.objects" (dict
+  "service" "sensor"
+  "values" .Values.phorvex
+  "releaseNamespace" .Release.Namespace
+  "serviceAccountName" $fullname
+  "clusterRoleName" $fullname
+  "clusterRoleBindingName" $fullname
+  "rolePrefix" $fullname
+  "labels" (include "phorvex-sensor.labels" .)) }}

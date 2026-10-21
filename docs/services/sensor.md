@@ -58,6 +58,16 @@ docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=sensor -t p
 It holds the one binary as `/service` on distroless nonroot. PR validation builds
 it, without pushing, beside the manager and console images.
 
+`deploy/charts/phorvex-sensor` deploys it: one replica replaced with the Recreate
+strategy, its own ServiceAccount bound to the sensor's read-only share of the
+services' access (`phorvex-common`), and a NetworkPolicy that admits the gRPC port
+only from the manager's pods. Egress stays open: the API server's and
+Prometheus's addresses depend on the cluster. The chart reads the manager chart's
+keys under `phorvex` and derives the trust, telemetry and EPSS flags as that chart
+does, so one environment file configures both and the handshake compares equal
+trust. `tools/test_service_charts.py` renders both charts from the same values and
+requires the same sensor flags, environment and EPSS volume.
+
 The sensor needs a Kubernetes configuration with read access to the inventories
 it lists and the evidence it binds (Pods, Services, EndpointSlices, Namespaces,
 Nodes, NetworkPolicies, RBAC, PodDisruptionBudgets, ServiceAccounts,
