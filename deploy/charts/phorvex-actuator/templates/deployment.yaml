@@ -1,0 +1,210 @@
+{{- $v := .Values.phorvex }}
+{{- $trust := dict "values" $v "releaseNamespace" .Release.Namespace "managerFullname" (include "phorvex-actuator.managerFullname" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phorvex-actuator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-actuator.labels" . | nindent 4 }}
+spec:
+  # One actuator: the native backend keeps its policy bindings in memory, and the
+  # manager restores them through standing-policy maintenance after a restart.
+  # Recreate never runs two at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "phorvex-actuator.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "phorvex-actuator.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "phorvex-actuator.fullname" . }}
+      # The actuator acts with its own access (rbac.yaml) and checks it at startup.
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        # Lets the nonroot user read its 0440 LiteLLM status credential.
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: actuator
+        image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --listen=:9090
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --shutdown-grace={{ .Values.shutdownGrace }}
+        - --log-level={{ .Values.log.level }}
+        - --log-format={{ .Values.log.format }}
+        {{- /* The manager chart's actuator flags, derived and validated the same way. */}}
+        {{- if $v.operatorNamespace }}
+        - --operator-namespace={{ $v.operatorNamespace }}
+        {{- end }}
+        {{- $quarantineCapText := toString $v.maxRetainedQuarantinesPerNamespace }}
+        {{- if kindIs "float64" $v.maxRetainedQuarantinesPerNamespace }}
+        {{- if or (lt $v.maxRetainedQuarantinesPerNamespace 0.0) (ne $v.maxRetainedQuarantinesPerNamespace (floor $v.maxRetainedQuarantinesPerNamespace)) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must be a non-negative whole number" }}
+        {{- end }}
+        {{- $quarantineCapText = printf "%.0f" $v.maxRetainedQuarantinesPerNamespace }}
+        {{- end }}
+        {{- if not (regexMatch "^(0|[1-9][0-9]*)$" $quarantineCapText) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must be a non-negative whole number" }}
+        {{- end }}
+        {{- if or (gt (len $quarantineCapText) 3) (gt (int64 $quarantineCapText) 128) }}
+        {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must not exceed 128" }}
+        {{- end }}
+        - --max-retained-quarantines-per-namespace={{ $quarantineCapText }}
+        {{- if $v.loraCleanSources.content }}
+        - --lora-clean-sources-file={{ $v.loraCleanSources.mountPath }}
+        {{- end }}
+        {{- if $v.mig.profiles.content }}
+        - --mig-profiles-file={{ $v.mig.profiles.mountPath }}
+        {{- end }}
+        {{- if not (has $v.servingSecurity.mode (list "secure-required" "legacy-plaintext")) }}{{ fail "phorvex.servingSecurity.mode must be secure-required or legacy-plaintext" }}{{- end }}
+        {{- if and (eq $v.servingSecurity.mode "legacy-plaintext") $v.servingSecurity.bindings }}{{ fail "legacy-plaintext does not accept servingSecurity.bindings" }}{{- end }}
+        {{- if and $v.servingSecurity.bindings (not (has $v.actuator (list "native" "hybrid"))) }}{{ fail "servingSecurity.bindings require phorvex.actuator=native or hybrid" }}{{- end }}
+        - --serving-security-mode={{ $v.servingSecurity.mode }}
+        {{- if $v.servingSecurity.bindings }}
+        - --serving-security-file={{ $v.servingSecurity.mountPath }}
+        {{- end }}
+        {{- with $v.mig.nodeExec }}
+        {{- if .enabled }}
+        {{- if not .exclusiveMaintenance }}{{ fail "phorvex.mig.nodeExec.exclusiveMaintenance=true is required when enabling destructive MIG node exec" }}{{- end }}
+        - --mig-node-exec=true
+        - --mig-agent-namespace={{ required "phorvex.mig.nodeExec.namespace is required when enabled" .namespace }}
+        - --mig-agent-service-accounts={{ required "phorvex.mig.nodeExec.serviceAccountName is required when enabled" .serviceAccountName }}
+        - --mig-agent-daemonset={{ required "phorvex.mig.nodeExec.daemonSetName is required when enabled" .daemonSetName }}
+        - --mig-agent-gpu-container={{ .gpuContainer }}
+        - --mig-agent-helper-container={{ .helperContainer }}
+        - --mig-allocation-helper={{ .allocationHelperPath }}
+        - --mig-allocation-socket={{ printf "%s/kubelet.sock" (.podResourcesMountPath | trimSuffix "/") }}
+        - --mig-agent-exec-timeout={{ .execTimeout }}
+        - --mig-allocation-read-timeout={{ .allocationReadTimeout }}
+        - --mig-allocation-release-timeout={{ .allocationReleaseTimeout }}
+        - --mig-exclusive-maintenance=true
+        {{- end }}
+        {{- end }}
+        {{- with include "phorvex-common.trustedDetectors" $trust }}
+        - --trusted-detectors={{ . }}
+        {{- end }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PHORVEX_VOICE_ADMISSION_ENABLED
+          value: {{ $v.voiceAdmission.enabled | default false | quote }}
+        {{- if $v.voiceMCP.enabled }}
+        - name: PHORVEX_VOICE_MCP_APPROVED_IMAGE
+          value: {{ required "voiceMCP.approvedImage must be a reviewed immutable repo@sha256" $v.voiceMCP.approvedImage | quote }}
+        {{- end }}
+        {{- with include "phorvex-common.endpointLeaseEnv" $trust }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- if $v.actuator }}
+        - name: PHORVEX_ACTUATOR
+          value: {{ $v.actuator | quote }}
+        {{- end }}
+        ports:
+        - name: grpc
+          containerPort: 9090
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings }}
+        volumeMounts:
+        {{- if $v.litellmClientRevoke.enabled }}
+        - name: litellm-client-revoke-status
+          mountPath: /etc/phorvex-litellm-status
+          readOnly: true
+        {{- end }}
+        {{- if $v.loraCleanSources.content }}
+        - name: lora-clean-sources
+          mountPath: {{ $v.loraCleanSources.mountPath }}
+          subPath: sources.json
+          readOnly: true
+        {{- end }}
+        {{- if $v.mig.profiles.content }}
+        - name: mig-profiles
+          mountPath: {{ $v.mig.profiles.mountPath }}
+          subPath: profiles.json
+          readOnly: true
+        {{- end }}
+        {{- if $v.servingSecurity.bindings }}
+        - name: serving-security
+          mountPath: {{ $v.servingSecurity.mountPath }}
+          subPath: security.json
+          readOnly: true
+        {{- end }}
+        {{- end }}
+      {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings }}
+      volumes:
+      {{- if $v.litellmClientRevoke.enabled }}
+      - name: litellm-client-revoke-status
+        secret:
+          secretName: {{ required "litellmClientRevoke.statusSecret required" $v.litellmClientRevoke.statusSecret | quote }}
+          defaultMode: 0440
+          items:
+          - key: token
+            path: token
+      {{- end }}
+      {{- if $v.loraCleanSources.content }}
+      - name: lora-clean-sources
+        configMap:
+          name: {{ include "phorvex-actuator.fullname" . }}-lora-clean-sources
+          items:
+          - key: sources.json
+            path: sources.json
+      {{- end }}
+      {{- if $v.mig.profiles.content }}
+      - name: mig-profiles
+        configMap:
+          name: {{ include "phorvex-actuator.fullname" . }}-mig-profiles
+          items:
+          - key: profiles.json
+            path: profiles.json
+      {{- end }}
+      {{- if $v.servingSecurity.bindings }}
+      - name: serving-security
+        configMap:
+          name: {{ include "phorvex-actuator.fullname" . }}-serving-security
+          items:
+          - key: security.json
+            path: security.json
+      {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

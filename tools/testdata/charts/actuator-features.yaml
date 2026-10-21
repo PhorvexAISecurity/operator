@@ -1,0 +1,9 @@
+# Every value that changes the actuator's flags beyond rbac-all-features.yaml and
+# sensor-features.yaml, for tools/test_service_charts.py. Synthetic fixture values only.
+phorvex:
+  maxRetainedQuarantinesPerNamespace: 4
+  loraCleanSources:
+    content: '{"version":1,"sources":[{"namespace":"vllm","adapter":"fixture","path":"/adapters/fixture"}]}'
+  mig:
+    profiles:
+      content: '{"version":1,"profiles":[{"namespace":"vllm","resource":"nvidia.com/mig-1g.5gb","profile":"1g.5gb"}]}'

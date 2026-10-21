@@ -1,0 +1,41 @@
+{{- /* The operator-owned files the actuator reads, from the manager chart's values. */}}
+{{- $v := .Values.phorvex }}
+{{- if $v.loraCleanSources.content }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-actuator.fullname" . }}-lora-clean-sources
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-actuator.labels" . | nindent 4 }}
+data:
+  sources.json: |-
+{{ $v.loraCleanSources.content | nindent 4 }}
+{{- end }}
+{{- if $v.mig.profiles.content }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-actuator.fullname" . }}-mig-profiles
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-actuator.labels" . | nindent 4 }}
+data:
+  profiles.json: |
+{{ $v.mig.profiles.content | indent 4 }}
+{{- end }}
+{{- if and (eq $v.servingSecurity.mode "secure-required") (has $v.actuator (list "native" "hybrid")) $v.servingSecurity.bindings }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-actuator.fullname" . }}-serving-security
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-actuator.labels" . | nindent 4 }}
+data:
+  security.json: |
+    {{- dict "version" 1 "bindings" $v.servingSecurity.bindings | toJson | nindent 4 }}
+{{- end }}
