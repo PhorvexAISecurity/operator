@@ -1,0 +1,3 @@
+# The sensor chart's own staging values (deploy/charts/phorvex-sensor), merged after phorvex.yaml.
+# The release (phase 5c) writes the published sensor image here, under `image`.
+{}

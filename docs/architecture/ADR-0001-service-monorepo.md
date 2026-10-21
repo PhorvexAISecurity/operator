@@ -161,13 +161,20 @@ every Docker build context complete for those targets.
 
 ### Argo CD
 
-- An `AppProject` named `phorvex` restricts the source repository and the
-  destination namespaces.
+- An `AppProject` named `phorvex-services` restricts the source repository, the
+  destination namespace and the cluster-scoped kinds.
 - An `ApplicationSet` generates one Application per service and environment
   (`phorvex-<service>-<env>`), so each service appears in Argo CD with its own
   health, sync state, history and pod logs.
-- First deployment is side by side in a separate namespace on the existing
-  cluster. The current `phorvex-stack` Application stays untouched until cutover.
+- First deployment is to staging: a virtual cluster (vcluster) on the existing
+  cluster, registered in Argo CD as its own cluster with the label
+  `phorvex.ai/environment`. A vcluster has its own API server, so staging has its
+  own PhorvexPolicy CRD, policies, webhooks and cluster-scoped objects, while its
+  pods share the cluster's nodes. Side by side in another namespace of the same API
+  server was rejected: the manager reconciles every PhorvexPolicy in its cluster,
+  so two managers would act on the same policies, and their cluster-scoped objects
+  would collide. The current `phorvex-stack` Application stays untouched until
+  cutover.
 
 ### Logging and observability
 
@@ -187,7 +194,7 @@ every Docker build context complete for those targets.
 | 2 | Foundation: first shared lib (`libs/logging`, slog JSON) adopted by the manager and console; gofmt/vet and image builds in CI | Unchanged (log format changes) |
 | 3 | Break the domain cycles above and enforce the boundaries (`archtest`, done in 3a); turn the process-global brain configuration into per-service flags | Unchanged |
 | 4 | gRPC contracts (sensor snapshot, brain decide stream with capability questions, actuator actuate and journals) and one binary per service, with the in-process wiring kept behind a flag for rollback; `mathlab` replays prove decision parity | Unchanged in in-process mode |
-| 5 | One image, chart and Argo CD Application per service; release-please components and affected-service CI; deploy side by side with actuation disabled and compare decisions against the live manager's audit stream; cut over when they match | Shadow, then cutover |
+| 5 | One image, chart and Argo CD Application per service; release-please components and affected-service CI; deploy to a staging vcluster first, then cut production over | Staging, then cutover |
 | 6 | Move attack firing and harness runs out of the console into the attacks service | Console calls the attacks API |
 
 Cutover criteria for phase 5 are decided separately. They must include decision

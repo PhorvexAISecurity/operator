@@ -1,0 +1,107 @@
+# One Argo CD Application per Phorvex service (ADR-0001) on every cluster registered
+# for an environment: the manager (with the console), the brain, the sensor and the
+# actuator, each its own chart, version, sync status and logs.
+#
+# NOT applied. Nothing watches this directory: the root app (../root.yaml) watches
+# ../apps of the production repository. Applying it is phase 5e, a separate,
+# approved step. Staging comes first, in a vcluster on the production cluster
+# (see README.md).
+#
+# A cluster joins an environment through its Argo CD cluster Secret's label
+# phorvex.ai/environment. Each environment reads deploy/environments/<environment>/:
+# phorvex.yaml (the manager chart's keys, shared by every chart) and <service>.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: phorvex-services
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+  - matrix:
+      generators:
+      - clusters:
+          selector:
+            matchExpressions:
+            - key: phorvex.ai/environment
+              operator: In
+              values: [staging]
+      - list:
+          elements:
+          - service: manager
+            chart: phorvex/charts/phorvex
+          - service: brain
+            chart: deploy/charts/phorvex-brain
+          - service: sensor
+            chart: deploy/charts/phorvex-sensor
+          - service: actuator
+            chart: deploy/charts/phorvex-actuator
+  template:
+    metadata:
+      name: 'phorvex-{{.service}}-{{index .metadata.labels "phorvex.ai/environment"}}'
+      labels:
+        app.kubernetes.io/part-of: phorvex
+        phorvex.ai/service: '{{.service}}'
+        phorvex.ai/environment: '{{index .metadata.labels "phorvex.ai/environment"}}'
+      finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: phorvex-services
+      sources:
+      - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+        targetRevision: main
+        path: '{{.chart}}'
+        helm:
+          # Every chart is released as `phorvex`, so its objects carry the names the
+          # others expect: phorvex-brain, phorvex-sensor, phorvex-actuator and the
+          # manager's phorvex-phorvex-manager identity.
+          releaseName: phorvex
+          valueFiles:
+          - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/phorvex.yaml'
+          - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/{{.service}}.yaml'
+      - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+        targetRevision: main
+        ref: values
+      destination:
+        server: '{{.server}}'
+        namespace: phorvex-system
+      syncPolicy:
+        automated:
+          enabled: true
+          # As for the production stack: the namespace holds objects the charts never
+          # created (the CRs the services write at runtime), which a prune would delete.
+          prune: false
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
+        # As for the production stack (../apps/phorvex-stack.yaml).
+        - ServerSideApply=true
+        # Keep the ignored fields below as they are live, even when another change syncs.
+        - RespectIgnoreDifferences=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 15s
+            factor: 2
+      ignoreDifferences:
+      - group: apiextensions.k8s.io
+        kind: CustomResourceDefinition
+        jsonPointers:
+        - /status
+      # The manager chart generates its admission webhook certificate when it finds
+      # none, and Argo CD renders without cluster access, so every render brings a new
+      # one. The first sync installs the certificate and its CA bundle together; later
+      # renders must not replace either.
+      - kind: Secret
+        name: phorvex-phorvex-webhook-cert
+        jsonPointers:
+        - /data
+      - group: admissionregistration.k8s.io
+        kind: MutatingWebhookConfiguration
+        jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+      - group: admissionregistration.k8s.io
+        kind: ValidatingWebhookConfiguration
+        jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
