@@ -402,6 +402,86 @@ class ActuatorChartTests(SplitServiceChart, unittest.TestCase):
                     self.assertNotEqual(result.returncode, 0, chart.name)
 
 
+REMOTE = ['--set', 'phorvex.services.brain.endpoint=phorvex-brain:9090', '--set', 'phorvex.services.sensor.endpoint=phorvex-sensor:9090',
+          '--set', 'phorvex.services.actuator.endpoint=phorvex-actuator:9090']
+# Code-exec admission admits only the manager's identity, so it needs the in-process actuator.
+WITHOUT_CODE_EXEC = ['--set', 'phorvex.codeExecAdmission.enabled=false']
+SPLIT_VALUE_SETS = {name: [*values, *WITHOUT_CODE_EXEC] for name, values in VALUE_SETS.items()}
+SPLIT_FEATURES = [*SERVICE_FEATURES, *WITHOUT_CODE_EXEC]
+ACTUATOR_VOLUMES = ActuatorChartTests.volumes
+ACTUATOR_FILE_FLAGS = ('--lora-clean-sources-file=', '--mig-profiles-file=', '--serving-security-file=', '--mig-')
+
+
+def manager_pod(docs):
+    return next(d['spec']['template']['spec'] for d in docs
+                if d['kind'] == 'Deployment' and 'manager' in [c['name'] for c in d['spec']['template']['spec']['containers']])
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ManagerRemoteModeTests(unittest.TestCase):
+    def test_the_manager_acts_in_process_by_default(self):
+        args = manager_pod(helm_template(MANAGER_CHART))['containers'][0]['args']
+        self.assertEqual([a for a in args if a.split('=')[0] in ('--brain-endpoint', '--sensor-endpoint', '--actuator-endpoint')], [])
+
+    def test_the_manager_reaches_each_remote_service(self):
+        args = manager_pod(helm_template(MANAGER_CHART, *REMOTE))['containers'][0]['args']
+        for flag in ('--brain-endpoint=phorvex-brain:9090', '--sensor-endpoint=phorvex-sensor:9090', '--actuator-endpoint=phorvex-actuator:9090'):
+            self.assertIn(flag, args)
+
+    def test_a_remote_actuator_leaves_the_manager_the_dispatchers_share(self):
+        for name, values in SPLIT_VALUE_SETS.items():
+            with self.subTest(values=name):
+                remote = manager_rbac([*values, *REMOTE])
+                share = library_rbac('dispatcher', values)
+                self.assertEqual({rbac_key(d) for d in remote}, {rbac_key(d) for d in share})
+                self.assertEqual(grants(remote), grants(share))
+                self.assertEqual({g for g in grants(remote) if g[2] == 'secrets'}, set(), 'the dispatcher reads no Secret')
+
+    def test_the_split_services_together_hold_exactly_the_in_process_access(self):
+        for name, values in SPLIT_VALUE_SETS.items():
+            with self.subTest(values=name):
+                split = grants(manager_rbac([*values, *REMOTE]))
+                for service in ('sensor', 'actuator'):
+                    split |= grants(helm_template(CHARTS / ('phorvex-' + service), *values))
+                self.assertEqual(split, grants(manager_rbac(values)))
+
+    def test_a_remote_actuator_reads_its_own_files_and_credentials(self):
+        docs = helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES, *REMOTE)
+        pod = manager_pod(docs)
+        self.assertEqual({v['name'] for v in pod.get('volumes', [])} & ACTUATOR_VOLUMES, set())
+        self.assertEqual([a for a in pod['containers'][0]['args'] if a.startswith(ACTUATOR_FILE_FLAGS)], [])
+        self.assertEqual([d['metadata']['name'] for d in docs if d['kind'] == 'ConfigMap'
+                          and d['metadata']['name'].endswith(('-lora-clean-sources', '-mig-profiles', '-serving-security'))], [])
+        # In process the same values mount every one of them.
+        in_process = manager_pod(helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES))
+        self.assertLessEqual(ACTUATOR_VOLUMES, {v['name'] for v in in_process['volumes']})
+
+    def test_the_remote_manager_shares_the_services_handshake_configuration(self):
+        handshake = {'trusted-detectors', 'trusted-loss-observers', 'trusted-current-inventory-observers', 'operator-namespace'}
+        manager = reading(helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES, *REMOTE), 'manager', handshake, LEASE_ENV | {'POD_NAMESPACE'}, set())
+        self.assertEqual(len(manager['flags']), len(handshake))
+        for service in ('sensor', 'actuator'):
+            got = reading(helm_template(CHARTS / ('phorvex-' + service), *SPLIT_FEATURES), service, handshake, LEASE_ENV | {'POD_NAMESPACE'}, set())
+            self.assertEqual({k: v for k, v in manager['flags'].items() if k in got['flags']}, got['flags'], service)
+            self.assertEqual(manager['env'], got['env'], service)
+
+    def test_a_remote_brain_records_the_math_lab(self):
+        capture = ['--set', 'phorvex.audit.enabled=true', '--set', 'phorvex.mathLab.capturePolicies={vllm/vllm-defense}']
+        in_process = manager_pod(helm_template(MANAGER_CHART, *capture))['containers'][0]['args']
+        self.assertIn('--math-lab-capture-policies=vllm/vllm-defense', in_process)
+        # The manager refuses capture flags with --brain-endpoint; the brain records instead.
+        remote = manager_pod(helm_template(MANAGER_CHART, *capture, *REMOTE))['containers'][0]['args']
+        self.assertEqual([a for a in remote if a.startswith('--math-lab')], [])
+        brain = by_kind(helm_template(CHARTS / 'phorvex-brain', *capture))['Deployment'][0]['spec']['template']['spec']['containers'][0]['args']
+        self.assertIn('--math-lab-capture-policies=vllm/vllm-defense', brain)
+
+    def test_code_exec_admission_needs_the_in_process_actuator(self):
+        result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), '-n', 'phorvex-system',
+                                 '--set', 'phorvex.codeExecAdmission.enabled=true', *REMOTE], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('requires the in-process actuator', result.stderr)
+
+
 class VendoredLibraryTests(unittest.TestCase):
     """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
 
@@ -410,23 +490,24 @@ class VendoredLibraryTests(unittest.TestCase):
         want = {f'phorvex-common/{p.relative_to(LIBRARY)}': p.read_bytes()
                 for p in LIBRARY.rglob('*') if p.is_file() and p.name != 'Chart.yaml'}
         users = []
-        for chart in sorted(p.parent for p in CHARTS.glob('*/Chart.yaml')):
+        for chart in sorted(p.parent for p in CHARTS.glob('*/Chart.yaml')) + [MANAGER_CHART]:
             deps = [d for d in yaml.safe_load((chart / 'Chart.yaml').read_text()).get('dependencies') or [] if d['name'] == 'phorvex-common']
             if not deps:
                 continue
             users.append(chart.name)
             with self.subTest(chart=chart.name):
-                self.assertEqual(deps, [{'name': 'phorvex-common', 'version': source['version'], 'repository': 'file://../phorvex-common'}])
+                self.assertEqual(deps, [{'name': 'phorvex-common', 'version': source['version'],
+                                         'repository': 'file://' + os.path.relpath(LIBRARY, chart)}])
                 package = chart / 'charts' / f"phorvex-common-{source['version']}.tgz"
                 self.assertEqual(sorted(p.name for p in package.parent.iterdir()), [package.name])
                 with tarfile.open(package) as archive:
                     got = {m.name: archive.extractfile(m).read() for m in archive.getmembers() if m.isfile()}
                 # helm package rewrites Chart.yaml, so it is compared as data.
                 self.assertEqual(yaml.safe_load(got.pop('phorvex-common/Chart.yaml')), source)
-                self.assertEqual(got, want, f'stale: run helm dependency update deploy/charts/{chart.name}')
+                self.assertEqual(got, want, f'stale: run helm dependency update {chart.relative_to(ROOT)}')
                 lock = yaml.safe_load((chart / 'Chart.lock').read_text())
                 self.assertEqual(lock['dependencies'], deps)
-        self.assertLessEqual({'phorvex-sensor', 'phorvex-actuator'}, set(users))
+        self.assertLessEqual({'phorvex-sensor', 'phorvex-actuator', 'phorvex'}, set(users))
 
 
 if __name__ == '__main__':
