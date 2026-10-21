@@ -220,27 +220,48 @@ class RBACLibraryTests(unittest.TestCase):
 
 
 
-SENSOR_CHART = CHARTS / 'phorvex-sensor'
-SENSOR_SA = {'kind': 'ServiceAccount', 'name': 'phorvex-sensor', 'namespace': 'phorvex-system'}
-SENSOR_FEATURES = ROOT / 'tools/testdata/charts/sensor-features.yaml'
-SENSOR_VALUE_SETS = {'defaults': [], 'all features': ['-f', str(ALL_FEATURES), '-f', str(SENSOR_FEATURES)]}
-SENSOR_CONFIG = [ROOT / 'phorvex/cmd/internal/sensorconfig/sensorconfig.go', ROOT / 'phorvex/cmd/internal/trustconfig/trustconfig.go']
-# The flags and environment the sensor configuration registers, read from its source.
-SENSOR_FLAGS = {f for p in SENSOR_CONFIG for f in re.findall(r'fs\.\w+Var\(&[^,]+, "([a-z0-9-]+)"', p.read_text())}
-SENSOR_ENV = {e for p in SENSOR_CONFIG for e in re.findall(r'os\.Getenv\("([A-Z0-9_]+)"\)', p.read_text())}
+FEATURES = ROOT / 'tools/testdata/charts'
+# Every value that changes a split service's flags, merged over the access features.
+SERVICE_FEATURES = ['-f', str(ALL_FEATURES), '-f', str(FEATURES / 'sensor-features.yaml'), '-f', str(FEATURES / 'actuator-features.yaml')]
+PODMONITOR = ['--api-versions', 'monitoring.coreos.com/v1/PodMonitor']
 LEASE_FLAGS = {'endpoint-lease-approved-source-sha256', 'endpoint-lease-approved-proxy-image', 'endpoint-lease-approved-engine-image'}
+LEASE_ENV = {'PHORVEX_' + f.upper().replace('-', '_') for f in LEASE_FLAGS}
+# The service's own listener, probes and shutdown, not the manager's.
+OWN_FLAGS = {'listen', 'metrics-bind-address', 'health-probe-bind-address', 'shutdown-grace'}
 
 
-def sensor_reading(docs, container):
-    """What a container's sensor configuration reads: its sensor flags and environment, and the EPSS volume."""
+def source_names(*paths):
+    """The flags and environment variables a Go configuration registers, read from its source."""
+    flags, env = set(), set()
+    for path in paths:
+        text = (ROOT / 'phorvex' / path).read_text()
+        flags |= set(re.findall(r'(?:fs|flag(?:\.CommandLine)?)\.\w+Var\(&[^,]+, "([a-z0-9-]+)"', text))
+        env |= set(re.findall(r'os\.(?:Getenv|LookupEnv)\("([A-Z0-9_]+)"\)', text))
+        env |= set(re.findall(r'EnvVar = "([A-Z0-9_]+)"', text))
+    return flags - OWN_FLAGS, env
+
+
+def reading(docs, container, flags, env, volumes):
+    """What a container reads of its configuration: the named flags and environment, and the files the named volumes mount."""
     pod = next(d['spec']['template']['spec'] for d in docs
                if d['kind'] == 'Deployment' and container in [c['name'] for c in d['spec']['template']['spec']['containers']])
     c = next(c for c in pod['containers'] if c['name'] == container)
-    flags = dict(a[2:].split('=', 1) for a in c['args'] if '=' in a and a[2:].split('=', 1)[0] in SENSOR_FLAGS)
-    env = [e for e in c.get('env', []) if e['name'] in SENSOR_ENV]
-    mounts = [m for m in c.get('volumeMounts', []) if m['name'] == 'epss']
-    volumes = [v for v in pod.get('volumes', []) if v['name'] == 'epss']
-    return {'flags': flags, 'env': env, 'mounts': mounts, 'volumes': volumes}
+    config_maps = {d['metadata']['name']: d.get('data') for d in docs if d['kind'] == 'ConfigMap'}
+    sources = {v['name']: v for v in pod.get('volumes', [])}
+    files = {}
+    for mount in c.get('volumeMounts', []):
+        if mount['name'] not in volumes:
+            continue
+        volume = sources[mount['name']]
+        if 'configMap' in volume:
+            # Compared by content: each chart names its own ConfigMap. None is one no chart renders.
+            source = {'items': volume['configMap'].get('items'), 'data': config_maps.get(volume['configMap']['name'])}
+        else:
+            source = {k: v for k, v in volume.items() if k != 'name'}
+        files[mount['mountPath']] = {'subPath': mount.get('subPath'), 'readOnly': mount.get('readOnly'), 'source': source}
+    return {'flags': dict(a[2:].split('=', 1) for a in c['args'] if '=' in a and a[2:].split('=', 1)[0] in flags),
+            'env': [e for e in c.get('env', []) if e['name'] in env],
+            'files': files}
 
 
 def leaves(tree, path=()):
@@ -251,69 +272,75 @@ def leaves(tree, path=()):
             yield path + (key,), value
 
 
-@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
-class SensorChartTests(unittest.TestCase):
-    def test_the_sensor_reads_as_the_manager_configures_it(self):
+class SplitServiceChart:
+    """What every split service chart must hold; a subclass names the service."""
+    service = sources = volumes = expected_env = None
+    # Flags whose value both charts pass as the environment the flag defaults from.
+    env_flags = LEASE_FLAGS
+
+    @property
+    def chart(self):
+        return CHARTS / ('phorvex-' + self.service)
+
+    @property
+    def account(self):
+        return {'kind': 'ServiceAccount', 'name': 'phorvex-' + self.service, 'namespace': 'phorvex-system'}
+
+    def read(self, docs, container):
+        flags, env = source_names(*self.sources)
+        return reading(docs, container, flags, env, self.volumes)
+
+    def test_it_reads_as_the_manager_configures_it(self):
+        flags, env = source_names(*self.sources)
         # Guards the source scan the comparison relies on.
-        self.assertGreaterEqual(len(SENSOR_FLAGS), 18)
-        self.assertIn('POD_NAMESPACE', SENSOR_ENV)
-        for name, values in SENSOR_VALUE_SETS.items():
+        self.assertGreaterEqual(len(flags), 10)
+        self.assertIn('POD_NAMESPACE', env)
+        for name, values in {'defaults': [], 'all features': SERVICE_FEATURES}.items():
             with self.subTest(values=name):
-                manager = sensor_reading(helm_template(MANAGER_CHART, '--api-versions', 'monitoring.coreos.com/v1/PodMonitor', *values), 'manager')
-                sensor = sensor_reading(helm_template(SENSOR_CHART, *values), 'sensor')
-                self.assertEqual(sensor, manager)
-        # The fixture reaches every flag; the lease authority arrives as environment.
-        sensor = sensor_reading(helm_template(SENSOR_CHART, *SENSOR_VALUE_SETS['all features']), 'sensor')
-        self.assertEqual(SENSOR_FLAGS - set(sensor['flags']), LEASE_FLAGS)
-        self.assertEqual({e['name'] for e in sensor['env']}, {'POD_NAMESPACE'} | {'PHORVEX_' + f.upper().replace('-', '_') for f in LEASE_FLAGS})
+                manager = self.read(helm_template(MANAGER_CHART, *PODMONITOR, *values), 'manager')
+                self.assertEqual(self.read(helm_template(self.chart, *values), self.service), manager)
+        # The fixture reaches every flag, environment variable and file.
+        got = self.read(helm_template(self.chart, *SERVICE_FEATURES), self.service)
+        self.assertEqual(flags - set(got['flags']), self.env_flags)
+        self.assertEqual({e['name'] for e in got['env']}, self.expected_env)
+        self.assertEqual(len(got['files']), len(self.volumes))
 
-    def test_the_cpu_fixture_detector_is_trusted_by_the_managers_name(self):
-        # The manager chart renders this fixture only with the console; the name is its e2e-detector-cpu ServiceAccount.
-        sensor = sensor_reading(helm_template(SENSOR_CHART, '--set', 'phorvex.console.podBoundTokenCPU.enabled=true'), 'sensor')
-        self.assertEqual(sensor['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/phorvex-phorvex-e2e-detector-cpu')
-        renamed = sensor_reading(helm_template(SENSOR_CHART, '--set', 'phorvex.e2eDetector.enabled=true', '--set', 'managerFullname=stack-phorvex'), 'sensor')
-        self.assertEqual(renamed['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/stack-phorvex-e2e-detector')
-
-    def test_the_sensor_defaults_are_the_managers(self):
+    def test_its_defaults_are_the_managers(self):
         manager = yaml.safe_load(MANAGER_VALUES.read_text())['phorvex']
-        sensor = yaml.safe_load((SENSOR_CHART / 'values.yaml').read_text())['phorvex']
-        for path, value in leaves(sensor):
+        for path, value in leaves(yaml.safe_load((self.chart / 'values.yaml').read_text())['phorvex']):
             want = manager
             for key in path:
                 want = want[key]
             self.assertEqual(value, want, '.'.join(path))
 
-    def test_the_sensor_holds_only_its_read_share(self):
+    def test_it_holds_exactly_its_share_of_the_access(self):
         for name, values in VALUE_SETS.items():
             with self.subTest(values=name):
-                docs = helm_template(SENSOR_CHART, *values)
-                access = grants(docs)
-                self.assertEqual(access, grants(library_rbac('sensor', values)))
-                self.assertEqual({g for g in access if g[4] not in READS}, set())
+                docs = helm_template(self.chart, *values)
+                self.assertEqual(grants(docs), grants(library_rbac(self.service, values)))
                 roles = {rbac_key(d) for d in docs if d['kind'] in ('Role', 'ClusterRole')}
                 bindings = [d for d in docs if d['kind'] in ('RoleBinding', 'ClusterRoleBinding')]
                 self.assertEqual({(b['roleRef']['kind'], b['metadata'].get('namespace') if b['kind'] == 'RoleBinding' else None, b['roleRef']['name'])
                                   for b in bindings}, roles)
                 for b in bindings:
-                    self.assertEqual(b['subjects'], [SENSOR_SA])
+                    self.assertEqual(b['subjects'], [self.account])
 
-    def test_one_sensor_runs_hardened(self):
-        kinds = by_kind(helm_template(SENSOR_CHART))
-        deployment = kinds['Deployment'][0]
+    def test_one_replica_runs_hardened(self):
+        deployment = by_kind(helm_template(self.chart))['Deployment'][0]
         self.assertEqual(deployment['spec']['replicas'], 1)
         self.assertEqual(deployment['spec']['strategy'], {'type': 'Recreate'})
         pod = deployment['spec']['template']['spec']
-        self.assertEqual(pod['serviceAccountName'], SENSOR_SA['name'])
+        self.assertEqual(pod['serviceAccountName'], self.account['name'])
         self.assertIs(pod['automountServiceAccountToken'], True)
         self.assertIs(pod['securityContext']['runAsNonRoot'], True)
         container = pod['containers'][0]
-        self.assertEqual(container['image'], 'phorvex-sensor:0.1.0')
+        self.assertEqual(container['image'], f'phorvex-{self.service}:0.1.0')
         self.assertEqual(container['securityContext'],
                          {'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']}})
         self.assertNotIn('volumes', pod)
 
-    def test_only_the_manager_reaches_the_sensor(self):
-        policy = by_kind(helm_template(SENSOR_CHART, '--set', 'metricsScraperNamespaces={monitoring}'))['NetworkPolicy'][0]['spec']
+    def test_only_the_manager_reaches_it(self):
+        policy = by_kind(helm_template(self.chart, '--set', 'metricsScraperNamespaces={monitoring}'))['NetworkPolicy'][0]['spec']
         self.assertEqual(policy['policyTypes'], ['Ingress'])
         grpc, health, metrics = policy['ingress']
         self.assertEqual(grpc['ports'], [{'port': 'grpc'}])
@@ -322,6 +349,57 @@ class SensorChartTests(unittest.TestCase):
             'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'phorvex', 'app.kubernetes.io/component': 'manager'}}}])
         self.assertEqual(health, {'ports': [{'port': 'health'}]})
         self.assertEqual(metrics['from'], [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'monitoring'}}}])
+
+    def test_the_cpu_fixture_detector_is_trusted_by_the_managers_name(self):
+        # The manager chart renders this fixture only with the console; the name is its e2e-detector-cpu ServiceAccount.
+        got = self.read(helm_template(self.chart, '--set', 'phorvex.console.podBoundTokenCPU.enabled=true'), self.service)
+        self.assertEqual(got['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/phorvex-phorvex-e2e-detector-cpu')
+        renamed = self.read(helm_template(self.chart, '--set', 'phorvex.e2eDetector.enabled=true', '--set', 'managerFullname=stack-phorvex'), self.service)
+        self.assertEqual(renamed['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/stack-phorvex-e2e-detector')
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class SensorChartTests(SplitServiceChart, unittest.TestCase):
+    service = 'sensor'
+    sources = ['cmd/internal/sensorconfig/sensorconfig.go', 'cmd/internal/trustconfig/trustconfig.go']
+    volumes = {'epss'}
+    expected_env = {'POD_NAMESPACE'} | LEASE_ENV
+
+    def test_the_sensor_only_reads(self):
+        access = grants(helm_template(self.chart, *VALUE_SETS['all features']))
+        self.assertTrue(access)
+        self.assertEqual({g for g in access if g[4] not in READS}, set())
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ActuatorChartTests(SplitServiceChart, unittest.TestCase):
+    service = 'actuator'
+    sources = ['cmd/actuator/main.go', 'cmd/internal/actuatorconfig/actuatorconfig.go', 'cmd/internal/trustconfig/trustconfig.go',
+               'internal/actuator/backend.go']
+    volumes = {'litellm-client-revoke-status', 'lora-clean-sources', 'mig-profiles', 'serving-security'}
+    expected_env = {'POD_NAMESPACE', 'PHORVEX_ACTUATOR', 'PHORVEX_VOICE_ADMISSION_ENABLED', 'PHORVEX_VOICE_MCP_APPROVED_IMAGE'} | LEASE_ENV
+    env_flags = LEASE_FLAGS | {'voice-mcp-approved-image'}
+
+    def test_the_actuator_holds_the_workload_writes(self):
+        access = {(g[2], g[4]) for g in grants(helm_template(self.chart, *VALUE_SETS['all features']))}
+        self.assertTrue({('pods', 'delete'), ('pods/eviction', 'create'), ('pods/exec', 'create'), ('networkpolicies', 'create'),
+                         ('securityevents', 'create'), ('adaptivemovingtargetdefenses', 'update')} <= access)
+        self.assertEqual(access & {('phorvexpolicies/status', 'update'), ('leases', 'create'), ('events', 'create')}, set())
+
+    def test_the_actuator_refuses_what_the_manager_refuses(self):
+        binding = 'phorvex.servingSecurity.bindings=[{"policyName":"p","namespace":"n","workload":"w","secretName":"s"}]'
+        for invalid in (['--set', 'phorvex.maxRetainedQuarantinesPerNamespace=129'],
+                        ['--set', 'phorvex.maxRetainedQuarantinesPerNamespace=1.5'],
+                        ['--set', 'phorvex.servingSecurity.mode=plaintext'],
+                        ['--set-json', binding],
+                        ['--set', 'phorvex.servingSecurity.mode=legacy-plaintext', '--set', 'phorvex.actuator=native', '--set-json', binding],
+                        ['--set', 'phorvex.actuator=native', '--set', 'phorvex.mig.nodeExec.enabled=true'],
+                        ['--set', 'phorvex.actuator=native', '--set', 'phorvex.voiceMCP.enabled=true'],
+                        ['--set', 'phorvex.endpointLease.enabled=true', '--set', 'phorvex.actuator=native', '--set', 'phorvex.endpointLease.approvedSourceSHA256=abc']):
+            with self.subTest(values=invalid):
+                for chart in (MANAGER_CHART, self.chart):
+                    result = subprocess.run([HELM, 'template', 'phorvex', str(chart), '-n', 'phorvex-system', *invalid], capture_output=True, text=True)
+                    self.assertNotEqual(result.returncode, 0, chart.name)
 
 
 class VendoredLibraryTests(unittest.TestCase):
@@ -348,7 +426,7 @@ class VendoredLibraryTests(unittest.TestCase):
                 self.assertEqual(got, want, f'stale: run helm dependency update deploy/charts/{chart.name}')
                 lock = yaml.safe_load((chart / 'Chart.lock').read_text())
                 self.assertEqual(lock['dependencies'], deps)
-        self.assertIn('phorvex-sensor', users)
+        self.assertLessEqual({'phorvex-sensor', 'phorvex-actuator'}, set(users))
 
 
 if __name__ == '__main__':
