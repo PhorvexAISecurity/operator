@@ -1,0 +1,2 @@
+# all | dispatcher | sensor | actuator. The test passes the manager chart's values.
+service: all

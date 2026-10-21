@@ -1,0 +1,29 @@
+# Every feature that adds manager RBAC, for tools/test_service_charts.py.
+phorvex:
+  actuator: hybrid
+  operatorNamespace: phorvex-system
+  actuatorNamespaces: [vllm, voice]
+  servingSecurity:
+    mode: secure-required
+    bindings:
+    - {policyName: vllm-defense, namespace: vllm, workload: vllm, secretName: vllm-serving-tls}
+  codeExecAdmission: {enabled: true}
+  outputPolicy: {enabled: true, targetNamespace: litellm, configMapName: phorvex-output-policy-fixture}
+  litellmClientRevoke: {enabled: true, statusSecret: phorvex-litellm-status}
+  crmRefundRevoke: {enabled: true}
+  endpointLease: {enabled: true, approvedSourceSHA256: "0000000000000000000000000000000000000000000000000000000000000000", approvedProxyImage: "registry.example/lease-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000", approvedEngineImage: "registry.example/vllm@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  voiceMemory: {enabled: true}
+  voiceOutput: {enabled: true}
+  voiceRefund: {enabled: true}
+  voiceMCP: {enabled: true, approvedImage: "registry.example/voice-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+  litellmOutput: {enabled: true}
+  voiceAdmission: {enabled: true, sourceConfigMapName: voice-admission-source, legacyConfigMapName: voice-admission-legacy}
+  mig:
+    nodeExec:
+      enabled: true
+      namespace: gpu-agents
+      daemonSetName: mig-agent
+      serviceAccountName: mig-agent
+      gpuImage: {repository: nvcr.io/nvidia/cuda, digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"}
+      gpuCommand: [nvidia-smi]
+      exclusiveMaintenance: true
