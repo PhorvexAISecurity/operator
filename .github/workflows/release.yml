@@ -100,6 +100,9 @@ jobs:
             git tag "$component-v$version" "$GITHUB_SHA"
             echo "$component $version" >> "$RUNNER_TEMP/released"
           done < "$RUNNER_TEMP/pending.tsv"
+      - name: Bound the shared build cache
+        if: always()
+        run: docker builder prune --force --keep-storage 10GB
       - name: Record the releases
         if: always()
         run: |

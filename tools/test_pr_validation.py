@@ -277,6 +277,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertIn('workflow_dispatch', doc['on'], workflow)
             self.assertIn('pull_request', doc['on'], workflow)
 
+    def test_image_builds_bound_the_shared_build_cache(self):
+        for doc, job in ((DOC, 'images'), (RELEASE, 'publish')):
+            step = next(s for s in doc['jobs'][job]['steps'] if s.get('name') == 'Bound the shared build cache')
+            self.assertEqual(step['if'], 'always()')
+            self.assertEqual(step['run'], 'docker builder prune --force --keep-storage 10GB')
 
 if __name__ == '__main__':
     unittest.main()

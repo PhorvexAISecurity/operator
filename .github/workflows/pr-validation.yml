@@ -210,6 +210,11 @@ jobs:
             *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --tag "$TAG" . ;;
           esac
           docker image rm "$TAG"
+      # The runner's Docker daemon is shared, and nothing else prunes its default
+      # build cache, which once filled the disk and failed CI. Keep at most 10GB.
+      - name: Bound the shared build cache
+        if: always()
+        run: docker builder prune --force --keep-storage 10GB
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
   # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
