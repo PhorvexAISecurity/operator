@@ -4,18 +4,23 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
-# Decision configuration. Each value must match the manager's flag of the same
-# name, or the brain refuses the manager at the handshake.
-engine: p1
-gpuEnvelopeMax: 1
-flowResidualClasses: ""
+# The manager chart's keys, under the same name, so one environment file
+# configures both charts. The decision values must match the manager's, or the
+# brain refuses the manager at the handshake; every default equals the manager
+# chart's (tools/test_service_charts.py). The engine is each binary's default:
+# neither chart passes --engine.
+phorvex:
+  gpuEnvelopeMax: 0.2925
+  flowResidualClasses: []
+  mathLab:
+    # Math Lab snapshots of the listed namespace/name policies. With a remote brain
+    # the brain records them; the manager refuses capture flags then.
+    capturePolicies: []
+    captureMaxBytes: 1073741824
 
-# Math Lab snapshots of the listed namespace/name policies. In remote mode the
-# brain records them, so configure capture here, not on the manager.
-mathLab:
-  capturePolicies: ""
-  maxBytes: 1073741824
-  # An existing claim keeps snapshots across restarts; empty uses an emptyDir.
+# The brain's own Math Lab snapshot store: an existing claim keeps snapshots
+# across restarts; empty uses an emptyDir.
+mathLabStore:
   existingClaim: ""
 
 shutdownGrace: 20s

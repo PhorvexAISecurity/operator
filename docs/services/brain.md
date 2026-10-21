@@ -37,9 +37,13 @@ it, without pushing, beside the manager and console images.
 
 `deploy/charts/phorvex-brain` deploys it: one replica replaced with the Recreate
 strategy, a ServiceAccount with no token mounted and no RBAC, and a NetworkPolicy
-that admits the gRPC port only from the manager's pods and allows no egress. The
-decision values (`engine`, `gpuEnvelopeMax`, `flowResidualClasses`) must match the
-manager's flags.
+that admits the gRPC port only from the manager's pods and allows no egress. It
+reads the manager chart's keys under `phorvex` (`gpuEnvelopeMax`,
+`flowResidualClasses`, `mathLab.capturePolicies`, `mathLab.captureMaxBytes`) and
+passes the decision flags as that chart does, so one environment file configures
+both and the handshake compares equal values. Neither chart passes `--engine`, so
+both binaries use their default. `tools/test_service_charts.py` renders both
+charts from the same values and requires the same decision flags.
 
 | Flag | Default | Meaning |
 |---|---|---|
