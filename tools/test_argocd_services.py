@@ -115,5 +115,47 @@ class EnvironmentRenderTests(unittest.TestCase):
                     self.assertIn(f"--{service}-endpoint={value['endpoint']}", args)
 
 
+
+STAGING = ROOT / 'deploy/argocd/staging'
+VCLUSTER_SERVER = 'https://phorvex-staging.phorvex-staging.svc:443'
+
+
+class StagingInfraTests(unittest.TestCase):
+    """The staging vcluster (deploy/argocd/staging) the services deploy into."""
+
+    def test_the_vcluster_is_pinned_and_confined(self):
+        app = load(STAGING / 'vcluster.yaml')['spec']
+        self.assertEqual(app['project'], 'phorvex-staging-infra')
+        self.assertEqual((app['source']['repoURL'], app['source']['chart']), ('https://charts.loft.sh', 'vcluster'))
+        self.assertRegex(app['source']['targetRevision'], r'^\d+\.\d+\.\d+$')
+        self.assertEqual(app['destination'], {'server': 'https://kubernetes.default.svc', 'namespace': 'phorvex-staging'})
+        values = app['source']['helm']['valuesObject']
+        self.assertEqual(values['exportKubeConfig']['server'], VCLUSTER_SERVER)
+        self.assertIs(values['rbac']['enableVolumeSnapshotRules']['enabled'], False)
+        self.assertIs(values['sync']['toHost']['networkPolicies']['enabled'], True)
+
+    def test_the_project_admits_only_the_vcluster_and_what_it_needs(self):
+        spec = load(STAGING / 'project.yaml')['spec']
+        self.assertEqual(sorted(spec['sourceRepos']), sorted(['https://charts.loft.sh', REPO]))
+        self.assertEqual(spec['destinations'], [{'server': 'https://kubernetes.default.svc', 'namespace': 'phorvex-staging'},
+                                                {'server': VCLUSTER_SERVER, 'namespace': '*'}])
+        self.assertEqual({k['kind'] for k in spec['clusterResourceWhitelist']},
+                         {'Namespace', 'CustomResourceDefinition'})
+
+    def test_the_phoenix_crds_go_into_the_vcluster(self):
+        app = load(STAGING / 'phoenix-crds.yaml')['spec']
+        self.assertEqual(app['destination'], {'server': VCLUSTER_SERVER})
+        self.assertEqual(app['source']['repoURL'], REPO)
+        include = app['source']['directory']['include'].strip('{}').split(',')
+        for name in include:
+            self.assertTrue((ROOT / app['source']['path'] / name).is_file(), name)
+        self.assertEqual(sorted(include), ['amtd.r6security.com_adaptivemovingtargetdefenses.yaml',
+                                           'amtd.r6security.com_securityevents.yaml'])
+
+    def test_nothing_applies_the_staging_manifests(self):
+        for app in (ROOT / 'deploy/argocd/apps').glob('*.yaml'):
+            self.assertNotIn('deploy/argocd/staging', app.read_text(), app.name)
+        self.assertIn('staging', ENVIRONMENT_NAMES)
+
 if __name__ == '__main__':
     unittest.main()
