@@ -1,0 +1,8 @@
+apiVersion: v2
+name: rbac-probe
+description: >-
+  Test-only chart: renders the phorvex-common access for one service with the
+  manager chart's values and names, so tools/test_service_charts.py can compare
+  it with the manager chart. The test copies the library templates in.
+type: application
+version: 0.1.0

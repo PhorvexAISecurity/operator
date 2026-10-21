@@ -1,0 +1,11 @@
+{{- $fullname := printf "%s-phorvex" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- $labels := printf "app.kubernetes.io/name: phorvex\napp.kubernetes.io/instance: %s\napp.kubernetes.io/managed-by: %s\napp.kubernetes.io/part-of: phorvex" .Release.Name .Release.Service -}}
+{{ include "phorvex-common.rbac.objects" (dict
+  "service" .Values.service
+  "values" .Values.phorvex
+  "releaseNamespace" .Release.Namespace
+  "serviceAccountName" (default (printf "%s-manager" $fullname) .Values.phorvex.serviceAccountName)
+  "clusterRoleName" (printf "%s-manager-role" $fullname)
+  "clusterRoleBindingName" (printf "%s-manager-rolebinding" $fullname)
+  "rolePrefix" $fullname
+  "labels" $labels) }}
