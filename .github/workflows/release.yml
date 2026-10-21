@@ -1,0 +1,159 @@
+name: Release
+# ADR-0001: each service is released on its own (docs/services/releasing.md).
+#
+# On every push to main the release PR (branch release/next) is brought up to date:
+# the next version and changelog of each service a merged change affects. Merging
+# that PR publishes those releases: each image is built from the merge commit,
+# pushed to ECR and tagged <service>-v<version>, and staging is pinned to its digest
+# by a commit to main, which Argo CD syncs.
+#
+# The only workflow here that writes: tools/test_pr_validation.py holds it to
+# exactly this shape. AWS is reached only from the publish job, through GitHub
+# OIDC and the role in the repository variable PHORVEX_RELEASE_ROLE_ARN, inside the
+# `release` environment.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+  AWS_REGION: us-east-2
+  ENVIRONMENT: staging
+
+jobs:
+  pending:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    outputs:
+      releases: ${{ steps.pending.outputs.releases }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache: false
+      - name: Prepared releases not yet tagged
+        id: pending
+        run: |
+          set -euo pipefail
+          go -C phorvex run ./tools/servicerelease pending | tee "$RUNNER_TEMP/pending.tsv"
+          echo "releases=$(wc -l < "$RUNNER_TEMP/pending.tsv" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: pending
+    if: needs.pending.outputs.releases != '0'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache: false
+      - name: Require the release role
+        env:
+          ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$ROLE" =~ ^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$ ]] || { echo "::error::set the repository variable PHORVEX_RELEASE_ROLE_ARN"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+        id: ecr
+      - name: Build, push, tag and pin each release
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+          go -C phorvex run ./tools/servicerelease pending > "$RUNNER_TEMP/pending.tsv"
+          # Nothing in the loop may read its stdin, the list of releases.
+          while IFS=$'\t' read -r component version dockerfile repository build_args; do
+            image="$REGISTRY/$repository:$version"
+            # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V words
+            docker build --file "$dockerfile" $build_args --tag "$image" . < /dev/null
+            docker push "$image" < /dev/null
+            digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"
+            docker image rm "$image"
+            go -C phorvex run ./tools/servicerelease deploy --environment "$ENVIRONMENT" --component "$component" \
+              --repository "$REGISTRY/$repository" --tag "$version" --digest "${digest#*@}" --source "$GITHUB_SHA" < /dev/null
+            git tag "$component-v$version" "$GITHUB_SHA"
+            echo "$component $version" >> "$RUNNER_TEMP/released"
+          done < "$RUNNER_TEMP/pending.tsv"
+      - name: Record the releases
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -s "$RUNNER_TEMP/released" ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/environments
+          git commit -m "deploy($ENVIRONMENT): $(paste -sd, "$RUNNER_TEMP/released" | sed 's/,/, /g')"
+          pushed=false
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then pushed=true; break; fi
+            git pull --rebase origin main
+          done
+          "$pushed"
+          awk '{print "refs/tags/" $1 "-v" $2}' "$RUNNER_TEMP/released" | xargs git push origin
+
+  release-pr:
+    needs: [pending, publish]
+    if: always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+      # To start CI on the release PR, which GitHub does not do for its token's pushes.
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache: false
+      - name: Bring the release PR up to date
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # From main as the publish job left it: its tags and the staging pins.
+          git fetch --tags --force origin main
+          git switch --force-create release/next FETCH_HEAD
+          status=0
+          go -C phorvex run ./tools/servicerelease prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
+          if [ "$status" -eq 3 ]; then exit 0; fi
+          [ "$status" -eq 0 ]
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release
+          git commit -F "$RUNNER_TEMP/title"
+          git push --force origin release/next
+          go -C phorvex run ./tools/servicerelease pull-request --head release/next --base main \
+            --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
+          go -C phorvex run ./tools/servicerelease dispatch --ref release/next \
+            --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml

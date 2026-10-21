@@ -6,6 +6,9 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The release workflow starts it on the release PR, which its token opened:
+  # GitHub starts no pull_request run for such a PR.
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -166,7 +169,7 @@ jobs:
             libs/logging/go.sum
       - name: Changed Go files are gofmt-clean
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before || 'origin/main' }}
         run: python3 tools/check-go-format.py "$BASE"
       - name: Vet every Go module
         run: |
