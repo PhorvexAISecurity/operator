@@ -150,6 +150,13 @@ class PRValidationTests(unittest.TestCase):
                 with self.subTest(key=key, state=state):
                     self.assertNotEqual(check(dict(good, **{key: state})), 0)
 
+    def test_the_services_a_change_affects_are_reported(self):
+        steps = DOC['jobs']['go-unit']['steps']
+        self.assertEqual(steps[0]['with']['fetch-depth'], '2')
+        step = next(s for s in steps if s.get('name') == 'Services this change affects')
+        self.assertIn('./tools/servicerelease affected --base HEAD^1 --markdown', step['run'])
+        self.assertIn('$GITHUB_STEP_SUMMARY', step['run'])
+
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
         # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change.
