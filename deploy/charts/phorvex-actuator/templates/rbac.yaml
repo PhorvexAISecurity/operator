@@ -1,0 +1,11 @@
+{{- /* The actuator's share of the services' access: the reads and the workload writes. */}}
+{{- $fullname := include "phorvex-actuator.fullname" . }}
+{{- include "phorvex-common.rbac.objects" (dict
+  "service" "actuator"
+  "values" .Values.phorvex
+  "releaseNamespace" .Release.Namespace
+  "serviceAccountName" $fullname
+  "clusterRoleName" $fullname
+  "clusterRoleBindingName" $fullname
+  "rolePrefix" $fullname
+  "labels" (include "phorvex-actuator.labels" .)) }}

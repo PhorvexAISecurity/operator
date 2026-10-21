@@ -94,6 +94,24 @@ docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=actuator -t
 It holds the one binary as `/service` on distroless nonroot. PR validation builds
 it, without pushing, beside the manager and console images.
 
+`deploy/charts/phorvex-actuator` deploys it: one replica replaced with the
+Recreate strategy, its own ServiceAccount bound to the actuator's share of the
+services' access (`phorvex-common`: the reads and the workload writes), and a
+NetworkPolicy that admits the gRPC port only from the manager's pods. Egress stays
+open: the actuator acts through the API server and calls the workloads' control
+endpoints. The chart reads the manager chart's keys under `phorvex`: it derives
+the operator namespace, the trust, the backend flags and environment as that chart
+does, and renders the operator-owned files it reads (adapter reload sources, MIG
+profiles, serving security bindings) as its own ConfigMaps.
+`tools/test_service_charts.py` renders both charts from the same values and
+requires the same actuator flags, environment and file contents, and that the
+actuator chart refuses every invalid configuration the manager chart refuses.
+
+With `codeExecAdmission` enabled, the admission policy admits ephemeral containers
+only from the manager's identity, so a separate actuator's code-exec is refused.
+Admitting the actuator's identity changes that reviewed admission contract (M-6)
+and is left to its own step.
+
 The actuator needs the actuation RBAC the selected backend uses (the manager's
 today) under its own ServiceAccount; before it serves it runs the startup
 authorization preflight (`startupauthz`) against that identity and refuses to

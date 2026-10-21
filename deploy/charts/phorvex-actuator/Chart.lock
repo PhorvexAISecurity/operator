@@ -1,0 +1,6 @@
+dependencies:
+- name: phorvex-common
+  repository: file://../phorvex-common
+  version: 0.1.0
+digest: sha256:3df39732f49fc0613d38d3afdd10b36935807f7530373f52e77d8f8e846b3946
+generated: "2026-10-21T16:28:39.540922002Z"

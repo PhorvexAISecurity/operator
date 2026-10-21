@@ -1,0 +1,117 @@
+image:
+  repository: phorvex-actuator
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# The manager release's fullname; empty is the manager chart's own,
+# <release>-phorvex. Its detector ServiceAccounts are trusted by name.
+managerFullname: ""
+
+# The manager chart's keys, under the same name, so one environment file
+# configures both charts. The actuator reads the backend, trust and actuation
+# keys, and the features that decide its Kubernetes access. Every default equals
+# the manager chart's (tools/test_service_charts.py), and the operator namespace
+# and trust must match the manager's, or the manager refuses the actuator at the
+# handshake.
+phorvex:
+  # "" (the binary's default), phoenix, native or hybrid.
+  actuator: ""
+  operatorNamespace: ""
+  trustedDetectors:
+  - vllm/detector-kv-canary
+  - vllm/detector-adapter-inv
+  - phorvex-system/operator-controller-manager
+  e2eDetector:
+    enabled: false
+  console:
+    podBoundTokenCPU:
+      enabled: false
+  endpointLease:
+    enabled: false
+    approvedSourceSHA256: ""
+    approvedProxyImage: ""
+    approvedEngineImage: ""
+
+  maxRetainedQuarantinesPerNamespace: 1
+  loraCleanSources:
+    content: ""
+    mountPath: /etc/phorvex-adapters/sources.json
+  servingSecurity:
+    mode: secure-required
+    mountPath: /etc/phorvex-serving/security.json
+    bindings: []
+  voiceAdmission:
+    enabled: false
+    sourceConfigMapName: ""
+    legacyConfigMapName: ""
+  voiceMCP:
+    enabled: false
+    approvedImage: ""
+  litellmClientRevoke:
+    enabled: false
+    statusSecret: ""
+  mig:
+    profiles:
+      content: ""
+      mountPath: /etc/phorvex-mig/profiles.json
+    nodeExec:
+      enabled: false
+      exclusiveMaintenance: false
+      namespace: ""
+      daemonSetName: ""
+      serviceAccountName: ""
+      gpuContainer: gpu-tools
+      helperContainer: allocation-helper
+      allocationHelperPath: /phorvex-mig-allocation-helper
+      podResourcesMountPath: /var/lib/kubelet/pod-resources
+      execTimeout: 5s
+      allocationReadTimeout: 3s
+      allocationReleaseTimeout: 45s
+
+  # Access (phorvex-common.rbac.objects): the actuator receives the reads and the
+  # workload writes.
+  actuatorNamespaces: []
+  codeExecAdmission:
+    enabled: false
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
+  crmRefundRevoke:
+    enabled: false
+  voiceMemory:
+    enabled: false
+  voiceOutput:
+    enabled: false
+  voiceRefund:
+    enabled: false
+  litellmOutput:
+    enabled: false
+
+shutdownGrace: 20s
+log:
+  level: info
+  format: json
+
+# Only the manager reaches the gRPC port (ADR-0001). Its pods are selected by
+# these labels in the namespace below (empty: the release namespace).
+dispatcher:
+  namespace: ""
+  podLabels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/component: manager
+
+# Namespaces whose Prometheus may scrape the metrics port; empty allows none.
+metricsScraperNamespaces: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

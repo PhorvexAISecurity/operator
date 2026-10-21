@@ -7,6 +7,7 @@ version. The manager and console chart is still `phorvex/charts/phorvex`.
 |---|---|
 | `phorvex-brain` | the brain service: no Kubernetes credentials, one replica, gRPC from the manager only |
 | `phorvex-sensor` | the sensor service: its read-only access, one replica, gRPC from the manager only |
+| `phorvex-actuator` | the actuator service: the actuation access and the operator-owned files it reads, one replica, gRPC from the manager only |
 | `phorvex-common` | library: what the services must agree on, defined once: their Kubernetes access and trust |
 
 ## Access (`phorvex-common.rbac.objects`)
@@ -57,6 +58,7 @@ After changing the library, refresh every chart that depends on it:
 
 ```sh
 helm dependency update deploy/charts/phorvex-sensor
+helm dependency update deploy/charts/phorvex-actuator
 ```
 
 `VendoredLibraryTests` in `tools/test_service_charts.py` fails while a vendored

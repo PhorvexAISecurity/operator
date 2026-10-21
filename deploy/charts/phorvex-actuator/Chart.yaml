@@ -1,0 +1,12 @@
+apiVersion: v2
+name: phorvex-actuator
+description: >-
+  The Phorvex actuator service (ADR-0001): the only service that writes to
+  workloads, served over gRPC to the manager. It holds the actuation access.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+- name: phorvex-common
+  version: 0.1.0
+  repository: file://../phorvex-common
