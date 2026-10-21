@@ -1,0 +1,61 @@
+# Every value that changes the sensor's flags, for tools/test_service_charts.py.
+# Merged after rbac-all-features.yaml. Synthetic fixture values only.
+phorvex:
+  trustedDetectors: [vllm/detector-kv-canary, fixture/detector]
+  prometheusUrl: http://prometheus.monitoring:9090
+  pcieClassCapacity:
+    NVIDIA A100-SXM4-40GB: {gen: 4, width: 16}
+  e2eDetector: {enabled: true, targetNamespace: e2e-target}
+  admissionWebhook: {enabled: true}
+  epss:
+    enabled: true
+    authoritative: true
+    feed:
+      scopeNamespaces: [vllm]
+      scopeDigests: ["registry.example/vllm@sha256:0000000000000000000000000000000000000000000000000000000000000000"]
+  lossHistory:
+    enabled: true
+    existingClaim: loss-history
+    trustedObservers: [fixture/loss-observer]
+    observer:
+      enabled: true
+      targetNamespace: vllm
+      targetName: vllm-0
+      targetUID: 00000000-0000-0000-0000-000000000000
+      policyNamespace: vllm
+      policyName: vllm-defense
+      canaryURL: https://canary.vllm.svc:8443/
+      serverName: canary.vllm.svc
+      caSecretName: fixture-ca
+      clientSecretName: fixture-loss-client
+      protectedAsset: fixture-asset
+      protectedVersion: v1
+      evidenceID: fixture-loss
+      ruleVersion: v1
+      ruleSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+      expectedBytes: 1
+      expectedSHA256: "0000000000000000000000000000000000000000000000000000000000000000"
+    currentInventory:
+      enabled: true
+      trustedObservers: []
+      observer:
+        enabled: true
+        targetNamespace: vllm
+        targetName: vllm-0
+        targetUID: 00000000-0000-0000-0000-000000000000
+        policyNamespace: vllm
+        policyName: vllm-defense
+        manifestURL: https://inventory.vllm.svc:8443/manifest
+        serverName: inventory.vllm.svc
+        caSecretName: fixture-ca
+        clientSecretName: fixture-inventory-client
+        configMapName: fixture-inventory
+        configMapKey: manifest.json
+        volumeName: inventory
+        containerName: vllm
+        mountPath: /etc/inventory
+        projectedPath: /etc/inventory/manifest.json
+        protectedAsset: fixture-asset
+        protectedVersion: v1
+        evidenceID: fixture-current
+        ruleSHA256: "0000000000000000000000000000000000000000000000000000000000000000"

@@ -1,8 +1,10 @@
 """Render the per-service charts (ADR-0001) and check what each may do."""
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 
@@ -215,6 +217,138 @@ class RBACLibraryTests(unittest.TestCase):
         own = {('phorvexpolicies/status', 'update'), ('phorvexpolicies/finalizers', 'update'), ('events', 'create'), ('leases', 'create')}
         self.assertEqual(dispatcher & own, own)
         self.assertEqual(actuator & own, set())
+
+
+
+SENSOR_CHART = CHARTS / 'phorvex-sensor'
+SENSOR_SA = {'kind': 'ServiceAccount', 'name': 'phorvex-sensor', 'namespace': 'phorvex-system'}
+SENSOR_FEATURES = ROOT / 'tools/testdata/charts/sensor-features.yaml'
+SENSOR_VALUE_SETS = {'defaults': [], 'all features': ['-f', str(ALL_FEATURES), '-f', str(SENSOR_FEATURES)]}
+SENSOR_CONFIG = [ROOT / 'phorvex/cmd/internal/sensorconfig/sensorconfig.go', ROOT / 'phorvex/cmd/internal/trustconfig/trustconfig.go']
+# The flags and environment the sensor configuration registers, read from its source.
+SENSOR_FLAGS = {f for p in SENSOR_CONFIG for f in re.findall(r'fs\.\w+Var\(&[^,]+, "([a-z0-9-]+)"', p.read_text())}
+SENSOR_ENV = {e for p in SENSOR_CONFIG for e in re.findall(r'os\.Getenv\("([A-Z0-9_]+)"\)', p.read_text())}
+LEASE_FLAGS = {'endpoint-lease-approved-source-sha256', 'endpoint-lease-approved-proxy-image', 'endpoint-lease-approved-engine-image'}
+
+
+def sensor_reading(docs, container):
+    """What a container's sensor configuration reads: its sensor flags and environment, and the EPSS volume."""
+    pod = next(d['spec']['template']['spec'] for d in docs
+               if d['kind'] == 'Deployment' and container in [c['name'] for c in d['spec']['template']['spec']['containers']])
+    c = next(c for c in pod['containers'] if c['name'] == container)
+    flags = dict(a[2:].split('=', 1) for a in c['args'] if '=' in a and a[2:].split('=', 1)[0] in SENSOR_FLAGS)
+    env = [e for e in c.get('env', []) if e['name'] in SENSOR_ENV]
+    mounts = [m for m in c.get('volumeMounts', []) if m['name'] == 'epss']
+    volumes = [v for v in pod.get('volumes', []) if v['name'] == 'epss']
+    return {'flags': flags, 'env': env, 'mounts': mounts, 'volumes': volumes}
+
+
+def leaves(tree, path=()):
+    for key, value in tree.items():
+        if isinstance(value, dict) and value:
+            yield from leaves(value, path + (key,))
+        else:
+            yield path + (key,), value
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class SensorChartTests(unittest.TestCase):
+    def test_the_sensor_reads_as_the_manager_configures_it(self):
+        # Guards the source scan the comparison relies on.
+        self.assertGreaterEqual(len(SENSOR_FLAGS), 18)
+        self.assertIn('POD_NAMESPACE', SENSOR_ENV)
+        for name, values in SENSOR_VALUE_SETS.items():
+            with self.subTest(values=name):
+                manager = sensor_reading(helm_template(MANAGER_CHART, '--api-versions', 'monitoring.coreos.com/v1/PodMonitor', *values), 'manager')
+                sensor = sensor_reading(helm_template(SENSOR_CHART, *values), 'sensor')
+                self.assertEqual(sensor, manager)
+        # The fixture reaches every flag; the lease authority arrives as environment.
+        sensor = sensor_reading(helm_template(SENSOR_CHART, *SENSOR_VALUE_SETS['all features']), 'sensor')
+        self.assertEqual(SENSOR_FLAGS - set(sensor['flags']), LEASE_FLAGS)
+        self.assertEqual({e['name'] for e in sensor['env']}, {'POD_NAMESPACE'} | {'PHORVEX_' + f.upper().replace('-', '_') for f in LEASE_FLAGS})
+
+    def test_the_cpu_fixture_detector_is_trusted_by_the_managers_name(self):
+        # The manager chart renders this fixture only with the console; the name is its e2e-detector-cpu ServiceAccount.
+        sensor = sensor_reading(helm_template(SENSOR_CHART, '--set', 'phorvex.console.podBoundTokenCPU.enabled=true'), 'sensor')
+        self.assertEqual(sensor['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/phorvex-phorvex-e2e-detector-cpu')
+        renamed = sensor_reading(helm_template(SENSOR_CHART, '--set', 'phorvex.e2eDetector.enabled=true', '--set', 'managerFullname=stack-phorvex'), 'sensor')
+        self.assertEqual(renamed['flags']['trusted-detectors'].split(',')[-1], 'phorvex-system/stack-phorvex-e2e-detector')
+
+    def test_the_sensor_defaults_are_the_managers(self):
+        manager = yaml.safe_load(MANAGER_VALUES.read_text())['phorvex']
+        sensor = yaml.safe_load((SENSOR_CHART / 'values.yaml').read_text())['phorvex']
+        for path, value in leaves(sensor):
+            want = manager
+            for key in path:
+                want = want[key]
+            self.assertEqual(value, want, '.'.join(path))
+
+    def test_the_sensor_holds_only_its_read_share(self):
+        for name, values in VALUE_SETS.items():
+            with self.subTest(values=name):
+                docs = helm_template(SENSOR_CHART, *values)
+                access = grants(docs)
+                self.assertEqual(access, grants(library_rbac('sensor', values)))
+                self.assertEqual({g for g in access if g[4] not in READS}, set())
+                roles = {rbac_key(d) for d in docs if d['kind'] in ('Role', 'ClusterRole')}
+                bindings = [d for d in docs if d['kind'] in ('RoleBinding', 'ClusterRoleBinding')]
+                self.assertEqual({(b['roleRef']['kind'], b['metadata'].get('namespace') if b['kind'] == 'RoleBinding' else None, b['roleRef']['name'])
+                                  for b in bindings}, roles)
+                for b in bindings:
+                    self.assertEqual(b['subjects'], [SENSOR_SA])
+
+    def test_one_sensor_runs_hardened(self):
+        kinds = by_kind(helm_template(SENSOR_CHART))
+        deployment = kinds['Deployment'][0]
+        self.assertEqual(deployment['spec']['replicas'], 1)
+        self.assertEqual(deployment['spec']['strategy'], {'type': 'Recreate'})
+        pod = deployment['spec']['template']['spec']
+        self.assertEqual(pod['serviceAccountName'], SENSOR_SA['name'])
+        self.assertIs(pod['automountServiceAccountToken'], True)
+        self.assertIs(pod['securityContext']['runAsNonRoot'], True)
+        container = pod['containers'][0]
+        self.assertEqual(container['image'], 'phorvex-sensor:0.1.0')
+        self.assertEqual(container['securityContext'],
+                         {'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']}})
+        self.assertNotIn('volumes', pod)
+
+    def test_only_the_manager_reaches_the_sensor(self):
+        policy = by_kind(helm_template(SENSOR_CHART, '--set', 'metricsScraperNamespaces={monitoring}'))['NetworkPolicy'][0]['spec']
+        self.assertEqual(policy['policyTypes'], ['Ingress'])
+        grpc, health, metrics = policy['ingress']
+        self.assertEqual(grpc['ports'], [{'port': 'grpc'}])
+        self.assertEqual(grpc['from'], [{
+            'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'phorvex-system'}},
+            'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'phorvex', 'app.kubernetes.io/component': 'manager'}}}])
+        self.assertEqual(health, {'ports': [{'port': 'health'}]})
+        self.assertEqual(metrics['from'], [{'namespaceSelector': {'matchLabels': {'kubernetes.io/metadata.name': 'monitoring'}}}])
+
+
+class VendoredLibraryTests(unittest.TestCase):
+    """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
+
+    def test_every_chart_vendors_the_current_library(self):
+        source = yaml.safe_load((LIBRARY / 'Chart.yaml').read_text())
+        want = {f'phorvex-common/{p.relative_to(LIBRARY)}': p.read_bytes()
+                for p in LIBRARY.rglob('*') if p.is_file() and p.name != 'Chart.yaml'}
+        users = []
+        for chart in sorted(p.parent for p in CHARTS.glob('*/Chart.yaml')):
+            deps = [d for d in yaml.safe_load((chart / 'Chart.yaml').read_text()).get('dependencies') or [] if d['name'] == 'phorvex-common']
+            if not deps:
+                continue
+            users.append(chart.name)
+            with self.subTest(chart=chart.name):
+                self.assertEqual(deps, [{'name': 'phorvex-common', 'version': source['version'], 'repository': 'file://../phorvex-common'}])
+                package = chart / 'charts' / f"phorvex-common-{source['version']}.tgz"
+                self.assertEqual(sorted(p.name for p in package.parent.iterdir()), [package.name])
+                with tarfile.open(package) as archive:
+                    got = {m.name: archive.extractfile(m).read() for m in archive.getmembers() if m.isfile()}
+                # helm package rewrites Chart.yaml, so it is compared as data.
+                self.assertEqual(yaml.safe_load(got.pop('phorvex-common/Chart.yaml')), source)
+                self.assertEqual(got, want, f'stale: run helm dependency update deploy/charts/{chart.name}')
+                lock = yaml.safe_load((chart / 'Chart.lock').read_text())
+                self.assertEqual(lock['dependencies'], deps)
+        self.assertIn('phorvex-sensor', users)
 
 
 if __name__ == '__main__':
