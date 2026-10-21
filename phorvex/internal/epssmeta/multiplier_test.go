@@ -1,4 +1,4 @@
-package recon
+package epssmeta
 
 import (
 	"math"
@@ -123,7 +123,7 @@ func TestEPSSEntersExactlyOneLayer(t *testing.T) {
 	}
 	// The formula exists once, here.
 	count := 0
-	for _, pkg := range []string{"recon", "platform"} {
+	for _, pkg := range []string{"epssmeta", "recon", "platform"} {
 		entries, _ := os.ReadDir(filepath.Join(root, pkg))
 		for _, ent := range entries {
 			if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".go") || strings.HasSuffix(ent.Name(), "_test.go") {

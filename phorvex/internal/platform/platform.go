@@ -25,9 +25,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/recon"
 	"github.com/phorvex/phorvex/internal/registry"
 )
 
@@ -159,7 +159,7 @@ func (genericK8s) Derive(snap *ingest.Snapshot) map[string]model.PhysicsWitness 
 		lk := lookupEPSS(p.ImageID)
 		// The multiplier is recon's (M-104, one layer); the witness carries it for the
 		// calibration snapshot and the scan report, plus the raw pair and the reason.
-		w.EPSSMultiplier, w.EPSSPresent, w.EPSSReason = recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
+		w.EPSSMultiplier, w.EPSSPresent, w.EPSSReason = epssmeta.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present)
 		w.EPSSScore, w.CVSS = lk.EPSS, lk.CVSS
 		w.EPSSBasis, w.EPSSCachedDigest, w.EPSSScanTS = lk.Basis, lk.CachedDigest, lk.ScanTS
 		w.EPSSFeedMode, w.EPSSFeedStatus = lk.Source.Mode, lk.Source.Status

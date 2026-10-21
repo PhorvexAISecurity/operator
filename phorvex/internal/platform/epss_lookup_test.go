@@ -9,8 +9,8 @@ import (
 
 	dto "github.com/prometheus/client_model/go"
 
+	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/metrics"
-	"github.com/phorvex/phorvex/internal/recon"
 )
 
 // epss_lookup_test.go — PHORVEXSEC-203 / M-141: exact digest -> latest scan of the same
@@ -48,7 +48,7 @@ func TestEPSSLookupExactHit(t *testing.T) {
 	if lk.Basis != EPSSBasisExact || !lk.Present || lk.CachedDigest != digestRun || lk.RunningDigest != digestRun || lk.ScanTS != "2026-09-01T03:17:00Z" {
 		t.Fatalf("exact lookup = %+v", lk)
 	}
-	if m, ok, _ := recon.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present); !ok || m != 1+0.5*(5.0/10) {
+	if m, ok, _ := epssmeta.EPSSMultiplier(lk.EPSS, lk.CVSS, lk.Present); !ok || m != 1+0.5*(5.0/10) {
 		t.Fatalf("multiplier = %v ok=%v, want the M-104 form 1 + e·c/10 = 1.25", m, ok)
 	}
 	if lookupCount(t, "hit") != before+1 {

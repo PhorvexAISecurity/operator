@@ -40,12 +40,19 @@ Measured couplings that block a naive split (see `internal/runner/manager.go`):
 
 | Service | Responsibility | Owns today's packages (moved in phase 3) | Kubernetes access |
 |---|---|---|---|
-| **sensor** | Observe the cluster and derive physics and context | `ingest`, `graph`, `platform`, `physics`, `ctxprov`, `calib`, `epssfeed` | Read-only (`phorvex-scanner` role) |
-| **brain** | Choose actions | `decision`, `actionset`, `recon`, `cost`, `feasibility`, `killchain`, `mathlab` | None (no token mounted) |
-| **dispatcher** | Run the tick: policy reconcile, gates, kill switch, dispatch, audit | `runner`, `controller`, `capability`, `capacity`, `slo`, `codeexec`, `exposure`, `scopedoutcome` | PhorvexPolicy, Leases, kill-switch and capacity ConfigMaps, webhooks |
+| **sensor** | Observe the cluster and derive the physics witnesses | `ingest`, `graph`, `platform`, `epssfeed` | Read-only (`phorvex-scanner` role) |
+| **brain** | Choose actions | `decision`, `actionset`, `recon`, `cost`, `killchain`, `mathlab`, `physics`, `ctxprov` | None (no token mounted) |
+| **dispatcher** | Run the tick: policy reconcile, gates, kill switch, dispatch, audit | `runner`, `controller`, `capability`, `capacity`, `slo`, `codeexec`, `exposure`, `scopedoutcome`, `calib` | PhorvexPolicy, Leases, kill-switch and capacity ConfigMaps, webhooks |
 | **actuator** | Execute actions against workloads | `actuator`, `podresources`, `startupauthz`; commands `recovery`, `mig-allocation-helper` | Namespaced write (`phorvex-actuator` role) |
 | **attacks** | Fire catalogue attacks and produce independent observations | `cataloguev1`, `lossobserver`, `currentobserver`, `build/test-harness` | Scoped to attack targets |
 | **console** | UI and API for operators | `console`, `dashboard-web` | Read, plus the grants it has today |
+
+After phase 4 the table was corrected to the code's actual use: `feasibility`
+(the SLO predicate both the brain and the dispatcher apply), `eventtrust` (the
+SecurityEvent trust boundary) and the EPSS multiplier in `epssmeta` are shared;
+`calib` belongs to the dispatcher, which drives it; and `physics` and `ctxprov`
+belong to the brain, which scores and records with them while no sensor package
+reads them.
 
 Shared libraries (`libs/`): `api` (CRD types), `model`, `proto` (service
 contracts), and platform code: logging, metrics, build info, `authz`, `audit`,
