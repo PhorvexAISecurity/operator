@@ -1,0 +1,27 @@
+# The staging environment's infrastructure (README.md): the vcluster phorvex-staging
+# on this cluster, and the Phoenix CRDs inside it. The services themselves are the
+# phorvex-services project's (../services).
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: phorvex-staging-infra
+  namespace: argocd
+spec:
+  description: The staging vcluster and what the Phorvex services need inside it.
+  sourceRepos:
+  - https://charts.loft.sh
+  - git@github.com:PhorvexSecurity/operator-refactored.git
+  destinations:
+  # The vcluster, in its namespace of this cluster.
+  - server: https://kubernetes.default.svc
+    namespace: phorvex-staging
+  # The CRDs, inside the vcluster.
+  - server: https://phorvex-staging.phorvex-staging.svc:443
+    namespace: '*'
+  clusterResourceWhitelist:
+  - group: ''
+    kind: Namespace
+  # The vcluster needs no cluster-wide access here: without volume snapshot rules
+  # it renders no ClusterRole. The CRDs go inside it.
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition

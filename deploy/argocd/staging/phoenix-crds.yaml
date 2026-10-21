@@ -1,0 +1,28 @@
+# The Phoenix resources the services read and write, inside the staging vcluster:
+# SecurityEvents and AdaptiveMovingTargetDefenses. No Phoenix operator runs in
+# staging, so the defenses the services record there are not executed.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phorvex-staging-phoenix-crds
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: phorvex-staging-infra
+  source:
+    repoURL: git@github.com:PhorvexSecurity/operator-refactored.git
+    targetRevision: main
+    path: build/phoenix-extended/config/crd/bases
+    directory:
+      include: '{amtd.r6security.com_securityevents.yaml,amtd.r6security.com_adaptivemovingtargetdefenses.yaml}'
+  destination:
+    server: https://phorvex-staging.phorvex-staging.svc:443
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: true
+    syncOptions:
+    # As for the production stack's Phoenix CRDs.
+    - ServerSideApply=true

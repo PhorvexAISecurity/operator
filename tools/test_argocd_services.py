@@ -10,7 +10,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SERVICES = ROOT / 'deploy/argocd/services'
 ENVIRONMENTS = ROOT / 'deploy/environments'
-REPO = 'https://github.com/PhorvexSecurity/operator-refactored.git'
+REPO = 'git@github.com:PhorvexSecurity/operator-refactored.git'
 HELM = shutil.which('helm')
 # Rendered by `helm template --include-crds`, as Argo CD renders a chart.
 CLUSTER_SCOPED = {'Namespace', 'CustomResourceDefinition', 'ClusterRole', 'ClusterRoleBinding', 'MutatingWebhookConfiguration',

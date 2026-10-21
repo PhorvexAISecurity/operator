@@ -34,15 +34,10 @@ policies, and the cluster-scoped objects would collide.
 
 1. **Images.** The release workflow publishes the images to ECR and pins them in
    `deploy/environments/staging/<service>.yaml` (`docs/services/releasing.md`).
-2. **The vcluster.** Install the vcluster `phorvex-staging` in the namespace
-   `phorvex-staging` of the production cluster.
-3. **Phoenix.** Install Phoenix, the AMTD executor, inside the vcluster: the
-   services read and write its SecurityEvent and AdaptiveMovingTargetDefense
-   resources. As in production, Argo CD does not manage it.
-4. **Register the cluster.** Register the vcluster's API server in Argo CD, with
-   `phorvex.ai/environment: staging` on its cluster Secret, and give Argo CD read
-   access to this repository.
-5. **Apply.** Apply `project.yaml`, then `applicationset.yaml`.
+2. **The staging infrastructure.** The vcluster, the Phoenix CRDs inside it,
+   Argo CD's read access to this repository and the vcluster's registration with
+   the label `phorvex.ai/environment: staging`: see `../staging/README.md`.
+3. **Apply.** Apply `project.yaml`, then `applicationset.yaml`.
 
 The services start in any order: the manager waits up to two minutes for each
 handshake and restarts until every service answers.
