@@ -48,18 +48,43 @@ class BrainChartTests(unittest.TestCase):
         self.assertEqual(container['image'], 'phorvex-brain:0.1.0')
         self.assertEqual(container['securityContext'],
                          {'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']}})
-        self.assertIn('--engine=p1', container['args'])
-        self.assertIn('--gpu-envelope-max=1', container['args'])
-        self.assertFalse([a for a in container['args'] if a.startswith('--math-lab')])
+        self.assertIn('--gpu-envelope-max=0.2925', container['args'])
+        self.assertFalse([a for a in container['args'] if a.startswith(('--math-lab', '--engine', '--flow-residual-classes'))])
         self.assertNotIn('volumes', pod)
 
     def test_math_lab_capture_gets_a_volume(self):
-        pod = by_kind(render('phorvex-brain', 'mathLab.capturePolicies=vllm/defense', 'mathLab.existingClaim=brain-math-lab'))['Deployment'][0]['spec']['template']['spec']
+        pod = by_kind(render('phorvex-brain', 'phorvex.mathLab.capturePolicies={vllm/defense}', 'mathLabStore.existingClaim=brain-math-lab'))['Deployment'][0]['spec']['template']['spec']
         args = pod['containers'][0]['args']
         self.assertIn('--math-lab-capture-policies=vllm/defense', args)
         self.assertIn('--math-lab-capture-dir=/var/lib/phorvex/math-lab', args)
         self.assertIn('--math-lab-capture-max-bytes=1073741824', args)
         self.assertEqual(pod['volumes'], [{'name': 'math-lab', 'persistentVolumeClaim': {'claimName': 'brain-math-lab'}}])
+
+    def decision_flags(self, chart, container, *sets):
+        args = [HELM, 'template', 'phorvex', str(chart), '-n', 'phorvex-system']
+        for value in sets:
+            args += ['--set', value]
+        docs = [d for d in yaml.safe_load_all(subprocess.run(args, check=True, capture_output=True, text=True).stdout) if d]
+        pod = next(d['spec']['template']['spec'] for d in docs if d['kind'] == 'Deployment'
+                   and container in [c['name'] for c in d['spec']['template']['spec']['containers']])
+        args = next(c for c in pod['containers'] if c['name'] == container)['args']
+        return sorted(a for a in args if a.startswith(('--engine=', '--gpu-envelope-max=', '--flow-residual-classes=')))
+
+    def test_the_brain_decides_as_the_manager_configures_it(self):
+        manager = ROOT / 'phorvex/charts/phorvex'
+        for sets in ([], ['phorvex.gpuEnvelopeMax=0.5', 'phorvex.flowResidualClasses={vllm,voice}']):
+            with self.subTest(values=sets):
+                want = self.decision_flags(manager, 'manager', *sets)
+                self.assertTrue(want)
+                self.assertEqual(self.decision_flags(CHARTS / 'phorvex-brain', 'brain', *sets), want)
+
+    def test_the_brain_defaults_are_the_managers(self):
+        manager = yaml.safe_load((ROOT / 'phorvex/charts/phorvex/values.yaml').read_text())['phorvex']
+        brain = yaml.safe_load((CHARTS / 'phorvex-brain/values.yaml').read_text())['phorvex']
+        self.assertEqual(brain['gpuEnvelopeMax'], manager['gpuEnvelopeMax'])
+        self.assertEqual(brain['flowResidualClasses'], manager['flowResidualClasses'])
+        for key in ('capturePolicies', 'captureMaxBytes'):
+            self.assertEqual(brain['mathLab'][key], manager['mathLab'][key], key)
 
     def test_only_the_manager_reaches_the_brain(self):
         policy = by_kind(render('phorvex-brain', 'metricsScraperNamespaces={monitoring}'))['NetworkPolicy'][0]['spec']

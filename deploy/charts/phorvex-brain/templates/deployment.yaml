@@ -1,3 +1,4 @@
+{{- $v := .Values.phorvex }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,16 +36,18 @@ spec:
         - --listen=:9090
         - --metrics-bind-address=:8080
         - --health-probe-bind-address=:8081
-        - --engine={{ .Values.engine }}
-        - --gpu-envelope-max={{ .Values.gpuEnvelopeMax }}
-        - --flow-residual-classes={{ .Values.flowResidualClasses }}
+        {{- /* The manager chart's decision flags, derived the same way. */}}
+        - --gpu-envelope-max={{ $v.gpuEnvelopeMax }}
+        {{- with $v.flowResidualClasses }}
+        - --flow-residual-classes={{ join "," . }}
+        {{- end }}
         - --shutdown-grace={{ .Values.shutdownGrace }}
         - --log-level={{ .Values.log.level }}
         - --log-format={{ .Values.log.format }}
-        {{- if .Values.mathLab.capturePolicies }}
-        - --math-lab-capture-policies={{ .Values.mathLab.capturePolicies }}
+        {{- with $v.mathLab.capturePolicies }}
+        - --math-lab-capture-policies={{ join "," . }}
         - --math-lab-capture-dir=/var/lib/phorvex/math-lab
-        - --math-lab-capture-max-bytes={{ int64 .Values.mathLab.maxBytes }}
+        - --math-lab-capture-max-bytes={{ $v.mathLab.captureMaxBytes | int64 }}
         {{- end }}
         ports:
         - name: grpc
@@ -68,17 +71,17 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        {{- if .Values.mathLab.capturePolicies }}
+        {{- if $v.mathLab.capturePolicies }}
         volumeMounts:
         - name: math-lab
           mountPath: /var/lib/phorvex/math-lab
         {{- end }}
-      {{- if .Values.mathLab.capturePolicies }}
+      {{- if $v.mathLab.capturePolicies }}
       volumes:
       - name: math-lab
-        {{- if .Values.mathLab.existingClaim }}
+        {{- if .Values.mathLabStore.existingClaim }}
         persistentVolumeClaim:
-          claimName: {{ .Values.mathLab.existingClaim }}
+          claimName: {{ .Values.mathLabStore.existingClaim }}
         {{- else }}
         emptyDir: {}
         {{- end }}
