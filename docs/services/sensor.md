@@ -49,6 +49,15 @@ go -C phorvex run ./cmd/sensor --listen=:9090 --prometheus-url=http://prometheus
   --trusted-detectors=vllm/detector-kv-canary
 ```
 
+The `phorvex-sensor` image is built from `deploy/docker/service.Dockerfile`:
+
+```sh
+docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=sensor -t phorvex-sensor .
+```
+
+It holds the one binary as `/service` on distroless nonroot. PR validation builds
+it, without pushing, beside the manager and console images.
+
 The sensor needs a Kubernetes configuration with read access to the inventories
 it lists and the evidence it binds (Pods, Services, EndpointSlices, Namespaces,
 Nodes, NetworkPolicies, RBAC, PodDisruptionBudgets, ServiceAccounts,

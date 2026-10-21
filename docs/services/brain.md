@@ -26,6 +26,15 @@ go -C phorvex run ./cmd/brain \
   --listen=:9090 --engine=p1 --gpu-envelope-max=1 --flow-residual-classes=vllm
 ```
 
+The `phorvex-brain` image is built from `deploy/docker/service.Dockerfile`:
+
+```sh
+docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=brain -t phorvex-brain .
+```
+
+It holds the one binary as `/service` on distroless nonroot. PR validation builds
+it, without pushing, beside the manager and console images.
+
 | Flag | Default | Meaning |
 |---|---|---|
 | `--listen` | `:9090` | gRPC address |

@@ -169,8 +169,8 @@ jobs:
       - name: Service contracts lint and their generated code is current
         run: |
           tools/generate-proto.sh
-          git diff --exit-code -- phorvex/internal/brainpb phorvex/internal/sensorpb
-          test -z "$(git status --porcelain -- phorvex/internal/brainpb phorvex/internal/sensorpb)"
+          git diff --exit-code -- 'phorvex/internal/*pb'
+          test -z "$(git status --porcelain -- 'phorvex/internal/*pb')"
 
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the
@@ -182,16 +182,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [operator, console]
+        image: [operator, console, brain, sensor, actuator]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Build the ${{ matrix.image }} image without pushing
         env:
+          IMAGE: ${{ matrix.image }}
           TAG: operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}
+        # The services (ADR-0001) share one Dockerfile; the manager and the
+        # console have their own.
         run: |
-          docker build --file deploy/docker/${{ matrix.image }}.Dockerfile --tag "$TAG" .
+          case "$IMAGE" in
+            operator|console) docker build --file "deploy/docker/$IMAGE.Dockerfile" --tag "$TAG" . ;;
+            *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --tag "$TAG" . ;;
+          esac
           docker image rm "$TAG"
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of

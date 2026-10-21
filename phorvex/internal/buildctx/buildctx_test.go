@@ -44,6 +44,7 @@ type buildStage struct {
 // cannot silently escape the check.
 var stages = []buildStage{
 	{"deploy/docker/operator.Dockerfile", "phorvex"},
+	{"deploy/docker/service.Dockerfile", "phorvex"},
 	{"deploy/docker/console.Dockerfile", "phorvex"},
 	{"deploy/docker/console.Dockerfile", "build/test-harness"},
 }
