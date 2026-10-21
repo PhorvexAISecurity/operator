@@ -1,0 +1,132 @@
+{{- $v := .Values.phorvex }}
+{{- $trust := dict "values" $v "releaseNamespace" .Release.Namespace "managerFullname" (include "phorvex-sensor.managerFullname" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "phorvex-sensor.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-sensor.labels" . | nindent 4 }}
+spec:
+  # One sensor: the telemetry source derives rates from its own previous samples,
+  # so two would each compute them over the wrong interval. Recreate never runs
+  # two at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "phorvex-sensor.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "phorvex-sensor.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "phorvex-sensor.fullname" . }}
+      # The sensor reads the cluster with its own read-only access (rbac.yaml).
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: sensor
+        image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - --listen=:9090
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --shutdown-grace={{ .Values.shutdownGrace }}
+        - --log-level={{ .Values.log.level }}
+        - --log-format={{ .Values.log.format }}
+        {{- /* The manager chart's sensor flags, derived the same way. */}}
+        {{- if $v.prometheusUrl }}
+        - --prometheus-url={{ $v.prometheusUrl }}
+        {{- end }}
+        {{- if $v.epss.enabled }}
+        - --epss-cache={{ printf "%s/%s" ($v.epss.mountPath | trimSuffix "/") $v.epss.fileName }}
+        - --epss-cache-refresh={{ $v.epss.refreshInterval }}
+        {{- if $v.epss.authoritative }}
+        {{- if or (empty $v.epss.feed.scopeNamespaces) (empty $v.epss.feed.scopeDigests) }}
+        {{- fail "authoritative EPSS requires non-empty feed.scopeNamespaces and feed.scopeDigests" }}
+        {{- end }}
+        - --epss-authoritative=true
+        - --epss-metadata={{ printf "%s/%s" ($v.epss.mountPath | trimSuffix "/") $v.epss.metadataFileName }}
+        - --epss-cache-key={{ $v.epss.fileName }}
+        - --epss-configmap-namespace={{ .Release.Namespace }}
+        - --epss-configmap-name={{ $v.epss.configMapName }}
+        - --epss-metadata-key={{ $v.epss.metadataFileName }}
+        - --epss-authoritative-timeout={{ $v.epss.authoritativeTimeout }}
+        - --epss-authoritative-scope-namespaces={{ join "," $v.epss.feed.scopeNamespaces }}
+        - --epss-authoritative-scope-digests={{ join "," $v.epss.feed.scopeDigests }}
+        {{- end }}
+        {{- end }}
+        {{- with $v.pcieClassCapacity }}
+        - --pcie-class-table={{ toJson . }}
+        {{- end }}
+        {{- with include "phorvex-common.trustedDetectors" $trust }}
+        - --trusted-detectors={{ . }}
+        {{- end }}
+        {{- with include "phorvex-common.trustedLossObservers" $trust }}
+        - --trusted-loss-observers={{ . }}
+        {{- end }}
+        {{- with include "phorvex-common.trustedCurrentInventoryObservers" $trust }}
+        - --trusted-current-inventory-observers={{ . }}
+        {{- end }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- with include "phorvex-common.endpointLeaseEnv" $trust }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        ports:
+        - name: grpc
+          containerPort: 9090
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        {{- if $v.epss.enabled }}
+        volumeMounts:
+        - name: epss
+          mountPath: {{ $v.epss.mountPath }}
+          readOnly: true
+        {{- end }}
+      {{- if $v.epss.enabled }}
+      # The manager chart (or the EPSS feed) owns this ConfigMap; the sensor reads it.
+      volumes:
+      - name: epss
+        configMap:
+          name: {{ $v.epss.configMapName }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

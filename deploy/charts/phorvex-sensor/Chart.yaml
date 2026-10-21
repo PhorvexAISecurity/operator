@@ -1,0 +1,12 @@
+apiVersion: v2
+name: phorvex-sensor
+description: >-
+  The Phorvex sensor service (ADR-0001): the cluster projection, served over
+  gRPC to the manager. It reads the cluster and never writes it.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+- name: phorvex-common
+  version: 0.1.0
+  repository: file://../phorvex-common

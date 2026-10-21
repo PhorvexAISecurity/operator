@@ -6,7 +6,8 @@ version. The manager and console chart is still `phorvex/charts/phorvex`.
 | Chart | Deploys |
 |---|---|
 | `phorvex-brain` | the brain service: no Kubernetes credentials, one replica, gRPC from the manager only |
-| `phorvex-common` | library: what the services must agree on, defined once; today their Kubernetes access |
+| `phorvex-sensor` | the sensor service: its read-only access, one replica, gRPC from the manager only |
+| `phorvex-common` | library: what the services must agree on, defined once: their Kubernetes access and trust |
 
 ## Access (`phorvex-common.rbac.objects`)
 
@@ -38,3 +39,25 @@ default values and with every feature that adds access enabled
 
 Reads are shared for now so no service loses an inventory it reads; narrowing
 them per service is a follow-up that needs per-service evidence.
+
+## Trust (`phorvex-common.trusted*`, `phorvex-common.endpointLeaseEnv`)
+
+The sensor and actuator handshakes compare the trusted detector and observer
+identities and the endpoint lease authority with the manager's. These templates
+derive them from the same `phorvex` values as the manager chart, including the
+identities of the manager's own detector and observer ServiceAccounts, named
+after the manager release (`managerFullname`, default `<release>-phorvex`). A
+service chart therefore reads the manager chart's keys under `phorvex`, with the
+same defaults, so one environment file configures every chart.
+
+## Vendoring
+
+Argo CD renders a chart's `charts/*.tgz`, not `deploy/charts/phorvex-common`.
+After changing the library, refresh every chart that depends on it:
+
+```sh
+helm dependency update deploy/charts/phorvex-sensor
+```
+
+`VendoredLibraryTests` in `tools/test_service_charts.py` fails while a vendored
+copy differs from the library.
