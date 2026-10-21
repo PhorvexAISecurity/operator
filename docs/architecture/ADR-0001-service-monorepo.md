@@ -150,14 +150,23 @@ every Docker build context complete for those targets.
 
 ### Versioning and release
 
-- release-please in manifest mode gives one component per service, lib and chart,
-  each with its own changelog and tag (`brain-v1.4.0`).
+- Each service is its own release component, with its own version, changelog
+  and tag (`brain-v1.4.0`). `phorvex/tools/servicerelease` computes them. Path
+  rules such as release-please's cannot: the services share one module, so a
+  change to a shared package belongs to every service whose binary imports it.
+  A service's inputs are therefore the source files of every package its image's
+  binaries import (`go list -deps`), its Dockerfile, its chart and the other
+  paths its image copies in. A commit belongs to a service's next release when it
+  touches one of those inputs. Its conventional-commit type sets the bump: a
+  breaking change is major, a feature minor, anything else patch. Before 1.0.0 a
+  breaking change moves the minor version.
 - A release builds one image per service (`<registry>/phorvex/<service>:<version>`,
   pinned by digest) and packages its chart.
 - Deployment stays GitOps: CI commits the new tag and digest into
   `deploy/environments/<env>/<service>.yaml`, and Argo CD syncs it.
-- CI builds and releases only the services whose binary's import graph contains a
-  changed file, plus every service that depends on a changed lib.
+- CI builds and releases only the services whose inputs contain a changed file;
+  a changed lib is an input of every service that imports it. PR validation
+  reports those services (`servicerelease affected`).
 
 ### Argo CD
 
@@ -194,7 +203,7 @@ every Docker build context complete for those targets.
 | 2 | Foundation: first shared lib (`libs/logging`, slog JSON) adopted by the manager and console; gofmt/vet and image builds in CI | Unchanged (log format changes) |
 | 3 | Break the domain cycles above and enforce the boundaries (`archtest`, done in 3a); turn the process-global brain configuration into per-service flags | Unchanged |
 | 4 | gRPC contracts (sensor snapshot, brain decide stream with capability questions, actuator actuate and journals) and one binary per service, with the in-process wiring kept behind a flag for rollback; `mathlab` replays prove decision parity | Unchanged in in-process mode |
-| 5 | One image, chart and Argo CD Application per service; release-please components and affected-service CI; deploy to a staging vcluster first, then cut production over | Staging, then cutover |
+| 5 | One image, chart and Argo CD Application per service; a version per service from the import graph, and affected-service CI; deploy to a staging vcluster first, then cut production over | Staging, then cutover |
 | 6 | Move attack firing and harness runs out of the console into the attacks service | Console calls the attacks API |
 
 Cutover criteria for phase 5 are decided separately. They must include decision
