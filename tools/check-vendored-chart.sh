@@ -21,22 +21,50 @@ VENDORED_DIR=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/phorvex-vendored.XXXXX
 trap 'rm -rf -- "$VENDORED_DIR"' EXIT
 tar xzf "$TGZ" -C "$VENDORED_DIR"
 # templates/, values.yaml and crds/ are archived verbatim, so they diff directly.
-# Chart.yaml does NOT: `helm package` reorders its keys and reflows the folded
-# description, so it is compared as parsed data instead of as text.
-if ! diff -r --exclude=.helmignore --exclude=Chart.yaml \
+# Chart.yaml and Chart.lock do NOT: `helm package` reorders their keys and
+# reflows the folded description, so they are compared as parsed data below.
+# The chart's own dependencies, vendored in it as charts/<name>-<version>.tgz,
+# are stored expanded as charts/<name>/, so they are compared separately.
+if ! diff -r --exclude=.helmignore --exclude=Chart.yaml --exclude=Chart.lock --exclude=charts \
        phorvex/charts/phorvex "$VENDORED_DIR/phorvex"; then
   echo "::error::the vendored subchart differs from phorvex/charts/phorvex."
   echo "::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack"
   exit 1
 fi
-python3 - "$VENDORED_DIR/phorvex/Chart.yaml" <<'PY'
-import sys, yaml
-a = yaml.safe_load(open("phorvex/charts/phorvex/Chart.yaml"))
-b = yaml.safe_load(open(sys.argv[1]))
-drift = {k: (a.get(k), b.get(k)) for k in set(a) | set(b) if a.get(k) != b.get(k)}
-if drift:
-    for k, (x, y) in drift.items():
-        print(f"::error::Chart.yaml {k}: source={x!r} vendored={y!r}")
-    sys.exit("vendored Chart.yaml is stale — helm dependency update")
-print("  Chart.yaml matches")
+mkdir -p "$VENDORED_DIR/dependencies" "$VENDORED_DIR/phorvex/charts"
+for dependency in phorvex/charts/phorvex/charts/*.tgz; do
+  [ -e "$dependency" ] || continue
+  tar xzf "$dependency" -C "$VENDORED_DIR/dependencies"
+done
+if ! diff -r --exclude=Chart.yaml "$VENDORED_DIR/dependencies" "$VENDORED_DIR/phorvex/charts"; then
+  echo "::error::the vendored subchart's dependencies differ from phorvex/charts/phorvex/charts."
+  echo "::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack"
+  exit 1
+fi
+python3 - "$VENDORED_DIR" <<'PY'
+import os, sys, yaml
+vendored = sys.argv[1]
+
+def load(path):
+    return (yaml.safe_load(open(path)) or {}) if os.path.exists(path) else {}
+
+pairs = [("Chart.yaml", "phorvex/charts/phorvex/Chart.yaml", f"{vendored}/phorvex/Chart.yaml")]
+for name in sorted(os.listdir(f"{vendored}/dependencies")):
+    pairs.append((f"charts/{name}/Chart.yaml", f"{vendored}/dependencies/{name}/Chart.yaml",
+                  f"{vendored}/phorvex/charts/{name}/Chart.yaml"))
+stale = False
+for label, source, copy in pairs:
+    a, b = load(source), load(copy)
+    for k in sorted(set(a) | set(b)):
+        if a.get(k) != b.get(k):
+            print(f"::error::{label} {k}: source={a.get(k)!r} vendored={b.get(k)!r}")
+            stale = True
+a, b = load("phorvex/charts/phorvex/Chart.lock"), load(f"{vendored}/phorvex/Chart.lock")
+for k in ("dependencies", "digest"):
+    if a.get(k) != b.get(k):
+        print(f"::error::Chart.lock {k}: source={a.get(k)!r} vendored={b.get(k)!r}")
+        stale = True
+if stale:
+    sys.exit("vendored chart metadata is stale — helm dependency update")
+print("  Chart.yaml, Chart.lock and dependencies match")
 PY

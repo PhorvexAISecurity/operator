@@ -1,7 +1,10 @@
 # Service charts
 
 One Helm chart per service (ADR-0001), each its own Argo CD Application and
-version. The manager and console chart is still `phorvex/charts/phorvex`.
+version. The manager and console chart is still `phorvex/charts/phorvex`. Its
+`phorvex.services.<brain|sensor|actuator>.endpoint` values point the manager at
+the services; with a remote actuator it holds only the dispatcher's share of the
+access below.
 
 | Chart | Deploys |
 |---|---|
@@ -59,6 +62,8 @@ After changing the library, refresh every chart that depends on it:
 ```sh
 helm dependency update deploy/charts/phorvex-sensor
 helm dependency update deploy/charts/phorvex-actuator
+helm dependency update phorvex/charts/phorvex
+helm dependency update deploy/helm/phorvex-stack   # re-vendors the manager chart
 ```
 
 `VendoredLibraryTests` in `tools/test_service_charts.py` fails while a vendored

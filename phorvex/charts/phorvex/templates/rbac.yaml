@@ -5,6 +5,9 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "phorvex.labels" . | nindent 4 }}
+{{- /* In process the manager holds the actuation access below. With a remote
+actuator it holds only the dispatcher's share (dispatcher-rbac.yaml). */}}
+{{- if not .Values.phorvex.services.actuator.endpoint }}
 ---
 # LEAST-PRIVILEGE ClusterRole (NFR4): read-only ingest of the K8s graph; write ONLY
 # Phorvex's own CRDs + Phoenix SecurityEvent/AMTD + policy warning Events. NEVER writes pods.
@@ -506,4 +509,5 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}

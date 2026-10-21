@@ -88,7 +88,9 @@ detector trust and endpoint lease flags come from `cmd/internal/trustconfig`,
 which the actuator registers too.
 Manager flags for remote mode: `--sensor-endpoint`, `--sensor-connect-timeout`
 (startup waits this long for the handshake, default 2m) and
-`--sensor-call-timeout` (30s per observation or telemetry read).
+`--sensor-call-timeout` (30s per observation or telemetry read). The manager chart
+passes `--sensor-endpoint` from `phorvex.services.sensor.endpoint`; it keeps
+passing the sensor flags, because the dispatcher reads the same trust.
 
 **Handshake.** `Hello` carries the contract version (`sensorapi.ContractVersion`)
 and the SHA-256 of `sensorapi.Config`: the trusted detector and observer

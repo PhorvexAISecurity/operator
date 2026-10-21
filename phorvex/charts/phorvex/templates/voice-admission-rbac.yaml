@@ -1,4 +1,4 @@
-{{- if .Values.phorvex.voiceAdmission.enabled }}
+{{- if and .Values.phorvex.voiceAdmission.enabled (not .Values.phorvex.services.actuator.endpoint) }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "voiceAdmission requires native or hybrid actuator" }}{{- end }}
 {{- range list "sourceConfigMapName" "legacyConfigMapName" }}
 {{- $name := required (printf "voiceAdmission.%s required" .) (index $.Values.phorvex.voiceAdmission .) }}

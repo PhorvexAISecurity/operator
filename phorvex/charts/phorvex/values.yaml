@@ -194,6 +194,18 @@ phorvex:
   # cluster), so it must be part of desired state rather than a hand-patched env var.
   # The per-action repertoire of each backend is published in phorvex/docs/actuator-repertoire.md.
   actuator: ""
+  # The services the manager reaches over gRPC (ADR-0001), each deployed by its own
+  # chart under deploy/charts. An empty endpoint runs that part in this process.
+  # With a remote actuator, the actuator holds the actuation access and reads the
+  # actuator's files and credentials; this chart then binds the manager only to the
+  # dispatcher's share of the access (phorvex-common) and mounts none of them.
+  services:
+    brain:
+      endpoint: ""
+    sensor:
+      endpoint: ""
+    actuator:
+      endpoint: ""
   # Optional, reporting-only scoped outcome observation. Enabling this mounts
   # one immutable startup config Secret, a separate mTLS Secret, and a
   # dedicated existing PVC for private evidence. The startup.json contents

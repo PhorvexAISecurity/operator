@@ -1,3 +1,9 @@
+{{- /* With a remote actuator (ADR-0001) the actuator reads its files and credentials. */}}
+{{- $inProcess := not .Values.phorvex.services.actuator.endpoint }}
+{{- $lora := and $inProcess .Values.phorvex.loraCleanSources.content }}
+{{- $migProfiles := and $inProcess .Values.phorvex.mig.profiles.content }}
+{{- $servingFile := and $inProcess .Values.phorvex.servingSecurity.bindings }}
+{{- $litellmStatus := and $inProcess .Values.phorvex.litellmClientRevoke.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -52,6 +58,15 @@ spec:
         - --metrics-bind-address={{ .Values.phorvex.metricsBindAddress }}
         - --health-probe-bind-address={{ .Values.phorvex.healthProbeBindAddress }}
         - --leader-elect={{ .Values.phorvex.leaderElect }}
+        {{- with .Values.phorvex.services.brain.endpoint }}
+        - --brain-endpoint={{ . }}
+        {{- end }}
+        {{- with .Values.phorvex.services.sensor.endpoint }}
+        - --sensor-endpoint={{ . }}
+        {{- end }}
+        {{- with .Values.phorvex.services.actuator.endpoint }}
+        - --actuator-endpoint={{ . }}
+        {{- end }}
         {{- if .Values.phorvex.admissionWebhook.enabled }}
         - --admission-webhook=true
         - --webhook-port={{ .Values.phorvex.admissionWebhook.port }}
@@ -99,20 +114,20 @@ spec:
         {{- fail "phorvex.maxRetainedQuarantinesPerNamespace must not exceed 128" }}
         {{- end }}
         - --max-retained-quarantines-per-namespace={{ $quarantineCapText }}
-        {{- if .Values.phorvex.loraCleanSources.content }}
+        {{- if $lora }}
         - --lora-clean-sources-file={{ .Values.phorvex.loraCleanSources.mountPath }}
         {{- end }}
-        {{- if .Values.phorvex.mig.profiles.content }}
+        {{- if $migProfiles }}
         - --mig-profiles-file={{ .Values.phorvex.mig.profiles.mountPath }}
         {{- end }}
         {{- if not (has .Values.phorvex.servingSecurity.mode (list "secure-required" "legacy-plaintext")) }}{{ fail "phorvex.servingSecurity.mode must be secure-required or legacy-plaintext" }}{{- end }}
         {{- if and (eq .Values.phorvex.servingSecurity.mode "legacy-plaintext") .Values.phorvex.servingSecurity.bindings }}{{ fail "legacy-plaintext does not accept servingSecurity.bindings" }}{{- end }}
         {{- if and .Values.phorvex.servingSecurity.bindings (not (has .Values.phorvex.actuator (list "native" "hybrid"))) }}{{ fail "servingSecurity.bindings require phorvex.actuator=native or hybrid" }}{{- end }}
         - --serving-security-mode={{ .Values.phorvex.servingSecurity.mode }}
-        {{- if .Values.phorvex.servingSecurity.bindings }}
+        {{- if $servingFile }}
         - --serving-security-file={{ .Values.phorvex.servingSecurity.mountPath }}
         {{- end }}
-        {{- if .Values.phorvex.mig.nodeExec.enabled }}
+        {{- if and $inProcess .Values.phorvex.mig.nodeExec.enabled }}
         {{- if not .Values.phorvex.mig.nodeExec.exclusiveMaintenance }}{{ fail "phorvex.mig.nodeExec.exclusiveMaintenance=true is required when enabling destructive MIG node exec" }}{{- end }}
         {{- $agentNS := required "phorvex.mig.nodeExec.namespace is required when enabled" .Values.phorvex.mig.nodeExec.namespace }}
         {{- $agentDS := required "phorvex.mig.nodeExec.daemonSetName is required when enabled" .Values.phorvex.mig.nodeExec.daemonSetName }}
@@ -214,7 +229,8 @@ spec:
         - --audit-source-vcluster-path={{ .Values.phorvex.console.auditTransport.vclusterPath }}
         {{- end }}
         {{- end }}
-        {{- with .Values.phorvex.mathLab.capturePolicies }}
+        {{- /* With a remote brain the brain records Math Lab snapshots; the manager refuses capture flags. */}}
+        {{- with and (not .Values.phorvex.services.brain.endpoint) .Values.phorvex.mathLab.capturePolicies }}
         {{- range . }}
         {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-.a-z0-9]*[a-z0-9])?$" .) }}
         {{- fail (printf "phorvex.mathLab.capturePolicies entry %q must be namespace/name" .) }}
@@ -322,9 +338,9 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled .Values.phorvex.litellmClientRevoke.enabled }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus }}
         volumeMounts:
-        {{- if .Values.phorvex.litellmClientRevoke.enabled }}
+        {{- if $litellmStatus }}
         - name: litellm-client-revoke-status
           mountPath: /etc/phorvex-litellm-status
           readOnly: true
@@ -352,19 +368,19 @@ spec:
           mountPath: {{ .Values.phorvex.admissionWebhook.certDir }}
           readOnly: true
         {{- end }}
-        {{- if .Values.phorvex.loraCleanSources.content }}
+        {{- if $lora }}
         - name: lora-clean-sources
           mountPath: {{ .Values.phorvex.loraCleanSources.mountPath }}
           subPath: sources.json
           readOnly: true
         {{- end }}
-        {{- if .Values.phorvex.mig.profiles.content }}
+        {{- if $migProfiles }}
         - name: mig-profiles
           mountPath: {{ .Values.phorvex.mig.profiles.mountPath }}
           subPath: profiles.json
           readOnly: true
         {{- end }}
-        {{- if .Values.phorvex.servingSecurity.bindings }}
+        {{- if $servingFile }}
         - name: serving-security
           mountPath: {{ .Values.phorvex.servingSecurity.mountPath }}
           subPath: security.json
@@ -385,9 +401,9 @@ spec:
           mountPath: {{ .Values.phorvex.scopedOutcome.evidenceMountPath }}
         {{- end }}
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled .Values.phorvex.loraCleanSources.content .Values.phorvex.mig.profiles.content .Values.phorvex.servingSecurity.bindings .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled .Values.phorvex.litellmClientRevoke.enabled }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus }}
       volumes:
-      {{- if .Values.phorvex.litellmClientRevoke.enabled }}
+      {{- if $litellmStatus }}
       - name: litellm-client-revoke-status
         secret:
           secretName: {{ required "litellmClientRevoke.statusSecret required" .Values.phorvex.litellmClientRevoke.statusSecret | quote }}
@@ -401,7 +417,7 @@ spec:
         configMap:
           name: {{ .Values.phorvex.epss.configMapName }}
       {{- end }}
-      {{- if .Values.phorvex.loraCleanSources.content }}
+      {{- if $lora }}
       - name: lora-clean-sources
         configMap:
           name: {{ include "phorvex.fullname" . }}-lora-clean-sources
@@ -409,7 +425,7 @@ spec:
           - key: sources.json
             path: sources.json
       {{- end }}
-      {{- if .Values.phorvex.mig.profiles.content }}
+      {{- if $migProfiles }}
       - name: mig-profiles
         configMap:
           name: {{ include "phorvex.fullname" . }}-mig-profiles
@@ -431,7 +447,7 @@ spec:
           secretName: {{ required "console.auditTransport.serverSecretName required" .Values.phorvex.console.auditTransport.serverSecretName }}
       {{- end }}
       {{- end }}
-      {{- if .Values.phorvex.servingSecurity.bindings }}
+      {{- if $servingFile }}
       - name: serving-security
         configMap:
           name: {{ include "phorvex.fullname" . }}-serving-security

@@ -1,4 +1,4 @@
-{{- if .Values.phorvex.loraCleanSources.content }}
+{{- if and .Values.phorvex.loraCleanSources.content (not .Values.phorvex.services.actuator.endpoint) }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

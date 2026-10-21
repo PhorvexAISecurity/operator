@@ -1,4 +1,7 @@
 {{- if .Values.phorvex.codeExecAdmission.enabled }}
+{{- if .Values.phorvex.services.actuator.endpoint }}
+{{- fail "phorvex.codeExecAdmission.enabled requires the in-process actuator: the policy admits only the manager's identity, and admitting a separate actuator's identity is a change to this reviewed contract" }}
+{{- end }}
 {{- $managerSA := include "phorvex.serviceAccountName" . }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne $managerSA "phorvex-phorvex-manager") }}
 {{- fail (printf "phorvex.codeExecAdmission.enabled requires the canonical singleton manager identity system:serviceaccount:phorvex-system:phorvex-phorvex-manager (rendered system:serviceaccount:%s:%s); custom manager identities require phorvex.codeExecAdmission.enabled=false" .Release.Namespace $managerSA) }}

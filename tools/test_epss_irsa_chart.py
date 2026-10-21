@@ -153,6 +153,10 @@ class ChartTests(unittest.TestCase):
             for member in archive.getmembers():
                 if member.isfile() and member.name != 'phorvex/Chart.yaml':
                     relative = Path(member.name).relative_to('phorvex')
+                    # helm package rewrites Chart.lock and stores the chart's own vendored
+                    # dependencies expanded; tools/check-vendored-chart.sh compares those.
+                    if relative.parts[0] == 'charts' or relative == Path('Chart.lock'):
+                        continue
                     self.assertEqual(archive.extractfile(member).read(), (SOURCE / relative).read_bytes())
 
     def test_active_stack_values_leave_auth_disabled(self):
