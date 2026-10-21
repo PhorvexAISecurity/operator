@@ -2,6 +2,9 @@ image:
   repository: phorvex-sensor
   # Defaults to the chart's appVersion.
   tag: ""
+  # The release writes the pushed image's sha256 digest; set, the pod runs
+  # exactly that image.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # The manager release's fullname; empty is the manager chart's own,

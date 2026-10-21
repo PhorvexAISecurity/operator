@@ -482,6 +482,25 @@ class ManagerRemoteModeTests(unittest.TestCase):
         self.assertIn('requires the in-process actuator', result.stderr)
 
 
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ImageDigestTests(unittest.TestCase):
+    """The release pins each service image by the digest it pushed (docs/services/releasing.md)."""
+
+    def test_a_service_runs_exactly_the_released_image(self):
+        digest = 'sha256:' + 'a' * 64
+        for service in ('brain', 'sensor', 'actuator'):
+            with self.subTest(service=service):
+                chart = CHARTS / ('phorvex-' + service)
+                pod = by_kind(helm_template(chart, '--set', 'image.repository=registry.example/phorvex/' + service,
+                                            '--set', 'image.tag=0.1.0', '--set', 'image.digest=' + digest))['Deployment'][0]
+                image = pod['spec']['template']['spec']['containers'][0]['image']
+                self.assertEqual(image, f'registry.example/phorvex/{service}:0.1.0@{digest}')
+                result = subprocess.run([HELM, 'template', 'phorvex', str(chart), '-n', 'phorvex-system', '--set', 'image.digest=latest'],
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('image.digest must be sha256', result.stderr)
+
+
 class VendoredLibraryTests(unittest.TestCase):
     """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
 

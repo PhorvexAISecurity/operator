@@ -2,6 +2,9 @@ image:
   repository: phorvex-brain
   # Defaults to the chart's appVersion.
   tag: ""
+  # The release writes the pushed image's sha256 digest; set, the pod runs
+  # exactly that image.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # The manager chart's keys, under the same name, so one environment file
