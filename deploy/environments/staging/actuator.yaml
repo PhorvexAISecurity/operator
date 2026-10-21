@@ -1,0 +1,3 @@
+# The actuator chart's own staging values (deploy/charts/phorvex-actuator), merged after phorvex.yaml.
+# The release (phase 5c) writes the published actuator image here, under `image`.
+{}

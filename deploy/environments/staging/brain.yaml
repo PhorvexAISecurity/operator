@@ -1,0 +1,3 @@
+# The brain chart's own staging values (deploy/charts/phorvex-brain), merged after phorvex.yaml.
+# The release (phase 5c) writes the published brain image here, under `image`.
+{}
