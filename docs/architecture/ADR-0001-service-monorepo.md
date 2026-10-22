@@ -113,6 +113,11 @@ Rules:
   sensor/brain/actuator and console → read APIs.
 - Process-global setters become per-service configuration. Nothing is shared
   in memory across services.
+- The console and the attacks service are the one HTTP/JSON boundary (decided
+  in phase 6). The attacks service serves the console's own API for the attack
+  routes, and the console forwards them after admitting the caller. Their
+  contract is the UI's, which a protobuf copy would only duplicate
+  (`docs/services/attacks.md`).
 
 ### State and availability
 
@@ -203,7 +208,7 @@ every Docker build context complete for those targets.
 | 3 | Break the domain cycles above and enforce the boundaries (`archtest`, done in 3a); turn the process-global brain configuration into per-service flags | Unchanged |
 | 4 | gRPC contracts (sensor snapshot, brain decide stream with capability questions, actuator actuate and journals) and one binary per service, with the in-process wiring kept behind a flag for rollback; `mathlab` replays prove decision parity | Unchanged in in-process mode |
 | 5 | One image, chart and Argo CD Application per service; a version per service from the import graph, and affected-service CI; deploy to staging beside production first, then cut production over | Staging, then cutover |
-| 6 | Move attack firing and harness runs out of the console into the attacks service | Console calls the attacks API |
+| 6 | Move attack firing and harness runs out of the console into the attacks service (`cmd/attacks`), over the console's HTTP/JSON API | Console forwards the attack routes to the attacks service |
 
 Cutover criteria for phase 5 are decided separately. They must include decision
 parity on live ticks, and rollback to the current `phorvex-stack` Application.

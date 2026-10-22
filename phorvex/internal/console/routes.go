@@ -52,6 +52,12 @@ func (s *Server) apiRoutes() []route {
 		return route{path: path, spec: spec, h: h}
 	}
 
+	// attack marks a route the attacks service serves (Config.Service).
+	attack := func(rt route) route {
+		rt.spec.attacks = true
+		return rt
+	}
+
 	return []route{
 		// ── session ───────────────────────────────────────────────────────────────────────
 		// What this identity may actually do. The SPA reads it to render only the controls the
@@ -64,9 +70,9 @@ func (s *Server) apiRoutes() []route {
 		// ── shared product metadata (any read grant) ──────────────────────────────────────
 		// Catalogue and registry facts that describe the PRODUCT, not a customer: no tenant is
 		// attributable to them and nothing private is disclosed by sharing them.
-		read("/api/suites", s.suites, routeSpec{}),
-		read("/api/catalog", s.catalog, routeSpec{}),
-		read("/api/threat-matrix", s.threatMatrix, routeSpec{}),
+		attack(read("/api/suites", s.suites, routeSpec{})),
+		attack(read("/api/catalog", s.catalog, routeSpec{})),
+		attack(read("/api/threat-matrix", s.threatMatrix, routeSpec{})),
 		read("/api/handlers", s.handlers, routeSpec{}),
 
 		// ── private evidence corpus (indivisible; needs an explicit cross-tenant grant) ────
@@ -75,15 +81,15 @@ func (s *Server) apiRoutes() []route {
 		// tenant, so they cannot be filtered down to one: an identity limited to some tenants
 		// gets none of it, and a vendor-side identity holds the wildcard that does. This is the
 		// "indivisible unattributable private evidence" case, not shared catalogue metadata.
-		read("/api/effectiveness", s.effectiveness, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/frontier", s.frontier, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/benchmarks", s.benchmarks, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/posture", s.posture, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/rawlog", s.rawlog, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/matrix", s.matrix, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/ai-surface", s.aiSurface, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/reports", s.reports, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true}),
-		read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly, fixedTarget: defaultTargetID, requireTenantWildcard: true}),
+		attack(read("/api/effectiveness", s.effectiveness, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/frontier", s.frontier, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/benchmarks", s.benchmarks, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/posture", s.posture, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/rawlog", s.rawlog, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/matrix", s.matrix, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/ai-surface", s.aiSurface, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/reports", s.reports, routeSpec{fixedTarget: defaultTargetID, requireTenantWildcard: true})),
+		attack(read("/api/benchmark-sim", s.benchmarkSim, routeSpec{methods: postOnly, fixedTarget: defaultTargetID, requireTenantWildcard: true})),
 
 		// ── tenant-attributable data (filtered to the granted tenants in the handler) ──────
 		read("/api/metrics", s.metricsScrape, routeSpec{fixedTarget: defaultTargetID}),
@@ -92,8 +98,8 @@ func (s *Server) apiRoutes() []route {
 		// time. The bytes are immutable and content-addressed; the console stores nothing.
 		read("/api/math-lab/snapshots", s.mathLabSnapshots, routeSpec{tenantQ: []string{"namespace"}, fixedTarget: defaultTargetID}),
 		read("/api/math-lab/snapshot", s.mathLabSnapshot, routeSpec{tenantQ: []string{"namespace"}, fixedTarget: defaultTargetID}),
-		read("/api/attack-results", s.attackResults, routeSpec{fixedTarget: defaultTargetID}),
-		read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{fixedTarget: defaultTargetID}),
+		attack(read("/api/attack-results", s.attackResults, routeSpec{fixedTarget: defaultTargetID})),
+		attack(read("/api/attack-monitoring", s.attackMonitoringHandler, routeSpec{fixedTarget: defaultTargetID})),
 		read("/api/diagnostics", s.diagnostics, routeSpec{fixedTarget: defaultTargetID}),
 
 		// ── target-scoped reads ───────────────────────────────────────────────────────────
@@ -112,8 +118,8 @@ func (s *Server) apiRoutes() []route {
 		// namespace stays available to a limited one.
 		read("/api/scan", s.scan, routeSpec{targetQ: []string{"context"}, tenantQ: []string{"ns"}, tenantOptional: true, wildcardWhenUnscoped: true}),
 		read("/api/ablation", s.ablation, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"ns"}, tenantOptional: true, wildcardWhenUnscoped: true}),
-		read("/api/availability-arms", s.availabilityArms, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"ns"}, tenantOptional: true}),
-		read("/api/workload/attacks", s.workloadAttacks, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"namespace"}}),
+		attack(read("/api/availability-arms", s.availabilityArms, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"ns"}, tenantOptional: true})),
+		attack(read("/api/workload/attacks", s.workloadAttacks, routeSpec{fixedTarget: defaultTargetID, tenantQ: []string{"namespace"}})),
 
 		// ── live decision stream + history ────────────────────────────────────────────────
 		// Any granted role may connect; the projection and the tenant filter are resolved from
@@ -136,17 +142,17 @@ func (s *Server) apiRoutes() []route {
 		// resolve what each will actually touch — the suite's own config for /start, and
 		// StartScenario's substituted context and forced sandbox namespace for /scenario — so an
 		// omitted or unknown target cannot slip past the grant.
-		control("/api/runs/start", s.startRun, routeSpec{destination: suiteRunDestination}),
-		control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination}),
-		control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination}),
-		control("/api/runs/functional/admission", s.functionalAdmission, routeSpec{methods: getOnly, destination: functionalAdmissionDestination}),
-		control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true}),
-		control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true}),
-		control("/api/runs/voice-cleanup-reconcile", s.runVoiceCleanupReconcile, routeSpec{runQ: "id", runBody: true}),
-		read("/api/runs/list", s.runsList, routeSpec{}),
-		read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"}),
-		read("/api/runs/stream", s.runStream, routeSpec{runQ: "id"}),
-		read("/api/runs/evidence", s.runEvidence, routeSpec{runQ: "id"}),
+		attack(control("/api/runs/start", s.startRun, routeSpec{destination: suiteRunDestination})),
+		attack(control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination})),
+		attack(control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination})),
+		attack(control("/api/runs/functional/admission", s.functionalAdmission, routeSpec{methods: getOnly, destination: functionalAdmissionDestination})),
+		attack(control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true})),
+		attack(control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true})),
+		attack(control("/api/runs/voice-cleanup-reconcile", s.runVoiceCleanupReconcile, routeSpec{runQ: "id", runBody: true})),
+		attack(read("/api/runs/list", s.runsList, routeSpec{})),
+		attack(read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"})),
+		attack(read("/api/runs/stream", s.runStream, routeSpec{runQ: "id"})),
+		attack(read("/api/runs/evidence", s.runEvidence, routeSpec{runQ: "id"})),
 
 		// ── controls: live cluster writes ─────────────────────────────────────────────────
 		control("/api/policy/edit", s.policyEdit, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
@@ -157,18 +163,18 @@ func (s *Server) apiRoutes() []route {
 		// The write side: an audited merge patch of those knobs on one policy (operator role; the
 		// body's namespace must be in the grant), or a restore of a previous change's values.
 		control(optimizerApplyRoute, s.optimizerApply, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
-		control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS}),
-		control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
-		control("/api/voice/agency/live/fire", s.voiceAgencyLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
-		control(voiceOutputRoute, s.voiceOutputLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
-		control(voiceAdmissionRoute, s.voiceAdmissionLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
-		control("/api/voice/mcp/live/fire", s.voiceMCPLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"}),
-		control("/api/litellm/live/fire", s.liteLLMLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),
-		control("/api/litellm/output/fire", s.liteLLMOutputFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"}),
-		control(crmLiveRoute, s.crmRefundLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "crm"}),
-		control("/api/workload/attack", s.workloadAttack, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
-		control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
-		control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true}),
+		attack(control("/api/vllm/attack", s.vllmAttack, routeSpec{fixedTarget: defaultTargetID, fixedTenant: vllmAttackNS})),
+		attack(control("/api/voice/live/fire", s.voiceMemoryLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"})),
+		attack(control("/api/voice/agency/live/fire", s.voiceAgencyLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"})),
+		attack(control(voiceOutputRoute, s.voiceOutputLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"})),
+		attack(control(voiceAdmissionRoute, s.voiceAdmissionLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"})),
+		attack(control("/api/voice/mcp/live/fire", s.voiceMCPLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "voice"})),
+		attack(control("/api/litellm/live/fire", s.liteLLMLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"})),
+		attack(control("/api/litellm/output/fire", s.liteLLMOutputFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "litellm"})),
+		attack(control(crmLiveRoute, s.crmRefundLiveFire, routeSpec{fixedTarget: defaultTargetID, fixedTenant: "crm"})),
+		attack(control("/api/workload/attack", s.workloadAttack, routeSpec{fixedTarget: defaultTargetID, tenantBody: true})),
+		attack(control("/api/workload/fire-scenario", s.fireScenarioLive, routeSpec{fixedTarget: defaultTargetID, tenantBody: true})),
+		attack(control("/api/availability-arms/run", s.runArmsExperiment, routeSpec{fixedTarget: defaultTargetID, tenantBody: true})),
 
 		// ── apply-fix write path ──────────────────────────────────────────────────────────
 		// The tenant is resolved from the grant (requestTenant), never from the body, and the
@@ -245,7 +251,20 @@ func (s *Server) Handler() http.Handler {
 	// Liveness only: no root path, no harness layout, no binary locations.
 	mux.HandleFunc("/api/health", s.health)
 	for _, rt := range s.apiRoutes() {
-		mux.HandleFunc(rt.path, s.guard(rt))
+		switch {
+		case s.cfg.serves(rt):
+			mux.HandleFunc(rt.path, s.guard(rt))
+		case s.cfg.Service == ServiceConsole:
+			mux.HandleFunc(rt.path, s.forward(rt))
+		}
+		// The attacks service leaves the console's routes unserved: they answer 404.
+	}
+	if s.cfg.Service == ServiceAttacks {
+		// The attacks service serves no UI.
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown API endpoint: " + r.URL.Path})
+		})
+		return mux
 	}
 	// Static SPA at /. An unmatched /api/ path is an API 404, never SPA HTML.
 	mux.HandleFunc("/", s.rootOrAPINotFound)

@@ -47,7 +47,7 @@ ARG CONSOLE_VERSION=dev
 RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
-      -o /console cmd/console/main.go
+      -o /console ./cmd/console
 
 # The console's live-scan/ablation subsystems SHELL OUT to the phorvex operator binary at
 # <root>/phorvex/bin/phorvex.exe (subsystems.go: c.PhorvexBin runs `phorvex --scan`). That
