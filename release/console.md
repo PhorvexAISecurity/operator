@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.6.0 (2026-10-22)
+
+- feat(scope): limit a deployment to its policy namespaces (c7e69292)
+
 ## 0.5.2 (2026-10-22)
 
 - test(jetstreamprobe): give the quorum test's fetches room on CI runners (3d7313fd)
