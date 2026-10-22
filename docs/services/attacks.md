@@ -76,6 +76,8 @@ docker build -f deploy/docker/console.Dockerfile --target attacks -t phorvex-att
   - its image (`image`, pinned by `digest`);
   - its ServiceAccount, Deployment and Service, all named `<release>-attacks`;
   - its own state claim, `<release>-attacks-state`;
+  - its own copy of the rendered grants, `<release>-attacks-grants`. The pod reads
+    them once, at startup, so they arrive in the same sync as the pod they roll;
   - `/api/health` probes, and no UI.
 - **Rendering.** It renders only where `phorvex.console.enabled` is set. It reads
   the manager chart's keys under `phorvex`; its defaults are copies of the manager's,
