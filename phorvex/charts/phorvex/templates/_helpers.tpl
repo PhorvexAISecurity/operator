@@ -17,6 +17,13 @@ app.kubernetes.io/part-of: phorvex
 {{- default (printf "%s-manager" (include "phorvex.fullname" .)) .Values.phorvex.serviceAccountName -}}
 {{- end -}}
 
+{{/* The manager image, pinned to the digest the release pushed once one is set. */}}
+{{- define "phorvex.image" -}}
+{{- $image := .Values.phorvex.image -}}
+{{- with $image.releaseDigest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "phorvex.image.releaseDigest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end -}}
+{{ $image.repository }}:{{ $image.tag }}{{ with $image.releaseDigest }}@{{ . }}{{ end }}
+{{- end -}}
+
 {{- define "phorvex.consoleServiceAccountName" -}}
 {{ include "phorvex.fullname" . }}-console
 {{- end -}}
