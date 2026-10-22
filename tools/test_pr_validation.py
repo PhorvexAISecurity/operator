@@ -261,8 +261,12 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git tag "$component-v$version" "$GITHUB_SHA"', run)
         self.assertEqual(RELEASE['env']['ENVIRONMENT'], 'staging')
         pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
-        self.assertIn('./tools/servicerelease prepare', pr)
-        self.assertIn('servicerelease pull-request --head release/next --base main', pr)
+        # A built binary, not `go run`, which reports prepare's exit 3 as 1.
+        self.assertIn('go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease', pr)
+        self.assertNotIn('servicerelease prepare', pr.replace('"$tool" prepare', ''))
+        self.assertIn('"$tool" prepare --title-file', pr)
+        self.assertIn('if [ "$status" -eq 3 ]; then exit 0; fi', pr)
+        self.assertIn('"$tool" pull-request --head release/next --base main', pr)
 
     def test_the_release_pr_gets_its_checks(self):
         # GitHub starts no pull_request run for a PR the workflow's token opened or
@@ -270,7 +274,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
         line = next(l for l in pr.splitlines() if '--workflows ' in l)
         dispatched = line.split('--workflows ')[1].split()[0].split(',')
-        self.assertIn('servicerelease dispatch --ref release/next', pr)
+        self.assertIn('"$tool" dispatch --ref release/next', pr)
         self.assertEqual(sorted(dispatched), ['e2e-contract.yml', 'native-rbac.yml', 'pr-validation.yml'])
         for workflow in dispatched:
             doc = yaml.load((ROOT / '.github/workflows' / workflow).read_text(), Loader=yaml.BaseLoader)
