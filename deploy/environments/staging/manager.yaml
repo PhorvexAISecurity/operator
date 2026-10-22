@@ -3,12 +3,12 @@
 phorvex:
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager"
-    tag: "0.5.0"
-    releaseDigest: "sha256:15d70941a79256d0250870156f7217a8455dd598d84c35e299b719fe13b2d9b1"
-    releaseSourceSHA: "489bb779c1c28c0e61f9d2e111a2fe6f08a82029"
+    tag: "0.6.0"
+    releaseDigest: "sha256:144cc101a0f900cffbef9780b3a3e72d600347ec4509c85de6765bd48b6c8f4c"
+    releaseSourceSHA: "8dfd69705556e3112ebe2d77a18ec86d2c4eec02"
   console:
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console"
-      tag: "0.5.2"
-      releaseDigest: "sha256:92f2d710b9c4e245c18bc3b980afef08850c89bfdb21a20a2b2ff8103decf7c5"
-      releaseSourceSHA: "b3518655ca70f995bb6230c9f94a7c61bb717c5d"
+      tag: "0.6.0"
+      releaseDigest: "sha256:4158470b4288496634891ea1bf2b1d4e3c88c87c46da051d7278be7374e413c1"
+      releaseSourceSHA: "8dfd69705556e3112ebe2d77a18ec86d2c4eec02"
