@@ -349,6 +349,9 @@ spec:
         # Environment defaults keep chart-first rollouts compatible with older console images,
         # which ignore unknown environment variables. New binaries still allow explicit CLI
         # flags to override these defaults outside this chart.
+        {{- with include "phorvex-common.injectorEnv" (dict "values" .Values.phorvex) }}
+        {{- . | nindent 8 }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_HISTORY_MAX_BYTES
           value: {{ .Values.phorvex.console.state.historyArchiveMaxBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES

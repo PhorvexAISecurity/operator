@@ -87,6 +87,9 @@ spec:
         {{- with include "phorvex-common.endpointLeaseEnv" $trust }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with include "phorvex-common.injectorEnv" $trust }}
+        {{- . | nindent 8 }}
+        {{- end }}
         ports:
         - name: grpc
           containerPort: 9090

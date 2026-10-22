@@ -67,6 +67,10 @@ phorvex:
     - vllm/detector-kv-canary
     - vllm/detector-adapter-inv
     - phorvex-system/operator-controller-manager
+  # The ServiceAccount (namespace/name) the workload live arms create their SecurityEvents
+  # as. Empty is the console of the release named phorvex in phorvex-system; any other
+  # environment names its own. Every service and the console must agree.
+  injectorIdentity: ""
   # Opt-in M100 synthetic completed-disclosure history. This authority is
   # independent of trustedDetectors. Durable history requires an operator-owned
   # existing PVC whose mount root is writable by UID/GID 65532 and inaccessible

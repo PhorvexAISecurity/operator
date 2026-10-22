@@ -51,6 +51,19 @@ observer ServiceAccounts.
 {{- end -}}
 
 {{/*
+phorvex-common.injectorEnv: the ServiceAccount the workload live arms create their
+SecurityEvents as (--injector-identity), or nothing for the default
+(phorvex-system/phorvex-phorvex-console). Every service and the console read it from
+this variable, which an image older than the setting ignores.
+*/}}
+{{- define "phorvex-common.injectorEnv" -}}
+{{- with .values.injectorIdentity -}}
+- name: PHORVEX_INJECTOR_IDENTITY
+  value: {{ . | quote }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 phorvex-common.endpointLeaseEnv: the reviewed endpoint lease authority as the
 container environment the trust flags default from, or nothing when the lease is
 off. Only immutable references are accepted.

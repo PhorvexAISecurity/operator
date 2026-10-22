@@ -26,6 +26,7 @@ phorvex:
   - vllm/detector-kv-canary
   - vllm/detector-adapter-inv
   - phorvex-system/operator-controller-manager
+  injectorIdentity: ""
   e2eDetector:
     enabled: false
   console:
