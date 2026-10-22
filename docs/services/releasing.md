@@ -1,7 +1,9 @@
 # Versioning the services
 
 Each service is released on its own (ADR-0001): `manager`, `brain`, `sensor`,
-`actuator` and `console`, one image each, with tags such as `brain-v0.1.0`.
+`actuator`, `console` and `attacks`, one image each, with tags such as
+`brain-v0.1.0`. The attacks image is the `attacks` stage of the console's
+Dockerfile (`docker build --target attacks`), so both build the same binaries.
 `phorvex/tools/servicerelease` decides what a release contains.
 
 ## What belongs to a service
@@ -32,8 +34,8 @@ inputs. Its conventional-commit type sets the bump:
 | anything else | patch: it still changed what the image is built from |
 
 A service's first release takes its initial version: 0.5.0 for the manager and
-console, which continue the 0.4.x line, and 0.1.0 for the brain, sensor and
-actuator.
+console, which continue the 0.4.x line, and 0.1.0 for the brain, sensor,
+actuator and attacks service.
 
 ```sh
 go -C phorvex run ./tools/servicerelease plan            # every service's next version
@@ -78,7 +80,8 @@ inside the `release` environment.
 In place since 2026-10-22:
 
 - **ECR.** The repositories `phorvex/manager`, `phorvex/brain`,
-  `phorvex/sensor`, `phorvex/actuator` and `phorvex/console` exist in account
+  `phorvex/sensor`, `phorvex/actuator`, `phorvex/console` and `phorvex/attacks`
+  exist in account
   753556437180, us-east-2: mutable tags, scan on push, AES256. The production
   stack's repositories (`phorvex`, `phorvex-console`) are not used.
 - **IAM.** The role `phorvex-refactored-release` trusts GitHub's OIDC provider
@@ -86,7 +89,7 @@ In place since 2026-10-22:
   the repository issues immutable subjects, which carry the owner's and the
   repository's IDs, so a renamed or recreated repository cannot match it.
   Its only policy, `phorvex-refactored-release-ecr`, allows `ecr:GetAuthorizationToken`
-  and pushing to those five repositories. The production repository's role,
+  and pushing to those six repositories. The production repository's role,
   `github-actions-phorvex`, is unchanged.
 - **The repository variable.** `PHORVEX_RELEASE_ROLE_ARN` names that role. The
   publish job refuses to run without it.

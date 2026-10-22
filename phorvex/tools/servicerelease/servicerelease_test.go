@@ -134,17 +134,21 @@ func TestInputsFollowTheImportGraph(t *testing.T) {
 		path string
 		want []string
 	}{
-		{"phorvex/internal/brainsvc/server.go", []string{"brain", "console", "manager"}},
-		{"phorvex/internal/sensorsvc/server.go", []string{"console", "manager", "sensor"}},
-		{"phorvex/internal/actuatorsvc/server.go", []string{"actuator", "console", "manager"}},
-		{"phorvex/internal/wire/wire.go", []string{"actuator", "brain", "console", "manager", "sensor"}},
+		{"phorvex/internal/brainsvc/server.go", []string{"attacks", "brain", "console", "manager"}},
+		{"phorvex/internal/sensorsvc/server.go", []string{"attacks", "console", "manager", "sensor"}},
+		{"phorvex/internal/actuatorsvc/server.go", []string{"actuator", "attacks", "console", "manager"}},
+		{"phorvex/internal/wire/wire.go", []string{"actuator", "attacks", "brain", "console", "manager", "sensor"}},
 		{"phorvex/cmd/brain/main.go", []string{"brain"}},
-		{"phorvex/go.mod", []string{"actuator", "brain", "console", "manager", "sensor"}},
-		{"libs/logging/logging.go", []string{"actuator", "brain", "console", "manager", "sensor"}},
+		{"phorvex/go.mod", []string{"actuator", "attacks", "brain", "console", "manager", "sensor"}},
+		{"libs/logging/logging.go", []string{"actuator", "attacks", "brain", "console", "manager", "sensor"}},
 		{"deploy/charts/phorvex-sensor/values.yaml", []string{"sensor"}},
 		{"phorvex/charts/phorvex/values.yaml", []string{"manager"}},
 		{"deploy/docker/service.Dockerfile", []string{"actuator", "brain", "sensor"}},
 		{"dashboard-web/package.json", []string{"console"}},
+		// The attacks image is a stage of the console Dockerfile, without the UI.
+		{"deploy/docker/console.Dockerfile", []string{"attacks", "console"}},
+		{"deploy/charts/phorvex-attacks/values.yaml", []string{"attacks"}},
+		{"phorvex/cmd/attacks/main.go", []string{"attacks", "console"}},
 		{"phorvex/internal/brainsvc/server_test.go", nil},
 		{"docs/services/brain.md", nil},
 	} {

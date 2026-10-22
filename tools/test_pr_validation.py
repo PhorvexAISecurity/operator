@@ -64,9 +64,10 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('python build/integrations/epss-ecr-auth-runtime/verify_recipe.py', runs['charts'])
         self.assertIn('python3 tools/check-go-format.py "$BASE"', runs['lint'])
         self.assertIn('go -C "$module" vet ./...', runs['lint'])
-        self.assertEqual(jobs['images']['strategy']['matrix']['image'], ['operator', 'console', 'brain', 'sensor', 'actuator'])
+        self.assertEqual(jobs['images']['strategy']['matrix']['image'], ['operator', 'console', 'brain', 'sensor', 'actuator', 'attacks'])
         self.assertIn('docker build --file "deploy/docker/$IMAGE.Dockerfile"', runs['images'])
         self.assertIn('docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE"', runs['images'])
+        self.assertIn('docker build --file deploy/docker/console.Dockerfile --target attacks', runs['images'])
         for forbidden in ('docker push', 'docker login', '--push'):
             self.assertNotIn(forbidden, runs['images'])
 
