@@ -1,5 +1,6 @@
 """The Argo CD manifests of the split services (deploy/argocd/services) against the charts and environments."""
 from pathlib import Path
+import json
 import os
 import shutil
 import subprocess
@@ -148,6 +149,38 @@ class EnvironmentRenderTests(unittest.TestCase):
                 console = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment' and d['metadata']['name'].endswith('-console'))
                 env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
                 self.assertEqual(env['PHORVEX_CONSOLE_ATTACKS_URL'], 'http://' + endpoint)
+
+    def test_an_end_to_end_identity_reaches_only_its_environment(self):
+        # Its tokens are console credentials, never Kubernetes ones. The audience is the
+        # environment's own, so another console's e2e token is refused, and the grant is
+        # the environment's namespace.
+        production = load(ROOT / 'deploy/helm/phorvex-stack/values-eks.yaml')['phorvex']['phorvex']['console']['auth']['oidc']
+        by_service = {e['service']: e for e in ELEMENTS}
+        for environment in ENVIRONMENTS_LISTED:
+            auth = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['console'].get('auth', {})
+            if not auth.get('e2eIdentity', {}).get('enabled'):
+                continue
+            with self.subTest(environment=environment['environment']):
+                namespace, name = environment['namespace'], environment['release'] + '-phorvex-console-e2e'
+                self.assertNotEqual(auth['oidc']['audience'], production['audience'])
+                subjects = [s for s in json.loads(auth['grants']['data'])['subjects']
+                            if s['subject'] == f'system:serviceaccount:{namespace}:{name}']
+                self.assertEqual([(s['issuer'], s['tenants'], s['targets']) for s in subjects],
+                                 [(auth['oidc']['issuer'], [namespace], ['default'])])
+                rendered = {service: render(environment, element) for service, element in by_service.items()}
+                account = next(d for d in rendered['manager'] if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
+                self.assertIs(account['automountServiceAccountToken'], False)
+                for service, docs in rendered.items():
+                    for d in docs:
+                        if d['kind'] in ('RoleBinding', 'ClusterRoleBinding'):
+                            self.assertNotIn(name, [s['name'] for s in d.get('subjects') or []], (service, d['metadata']['name']))
+                # The console and the attacks service both verify its tokens.
+                consoles = [d for d in rendered['manager'] + rendered['attacks'] if d['kind'] == 'Deployment'
+                            and d['metadata']['name'] in (environment['release'] + '-phorvex-console', environment['release'] + '-attacks')]
+                self.assertEqual(len(consoles), 2)
+                for console in consoles:
+                    env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
+                    self.assertEqual(env['PHORVEX_CONSOLE_OIDC_AUDIENCE'], auth['oidc']['audience'], console['metadata']['name'])
 
     def test_an_environment_beside_production_leaves_it_alone(self):
         # On the production cluster the manager, sensor and actuator share the API
