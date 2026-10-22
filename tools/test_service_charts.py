@@ -648,6 +648,16 @@ class AttacksServiceTests(unittest.TestCase):
         self.assertEqual({g[0] for g in fire if g[2] != 'securityevents'}, {'team-a', 'team-b'})
         self.assertEqual({g for g in account_grants(docs, *ATTACKS_SA) if g[0] == '*cluster*' and g[2] in ('pods', 'pods/exec', 'services')}, set())
 
+    def test_attack_namespaces_confine_policy_edits(self):
+        docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE, '--set', 'phorvex.console.attackNamespaces={team-a,team-b}')
+        for account in (CONSOLE_SA, ATTACKS_SA):
+            with self.subTest(account=account[1]):
+                edits = {g[0] for g in account_grants(docs, *account) if g[2] == 'phorvexpolicies' and g[4] == 'patch'}
+                self.assertEqual(edits, {'team-a', 'team-b'})
+        # Unconfined, both may edit any policy, as the console could.
+        docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE)
+        self.assertIn(('*cluster*', 'phorvex.ai', 'phorvexpolicies', '*', 'patch'), account_grants(docs, *CONSOLE_SA))
+
     def test_the_console_forwards_to_the_attacks_service_and_names_it_the_injector(self):
         docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE)
         env = {c['name']: {e['name']: e.get('value') for e in c.get('env', [])} for c in containers(docs)}
@@ -727,6 +737,28 @@ class ExternalIdentityPolicyTests(unittest.TestCase):
                 self.assertIn({'name': 'PHORVEX_EVENT_IDENTITY_POLICY', 'value': 'prod-se-creator'}, container(docs, service)['env'])
                 self.assertLessEqual(guard, grants(docs))
         self.assertEqual({g for g in grants(helm_template(CHARTS / 'phorvex-actuator', *self.OFF, *self.GUARD)) if g[2].startswith('validatingadmission')}, set())
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ConsoleIngressTests(unittest.TestCase):
+    def test_the_console_can_be_exposed_on_its_own(self):
+        docs = helm_template(MANAGER_CHART, *CONSOLE, '--set', 'phorvex.console.ingress.enabled=true', '--set', 'phorvex.console.ingress.className=alb',
+                             '--set', 'phorvex.console.ingress.host=staging-console.example', '--set', 'phorvex.console.ingress.annotations.a=b')
+        service = next(d for d in docs if d['kind'] == 'Service' and d['metadata']['name'] == 'phorvex-phorvex-console')
+        console = next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == 'phorvex-phorvex-console')
+        self.assertLessEqual(service['spec']['selector'].items(), console['spec']['template']['metadata']['labels'].items())
+        self.assertEqual(service['spec']['ports'], [{'name': 'http', 'port': 80, 'targetPort': 'http'}])
+        ingress = next(d for d in docs if d['kind'] == 'Ingress')
+        self.assertEqual(ingress['spec']['ingressClassName'], 'alb')
+        self.assertEqual(ingress['metadata']['annotations'], {'a': 'b'})
+        rule = ingress['spec']['rules'][0]
+        self.assertEqual(rule['host'], 'staging-console.example')
+        self.assertEqual(rule['http']['paths'][0]['backend']['service'], {'name': 'phorvex-phorvex-console', 'port': {'name': 'http'}})
+        # Off by default, and it needs a host.
+        self.assertEqual([d for d in helm_template(MANAGER_CHART, *CONSOLE) if d['kind'] in ('Ingress', 'Service') and 'console' in d['metadata']['name']], [])
+        result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), *CONSOLE, '--set', 'phorvex.console.ingress.enabled=true'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('ingress.host is required', result.stderr)
 
 
 class VendoredLibraryTests(unittest.TestCase):

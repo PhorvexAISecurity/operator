@@ -61,7 +61,8 @@ rules:
   verbs: {{ if .Values.phorvex.services.attacks.endpoint }}["get", "list", "watch"]{{ else }}["get", "list", "watch", "create", "update", "patch", "delete"]{{ end }}
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
-  verbs: ["get", "list", "patch"]
+  # Confined (attackNamespaces), policy edits are the per-namespace Roles' below.
+  verbs: ["get", "list"{{ if not (and .Values.phorvex.services.attacks.endpoint .Values.phorvex.console.attackNamespaces) }}, "patch"{{ end }}]
 {{- if and .Values.phorvex.console.allowWorkloadMutations (not .Values.phorvex.services.attacks.endpoint) }}
 # The console's vLLM attack adapters label Pods, patch Services and can
 # delete test Pods. This is explicit opt-in; it grants no journal or SA writes.
@@ -92,8 +93,9 @@ subjects:
 {{- $scoped := .Values.phorvex.console.attackNamespaces }}
 ---
 # The attacks service fires what the console fired, so it holds the console's base
-# grants beyond reading. With console.attackNamespaces, what it may exec into and change
-# is limited to those namespaces; SecurityEvents are cluster-scoped.
+# grants beyond reading. With console.attackNamespaces, what it and the console may exec
+# into and change, policies included, is limited to those namespaces; SecurityEvents
+# are cluster-scoped.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -109,7 +111,7 @@ rules:
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
-  verbs: ["get", "list", "patch"]
+  verbs: ["get", "list"{{ if not $scoped }}, "patch"{{ end }}]
 {{- if not $scoped }}
 {{- include "phorvex.attackTargetRules" . }}
 {{- end }}
@@ -141,6 +143,9 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "services"]
   verbs: ["get", "list"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["patch"]
 {{- include "phorvex.attackTargetRules" $ }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -157,6 +162,35 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ $attacksSA }}
+  namespace: {{ $.Release.Namespace }}
+---
+# The console's policy edits (/api/policy/edit, the optimizer knobs), in this namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-policy-edit
+  namespace: {{ . }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+rules:
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-console-policy-edit
+  namespace: {{ . }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-console-policy-edit
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.consoleServiceAccountName" $ }}
   namespace: {{ $.Release.Namespace }}
 {{- end }}
 {{- end }}
