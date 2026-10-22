@@ -150,6 +150,26 @@ class EnvironmentRenderTests(unittest.TestCase):
                 env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
                 self.assertEqual(env['PHORVEX_CONSOLE_ATTACKS_URL'], 'http://' + endpoint)
 
+    def test_the_audit_history_fits_its_volume(self):
+        # A full volume stops the decision history: the manager keeps deciding, but
+        # records nothing the console or an investigation can read. Whole records can
+        # overrun a segment, so the nominal budget gets at most half the volume.
+        units = {'Ki': 2**10, 'Mi': 2**20, 'Gi': 2**30, 'Ti': 2**40}
+        by_service = {e['service']: e for e in ELEMENTS}
+        for environment in ENVIRONMENTS_LISTED:
+            docs = render(environment, by_service['manager'])
+            args = service_pod(docs, 'manager')['containers'][0]['args']
+            flags = dict(a[2:].split('=', 1) for a in args if a.startswith('--audit-max-'))
+            volume = next((d for d in docs if d['kind'] == 'PersistentVolumeClaim' and d['metadata']['name'].endswith('-audit')), None)
+            if volume is None:
+                continue
+            with self.subTest(environment=environment['environment']):
+                size = volume['spec']['resources']['requests']['storage']
+                capacity = int(size[:-2]) * units[size[-2:]]
+                segment = int(flags['audit-max-bytes'])
+                self.assertGreater(segment, 0, 'an unbounded audit fills any volume')
+                self.assertLessEqual(segment * (int(flags['audit-max-backups']) + 1), capacity // 2, size)
+
     def test_an_end_to_end_identity_reaches_only_its_environment(self):
         # Its tokens are console credentials, never Kubernetes ones. The audience is the
         # environment's own, so another console's e2e token is refused, and the grant is
