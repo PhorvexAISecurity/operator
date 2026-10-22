@@ -16,17 +16,22 @@ import (
 
 func crmLiveFixture(t *testing.T) client.Client {
 	t.Helper()
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: Namespace, UID: "svc-uid"},
+	return crmLiveFixtureInNamespace(t, Namespace)
+}
+
+func crmLiveFixtureInNamespace(t *testing.T, namespace string) client.Client {
+	t.Helper()
+	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName, Namespace: namespace, UID: "svc-uid"},
 		Spec: corev1.ServiceSpec{Selector: map[string]string{"app": "crm"},
 			Ports: []corev1.ServicePort{{Port: 8080, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(8080)}}}}
-	guard := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: GuardConfigMapName, Namespace: Namespace, UID: "guard-uid"},
+	guard := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: GuardConfigMapName, Namespace: namespace, UID: "guard-uid"},
 		Data: map[string]string{GuardKey: `{"denied_order_ids":[]}`}}
 	objects := []client.Object{svc, guard}
 	ready := true
 	var endpoints []discoveryv1.Endpoint
 	for i, name := range []string{"crm-a", "crm-b"} {
 		guardVol := corev1.Volume{Name: "crm-guard", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: GuardConfigMapName}}}}
-		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: Namespace, UID: types.UID("pod-" + string(rune('a'+i))), Labels: map[string]string{"app": "crm"}},
+		pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: types.UID("pod-" + string(rune('a'+i))), Labels: map[string]string{"app": "crm"}},
 			Spec: corev1.PodSpec{Volumes: []corev1.Volume{guardVol},
 				Containers: []corev1.Container{{Name: "crm", VolumeMounts: []corev1.VolumeMount{{Name: "crm-guard", ReadOnly: true, MountPath: GuardMountPath}}}}},
 			Status: corev1.PodStatus{PodIP: "10.2.0." + string(rune('1'+i)), ContainerStatuses: []corev1.ContainerStatus{{Name: "crm", Ready: true}}}}
@@ -35,9 +40,19 @@ func crmLiveFixture(t *testing.T) client.Client {
 			Conditions: discoveryv1.EndpointConditions{Ready: &ready}, TargetRef: &corev1.ObjectReference{Kind: "Pod", Name: name, UID: pod.UID}})
 	}
 	port := int32(8080)
-	objects = append(objects, &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "crm-slice", Namespace: Namespace,
+	objects = append(objects, &discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "crm-slice", Namespace: namespace,
 		Labels: map[string]string{discoveryv1.LabelServiceName: ServiceName}},
 		Ports: []discoveryv1.EndpointPort{{Port: &port}}, Endpoints: endpoints})
+	if namespace == StagingNamespace {
+		for _, object := range objects {
+			labels := object.GetLabels()
+			if labels == nil {
+				labels = map[string]string{}
+			}
+			labels[StagingFixtureLabel] = StagingFixtureValue
+			object.SetLabels(labels)
+		}
+	}
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, discoveryv1.AddToScheme} {
 		if e := add(scheme); e != nil {
@@ -119,5 +134,75 @@ func TestCRMValidateLiveAcceptsWrittenLedger(t *testing.T) {
 	got, e := ValidateLive(ctx, c, "pod-a", "pod-b")
 	if e != nil || len(got.State.Entries) != 1 || got.State.Entries[0].OrderID != "OR-5002" {
 		t.Fatalf("written ledger not read back: %+v %v", got, e)
+	}
+}
+
+func TestCRMStagingNamespaceRequiresExplicitOptIn(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name, configured, namespace string
+		want                        bool
+	}{
+		{"legacy-default", "", Namespace, true},
+		{"staging-default-off", "", StagingNamespace, false},
+		{"staging-explicit", StagingNamespace, StagingNamespace, true},
+		{"legacy-still-pinned", StagingNamespace, Namespace, true},
+		{"arbitrary-config", "other", StagingNamespace, false},
+		{"arbitrary-namespace", StagingNamespace, "other", false},
+		{"empty-namespace", StagingNamespace, "", false},
+		{"no-trimming", StagingNamespace + " ", StagingNamespace, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(NamespaceEnv, tc.configured)
+			c := crmLiveFixtureInNamespace(t, tc.namespace)
+			_, err := ValidateLiveInNamespace(ctx, c, tc.namespace, "pod-a", "pod-b")
+			if (err == nil) != tc.want {
+				t.Fatalf("namespace %q configured %q: err=%v want admitted=%v", tc.namespace, tc.configured, err, tc.want)
+			}
+		})
+	}
+	t.Setenv(NamespaceEnv, StagingNamespace)
+	if _, err := ValidateLive(ctx, crmLiveFixtureInNamespace(t, StagingNamespace), "pod-a", "pod-b"); err == nil {
+		t.Fatal("legacy ValidateLive changed namespace under staging configuration")
+	}
+}
+
+func TestCRMStagingRejectsMissingFixtureMarkersAndGuardDrift(t *testing.T) {
+	t.Setenv(NamespaceEnv, StagingNamespace)
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		object client.Object
+	}{
+		{"service", &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: ServiceName}}},
+		{"guard", &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: GuardConfigMapName}}},
+		{"target", &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crm-a"}}},
+		{"peer", &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "crm-b"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := crmLiveFixtureInNamespace(t, StagingNamespace)
+			if err := c.Get(ctx, client.ObjectKey{Namespace: StagingNamespace, Name: tc.object.GetName()}, tc.object); err != nil {
+				t.Fatal(err)
+			}
+			delete(tc.object.GetLabels(), StagingFixtureLabel)
+			if err := c.Update(ctx, tc.object); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ValidateLiveInNamespace(ctx, c, StagingNamespace, "pod-a", "pod-b"); err == nil {
+				t.Fatal("unmarked staging object admitted")
+			}
+		})
+	}
+	c := crmLiveFixtureInNamespace(t, StagingNamespace)
+	guard := &corev1.ConfigMap{}
+	if err := c.Get(ctx, client.ObjectKey{Namespace: StagingNamespace, Name: GuardConfigMapName}, guard); err != nil {
+		t.Fatal(err)
+	}
+	guard.Data[GuardKey] = `{"denied_order_ids":["OR-9999"]}`
+	if err := c.Update(ctx, guard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateLiveInNamespace(ctx, c, StagingNamespace, "pod-a", "pod-b"); err == nil {
+		t.Fatal("staging bypassed app/ledger agreement")
 	}
 }

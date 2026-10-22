@@ -23,6 +23,7 @@ var attackRoutes = []string{
 	"/api/runs/stream", "/api/runs/evidence",
 	"/api/vllm/attack", "/api/voice/live/fire", "/api/voice/agency/live/fire", voiceOutputRoute, voiceAdmissionRoute,
 	"/api/voice/mcp/live/fire", "/api/litellm/live/fire", "/api/litellm/output/fire", crmLiveRoute,
+	"/api/newstack/catalog", "/api/newstack/check", "/api/newstack/result", newstackFireRoute, "/api/newstack/cleanup",
 	"/api/workload/attack", "/api/workload/fire-scenario", "/api/availability-arms/run",
 }
 

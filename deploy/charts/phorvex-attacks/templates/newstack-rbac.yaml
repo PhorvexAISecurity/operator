@@ -1,0 +1,86 @@
+{{- if dig "console" "newstackLoops" "enabled" false .Values.phorvex }}
+{{- if or (ne .Release.Namespace "phorvex-staging") (not .Values.phorvex.console.enabled) (ne .Values.phorvex.services.attacks.endpoint "staging-attacks:8090") }}
+{{- fail "newstack fixture provisioning requires the staging console and staging-attacks:8090 in phorvex-staging" }}
+{{- end }}
+# The attack service owns disposable fixtures; normal actuation belongs to the
+# separate actuator identity. No Secret, RBAC, namespace or pod-delete grant.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-fixtures
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["get", "list", "watch", "create", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-fixtures
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-fixtures
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# Read only the installed external creator guard; review this account's own RBAC.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-preflight
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: [{{ required "newstack loops require eventIdentityPolicy.external" .Values.phorvex.eventIdentityPolicy.external | quote }}]
+  verbs: ["get"]
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["selfsubjectaccessreviews"]
+  verbs: ["create"]
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["selfsubjectreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-preflight
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-newstack-preflight
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

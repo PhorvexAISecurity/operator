@@ -548,6 +548,16 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return err
 	}
 	cfg.CRMRefundLiveEnabled = crmRefundLiveEnabled
+	newstackLoopsEnabled, err := readBool("PHORVEX_NEWSTACK_LOOPS_ENABLED")
+	if err != nil {
+		return err
+	}
+	cfg.NewstackLoopsEnabled = newstackLoopsEnabled
+	cfg.NewstackIdentityPolicy = read("PHORVEX_EVENT_IDENTITY_POLICY")
+	cfg.PodNamespace = read("POD_NAMESPACE")
+	if newstackLoopsEnabled && cfg.PodNamespace != "phorvex-staging" {
+		return errors.New("PHORVEX_NEWSTACK_LOOPS_ENABLED requires POD_NAMESPACE=phorvex-staging")
+	}
 	podBoundTokenEnabled, err := readBool("PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED")
 	if err != nil {
 		return err

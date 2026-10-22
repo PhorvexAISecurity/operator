@@ -32,14 +32,24 @@ type Live struct {
 // and exactly the two serving Pods, each Ready and mounting the guard, with the target and
 // (when given) peer among them.
 func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID string) (Live, error) {
+	return ValidateLiveInNamespace(ctx, r, Namespace, targetUID, peerUID)
+}
+
+// ValidateLiveInNamespace applies the same authority checks within one admitted
+// namespace. Staging requires explicit opt-in and fixture markers on the Service,
+// guard and both serving Pods; the legacy wrapper always reads the CRM namespace.
+func ValidateLiveInNamespace(ctx context.Context, r client.Reader, namespace, targetUID, peerUID string) (Live, error) {
+	if !NamespaceAllowed(namespace) {
+		return Live{}, errors.New("crm-refund namespace not admitted")
+	}
 	if r == nil || targetUID == "" || (peerUID != "" && targetUID == peerUID) {
 		return Live{}, errors.New("crm-refund reader or Pod identity absent")
 	}
 	svc := &corev1.Service{}
-	if e := r.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: ServiceName}, svc); e != nil {
+	if e := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ServiceName}, svc); e != nil {
 		return Live{}, e
 	}
-	if svc.DeletionTimestamp != nil || string(svc.UID) == "" || len(svc.Spec.Selector) != 1 || svc.Spec.Selector["app"] != "crm" {
+	if !stagingFixtureMatches(namespace, svc.Labels) || svc.DeletionTimestamp != nil || string(svc.UID) == "" || len(svc.Spec.Selector) != 1 || svc.Spec.Selector["app"] != "crm" {
 		return Live{}, errors.New("crm-refund Service selector/identity differs")
 	}
 	portOK := false
@@ -52,10 +62,10 @@ func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID strin
 		return Live{}, errors.New("crm-refund app is not the Service target on 8080")
 	}
 	guard := &corev1.ConfigMap{}
-	if e := r.Get(ctx, client.ObjectKey{Namespace: Namespace, Name: GuardConfigMapName}, guard); e != nil {
+	if e := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: GuardConfigMapName}, guard); e != nil {
 		return Live{}, e
 	}
-	if guard.DeletionTimestamp != nil || guard.UID == "" {
+	if !stagingFixtureMatches(namespace, guard.Labels) || guard.DeletionTimestamp != nil || guard.UID == "" {
 		return Live{}, errors.New("crm-refund guard ConfigMap identity differs")
 	}
 	// The app-facing denied.json is always present; the operator ledger (StateKey) is absent
@@ -74,7 +84,7 @@ func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID strin
 		return Live{}, errors.New("crm-refund app guard and operator ledger disagree")
 	}
 	var pods corev1.PodList
-	if e := r.List(ctx, &pods, client.InNamespace(Namespace), client.MatchingLabels{"app": "crm"}); e != nil {
+	if e := r.List(ctx, &pods, client.InNamespace(namespace), client.MatchingLabels{"app": "crm"}); e != nil {
 		return Live{}, e
 	}
 	if len(pods.Items) != 2 {
@@ -84,7 +94,7 @@ func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID strin
 	seen := map[string]bool{}
 	for i := range pods.Items {
 		p := &pods.Items[i]
-		if p.DeletionTimestamp != nil || p.UID == "" || p.Status.PodIP == "" || seen[string(p.UID)] {
+		if !stagingFixtureMatches(namespace, p.Labels) || p.DeletionTimestamp != nil || p.UID == "" || p.Status.PodIP == "" || seen[string(p.UID)] {
 			return Live{}, errors.New("crm-refund Pod lifetime differs")
 		}
 		seen[string(p.UID)] = true
@@ -106,7 +116,7 @@ func ValidateLive(ctx context.Context, r client.Reader, targetUID, peerUID strin
 		return Live{}, errors.New("crm-refund target/peer UID differs")
 	}
 	var slices discoveryv1.EndpointSliceList
-	if e := r.List(ctx, &slices, client.InNamespace(Namespace), client.MatchingLabels{discoveryv1.LabelServiceName: ServiceName}); e != nil {
+	if e := r.List(ctx, &slices, client.InNamespace(namespace), client.MatchingLabels{discoveryv1.LabelServiceName: ServiceName}); e != nil {
 		return Live{}, e
 	}
 	if len(slices.Items) == 0 {

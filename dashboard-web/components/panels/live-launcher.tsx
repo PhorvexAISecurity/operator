@@ -13,6 +13,7 @@ import { emitQueryChange } from "@/lib/query-events";
 import { canSendCatalogueSignal, isCatalogueSignalResult } from "@/lib/attack-result-truth";
 import { CatalogueSignalResult } from "@/components/panels/catalogue-signal-result";
 import { ScenarioResponseGuidance, displayActuatorHints } from "@/components/panels/scenario-response-guidance";
+import { NewstackLoopsPanel } from "@/components/panels/newstack-loops";
 
 // LiveLauncherPanel — the per-app attack launcher with actuator verdicts.
 //
@@ -230,16 +231,19 @@ export function LiveLauncherPanel({ lens }: { lens: Lens }) {
     finally { if (request === generation.current) setFiring(""); }
   };
 
-  if (readErrorMessage && !nss) return <div className="text-[12px] text-danger">error: {readErrorMessage}</div>;
-  if (err && !compat && !nss) return <div className="text-[12px] text-danger">error: {err}</div>;
-  if (!nss) return <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading your apps…</div>;
-  if (nss.length === 0) return <Empty msg="No non-system workloads found on this cluster." />;
+  const newstackPanel = <NewstackLoopsPanel key={`${queryScope.providerToken}:${lens}:${sel.context}`} lens={lens}
+    allowMutations={queryScope.ready && !targetQuery.error && !workloadQuery.error && lens === "operator" && mutatesDefaultContext} />;
+  if (readErrorMessage && !nss) return <div className="space-y-4">{newstackPanel}<div className="text-[12px] text-danger">error: {readErrorMessage}</div></div>;
+  if (err && !compat && !nss) return <div className="space-y-4">{newstackPanel}<div className="text-[12px] text-danger">error: {err}</div></div>;
+  if (!nss) return <div className="space-y-4">{newstackPanel}<div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> loading your apps…</div></div>;
+  if (nss.length === 0) return <div className="space-y-4">{newstackPanel}<Empty msg="No non-system workloads found on this cluster." /></div>;
 
   const liveCompatible = compat?.live.filter((a) => a.compatible) ?? [];
   const catCompatible = compat?.catalog.filter((c) => c.compatible) ?? [];
 
   return (
     <div className="space-y-4">
+      {newstackPanel}
       {readErrorMessage && <div className="rounded-md border border-danger/25 bg-danger/[0.06] p-3 text-[12.5px] text-danger">error: {readErrorMessage}</div>}
       {/* app picker */}
       <Card><CardContent className="p-4">

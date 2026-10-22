@@ -23,14 +23,14 @@ import (
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
-// crmRefundCapability gates offer-time: a reader, a crm-namespace target Pod, and a live
+// crmRefundCapability gates offer-time: a reader, an admitted namespace target Pod, and a live
 // deny-guard with spare capacity. There is no protected journal — the guard ledger itself
 // (StateKey) is the idempotency record, refusing a repeated order or reused operation id.
 func crmRefundCapability(ctx context.Context, reader client.Reader, t Target) (bool, string) {
-	if reader == nil || t.Namespace != crmrefund.Namespace || t.UID == "" || t.Pod == "" {
+	if reader == nil || !crmrefund.NamespaceAllowed(t.Namespace) || t.UID == "" || t.Pod == "" {
 		return false, "crm-refund-revoke: reader or target unavailable"
 	}
-	live, e := crmrefund.ValidateLive(ctx, reader, t.UID, "")
+	live, e := crmrefund.ValidateLiveInNamespace(ctx, reader, t.Namespace, t.UID, "")
 	if e != nil {
 		return false, "crm-refund-revoke: " + e.Error()
 	}
@@ -47,7 +47,7 @@ func crmRefundCapability(ctx context.Context, reader client.Reader, t Target) (b
 func crmRefundAuthority(ctx context.Context, ec EnactCtx, req Request) (crmrefund.Live, error) {
 	o := req.CRMRefundObservation
 	if ec.Reader == nil || ec.Client == nil || req.Action != model.ActionCRMRefundRevoke ||
-		req.Namespace != crmrefund.Namespace || req.TargetUID == "" || req.Pod == "" || req.PolicyName == "" ||
+		!crmrefund.NamespaceAllowed(req.Namespace) || req.TargetUID == "" || req.Pod == "" || req.PolicyName == "" ||
 		req.PolicyUID == "" || req.PolicyGeneration < 1 || req.OperationID == "" || len(req.OperationID) > 128 ||
 		o == nil || o.TargetPodUID != req.TargetUID || o.PeerPodUID == "" || o.TargetPodUID == o.PeerPodUID ||
 		o.EventUID == "" || o.EventName == "" || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID ||
@@ -57,7 +57,7 @@ func crmRefundAuthority(ctx context.Context, ec EnactCtx, req Request) (crmrefun
 		time.Since(o.ObservedAt) < 0 || time.Since(o.ObservedAt) >= 60*time.Second {
 		return crmrefund.Live{}, errors.New("crm-refund request/observation authority incomplete")
 	}
-	live, e := crmrefund.ValidateLive(ctx, ec.Reader, o.TargetPodUID, o.PeerPodUID)
+	live, e := crmrefund.ValidateLiveInNamespace(ctx, ec.Reader, req.Namespace, o.TargetPodUID, o.PeerPodUID)
 	if e != nil {
 		return live, e
 	}
@@ -241,7 +241,7 @@ func (crmRefundRevokeHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 	appEnc := next.EncodeAppGuard()
 
 	cm := &corev1.ConfigMap{}
-	if e = ec.Reader.Get(ctx, client.ObjectKey{Namespace: crmrefund.Namespace, Name: crmrefund.GuardConfigMapName}, cm); e != nil {
+	if e = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: crmrefund.GuardConfigMapName}, cm); e != nil {
 		return HandlerResult{}, RefusedWithoutEffect(e)
 	}
 	priorState := crmrefund.Guard{Version: 2, Entries: []crmrefund.Entry{}}
@@ -266,7 +266,7 @@ func (crmRefundRevokeHandler) Enact(ctx context.Context, ec EnactCtx, req Reques
 		return HandlerResult{MutationKind: "partial"}, e
 	}
 
-	current, e := crmrefund.ValidateLive(ctx, ec.Reader, o.TargetPodUID, o.PeerPodUID)
+	current, e := crmrefund.ValidateLiveInNamespace(ctx, ec.Reader, req.Namespace, o.TargetPodUID, o.PeerPodUID)
 	entry, exists := current.State.Entry(o.OrderID)
 	if e != nil || !exists || !entry.Active || entry.OperationID != req.OperationID ||
 		current.GuardUID != live.GuardUID || current.ServiceUID != live.ServiceUID {

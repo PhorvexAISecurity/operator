@@ -68,6 +68,11 @@ attacks routes are served remotely (phorvex.services.attacks.endpoint), and othe
 - name: PHORVEX_INJECTOR_IDENTITY
   value: {{ . | quote }}
 {{- end -}}
+{{- if dig "console" "newstackLoops" "enabled" false .values }}
+{{- if ne .releaseNamespace "phorvex-staging" }}{{ fail "console.newstackLoops is restricted to phorvex-staging" }}{{ end }}
+- name: PHORVEX_CRM_REFUND_NAMESPACE
+  value: phorvex-staging
+{{- end -}}
 {{- end -}}
 
 {{/*

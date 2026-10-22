@@ -91,8 +91,12 @@ roles:
 {{- end }}
 {{- if $v.crmRefundRevoke.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "crmRefundRevoke requires native or hybrid actuator" }}{{- end }}
+{{- $crmNamespace := $v.crmRefundRevoke.namespace | default "crm" }}
+{{- if and (ne $crmNamespace "crm") (not (and (eq $crmNamespace "phorvex-staging") (eq .releaseNamespace "phorvex-staging") (dig "console" "newstackLoops" "enabled" false $v))) }}
+{{- fail "crmRefundRevoke.namespace may change only for the opted-in phorvex-staging fixtures" }}
+{{- end }}
 - name: crm-refund-revoke
-  namespace: crm
+  namespace: {{ $crmNamespace }}
   rules:
   - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["crm-refund-guard"], verbs: ["get", "update"], writers: [actuator]}
 {{- end }}

@@ -113,7 +113,7 @@ class EnvironmentRenderTests(unittest.TestCase):
             endpoints = {k: v for k, v in endpoints.items() if k != 'attacks'}
             by_service = {e['service']: e for e in ELEMENTS}
             self.assertEqual(set(endpoints), set(by_service) - {'manager', 'attacks'})
-            manager = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment')
+            manager = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment' and d['spec']['template']['spec']['containers'][0]['name'] == 'manager')
             args = manager['spec']['template']['spec']['containers'][0]['args']
             for service, value in endpoints.items():
                 with self.subTest(environment=environment['environment'], service=service):
@@ -155,7 +155,14 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertNotEqual(release, 'phorvex')
                 values = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']
                 self.assertEqual(values['policyNamespaces'], [namespace])
-                self.assertIs(values['globalKillSwitch'], True)
+                enabled = values.get('console', {}).get('newstackLoops', {}).get('enabled', False)
+                self.assertIs(values['globalKillSwitch'], not enabled)
+                if enabled:
+                    self.assertEqual(namespace, 'phorvex-staging')
+                    self.assertEqual(values['actuator'], 'native')
+                    self.assertEqual(values['actuatorNamespaces'], [namespace])
+                    self.assertEqual(values['trustedDetectors'], [namespace + '/staging-attacks'])
+                    self.assertTrue(values['eventIdentityPolicy'].get('external'))
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
                 for service, element in by_service.items():
@@ -164,11 +171,11 @@ class EnvironmentRenderTests(unittest.TestCase):
                         if d['kind'] in CLUSTER_SCOPED:
                             self.assertTrue(d['metadata']['name'].startswith(release + '-'), (service, d['kind'], d['metadata']['name']))
                     if service in ('manager', 'sensor', 'actuator'):
-                        pod = next(d for d in docs if d['kind'] == 'Deployment')['spec']['template']['spec']
+                        pod = next(d for d in docs if d['kind'] == 'Deployment' and d['spec']['template']['spec']['containers'][0]['name'] == service)['spec']['template']['spec']
                         args = pod['containers'][0]['args']
                         self.assertIn(f'--policy-namespaces={namespace}', args, service)
                         if service == 'manager':
-                            self.assertIn('--global-kill-switch=true', args)
+                            self.assertEqual('--global-kill-switch=true' in args, not enabled)
 
 if __name__ == '__main__':
     unittest.main()
@@ -207,4 +214,3 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(env['actuator'], 'native')
         self.assertEqual(env['policyNamespaces'], [self.staging['namespace']])
         self.assertEqual(env['actuatorNamespaces'], [self.staging['namespace']])
-

@@ -164,6 +164,27 @@ export interface FunctionalAdmission {
   reasonCode: FunctionalAdmissionReason;
   message: string;
 }
+export interface NewstackCase {
+  id: string; name: string; expectedActuator: string; fixture: string; class: string; limitation: string;
+}
+export interface NewstackCatalog {
+  schema: "newstack-catalog-v1"; namespace: string; items: NewstackCase[];
+  enabled: boolean; reason: string; fireEndpoint: string; maximumSeconds: number;
+}
+export interface NewstackCheck {
+  ok: boolean; ready?: boolean; caseId: string; namespace: string; limitation?: string; error?: string;
+}
+export interface NewstackRun {
+  schema: "newstack-run-v1"; runId: string; caseId: string; namespace: string; status: string; verdict: string;
+  cleanupComplete: boolean; postflightClean: boolean; decision?: AttackDecisionEvidence;
+  issues: string[]; limitation: string; phase?: string; class?: string; signalMode?: string;
+  baselineLanded?: boolean; replayDenied?: boolean; legitimateSucceeded?: boolean;
+  [field: string]: unknown;
+}
+export interface NewstackCleanup {
+  ok?: boolean; caseId?: string; cleanupComplete: boolean; postflightClean?: boolean; message?: string;
+  [field: string]: unknown;
+}
 export interface BenchArm { defender: string; disruption: CI; dwell: CI; harmRate: CI; trials: number }
 export interface BenchGroup { scenario: string; source: string; arms: BenchArm[] }
 export interface CoverageTechnique { technique: string; scenarios: string[]; product: string; covered: boolean }
@@ -254,6 +275,11 @@ export const api = {
   session: (lens: Lens = "operator", signal?: AbortSignal) => get<Session>("/api/session", lens, signal, false),
   liveHistory: (lens: Lens, filters: Record<string, string>, signal?: AbortSignal) =>
     get<LiveHistoryPage>(`/api/live/history?${new URLSearchParams(filters)}`, lens, signal),
+  newstackCatalog: (lens: Lens, signal?: AbortSignal) => get<NewstackCatalog>("/api/newstack/catalog", lens, signal),
+  newstackCheck: (caseId: string, lens: Lens, signal?: AbortSignal) =>
+    get<NewstackCheck>(`/api/newstack/check?${new URLSearchParams({ caseId })}`, lens, signal),
+  newstackFire: (caseId: string, lens: Lens) => post<NewstackRun>("/api/newstack/fire", { caseId }, lens),
+  newstackCleanup: (caseId: string, lens: Lens) => post<NewstackCleanup>("/api/newstack/cleanup", { caseId }, lens),
   health: (lens: Lens = "operator") => get<any>("/api/health", lens),
   // diagnostics is the authenticated form of what /api/health used to disclose.
   diagnostics: (lens: Lens = "operator", signal?: AbortSignal) => get<any>("/api/diagnostics", lens, signal),

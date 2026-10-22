@@ -7,11 +7,13 @@ package console
 import (
 	"fmt"
 	"math"
+	"net/http"
 	"path/filepath"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Config locates the Phorvex tree the console reads (read-only) and triggers.
@@ -100,6 +102,13 @@ type Config struct {
 	// its in-cluster Service. It is off by default and enabled through Helm once the console
 	// read-grant on the crm-refund-guard ConfigMap and the crm-refund-revoke actuator are live.
 	CRMRefundLiveEnabled bool
+	// Newstack loops are fixed disposable fixtures confined to the staging
+	// attacks namespace. Both settings must match before any loop may run.
+	NewstackLoopsEnabled   bool
+	NewstackIdentityPolicy string
+	PodNamespace           string
+	newstackClient         client.Client // isolated local tests only
+	newstackHTTP           *http.Client  // isolated fixture tests only
 	// LiteLLM Live Fire is a separately reviewed real-Service profile. It
 	// cannot be enabled by a catalogue row or caller-supplied destination.
 	// LiveAttackDisabled force-hides Live attack rows that have no actuator wired end to end,

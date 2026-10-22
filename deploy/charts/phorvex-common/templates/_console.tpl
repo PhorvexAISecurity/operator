@@ -374,6 +374,20 @@ spec:
         - -auth-grants={{ .Values.phorvex.console.auth.grants.mountPath }}/{{ .Values.phorvex.console.auth.grants.fileName }}
         {{- end }}
         env:
+        {{- if dig "console" "newstackLoops" "enabled" false .Values.phorvex }}
+        {{- if or (ne .Release.Namespace "phorvex-staging") (ne (.Values.phorvex.policyNamespaces | toJson) "[\"phorvex-staging\"]") (ne .Values.phorvex.actuator "native") }}
+        {{- fail "console.newstackLoops requires native enactment and policyNamespaces=[phorvex-staging] in phorvex-staging" }}
+        {{- end }}
+        - name: PHORVEX_NEWSTACK_LOOPS_ENABLED
+          value: "true"
+        {{- with include "phorvex-common.identityPolicyEnv" (dict "values" .Values.phorvex) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        {{- end }}
         # Environment defaults keep chart-first rollouts compatible with older console images,
         # which ignore unknown environment variables. New binaries still allow explicit CLI
         # flags to override these defaults outside this chart.

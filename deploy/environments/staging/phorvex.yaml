@@ -1,13 +1,7 @@
-# Staging: the split services beside the production stack on the production
-# cluster, in the namespace phorvex-staging under the release name staging
-# (ADR-0001, deploy/argocd/services/README.md).
-#
-# Every chart reads this file: the manager chart's keys under `phorvex`, which the
-# brain, sensor and actuator charts read under the same name, so the values their
-# handshakes compare are set once.
+# Staging only: native, namespace-confined console loops beside the existing demo.
+# Retain staging monitoring and prepared ingress settings; ingress stays disabled
+# so these loops provision no load balancer. Access through the console tunnel.
 phorvex:
-  # The manager reaches each service through its chart's Service, in the same
-  # namespace; each chart is released as `staging`.
   services:
     brain:
       endpoint: staging-brain:9090
@@ -15,40 +9,29 @@ phorvex:
       endpoint: staging-sensor:9090
     actuator:
       endpoint: staging-actuator:9090
-
-  # Beside production, staging must leave production's policies and requests alone.
-  # It reconciles, ticks and authorizes only the PhorvexPolicies of its own
-  # namespace, of which there are none yet.
-  policyNamespaces: [phorvex-staging]
-  # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
-  # for production's Phoenix to act on, and changes workloads only in this namespace.
-  # The kill switch stays on until the console and the attacks service run here.
+    attacks:
+      endpoint: staging-attacks:8090
+  policyNamespaces:
+  - phorvex-staging
   actuator: native
-  actuatorNamespaces: [phorvex-staging]
-  globalKillSwitch: true
-  # Admission webhooks and policies are cluster-wide: staging's would also admit
-  # production's requests.
+  actuatorNamespaces:
+  - phorvex-staging
+  globalKillSwitch: false
   admissionWebhook:
     enabled: false
   eventIdentityPolicy:
     enabled: false
-  # Without the identity policy, no external detector may be trusted.
-  trustedDetectors: []
-
-  # Telemetry from the cluster's Prometheus.
+    external: phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0
+  trustedDetectors:
+  - phorvex-staging/staging-attacks
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
-
-  # Scraped by the cluster's Prometheus under environment=staging, with the
-  # "Phorvex services — staging" dashboard and severity-info alerts
-  # (deploy/monitoring/README.md).
   metrics:
     podMonitor:
       enabled: true
       environment: staging
-      # Production's PhorvexCostNaNUnactionable sums this counter over every
-      # namespace; staging's own name keeps its cost failures off production's receiver.
       metricRelabelings:
-      - sourceLabels: [__name__]
+      - sourceLabels:
+        - __name__
         regex: phorvex_cost_nan_unactionable_total
         targetLabel: __name__
         replacement: phorvex_staging_cost_nan_unactionable_total
@@ -56,29 +39,72 @@ phorvex:
       enabled: true
     rules:
       enabled: true
-
   console:
-    # staging-console.phorvex.ai: its own ALB, behind the console user pool through its
-    # own app client (phorvex-staging-console-alb), with production's certificate,
-    # subnets and security group. external-dns writes the record.
     ingress:
-      enabled: true
+      enabled: false
       className: alb
       host: staging-console.phorvex.ai
       annotations:
         alb.ingress.kubernetes.io/scheme: internet-facing
         alb.ingress.kubernetes.io/target-type: ip
         alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-        alb.ingress.kubernetes.io/ssl-redirect: "443"
+        alb.ingress.kubernetes.io/ssl-redirect: '443'
         alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:753556437180:certificate/6f771a0d-5c30-4897-bcba-9422024cd3b6
         alb.ingress.kubernetes.io/subnets: subnet-0e2c4f3f433045f81,subnet-08bd0af4dcc7672e2
         alb.ingress.kubernetes.io/security-groups: sg-098aac8d74e88e2fe
-        alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
+        alb.ingress.kubernetes.io/manage-backend-security-group-rules: 'true'
         alb.ingress.kubernetes.io/auth-type: cognito
         alb.ingress.kubernetes.io/auth-scope: openid
         alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
         alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:us-east-2:753556437180:userpool/us-east-2_JfwlBPRbB","userPoolClientID":"5njtljkiehde7iesciehr6a562","userPoolDomain":"phorvex-console-753556437180"}'
         external-dns.alpha.kubernetes.io/hostname: staging-console.phorvex.ai
-
-# The brain, sensor and actuator admit the scrape from the cluster's Prometheus.
-metricsScraperNamespaces: [monitoring]
+    enabled: true
+    newstackLoops:
+      enabled: true
+    attackNamespaces:
+    - phorvex-staging
+    allowWorkloadMutations: false
+    auditTransport:
+      serverSecretName: staging-phorvex-audit-server
+      clientSecretName: staging-phorvex-audit-client
+      serverDNSName: staging-phorvex-audit-source.phorvex-staging.svc
+      clientDNSName: staging-phorvex-console.phorvex-staging.svc
+    state:
+      persistence:
+        storageClass: gp2-csi
+        size: 1Gi
+    auth:
+      oidc:
+        issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+        audience: phorvex-staging-console
+        jwksUrl: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys
+        algorithms:
+        - RS256
+      e2eIdentity:
+        enabled: true
+      grants:
+        enabled: true
+        create: true
+        data: |-
+          {
+            "version": 1,
+            "subjects": [{
+              "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+              "subject": "system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e",
+              "roles": ["operator"],
+              "tenants": ["phorvex-staging"],
+              "targets": ["default"],
+              "note": "Disposable staging loops only"
+            }]
+          }
+  crmRefundRevoke:
+    enabled: true
+    namespace: phorvex-staging
+  injectorIdentity: phorvex-staging/staging-attacks
+  audit:
+    enabled: true
+    persistence:
+      storageClass: gp2-csi
+      size: 1Gi
+metricsScraperNamespaces:
+- monitoring

@@ -23,7 +23,7 @@ const crmRefundHorizon = 60 * time.Second
 // The authoritative re-check still happens at enact time in crmRefundAuthority.
 func bindCRMRefundObservation(ctx context.Context, reader client.Reader, p *model.Pod, events []model.SecurityEventInfo) {
 	p.CRMRefundObservation = nil
-	if p.Namespace != crmrefund.Namespace || p.UID == "" || reader == nil {
+	if !crmrefund.NamespaceAllowed(p.Namespace) || p.UID == "" || reader == nil {
 		return
 	}
 	var chosen *model.SecurityEventInfo
@@ -49,7 +49,7 @@ func bindCRMRefundObservation(ctx context.Context, reader client.Reader, p *mode
 	if chosen == nil {
 		return
 	}
-	live, e := crmrefund.ValidateLive(ctx, reader, payload.TargetPodUID, payload.PeerPodUID)
+	live, e := crmrefund.ValidateLiveInNamespace(ctx, reader, p.Namespace, payload.TargetPodUID, payload.PeerPodUID)
 	_, alreadyDenied := live.State.Entry(payload.OrderID)
 	if e != nil || alreadyDenied || len(live.State.Entries) >= 256 ||
 		live.GuardUID != payload.GuardConfigMapUID || live.ServiceUID != payload.ServiceUID {

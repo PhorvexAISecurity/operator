@@ -1,6 +1,7 @@
 {{- $ingress := .Values.phorvex.console.ingress }}
-{{- if $ingress.enabled }}
-{{- if not $ingress.host }}{{ fail "phorvex.console.ingress.host is required" }}{{ end }}
+{{- $newstack := dig "console" "newstackLoops" "enabled" false .Values.phorvex }}
+{{- if or $ingress.enabled $newstack }}
+{{- if and $ingress.enabled (not $ingress.host) }}{{ fail "phorvex.console.ingress.host is required" }}{{ end }}
 # The console's own Service and Ingress, for an environment that exposes the console
 # itself rather than through the production stack's dashboard (deploy/helm/phorvex-stack).
 apiVersion: v1
@@ -20,6 +21,7 @@ spec:
   - name: http
     port: 80
     targetPort: http
+{{- if $ingress.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -48,4 +50,5 @@ spec:
             name: {{ include "phorvex.fullname" . }}-console
             port:
               name: http
+{{- end }}
 {{- end }}
