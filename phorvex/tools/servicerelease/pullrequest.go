@@ -67,15 +67,36 @@ func (g PullRequests) Dispatch(workflow, ref string) error {
 	return g.call("POST", "/actions/workflows/"+url.PathEscape(workflow)+"/dispatches", map[string]string{"ref": ref}, nil)
 }
 
+// CloseOpen closes the open PR from head into base, if there is one, with a
+// comment saying why, and returns its URL; empty when none was open.
+func (g PullRequests) CloseOpen(head, base, why string) (string, error) {
+	open, err := g.open(head, base)
+	if err != nil || len(open) == 0 {
+		return "", err
+	}
+	if err := g.call("POST", fmt.Sprintf("/issues/%d/comments", open[0].Number), map[string]string{"body": why}, nil); err != nil {
+		return "", err
+	}
+	return open[0].HTMLURL, g.call("PATCH", fmt.Sprintf("/pulls/%d", open[0].Number), map[string]string{"state": "closed"}, nil)
+}
+
+type openPull struct {
+	Number  int    `json:"number"`
+	HTMLURL string `json:"html_url"`
+}
+
+func (g PullRequests) open(head, base string) ([]openPull, error) {
+	owner, _, _ := strings.Cut(g.Repository, "/")
+	var open []openPull
+	q := url.Values{"state": {"open"}, "head": {owner + ":" + head}, "base": {base}}
+	err := g.call("GET", "/pulls?"+q.Encode(), nil, &open)
+	return open, err
+}
+
 // Upsert updates the open PR from head into base, or opens one, and returns its URL.
 func (g PullRequests) Upsert(head, base, title, body string) (string, error) {
-	owner, _, _ := strings.Cut(g.Repository, "/")
-	var open []struct {
-		Number  int    `json:"number"`
-		HTMLURL string `json:"html_url"`
-	}
-	q := url.Values{"state": {"open"}, "head": {owner + ":" + head}, "base": {base}}
-	if err := g.call("GET", "/pulls?"+q.Encode(), nil, &open); err != nil {
+	open, err := g.open(head, base)
+	if err != nil {
 		return "", err
 	}
 	var pr struct {
@@ -85,6 +106,6 @@ func (g PullRequests) Upsert(head, base, title, body string) (string, error) {
 		err := g.call("PATCH", fmt.Sprintf("/pulls/%d", open[0].Number), map[string]string{"title": title, "body": body}, &pr)
 		return pr.HTMLURL, err
 	}
-	err := g.call("POST", "/pulls", map[string]string{"head": head, "base": base, "title": title, "body": body}, &pr)
+	err = g.call("POST", "/pulls", map[string]string{"head": head, "base": base, "title": title, "body": body}, &pr)
 	return pr.HTMLURL, err
 }

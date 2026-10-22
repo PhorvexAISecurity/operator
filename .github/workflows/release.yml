@@ -148,9 +148,18 @@ jobs:
           # means nothing to release.
           go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
           tool="$RUNNER_TEMP/servicerelease"
+          # A newer merge of the release PR is still to publish; its own run brings
+          # the PR up to date afterwards. Preparing now would release it again.
+          if [ -n "$("$tool" pending)" ]; then
+            echo "A merged release is still to publish; its run brings the release PR up to date." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           status=0
           "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
-          if [ "$status" -eq 3 ]; then exit 0; fi
+          if [ "$status" -eq 3 ]; then
+            "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           [ "$status" -eq 0 ]
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
