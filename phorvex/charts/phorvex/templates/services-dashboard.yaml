@@ -1,0 +1,16 @@
+{{- $m := .Values.phorvex.metrics }}
+{{- if $m.dashboard.enabled }}
+{{- $environment := required "phorvex.metrics.dashboard needs phorvex.metrics.podMonitor.environment, which its queries filter on" $m.podMonitor.environment }}
+# The services dashboard of this environment, for the Grafana sidecar, which loads
+# ConfigMaps labelled grafana_dashboard=1 from every namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex.fullname" . }}-services-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  phorvex-services-{{ $environment }}.json: {{ .Files.Get "files/services-dashboard.json" | replace "__ENVIRONMENT__" $environment | replace "__NAMESPACE__" .Release.Namespace | quote }}
+{{- end }}

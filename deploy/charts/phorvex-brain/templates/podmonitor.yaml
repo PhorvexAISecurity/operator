@@ -1,0 +1,2 @@
+{{- include "phorvex-common.podMonitor" (dict "root" . "values" .Values.phorvex "name" (include "phorvex-brain.fullname" .)
+  "selector" (include "phorvex-brain.selectorLabels" .) "labels" (include "phorvex-brain.labels" .)) }}

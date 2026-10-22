@@ -1,0 +1,45 @@
+{{- $m := .Values.phorvex.metrics }}
+{{- if $m.rules.enabled }}
+{{- $environment := required "phorvex.metrics.rules needs phorvex.metrics.podMonitor.environment, which they filter on" $m.podMonitor.environment }}
+{{- $e := printf "environment=%q" $environment }}
+# Alerts on this environment's services. Severity info: Prometheus and Grafana show
+# them, and the cluster's Alertmanager pages no one for them.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "phorvex.fullname" . }}-services
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+spec:
+  groups:
+  - name: phorvex-services-{{ $environment }}
+    rules:
+    - alert: PhorvexServiceDown
+      expr: max by (job, instance) (up{ {{- $e -}} }) == 0
+      for: 5m
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: A Phorvex service of {{ $environment }} is not scraped.
+    - alert: PhorvexServiceCallsFailing
+      expr: >-
+        sum by (grpc_service, grpc_method) (rate(phorvex_grpc_server_handled_total{ {{- $e -}} ,grpc_code!="OK"}[10m]))
+        / clamp_min(sum by (grpc_service, grpc_method) (rate(phorvex_grpc_server_handled_total{ {{- $e -}} }[10m])), 1e-9) > 0.05
+      for: 10m
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: More than 5% of a service's gRPC calls in {{ $environment }} fail.
+    - alert: PhorvexManagerTicksIncomplete
+      expr: >-
+        sum(increase(phorvex_manager_tick_duration_seconds_count{ {{- $e -}} }[15m])) > 0
+        and sum(increase(phorvex_manager_tick_duration_seconds_count{ {{- $e -}} ,outcome="finished-full-snapshot"}[15m])) == 0
+      for: 15m
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: The {{ $environment }} manager ticks, but none completed with a full snapshot in 15 minutes.
+    - alert: PhorvexServiceRestarting
+      expr: sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace={{ .Release.Namespace | quote }}}[15m])) > 2
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: A Pod in {{ .Release.Namespace }} restarted more than twice in 15 minutes.
+{{- end }}

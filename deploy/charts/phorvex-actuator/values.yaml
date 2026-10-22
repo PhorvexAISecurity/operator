@@ -18,6 +18,12 @@ managerFullname: ""
 # and trust must match the manager's, or the manager refuses the actuator at the
 # handshake.
 phorvex:
+  metrics:
+    podMonitor:
+      enabled: false
+      interval: 30s
+      environment: ""
+      metricRelabelings: []
   # "" (the binary's default), phoenix, native or hybrid.
   actuator: ""
   operatorNamespace: ""

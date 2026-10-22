@@ -109,11 +109,11 @@ func run(ctx context.Context, cfg config, lis net.Listener, logger *slog.Logger)
 		logger.Info("math-lab decision capture enabled", "policies", cfg.mathLabPolicies, "dir", cfg.mathLabDir)
 	}
 
-	server := grpc.NewServer(
+	server := grpc.NewServer(append(metrics.GRPCServerOptions(),
 		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
-	)
+	)...)
 	brainpb.RegisterBrainServiceServer(server, brainsvc.NewServer(brainsvc.NewLocal(optimizer, recorder), decisionConfig.SHA256()))
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
