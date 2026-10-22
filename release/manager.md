@@ -1,5 +1,13 @@
 # manager changelog
 
+## 0.8.0 (2026-10-22)
+
+- feat(charts): scrape the services and chart them per environment (123dc5c9)
+- feat(metrics): count and time the services' gRPC calls (b90984eb)
+- feat(trust): trust detectors beside a release that installs the identity guard (fd4f47c8)
+- fix(rbac): give the native backend no Phoenix writes (4ed5ccf6)
+- feat(charts): deploy the attacks service beside the console (c4a522d1)
+
 ## 0.7.0 (2026-10-22)
 
 - refactor(charts): render the console Deployment from the library (bf125858)

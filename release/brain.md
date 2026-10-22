@@ -1,5 +1,11 @@
 # brain changelog
 
+## 0.3.0 (2026-10-22)
+
+- feat(charts): scrape the services and chart them per environment (123dc5c9)
+- feat(metrics): count and time the services' gRPC calls (b90984eb)
+- feat(trust): trust detectors beside a release that installs the identity guard (fd4f47c8)
+
 ## 0.2.0 (2026-10-22)
 
 - feat(trust): make the injector identity configuration (4d782ff6)

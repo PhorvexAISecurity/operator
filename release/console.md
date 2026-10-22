@@ -1,5 +1,13 @@
 # console changelog
 
+## 0.8.0 (2026-10-22)
+
+- feat(metrics): count and time the services' gRPC calls (b90984eb)
+- fix(harness): know every stream's admission before the busy reset (8b743e8e)
+- feat(trust): trust detectors beside a release that installs the identity guard (fd4f47c8)
+- feat(release): build and release the attacks image (072d38d0)
+- fix(harness): wait out a pending duplicate when reconciling after a quorum pause (7ed19800)
+
 ## 0.7.0 (2026-10-22)
 
 - feat(attacks): serve the attack routes from their own service (b00d464e)
