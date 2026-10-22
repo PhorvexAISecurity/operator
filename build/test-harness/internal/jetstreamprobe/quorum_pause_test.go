@@ -227,7 +227,11 @@ func TestRealThreeProcessClusterReconcilesAmbiguousPublicationAfterQuorumPause(t
 	cfg.Replicas = 3
 	cfg.ConnectTimeout = 2 * time.Second
 	cfg.RequestTimeout = 600 * time.Millisecond
-	cfg.FetchTimeout = 250 * time.Millisecond
+	// Generous enough for a consumer leader that is still settling after the
+	// quorum resumes on a small CI runner, and longer than the ACK wait, so the
+	// no-redelivery windows would also see a redelivery. Fetches run outside the
+	// pause, so this widens neither the pause nor the duplicate window.
+	cfg.FetchTimeout = 1500 * time.Millisecond
 	cfg.DuplicateWindow = 5 * time.Second
 	var probe *Probe
 	var err error
