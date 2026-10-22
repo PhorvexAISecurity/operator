@@ -9,9 +9,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = (ROOT / '.github/workflows/pr-validation.yml').read_text()
-# The organization's shared build runner. It holds no cluster or AWS credentials;
+# A fresh GitHub-hosted runner for every job. It holds no cluster or AWS credentials;
 # the isolated AWS runner (label phorvex-isolated-aws) must never run this repo's jobs.
-BUILD_RUNNER = ['self-hosted', 'Linux', 'X64']
+BUILD_RUNNER = 'ubuntu-24.04'
 DOC = yaml.load(RAW, Loader=yaml.BaseLoader)
 
 
@@ -161,7 +161,7 @@ class PRValidationTests(unittest.TestCase):
         # This repository is not a deployer: the legacy pipeline stays in
         # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change;
         # the one that has, release.yml, is held to its exact shape by ReleaseWorkflowTests.
-        # Every job runs on the shared build runner, never on a runner with live access.
+        # Every job runs on a GitHub-hosted runner, never on a runner with live access.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
             if path.name == 'release.yml':
                 continue
@@ -174,7 +174,7 @@ class PRValidationTests(unittest.TestCase):
                     self.assertEqual(job['runs-on'], BUILD_RUNNER, name)
                     self.assertNotIn('container', job, name)
 
-    def test_images_on_the_shared_daemon_are_per_run_and_removed(self):
+    def test_images_are_built_under_a_per_run_tag_and_removed(self):
         step = next(s for s in DOC['jobs']['images']['steps'] if 'docker build' in s.get('run', ''))
         self.assertEqual(step['env']['TAG'],
                          'operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}')
@@ -277,11 +277,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertIn('workflow_dispatch', doc['on'], workflow)
             self.assertIn('pull_request', doc['on'], workflow)
 
-    def test_image_builds_bound_the_shared_build_cache(self):
-        for doc, job in ((DOC, 'images'), (RELEASE, 'publish')):
-            step = next(s for s in doc['jobs'][job]['steps'] if s.get('name') == 'Bound the shared build cache')
-            self.assertEqual(step['if'], 'always()')
-            self.assertEqual(step['run'], 'docker builder prune --force --keep-storage 10GB')
 
 if __name__ == '__main__':
     unittest.main()

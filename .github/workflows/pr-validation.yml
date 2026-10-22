@@ -22,8 +22,8 @@ concurrency:
 
 jobs:
   charts:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -71,8 +71,8 @@ jobs:
           done
 
   go-unit:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       # This job tests candidate source, never an existing cluster. Local-API and
       # controller-manager-backed tests skip here BY DESIGN; the
@@ -147,8 +147,8 @@ jobs:
   # gofmt-clean. Untouched files are not reformatted wholesale: some are pinned by
   # content hash (scenario sourceSHA256, generated cover maps).
   lint:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       GOTOOLCHAIN: local
       KUBECONFIG: /dev/null
@@ -185,10 +185,9 @@ jobs:
 
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the
-  # image. Built locally and discarded; nothing is pushed. The runner's Docker
-  # daemon is shared, so each build gets a per-run tag and removes it.
+  # image. Built locally under a per-run tag and discarded; nothing is pushed.
   images:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -210,11 +209,6 @@ jobs:
             *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --tag "$TAG" . ;;
           esac
           docker image rm "$TAG"
-      # The runner's Docker daemon is shared, and nothing else prunes its default
-      # build cache, which once filled the disk and failed CI. Keep at most 10GB.
-      - name: Bound the shared build cache
-        if: always()
-        run: docker builder prune --force --keep-storage 10GB
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
   # API, actuator, runner, authz, startupauthz, console and cmd packages (no -run filter)
@@ -232,8 +226,8 @@ jobs:
   # backend, and nothing here mitigates a physical attack. Everything else in
   # go-unit is a unit test with mocks.
   go-envtest:
-    runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       # Isolated local control plane only. The job downloads pinned binaries
       # and must never attach to an existing cluster or fall back to a blank
@@ -291,7 +285,7 @@ jobs:
           retention-days: 30
 
   frontend:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
@@ -315,7 +309,7 @@ jobs:
     name: PR validation
     if: always()
     needs: [charts, go-unit, go-envtest, frontend, lint, images]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 1
     steps:
       - name: Require every source check to succeed
