@@ -737,15 +737,37 @@ func (p *Probe) ping(ctx context.Context) PingReceipt {
 	return receipt
 }
 
+// A clustered stream answers a duplicate whose original its leader has accepted but not
+// yet applied with sequence 0: the ID is known, its place is not. After a quorum pause
+// the reconciling publication can meet the ambiguous one in that state, so the same ID
+// is published again, a bounded number of times, until the stream reports where it
+// stored it. Publishing one ID again stores nothing new.
+const (
+	pendingDuplicateAttempts = 20
+	pendingDuplicateBackoff  = 50 * time.Millisecond
+)
+
 func (p *Probe) publishReconcile(ctx context.Context, message Message, sequence uint64) (PubAckReceipt, error) {
-	msg := nats.NewMsg(p.cfg.Subject)
-	msg.Header.Set(messageIDHeader, message.ID)
-	msg.Data = append([]byte(nil), message.Payload...)
-	reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
-	defer cancel()
-	ack, err := p.js.PublishMsg(reqCtx, msg, jetstream.WithRetryAttempts(0))
-	if err != nil {
-		return PubAckReceipt{}, fmt.Errorf("same-ID reconcile %q: %w", message.ID, err)
+	var ack *jetstream.PubAck
+	for attempt := 1; ; attempt++ {
+		msg := nats.NewMsg(p.cfg.Subject)
+		msg.Header.Set(messageIDHeader, message.ID)
+		msg.Data = append([]byte(nil), message.Payload...)
+		reqCtx, cancel := bounded(ctx, p.cfg.RequestTimeout)
+		var err error
+		ack, err = p.js.PublishMsg(reqCtx, msg, jetstream.WithRetryAttempts(0))
+		cancel()
+		if err != nil {
+			return PubAckReceipt{}, fmt.Errorf("same-ID reconcile %q: %w", message.ID, err)
+		}
+		if ack == nil || !ack.Duplicate || ack.Sequence != 0 || attempt == pendingDuplicateAttempts {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return PubAckReceipt{}, fmt.Errorf("same-ID reconcile %q: %w", message.ID, ctx.Err())
+		case <-time.After(pendingDuplicateBackoff):
+		}
 	}
 	if ack == nil || ack.Stream != p.cfg.Stream || ack.Sequence != sequence {
 		return PubAckReceipt{}, fmt.Errorf("same-ID reconcile PubAck differs: got %+v want stream=%q sequence=%d", ack, p.cfg.Stream, sequence)
