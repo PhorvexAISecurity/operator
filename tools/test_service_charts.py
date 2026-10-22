@@ -642,6 +642,24 @@ class AttacksServiceTests(unittest.TestCase):
                 self.assertTrue(firing(in_process))
                 self.assertEqual(firing(console), set(), 'the console fires nothing once the attacks service does')
 
+    def test_the_attacks_service_mounts_the_grants_its_own_release_renders(self):
+        # The pod reads its grants once, at startup. Mounting the manager release's copy let
+        # an attacks pod that rolled before the manager synced start on the old grants.
+        data = '{"version": 1, "subjects": [{"issuer": "https://issuer.example", "subject": "a"}]}\n'
+        with tempfile.TemporaryDirectory() as tmp:
+            values = Path(tmp) / 'grants.yaml'
+            values.write_text(yaml.safe_dump({'phorvex': {'console': {'auth': {'grants': {'enabled': True, 'create': True, 'data': data}}}}}))
+            manager = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE, '-f', str(values))
+            attacks = helm_template(ATTACKS_CHART, *CONSOLE, '-f', str(values))
+        def mounted(docs, name):
+            pod = next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == name)['spec']['template']['spec']
+            return next(v['configMap']['name'] for v in pod['volumes'] if v['name'] == 'console-grants')
+        maps = {d['metadata']['name']: d['data'] for d in manager + attacks if d['kind'] == 'ConfigMap' and 'grants' in d['metadata']['name']}
+        self.assertEqual(mounted(manager, 'phorvex-phorvex-console'), 'phorvex-phorvex-console-grants')
+        self.assertEqual(mounted(attacks, 'phorvex-attacks'), 'phorvex-attacks-grants')
+        self.assertEqual(maps['phorvex-attacks-grants'], maps['phorvex-phorvex-console-grants'])
+        self.assertEqual(maps['phorvex-attacks-grants'], {'grants.json': data})
+
     def test_attack_namespaces_confine_what_the_attacks_service_changes(self):
         docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE, '--set', 'phorvex.console.allowWorkloadMutations=true',
                              '--set', 'phorvex.console.attackNamespaces={team-a,team-b}')
