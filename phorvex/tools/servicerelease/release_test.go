@@ -246,3 +246,34 @@ func TestPullRequestsUpsert(t *testing.T) {
 		t.Errorf("calls = %q", calls)
 	}
 }
+
+func TestCloseOpenClosesOnlyAnOpenReleasePR(t *testing.T) {
+	var calls []string
+	open := []map[string]any{{"number": 44, "html_url": "https://example.invalid/pull/44"}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		calls = append(calls, r.Method+" "+r.URL.Path+" "+string(body))
+		if r.Method == "GET" {
+			_ = json.NewEncoder(w).Encode(open)
+			return
+		}
+		if r.Method == "PATCH" {
+			open = nil
+		}
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer srv.Close()
+	g := PullRequests{API: srv.URL, Repository: "PhorvexSecurity/operator-refactored", Token: "token"}
+	u, err := g.CloseOpen("release/next", "main", "nothing left")
+	if err != nil || u != "https://example.invalid/pull/44" {
+		t.Fatalf("CloseOpen = %q, %v", u, err)
+	}
+	if len(calls) != 3 || !strings.HasPrefix(calls[1], "POST /repos/PhorvexSecurity/operator-refactored/issues/44/comments ") ||
+		calls[2] != `PATCH /repos/PhorvexSecurity/operator-refactored/pulls/44 {"state":"closed"}` {
+		t.Fatalf("calls = %q", calls)
+	}
+	// Nothing open: nothing to close.
+	if u, err := g.CloseOpen("release/next", "main", "nothing left"); err != nil || u != "" || len(calls) != 4 {
+		t.Fatalf("a second close = %q, %v, %q", u, err, calls)
+	}
+}

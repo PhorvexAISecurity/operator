@@ -265,7 +265,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease', pr)
         self.assertNotIn('servicerelease prepare', pr.replace('"$tool" prepare', ''))
         self.assertIn('"$tool" prepare --title-file', pr)
-        self.assertIn('if [ "$status" -eq 3 ]; then exit 0; fi', pr)
+        # A release still to publish is left to its own run, and nothing to release
+        # closes a release PR left open.
+        self.assertIn('if [ -n "$("$tool" pending)" ]; then', pr)
+        self.assertLess(pr.index('"$tool" pending'), pr.index('"$tool" prepare'))
+        self.assertIn('"$tool" close-pull-request --head release/next --base main', pr)
         self.assertIn('"$tool" pull-request --head release/next --base main', pr)
 
     def test_the_release_pr_gets_its_checks(self):

@@ -23,13 +23,14 @@ const usage = `usage:
   servicerelease pending [--dir release]
   servicerelease deploy --environment <env> --component <name> --repository <repo> --tag <version> --digest <sha256:...> [--source <sha>]
   servicerelease pull-request --head <branch> --base <branch> --title-file <path> --body-file <path>
-  servicerelease dispatch --ref <branch> --workflows <file>[,<file>...]`
+  servicerelease dispatch --ref <branch> --workflows <file>[,<file>...]
+  servicerelease close-pull-request --head <branch> --base <branch>`
 
 // exitNothing is prepare's exit status when no component changed.
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "pending": true, "deploy": true, "pull-request": true, "dispatch": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "pending": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -178,6 +179,24 @@ func run(args []string, stdout, stderr io.Writer) int {
 				return fail(err)
 			}
 			fmt.Fprintf(stdout, "started %s on %s\n", w, *ref)
+		}
+	case "close-pull-request":
+		if *base == "" || *head == "HEAD" {
+			fmt.Fprintln(stderr, "servicerelease close-pull-request: --head and --base are required")
+			return 2
+		}
+		g, code := gitHub(stderr)
+		if code != 0 {
+			return code
+		}
+		u, err := g.CloseOpen(*head, *base, "Closing: every service is released, so there is nothing left to release. The release workflow opens a new release PR when a merged change affects a service again.")
+		if err != nil {
+			return fail(err)
+		}
+		if u != "" {
+			fmt.Fprintln(stdout, "Nothing to release; closed the release PR", u)
+		} else {
+			fmt.Fprintln(stdout, "Nothing to release.")
 		}
 	case "pull-request":
 		if *base == "" || *head == "HEAD" || *titleFile == "" || *bodyFile == "" {
