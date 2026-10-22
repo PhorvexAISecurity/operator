@@ -91,9 +91,21 @@ export function useApiRead<T>({ lens, resource, parameters = null, fetcher, stal
   return { ...query, data: enabled ? authorizedData(query.data, query.error) : undefined };
 }
 
+/**
+ * grantedNamespace is the namespace a scan or ablation asks for. A cross-tenant grant keeps the
+ * one it was given ("" is every namespace). A tenant-limited grant must name a tenant it holds —
+ * the server refuses an unscoped or foreign one — so a namespace outside the grant becomes the
+ * grant's first tenant. The server enforces the grant regardless; this only asks for what it allows.
+ */
+export function grantedNamespace(session: Session, namespace: string) {
+  if (session.tenants.includes("*") || session.tenants.includes(namespace)) return namespace;
+  return [...session.tenants].sort()[0] ?? namespace;
+}
+
 /** A scan is an expensive read/exec: one exact identity+lens+context+namespace snapshot until explicit refetch. */
-export function useScanSnapshot(lens: Lens, context: string, namespace: string, autoFetch = true) {
+export function useScanSnapshot(lens: Lens, context: string, requested: string, autoFetch = true) {
   const scope = useQueryScope(lens);
+  const namespace = grantedNamespace(scope.session, requested);
   const query = useQuery<ScanResult>({
     queryKey: queryKeys.scan(scope, context, namespace),
     queryFn: ({ signal }) => api.scan(namespace, lens, context, signal),
@@ -104,7 +116,7 @@ export function useScanSnapshot(lens: Lens, context: string, namespace: string, 
     if (!scope.ready || lens === "owner") return Promise.resolve({ ...query, data: undefined } as Awaited<ReturnType<typeof query.refetch>>);
     return query.refetch(options);
   }, [lens, query, scope.ready]);
-  return { ...query, refetch, data: authorizedData(query.data, query.error) };
+  return { ...query, refetch, namespace, data: authorizedData(query.data, query.error) };
 }
 
 // One bounded sample is shared by exact identity+lens+context+tenant+epoch mode for 30s.

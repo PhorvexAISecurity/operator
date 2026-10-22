@@ -64,7 +64,8 @@ export function ScanStep({ lens, go }: { lens: Lens; go: (s: StepId) => void }) 
             <>
               <div className="text-center text-sm text-muted-foreground">
                 Request a fresh platform-physics scan — runs <span className="font-mono text-foreground/80">phorvex --scan</span> for
-                <span className="font-mono text-foreground/80"> {ctxLabel}</span> and returns fresh results.
+                <span className="font-mono text-foreground/80"> {ctxLabel}</span>
+                {scanQuery.namespace && <> in namespace <span className="font-mono text-foreground/80">{scanQuery.namespace}</span></>} and returns fresh results.
               </div>
               <Button onClick={run}><Radar className="h-4 w-4" /> Run scan</Button>
               {err && <div className="w-full max-w-md"><ErrorBox msg={err} /></div>}
