@@ -70,12 +70,13 @@ rules:
   # grants no cluster power — it only asks the apiserver what this ServiceAccount may already do.
   resources: ["selfsubjectaccessreviews"]
   verbs: ["create"]
+# Only the Phoenix route creates SecurityEvents and AMTDs (actuator/phoenix.go).
 - apiGroups: ["amtd.r6security.com"]
   resources: ["securityevents"]
-  verbs: ["get", "list", "watch", "create"]
+  verbs: ["get", "list", "watch"{{ if ne .Values.phorvex.actuator "native" }}, "create"{{ end }}]
 - apiGroups: ["amtd.r6security.com"]
   resources: ["adaptivemovingtargetdefenses"]
-  verbs: ["get", "list", "watch", "create", "update", "patch"]
+  verbs: ["get", "list", "watch"{{ if ne .Values.phorvex.actuator "native" }}, "create", "update", "patch"{{ end }}]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
   verbs: ["get", "list", "watch"]

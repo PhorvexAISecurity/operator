@@ -32,8 +32,14 @@ cluster:
 - {apiGroups: ["rbac.authorization.k8s.io"], resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"], verbs: ["get", "list", "watch"]}
 # T1-E: a service reviews its OWN access; creating a review grants nothing.
 - {apiGroups: ["authorization.k8s.io"], resources: ["selfsubjectaccessreviews"], verbs: ["create"], writers: [dispatcher, actuator]}
+{{- /* Only the Phoenix route creates SecurityEvents and AMTDs (actuator/phoenix.go). */}}
+{{- if eq $v.actuator "native" }}
+- {apiGroups: ["amtd.r6security.com"], resources: ["securityevents"], verbs: ["get", "list", "watch"]}
+- {apiGroups: ["amtd.r6security.com"], resources: ["adaptivemovingtargetdefenses"], verbs: ["get", "list", "watch"]}
+{{- else }}
 - {apiGroups: ["amtd.r6security.com"], resources: ["securityevents"], verbs: ["get", "list", "watch", "create"], writers: [actuator]}
 - {apiGroups: ["amtd.r6security.com"], resources: ["adaptivemovingtargetdefenses"], verbs: ["get", "list", "watch", "create", "update", "patch"], writers: [actuator]}
+{{- end }}
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies"], verbs: ["get", "list", "watch"]}
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies/status"], verbs: ["get", "update", "patch"], writers: [dispatcher]}
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies/finalizers"], verbs: ["update"], writers: [dispatcher]}

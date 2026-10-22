@@ -110,7 +110,9 @@ PROBE = ROOT / 'tools/testdata/charts/rbac-probe'
 LIBRARY = CHARTS / 'phorvex-common'
 MANAGER_SA = {'kind': 'ServiceAccount', 'name': 'phorvex-phorvex-manager', 'namespace': 'phorvex-system'}
 READS = {'get', 'list', 'watch'}
-VALUE_SETS = {'defaults': [], 'all features': ['-f', str(ALL_FEATURES)]}
+VALUE_SETS = {'defaults': [], 'all features': ['-f', str(ALL_FEATURES)],
+              # The native backend drives no Phoenix, so it creates no SecurityEvent or AMTD.
+              'native': ['--set', 'phorvex.actuator=native']}
 
 
 def helm_template(chart, *args):
@@ -170,7 +172,7 @@ class RBACLibraryTests(unittest.TestCase):
             with self.subTest(values=name):
                 want = {rbac_key(d): normal(d) for d in manager_rbac(values)}
                 # Guards the comparison itself: the manager chart's RBAC was found.
-                self.assertGreaterEqual(len(want), 30 if values else 6)
+                self.assertGreaterEqual(len(want), 30 if name == 'all features' else 6)
                 got = {rbac_key(d): normal(d) for d in library_rbac('all', values)}
                 self.assertEqual(sorted(got), sorted(want))
                 for key in want:
@@ -688,6 +690,17 @@ class AttacksServiceTests(unittest.TestCase):
         attacks = yaml.safe_load((ATTACKS_CHART / 'values.yaml').read_text())['phorvex']
         for key, value in attacks.items():
             self.assertEqual(value, manager[key], key)
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class NativeBackendTests(unittest.TestCase):
+    def test_the_native_backend_writes_no_phoenix_objects(self):
+        for name, values in {'in process': [], 'remote actuator': REMOTE}.items():
+            with self.subTest(mode=name):
+                docs = [*helm_template(MANAGER_CHART, '--set', 'phorvex.actuator=native', *WITHOUT_CODE_EXEC, *values),
+                        *helm_template(CHARTS / 'phorvex-actuator', '--set', 'phorvex.actuator=native')]
+                writes = {g for g in grants(docs) if g[1] == 'amtd.r6security.com' and g[4] not in ('get', 'list', 'watch')}
+                self.assertEqual(writes, set())
+        phoenix = helm_template(MANAGER_CHART)
+        self.assertIn(('*cluster*', 'amtd.r6security.com', 'securityevents', '*', 'create'), grants(phoenix))
 
 
 class VendoredLibraryTests(unittest.TestCase):
