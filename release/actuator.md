@@ -1,5 +1,9 @@
 # actuator changelog
 
+## 0.5.0 (2026-10-22)
+
+- feat(charts): confine the attacks service's SecurityEvents to its namespaces (329b7cc3)
+
 ## 0.4.0 (2026-10-22)
 
 - feat(charts): scrape the services and chart them per environment (123dc5c9)

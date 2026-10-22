@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.8.1 (2026-10-22)
+
+- fix(attacks): reap only this environment's SecurityEvents (26816294)
+
 ## 0.8.0 (2026-10-22)
 
 - feat(metrics): count and time the services' gRPC calls (b90984eb)
