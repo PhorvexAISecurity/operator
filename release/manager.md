@@ -1,5 +1,9 @@
 # manager changelog
 
+## 0.10.0 (2026-10-22)
+
+- feat(charts): confine the attacks service's SecurityEvents to its namespaces (329b7cc3)
+
 ## 0.9.0 (2026-10-22)
 
 - feat(charts): expose the console on its own and confine its policy edits (9b828da3)
