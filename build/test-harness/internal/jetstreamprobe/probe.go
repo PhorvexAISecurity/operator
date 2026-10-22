@@ -1150,12 +1150,44 @@ func (p *Probe) ConsumeStoredWithFreshConsumer(ctx context.Context, name string,
 		return receipt, nil
 	}()
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), p.cfg.RequestTimeout)
-	cleanupErr := p.deleteConsumer(cleanupCtx, name)
+	cleanupErr := p.deleteOwnedConsumer(cleanupCtx, name)
 	cleanupCancel()
 	if cleanupErr != nil {
 		cleanupErr = fmt.Errorf("cleanup distinct consumer %q: %w", name, cleanupErr)
 	}
 	return receipt, errors.Join(operationErr, cleanupErr)
+}
+
+// A 2.10 server stops a consumer and removes it from its stream before it removes the
+// consumer's store. That removal can race the consumer's last state write and fail with
+// a general error ("unlinkat ...: directory not empty"), although the consumer is gone.
+// The delete is repeated, a bounded number of times, until the server deletes it or
+// reports it absent.
+const (
+	jsStreamGeneralError   jetstream.ErrorCode = 10051
+	consumerDeleteAttempts                     = 5
+	consumerDeleteBackoff                      = 50 * time.Millisecond
+)
+
+// deleteOwnedConsumer deletes a consumer this probe created and verified it owns.
+func (p *Probe) deleteOwnedConsumer(ctx context.Context, name string) error {
+	err := p.deleteConsumer(ctx, name)
+	for attempt := 1; err != nil && attempt < consumerDeleteAttempts && isStoreRemovalRace(err); attempt++ {
+		select {
+		case <-ctx.Done():
+			return errors.Join(err, ctx.Err())
+		case <-time.After(consumerDeleteBackoff):
+		}
+		if err = p.deleteConsumer(ctx, name); errors.Is(err, jetstream.ErrConsumerNotFound) {
+			return nil
+		}
+	}
+	return err
+}
+
+func isStoreRemovalRace(err error) bool {
+	var apiErr *jetstream.APIError
+	return errors.As(err, &apiErr) && apiErr.ErrorCode == jsStreamGeneralError
 }
 
 func (p *Probe) fetchOne(ctx context.Context, consumer jetstream.Consumer, wait time.Duration) (jetstream.Msg, error) {
