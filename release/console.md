@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.8.2 (2026-10-22)
+
+- fix(console): scope a tenant-limited grant's scans to its tenant (29bc056c)
+
 ## 0.8.1 (2026-10-22)
 
 - fix(attacks): reap only this environment's SecurityEvents (26816294)
