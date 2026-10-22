@@ -42,6 +42,8 @@ phorvex:
     approvedProxyImage: ""
     approvedEngineImage: ""
 
+  policyNamespaces: []
+
   prometheusUrl: ""
   pcieClassCapacity:
     Tesla T4:

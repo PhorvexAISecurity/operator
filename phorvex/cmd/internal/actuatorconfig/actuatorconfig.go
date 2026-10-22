@@ -164,9 +164,10 @@ func (s Settings) Configure(act actuator.Actuator, boundary client.Reader, opera
 
 // Shared is the configuration the manager and a separate actuator must share,
 // which the actuator's handshake compares. Both binaries derive it here.
-func Shared(operatorNamespace string, trust trustconfig.Trust) actuatorapi.Config {
+func Shared(operatorNamespace string, trust trustconfig.Trust, policyNamespaces []string) actuatorapi.Config {
 	return actuatorapi.Config{
 		OperatorNamespace:                operatorNamespace,
+		PolicyNamespaces:                 policyNamespaces,
 		TrustedDetectors:                 trust.Detectors().List(),
 		EndpointLeaseApprovedSource:      trust.EndpointLeaseApprovedSource,
 		EndpointLeaseApprovedProxyImage:  trust.EndpointLeaseApprovedProxyImage,
@@ -174,9 +175,10 @@ func Shared(operatorNamespace string, trust trustconfig.Trust) actuatorapi.Confi
 	}
 }
 
-// Preflight is the startup authorization the backend's identity must hold.
-func (f Flags) Preflight(s Settings, backend actuator.Backend, operatorNamespace string) startupauthz.Config {
-	cfg := startupauthz.Config{Backend: backend, OperatorNamespace: operatorNamespace, ServingSecurity: s.ServingSecurity}
+// Preflight is the startup authorization the backend's identity must hold, for the
+// policies in scope (every namespace when policyNamespaces is empty).
+func (f Flags) Preflight(s Settings, backend actuator.Backend, operatorNamespace string, policyNamespaces []string) startupauthz.Config {
+	cfg := startupauthz.Config{Backend: backend, OperatorNamespace: operatorNamespace, ServingSecurity: s.ServingSecurity, PolicyNamespaces: policyNamespaces}
 	if f.MIG.Enabled {
 		cfg.MIGAgent = &startupauthz.MIGAgentAccess{Namespace: f.MIG.Namespace, DaemonSet: f.MIG.DaemonSet}
 	}

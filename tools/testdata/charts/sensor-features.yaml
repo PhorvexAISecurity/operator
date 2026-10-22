@@ -2,6 +2,7 @@
 # Merged after rbac-all-features.yaml. Synthetic fixture values only.
 phorvex:
   trustedDetectors: [vllm/detector-kv-canary, fixture/detector]
+  policyNamespaces: [fixture-a, fixture-b]
   prometheusUrl: http://prometheus.monitoring:9090
   pcieClassCapacity:
     NVIDIA A100-SXM4-40GB: {gen: 4, width: 16}

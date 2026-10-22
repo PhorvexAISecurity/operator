@@ -129,6 +129,7 @@ ledger are durable ConfigMaps.
 | `--trusted-detectors`, `--endpoint-lease-approved-*` | as the manager | must match the manager, or the handshake refuses it |
 | `--serving-security-*`, `--lora-clean-sources-file`, `--mig-profiles-file`, `--mig-*`, `--voice-mcp-approved-image`, `--max-retained-quarantines-per-namespace` | as the manager | the backends' configuration now reads here |
 | `PHORVEX_ACTUATOR`, `PHORVEX_VOICE_ADMISSION_ENABLED` | as the manager | the backend and the Voice admission flag |
+| `--policy-namespaces` | every namespace | the policy scope (`cmd/internal/policyscope`): the PhorvexPolicies the startup preflight authorizes and the backends read; must match the manager, or the handshake refuses it |
 
 `phorvex/cmd/internal/actuatorconfig` defines the backend flags and
 `phorvex/cmd/internal/trustconfig` the shared trust flags, for both binaries;

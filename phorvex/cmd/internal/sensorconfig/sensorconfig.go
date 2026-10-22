@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/trustconfig"
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/eventtrust"
@@ -26,9 +27,11 @@ import (
 )
 
 // Flags is the projection's configuration. The detector trust and the endpoint
-// lease authority are shared with the actuator (trustconfig).
+// lease authority are shared with the actuator (trustconfig), and so is the
+// policy scope (policyscope).
 type Flags struct {
 	trustconfig.Trust
+	policyscope.Scope
 	TrustedLossObservers             string
 	TrustedCurrentInventoryObservers string
 	PrometheusURL                    string
@@ -55,6 +58,7 @@ type EPSS struct {
 func (f *Flags) Register(fs *flag.FlagSet) {
 	fs.StringVar(&f.PCIeClassTable, "pcie-class-table", os.Getenv("PHORVEX_PCIE_CLASS_TABLE"), "JSON map of DCGM modelName -> {gen,width} used as the PCIe capacity fallback when the exporter publishes no link gen/width (M-114). Merged over the shipped default {\"Tesla T4\":{\"gen\":3,\"width\":16}}.")
 	f.Trust.Register(fs)
+	f.Scope.Register(fs)
 	fs.StringVar(&f.TrustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
 	fs.StringVar(&f.TrustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
 	fs.StringVar(&f.PrometheusURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
@@ -73,9 +77,12 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 }
 
 // Describe returns the configuration the sensor handshake compares, with the
-// identity lists normalized as the projection reads them.
+// identity lists normalized as the projection reads them. The policy scope is
+// validated at startup (Scope.List), so an invalid one never reaches here.
 func (f Flags) Describe() sensorapi.Config {
+	policyNamespaces, _ := f.Scope.List()
 	return sensorapi.Config{
+		PolicyNamespaces:                 policyNamespaces,
 		TrustedDetectors:                 identities(f.TrustedDetectors).List(),
 		TrustedLossObservers:             identities(f.TrustedLossObservers).List(),
 		TrustedCurrentInventoryObservers: identities(f.TrustedCurrentInventoryObservers).List(),

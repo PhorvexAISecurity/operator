@@ -1,46 +1,52 @@
 # Split services (ADR-0001)
 
-`applicationset.yaml` gives every Phorvex service its own Argo CD Application on
-each cluster registered for an environment: `phorvex-manager-<env>` (the manager
-and console chart in remote mode), `phorvex-brain-<env>`, `phorvex-sensor-<env>`
-and `phorvex-actuator-<env>`. Each has its own chart, sync status, history and
-logs. `project.yaml` limits them to this repository, the `phorvex-system`
-namespace and the cluster-scoped kinds the charts render.
+`applicationset.yaml` gives every Phorvex service its own Argo CD Application in
+each environment: `phorvex-manager-<env>` (the manager and console chart in
+remote mode), `phorvex-brain-<env>`, `phorvex-sensor-<env>` and
+`phorvex-actuator-<env>`. Each has its own chart, sync status, history and logs.
+`project.yaml` limits them to this repository, each environment's namespace and
+the cluster-scoped kinds the charts render there.
 
-**Nothing here is applied.** The root app (`../root.yaml`) watches `../apps` of the
-production repository, and nothing watches this directory. Applying it is phase 5e
-and needs separate approval.
+The root app (`../root.yaml`) watches `../apps` of the production repository,
+not this directory: these manifests are applied by hand.
 
 ## Environments
 
-The cluster generator selects Argo CD clusters by the label
-`phorvex.ai/environment` on their cluster Secret. Each environment's values live in
-`deploy/environments/<environment>/` (see its README). Production keeps the
-stack (`../apps/phorvex-stack.yaml`) until the split services have run in
-staging.
+An environment names its cluster, namespace and Helm release in the
+ApplicationSet's list, and keeps its values in `deploy/environments/<environment>/`
+(see its README).
 
-**Staging is a virtual cluster on the production cluster.** It is the vcluster
-`phorvex-staging` in the namespace `phorvex-staging` of `phorvex-dev-eks`. A
-vcluster has its own API server, so staging has its own PhorvexPolicy CRD,
-policies, admission webhooks and cluster-scoped RBAC, while its pods run on the
-production cluster's nodes.
+**Staging runs beside the production stack on the production cluster**, in the
+namespace `phorvex-staging` under the release name `staging`. Sharing the API
+server with production, it must leave production alone, and its values see to it
+(`tools/test_argocd_services.py` checks each):
 
-Never register the production cluster's own API server for an environment while
-the stack runs there. The manager reconciles every PhorvexPolicy in its cluster
-and writes their status and finalizers, so two managers would act on the same
-policies, and the cluster-scoped objects would collide.
+- **Its own policies only.** `policyNamespaces: [phorvex-staging]`: the manager
+  reconciles and ticks, the sensor lists and the actuator authorizes only the
+  PhorvexPolicies of its namespace, of which there are none yet. Without the
+  scope, the manager would write production's policy status and act on its
+  policies.
+- **No actuation.** The global kill switch is on: production's Phoenix acts on
+  every SecurityEvent in the cluster.
+- **No cluster-wide admission.** Its admission webhooks and the SecurityEvent
+  identity policy are off, since they would also admit production's requests.
+  Without that policy, no external detector is trusted.
+- **No shared cluster-scoped object.** The CRDs are skipped (they are
+  production's), and every ClusterRole and binding carries the release name.
 
-## Before applying (phase 5e)
+Staging therefore shows the services running, connected and healthy from the
+released images, not decisions on real workloads.
 
-1. **Images.** The release workflow publishes the images to ECR and pins them in
-   `deploy/environments/staging/<service>.yaml` (`docs/services/releasing.md`).
-2. **The staging infrastructure.** The vcluster, the Phoenix CRDs inside it,
-   Argo CD's read access to this repository and the vcluster's registration with
-   the label `phorvex.ai/environment: staging`: see `../staging/README.md`.
-3. **Apply.** Apply `project.yaml`, then `applicationset.yaml`.
+## Applying
+
+1. Argo CD reads this repository over HTTPS with the credential it uses for the
+   production repository, in a repository Secret for this repository's URL. The
+   enterprise disables deploy keys.
+2. Apply `project.yaml`, then `applicationset.yaml`.
 
 The services start in any order: the manager waits up to two minutes for each
-handshake and restarts until every service answers.
+handshake and restarts until every service answers. Deleting the ApplicationSet
+removes the Applications and, through their finalizers, everything they created.
 
 ## Webhook certificate
 
@@ -48,7 +54,8 @@ The manager chart generates its admission webhook certificate when it finds none
 (`lookup`). Argo CD renders charts without cluster access, so every render brings
 a new certificate. The ApplicationSet therefore ignores the certificate Secret's
 data and the webhook configurations' CA bundles, and respects those ignores on
-sync. The first sync installs both together, and later syncs keep them.
+sync. Staging's webhook is off, so this matters only to an environment that enables
+it.
 
 `tools/test_argocd_services.py` checks these manifests against the charts and
 environments.

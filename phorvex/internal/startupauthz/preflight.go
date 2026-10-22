@@ -26,6 +26,33 @@ type Config struct {
 	Timeout           time.Duration
 	MIGAgent          *MIGAgentAccess
 	ServingSecurity   *actuator.ServingSecurityConfig
+	// PolicyNamespaces limits the policies checked to the deployment's policy
+	// scope; empty checks every namespace.
+	PolicyNamespaces []string
+}
+
+// listPolicies reads the complete PhorvexPolicy inventory of the policy scope:
+// every namespace when namespaces is empty, else each listed one.
+func listPolicies(ctx context.Context, reader client.Reader, namespaces []string) (v1alpha1.PhorvexPolicyList, error) {
+	var all v1alpha1.PhorvexPolicyList
+	scopes := [][]client.ListOption{nil}
+	if len(namespaces) > 0 {
+		scopes = nil
+		for _, ns := range namespaces {
+			scopes = append(scopes, []client.ListOption{client.InNamespace(ns)})
+		}
+	}
+	for _, opts := range scopes {
+		var policies v1alpha1.PhorvexPolicyList
+		if err := reader.List(ctx, &policies, opts...); err != nil {
+			return all, fmt.Errorf("startup authorization: incomplete PhorvexPolicy inventory: %w", err)
+		}
+		if policies.Continue != "" || policies.RemainingItemCount != nil {
+			return all, fmt.Errorf("startup authorization: incomplete paginated PhorvexPolicy inventory")
+		}
+		all.Items = append(all.Items, policies.Items...)
+	}
+	return all, nil
 }
 
 // MIGAgentAccess describes the optional M83 manager-to-agent path. These permissions are
@@ -77,12 +104,9 @@ func Check(parent context.Context, reader client.Reader, reviews SSARClient, cfg
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
-	var policies v1alpha1.PhorvexPolicyList
-	if err := reader.List(ctx, &policies); err != nil {
-		return Report{}, fmt.Errorf("startup authorization: incomplete PhorvexPolicy inventory: %w", err)
-	}
-	if policies.Continue != "" || policies.RemainingItemCount != nil {
-		return Report{}, fmt.Errorf("startup authorization: incomplete paginated PhorvexPolicy inventory")
+	policies, err := listPolicies(ctx, reader, cfg.PolicyNamespaces)
+	if err != nil {
+		return Report{}, err
 	}
 	report := Report{Policies: len(policies.Items), NoPolicies: len(policies.Items) == 0}
 	requirements := map[string]Requirement{}

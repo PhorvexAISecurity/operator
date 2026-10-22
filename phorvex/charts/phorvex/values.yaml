@@ -174,6 +174,10 @@ phorvex:
   # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
   # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
   operatorNamespace: ""
+  # The namespaces whose PhorvexPolicies this release reconciles, ticks and
+  # authorizes; empty = every namespace. A second release on the same cluster, such
+  # as a staging environment, lists only its own (--policy-namespaces).
+  policyNamespaces: []
   # Hard safety bound shared by every policy and actuator route in a namespace.
   # Existing and pending quarantine UIDs consume the same protected capacity. Zero
   # disables new quarantine; values above 128 are rejected at render and startup.

@@ -361,7 +361,7 @@ class SplitServiceChart:
 @unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
 class SensorChartTests(SplitServiceChart, unittest.TestCase):
     service = 'sensor'
-    sources = ['cmd/internal/sensorconfig/sensorconfig.go', 'cmd/internal/trustconfig/trustconfig.go']
+    sources = ['cmd/internal/sensorconfig/sensorconfig.go', 'cmd/internal/trustconfig/trustconfig.go', 'cmd/internal/policyscope/policyscope.go']
     volumes = {'epss'}
     expected_env = {'POD_NAMESPACE'} | LEASE_ENV
 
@@ -375,7 +375,7 @@ class SensorChartTests(SplitServiceChart, unittest.TestCase):
 class ActuatorChartTests(SplitServiceChart, unittest.TestCase):
     service = 'actuator'
     sources = ['cmd/actuator/main.go', 'cmd/internal/actuatorconfig/actuatorconfig.go', 'cmd/internal/trustconfig/trustconfig.go',
-               'internal/actuator/backend.go']
+               'cmd/internal/policyscope/policyscope.go', 'internal/actuator/backend.go']
     volumes = {'litellm-client-revoke-status', 'lora-clean-sources', 'mig-profiles', 'serving-security'}
     expected_env = {'POD_NAMESPACE', 'PHORVEX_ACTUATOR', 'PHORVEX_VOICE_ADMISSION_ENABLED', 'PHORVEX_VOICE_MCP_APPROVED_IMAGE'} | LEASE_ENV
     env_flags = LEASE_FLAGS | {'voice-mcp-approved-image'}
@@ -457,7 +457,7 @@ class ManagerRemoteModeTests(unittest.TestCase):
         self.assertLessEqual(ACTUATOR_VOLUMES, {v['name'] for v in in_process['volumes']})
 
     def test_the_remote_manager_shares_the_services_handshake_configuration(self):
-        handshake = {'trusted-detectors', 'trusted-loss-observers', 'trusted-current-inventory-observers', 'operator-namespace'}
+        handshake = {'trusted-detectors', 'trusted-loss-observers', 'trusted-current-inventory-observers', 'operator-namespace', 'policy-namespaces'}
         manager = reading(helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES, *REMOTE), 'manager', handshake, LEASE_ENV | {'POD_NAMESPACE'}, set())
         self.assertEqual(len(manager['flags']), len(handshake))
         for service in ('sensor', 'actuator'):

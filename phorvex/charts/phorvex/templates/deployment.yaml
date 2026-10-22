@@ -100,6 +100,9 @@ spec:
         {{- if .Values.phorvex.operatorNamespace }}
         - --operator-namespace={{ .Values.phorvex.operatorNamespace }}
         {{- end }}
+        {{- with .Values.phorvex.policyNamespaces }}
+        - --policy-namespaces={{ join "," . }}
+        {{- end }}
         {{- $quarantineCapText := toString .Values.phorvex.maxRetainedQuarantinesPerNamespace }}
         {{- if kindIs "float64" .Values.phorvex.maxRetainedQuarantinesPerNamespace }}
         {{- if or (lt .Values.phorvex.maxRetainedQuarantinesPerNamespace 0.0) (ne .Values.phorvex.maxRetainedQuarantinesPerNamespace (floor .Values.phorvex.maxRetainedQuarantinesPerNamespace)) }}

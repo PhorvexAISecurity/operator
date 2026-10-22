@@ -118,11 +118,11 @@ func TestConfigureAppliesTheSettingsToTheNativeBackend(t *testing.T) {
 
 func TestPreflightNamesTheMIGAgentOnlyWhenEnabled(t *testing.T) {
 	f := parse(t, "--mig-agent-namespace=gpu", "--mig-agent-daemonset=agent")
-	if cfg := f.Preflight(Settings{}, actuator.BackendNative, "phorvex-system"); cfg.MIGAgent != nil || cfg.OperatorNamespace != "phorvex-system" {
+	if cfg := f.Preflight(Settings{}, actuator.BackendNative, "phorvex-system", nil); cfg.MIGAgent != nil || cfg.OperatorNamespace != "phorvex-system" {
 		t.Fatalf("disabled node exec still checked: %+v", cfg)
 	}
 	f.MIG.Enabled = true
-	if cfg := f.Preflight(Settings{}, actuator.BackendNative, "phorvex-system"); cfg.MIGAgent == nil || cfg.MIGAgent.Namespace != "gpu" || cfg.MIGAgent.DaemonSet != "agent" {
+	if cfg := f.Preflight(Settings{}, actuator.BackendNative, "phorvex-system", nil); cfg.MIGAgent == nil || cfg.MIGAgent.Namespace != "gpu" || cfg.MIGAgent.DaemonSet != "agent" {
 		t.Fatalf("enabled node exec not checked: %+v", cfg)
 	}
 	if err := (MIGNodeExec{}).Wire(nil, nil); err != nil {
@@ -134,12 +134,30 @@ func TestPreflightNamesTheMIGAgentOnlyWhenEnabled(t *testing.T) {
 }
 
 func TestSharedConfigurationIsOneDerivation(t *testing.T) {
-	a := Shared("phorvex-system", trustconfig.Trust{TrustedDetectors: "vllm/b, vllm/a,,vllm/a", EndpointLeaseApprovedSource: "src"})
-	b := Shared("phorvex-system", trustconfig.Trust{TrustedDetectors: "vllm/a,vllm/b", EndpointLeaseApprovedSource: "src"})
+	a := Shared("phorvex-system", trustconfig.Trust{TrustedDetectors: "vllm/b, vllm/a,,vllm/a", EndpointLeaseApprovedSource: "src"}, nil)
+	b := Shared("phorvex-system", trustconfig.Trust{TrustedDetectors: "vllm/a,vllm/b", EndpointLeaseApprovedSource: "src"}, nil)
 	if a.SHA256() != b.SHA256() {
 		t.Fatalf("the same trust describes differently: %+v vs %+v", a, b)
 	}
-	if Shared("other", trustconfig.Trust{TrustedDetectors: "vllm/a,vllm/b", EndpointLeaseApprovedSource: "src"}).SHA256() == a.SHA256() {
+	if Shared("other", trustconfig.Trust{TrustedDetectors: "vllm/a,vllm/b", EndpointLeaseApprovedSource: "src"}, nil).SHA256() == a.SHA256() {
 		t.Fatal("another operator namespace must change the configuration")
+	}
+}
+
+// The policy scope is part of the handshake: a manager and an actuator scoped
+// differently refuse each other, an unscoped one keeps its earlier identity, and
+// the namespaces compare as a set.
+func TestSharedComparesThePolicyScope(t *testing.T) {
+	trust := trustconfig.Trust{TrustedDetectors: "vllm/a"}
+	unscoped := Shared("staging", trust, nil)
+	if Shared("staging", trust, []string{}).SHA256() != unscoped.SHA256() {
+		t.Fatal("an empty scope changed the unscoped identity")
+	}
+	scoped := Shared("staging", trust, []string{"b", "a"})
+	if scoped.SHA256() == unscoped.SHA256() {
+		t.Fatal("a scoped actuator matches an unscoped manager")
+	}
+	if Shared("staging", trust, []string{"a", "b"}).SHA256() != scoped.SHA256() {
+		t.Fatal("the scope compares in order")
 	}
 }
