@@ -235,7 +235,7 @@ spec:
               mountPath: /tools
           containers:
           - name: feed
-            image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+            image: {{ include "phorvex.image" . | quote }}
             imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
             args:
             - --epss-feed=true

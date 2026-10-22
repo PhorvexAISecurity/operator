@@ -318,7 +318,8 @@ spec:
       {{- end }}
       containers:
       - name: console
-        image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}"
+        {{- with .Values.phorvex.console.image.releaseDigest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "phorvex.console.image.releaseDigest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end }}
+        image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}{{ with .Values.phorvex.console.image.releaseDigest }}@{{ . }}{{ end }}"
         imagePullPolicy: {{ .Values.phorvex.console.image.pullPolicy }}
         args:
         - -root={{ .Values.phorvex.console.root }}

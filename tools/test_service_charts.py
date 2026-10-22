@@ -481,6 +481,30 @@ class ManagerRemoteModeTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('requires the in-process actuator', result.stderr)
 
+    def test_the_manager_outlasts_its_wait_for_the_services(self):
+        # Startup waits for each remote service in turn before /healthz answers, and
+        # liveness starts only once the startup probe passes.
+        source = (ROOT / 'phorvex/cmd/main.go').read_text()
+        waits = re.findall(r'"(?:brain|sensor|actuator)-connect-timeout", (\d+)\*time\.Minute', source)
+        self.assertEqual(len(waits), 3)
+        probe = manager_pod(helm_template(MANAGER_CHART, *REMOTE))['containers'][0]['startupProbe']
+        self.assertGreater(probe['periodSeconds'] * probe['failureThreshold'], 60 * sum(map(int, waits)))
+
+
+def containers(docs):
+    for d in docs:
+        spec = d.get('spec', {})
+        spec = spec.get('jobTemplate', {}).get('spec', spec)
+        yield from spec.get('template', {}).get('spec', {}).get('containers', [])
+
+
+# The console renders only with its audit transport configured.
+CONSOLE = ['--set', 'phorvex.console.enabled=true', '--set', 'phorvex.audit.enabled=true',
+           '--set', 'phorvex.console.auditTransport.serverSecretName=audit-server',
+           '--set', 'phorvex.console.auditTransport.clientSecretName=audit-client',
+           '--set', 'phorvex.console.auditTransport.clientDNSName=console.example',
+           '--set', 'phorvex.console.auditTransport.serverDNSName=phorvex-phorvex-audit-source.phorvex-system.svc']
+
 
 @unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
 class ImageDigestTests(unittest.TestCase):
@@ -499,6 +523,31 @@ class ImageDigestTests(unittest.TestCase):
                                         capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('image.digest must be sha256', result.stderr)
+
+    def test_every_manager_image_is_the_released_one(self):
+        digest = 'sha256:' + 'a' * 64
+        pinned = 'registry.example/phorvex/manager:0.6.0@' + digest
+        docs = helm_template(MANAGER_CHART, '-f', str(ALL_FEATURES), '--set', 'phorvex.image.repository=registry.example/phorvex/manager',
+                             '--set', 'phorvex.image.tag=0.6.0', '--set', 'phorvex.image.releaseDigest=' + digest)
+        images = [c['image'] for c in containers(docs) if c['image'].startswith('registry.example/phorvex/manager')]
+        self.assertGreater(len(images), 1)
+        self.assertEqual(set(images), {pinned})
+        env = {e['name']: e.get('value') for c in containers(docs) for e in c.get('env', [])}
+        self.assertEqual(env['PHORVEX_BRAIN_IMAGE'], pinned)
+
+    def test_the_console_runs_exactly_the_released_image(self):
+        digest = 'sha256:' + 'b' * 64
+        docs = helm_template(MANAGER_CHART, *CONSOLE, '--set', 'phorvex.console.image.repository=registry.example/phorvex/console',
+                             '--set', 'phorvex.console.image.tag=0.6.0', '--set', 'phorvex.console.image.releaseDigest=' + digest)
+        self.assertIn('registry.example/phorvex/console:0.6.0@' + digest, [c['image'] for c in containers(docs)])
+
+    def test_a_release_digest_must_be_a_digest(self):
+        for key in ('phorvex.image.releaseDigest', 'phorvex.console.image.releaseDigest'):
+            with self.subTest(key=key):
+                result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), '-n', 'phorvex-system', *CONSOLE,
+                                         '--set', key + '=latest'], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(key + ' must be sha256', result.stderr)
 
 
 class VendoredLibraryTests(unittest.TestCase):

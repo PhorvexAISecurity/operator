@@ -9,6 +9,7 @@ phorvex:
     pullPolicy: IfNotPresent
     tag: "0.1.0-p0"
     # CI-maintained published immutable release authority; never derived from a live tag.
+    # Once set, every pod that runs this image pulls it by this digest.
     releaseDigest: ""
     releaseSourceSHA: ""
   litellmClientRevoke:
@@ -709,6 +710,7 @@ phorvex:
     image:
       repository: ""
       tag: ""
+      # Once set, the console pulls its image by this digest.
       releaseDigest: ""
       releaseSourceSHA: ""
       pullPolicy: IfNotPresent

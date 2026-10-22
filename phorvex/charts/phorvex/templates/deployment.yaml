@@ -43,7 +43,7 @@ spec:
         {{- end }}
       containers:
       - name: manager
-        image: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+        image: {{ include "phorvex.image" . | quote }}
         imagePullPolicy: {{ .Values.phorvex.image.pullPolicy }}
         args:
         - --base-interval={{ .Values.phorvex.baseInterval }}
@@ -277,7 +277,7 @@ spec:
             fieldRef:
               fieldPath: metadata.namespace
         - name: PHORVEX_BRAIN_IMAGE
-          value: "{{ .Values.phorvex.image.repository }}:{{ .Values.phorvex.image.tag }}"
+          value: {{ include "phorvex.image" . | quote }}
         - name: PHORVEX_VOICE_ADMISSION_ENABLED
           value: {{ .Values.phorvex.voiceAdmission.enabled | default false | quote }}
         {{- if .Values.phorvex.voiceMCP.enabled }}
@@ -322,6 +322,15 @@ spec:
           containerPort: {{ .Values.phorvex.admissionWebhook.port }}
           protocol: TCP
         {{- end }}
+        # Startup waits for each remote service in turn, up to its 2m
+        # --<service>-connect-timeout, before /healthz answers; liveness only starts
+        # once this passes, so it must outlast all three waits.
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 10
+          failureThreshold: 42
         livenessProbe:
           httpGet:
             path: /healthz

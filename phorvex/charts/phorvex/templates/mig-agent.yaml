@@ -49,7 +49,7 @@ spec:
         securityContext:
           privileged: true
       - name: {{ $cfg.helperContainer }}
-        image: "{{ $.Values.phorvex.image.repository }}:{{ $.Values.phorvex.image.tag }}"
+        image: {{ include "phorvex.image" $ | quote }}
         imagePullPolicy: {{ $.Values.phorvex.image.pullPolicy }}
         command: [{{ $cfg.allocationHelperPath | quote }}]
         args: ["--idle"]
