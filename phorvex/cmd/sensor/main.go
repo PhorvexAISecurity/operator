@@ -40,6 +40,7 @@ import (
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/ingest"
+	phorvexmetrics "github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 	"github.com/phorvex/phorvex/internal/sensorpb"
 	"github.com/phorvex/phorvex/internal/sensorsvc"
@@ -137,11 +138,11 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 		PromURL: cfg.sensor.PrometheusURL, PCIeClasses: pcie, Metrics: metrics}
 	sensorConfig := cfg.sensor.Describe()
 
-	server := grpc.NewServer(
+	server := grpc.NewServer(append(phorvexmetrics.GRPCServerOptions(),
 		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
-	)
+	)...)
 	sensorpb.RegisterSensorServiceServer(server, sensorsvc.NewServer(local, sensorConfig.SHA256(), local.TelemetrySource()))
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)

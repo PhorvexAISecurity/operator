@@ -50,6 +50,7 @@ import (
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/startupauthz"
 	"github.com/phorvex/phorvex/internal/wire"
 )
@@ -190,11 +191,11 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 		return err
 	}
 
-	server := grpc.NewServer(
+	server := grpc.NewServer(append(metrics.GRPCServerOptions(),
 		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
-	)
+	)...)
 	actuatorpb.RegisterActuatorServiceServer(server, service)
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
