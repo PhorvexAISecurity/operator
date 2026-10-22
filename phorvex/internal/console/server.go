@@ -70,6 +70,7 @@ type Server struct {
 	// [P-VCLUSTER Pass 2] multi-tenant write-path components:
 	quota         *TenantQuota     // per-tenant DoS limiter on tenant-facing surfaces
 	applyfix      *ApplyFixManager // the safe apply-fix write-path
+	attacks       http.Handler     // the attacks service, for a forwarding console (ServiceConsole)
 	stateMu       sync.RWMutex
 	stateErr      string
 	experimentAPI experimentCluster
@@ -101,6 +102,9 @@ func NewServer(cfg Config) *Server {
 		cfg.AuditPath = cfg.auditFile()
 	}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	if cfg.Service == ServiceConsole {
+		s.attacks = newAttacksProxy(cfg.AttacksURL)
+	}
 	s.runs.natsResponse = s.coordinateNATSResponse
 	s.runs.podBoundTokenResponse = s.coordinatePodBoundTokenResponse
 	if cfg.StateDir == "" {
@@ -109,8 +113,11 @@ func NewServer(cfg Config) *Server {
 		s.stateErr = s.runs.loadErr.Error()
 	}
 	if cfg.StateDir != "" {
-		s.recoverExperiments()
-		if cfg.AuditPath != "" || cfg.AuditSource != nil {
+		if cfg.servesAttacks() {
+			s.recoverExperiments()
+		}
+		// The decision history backs the console's live and owner views.
+		if cfg.Service != ServiceAttacks && (cfg.AuditPath != "" || cfg.AuditSource != nil) {
 			store, err := openHistoryStore(cfg)
 			if err != nil {
 				historyErr := fmt.Errorf("audit history database: %w", err)

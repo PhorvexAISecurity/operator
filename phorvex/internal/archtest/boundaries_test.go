@@ -92,7 +92,7 @@ var debt = map[edge]string{
 	{"console", "decision"}:    "the console embeds brain code (apply-fix gate, benchmark simulation); phase 4 calls the brain API",
 	{"console", "mathlab"}:     "the console replays Math Lab snapshots in-process; phase 4 calls the brain API",
 	{"console", "actuator"}:    "the console introspects the actuator handler registry; phase 4 reads it from the actuator API",
-	{"console", "cataloguev1"}: "the console runs catalogue jobs in-process; phase 6 moves them to the attacks service",
+	{"console", "cataloguev1"}: "cmd/attacks serves the catalogue jobs, but their code is still package console's; it moves to an attacks package",
 
 	// The in-process composition: the runner builds the Local adapters and their parts.
 	{"runner", "brainsvc"}:    "the runner builds the in-process brain adapter; the composition moves to cmd",

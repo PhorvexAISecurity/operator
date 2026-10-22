@@ -21,6 +21,10 @@ type Config struct {
 	HarnessBin string // harness.exe (for -config <yaml>)
 	HarnessDir string // build/test-harness (cwd for harness runs)
 	StateDir   string // writable console-owned state; never the manager decision audit
+	// Service is the part of the API this process serves; AttacksURL is the attacks
+	// service's origin a forwarding console (ServiceConsole) sends attack routes to.
+	Service    Service
+	AttacksURL string
 	// HistoryArchiveMaxBytes and HistoryMinFreeBytes bound the append-only durable history
 	// importer. Existing records remain readable when either limit pauses new imports.
 	HistoryArchiveMaxBytes int64
@@ -102,7 +106,7 @@ type Config struct {
 	// keyed "namespace/id" (or "*/id" for every namespace). The catalogue marks a matching row
 	// not-armed and not-compatible, and the foothold and vLLM fire handlers refuse it, so the
 	// operator can retire a non-actuating attack through Helm without a code change.
-	LiveAttackDisabled map[string]bool
+	LiveAttackDisabled       map[string]bool
 	LiteLLMLiveEnabled       bool
 	LiteLLMLiveProfileSHA256 string
 	LiteLLMLiveProfilePath   string

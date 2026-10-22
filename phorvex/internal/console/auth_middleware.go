@@ -94,6 +94,10 @@ type routeSpec struct {
 	// its own context/namespace for the one it was given, declares this so the boundary
 	// authorizes the real destination rather than the one the request named or omitted.
 	destination func(s *Server, r *http.Request, body scopedBody) (runDestination, error)
+
+	// attacks marks a route the attacks service serves: attack firing, the harness runs
+	// and the evidence they produce (Config.Service).
+	attacks bool
 }
 
 func (rs routeSpec) allowsMethod(m string) bool {
@@ -115,79 +119,9 @@ type route struct {
 // guard wraps one route's handler with the boundary.
 func (s *Server) guard(rt route) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		s.applyCORS(w, origin)
-		if r.Method == http.MethodOptions {
-			// Preflight is answered only for an origin the deployment trusts. There is no
-			// wildcard: a wildcard ACAO is an implicit grant to every site on the internet.
-			if origin != "" && (s.auth == nil || !s.auth.originTrusted(origin)) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
+		principal, ok := s.admit(rt, w, r)
+		if !ok {
 			return
-		}
-		// No verifier configured => no trust boundary => serve nothing. This is the state the
-		// old build treated as "demo trust"; it is now a refusal.
-		if s.auth == nil {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-				"error": "console authentication is not configured; the API is closed",
-			})
-			return
-		}
-		// The unsigned ALB headers are not identity. Presented without the signed header they can
-		// only be an attempt to assert one, so say so rather than ignoring them.
-		if unsignedALBHeadersPresent(r) && strings.TrimSpace(r.Header.Get(ALBDataHeader)) == "" {
-			s.unauthorized(w, "x-amzn-oidc-identity / x-amzn-oidc-accesstoken are not proof of identity; the signed "+ALBDataHeader+" header is required")
-			return
-		}
-		principal, err := s.auth.Authenticate(r.Context(), r)
-		if err != nil {
-			switch {
-			case errors.Is(err, ErrNoGrant):
-				// Authenticated, but the deployment has bound this subject to nothing. This is the
-				// visible fail-closed state when the grant table has not been supplied yet. The
-				// caller's own verified issuer+subject is echoed so the administrator can write
-				// the grant entry from what the screen shows — the exact `sub` is the key, and it
-				// is not otherwise discoverable without IdP console access.
-				body := map[string]string{
-					"error": "no authorization grant for this identity; a console administrator must bind this subject to a role and tenant scope",
-				}
-				var ng *NoGrantError
-				if errors.As(err, &ng) {
-					body["subject"] = ng.Subject
-					body["issuer"] = ng.Issuer
-					body["error"] += " — verified subject " + ng.Subject + " from " + ng.Issuer
-				}
-				writeJSON(w, http.StatusForbidden, body)
-			case errors.Is(err, ErrAmbiguousCredentials):
-				s.unauthorized(w, ErrAmbiguousCredentials.Error())
-			default:
-				s.unauthorized(w, "authentication required")
-			}
-			return
-		}
-		if !rt.spec.allowsMethod(r.Method) {
-			w.Header().Set("Allow", strings.Join(rt.spec.methods, ", "))
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
-				"error": "method not allowed; " + rt.path + " accepts " + strings.Join(rt.spec.methods, ", "),
-			})
-			return
-		}
-		if !allowedByAccess(principal, rt.spec.access) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": accessDenialMessage(rt.spec.access)})
-			return
-		}
-		// CSRF: a browser request authenticated by the ALB session cookie must come from an origin
-		// this deployment trusts. A bearer caller carries its credential deliberately in a header,
-		// so it is not subject to (and not authenticated by) Origin.
-		if principal.Source == "alb" && r.Method != http.MethodGet && r.Method != http.MethodHead {
-			if !s.sameOriginOK(r) {
-				writeJSON(w, http.StatusForbidden, map[string]string{
-					"error": "cross-origin state-changing request refused; this console accepts them only from its configured origins",
-				})
-				return
-			}
 		}
 		runID, code, msg, ok := s.checkScope(r, principal, rt.spec)
 		if !ok {
@@ -202,6 +136,88 @@ func (s *Server) guard(rt route) http.HandlerFunc {
 		}
 		rt.h(w, r.WithContext(ctx))
 	}
+}
+
+// admit is the part of the boundary that needs only the caller and the route: CORS and
+// preflight, authentication, the method, the role and the CSRF origin check. It writes
+// the answer and reports false when the request goes no further; the tenant, target
+// and run scope is checkScope's.
+func (s *Server) admit(rt route, w http.ResponseWriter, r *http.Request) (*Principal, bool) {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	s.applyCORS(w, origin)
+	if r.Method == http.MethodOptions {
+		// Preflight is answered only for an origin the deployment trusts. There is no
+		// wildcard: a wildcard ACAO is an implicit grant to every site on the internet.
+		if origin != "" && (s.auth == nil || !s.auth.originTrusted(origin)) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "origin not allowed"})
+			return nil, false
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return nil, false
+	}
+	// No verifier configured => no trust boundary => serve nothing. This is the state the
+	// old build treated as "demo trust"; it is now a refusal.
+	if s.auth == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "console authentication is not configured; the API is closed",
+		})
+		return nil, false
+	}
+	// The unsigned ALB headers are not identity. Presented without the signed header they can
+	// only be an attempt to assert one, so say so rather than ignoring them.
+	if unsignedALBHeadersPresent(r) && strings.TrimSpace(r.Header.Get(ALBDataHeader)) == "" {
+		s.unauthorized(w, "x-amzn-oidc-identity / x-amzn-oidc-accesstoken are not proof of identity; the signed "+ALBDataHeader+" header is required")
+		return nil, false
+	}
+	principal, err := s.auth.Authenticate(r.Context(), r)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNoGrant):
+			// Authenticated, but the deployment has bound this subject to nothing. This is the
+			// visible fail-closed state when the grant table has not been supplied yet. The
+			// caller's own verified issuer+subject is echoed so the administrator can write
+			// the grant entry from what the screen shows — the exact `sub` is the key, and it
+			// is not otherwise discoverable without IdP console access.
+			body := map[string]string{
+				"error": "no authorization grant for this identity; a console administrator must bind this subject to a role and tenant scope",
+			}
+			var ng *NoGrantError
+			if errors.As(err, &ng) {
+				body["subject"] = ng.Subject
+				body["issuer"] = ng.Issuer
+				body["error"] += " — verified subject " + ng.Subject + " from " + ng.Issuer
+			}
+			writeJSON(w, http.StatusForbidden, body)
+		case errors.Is(err, ErrAmbiguousCredentials):
+			s.unauthorized(w, ErrAmbiguousCredentials.Error())
+		default:
+			s.unauthorized(w, "authentication required")
+		}
+		return nil, false
+	}
+	if !rt.spec.allowsMethod(r.Method) {
+		w.Header().Set("Allow", strings.Join(rt.spec.methods, ", "))
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{
+			"error": "method not allowed; " + rt.path + " accepts " + strings.Join(rt.spec.methods, ", "),
+		})
+		return nil, false
+	}
+	if !allowedByAccess(principal, rt.spec.access) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": accessDenialMessage(rt.spec.access)})
+		return nil, false
+	}
+	// CSRF: a browser request authenticated by the ALB session cookie must come from an origin
+	// this deployment trusts. A bearer caller carries its credential deliberately in a header,
+	// so it is not subject to (and not authenticated by) Origin.
+	if principal.Source == "alb" && r.Method != http.MethodGet && r.Method != http.MethodHead {
+		if !s.sameOriginOK(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{
+				"error": "cross-origin state-changing request refused; this console accepts them only from its configured origins",
+			})
+			return nil, false
+		}
+	}
+	return principal, true
 }
 
 func (s *Server) unauthorized(w http.ResponseWriter, msg string) {
