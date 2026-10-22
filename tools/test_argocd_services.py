@@ -37,9 +37,13 @@ def value_files(environment, service):
     return [ROOT / f.replace('$values/', '').replace('{{.environment}}', environment).replace('{{.service}}', service) for f in files]
 
 
+# The cluster's APIs Argo CD renders the charts against, beyond the built-in ones.
+CLUSTER_APIS = ['--api-versions', 'monitoring.coreos.com/v1/PodMonitor', '--api-versions', 'monitoring.coreos.com/v1/PrometheusRule']
+
+
 def render(environment, element):
     # As the template releases it: the environment's release name and namespace, no CRDs.
-    args = [HELM, 'template', environment['release'], str(ROOT / element['chart']), '-n', environment['namespace']]
+    args = [HELM, 'template', environment['release'], str(ROOT / element['chart']), '-n', environment['namespace'], *CLUSTER_APIS]
     for path in value_files(environment['environment'], element['service']):
         args += ['-f', str(path)]
     out = subprocess.run(args, check=True, capture_output=True, text=True).stdout
@@ -168,3 +172,39 @@ class EnvironmentRenderTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+DEMO = load(SERVICES / 'demo-staging.yaml')
+
+
+def demo_manifests():
+    return [d for f in sorted((ROOT / DEMO['spec']['source']['path']).glob('*.yaml')) for d in yaml.safe_load_all(f.read_text()) if d]
+
+
+class DemoTests(unittest.TestCase):
+    """The workload staging's services defend (deploy/demo)."""
+    staging = next(e for e in ENVIRONMENTS_LISTED if e['environment'] == 'staging')
+
+    def test_it_deploys_into_the_environment_only(self):
+        spec = DEMO['spec']
+        self.assertEqual(spec['project'], PROJECT['metadata']['name'])
+        self.assertEqual(spec['source']['repoURL'], REPO)
+        self.assertEqual(spec['destination'], {'server': self.staging['server'], 'namespace': self.staging['namespace']})
+        for d in demo_manifests():
+            # Argo CD places every object in the destination; none is cluster-scoped.
+            self.assertNotIn('namespace', d['metadata'], d['metadata']['name'])
+            self.assertNotIn(d['kind'], CLUSTER_SCOPED)
+
+    def test_the_policy_defends_only_the_demo_with_the_native_backend(self):
+        docs = demo_manifests()
+        policy = next(d for d in docs if d['kind'] == 'PhorvexPolicy')['spec']
+        labels = next(d for d in docs if d['kind'] == 'Deployment')['spec']['template']['metadata']['labels']
+        self.assertLessEqual(policy['selector']['matchLabels'].items(), labels.items())
+        # The console's workload attack picks a rotation target before any other Pod.
+        self.assertEqual(labels['r6th.io/rotation-target'], 'true')
+        self.assertLessEqual(set(policy['actions']['enabled']), {'rotate', 'quarantine'})
+        env = load(ENVIRONMENTS / 'staging' / 'phorvex.yaml')['phorvex']
+        self.assertEqual(env['actuator'], 'native')
+        self.assertEqual(env['policyNamespaces'], [self.staging['namespace']])
+        self.assertEqual(env['actuatorNamespaces'], [self.staging['namespace']])
+

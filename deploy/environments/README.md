@@ -16,7 +16,7 @@ files.
 
 | Environment | Cluster | State |
 |---|---|---|
-| `staging` | `phorvex-dev-eks`, beside the production stack: namespace `phorvex-staging`, release `staging`, its own policy scope, actuation off | applied by hand (`deploy/argocd/services/README.md`) |
+| `staging` | `phorvex-dev-eks`, beside the production stack: namespace `phorvex-staging`, release `staging`, its own policy scope, the native backend confined to its namespace, its own monitoring (`environment=staging`) and the `deploy/demo` workload to defend | applied by hand (`deploy/argocd/services/README.md`) |
 
 Production keeps running the stack in `deploy/helm/phorvex-stack` until the split
 services have run in staging.
