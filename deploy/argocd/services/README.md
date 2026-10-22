@@ -49,6 +49,17 @@ the console's workload attack targets (`r6th.io/rotation-target`), never a
 Phorvex service Pod. The console is reachable at `staging-console.phorvex.ai`,
 through its own ALB and Cognito app client.
 
+End-to-End runs reach the staging console with a bearer token instead. The token
+belongs to `staging-phorvex-console-e2e`, a ServiceAccount with no RBAC, and its
+audience is staging's own:
+
+```sh
+kubectl -n phorvex-staging create token staging-phorvex-console-e2e \
+  --audience phorvex-staging-console --duration 10m
+```
+
+The grant confines it to `phorvex-staging`, like the operator's.
+
 ## Applying
 
 1. Argo CD reads this repository over HTTPS with the credential it uses for the

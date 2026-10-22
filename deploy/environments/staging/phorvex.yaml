@@ -94,6 +94,18 @@ phorvex:
         issuer: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
         clientId: 5njtljkiehde7iesciehr6a562
         region: us-east-2
+      # The staging End-to-End identity (docs/CONSOLE-AUTH.md, "DevOps handoff"): a
+      # token-less ServiceAccount with no RBAC, whose short-lived projected tokens are
+      # console credentials only. The cluster's OIDC issuer signs them; the audience is
+      # staging's own, so production's e2e tokens are refused here and these there.
+      #   kubectl -n phorvex-staging create token staging-phorvex-console-e2e \
+      #     --audience phorvex-staging-console --duration 10m
+      oidc:
+        issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+        audience: phorvex-staging-console
+        jwksUrl: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys
+      e2eIdentity:
+        enabled: true
       trustedOrigins: [https://staging-console.phorvex.ai]
       grants:
         enabled: true
@@ -115,6 +127,20 @@ phorvex:
                   "default"
                 ],
                 "note": "The production console's operator, confined to staging's tenant."
+              },
+              {
+                "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+                "subject": "system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e",
+                "roles": [
+                  "operator"
+                ],
+                "tenants": [
+                  "phorvex-staging"
+                ],
+                "targets": [
+                  "default"
+                ],
+                "note": "Staging End-to-End runs against the demo workloads; token minted per run, never stored."
               }
             ]
           }
