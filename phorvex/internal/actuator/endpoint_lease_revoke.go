@@ -20,11 +20,10 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
-
-const endpointLeaseConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // Status is private, TLS authenticated, fixed Pod-IP/port/path, and contains
 // HMAC IDs only. Neither the caller bearer nor its HMAC seed reaches this code.
@@ -135,7 +134,7 @@ func endpointLeaseDispatchAuthority(ctx context.Context, ec EnactCtx, req Reques
 		!endpointlease.ValidOperationID(req.OperationID) || req.TickID == "" || len(req.TickID) > 128 || o == nil ||
 		!endpointlease.ValidSHA(ec.EndpointLeaseApprovedSourceSHA256) || ec.EndpointLeaseApprovedProxyImage == "" || ec.EndpointLeaseApprovedEngineImage == "" ||
 		o.TargetPodUID != req.TargetUID || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration ||
-		o.CreatorIdentity != endpointLeaseConsoleCreator || o.ScenarioID != "ai2-endpoint-security" || o.EvidenceSource != "TEST_INJECTED" ||
+		o.CreatorIdentity != eventtrust.Injector() || o.ScenarioID != "ai2-endpoint-security" || o.EvidenceSource != "TEST_INJECTED" ||
 		o.EventName == "" || !endpointlease.ValidUID(o.EventUID) || o.AcceptedStatus != 200 || o.RetainedBaselineStatus != 200 ||
 		o.ObservedAt.IsZero() || o.ObservedAt.After(time.Now()) || time.Since(o.ObservedAt) >= 60*time.Second {
 		return endpointlease.Live{}, errors.New("endpoint lease selected observation or trusted configuration incomplete")
@@ -172,7 +171,7 @@ func endpointLeaseDispatchAuthority(ctx context.Context, ec EnactCtx, req Reques
 	if err = ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, pod); err != nil {
 		return live, err
 	}
-	if string(pod.UID) != req.TargetUID || !selector.Matches(labels.Set(pod.Labels)) || pod.Annotations["phorvex.ai/endpoint-lease-event-creator"] != endpointLeaseConsoleCreator {
+	if string(pod.UID) != req.TargetUID || !selector.Matches(labels.Set(pod.Labels)) || pod.Annotations["phorvex.ai/endpoint-lease-event-creator"] != eventtrust.Injector() {
 		return live, errors.New("endpoint lease target left selecting policy or creator scope")
 	}
 	event := &amtdv1beta1.SecurityEvent{}
@@ -180,7 +179,7 @@ func endpointLeaseDispatchAuthority(ctx context.Context, ec EnactCtx, req Reques
 		return live, err
 	}
 	if event.DeletionTimestamp != nil || string(event.UID) != o.EventUID || event.Spec.Rule.Type != endpointlease.RuleType || event.Spec.Rule.Source != "redteam" ||
-		event.Annotations["phorvex.ai/creator-identity"] != endpointLeaseConsoleCreator ||
+		event.Annotations["phorvex.ai/creator-identity"] != eventtrust.Injector() ||
 		event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod ||
 		event.CreationTimestamp.IsZero() || o.ObservedAt.After(event.CreationTimestamp.Time.Add(time.Second)) ||
 		event.CreationTimestamp.Time.Sub(o.ObservedAt) >= 60*time.Second || time.Since(event.CreationTimestamp.Time) >= 60*time.Second {

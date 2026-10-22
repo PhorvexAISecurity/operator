@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 )
 
 type Receipt struct {
@@ -45,7 +46,7 @@ func ParseJournal(raw string) (Journal, error) {
 	for _, r := range j.Receipts {
 		op, e := OperationID(r.DeploymentUID, r.ConfigMapUID, r.PolicyUID, r.PolicyGeneration, r.EventUID, r.TickID, r.SelectionDecisionID, r.Prior.SHA256())
 		next, ne := Enforce(r.Prior, r.OperationID)
-		if r.Version != 1 || (r.Phase != "prepared" && r.Phase != "terminal-full") || r.PolicyName == "" || r.TargetName == "" || !ValidUID(r.TargetPodUID) || r.EventName == "" || r.CreatorIdentity != Creator || !ValidUID(r.SourceConfigMapUID) || !ValidUID(r.SessionID) || !ValidSHA(r.RunSHA256) || !ValidSHA(r.ReceiptSHA256) || !ValidSHA(r.ProviderEvidenceSHA256) || e != nil || op != r.OperationID || ne != nil || !bytes.Equal(next.Bytes(), r.Desired.Bytes()) || r.Prior.DeploymentUID != r.DeploymentUID || r.Prior.SecurityPolicyUID != r.PolicyUID || r.Prior.WrapperCMUID != r.SourceConfigMapUID || r.PodReceipts == nil {
+		if r.Version != 1 || (r.Phase != "prepared" && r.Phase != "terminal-full") || r.PolicyName == "" || r.TargetName == "" || !ValidUID(r.TargetPodUID) || r.EventName == "" || r.CreatorIdentity != eventtrust.Injector() || !ValidUID(r.SourceConfigMapUID) || !ValidUID(r.SessionID) || !ValidSHA(r.RunSHA256) || !ValidSHA(r.ReceiptSHA256) || !ValidSHA(r.ProviderEvidenceSHA256) || e != nil || op != r.OperationID || ne != nil || !bytes.Equal(next.Bytes(), r.Desired.Bytes()) || r.Prior.DeploymentUID != r.DeploymentUID || r.Prior.SecurityPolicyUID != r.PolicyUID || r.Prior.WrapperCMUID != r.SourceConfigMapUID || r.PodReceipts == nil {
 			return Journal{}, errors.New("Voice admission protected receipt authority invalid")
 		}
 		if r.Phase == "prepared" && len(r.PodReceipts) != 0 || r.Phase == "terminal-full" && (len(r.PodReceipts) == 0 || len(r.PodReceipts) > 128) {

@@ -48,6 +48,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuatorsvc"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/buildinfo"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/startupauthz"
 	"github.com/phorvex/phorvex/internal/wire"
@@ -138,6 +139,9 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(cfg.trust.EndpointLeaseApprovedSource,
 		cfg.trust.EndpointLeaseApprovedProxyImage, cfg.trust.EndpointLeaseApprovedEngineImage); err != nil {
 		return fmt.Errorf("endpoint lease source configuration invalid: %w", err)
+	}
+	if err := eventtrust.ConfigureInjector(cfg.trust.InjectorIdentity); err != nil {
+		return err
 	}
 	actuator.ConfigureAdapterDetectorIdentities(cfg.trust.Detectors().List())
 

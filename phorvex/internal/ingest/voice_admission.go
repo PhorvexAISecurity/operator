@@ -24,7 +24,7 @@ func bindVoiceAdmissionObservation(ctx context.Context, reader client.Reader, p 
 	var payload voiceadmissionpolicy.EventAssertion
 	for i := range events {
 		e := &events[i]
-		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceAdmission || e.CreatorIdentity != voiceadmissionpolicy.Creator || e.Name == "" || !voiceadmissionpolicy.ValidUID(e.UID) || e.TimestampMissing || e.Age < 0 || e.Age >= time.Minute || e.ConsoleTargetPodUID != p.UID {
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceAdmission || e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || !voiceadmissionpolicy.ValidUID(e.UID) || e.TimestampMissing || e.Age < 0 || e.Age >= time.Minute || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}
 		a, err := voiceadmissionpolicy.ParseEvent(e.VoiceAdmissionRaw)

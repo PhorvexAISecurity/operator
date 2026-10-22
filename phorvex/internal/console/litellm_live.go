@@ -22,6 +22,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/litellmclient"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -167,7 +168,7 @@ func parseLiteLiveProfile(raw []byte) (liteLLMLiveProfile, error) {
 		p.Version != 2 || !litellmclient.ApprovedRuntime(p.SourceSHA256, p.GatewayImage) ||
 		!staticSHA256.MatchString(p.ClientsSHA256) || !staticSHA256.MatchString(p.SeedSHA256) ||
 		p.PolicyName != "litellm-defense" || p.ModelAlias != "gpt-4o-mini" ||
-		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
+		p.EventCreator != eventtrust.Injector() ||
 		p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 {
 		return p, errors.New("reviewed LiteLLM Live profile invalid")
 	}

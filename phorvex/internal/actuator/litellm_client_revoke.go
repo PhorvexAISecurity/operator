@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -131,7 +132,7 @@ func litellmRevokeAuthority(ctx context.Context, ec EnactCtx, req Request) (lite
 	if event.DeletionTimestamp != nil || string(event.UID) != o.EventUID || event.Spec.Rule.Type != litellmclient.RuleType ||
 		event.Spec.Rule.Source != "redteam" || !litellmEventTimeMatches(event.CreationTimestamp.Time, o.ObservedAt, time.Now()) ||
 		event.Annotations["phorvex.ai/creator-identity"] != o.CreatorIdentity ||
-		o.CreatorIdentity != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
+		o.CreatorIdentity != eventtrust.Injector() ||
 		event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID ||
 		len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod ||
 		event.Annotations[litellmclient.ObservationAnnotation] == "" {

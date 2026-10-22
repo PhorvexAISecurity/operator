@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -60,7 +61,7 @@ func voiceAdmissionScopeAt(ctx context.Context, reader client.Reader, target Tar
 	if e := reader.Get(ctx, client.ObjectKey{Namespace: target.Namespace, Name: target.Pod}, pod); e != nil {
 		return s, e
 	}
-	if string(pod.UID) != target.UID || !voiceAdmissionReady(pod) || pod.Annotations[voiceadmissionpolicy.EventCreatorAnnotation] != voiceadmissionpolicy.Creator {
+	if string(pod.UID) != target.UID || !voiceAdmissionReady(pod) || pod.Annotations[voiceadmissionpolicy.EventCreatorAnnotation] != eventtrust.Injector() {
 		return s, errors.New("Voice admission target readiness/creator changed")
 	}
 	dep, e := voiceRefundOwner(ctx, reader, pod)
@@ -139,7 +140,7 @@ func voiceAdmissionScopeAt(ctx context.Context, reader client.Reader, target Tar
 			continue
 		}
 		owner, oe := voiceRefundOwner(ctx, reader, &p)
-		if oe != nil || owner.UID != dep.UID || !voiceAdmissionReady(&p) || !svcSel.Matches(labels.Set(p.Labels)) || !depSel.Matches(labels.Set(p.Labels)) || !sel.Matches(labels.Set(p.Labels)) || p.Annotations[voiceadmissionpolicy.EventCreatorAnnotation] != voiceadmissionpolicy.Creator {
+		if oe != nil || owner.UID != dep.UID || !voiceAdmissionReady(&p) || !svcSel.Matches(labels.Set(p.Labels)) || !depSel.Matches(labels.Set(p.Labels)) || !sel.Matches(labels.Set(p.Labels)) || p.Annotations[voiceadmissionpolicy.EventCreatorAnnotation] != eventtrust.Injector() {
 			return s, errors.New("Voice admission serving owner/readiness set incomplete")
 		}
 		peerSource, se := voiceadmissionpolicy.VerifySource(ctx, reader, &p, dep)
@@ -404,7 +405,7 @@ func voiceAdmissionEvent(ctx context.Context, ec EnactCtx, req Request, o *model
 	if e := ec.Reader.Get(ctx, client.ObjectKey{Name: o.EventName}, event); e != nil {
 		return e
 	}
-	if string(event.UID) != o.EventUID || event.DeletionTimestamp != nil || event.Annotations["phorvex.ai/creator-identity"] != voiceadmissionpolicy.Creator || o.CreatorIdentity != voiceadmissionpolicy.Creator || event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID || event.Spec.Rule.Type != model.AttackVectorVoiceAdmission || event.Spec.Rule.Source != "redteam" || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod || event.CreationTimestamp.IsZero() || time.Since(event.CreationTimestamp.Time) < 0 || time.Since(event.CreationTimestamp.Time) >= time.Minute {
+	if string(event.UID) != o.EventUID || event.DeletionTimestamp != nil || event.Annotations["phorvex.ai/creator-identity"] != eventtrust.Injector() || o.CreatorIdentity != eventtrust.Injector() || event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID || event.Spec.Rule.Type != model.AttackVectorVoiceAdmission || event.Spec.Rule.Source != "redteam" || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod || event.CreationTimestamp.IsZero() || time.Since(event.CreationTimestamp.Time) < 0 || time.Since(event.CreationTimestamp.Time) >= time.Minute {
 		return errors.New("Voice admission SecurityEvent identity or freshness changed")
 	}
 	a, e := voiceadmissionpolicy.ParseEvent(event.Annotations[voiceadmissionpolicy.EventAnnotation])
@@ -519,7 +520,7 @@ func (voiceAdmissionHandler) Enact(ctx context.Context, ec EnactCtx, req Request
 		return HandlerResult{}, errDryRunGuard
 	}
 	o := req.VoiceAdmissionObservation
-	if !ec.VoiceAdmissionEnabled || req.Action != model.ActionVoiceSessionAdmissionEnforce || ec.Reader == nil || ec.Client == nil || ec.JournalNamespace == "" || o == nil || !o.Assertion.Valid() || req.Namespace != voiceadmissionpolicy.Namespace || o.TargetPodUID != req.TargetUID || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration || o.CreatorIdentity != voiceadmissionpolicy.Creator {
+	if !ec.VoiceAdmissionEnabled || req.Action != model.ActionVoiceSessionAdmissionEnforce || ec.Reader == nil || ec.Client == nil || ec.JournalNamespace == "" || o == nil || !o.Assertion.Valid() || req.Namespace != voiceadmissionpolicy.Namespace || o.TargetPodUID != req.TargetUID || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration || o.CreatorIdentity != eventtrust.Injector() {
 		return HandlerResult{}, errors.New("Voice admission selection authority incomplete")
 	}
 	opID, e := voiceadmissionpolicy.OperationID(o.DeploymentUID, o.ConfigMapUID, req.PolicyUID, req.PolicyGeneration, o.EventUID, req.TickID, req.OperationID, o.RuleSHA256)

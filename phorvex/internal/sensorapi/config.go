@@ -26,6 +26,9 @@ type Config struct {
 	// PolicyNamespaces is the policy scope (cmd/internal/policyscope); empty is
 	// every namespace, and leaves the identity as it was before the scope existed.
 	PolicyNamespaces []string `json:",omitempty"`
+	// InjectorIdentity is the identity the workload live arms' events must come
+	// from (--injector-identity); empty is eventtrust.DefaultInjector.
+	InjectorIdentity string `json:",omitempty"`
 }
 
 // SHA256 identifies the configuration. The identity lists and the policy scope

@@ -34,6 +34,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
 	"github.com/phorvex/phorvex/internal/recon"
@@ -266,7 +267,7 @@ func Fixtures() []Fixture {
 			Events: []EventSpec{{Type: typ, TargetsPod: targetsPod, Trust: "trusted", AgeSeconds: age}}}
 	}
 	at := time.Unix(1, 0).UTC()
-	const consoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
+	const consoleCreator = eventtrust.DefaultInjector
 	uid := func(n int) string { return fmt.Sprintf("%08d-0000-4000-8000-%012d", n, n) }
 	sha := func(c string) string { return strings.Repeat(c, 64) }
 	// The admitted typed observation alone mints each application-scoped fact (ingest binds it
@@ -312,8 +313,8 @@ func Fixtures() []Fixture {
 					RawModelMarkerObserved: true, AssistantOutputMarkerObserved: true, ObservedAt: at}}),
 		boundFixture("voice-admission", "Admitted unsigned-media session assertion matching the exact admission rule: voiceAdmissionAccess appears at 3x and only voice-session-admission-enforce covers it.",
 			"voice", admissionPod, BoundSpec{VoiceAdmissionConfigMap: voiceadmissionpolicy.ConfigMapName, VoiceAdmissionSourceSHA256: sha("2"),
-				VoiceAdmissionDeploymentUID: admissionDeploy, VoiceAdmissionEventCreator: voiceadmissionpolicy.Creator,
-				VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid(66), CreatorIdentity: voiceadmissionpolicy.Creator,
+				VoiceAdmissionDeploymentUID: admissionDeploy, VoiceAdmissionEventCreator: eventtrust.DefaultInjector,
+				VoiceAdmissionObservation: &model.VoiceAdmissionObservation{EventName: "observed", EventUID: uid(66), CreatorIdentity: eventtrust.DefaultInjector,
 					ScenarioID: voiceadmissionpolicy.ScenarioID, EvidenceSource: "TEST_INJECTED", TargetPodUID: admissionPod, DeploymentUID: admissionDeploy,
 					ConfigMapUID: admissionCM, ConfigMapResourceVersion: "7", RuleSHA256: sha("5"), SourceSHA256: sha("2"), SessionID: uid(64),
 					PolicyName: "voice-defense", PolicyUID: uid(65), PolicyGeneration: 1, Assertion: admission, ObservedAt: at}}),

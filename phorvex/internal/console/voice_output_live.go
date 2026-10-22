@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"io"
 	"net/http"
 	"os"
@@ -80,7 +81,7 @@ func parseVoiceOutputProfile(raw []byte) (voiceOutputProfile, error) {
 	if d.Decode(&p) != nil || d.Decode(new(any)) != io.EOF || p.Version != 1 || !staticSHA256.MatchString(p.SourceSHA256) ||
 		!staticSHA256.MatchString(p.ProbeSHA256) || p.AttackClipSHA256 != voiceOutputAttackClipSHA256 ||
 		p.BenignClipSHA256 != voiceOutputBenignClipSHA256 || p.PolicyName != voiceAgencyPolicyName ||
-		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
+		p.EventCreator != eventtrust.Injector() ||
 		p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 {
 		return p, errors.New("reviewed Voice output profile invalid")
 	}

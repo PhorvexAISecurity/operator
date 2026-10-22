@@ -24,7 +24,6 @@ const (
 	ScenarioID      = "voice-unauthenticated-media-admission"
 	EventType       = "phorvex.attack.voice-session-admission"
 	EventAnnotation = "phorvex.ai/voice-admission-observation-v1"
-	Creator         = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 	JournalName     = "phorvex-voice-admission-journal"
 	JournalLabel    = "phorvex.ai/voice-admission-journal"
 	MaxBytes        = 8192

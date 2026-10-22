@@ -22,13 +22,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
-
-const liteOutputConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 type liteOutputReceipt struct {
 	Version                          int                   `json:"version"`
@@ -68,7 +67,7 @@ func (r liteOutputReceipt) valid() bool {
 	if r.Version != 2 || (r.Phase != "prepared" && r.Phase != "terminal-full" && r.Phase != "aborted-no-write") ||
 		r.PolicyName != "litellm-defense" || r.PolicyUID == "" || r.PolicyGeneration < 1 ||
 		r.TargetName == "" || r.TargetUID == "" || r.EventName == "" || r.EventUID == "" ||
-		r.CreatorIdentity != liteOutputConsoleCreator || r.TickID == "" || r.SelectionDecisionID == "" ||
+		r.CreatorIdentity != eventtrust.Injector() || r.TickID == "" || r.SelectionDecisionID == "" ||
 		r.ObservedAt.IsZero() ||
 		r.ConfigMapUID == "" || r.SelectedConfigMapResourceVersion == "" || !outputpolicy.LiteValidRuleSlotName(r.RuleConfigMapName) || r.RuleConfigMapUID == "" ||
 		r.Rule.SHA256() != r.RuleSHA256 || r.Rule.TargetPodUID != r.TargetUID ||
@@ -601,7 +600,7 @@ func enactLiteOutputPolicy(ctx context.Context, ec EnactCtx, req Request) (Handl
 		req.PolicyUID == "" || req.PolicyGeneration < 1 || req.TickID == "" || req.OperationID == "" ||
 		o == nil || o.Version != 2 || o.LiteLLM == nil || o.TargetPodUID != req.TargetUID ||
 		o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration ||
-		o.EventName == "" || o.EventUID == "" || o.CreatorIdentity != liteOutputConsoleCreator ||
+		o.EventName == "" || o.EventUID == "" || o.CreatorIdentity != eventtrust.Injector() ||
 		o.ObservedAt.IsZero() || time.Since(o.ObservedAt) < 0 || time.Since(o.ObservedAt) >= 60*time.Second {
 		return HandlerResult{}, errors.New("LiteLLM output selection/observation incomplete")
 	}

@@ -16,7 +16,6 @@ import (
 )
 
 const litellmClientHorizon = 60 * time.Second
-const litellmConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // bindLiteLLMClientObservation grants a fact only for one fresh trusted event
 // whose typed identities match the current gateway, Service, policy, and both
@@ -31,7 +30,7 @@ func bindLiteLLMClientObservation(ctx context.Context, reader client.Reader, p *
 	for i := range events {
 		e := &events[i]
 		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorLiteLLMClientAbuse ||
-			e.CreatorIdentity != litellmConsoleCreator || e.Name == "" || e.UID == "" ||
+			e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= litellmClientHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}

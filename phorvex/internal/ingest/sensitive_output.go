@@ -170,7 +170,7 @@ func bindLiteOutputObservation(ctx context.Context, reader client.Reader, p *mod
 	for i := range events {
 		e := &events[i]
 		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorSensitiveOutput ||
-			e.CreatorIdentity != litellmConsoleCreator || e.Name == "" || e.UID == "" || e.TimestampMissing ||
+			e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || e.UID == "" || e.TimestampMissing ||
 			e.Age < 0 || e.Age >= sensitiveOutputHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}

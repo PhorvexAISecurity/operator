@@ -172,6 +172,7 @@ func Shared(operatorNamespace string, trust trustconfig.Trust, policyNamespaces 
 		EndpointLeaseApprovedSource:      trust.EndpointLeaseApprovedSource,
 		EndpointLeaseApprovedProxyImage:  trust.EndpointLeaseApprovedProxyImage,
 		EndpointLeaseApprovedEngineImage: trust.EndpointLeaseApprovedEngineImage,
+		InjectorIdentity:                 trust.Injector(),
 	}
 }
 

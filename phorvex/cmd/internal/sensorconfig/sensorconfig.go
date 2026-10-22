@@ -89,14 +89,18 @@ func (f Flags) Describe() sensorapi.Config {
 		EndpointLeaseApprovedSource:      f.EndpointLeaseApprovedSource,
 		EndpointLeaseApprovedProxyImage:  f.EndpointLeaseApprovedProxyImage,
 		EndpointLeaseApprovedEngineImage: f.EndpointLeaseApprovedEngineImage,
+		InjectorIdentity:                 f.Trust.Injector(),
 	}
 }
 
-// ApplyTrust installs the endpoint lease authority and the detector and observer
-// trust the projection reads.
+// ApplyTrust installs the endpoint lease authority, the injector and the detector
+// and observer trust the projection reads.
 func (f Flags) ApplyTrust() error {
 	if err := ingest.ConfigureEndpointLeaseApprovedAuthority(f.EndpointLeaseApprovedSource, f.EndpointLeaseApprovedProxyImage, f.EndpointLeaseApprovedEngineImage); err != nil {
 		return fmt.Errorf("endpoint lease source configuration invalid: %w", err)
+	}
+	if err := eventtrust.ConfigureInjector(f.InjectorIdentity); err != nil {
+		return err
 	}
 	eventtrust.ConfigureEventTrust(identities(f.TrustedDetectors))
 	eventtrust.ConfigureCompletedDisclosureTrust(identities(f.TrustedLossObservers))

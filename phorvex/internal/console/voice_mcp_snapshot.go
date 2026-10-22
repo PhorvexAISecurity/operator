@@ -14,6 +14,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/voicemcppolicy"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -225,7 +226,7 @@ func parseVoiceMCPProfile(raw []byte) (voiceMCPProfile, error) {
 		!staticSHA256.MatchString(p.MCPImage[strings.LastIndex(p.MCPImage, "@sha256:")+8:]) ||
 		p.AttackClipSHA256 != voiceMCPAttackAudioSHA || p.BenignClipSHA256 != voiceMCPBenignAudioSHA ||
 		p.GoodDescriptorSHA256 != voiceMCPGoodStoreSHA || p.PolicyName != voiceMCPPolicyName ||
-		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
+		p.EventCreator != eventtrust.Injector() ||
 		p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 {
 		return p, errors.New("reviewed MCP profile invalid")
 	}

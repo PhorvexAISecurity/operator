@@ -283,6 +283,10 @@ func main() {
 	eventtrust.ConfigureCompletedDisclosureTrust(lossObservers)
 	currentObservers := eventtrust.NewTrustedDetectors(strings.Split(sensorFlags.TrustedCurrentInventoryObservers, ","))
 	eventtrust.ConfigureCurrentInventoryTrust(currentObservers)
+	if err := eventtrust.ConfigureInjector(sensorFlags.InjectorIdentity); err != nil {
+		setupLog.Error(err, "invalid --injector-identity")
+		os.Exit(2)
+	}
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
 	if detectors.Empty() {
 		setupLog.Info("WARNING: no trusted detector identities configured — every external SecurityEvent is ingested as untrusted and supplies NO belief evidence (M-94 fail-closed). Set --trusted-detectors / phorvex.trustedDetectors.")

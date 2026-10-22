@@ -68,7 +68,7 @@ func TestEndpointLeaseIngestRequiresCurrentSourcePolicyAndFreshTrustedEvent(t *t
 		return string(raw)
 	}
 	event := model.SecurityEventInfo{CreatedAt: now, Age: 0, Trust: eventtrust.TrustTrusted, TargetsPod: true,
-		Type: endpointlease.RuleType, Source: "redteam", CreatorIdentity: endpointLeaseConsoleCreator,
+		Type: endpointlease.RuleType, Source: "redteam", CreatorIdentity: eventtrust.Injector(),
 		Name: "lease-event", UID: "66666666-6666-4666-8666-666666666666", ConsoleTargetPodUID: podUID,
 		EndpointLeaseRaw: encode(observation)}
 	live := endpointlease.Live{ServiceUID: observation.ServiceUID, PolicyUID: observation.PolicyConfigMapUID,

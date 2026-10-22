@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
@@ -632,7 +633,7 @@ func (p Pod) HasBoundVoiceRefundObservation() bool {
 
 func (p Pod) HasBoundVoiceAdmissionObservation() bool {
 	o := p.VoiceAdmissionObservation
-	return o != nil && o.Assertion.Valid() && p.Namespace == "voice" && p.UID != "" && p.VoiceAdmissionConfigMap == voiceadmissionpolicy.ConfigMapName && o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceAdmissionDeploymentUID && o.SourceSHA256 == p.VoiceAdmissionSourceSHA256 && o.ConfigMapUID == o.Assertion.PolicyCMUID && o.ConfigMapResourceVersion == o.Assertion.PolicyResourceVersion && o.RuleSHA256 == o.Assertion.RuleSHA256 && o.SourceSHA256 == o.Assertion.AdmissionSourceSHA256 && o.SessionID == o.Assertion.SessionID && o.TargetPodUID == o.Assertion.PodUID && o.DeploymentUID == o.Assertion.DeploymentUID && o.PolicyUID == o.Assertion.SecurityPolicyUID && o.PolicyGeneration == o.Assertion.SecurityPolicyGeneration && o.EventName != "" && voiceadmissionpolicy.ValidUID(o.EventUID) && o.CreatorIdentity == voiceadmissionpolicy.Creator && o.CreatorIdentity == p.VoiceAdmissionEventCreator && o.PolicyName != "" && o.ScenarioID == voiceadmissionpolicy.ScenarioID && o.EvidenceSource == "TEST_INJECTED" && o.SelectedRevision == 0
+	return o != nil && o.Assertion.Valid() && p.Namespace == "voice" && p.UID != "" && p.VoiceAdmissionConfigMap == voiceadmissionpolicy.ConfigMapName && o.TargetPodUID == p.UID && o.DeploymentUID == p.VoiceAdmissionDeploymentUID && o.SourceSHA256 == p.VoiceAdmissionSourceSHA256 && o.ConfigMapUID == o.Assertion.PolicyCMUID && o.ConfigMapResourceVersion == o.Assertion.PolicyResourceVersion && o.RuleSHA256 == o.Assertion.RuleSHA256 && o.SourceSHA256 == o.Assertion.AdmissionSourceSHA256 && o.SessionID == o.Assertion.SessionID && o.TargetPodUID == o.Assertion.PodUID && o.DeploymentUID == o.Assertion.DeploymentUID && o.PolicyUID == o.Assertion.SecurityPolicyUID && o.PolicyGeneration == o.Assertion.SecurityPolicyGeneration && o.EventName != "" && voiceadmissionpolicy.ValidUID(o.EventUID) && o.CreatorIdentity == eventtrust.Injector() && o.CreatorIdentity == p.VoiceAdmissionEventCreator && o.PolicyName != "" && o.ScenarioID == voiceadmissionpolicy.ScenarioID && o.EvidenceSource == "TEST_INJECTED" && o.SelectedRevision == 0
 }
 
 func (p Pod) HasBoundVoiceOutputObservation() bool {

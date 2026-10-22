@@ -22,6 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/voiceoutputpolicy"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -33,7 +34,6 @@ const (
 	voiceOutputObservationAnnotation = "phorvex.ai/voice-output-observation-v1"
 	voiceOutputSecretName            = "voice-memory-state-token"
 	voiceOutputTestSecretName        = "voice-output-test-token"
-	voiceOutputCreator               = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 )
 
 type voiceOutputScope struct {
@@ -459,7 +459,7 @@ func voiceOutputEvent(ctx context.Context, ec EnactCtx, req Request, o *model.Vo
 	if e := ec.Reader.Get(ctx, client.ObjectKey{Name: o.EventName}, event); e != nil {
 		return e
 	}
-	if string(event.UID) != o.EventUID || event.DeletionTimestamp != nil || event.Annotations["phorvex.ai/creator-identity"] != o.CreatorIdentity || o.CreatorIdentity != voiceOutputCreator || s.pod.Annotations["phorvex.ai/voice-output-event-creator"] != o.CreatorIdentity || event.Annotations[model.ConsoleTargetPodUIDAnnotation] != o.TargetPodUID || event.Spec.Rule.Type != model.AttackVectorVoiceOutput || event.Spec.Rule.Source != "redteam" || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod || event.CreationTimestamp.IsZero() || time.Since(event.CreationTimestamp.Time) < 0 || time.Since(event.CreationTimestamp.Time) >= time.Minute {
+	if string(event.UID) != o.EventUID || event.DeletionTimestamp != nil || event.Annotations["phorvex.ai/creator-identity"] != o.CreatorIdentity || o.CreatorIdentity != eventtrust.Injector() || s.pod.Annotations["phorvex.ai/voice-output-event-creator"] != o.CreatorIdentity || event.Annotations[model.ConsoleTargetPodUIDAnnotation] != o.TargetPodUID || event.Spec.Rule.Type != model.AttackVectorVoiceOutput || event.Spec.Rule.Source != "redteam" || len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod || event.CreationTimestamp.IsZero() || time.Since(event.CreationTimestamp.Time) < 0 || time.Since(event.CreationTimestamp.Time) >= time.Minute {
 		return errors.New("Voice output SecurityEvent identity or freshness changed")
 	}
 	raw := event.Annotations[voiceOutputObservationAnnotation]
@@ -552,7 +552,7 @@ func (voiceOutputHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (
 		return HandlerResult{}, errDryRunGuard
 	}
 	o := req.VoiceOutputObservation
-	if req.Action != model.ActionVoiceOutputPolicyActivate || ec.Reader == nil || ec.Client == nil || ec.JournalNamespace == "" || o == nil || req.Namespace != voiceoutputpolicy.Namespace || req.TickID == "" || req.OperationID == "" || len(req.TickID) > 253 || len(req.OperationID) > 253 || o.TargetPodUID != req.TargetUID || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration || o.ScenarioID != "ai2-system-prompt-leakage" || o.EvidenceSource != "TEST_INJECTED" || o.CreatorIdentity != voiceOutputCreator || !o.RawModelMarkerObserved || !o.AssistantOutputMarkerObserved || !voiceoutputpolicy.ValidSHA(o.MarkerSHA256) {
+	if req.Action != model.ActionVoiceOutputPolicyActivate || ec.Reader == nil || ec.Client == nil || ec.JournalNamespace == "" || o == nil || req.Namespace != voiceoutputpolicy.Namespace || req.TickID == "" || req.OperationID == "" || len(req.TickID) > 253 || len(req.OperationID) > 253 || o.TargetPodUID != req.TargetUID || o.PolicyName != req.PolicyName || o.PolicyUID != req.PolicyUID || o.PolicyGeneration != req.PolicyGeneration || o.ScenarioID != "ai2-system-prompt-leakage" || o.EvidenceSource != "TEST_INJECTED" || o.CreatorIdentity != eventtrust.Injector() || !o.RawModelMarkerObserved || !o.AssistantOutputMarkerObserved || !voiceoutputpolicy.ValidSHA(o.MarkerSHA256) {
 		return HandlerResult{}, errors.New("Voice output selection authority incomplete")
 	}
 	target := Target{Namespace: req.Namespace, Pod: req.Pod, UID: req.TargetUID, PolicyName: req.PolicyName, PolicyUID: req.PolicyUID}

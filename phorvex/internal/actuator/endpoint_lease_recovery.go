@@ -11,6 +11,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -75,7 +76,7 @@ func recoverPreparedEndpointLease(ctx context.Context, ec EnactCtx, r endpointLe
 	if err == nil {
 		if string(event.UID) != r.EventUID || event.Spec.Rule.Type != endpointlease.RuleType || event.Spec.Rule.Source != "redteam" ||
 			event.Annotations[model.ConsoleTargetPodUIDAnnotation] != r.TargetPodUID ||
-			event.Annotations["phorvex.ai/creator-identity"] != endpointLeaseConsoleCreator {
+			event.Annotations["phorvex.ai/creator-identity"] != eventtrust.Injector() {
 			return errors.New("endpoint lease recovery original event identity changed")
 		}
 	} else if !apierrors.IsNotFound(err) {
