@@ -1,0 +1,45 @@
+{{- $scoped := .Values.phorvex.console.attackNamespaces }}
+{{- if and .Values.phorvex.services.attacks.endpoint $scoped }}
+{{- $name := printf "%s-attacks-targets-%s" .Release.Name (printf "%s/%s" .Release.Namespace .Release.Name | sha256sum | trunc 10) | trunc 63 | trimSuffix "-" }}
+{{- $account := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex-common.attacksServiceAccountName" .) }}
+# The attacks service's SecurityEvents target only console.attackNamespaces. SecurityEvents
+# are cluster-scoped, so RBAC cannot confine what it creates, changes or deletes; this policy
+# matches the attacks service's own requests only, and leaves every other requester's,
+# production's included, alone. It runs in the API server and cannot fail open.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: attacks-targets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["amtd.r6security.com"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["securityevents"]
+  matchConditions:
+  - name: the-attacks-service
+    expression: {{ printf "request.userInfo.username == %q" $account | quote }}
+  variables:
+  - name: targets
+    expression: "request.operation == 'DELETE' ? oldObject.spec.targets : object.spec.targets"
+  validations:
+  - expression: {{ printf "size(variables.targets) > 0 && variables.targets.all(t, %s.exists(n, t.startsWith(n + '/')))" (toJson $scoped) | quote }}
+    reason: Forbidden
+    message: {{ printf "the attacks service may only target, change or delete SecurityEvents of Pods in %s" (join ", " $scoped) | quote }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    phorvex.ai/policy: attacks-targets
+spec:
+  policyName: {{ $name }}
+  validationActions: ["Deny"]
+{{- end }}

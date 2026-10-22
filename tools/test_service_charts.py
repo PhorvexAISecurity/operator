@@ -659,6 +659,30 @@ class AttacksServiceTests(unittest.TestCase):
         docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE)
         self.assertIn(('*cluster*', 'phorvex.ai', 'phorvexpolicies', '*', 'patch'), account_grants(docs, *CONSOLE_SA))
 
+    def test_the_attacks_service_targets_only_its_namespaces(self):
+        scope = ['--set', 'phorvex.console.attackNamespaces={team-a,team-b}']
+        docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE, *scope)
+        guard = [d for d in docs if d['kind'].startswith('ValidatingAdmissionPolicy') and d['metadata']['labels'].get('phorvex.ai/policy') == 'attacks-targets']
+        policy = next(d for d in guard if d['kind'] == 'ValidatingAdmissionPolicy')
+        binding = next(d for d in guard if d['kind'] == 'ValidatingAdmissionPolicyBinding')
+        spec = policy['spec']
+        self.assertEqual(spec['failurePolicy'], 'Fail')
+        # Only the attacks service's own requests: every other requester, production's included, is untouched.
+        self.assertEqual(spec['matchConditions'], [{'name': 'the-attacks-service',
+                                                    'expression': 'request.userInfo.username == "system:serviceaccount:phorvex-system:phorvex-attacks"'}])
+        self.assertEqual(spec['matchConstraints']['resourceRules'][0]['operations'], ['CREATE', 'UPDATE', 'DELETE'])
+        self.assertIn('["team-a","team-b"].exists', spec['validations'][0]['expression'])
+        self.assertEqual(binding['spec'], {'policyName': policy['metadata']['name'], 'validationActions': ['Deny']})
+        self.assertTrue(policy['metadata']['name'].startswith('phorvex-attacks-targets-'))
+        # The sweeper reaps only those namespaces' events, wherever it runs.
+        for chart, docs, name in ((MANAGER_CHART, docs, 'console'), (ATTACKS_CHART, helm_template(ATTACKS_CHART, *CONSOLE, *scope), 'attacks')):
+            self.assertIn({'name': 'PHORVEX_CONSOLE_SWEEP_NAMESPACES', 'value': 'team-a,team-b'}, container(docs, name)['env'], name)
+        # Unconfined, there is neither.
+        for values in ([], ATTACKS_REMOTE):
+            docs = helm_template(MANAGER_CHART, *CONSOLE, *values)
+            self.assertEqual([d for d in docs if d['kind'] == 'ValidatingAdmissionPolicy' and 'attacks-targets' in d['metadata']['name']], [])
+            self.assertNotIn('PHORVEX_CONSOLE_SWEEP_NAMESPACES', [e['name'] for e in container(docs, 'console')['env']])
+
     def test_the_console_forwards_to_the_attacks_service_and_names_it_the_injector(self):
         docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE)
         env = {c['name']: {e['name']: e.get('value') for e in c.get('env', [])} for c in containers(docs)}

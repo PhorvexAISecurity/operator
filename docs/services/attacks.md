@@ -101,6 +101,14 @@ environment's values turns the split on in the manager chart:
   changes and policy edits, the console's and the attacks service's, to Roles in
   those namespaces. SecurityEvents are cluster-scoped, so creating them stays
   cluster-wide.
+- **SecurityEvents.** SecurityEvents are cluster-scoped, so RBAC cannot confine
+  them. With `attackNamespaces` set, two guards do instead:
+  - A ValidatingAdmissionPolicy (`<release>-attacks-targets-*`) matches only the
+    attacks service's own requests. It refuses any SecurityEvent it creates,
+    changes or deletes with a target outside those namespaces. Production's
+    requests never match it.
+  - The red-team sweeper reaps only events every target of which is in those
+    namespaces (`PHORVEX_CONSOLE_SWEEP_NAMESPACES`).
 - **Exposure.** `phorvex.console.ingress` renders the console's own Service (port 80)
   and Ingress, for an environment outside the production stack's dashboard.
 
