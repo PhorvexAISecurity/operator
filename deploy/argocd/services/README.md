@@ -24,14 +24,15 @@ namespace `phorvex-staging` under the release name `staging`. Sharing the API
 server with production, it must leave production alone, and its values see to it
 (`tools/test_argocd_services.py` checks each):
 
-- **Its own policies only.** `policyNamespaces: [phorvex-staging]`: the manager
-  reconciles and ticks, the sensor lists and the actuator authorizes only the
-  PhorvexPolicies of its namespace. Without the scope, the manager would write
-  production's policy status and act on its policies.
+- **Its own policies only.** `policyNamespaces: [phorvex-staging-demo]`: the
+  manager reconciles and ticks, the sensor lists and the actuator authorizes only
+  the PhorvexPolicies of the demo's namespace. Without the scope, the manager would
+  write production's policy status and act on its policies. The services never
+  defend the namespace they run in: the actuator refuses to quarantine there.
 - **Its own hands.** The native backend (`actuator: native`) creates no
   SecurityEvent or AMTD for production's Phoenix to act on, and changes workloads
-  only in `actuatorNamespaces: [phorvex-staging]`. Production's Phoenix acts on
-  every SecurityEvent, but its AMTDs cover only production's namespaces. The
+  only in `actuatorNamespaces: [phorvex-staging-demo]`. Production's Phoenix acts
+  on every SecurityEvent, but its AMTDs cover only production's namespaces. The
   global kill switch stays on until the console and the attacks service run here.
 - **No cluster-wide admission.** Its admission webhooks and the SecurityEvent
   identity policy are off, since they would also admit production's requests.
@@ -42,12 +43,26 @@ server with production, it must leave production alone, and its values see to it
   severity-info alerts filter on it, and production's one unscoped rule never sees
   its cost counter (`deploy/monitoring/README.md`).
 
-`phorvex-demo-staging` (`demo-staging.yaml`) deploys `deploy/demo`: a stateless
-`demo-api` for the services to defend, and its PhorvexPolicy, which selects only
-its Pods and enables only the native backend's rotate and quarantine. Its Pods are
-the console's workload attack targets (`r6th.io/rotation-target`), never a
-Phorvex service Pod. The console is reachable at `staging-console.phorvex.ai`,
-through its own ALB and Cognito app client.
+Production does not leave staging alone in one respect. Its manager has no policy
+scope, so it also reconciles and ticks staging's policies, writes their status and
+records their decisions in its audit. It holds no RBAC in staging's namespaces and
+trusts none of staging's detectors, so it decides there but cannot act. Scoping
+production's manager to its own namespaces closes this.
+
+`phorvex-demo-staging` (`demo-staging.yaml`) deploys `deploy/demo` into its own
+namespace, `phorvex-staging-demo`:
+- `demo-api`, a stateless nginx for the services to defend. Its Pods are the
+  console's workload attack targets (`r6th.io/rotation-target`).
+- Its PhorvexPolicy, which selects only those Pods and enables only the native
+  backend's rotate and quarantine.
+- Its measured load. An exporter sidecar and a PodMonitor give each Pod an
+  `http_requests_total`, and `demo-load` sends about five requests a second.
+  Without a measured load the brain prices every rotation at its conservative
+  bound, above the policy's cost ceiling.
+
+That namespace is also the console's attack scope and every staging grant's
+tenant. The console is reachable at `staging-console.phorvex.ai`, through its own
+ALB and Cognito app client.
 
 End-to-End runs reach the staging console with a bearer token instead. The token
 belongs to `staging-phorvex-console-e2e`, a ServiceAccount with no RBAC, and its
@@ -58,7 +73,7 @@ kubectl -n phorvex-staging create token staging-phorvex-console-e2e \
   --audience phorvex-staging-console --duration 10m
 ```
 
-The grant confines it to `phorvex-staging`, like the operator's.
+The grant confines it to `phorvex-staging-demo`, like the operator's.
 
 ## Applying
 

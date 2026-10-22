@@ -21,14 +21,15 @@ phorvex:
       endpoint: staging-attacks:8090
 
   # Beside production, staging must leave production's policies and requests alone.
-  # It reconciles, ticks and authorizes only the PhorvexPolicies of its own
-  # namespace, of which there are none yet.
-  policyNamespaces: [phorvex-staging]
+  # It reconciles, ticks and authorizes only the PhorvexPolicies of the demo's
+  # namespace (deploy/demo). The services never defend their own namespace: the
+  # actuator refuses to quarantine in it.
+  policyNamespaces: [phorvex-staging-demo]
   # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
-  # for production's Phoenix to act on, and changes workloads only in this namespace.
-  # The kill switch stays on until the console and the attacks service run here.
+  # for production's Phoenix to act on, and changes workloads only in the demo's
+  # namespace. The kill switch stays on until the console and the attacks service run here.
   actuator: native
-  actuatorNamespaces: [phorvex-staging]
+  actuatorNamespaces: [phorvex-staging-demo]
   globalKillSwitch: true
   # Admission webhooks and policies are cluster-wide: staging's would also admit
   # production's requests.
@@ -77,8 +78,8 @@ phorvex:
 
   console:
     enabled: true
-    # Exec, workload changes and policy edits stay in this namespace.
-    attackNamespaces: [phorvex-staging]
+    # Exec, workload changes and policy edits stay in the demo's namespace.
+    attackNamespaces: [phorvex-staging-demo]
     state:
       persistence:
         storageClass: gp2-csi
@@ -124,12 +125,12 @@ phorvex:
                   "operator"
                 ],
                 "tenants": [
-                  "phorvex-staging"
+                  "phorvex-staging-demo"
                 ],
                 "targets": [
                   "default"
                 ],
-                "note": "The production console's operator, confined to staging's tenant."
+                "note": "The production console's operator, confined to staging's demo tenant."
               },
               {
                 "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
@@ -138,7 +139,7 @@ phorvex:
                   "operator"
                 ],
                 "tenants": [
-                  "phorvex-staging"
+                  "phorvex-staging-demo"
                 ],
                 "targets": [
                   "default"

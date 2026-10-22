@@ -1,6 +1,35 @@
 # A stateless workload for an environment's services to defend (deploy/environments/README.md).
 # It carries the rotation-target label, so the console's workload attack picks one of its
-# Pods and never a Phorvex service Pod in the same namespace.
+# Pods before any other Pod in the namespace.
+#
+# The brain prices a rotation by the load it disrupts: `http_requests_total` per Pod
+# (ingest/prometheus.go). nginx counts its requests in stub_status, the exporter
+# sidecar serves the count, and the PodMonitor below names it http_requests_total.
+# demo-load keeps the count moving.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-api-nginx
+  labels:
+    app.kubernetes.io/name: demo-api
+    app.kubernetes.io/part-of: phorvex-demo
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location / {
+        root /usr/share/nginx/html;
+        index index.html;
+      }
+    }
+    # Only the exporter sidecar reads it, over the Pod's loopback.
+    server {
+      listen 127.0.0.1:8081;
+      location = /stub_status {
+        stub_status;
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -46,9 +75,32 @@ spec:
         volumeMounts:
         - name: tmp
           mountPath: /tmp
+        - name: nginx-conf
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+      - name: exporter
+        image: public.ecr.aws/nginx/nginx-prometheus-exporter:1.5.3@sha256:85666e7fde7e253f1c6d978f9a961245df4c9cdb7677e1866d9bb28e8f9ee41d
+        args: ["--nginx.scrape-uri=http://127.0.0.1:8081/stub_status"]
+        ports:
+        - name: metrics
+          containerPort: 9113
+        readinessProbe:
+          httpGet: {path: /metrics, port: metrics}
+          periodSeconds: 10
+        resources:
+          requests: {cpu: 5m, memory: 16Mi}
+          limits: {memory: 32Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
       volumes:
       - name: tmp
         emptyDir: {}
+      - name: nginx-conf
+        configMap:
+          name: demo-api-nginx
 ---
 apiVersion: v1
 kind: Service
@@ -64,3 +116,66 @@ spec:
   - name: http
     port: 80
     targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: demo-api
+  labels:
+    app.kubernetes.io/name: demo-api
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 15s
+    metricRelabelings:
+    - action: keep
+      sourceLabels: [__name__]
+      regex: nginx_http_requests_total|nginx_up
+    - action: replace
+      sourceLabels: [__name__]
+      regex: nginx_http_requests_total
+      targetLabel: __name__
+      replacement: http_requests_total
+---
+# Steady traffic through the Service, about five requests a second, so every Pod
+# has a measured load. It is not a rotation target and the policy does not select it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-load
+  labels:
+    app.kubernetes.io/name: demo-load
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-load
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: demo-load
+        app.kubernetes.io/part-of: phorvex-demo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: load
+        image: public.ecr.aws/docker/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        command: ["sh", "-c", "while true; do wget -q -O /dev/null -T 2 http://demo-api/ || true; sleep 0.2; done"]
+        resources:
+          requests: {cpu: 5m, memory: 8Mi}
+          limits: {memory: 16Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
