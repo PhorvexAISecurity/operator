@@ -41,6 +41,12 @@ def value_files(environment, service):
 CLUSTER_APIS = ['--api-versions', 'monitoring.coreos.com/v1/PodMonitor', '--api-versions', 'monitoring.coreos.com/v1/PrometheusRule']
 
 
+def service_pod(docs, service):
+    """The pod spec of the Deployment whose first container is the service's."""
+    return next(d['spec']['template']['spec'] for d in docs
+                if d['kind'] == 'Deployment' and d['spec']['template']['spec']['containers'][0]['name'] == service)
+
+
 def render(environment, element):
     # As the template releases it: the environment's release name and namespace, no CRDs.
     args = [HELM, 'template', environment['release'], str(ROOT / element['chart']), '-n', environment['namespace'], *CLUSTER_APIS]
@@ -113,8 +119,8 @@ class EnvironmentRenderTests(unittest.TestCase):
             endpoints = {k: v for k, v in endpoints.items() if k != 'attacks'}
             by_service = {e['service']: e for e in ELEMENTS}
             self.assertEqual(set(endpoints), set(by_service) - {'manager', 'attacks'})
-            manager = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment')
-            args = manager['spec']['template']['spec']['containers'][0]['args']
+            manager = service_pod(render(environment, by_service['manager']), 'manager')
+            args = manager['containers'][0]['args']
             for service, value in endpoints.items():
                 with self.subTest(environment=environment['environment'], service=service):
                     docs = render(environment, by_service[service])
@@ -164,14 +170,12 @@ class EnvironmentRenderTests(unittest.TestCase):
                         if d['kind'] in CLUSTER_SCOPED:
                             self.assertTrue(d['metadata']['name'].startswith(release + '-'), (service, d['kind'], d['metadata']['name']))
                     if service in ('manager', 'sensor', 'actuator'):
-                        pod = next(d for d in docs if d['kind'] == 'Deployment')['spec']['template']['spec']
+                        pod = service_pod(docs, service)
                         args = pod['containers'][0]['args']
                         self.assertIn(f'--policy-namespaces={namespace}', args, service)
                         if service == 'manager':
                             self.assertIn('--global-kill-switch=true', args)
 
-if __name__ == '__main__':
-    unittest.main()
 
 
 DEMO = load(SERVICES / 'demo-staging.yaml')
@@ -208,3 +212,6 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(env['policyNamespaces'], [self.staging['namespace']])
         self.assertEqual(env['actuatorNamespaces'], [self.staging['namespace']])
 
+
+if __name__ == '__main__':
+    unittest.main()
