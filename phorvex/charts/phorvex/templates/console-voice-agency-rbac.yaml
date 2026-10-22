@@ -25,7 +25,7 @@ roleRef:
   name: {{ $full }}-console-voice-agency-rule
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # Dynamic journal names are deterministic for one Deployment UID. Grant only
@@ -55,6 +55,6 @@ roleRef:
   name: {{ $full }}-console-voice-agency-journal
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

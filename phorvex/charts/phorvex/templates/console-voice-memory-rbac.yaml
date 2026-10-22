@@ -27,6 +27,6 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-console-voice-memory
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

@@ -54,10 +54,17 @@ observer ServiceAccounts.
 phorvex-common.injectorEnv: the ServiceAccount the workload live arms create their
 SecurityEvents as (--injector-identity), or nothing for the default
 (phorvex-system/phorvex-phorvex-console). Every service and the console read it from
-this variable, which an image older than the setting ignores.
+this variable, which an image older than the setting ignores. It is
+phorvex.injectorIdentity when set; otherwise the release's attacks service once the
+attacks routes are served remotely (phorvex.services.attacks.endpoint), and otherwise
+.default, which the attacks service sets to its own account.
 */}}
 {{- define "phorvex-common.injectorEnv" -}}
-{{- with .values.injectorIdentity -}}
+{{- $identity := .values.injectorIdentity | default .default -}}
+{{- if and (not $identity) (dig "services" "attacks" "endpoint" "" .values) -}}
+{{- $identity = printf "%s/%s" .releaseNamespace (printf "%s-attacks" .releaseName | trunc 63 | trimSuffix "-") -}}
+{{- end -}}
+{{- with $identity -}}
 - name: PHORVEX_INJECTOR_IDENTITY
   value: {{ . | quote }}
 {{- end -}}

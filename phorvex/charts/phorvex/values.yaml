@@ -215,6 +215,11 @@ phorvex:
       endpoint: ""
     actuator:
       endpoint: ""
+    # The attacks service (deploy/charts/phorvex-attacks, docs/services/attacks.md). Set,
+    # the console forwards the attack routes to it, and its account holds the attack
+    # grants and injects the workload live arms' events.
+    attacks:
+      endpoint: ""
   # Optional, reporting-only scoped outcome observation. Enabling this mounts
   # one immutable startup config Secret, a separate mTLS Secret, and a
   # dedicated existing PVC for private evidence. The startup.json contents
@@ -449,6 +454,9 @@ phorvex:
   console:
     enabled: false
     allowWorkloadMutations: false
+    # With the attacks service remote (services.attacks.endpoint): the namespaces it may
+    # exec into and change. Empty is every namespace, as the console had.
+    attackNamespaces: []
     # Live attack ids (namespace/id, or */id) with no actuator wired end to end. Retired rows
     # show in the catalogue as not-armed with a clear reason, and the fire handlers refuse them.
     liveAttackDisabled: []

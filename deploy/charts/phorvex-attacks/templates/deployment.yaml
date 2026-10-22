@@ -1,0 +1,2 @@
+{{- /* The console's pod, run as cmd/attacks; it renders when the console does. */}}
+{{- include "phorvex-common.consoleDeployment" . }}

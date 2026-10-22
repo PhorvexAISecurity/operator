@@ -24,6 +24,38 @@ app.kubernetes.io/part-of: phorvex
 {{ $image.repository }}:{{ $image.tag }}{{ with $image.releaseDigest }}@{{ . }}{{ end }}
 {{- end -}}
 
+{{/* The ServiceAccount that fires attacks: the attacks service's once the attack routes
+are served remotely (services.attacks.endpoint), otherwise the console's. */}}
+{{- define "phorvex.attackServiceAccountName" -}}
+{{- if .Values.phorvex.services.attacks.endpoint -}}
+{{- include "phorvex-common.attacksServiceAccountName" . -}}
+{{- else -}}
+{{- include "phorvex.consoleServiceAccountName" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/* What the attacks service needs in the namespaces it attacks. */}}
+{{- define "phorvex.attackTargetRules" }}
+- apiGroups: ["apps"]
+  resources: ["statefulsets", "deployments", "replicasets", "daemonsets"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+{{- if .Values.phorvex.console.allowWorkloadMutations }}
+# The vLLM attack adapters label Pods, patch Services and can delete test Pods.
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["patch"]
+{{- end }}
+{{- end }}
+
 {{- define "phorvex.consoleServiceAccountName" -}}
 {{ include "phorvex.fullname" . }}-console
 {{- end -}}

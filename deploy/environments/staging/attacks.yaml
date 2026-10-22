@@ -1,0 +1,7 @@
+# The attacks chart's own staging values (deploy/charts/phorvex-attacks), merged after phorvex.yaml.
+# The release writes the published attacks image here, under `image`. The chart renders
+# only where the console is enabled (docs/services/attacks.md).
+image:
+  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks"
+  tag: ""
+  digest: ""

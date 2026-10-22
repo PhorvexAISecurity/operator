@@ -1,0 +1,26 @@
+{{- $persistence := .Values.phorvex.console.state.persistence }}
+{{- if and .Values.phorvex.console.enabled $persistence.enabled }}
+# The runs, the attack records and the experiments: the attacks service's own state,
+# sized and kept like the console's.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-state
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: attacks-state
+  {{- if $persistence.retainOnDelete }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml $persistence.accessModes | nindent 4 }}
+  {{- with $persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $persistence.size }}
+{{- end }}

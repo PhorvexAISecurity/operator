@@ -70,7 +70,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-fixture
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The console verifies the installed E2E creator's admission guard before it
@@ -96,7 +96,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The console may mint a short-lived token only for the existing admitted
@@ -128,7 +128,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The harness derives the protected reservation name from the live Voice
@@ -155,6 +155,6 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

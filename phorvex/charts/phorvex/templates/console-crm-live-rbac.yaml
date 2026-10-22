@@ -27,6 +27,6 @@ roleRef:
   name: {{ $full }}-console-crm-refund-guard
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

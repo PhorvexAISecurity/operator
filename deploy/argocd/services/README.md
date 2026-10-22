@@ -2,8 +2,11 @@
 
 `applicationset.yaml` gives every Phorvex service its own Argo CD Application in
 each environment: `phorvex-manager-<env>` (the manager and console chart in
-remote mode), `phorvex-brain-<env>`, `phorvex-sensor-<env>` and
-`phorvex-actuator-<env>`. Each has its own chart, sync status, history and logs.
+remote mode), `phorvex-brain-<env>`, `phorvex-sensor-<env>`,
+`phorvex-actuator-<env>` and `phorvex-attacks-<env>`. Each has its own chart,
+sync status, history and logs. The attacks service renders only where the console
+runs, and takes the attack routes once the environment names it in
+`phorvex.services.attacks.endpoint` (`docs/services/attacks.md`).
 `project.yaml` limits them to this repository, each environment's namespace and
 the cluster-scoped kinds the charts render there.
 

@@ -43,6 +43,6 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-console-mongo-exposure
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

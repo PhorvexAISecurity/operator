@@ -68,7 +68,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-fixture
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The console verifies the installed E2E creator's admission guard before it
@@ -94,7 +94,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator-policy-read
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The console may mint a short-lived token only for the existing admitted
@@ -126,7 +126,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-creator
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 # The harness derives the protected reservation name from the live CPU fixture
@@ -153,6 +153,6 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-pod-bound-token-cpu-capacity-ledger
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

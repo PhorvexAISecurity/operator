@@ -1,0 +1,26 @@
+{{- if .Values.phorvex.console.enabled }}
+# Only the console reaches the attacks service, which applies the console's whole
+# identity boundary again; egress stays open, because it attacks the workloads and
+# reads the API server.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: attacks
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "phorvex-attacks.selectorLabels" . | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: phorvex-console
+          app.kubernetes.io/instance: {{ .Release.Name }}
+    ports:
+    - port: http
+{{- end }}
