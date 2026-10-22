@@ -2,7 +2,7 @@
 
 One directory per environment the split services run in (ADR-0001). The Argo CD
 ApplicationSet `deploy/argocd/services/applicationset.yaml` deploys every service
-chart to each cluster registered for an environment, with two value files:
+chart to each environment it lists, with two value files:
 
 | File | Read by | Holds |
 |---|---|---|
@@ -16,7 +16,7 @@ files.
 
 | Environment | Cluster | State |
 |---|---|---|
-| `staging` | the vcluster `phorvex-staging` on `phorvex-dev-eks`, registered in Argo CD with the cluster Secret label `phorvex.ai/environment: staging` | not on the cluster: applied and removed on 2026-10-22 to free the cluster for its other services |
+| `staging` | `phorvex-dev-eks`, beside the production stack: namespace `phorvex-staging`, release `staging`, its own policy scope, actuation off | applied by hand (`deploy/argocd/services/README.md`) |
 
 Production keeps running the stack in `deploy/helm/phorvex-stack` until the split
 services have run in staging.

@@ -63,7 +63,6 @@ apps/
   ci-reports.yaml    the nginx host behind ci-report.phorvex.ai
 install/             ArgoCD itself — kustomize, pinned to v3.4.6
 services/            one Application per split service (ADR-0001), applied by hand, see services/README.md
-staging/             the staging vcluster those Applications deploy into, see staging/README.md
 ```
 
 `root.yaml` deliberately sits *outside* `apps/`. A root that watched its own directory

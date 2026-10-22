@@ -1,6 +1,6 @@
 # The Argo CD project of the split Phorvex services (applicationset.yaml): the
-# service charts of this repository, into phorvex-system only, with exactly the
-# cluster-scoped kinds the charts render. NOT applied (phase 5e).
+# service charts of this repository, into each environment's namespace only, with
+# exactly the cluster-scoped kinds the charts render there.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -11,24 +11,14 @@ spec:
   sourceRepos:
   - https://github.com/PhorvexSecurity/operator-refactored.git
   destinations:
-  - server: '*'
-    namespace: phorvex-system
+  - server: https://kubernetes.default.svc
+    namespace: phorvex-staging
   # tools/test_argocd_services.py requires this list to equal the cluster-scoped
   # kinds every environment renders, plus the namespace CreateNamespace creates.
   clusterResourceWhitelist:
   - group: ''
     kind: Namespace
-  - group: apiextensions.k8s.io
-    kind: CustomResourceDefinition
   - group: rbac.authorization.k8s.io
     kind: ClusterRole
   - group: rbac.authorization.k8s.io
     kind: ClusterRoleBinding
-  - group: admissionregistration.k8s.io
-    kind: MutatingWebhookConfiguration
-  - group: admissionregistration.k8s.io
-    kind: ValidatingWebhookConfiguration
-  - group: admissionregistration.k8s.io
-    kind: ValidatingAdmissionPolicy
-  - group: admissionregistration.k8s.io
-    kind: ValidatingAdmissionPolicyBinding

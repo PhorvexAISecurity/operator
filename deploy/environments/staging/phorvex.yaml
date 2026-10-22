@@ -1,16 +1,33 @@
-# Staging: the split services in the vcluster phorvex-staging on the production
-# cluster, before production (ADR-0001, deploy/argocd/services/README.md).
+# Staging: the split services beside the production stack on the production
+# cluster, in the namespace phorvex-staging under the release name staging
+# (ADR-0001, deploy/argocd/services/README.md).
 #
 # Every chart reads this file: the manager chart's keys under `phorvex`, which the
-# brain, sensor and actuator charts read under the same name, so the trust and
-# decision values their handshakes compare are set once.
+# brain, sensor and actuator charts read under the same name, so the values their
+# handshakes compare are set once.
 phorvex:
   # The manager reaches each service through its chart's Service, in the same
-  # namespace; each chart is released as `phorvex`.
+  # namespace; each chart is released as `staging`.
   services:
     brain:
-      endpoint: phorvex-brain:9090
+      endpoint: staging-brain:9090
     sensor:
-      endpoint: phorvex-sensor:9090
+      endpoint: staging-sensor:9090
     actuator:
-      endpoint: phorvex-actuator:9090
+      endpoint: staging-actuator:9090
+
+  # Beside production, staging must leave production's policies and requests alone.
+  # It reconciles, ticks and authorizes only the PhorvexPolicies of its own
+  # namespace, of which there are none yet.
+  policyNamespaces: [phorvex-staging]
+  # It actuates nothing: production's Phoenix acts on every SecurityEvent in the
+  # cluster.
+  globalKillSwitch: true
+  # Admission webhooks and policies are cluster-wide: staging's would also admit
+  # production's requests.
+  admissionWebhook:
+    enabled: false
+  eventIdentityPolicy:
+    enabled: false
+  # Without the identity policy, no external detector may be trusted.
+  trustedDetectors: []

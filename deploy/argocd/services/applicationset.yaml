@@ -1,15 +1,13 @@
-# One Argo CD Application per Phorvex service (ADR-0001) on every cluster registered
-# for an environment: the manager (with the console), the brain, the sensor and the
-# actuator, each its own chart, version, sync status and logs.
+# One Argo CD Application per Phorvex service (ADR-0001) for every environment: the
+# manager (with the console), the brain, the sensor and the actuator, each its own
+# chart, version, sync status and logs.
 #
-# NOT applied. Nothing watches this directory: the root app (../root.yaml) watches
-# ../apps of the production repository. Applying it is phase 5e, a separate,
-# approved step. Staging comes first, in a vcluster on the production cluster
-# (see README.md).
+# Applied by hand (README.md); the production root app (../root.yaml) watches
+# ../apps of the production repository, not this directory.
 #
-# A cluster joins an environment through its Argo CD cluster Secret's label
-# phorvex.ai/environment. Each environment reads deploy/environments/<environment>/:
-# phorvex.yaml (the manager chart's keys, shared by every chart) and <service>.yaml.
+# An environment names its cluster, namespace and Helm release. Each reads
+# deploy/environments/<environment>/: phorvex.yaml (the manager chart's keys,
+# shared by every chart) and <service>.yaml.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -21,12 +19,15 @@ spec:
   generators:
   - matrix:
       generators:
-      - clusters:
-          selector:
-            matchExpressions:
-            - key: phorvex.ai/environment
-              operator: In
-              values: [staging]
+      - list:
+          elements:
+          # Staging beside the production stack on this cluster: its own namespace
+          # and release name, and, in phorvex.yaml, its own policy scope and the
+          # actuation kill switch.
+          - environment: staging
+            server: https://kubernetes.default.svc
+            namespace: phorvex-staging
+            release: staging
       - list:
           elements:
           - service: manager
@@ -39,11 +40,11 @@ spec:
             chart: deploy/charts/phorvex-actuator
   template:
     metadata:
-      name: 'phorvex-{{.service}}-{{index .metadata.labels "phorvex.ai/environment"}}'
+      name: 'phorvex-{{.service}}-{{.environment}}'
       labels:
         app.kubernetes.io/part-of: phorvex
         phorvex.ai/service: '{{.service}}'
-        phorvex.ai/environment: '{{index .metadata.labels "phorvex.ai/environment"}}'
+        phorvex.ai/environment: '{{.environment}}'
       finalizers:
       - resources-finalizer.argocd.argoproj.io
     spec:
@@ -53,19 +54,22 @@ spec:
         targetRevision: main
         path: '{{.chart}}'
         helm:
-          # Every chart is released as `phorvex`, so its objects carry the names the
-          # others expect: phorvex-brain, phorvex-sensor, phorvex-actuator and the
-          # manager's phorvex-phorvex-manager identity.
-          releaseName: phorvex
+          # Every chart of an environment shares its release name, so its objects
+          # carry the names the others expect: <release>-brain, <release>-sensor,
+          # <release>-actuator and the manager's <release>-phorvex-manager identity.
+          releaseName: '{{.release}}'
+          # The PhorvexPolicy CRD is cluster-wide and belongs to the cluster's
+          # production stack.
+          skipCrds: true
           valueFiles:
-          - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/phorvex.yaml'
-          - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/{{.service}}.yaml'
+          - '$values/deploy/environments/{{.environment}}/phorvex.yaml'
+          - '$values/deploy/environments/{{.environment}}/{{.service}}.yaml'
       - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
         targetRevision: main
         ref: values
       destination:
         server: '{{.server}}'
-        namespace: phorvex-system
+        namespace: '{{.namespace}}'
       syncPolicy:
         automated:
           enabled: true
@@ -94,7 +98,7 @@ spec:
       # one. The first sync installs the certificate and its CA bundle together; later
       # renders must not replace either.
       - kind: Secret
-        name: phorvex-phorvex-webhook-cert
+        name: '{{.release}}-phorvex-webhook-cert'
         jsonPointers:
         - /data
       - group: admissionregistration.k8s.io
