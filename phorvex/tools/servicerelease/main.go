@@ -149,11 +149,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return fail(err)
 		}
-		// One release per line, tab-separated, for the release workflow.
+		// One release per line, tab-separated, for the release workflow; the last
+		// field is the image's docker build options.
 		for _, p := range pending {
 			var buildArgs []string
 			for _, a := range p.BuildArgs {
 				buildArgs = append(buildArgs, "--build-arg", a)
+			}
+			if p.Target != "" {
+				buildArgs = append(buildArgs, "--target", p.Target)
 			}
 			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Dockerfile, p.Repository, strings.Join(buildArgs, " "))
 		}

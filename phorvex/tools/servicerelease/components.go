@@ -23,6 +23,8 @@ type Component struct {
 	// Image is the name the PR validation images matrix builds it under.
 	Image      string
 	Dockerfile string
+	// Target is the Dockerfile stage its image is, when it is not the last one.
+	Target string
 	// Chart deploys it; empty when another component's chart does.
 	Chart string
 	// Builds are the binaries its image compiles, per Go module.
@@ -94,7 +96,8 @@ var Components = []Component{
 		// The manager chart deploys the console.
 		Name: "console", Image: "console", Dockerfile: "deploy/docker/console.Dockerfile",
 		Builds: []Build{
-			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd"}},
+			// The console Dockerfile builds the attacks service too.
+			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd/attacks", "./cmd"}},
 			{Module: "build/test-harness", Packages: []string{"./cmd/harness", "./cmd/nats-owned-observer"}},
 		},
 		// The web UI, and the harness data the image ships under /data.
@@ -105,5 +108,20 @@ var Components = []Component{
 		BuildArgs: map[string]string{"CONSOLE_VERSION": "{version}"},
 		Deploy: ImageValues{File: "manager", Path: []string{"phorvex", "console", "image"},
 			Repository: "repository", Tag: "tag", Digest: "releaseDigest", Source: "releaseSourceSHA"},
+	},
+	{
+		// The console's image without the UI, run as cmd/attacks (docs/services/attacks.md).
+		Name: "attacks", Image: "attacks", Dockerfile: "deploy/docker/console.Dockerfile", Target: "attacks",
+		Chart: "deploy/charts/phorvex-attacks",
+		Builds: []Build{
+			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd/attacks", "./cmd"}},
+			{Module: "build/test-harness", Packages: []string{"./cmd/harness", "./cmd/nats-owned-observer"}},
+		},
+		// The harness data the image ships under /data.
+		Paths:      []string{"build/test-harness"},
+		Initial:    "0.1.0",
+		Repository: "phorvex/attacks",
+		BuildArgs:  map[string]string{"CONSOLE_VERSION": "{version}"},
+		Deploy:     serviceImage("attacks"),
 	},
 }

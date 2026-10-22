@@ -48,6 +48,12 @@ RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sh
     go build -trimpath \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
       -o /console ./cmd/console
+# The attacks service (cmd/attacks) shares the console's configuration and reports the
+# version it was built as the same way.
+RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
+      -o /attacks ./cmd/attacks
 
 # The console's live-scan/ablation subsystems SHELL OUT to the phorvex operator binary at
 # <root>/phorvex/bin/phorvex.exe (subsystems.go: c.PhorvexBin runs `phorvex --scan`). That
@@ -122,7 +128,24 @@ RUN mkdir -p /data/phorvex/bin && \
         -exec rm -rf {} + || true && \
     mkdir -p /data/build/test-harness/bin
 
-# ---- Final image ----
+# ---- The attacks service image: docker build --target attacks ----
+# What the harness runs and the live arms need (the harness and its data, the NATS
+# observer, the phorvex binary and kubectl), run as cmd/attacks, without the UI
+# (docs/services/attacks.md).
+FROM gcr.io/distroless/static:nonroot AS attacks
+WORKDIR /app
+COPY --from=gobuild /attacks /app/attacks
+COPY --from=data /data /data
+COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
+COPY --from=harnessbuild /nats-owned-observer /app/nats-owned-observer
+COPY --from=gobuild /phorvex /data/phorvex/bin/phorvex.exe
+COPY --from=kubectl /kubectl /usr/local/bin/kubectl
+USER 65532:65532
+EXPOSE 8090
+ENTRYPOINT ["/app/attacks"]
+CMD ["-root=/data", "-addr=:8090"]
+
+# ---- Final image: the console ----
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=gobuild /console /app/console

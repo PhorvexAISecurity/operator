@@ -90,7 +90,7 @@ jobs:
           # Nothing in the loop may read its stdin, the list of releases.
           while IFS=$'\t' read -r component version dockerfile repository build_args; do
             image="$REGISTRY/$repository:$version"
-            # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V words
+            # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V and --target words
             docker build --file "$dockerfile" $build_args --tag "$image" . < /dev/null
             docker push "$image" < /dev/null
             digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"

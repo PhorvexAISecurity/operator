@@ -192,7 +192,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [operator, console, brain, sensor, actuator]
+        image: [operator, console, brain, sensor, actuator, attacks]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -206,6 +206,8 @@ jobs:
         run: |
           case "$IMAGE" in
             operator|console) docker build --file "deploy/docker/$IMAGE.Dockerfile" --tag "$TAG" . ;;
+            # The attacks service is a stage of the console's Dockerfile.
+            attacks) docker build --file deploy/docker/console.Dockerfile --target attacks --tag "$TAG" . ;;
             *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --tag "$TAG" . ;;
           esac
           docker image rm "$TAG"

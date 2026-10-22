@@ -124,7 +124,7 @@ func TestPendingReleasesSkipsTaggedVersions(t *testing.T) {
 	if err := os.MkdirAll(release, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(release, VersionsFile), []byte(`{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1"}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(release, VersionsFile), []byte(`{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	pending, err := PendingReleases(dir, release, "HEAD")
@@ -133,9 +133,10 @@ func TestPendingReleasesSkipsTaggedVersions(t *testing.T) {
 	}
 	var names []string
 	for _, p := range pending {
-		names = append(names, p.Component+" "+p.Version+" "+strings.Join(p.BuildArgs, ","))
+		names = append(names, p.Component+" "+p.Version+" "+strings.Join(p.BuildArgs, ",")+" "+p.Target)
 	}
-	if want := []string{"sensor 0.1.0 SERVICE=sensor", "console 0.5.1 CONSOLE_VERSION=0.5.1"}; !slices.Equal(names, want) {
+	// The attacks service is a stage of the console's Dockerfile.
+	if want := []string{"sensor 0.1.0 SERVICE=sensor ", "console 0.5.1 CONSOLE_VERSION=0.5.1 ", "attacks 0.1.0 CONSOLE_VERSION=0.1.0 attacks"}; !slices.Equal(names, want) {
 		t.Errorf("pending = %v, want %v", names, want)
 	}
 }

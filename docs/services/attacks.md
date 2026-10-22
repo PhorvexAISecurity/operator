@@ -50,6 +50,21 @@ ServiceAccount once it is remote. The sensor and the actuator admit those arms o
 from the injector identity (`--injector-identity`, `phorvex.injectorIdentity`), so
 an environment that runs the attacks service sets it to that account.
 
+## Image and release
+
+The `phorvex-attacks` image is the `attacks` stage of the console's Dockerfile:
+
+```sh
+docker build -f deploy/docker/console.Dockerfile --target attacks -t phorvex-attacks .
+```
+
+- **Contents.** The harness and its data, the NATS observer, the phorvex binary
+  and kubectl, run as `/app/attacks`, without the UI.
+- **Release.** It is released as the `attacks` component (`phorvex/attacks` in
+  ECR, tags `attacks-vX.Y.Z`, `docs/services/releasing.md`).
+- **Inputs.** It builds what the console's image builds, so the two share their
+  inputs except the UI.
+
 ## Deploying
 
 `deploy/charts/phorvex-attacks` deploys it beside a manager release of the same name.

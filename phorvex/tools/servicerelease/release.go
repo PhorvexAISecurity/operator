@@ -99,6 +99,8 @@ type Pending struct {
 	Repository string
 	// BuildArgs are sorted --build-arg values.
 	BuildArgs []string
+	// Target is the Dockerfile stage to build, or empty for the last.
+	Target string
 }
 
 // PendingReleases lists the prepared releases in dir not yet tagged at head.
@@ -125,7 +127,7 @@ func PendingReleases(root, dir, head string) ([]Pending, error) {
 		if _, err := git(root, "rev-parse", "--verify", "--quiet", "refs/tags/"+c.Name+"-v"+v); err == nil {
 			continue // released
 		}
-		p := Pending{Component: c.Name, Version: v, Dockerfile: c.Dockerfile, Repository: c.Repository}
+		p := Pending{Component: c.Name, Version: v, Dockerfile: c.Dockerfile, Repository: c.Repository, Target: c.Target}
 		for k, val := range c.BuildArgs {
 			p.BuildArgs = append(p.BuildArgs, k+"="+strings.ReplaceAll(val, "{version}", v))
 		}
