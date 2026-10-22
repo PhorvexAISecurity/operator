@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { Cpu, Radar, GitBranch, Boxes, Coins, FlaskConical, Activity, Check, X, Loader2 } from "lucide-react";
 import { useLocalPage } from "@/lib/use-local-page";
 import { PaginationBar } from "@/components/ui/pagination";
-import { useApiRead, useAuditSnapshot, useScanSnapshot } from "@/lib/query";
+import { grantedNamespace, useApiRead, useAuditSnapshot, useQueryScope, useScanSnapshot } from "@/lib/query";
 
 // collect live audit Records over `ms` (operator/investor get full internals).
 function useAudit(lens: Lens, ms = 3000) {
@@ -268,7 +268,8 @@ export function ActuatorPanel({ lens }: { lens: Lens }) {
 }
 
 /* ---------- ABLATION (live --ablation JSON) ---------- */
-export function AblationPanel({ lens, ns = "scandemo" }: { lens: Lens; ns?: string }) {
+export function AblationPanel({ lens, ns: requested = "scandemo" }: { lens: Lens; ns?: string }) {
+  const ns = grantedNamespace(useQueryScope(lens).session, requested);
   const [d, setD] = React.useState<AblationResult | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState("");

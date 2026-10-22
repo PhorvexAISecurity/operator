@@ -173,7 +173,8 @@ A route's declared scope has to match what its handler actually does, not what t
   cannot reach it. The same applies to the cluster-reading endpoints.
 - **Omitting a scope parameter is a widening.** `GET /api/scan` and `GET /api/ablation` become
   cluster-wide when `ns` is omitted, so the unscoped form requires the cross-tenant grant while
-  `?ns=<granted>` stays available to a limited one.
+  `?ns=<granted>` stays available to a limited one. The UI asks a limited grant's scans and
+  ablations for its first tenant (`grantedNamespace` in `dashboard-web/lib/query.tsx`).
 - **Cluster-wide listings are filtered, not returned whole.** `/api/cluster`, `/api/workloads`,
   `/api/targets`, `/api/attack-results`, `/api/attack-monitoring`, `/api/uptime`,
   `/api/availability-arms`, `/api/metrics`, `/api/live`, `/api/live/history` and the owner
