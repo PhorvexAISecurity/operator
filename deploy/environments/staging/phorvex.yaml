@@ -42,12 +42,15 @@ phorvex:
   # The attacks service's signals are the evidence staging's services act on.
   trustedDetectors: [phorvex-staging/staging-attacks]
   # The decision history the console and the attacks service read (mTLS, below).
+  # Production's budget: five 256Mi segments on a 5Gi volume. Three Pods write
+  # about 290Mi of decisions an hour, so the history covers about four hours.
   audit:
     enabled: true
+    maxBytes: 268435456
     persistence:
       enabled: true
       storageClass: gp2-csi
-      size: 2Gi
+      size: 5Gi
 
   # Telemetry from the cluster's Prometheus.
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
