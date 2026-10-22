@@ -18,11 +18,10 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/crmrefund"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
-
-const crmConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // crmRefundCapability gates offer-time: a reader, a crm-namespace target Pod, and a live
 // deny-guard with spare capacity. There is no protected journal — the guard ledger itself
@@ -105,7 +104,7 @@ func crmRefundAuthority(ctx context.Context, ec EnactCtx, req Request) (crmrefun
 	if event.DeletionTimestamp != nil || string(event.UID) != o.EventUID || event.Spec.Rule.Type != crmrefund.RuleType ||
 		event.Spec.Rule.Source != "redteam" || !litellmEventTimeMatches(event.CreationTimestamp.Time, o.ObservedAt, time.Now()) ||
 		event.Annotations["phorvex.ai/creator-identity"] != o.CreatorIdentity ||
-		o.CreatorIdentity != crmConsoleCreator ||
+		o.CreatorIdentity != eventtrust.Injector() ||
 		event.Annotations[model.ConsoleTargetPodUIDAnnotation] != req.TargetUID ||
 		len(event.Spec.Targets) != 1 || event.Spec.Targets[0] != req.Namespace+"/"+req.Pod ||
 		event.Annotations[crmrefund.ObservationAnnotation] == "" {

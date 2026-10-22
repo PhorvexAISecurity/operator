@@ -50,6 +50,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
 	"github.com/phorvex/phorvex/internal/console"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -120,6 +121,7 @@ func run() int {
 		catalogueV1Job       string
 		catalogueV1Reconcile string
 		catalogueV1Runtime   string
+		injectorIdentity     string
 	)
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
@@ -139,10 +141,18 @@ func run() int {
 	flag.StringVar(&catalogueV1Job, "catalogue-v1-job", "", "Internal: execute one private fixed-suite job.")
 	flag.StringVar(&catalogueV1Reconcile, "catalogue-v1-reconcile", "", "Internal: reconcile one interrupted fixed-suite job without replay.")
 	flag.StringVar(&catalogueV1Runtime, "catalogue-v1-runtime", "", "Internal: private server-generated fixed-suite runtime file.")
+	// The workload live arms create their SecurityEvents as this console; the sensor
+	// and the actuator admit only this identity's (eventtrust.ConfigureInjector). The
+	// fixed-suite workers inherit it through the environment.
+	flag.StringVar(&injectorIdentity, "injector-identity", os.Getenv("PHORVEX_INJECTOR_IDENTITY"), "This console's ServiceAccount (namespace/name). Empty = "+eventtrust.DefaultInjector+".")
 	logging.RegisterFlags(flag.CommandLine, &logOptions)
 	flag.Parse()
 	if err := setLogger(logOptions); err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	if err := eventtrust.ConfigureInjector(injectorIdentity); err != nil {
+		slog.Error("injector identity invalid", "err", err)
 		return 2
 	}
 	if catalogueV1Job != "" || catalogueV1Reconcile != "" {

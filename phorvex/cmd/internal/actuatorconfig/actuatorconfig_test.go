@@ -161,3 +161,18 @@ func TestSharedComparesThePolicyScope(t *testing.T) {
 		t.Fatal("the scope compares in order")
 	}
 }
+
+// The injector is part of the handshake once configured; the default keeps the
+// identity the actuator had before it was configurable.
+func TestSharedComparesTheInjector(t *testing.T) {
+	trust := trustconfig.Trust{TrustedDetectors: "vllm/a"}
+	defaulted := Shared("staging", trust, nil)
+	trust.InjectorIdentity = "phorvex-staging/staging-attacks"
+	configured := Shared("staging", trust, nil)
+	if configured.InjectorIdentity != "system:serviceaccount:phorvex-staging:staging-attacks" || configured.SHA256() == defaulted.SHA256() {
+		t.Fatalf("configured injector = %q, same identity as the default: %v", configured.InjectorIdentity, configured.SHA256() == defaulted.SHA256())
+	}
+	if defaulted.InjectorIdentity != "" {
+		t.Fatalf("default injector described as %q", defaulted.InjectorIdentity)
+	}
+}

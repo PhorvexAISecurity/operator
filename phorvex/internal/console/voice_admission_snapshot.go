@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -43,7 +44,7 @@ func parseVoiceAdmissionProfile(raw []byte) (voiceAdmissionProfile, error) {
 	if voiceadmissionpolicy.ExactDecode(raw, &p) != nil || p.Version != 1 || !voiceadmissionpolicy.ValidUID(p.DeploymentUID) || !voiceadmissionpolicy.ValidUID(p.PolicyCMUID) ||
 		!voiceadmissionpolicy.ValidSHA(p.AdmissionSourceSHA256) || !voiceadmissionpolicy.ValidSHA(p.LegacyBundleSHA256) || !voiceadmissionpolicy.ValidSHA(p.AuthProfileSHA256) ||
 		!validObjectName(p.WrapperConfigMapName) || p.LegacyConfigMapName != "voice-memory-source-"+p.LegacyBundleSHA256[:12] || p.ProbeSHA256 != voiceAdmissionProbeSHA() ||
-		p.AudioSHA256 != voiceAdmissionAudioSHA || p.EventCreator != voiceadmissionpolicy.Creator || p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 ||
+		p.AudioSHA256 != voiceAdmissionAudioSHA || p.EventCreator != eventtrust.Injector() || p.AuditSourceIdentity == "" || p.MaxRunSeconds != 900 ||
 		string(raw) != string(voiceAdmissionCanonical(p)) {
 		return p, errors.New("reviewed admission profile invalid")
 	}

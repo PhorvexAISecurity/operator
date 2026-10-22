@@ -83,6 +83,7 @@ replicas would compute them over the wrong interval.
 | `--trusted-detectors`, `--trusted-loss-observers`, `--trusted-current-inventory-observers`, `--endpoint-lease-approved-*` | as the manager | must match the manager, or the handshake refuses it |
 | `--prometheus-url`, `--pcie-class-table`, `--epss-*` | as the manager | telemetry, the GPU witness and the EPSS feed now read here |
 | `--policy-namespaces` | every namespace | the policy scope (`cmd/internal/policyscope`): the PhorvexPolicies a snapshot lists; must match the manager |
+| `--injector-identity` (`PHORVEX_INJECTOR_IDENTITY`) | `phorvex-system/phorvex-phorvex-console` | the ServiceAccount the workload live arms create their SecurityEvents as; the projection admits those arms' events only from it. Must match the manager |
 
 `phorvex/cmd/internal/sensorconfig` defines these flags for both binaries; the
 detector trust and endpoint lease flags come from `cmd/internal/trustconfig`,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"io"
 	"path/filepath"
 	"regexp"
@@ -78,7 +79,7 @@ func parseEndpointLeaseProfile(raw []byte) (endpointLeaseProfile, error) {
 	if !bytes.Equal(raw, encoded) || p.Version != 1 || p.ServiceName != "vllm" ||
 		p.PolicyName != "vllm-defense" || p.SourceConfigMapName != "guardrail-proxy" ||
 		p.ModelID != endpointLeaseModel || p.MaxRunSeconds != 900 ||
-		p.EventCreator != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" ||
+		p.EventCreator != eventtrust.Injector() ||
 		p.AuditSourceIdentity == "" || len(p.AuditSourceIdentity) > 256 ||
 		p.PolicyGeneration < 1 || !endpointLeaseImageDigest.MatchString(p.ProxyImage) ||
 		!endpointLeaseImageDigest.MatchString(p.ApprovedEngineImage) ||

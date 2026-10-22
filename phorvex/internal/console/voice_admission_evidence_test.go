@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/voiceadmissionpolicy"
 )
 
@@ -104,7 +105,7 @@ func TestAdmissionProfileStrictPinnedAndDisabledByDefault(t *testing.T) {
 	_, snap, _, _ := admissionObservedFixture()
 	p := voiceAdmissionProfile{Version: 1, DeploymentUID: snap.DeploymentUID, PolicyCMUID: "77777777-7777-7777-7777-777777777777", AdmissionSourceSHA256: snap.Rule.AdmissionSourceSHA256,
 		LegacyBundleSHA256: snap.Rule.LegacyBundleSHA256, AuthProfileSHA256: snap.Rule.AuthProfileSHA256, WrapperConfigMapName: "voice-admission-source-000000000000", LegacyConfigMapName: "voice-memory-source-" + snap.Rule.LegacyBundleSHA256[:12], ProbeSHA256: voiceAdmissionProbeSHA(), AudioSHA256: voiceAdmissionAudioSHA,
-		EventCreator: voiceadmissionpolicy.Creator, AuditSourceIdentity: "https://audit.invalid:8445|audit.invalid", MaxRunSeconds: 900}
+		EventCreator: eventtrust.Injector(), AuditSourceIdentity: "https://audit.invalid:8445|audit.invalid", MaxRunSeconds: 900}
 	raw := voiceAdmissionCanonical(p)
 	if _, e := parseVoiceAdmissionProfile(raw); e != nil {
 		t.Fatal(e)

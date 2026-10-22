@@ -226,6 +226,9 @@ SERVICE_FEATURES = ['-f', str(ALL_FEATURES), '-f', str(FEATURES / 'sensor-featur
 PODMONITOR = ['--api-versions', 'monitoring.coreos.com/v1/PodMonitor']
 LEASE_FLAGS = {'endpoint-lease-approved-source-sha256', 'endpoint-lease-approved-proxy-image', 'endpoint-lease-approved-engine-image'}
 LEASE_ENV = {'PHORVEX_' + f.upper().replace('-', '_') for f in LEASE_FLAGS}
+# The trust both charts pass as the environment its flags default from.
+TRUST_ENV_FLAGS = LEASE_FLAGS | {'injector-identity'}
+TRUST_ENV = {'PHORVEX_' + f.upper().replace('-', '_') for f in TRUST_ENV_FLAGS}
 # The service's own listener, probes and shutdown, not the manager's.
 OWN_FLAGS = {'listen', 'metrics-bind-address', 'health-probe-bind-address', 'shutdown-grace'}
 
@@ -276,7 +279,7 @@ class SplitServiceChart:
     """What every split service chart must hold; a subclass names the service."""
     service = sources = volumes = expected_env = None
     # Flags whose value both charts pass as the environment the flag defaults from.
-    env_flags = LEASE_FLAGS
+    env_flags = TRUST_ENV_FLAGS
 
     @property
     def chart(self):
@@ -363,7 +366,7 @@ class SensorChartTests(SplitServiceChart, unittest.TestCase):
     service = 'sensor'
     sources = ['cmd/internal/sensorconfig/sensorconfig.go', 'cmd/internal/trustconfig/trustconfig.go', 'cmd/internal/policyscope/policyscope.go']
     volumes = {'epss'}
-    expected_env = {'POD_NAMESPACE'} | LEASE_ENV
+    expected_env = {'POD_NAMESPACE'} | TRUST_ENV
 
     def test_the_sensor_only_reads(self):
         access = grants(helm_template(self.chart, *VALUE_SETS['all features']))
@@ -377,8 +380,8 @@ class ActuatorChartTests(SplitServiceChart, unittest.TestCase):
     sources = ['cmd/actuator/main.go', 'cmd/internal/actuatorconfig/actuatorconfig.go', 'cmd/internal/trustconfig/trustconfig.go',
                'cmd/internal/policyscope/policyscope.go', 'internal/actuator/backend.go']
     volumes = {'litellm-client-revoke-status', 'lora-clean-sources', 'mig-profiles', 'serving-security'}
-    expected_env = {'POD_NAMESPACE', 'PHORVEX_ACTUATOR', 'PHORVEX_VOICE_ADMISSION_ENABLED', 'PHORVEX_VOICE_MCP_APPROVED_IMAGE'} | LEASE_ENV
-    env_flags = LEASE_FLAGS | {'voice-mcp-approved-image'}
+    expected_env = {'POD_NAMESPACE', 'PHORVEX_ACTUATOR', 'PHORVEX_VOICE_ADMISSION_ENABLED', 'PHORVEX_VOICE_MCP_APPROVED_IMAGE'} | TRUST_ENV
+    env_flags = TRUST_ENV_FLAGS | {'voice-mcp-approved-image'}
 
     def test_the_actuator_holds_the_workload_writes(self):
         access = {(g[2], g[4]) for g in grants(helm_template(self.chart, *VALUE_SETS['all features']))}
@@ -458,10 +461,10 @@ class ManagerRemoteModeTests(unittest.TestCase):
 
     def test_the_remote_manager_shares_the_services_handshake_configuration(self):
         handshake = {'trusted-detectors', 'trusted-loss-observers', 'trusted-current-inventory-observers', 'operator-namespace', 'policy-namespaces'}
-        manager = reading(helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES, *REMOTE), 'manager', handshake, LEASE_ENV | {'POD_NAMESPACE'}, set())
+        manager = reading(helm_template(MANAGER_CHART, *PODMONITOR, *SPLIT_FEATURES, *REMOTE), 'manager', handshake, TRUST_ENV | {'POD_NAMESPACE'}, set())
         self.assertEqual(len(manager['flags']), len(handshake))
         for service in ('sensor', 'actuator'):
-            got = reading(helm_template(CHARTS / ('phorvex-' + service), *SPLIT_FEATURES), service, handshake, LEASE_ENV | {'POD_NAMESPACE'}, set())
+            got = reading(helm_template(CHARTS / ('phorvex-' + service), *SPLIT_FEATURES), service, handshake, TRUST_ENV | {'POD_NAMESPACE'}, set())
             self.assertEqual({k: v for k, v in manager['flags'].items() if k in got['flags']}, got['flags'], service)
             self.assertEqual(manager['env'], got['env'], service)
 
@@ -548,6 +551,20 @@ class ImageDigestTests(unittest.TestCase):
                                          '--set', key + '=latest'], capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(key + ' must be sha256', result.stderr)
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class InjectorTests(unittest.TestCase):
+    """The console creates the workload live arms' events as the identity the services admit."""
+
+    def test_the_console_and_the_manager_name_one_injector(self):
+        docs = helm_template(MANAGER_CHART, *CONSOLE, '--set', 'phorvex.injectorIdentity=fixture/injector')
+        env = {c['name']: {e['name']: e.get('value') for e in c.get('env', [])} for c in containers(docs)}
+        for container in ('manager', 'console'):
+            self.assertEqual(env[container].get('PHORVEX_INJECTOR_IDENTITY'), 'fixture/injector', container)
+        # The default sets nothing, so an image older than the setting runs unchanged.
+        default = helm_template(MANAGER_CHART, *CONSOLE)
+        self.assertEqual([e for c in containers(default) for e in c.get('env', []) if e['name'] == 'PHORVEX_INJECTOR_IDENTITY'], [])
 
 
 class VendoredLibraryTests(unittest.TestCase):

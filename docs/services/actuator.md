@@ -130,6 +130,7 @@ ledger are durable ConfigMaps.
 | `--serving-security-*`, `--lora-clean-sources-file`, `--mig-profiles-file`, `--mig-*`, `--voice-mcp-approved-image`, `--max-retained-quarantines-per-namespace` | as the manager | the backends' configuration now reads here |
 | `PHORVEX_ACTUATOR`, `PHORVEX_VOICE_ADMISSION_ENABLED` | as the manager | the backend and the Voice admission flag |
 | `--policy-namespaces` | every namespace | the policy scope (`cmd/internal/policyscope`): the PhorvexPolicies the startup preflight authorizes and the backends read; must match the manager, or the handshake refuses it |
+| `--injector-identity` (`PHORVEX_INJECTOR_IDENTITY`) | `phorvex-system/phorvex-phorvex-console` | the ServiceAccount the workload live arms create their SecurityEvents as; the backends act on those arms only for its events. Must match the manager |
 
 `phorvex/cmd/internal/actuatorconfig` defines the backend flags and
 `phorvex/cmd/internal/trustconfig` the shared trust flags, for both binaries;

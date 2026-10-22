@@ -1,6 +1,7 @@
 package sensorconfig
 
 import (
+	"encoding/json"
 	"flag"
 	"strings"
 	"testing"
@@ -88,5 +89,27 @@ func TestDescribeComparesThePolicyScope(t *testing.T) {
 	}
 	if a.Describe().SHA256() == (Flags{}).Describe().SHA256() {
 		t.Fatal("a scoped sensor matches an unscoped manager")
+	}
+}
+
+func TestDescribeComparesTheInjector(t *testing.T) {
+	staging := parse(t, "--injector-identity=phorvex-staging/staging-attacks")
+	if got := staging.Describe().InjectorIdentity; got != "system:serviceaccount:phorvex-staging:staging-attacks" {
+		t.Fatalf("described injector = %q", got)
+	}
+	if staging.Describe().SHA256() == parse(t).Describe().SHA256() {
+		t.Fatal("a sensor with another injector matches a manager with the default")
+	}
+	// The default describes as it did before the injector was configurable.
+	raw, err := json.Marshal(parse(t).Describe())
+	if err != nil || strings.Contains(string(raw), "InjectorIdentity") {
+		t.Fatalf("default configuration = %s (%v)", raw, err)
+	}
+	t.Cleanup(func() { _ = eventtrust.ConfigureInjector("") })
+	if err := staging.ApplyTrust(); err != nil || eventtrust.Injector() != staging.Describe().InjectorIdentity {
+		t.Fatalf("installed injector %q (%v)", eventtrust.Injector(), err)
+	}
+	if err := parse(t, "--injector-identity=not-a-service-account").ApplyTrust(); err == nil {
+		t.Fatal("an invalid injector was accepted")
 	}
 }

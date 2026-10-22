@@ -10,9 +10,12 @@
 package eventtrust
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 // SecurityEvent trust boundary (PHORVEXSEC-193 / M-94).
@@ -171,6 +174,39 @@ func CurrentInventoryTrust() TrustedDetectors {
 	trustMu.RLock()
 	defer trustMu.RUnlock()
 	return trustedCurrentInventoryActors
+}
+
+// DefaultInjector is the identity the workload live arms create their SecurityEvents
+// as when --injector-identity is not set: the console of the release named phorvex
+// in phorvex-system.
+const DefaultInjector = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
+
+var injector = DefaultInjector
+
+// ConfigureInjector installs the ServiceAccount the workload live arms create their
+// SecurityEvents as (--injector-identity). The sensor admits, and the actuator acts
+// on, those arms' events only from this identity. Empty keeps DefaultInjector.
+func ConfigureInjector(identity string) error {
+	id := DefaultInjector
+	if identity != "" {
+		id = NormalizeIdentity(identity)
+		rest, ok := strings.CutPrefix(id, "system:serviceaccount:")
+		ns, name, _ := strings.Cut(rest, ":")
+		if !ok || len(validation.IsDNS1123Label(ns)) > 0 || len(validation.IsDNS1123Subdomain(name)) > 0 {
+			return fmt.Errorf("injector identity %q is not a ServiceAccount (namespace/name)", identity)
+		}
+	}
+	trustMu.Lock()
+	defer trustMu.Unlock()
+	injector = id
+	return nil
+}
+
+// Injector returns the installed injector identity in the API server's form.
+func Injector() string {
+	trustMu.RLock()
+	defer trustMu.RUnlock()
+	return injector
 }
 
 // Classify returns the trust verdict for an event's stamped creator identity.

@@ -143,7 +143,7 @@ func bindVoiceOutputObservation(ctx context.Context, reader client.Reader, p *mo
 	var payload voiceOutputPayload
 	for i := range events {
 		e := &events[i]
-		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceOutput || e.CreatorIdentity != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" || e.Name == "" || e.UID == "" || e.TimestampMissing || e.Age < 0 || e.Age >= voiceOutputHorizon || e.ConsoleTargetPodUID != p.UID {
+		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorVoiceOutput || e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || e.UID == "" || e.TimestampMissing || e.Age < 0 || e.Age >= voiceOutputHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}
 		a, ok := decodeVoiceOutputPayload(e.VoiceOutputRaw)

@@ -16,7 +16,6 @@ import (
 )
 
 const crmRefundHorizon = 60 * time.Second
-const crmConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // bindCRMRefundObservation grants the crm-refund-revoke candidate fact only for one fresh
 // trusted cross-record-refund-abuse event whose typed identities match the live deny-guard,
@@ -32,7 +31,7 @@ func bindCRMRefundObservation(ctx context.Context, reader client.Reader, p *mode
 	for i := range events {
 		e := &events[i]
 		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != model.AttackVectorCRMRefundAbuse ||
-			e.CreatorIdentity != crmConsoleCreator || e.Name == "" || e.UID == "" ||
+			e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= crmRefundHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}

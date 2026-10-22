@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -250,7 +251,7 @@ func proxySpecMatches(spec corev1.PodSpec, annotations map[string]string, image,
 	if annotations[SourceConfigMapAnnotation] != SourceConfigMapName || annotations[SourceSHAAnnotation] != sourceSHA || annotations[PolicyUIDAnnotation] != policyUID {
 		return false
 	}
-	if annotations[EventCreatorAnnotation] != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" {
+	if annotations[EventCreatorAnnotation] != eventtrust.Injector() {
 		return false
 	}
 	var sourceVolume, secretVolume string

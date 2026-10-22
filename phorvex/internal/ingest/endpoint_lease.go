@@ -16,7 +16,6 @@ import (
 )
 
 const endpointLeaseHorizon = 60 * time.Second
-const endpointLeaseConsoleCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // bindEndpointLeaseObservation accepts a synthetic assertion only after current
 // Kubernetes source, policy, Secret metadata, Service, and Pod authority agree.
@@ -39,7 +38,7 @@ func bindEndpointLeaseObservationWithValidator(ctx context.Context, reader clien
 	for i := range events {
 		e := &events[i]
 		if e.Trust != eventtrust.TrustTrusted || !e.TargetsPod || e.Type != endpointlease.RuleType ||
-			e.Source != "redteam" || e.CreatorIdentity != endpointLeaseConsoleCreator || e.Name == "" || e.UID == "" ||
+			e.Source != "redteam" || e.CreatorIdentity != eventtrust.Injector() || e.Name == "" || e.UID == "" ||
 			e.TimestampMissing || e.Age < 0 || e.Age >= endpointLeaseHorizon || e.ConsoleTargetPodUID != p.UID {
 			continue
 		}

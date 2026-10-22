@@ -15,6 +15,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/crmrefund"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -368,8 +369,8 @@ func crmLiveSnapshotHasPod(snap crmLiveSnapshot, pod crmLivePod) bool {
 
 func crmLiveHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout: 8 * time.Second,
-		Transport: &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxIdleConns: 0},
+		Timeout:       8 * time.Second,
+		Transport:     &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxIdleConns: 0},
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return errors.New("crm redirect refused") },
 	}
 }
@@ -565,8 +566,8 @@ func (s *Server) createCRMRefundEvent(ctx context.Context, caseID string, snap c
 			"labels":      map[string]string{"phorvex.ai/redteam": "true", "phorvex.ai/attack-correlation": id},
 			"annotations": map[string]string{model.ConsoleTargetPodUIDAnnotation: target.UID, crmrefund.ObservationAnnotation: string(raw)}},
 		"spec": map[string]any{"description": "TEST_INJECTED after a real cross-account CRM refund landed",
-			"targets": []string{"crm/" + target.Name},
-			"rule":    map[string]any{"type": crmrefund.RuleType, "threatLevel": "critical", "source": "redteam"},
+			"targets":      []string{"crm/" + target.Name},
+			"rule":         map[string]any{"type": crmrefund.RuleType, "threatLevel": "critical", "source": "redteam"},
 			"anomalyScore": "0.9"}}
 	manifest, err := json.Marshal(object)
 	if err != nil {
@@ -601,7 +602,7 @@ func (s *Server) createCRMRefundEvent(ctx context.Context, caseID string, snap c
 	var created vllmSecurityEvent
 	if json.Unmarshal([]byte(reply), &created) != nil || created.Metadata.Name != name || created.Metadata.Namespace != "" ||
 		created.Metadata.UID == "" || created.Metadata.CreationTimestamp == "" ||
-		created.Metadata.Annotations["phorvex.ai/creator-identity"] != crmLiveEventCreator ||
+		created.Metadata.Annotations["phorvex.ai/creator-identity"] != eventtrust.Injector() ||
 		created.Metadata.Annotations[model.ConsoleTargetPodUIDAnnotation] != target.UID ||
 		created.Metadata.Annotations[crmrefund.ObservationAnnotation] != string(raw) ||
 		len(created.Spec.Targets) != 1 || created.Spec.Targets[0] != "crm/"+target.Name ||
@@ -612,8 +613,6 @@ func (s *Server) createCRMRefundEvent(ctx context.Context, caseID string, snap c
 	_ = ctx
 	return candidate, nil
 }
-
-const crmLiveEventCreator = "system:serviceaccount:phorvex-system:phorvex-phorvex-console"
 
 // ── brain decision (shared audit decision window) ───────────────────────────────────────
 

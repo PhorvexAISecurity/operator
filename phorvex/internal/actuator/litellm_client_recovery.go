@@ -12,6 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
@@ -142,7 +143,7 @@ func recoverPreparedLiteLLMClient(ctx context.Context, ec EnactCtx,
 	if e == nil {
 		if string(event.UID) != r.EventUID || event.Spec.Rule.Type != litellmclient.RuleType ||
 			event.Spec.Rule.Source != "redteam" || event.Annotations[model.ConsoleTargetPodUIDAnnotation] != r.TargetUID ||
-			event.Annotations["phorvex.ai/creator-identity"] != "system:serviceaccount:phorvex-system:phorvex-phorvex-console" {
+			event.Annotations["phorvex.ai/creator-identity"] != eventtrust.Injector() {
 			return errors.New("owned-client prepared operation original event differs")
 		}
 	} else if !apierrors.IsNotFound(e) {

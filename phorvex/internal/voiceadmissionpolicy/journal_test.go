@@ -1,6 +1,7 @@
 package voiceadmissionpolicy
 
 import (
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func testPreparedReceipt(t *testing.T) Receipt {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Receipt{Version: 1, Phase: "prepared", PolicyName: "voice-defense", PolicyUID: testUID, PolicyGeneration: 1, DeploymentUID: testUID, TargetName: "voice-bot", TargetPodUID: testUID, EventName: "actual-loss", EventUID: testUID, CreatorIdentity: Creator, TickID: "tick", SelectionDecisionID: "selection", ConfigMapUID: testUID, SourceConfigMapUID: testUID, SessionID: testUID, RunSHA256: strings.Repeat("a", 64), ReceiptSHA256: strings.Repeat("b", 64), ProviderEvidenceSHA256: strings.Repeat("c", 64), Prior: prior, Desired: desired, OperationID: op, PodReceipts: []State{}}
+	return Receipt{Version: 1, Phase: "prepared", PolicyName: "voice-defense", PolicyUID: testUID, PolicyGeneration: 1, DeploymentUID: testUID, TargetName: "voice-bot", TargetPodUID: testUID, EventName: "actual-loss", EventUID: testUID, CreatorIdentity: eventtrust.Injector(), TickID: "tick", SelectionDecisionID: "selection", ConfigMapUID: testUID, SourceConfigMapUID: testUID, SessionID: testUID, RunSHA256: strings.Repeat("a", 64), ReceiptSHA256: strings.Repeat("b", 64), ProviderEvidenceSHA256: strings.Repeat("c", 64), Prior: prior, Desired: desired, OperationID: op, PodReceipts: []State{}}
 }
 
 func TestProtectedJournalPreservesOriginalSelectionAndOneWayHistory(t *testing.T) {

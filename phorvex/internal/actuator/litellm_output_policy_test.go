@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/outputpolicy"
 	corev1 "k8s.io/api/core/v1"
@@ -38,7 +39,7 @@ func liteOutputTestReceipt(t *testing.T) (liteOutputReceipt, outputpolicy.LiteSt
 		t.Fatal(err)
 	}
 	r := liteOutputReceipt{Version: 2, Phase: "prepared", PolicyName: "litellm-defense", PolicyUID: "policy-uid", PolicyGeneration: 1,
-		TargetName: "litellm-a", TargetUID: "pod-a", EventName: "event-name", EventUID: "event-uid", CreatorIdentity: liteOutputConsoleCreator,
+		TargetName: "litellm-a", TargetUID: "pod-a", EventName: "event-name", EventUID: "event-uid", CreatorIdentity: eventtrust.Injector(),
 		TickID: "tick-id", SelectionDecisionID: "decision-id", OperationID: op, ConfigMapUID: "cm-uid", SelectedConfigMapResourceVersion: "8",
 		RuleConfigMapName: outputpolicy.LiteRuleSlotName(0), RuleConfigMapUID: "rule-cm-uid", RuleSHA256: rule.SHA256(), Rule: rule, Prior: string(prior.Bytes()), Desired: string(desired.Bytes()),
 		RequestSHA256: strings.Repeat("d", 64), OriginalCompletionSHA256: strings.Repeat("e", 64), ObservedAt: time.Now().UTC()}

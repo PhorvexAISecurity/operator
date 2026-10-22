@@ -112,6 +112,9 @@ spec:
         {{- with include "phorvex-common.endpointLeaseEnv" $trust }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- with include "phorvex-common.injectorEnv" $trust }}
+        {{- . | nindent 8 }}
+        {{- end }}
         {{- if $v.actuator }}
         - name: PHORVEX_ACTUATOR
           value: {{ $v.actuator | quote }}

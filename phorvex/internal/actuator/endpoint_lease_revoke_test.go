@@ -22,6 +22,7 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/endpointlease"
+	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
@@ -83,7 +84,7 @@ func newLeaseFixture(t *testing.T) *leaseFixture {
 		t.Fatal(err)
 	}
 	immutable := true
-	creator := endpointLeaseConsoleCreator
+	creator := eventtrust.Injector()
 	ann := map[string]string{endpointlease.SourceConfigMapAnnotation: endpointlease.SourceConfigMapName, endpointlease.SourceSHAAnnotation: source,
 		endpointlease.PolicyUIDAnnotation: r.PolicyConfigMapUID, endpointlease.EventCreatorAnnotation: creator}
 	env := []corev1.EnvVar{}
