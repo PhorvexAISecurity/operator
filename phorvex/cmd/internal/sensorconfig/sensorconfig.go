@@ -6,6 +6,7 @@
 package sensorconfig
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -36,7 +37,10 @@ type Flags struct {
 	TrustedCurrentInventoryObservers string
 	PrometheusURL                    string
 	PCIeClassTable                   string
-	EPSS                             EPSS
+	// EventIdentityPolicy names the creator-identity guard another release on the
+	// cluster installs, where this one installs none (eventtrust.CheckIdentityPolicy).
+	EventIdentityPolicy string
+	EPSS                EPSS
 }
 
 // EPSS configures the exploitability feed of the physics witness.
@@ -62,6 +66,7 @@ func (f *Flags) Register(fs *flag.FlagSet) {
 	fs.StringVar(&f.TrustedLossObservers, "trusted-loss-observers", os.Getenv("PHORVEX_TRUSTED_LOSS_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic completed-disclosure evidence. General detector trust does not grant this authority.")
 	fs.StringVar(&f.TrustedCurrentInventoryObservers, "trusted-current-inventory-observers", os.Getenv("PHORVEX_TRUSTED_CURRENT_INVENTORY_OBSERVERS"), "Comma-separated dedicated ServiceAccount identities allowed to create synthetic current protected-version observations.")
 	fs.StringVar(&f.PrometheusURL, "prometheus-url", "", "Prometheus base URL for telemetry ingest (empty = no telemetry, K8s-only signals).")
+	fs.StringVar(&f.EventIdentityPolicy, "event-identity-policy", os.Getenv("PHORVEX_EVENT_IDENTITY_POLICY"), "ValidatingAdmissionPolicy another release installs that enforces the SecurityEvent creator-identity stamp (M-94). Startup refuses to run unless it is in force with a Deny binding. Empty = this release installs the guard, or trusts no detector.")
 	e := &f.EPSS
 	fs.StringVar(&e.CachePath, "epss-cache", os.Getenv("PHORVEX_EPSS_CACHE"), "Path to a JSON image-digest->{epss,cvss} exploitability cache (scanner/NVD-FIRST export). Empty/missing = EPSS honest-absent (1.0).")
 	fs.DurationVar(&e.Refresh, "epss-cache-refresh", 0, "Re-read --epss-cache at this interval so a scanner pipeline that owns the ConfigMap is actually observed (0 = read once at startup, the previous behaviour). A failed read keeps the existing cache.")
@@ -106,6 +111,15 @@ func (f Flags) ApplyTrust() error {
 	eventtrust.ConfigureCompletedDisclosureTrust(identities(f.TrustedLossObservers))
 	eventtrust.ConfigureCurrentInventoryTrust(identities(f.TrustedCurrentInventoryObservers))
 	return nil
+}
+
+// VerifyIdentityPolicy refuses to run when --event-identity-policy names a guard that
+// is not in force: the trusted identities would then be claims, not facts (M-94).
+func (f Flags) VerifyIdentityPolicy(ctx context.Context, reader client.Reader) error {
+	if f.EventIdentityPolicy == "" {
+		return nil
+	}
+	return eventtrust.CheckIdentityPolicy(ctx, reader, f.EventIdentityPolicy)
 }
 
 func identities(list string) eventtrust.TrustedDetectors {

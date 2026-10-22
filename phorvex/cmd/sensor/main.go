@@ -125,6 +125,9 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err != nil {
 		return fmt.Errorf("manager: %w", err)
 	}
+	if err := cfg.sensor.VerifyIdentityPolicy(ctx, mgr.GetAPIReader()); err != nil {
+		return err
+	}
 	if refresher := cfg.sensor.EPSS.Refresher(mgr.GetAPIReader(), log); refresher != nil {
 		if err := mgr.Add(refresher); err != nil {
 			return fmt.Errorf("epss refresher: %w", err)

@@ -162,6 +162,12 @@ phorvex:
       enabled: false
   eventIdentityPolicy:
     enabled: true
+    # The guard another release on the cluster installs, by its ValidatingAdmissionPolicy
+    # name, where this release installs none (enabled: false) beside a production stack
+    # that does. The manager and the sensor refuse to start unless it is in force with a
+    # Deny binding of the same name (eventtrust.CheckIdentityPolicy), and trustedDetectors
+    # may then be non-empty.
+    external: ""
   # Opt-in live E2E identity. Admission confines its events to one test namespace;
   # the console/operator identity is NOT added to the detector allowlist.
   e2eDetector:

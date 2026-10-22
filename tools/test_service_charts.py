@@ -369,7 +369,9 @@ class SensorChartTests(SplitServiceChart, unittest.TestCase):
     service = 'sensor'
     sources = ['cmd/internal/sensorconfig/sensorconfig.go', 'cmd/internal/trustconfig/trustconfig.go', 'cmd/internal/policyscope/policyscope.go']
     volumes = {'epss'}
-    expected_env = {'POD_NAMESPACE'} | TRUST_ENV
+    expected_env = {'POD_NAMESPACE', 'PHORVEX_EVENT_IDENTITY_POLICY'} | TRUST_ENV
+    # The sensor verifies the creator-identity guard another release installs.
+    env_flags = TRUST_ENV_FLAGS | {'event-identity-policy'}
 
     def test_the_sensor_only_reads(self):
         access = grants(helm_template(self.chart, *VALUE_SETS['all features']))
@@ -748,6 +750,28 @@ class MonitoringTests(unittest.TestCase):
             result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), *PODMONITOR, '--set', f'phorvex.metrics.{key}.enabled=true'], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0, key)
             self.assertIn('podMonitor.environment', result.stderr)
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ExternalIdentityPolicyTests(unittest.TestCase):
+    """Beside a release that installs the creator-identity guard, trust waits on it (M-94)."""
+    OFF = ['--set', 'phorvex.eventIdentityPolicy.enabled=false', '--set', 'phorvex.trustedDetectors={staging/staging-attacks}']
+    GUARD = ['--set', 'phorvex.eventIdentityPolicy.external=prod-se-creator']
+
+    def test_trusted_detectors_need_a_guard(self):
+        result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), '-n', 'phorvex-system', *self.OFF], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('phorvex.eventIdentityPolicy.external', result.stderr)
+
+    def test_the_manager_and_the_sensor_verify_the_named_guard(self):
+        manager = helm_template(MANAGER_CHART, *self.OFF, *self.GUARD)
+        self.assertEqual([d for d in manager if d['kind'] in ('ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding')], [])
+        guard = {(n, 'admissionregistration.k8s.io', r, 'prod-se-creator', 'get')
+                 for n in ('*cluster*',) for r in ('validatingadmissionpolicies', 'validatingadmissionpolicybindings')}
+        for name, docs, service in (('manager', manager, 'manager'),
+                                    ('sensor', helm_template(CHARTS / 'phorvex-sensor', *self.OFF, *self.GUARD), 'sensor')):
+            with self.subTest(service=name):
+                self.assertIn({'name': 'PHORVEX_EVENT_IDENTITY_POLICY', 'value': 'prod-se-creator'}, container(docs, service)['env'])
+                self.assertLessEqual(guard, grants(docs))
+        self.assertEqual({g for g in grants(helm_template(CHARTS / 'phorvex-actuator', *self.OFF, *self.GUARD)) if g[2].startswith('validatingadmission')}, set())
 
 
 class VendoredLibraryTests(unittest.TestCase):
