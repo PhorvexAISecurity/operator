@@ -8,6 +8,38 @@ Argo CD, and until 2026-09-29 these two pieces existed only on the cluster.
 | `additional-scrape-configs.yaml` | Secret `monitoring/kube-prom-stack-kube-prome-prometheus-scrape-confg`, key `additional-scrape-configs.yaml` (the release's `prometheus.prometheusSpec.additionalScrapeConfigs`) |
 | `phorvex-apps-dashboard.json` | ConfigMap `monitoring/phorvex-apps-dashboard`, key `phorvex-apps.json`, label `grafana_dashboard=1` |
 
+## Split services (ADR-0001)
+
+The service charts (`phorvex/charts/phorvex`, `deploy/charts/phorvex-*`) monitor
+themselves. These keys are set once per environment, in
+`deploy/environments/<env>/phorvex.yaml`.
+
+- **Scraping.** `phorvex.metrics.podMonitor.enabled` renders a PodMonitor for each
+  service's metrics port: manager, brain, sensor and actuator.
+  - It needs the PodMonitor API, and fails where it is missing.
+  - `environment` labels every series, so the cluster's one Prometheus tells the
+    environments apart.
+  - `metricRelabelings` passes prometheus-operator relabelings through.
+  - The brain, sensor and actuator NetworkPolicies admit the scrape only from
+    their `metricsScraperNamespaces`.
+- **Call metrics.** The services export their gRPC calls on both ends:
+  `phorvex_grpc_{server,client}_handled_total{grpc_service,grpc_method,grpc_code}`
+  and the matching `_handling_seconds` histograms.
+- **Dashboard.** `phorvex.metrics.dashboard.enabled` adds the
+  "Phorvex services — <environment>" dashboard, as a `grafana_dashboard=1`
+  ConfigMap in the release's namespace; the Grafana sidecar loads them from every
+  namespace. It covers scrape health, service calls, ticks, decisions,
+  actuations, SecurityEvents and resources.
+- **Alerts.** `phorvex.metrics.rules.enabled` adds four alerts: a service down,
+  failing calls, incomplete ticks and restarts. They are severity `info`, so the
+  Alertmanager here routes them to no receiver; Prometheus and Grafana show them.
+
+All of these filter on the environment label or the release's namespace. The
+production stack's rules are not all scoped: `PhorvexCostNaNUnactionable` sums
+`phorvex_cost_nan_unactionable_total` over every namespace. An environment
+beside production therefore renames that series in `metricRelabelings`, so its
+cost failures do not page production's receiver.
+
 ## LiteLLM gateway metrics preparation
 
 Stage 5 prepares bearer-authenticated admission counters/histograms on exact

@@ -1,5 +1,6 @@
 """Render the per-service charts (ADR-0001) and check what each may do."""
 from pathlib import Path
+import json
 import os
 import re
 import shutil
@@ -705,6 +706,50 @@ class NativeBackendTests(unittest.TestCase):
         self.assertIn(('*cluster*', 'amtd.r6security.com', 'securityevents', '*', 'create'), grants(phoenix))
 
 
+MONITORING = ['--set', 'phorvex.metrics.podMonitor.enabled=true', '--set', 'phorvex.metrics.podMonitor.environment=staging']
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class MonitoringTests(unittest.TestCase):
+    """Each service is scraped, labelled with its environment (deploy/environments/README.md)."""
+    charts = {'manager': MANAGER_CHART, 'brain': CHARTS / 'phorvex-brain', 'sensor': CHARTS / 'phorvex-sensor', 'actuator': CHARTS / 'phorvex-actuator'}
+
+    def test_each_service_is_scraped_with_its_environment(self):
+        for service, chart in self.charts.items():
+            with self.subTest(service=service):
+                docs = helm_template(chart, *PODMONITOR, *MONITORING)
+                monitor = next(d for d in docs if d['kind'] == 'PodMonitor')['spec']
+                pod = next(d for d in docs if d['kind'] == 'Deployment' and service in [c['name'] for c in d['spec']['template']['spec']['containers']])
+                labels = pod['spec']['template']['metadata']['labels']
+                self.assertLessEqual(monitor['selector']['matchLabels'].items(), labels.items())
+                self.assertEqual(monitor['namespaceSelector'], {'matchNames': ['phorvex-system']})
+                endpoint = monitor['podMetricsEndpoints'][0]
+                self.assertIn('metrics', [p['name'] for c in pod['spec']['template']['spec']['containers'] for p in c.get('ports', [])])
+                self.assertIn({'action': 'replace', 'targetLabel': 'environment', 'replacement': 'staging'}, endpoint['relabelings'])
+                # Off by default, and refused where Prometheus cannot read it.
+                self.assertEqual([d for d in helm_template(chart, *PODMONITOR) if d['kind'] == 'PodMonitor'], [])
+                result = subprocess.run([HELM, 'template', 'phorvex', str(chart), *MONITORING], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('requires the PodMonitor API', result.stderr)
+
+    def test_the_dashboard_and_rules_read_only_their_environment(self):
+        docs = helm_template(MANAGER_CHART, *PODMONITOR, *MONITORING, '--set', 'phorvex.metrics.dashboard.enabled=true', '--set', 'phorvex.metrics.rules.enabled=true')
+        dashboard = next(d for d in docs if d['kind'] == 'ConfigMap' and d['metadata']['name'].endswith('-services-dashboard'))
+        self.assertEqual(dashboard['metadata']['labels']['grafana_dashboard'], '1')
+        board = json.loads(dashboard['data']['phorvex-services-staging.json'])
+        self.assertEqual(board['uid'], 'phorvex-services-staging')
+        exprs = [t['expr'] for panel in board['panels'] for t in panel.get('targets', [])]
+        rules = next(d for d in docs if d['kind'] == 'PrometheusRule' and d['metadata']['name'].endswith('-services'))['spec']['groups'][0]['rules']
+        exprs += [r['expr'] for r in rules]
+        self.assertGreater(len(exprs), 15)
+        for expr in exprs:
+            self.assertNotIn('__', expr)
+            self.assertTrue('environment="staging"' in expr or 'namespace="phorvex-system"' in expr, expr)
+        self.assertEqual({r['labels']['severity'] for r in rules}, {'info'})
+        for key in ('dashboard', 'rules'):
+            result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), *PODMONITOR, '--set', f'phorvex.metrics.{key}.enabled=true'], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0, key)
+            self.assertIn('podMonitor.environment', result.stderr)
 @unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
 class ExternalIdentityPolicyTests(unittest.TestCase):
     """Beside a release that installs the creator-identity guard, trust waits on it (M-94)."""

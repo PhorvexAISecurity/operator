@@ -13,6 +13,12 @@ image:
 # chart's (tools/test_service_charts.py). The engine is each binary's default:
 # neither chart passes --engine.
 phorvex:
+  metrics:
+    podMonitor:
+      enabled: false
+      interval: 30s
+      environment: ""
+      metricRelabelings: []
   gpuEnvelopeMax: 0.2925
   flowResidualClasses: []
   mathLab:
