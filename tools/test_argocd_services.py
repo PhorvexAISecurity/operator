@@ -72,7 +72,8 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual({s['repoURL'] for s in TEMPLATE['spec']['sources']}, {REPO})
         self.assertEqual(TEMPLATE['spec']['project'], PROJECT['metadata']['name'])
         self.assertEqual(TEMPLATE['spec']['destination'], {'server': '{{.server}}', 'namespace': '{{.namespace}}'})
-        self.assertEqual(PROJECT['spec']['destinations'], [{'server': e['server'], 'namespace': e['namespace']} for e in ENVIRONMENTS_LISTED])
+        demo = load(SERVICES / 'demo-staging.yaml')['spec']['destination']
+        self.assertEqual(PROJECT['spec']['destinations'], [{'server': e['server'], 'namespace': e['namespace']} for e in ENVIRONMENTS_LISTED] + [demo])
         self.assertIs(TEMPLATE['spec']['sources'][0]['helm']['skipCrds'], True)
 
     def test_nothing_applies_these_manifests(self):
@@ -101,6 +102,8 @@ class EnvironmentRenderTests(unittest.TestCase):
         allowed = {(k['group'], k['kind']) for k in PROJECT['spec']['clusterResourceWhitelist']}
         for environment in ENVIRONMENTS_LISTED:
             namespace = environment['namespace']
+            # The services' own namespace, and the defended namespaces their Roles name.
+            destinations = {d['namespace'] for d in PROJECT['spec']['destinations'] if d['server'] == environment['server']}
             cluster = set()
             for element in ELEMENTS:
                 with self.subTest(environment=environment['environment'], service=element['service']):
@@ -109,7 +112,7 @@ class EnvironmentRenderTests(unittest.TestCase):
                         if d['kind'] in CLUSTER_SCOPED:
                             cluster.add((group, d['kind']))
                         else:
-                            self.assertEqual(d['metadata'].get('namespace', namespace), namespace, (d['kind'], d['metadata']['name']))
+                            self.assertIn(d['metadata'].get('namespace', namespace), destinations, (d['kind'], d['metadata']['name']))
             # Exactly what the charts need, and the namespace CreateNamespace creates.
             self.assertEqual(allowed, cluster | {('', 'Namespace')}, environment['environment'])
 
@@ -173,11 +176,12 @@ class EnvironmentRenderTests(unittest.TestCase):
     def test_an_end_to_end_identity_reaches_only_its_environment(self):
         # Its tokens are console credentials, never Kubernetes ones. The audience is the
         # environment's own, so another console's e2e token is refused, and the grant is
-        # the environment's namespace.
+        # the namespaces the environment attacks.
         production = load(ROOT / 'deploy/helm/phorvex-stack/values-eks.yaml')['phorvex']['phorvex']['console']['auth']['oidc']
         by_service = {e['service']: e for e in ELEMENTS}
         for environment in ENVIRONMENTS_LISTED:
-            auth = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['console'].get('auth', {})
+            console = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['console']
+            auth = console.get('auth', {})
             if not auth.get('e2eIdentity', {}).get('enabled'):
                 continue
             with self.subTest(environment=environment['environment']):
@@ -186,7 +190,7 @@ class EnvironmentRenderTests(unittest.TestCase):
                 subjects = [s for s in json.loads(auth['grants']['data'])['subjects']
                             if s['subject'] == f'system:serviceaccount:{namespace}:{name}']
                 self.assertEqual([(s['issuer'], s['tenants'], s['targets']) for s in subjects],
-                                 [(auth['oidc']['issuer'], [namespace], ['default'])])
+                                 [(auth['oidc']['issuer'], console['attackNamespaces'], ['default'])])
                 rendered = {service: render(environment, element) for service, element in by_service.items()}
                 account = next(d for d in rendered['manager'] if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
                 self.assertIs(account['automountServiceAccountToken'], False)
@@ -213,7 +217,12 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertNotEqual(namespace, 'phorvex-system')
                 self.assertNotEqual(release, 'phorvex')
                 values = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']
-                self.assertEqual(values['policyNamespaces'], [namespace])
+                # Its own namespaces only, and never the one the services run in: the
+                # actuator refuses to quarantine there.
+                scope = values['policyNamespaces']
+                self.assertTrue(scope)
+                for policy_namespace in scope:
+                    self.assertTrue(policy_namespace.startswith(namespace + '-'), policy_namespace)
                 self.assertIs(values['globalKillSwitch'], True)
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
@@ -225,7 +234,7 @@ class EnvironmentRenderTests(unittest.TestCase):
                     if service in ('manager', 'sensor', 'actuator'):
                         pod = service_pod(docs, service)
                         args = pod['containers'][0]['args']
-                        self.assertIn(f'--policy-namespaces={namespace}', args, service)
+                        self.assertIn(f"--policy-namespaces={','.join(scope)}", args, service)
                         if service == 'manager':
                             self.assertIn('--global-kill-switch=true', args)
 
@@ -246,7 +255,9 @@ class DemoTests(unittest.TestCase):
         spec = DEMO['spec']
         self.assertEqual(spec['project'], PROJECT['metadata']['name'])
         self.assertEqual(spec['source']['repoURL'], REPO)
-        self.assertEqual(spec['destination'], {'server': self.staging['server'], 'namespace': self.staging['namespace']})
+        # Its own namespace, beside the services' and never theirs.
+        self.assertEqual(spec['destination'], {'server': self.staging['server'], 'namespace': self.staging['namespace'] + '-demo'})
+        self.assertIn('CreateNamespace=true', spec['syncPolicy']['syncOptions'])
         for d in demo_manifests():
             # Argo CD places every object in the destination; none is cluster-scoped.
             self.assertNotIn('namespace', d['metadata'], d['metadata']['name'])
@@ -255,15 +266,38 @@ class DemoTests(unittest.TestCase):
     def test_the_policy_defends_only_the_demo_with_the_native_backend(self):
         docs = demo_manifests()
         policy = next(d for d in docs if d['kind'] == 'PhorvexPolicy')['spec']
-        labels = next(d for d in docs if d['kind'] == 'Deployment')['spec']['template']['metadata']['labels']
-        self.assertLessEqual(policy['selector']['matchLabels'].items(), labels.items())
-        # The console's workload attack picks a rotation target before any other Pod.
-        self.assertEqual(labels['r6th.io/rotation-target'], 'true')
+        workloads = {d['metadata']['name']: d['spec']['template']['metadata']['labels'] for d in docs if d['kind'] == 'Deployment'}
+        selector = policy['selector']['matchLabels'].items()
+        self.assertLessEqual(selector, workloads['demo-api'].items())
+        # The console's workload attack picks a rotation target before any other Pod;
+        # the load generator is neither a target nor defended.
+        self.assertEqual(workloads['demo-api']['r6th.io/rotation-target'], 'true')
+        self.assertNotIn('r6th.io/rotation-target', workloads['demo-load'])
+        self.assertFalse(selector <= workloads['demo-load'].items())
         self.assertLessEqual(set(policy['actions']['enabled']), {'rotate', 'quarantine'})
+        # One namespace is the demo's tenant, the services' scope, their hands, the
+        # attacks' targets and every console grant.
+        namespace = DEMO['spec']['destination']['namespace']
+        self.assertEqual(policy['tenant'], namespace)
         env = load(ENVIRONMENTS / 'staging' / 'phorvex.yaml')['phorvex']
         self.assertEqual(env['actuator'], 'native')
-        self.assertEqual(env['policyNamespaces'], [self.staging['namespace']])
-        self.assertEqual(env['actuatorNamespaces'], [self.staging['namespace']])
+        for scope in (env['policyNamespaces'], env['actuatorNamespaces'], env['console']['attackNamespaces']):
+            self.assertEqual(scope, [namespace])
+        for subject in json.loads(env['console']['auth']['grants']['data'])['subjects']:
+            self.assertEqual(subject['tenants'], [namespace], subject['subject'])
+
+    def test_its_load_is_measured(self):
+        # Without a per-Pod http_requests_total the brain prices every rotation at its
+        # conservative bound, above the policy's cost ceiling (cost/action_flow.go).
+        docs = demo_manifests()
+        monitor = next(d for d in docs if d['kind'] == 'PodMonitor')['spec']
+        api = next(d for d in docs if d['kind'] == 'Deployment' and d['metadata']['name'] == 'demo-api')['spec']['template']
+        self.assertLessEqual(monitor['selector']['matchLabels'].items(), api['metadata']['labels'].items())
+        endpoint = monitor['podMetricsEndpoints'][0]
+        ports = {p['name'] for c in api['spec']['containers'] for p in c.get('ports', [])}
+        self.assertIn(endpoint['port'], ports)
+        renamed = [r for r in endpoint['metricRelabelings'] if r['action'] == 'replace' and r['targetLabel'] == '__name__']
+        self.assertEqual([r['replacement'] for r in renamed], ['http_requests_total'])
 
 
 if __name__ == '__main__':

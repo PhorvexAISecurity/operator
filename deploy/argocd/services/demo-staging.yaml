@@ -1,6 +1,6 @@
 # The workload staging's services defend (deploy/demo), as its own
-# Application in the services project, so Argo CD confines it to phorvex-staging.
-# Applied by hand, like applicationset.yaml.
+# Application in the services project, in its own namespace: the services never
+# defend the namespace they run in. Applied by hand, like applicationset.yaml.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -19,7 +19,7 @@ spec:
     path: deploy/demo
   destination:
     server: https://kubernetes.default.svc
-    namespace: phorvex-staging
+    namespace: phorvex-staging-demo
   syncPolicy:
     automated:
       enabled: true
@@ -27,3 +27,4 @@ spec:
       selfHeal: true
     syncOptions:
     - ServerSideApply=true
+    - CreateNamespace=true

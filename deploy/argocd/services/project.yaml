@@ -13,6 +13,9 @@ spec:
   destinations:
   - server: https://kubernetes.default.svc
     namespace: phorvex-staging
+  # The workload staging defends (demo-staging.yaml).
+  - server: https://kubernetes.default.svc
+    namespace: phorvex-staging-demo
   # tools/test_argocd_services.py requires this list to equal the cluster-scoped
   # kinds every environment renders, plus the namespace CreateNamespace creates.
   clusterResourceWhitelist:
