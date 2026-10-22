@@ -144,8 +144,12 @@ jobs:
           # From main as the publish job left it: its tags and the staging pins.
           git fetch --tags --force origin main
           git switch --force-create release/next FETCH_HEAD
+          # Built once: `go run` reports every failing exit as 1, and prepare's 3
+          # means nothing to release.
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
           status=0
-          go -C phorvex run ./tools/servicerelease prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
+          "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
           if [ "$status" -eq 3 ]; then exit 0; fi
           [ "$status" -eq 0 ]
           git config user.name "github-actions[bot]"
@@ -153,7 +157,6 @@ jobs:
           git add release
           git commit -F "$RUNNER_TEMP/title"
           git push --force origin release/next
-          go -C phorvex run ./tools/servicerelease pull-request --head release/next --base main \
+          "$tool" pull-request --head release/next --base main \
             --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
-          go -C phorvex run ./tools/servicerelease dispatch --ref release/next \
-            --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+          "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml

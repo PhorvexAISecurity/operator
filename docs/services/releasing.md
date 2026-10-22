@@ -81,7 +81,9 @@ In place since 2026-10-22:
   753556437180, us-east-2: mutable tags, scan on push, AES256. The production
   stack's repositories (`phorvex`, `phorvex-console`) are not used.
 - **IAM.** The role `phorvex-refactored-release` trusts GitHub's OIDC provider
-  for exactly `repo:PhorvexSecurity/operator-refactored:environment:release`.
+  for exactly `repo:PhorvexSecurity@289469515/operator-refactored@1421933320:environment:release`:
+  the repository issues immutable subjects, which carry the owner's and the
+  repository's IDs, so a renamed or recreated repository cannot match it.
   Its only policy, `phorvex-refactored-release-ecr`, allows `ecr:GetAuthorizationToken`
   and pushing to those five repositories. The production repository's role,
   `github-actions-phorvex`, is unchanged.
