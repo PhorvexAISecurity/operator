@@ -10,7 +10,7 @@ spec:
   description: The staging vcluster and what the Phorvex services need inside it.
   sourceRepos:
   - https://charts.loft.sh
-  - git@github.com:PhorvexSecurity/operator-refactored.git
+  - https://github.com/PhorvexSecurity/operator-refactored.git
   destinations:
   # The vcluster, in its namespace of this cluster.
   - server: https://kubernetes.default.svc

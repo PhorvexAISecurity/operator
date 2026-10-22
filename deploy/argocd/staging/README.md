@@ -18,8 +18,10 @@ services' project and ApplicationSet are applied with `kubectl apply`, and two
 Secrets that hold credentials are created out of band, never in git:
 
 - **Repository access.** A repository Secret in `argocd` for
-  `git@github.com:PhorvexSecurity/operator-refactored.git`, holding the private
-  half of a read-only deploy key of this repository.
+  `https://github.com/PhorvexSecurity/operator-refactored.git`. It holds the same
+  HTTPS credential as the production stack's repository Secret: the enterprise's
+  policy disables deploy keys. A GitHub App with read access to this repository
+  alone would narrow it.
 - **The cluster.** A cluster Secret in `argocd` for
   `https://phorvex-staging.phorvex-staging.svc:443`, built from the kubeconfig the
   vcluster writes into the Secret `vc-phorvex-staging`. It carries the label
