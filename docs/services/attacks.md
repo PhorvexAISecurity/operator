@@ -97,9 +97,12 @@ environment's values turns the split on in the manager chart:
   - every live arm's and catalogue run's Roles.
 
   The two accounts together hold exactly what the console held.
-- **Namespace scope.** `phorvex.console.attackNamespaces` confines exec and
-  changes to Roles in those namespaces. SecurityEvents are cluster-scoped, so
-  creating them stays cluster-wide.
+- **Namespace scope.** `phorvex.console.attackNamespaces` confines exec, workload
+  changes and policy edits, the console's and the attacks service's, to Roles in
+  those namespaces. SecurityEvents are cluster-scoped, so creating them stays
+  cluster-wide.
+- **Exposure.** `phorvex.console.ingress` renders the console's own Service (port 80)
+  and Ingress, for an environment outside the production stack's dashboard.
 
 Four live arms pin the reviewed production console as their injector in their
 profiles: `endpointLease`, `voiceAgencyLive`, `voiceOutputLive` and

@@ -478,8 +478,16 @@ phorvex:
     enabled: false
     allowWorkloadMutations: false
     # With the attacks service remote (services.attacks.endpoint): the namespaces it may
-    # exec into and change. Empty is every namespace, as the console had.
+    # exec into and change, and where it and the console may edit policies. Empty is
+    # every namespace, as the console had.
     attackNamespaces: []
+    # The console's own Service and Ingress, for an environment that exposes it outside
+    # the production stack's dashboard. The Service serves port 80.
+    ingress:
+      enabled: false
+      className: ""
+      host: ""
+      annotations: {}
     # Live attack ids (namespace/id, or */id) with no actuator wired end to end. Retired rows
     # show in the catalogue as not-armed with a clear reason, and the fire handlers refuse them.
     liveAttackDisabled: []
