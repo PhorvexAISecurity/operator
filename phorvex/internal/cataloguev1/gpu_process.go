@@ -43,7 +43,7 @@ func persistGPUProcessIdentity(path string, job Job, command *exec.Cmd, harnessS
 	if filepath.Base(path) == "crm-process.json" && executableSHA != harnessSHA {
 		return errors.New("CRM started executable SHA-256 differs from reviewed harness")
 	}
-	commandLine, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
+	commandLine, err := startedCommandLine(pid)
 	if err != nil || len(commandLine) == 0 {
 		return errors.New("GPU harness command-line identity is unavailable")
 	}
@@ -57,6 +57,22 @@ func persistGPUProcessIdentity(path string, job Job, command *exec.Cmd, harnessS
 		return err
 	}
 	return writeExclusive(path, append(raw, '\n'), 0o600)
+}
+
+// startedCommandLine reads the command line of a process exec.Cmd.Start just
+// started. Start returns once execve passed its point of no return, a moment
+// before the kernel sets the new program's arguments, and /proc reads an empty
+// command line in between; the read is retried for at most a second.
+func startedCommandLine(pid int) ([]byte, error) {
+	path := filepath.Join("/proc", strconv.Itoa(pid), "cmdline")
+	deadline := time.Now().Add(time.Second)
+	for {
+		raw, err := os.ReadFile(path)
+		if err != nil || len(raw) > 0 || time.Now().After(deadline) {
+			return raw, err
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func readLinuxProcessIdentity(pid int) (pgid int, start uint64, err error) {
