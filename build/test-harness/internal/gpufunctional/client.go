@@ -677,6 +677,12 @@ func (c *Client) runBusyRefusal(ctx context.Context) (receipt BusyReceipt, retEr
 	if err := cohort.waitSubmitted(ctx, 10*time.Second); err != nil {
 		return receipt, err
 	}
+	// Every stream's admission must be known before the reset: a refusal still in
+	// flight would pass preActionFailure, and the reset would act on a cohort only
+	// partly admitted.
+	if err := cohort.waitResponseHeaders(ctx, 10*time.Second); err != nil {
+		return receipt, err
+	}
 	active, err := c.waitMetrics(ctx, 5*time.Second, busyEstablished)
 	receipt.ActiveMetrics = active
 	if err != nil {
