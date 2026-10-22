@@ -1,5 +1,10 @@
 # Staging infrastructure
 
+**Not on the cluster.** Staging was applied on 2026-10-22 and removed the same day,
+at the owner's request, to free the cluster's resources for its other services:
+the vcluster, its namespace and volume, the two AppProjects, and the repository and
+cluster Secrets. These manifests stay to recreate it, in the order below.
+
 Staging (ADR-0001) is the vcluster `phorvex-staging`, in the namespace
 `phorvex-staging` of the production cluster `phorvex-dev-eks`. A vcluster has its
 own API server, so staging has its own PhorvexPolicy CRD, policies, admission

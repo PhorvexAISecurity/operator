@@ -16,7 +16,7 @@ files.
 
 | Environment | Cluster | State |
 |---|---|---|
-| `staging` | the vcluster `phorvex-staging` on `phorvex-dev-eks`, registered in Argo CD with the cluster Secret label `phorvex.ai/environment: staging` | written, not applied (phase 5e) |
+| `staging` | the vcluster `phorvex-staging` on `phorvex-dev-eks`, registered in Argo CD with the cluster Secret label `phorvex.ai/environment: staging` | not on the cluster: applied and removed on 2026-10-22 to free the cluster for its other services |
 
 Production keeps running the stack in `deploy/helm/phorvex-stack` until the split
 services have run in staging.
