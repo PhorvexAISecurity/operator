@@ -23,11 +23,15 @@ type Config struct {
 	EndpointLeaseApprovedSource      string
 	EndpointLeaseApprovedProxyImage  string
 	EndpointLeaseApprovedEngineImage string
+	// PolicyNamespaces is the policy scope (cmd/internal/policyscope); empty is
+	// every namespace, and leaves the identity as it was before the scope existed.
+	PolicyNamespaces []string `json:",omitempty"`
 }
 
-// SHA256 identifies the configuration. The identity lists compare as sets.
+// SHA256 identifies the configuration. The identity lists and the policy scope
+// compare as sets.
 func (c Config) SHA256() string {
-	for _, list := range []*[]string{&c.TrustedDetectors, &c.TrustedLossObservers, &c.TrustedCurrentInventoryObservers} {
+	for _, list := range []*[]string{&c.TrustedDetectors, &c.TrustedLossObservers, &c.TrustedCurrentInventoryObservers, &c.PolicyNamespaces} {
 		sorted := append([]string{}, *list...)
 		sort.Strings(sorted)
 		*list = sorted

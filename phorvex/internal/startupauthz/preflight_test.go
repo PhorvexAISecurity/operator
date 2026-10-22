@@ -402,3 +402,47 @@ func TestEndpointLeaseJournalStartupAuthorizationUsesOperatorNamespace(t *testin
 		})
 	}
 }
+
+// A deployment scoped to its own namespaces authorizes only their policies: a
+// staging actuator beside the production stack neither needs nor checks the
+// production policies' access.
+func TestCheckAuthorizesOnlyThePolicyScope(t *testing.T) {
+	reader := policyReader(t,
+		policy("staging", "own", v1alpha1.ModeActive, v1alpha1.ActionRotate),
+		policy("tenant", "production", v1alpha1.ModeActive, v1alpha1.ActionRotate))
+	for name, test := range map[string]struct {
+		scope      []string
+		policies   int
+		namespaces []string
+	}{
+		"unscoped": {nil, 2, []string{"staging", "tenant"}},
+		"scoped":   {[]string{"staging"}, 1, []string{"staging"}},
+		"empty":    {[]string{"no-policies"}, 0, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			reviews := &recordingSSAR{}
+			report, err := Check(t.Context(), reader, reviews, Config{Backend: actuator.BackendNative, OperatorNamespace: "operator", PolicyNamespaces: test.scope})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.Policies != test.policies {
+				t.Fatalf("policies = %d, want %d", report.Policies, test.policies)
+			}
+			seen := map[string]bool{}
+			for _, attributes := range reviews.attributes {
+				if attributes.Resource == "pods" && attributes.Namespace != "" {
+					seen[attributes.Namespace] = true
+				}
+			}
+			for _, ns := range []string{"staging", "tenant"} {
+				want := false
+				for _, w := range test.namespaces {
+					want = want || w == ns
+				}
+				if seen[ns] != want {
+					t.Fatalf("pods reviewed in %s = %v, want %v (%+v)", ns, seen[ns], want, reviews.attributes)
+				}
+			}
+		})
+	}
+}

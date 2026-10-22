@@ -40,6 +40,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/cmd/internal/actuatorconfig"
+	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
@@ -304,6 +305,11 @@ func main() {
 		setupLog.Error(err, "invalid GPU warm-up calibration")
 		os.Exit(2)
 	}
+	policyNamespaces, scopeErr := sensorFlags.Scope.List()
+	if scopeErr != nil {
+		setupLog.Error(scopeErr, "invalid policy scope")
+		os.Exit(2)
+	}
 	if brainEndpoint != "" && strings.TrimSpace(mathLabCapturePolicies) != "" {
 		setupLog.Error(fmt.Errorf("math-lab capture records on the brain service"), "set --math-lab-capture-policies on the brain, not the manager, when --brain-endpoint is set")
 		os.Exit(2)
@@ -391,6 +397,11 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeader,
 		LeaderElectionID:       "phorvex.phorvex.ai",
+		// The policy controller and every cached policy read see only the policy scope.
+		Cache: policyscope.Cache(policyNamespaces),
+	}
+	if len(policyNamespaces) > 0 {
+		setupLog.Info("policy scope", "namespaces", policyNamespaces)
 	}
 	if admissionWebhook {
 		managerOptions.WebhookServer = webhook.NewServer(webhook.Options{Port: webhookPort, CertDir: webhookCertDir})
@@ -410,7 +421,7 @@ func main() {
 			bootReviews = cs.AuthorizationV1().SelfSubjectAccessReviews()
 		}
 		bootReport, bootErr := startupauthz.Check(context.Background(), mgr.GetAPIReader(), bootReviews,
-			actuatorFlags.Preflight(actuatorSettings, backend.Backend, operatorNS))
+			actuatorFlags.Preflight(actuatorSettings, backend.Backend, operatorNS, policyNamespaces))
 		if bootErr != nil {
 			setupLog.Error(bootErr, "startup authorization preflight failed; refusing to start")
 			os.Exit(1)
@@ -450,7 +461,7 @@ func main() {
 		}
 		actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
 	} else {
-		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, actuatorconfig.Shared(operatorNS, sensorFlags.Trust),
+		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, actuatorconfig.Shared(operatorNS, sensorFlags.Trust, policyNamespaces),
 			actuatorConnectTimeout, actuatorCallTimeout)
 		if actuatorErr != nil {
 			setupLog.Error(actuatorErr, "refusing to start without the actuator service", "endpoint", actuatorEndpoint)

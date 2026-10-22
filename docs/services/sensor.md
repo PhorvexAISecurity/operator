@@ -82,6 +82,7 @@ replicas would compute them over the wrong interval.
 | `--metrics-bind-address`, `--health-probe-bind-address` | `:8080`, `:8081` | metrics and probes |
 | `--trusted-detectors`, `--trusted-loss-observers`, `--trusted-current-inventory-observers`, `--endpoint-lease-approved-*` | as the manager | must match the manager, or the handshake refuses it |
 | `--prometheus-url`, `--pcie-class-table`, `--epss-*` | as the manager | telemetry, the GPU witness and the EPSS feed now read here |
+| `--policy-namespaces` | every namespace | the policy scope (`cmd/internal/policyscope`): the PhorvexPolicies a snapshot lists; must match the manager |
 
 `phorvex/cmd/internal/sensorconfig` defines these flags for both binaries; the
 detector trust and endpoint lease flags come from `cmd/internal/trustconfig`,

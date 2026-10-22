@@ -36,6 +36,7 @@ import (
 	"phorvex.ai/libs/logging"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/ingest"
@@ -101,6 +102,10 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err := cfg.sensor.ApplyTrust(); err != nil {
 		return err
 	}
+	policyNamespaces, err := cfg.sensor.Scope.List()
+	if err != nil {
+		return err
+	}
 	pcie, err := ingest.ParsePCIeClassTable(cfg.sensor.PCIeClassTable)
 	if err != nil {
 		return fmt.Errorf("invalid --pcie-class-table: %w", err)
@@ -110,6 +115,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	}
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                  newScheme(),
+		Cache:                   policyscope.Cache(policyNamespaces), // a snapshot lists the scope's policies only
 		Metrics:                 metricsserver.Options{BindAddress: cfg.metricsAddr},
 		HealthProbeBindAddress:  cfg.probeAddr,
 		LeaderElection:          false,

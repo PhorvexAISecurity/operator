@@ -40,6 +40,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/cmd/internal/actuatorconfig"
+	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/trustconfig"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/actuatorapi"
@@ -57,6 +58,7 @@ type config struct {
 	shutdownGrace                  time.Duration
 	operatorNamespace              string
 	trust                          trustconfig.Trust
+	scope                          policyscope.Scope
 	actuator                       actuatorconfig.Flags
 	log                            logging.Options
 }
@@ -77,6 +79,7 @@ func main() {
 	flag.DurationVar(&cfg.shutdownGrace, "shutdown-grace", 20*time.Second, "Time in-flight calls get to finish on shutdown.")
 	flag.StringVar(&cfg.operatorNamespace, "operator-namespace", os.Getenv("POD_NAMESPACE"), "Namespace holding the protected-operation journals and the quarantine ledger; must match the manager's.")
 	cfg.trust.Register(flag.CommandLine)
+	cfg.scope.Register(flag.CommandLine)
 	cfg.actuator.Register(flag.CommandLine)
 	logging.RegisterFlags(flag.CommandLine, &cfg.log)
 	flag.Parse()
@@ -115,6 +118,10 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err := cfg.actuator.ValidateBound(); err != nil {
 		return err
 	}
+	policyNamespaces, err := cfg.scope.List()
+	if err != nil {
+		return err
+	}
 	backend, err := actuator.ResolveBackendFromEnv()
 	if err != nil {
 		return fmt.Errorf("invalid actuator configuration: %w", err)
@@ -136,6 +143,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                  newScheme(),
+		Cache:                   policyscope.Cache(policyNamespaces), // the backends read the scope's policies only
 		Metrics:                 metricsserver.Options{BindAddress: cfg.metricsAddr},
 		HealthProbeBindAddress:  cfg.probeAddr,
 		LeaderElection:          false,
@@ -149,7 +157,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 		return fmt.Errorf("clientset: %w", err)
 	}
 	report, err := startupauthz.Check(ctx, mgr.GetAPIReader(), cs.AuthorizationV1().SelfSubjectAccessReviews(),
-		cfg.actuator.Preflight(settings, backend.Backend, cfg.operatorNamespace))
+		cfg.actuator.Preflight(settings, backend.Backend, cfg.operatorNamespace, policyNamespaces))
 	if err != nil {
 		return fmt.Errorf("startup authorization preflight failed: %w", err)
 	}
@@ -172,7 +180,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	}
 	local := &actuatorsvc.Local{Actuator: act, Capacity: capacity, Reader: mgr.GetAPIReader(),
 		OperatorNamespace: cfg.operatorNamespace, Access: authz.NewChecker(cs, authz.DefaultTTL)}
-	shared := actuatorconfig.Shared(cfg.operatorNamespace, cfg.trust)
+	shared := actuatorconfig.Shared(cfg.operatorNamespace, cfg.trust, policyNamespaces)
 	service, err := actuatorsvc.NewServer(local, shared.SHA256())
 	if err != nil {
 		return err

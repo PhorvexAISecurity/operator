@@ -78,3 +78,15 @@ func TestEPSSConfigurationAndRefresher(t *testing.T) {
 		t.Fatalf("no EPSS cache is honest-absent, not an error: %v", err)
 	}
 }
+
+// The sensor handshake compares the policy scope, as a set.
+func TestDescribeComparesThePolicyScope(t *testing.T) {
+	var a, b Flags
+	a.Scope.Namespaces, b.Scope.Namespaces = "staging-b,staging-a", "staging-a,staging-b"
+	if a.Describe().SHA256() != b.Describe().SHA256() {
+		t.Fatal("the same scope describes differently")
+	}
+	if a.Describe().SHA256() == (Flags{}).Describe().SHA256() {
+		t.Fatal("a scoped sensor matches an unscoped manager")
+	}
+}
