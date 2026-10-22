@@ -16,9 +16,10 @@ spec:
     helm:
       releaseName: phorvex-staging
       valuesObject:
-        # Argo CD reaches the virtual API server through its Service.
+        # Argo CD reaches the virtual API server through its Service, by the name
+        # the vcluster's serving certificate carries (not the .svc form).
         exportKubeConfig:
-          server: https://phorvex-staging.phorvex-staging.svc:443
+          server: https://phorvex-staging.phorvex-staging:443
         rbac:
           # No volume snapshots in staging: without this the vcluster may create and
           # delete VolumeSnapshotContents across the whole cluster.
