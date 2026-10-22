@@ -1,0 +1,44 @@
+# Staging's services defend demo-api, and only demo-api: the selector names its Pods.
+# Event-driven and reactive only, they act on trusted SecurityEvents, such as the attacks
+# service's workload signal, with the native backend's rotate and quarantine.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: demo-api-defense
+  labels:
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  tenant: phorvex-staging
+  mode: active
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  actions:
+    enabled: [rotate, quarantine]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 90s
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 5s
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    disruptionAversion: "1"
+    lambda: "0"
+  slo:
+    costCeiling: "1.2"
+    minAvailableReplicas: 2
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: true

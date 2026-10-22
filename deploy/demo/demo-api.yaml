@@ -1,0 +1,66 @@
+# A stateless workload for an environment's services to defend (deploy/environments/README.md).
+# It carries the rotation-target label, so the console's workload attack picks one of its
+# Pods and never a Phorvex service Pod in the same namespace.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-api
+  labels:
+    app.kubernetes.io/name: demo-api
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: demo-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: demo-api
+        app.kubernetes.io/part-of: phorvex-demo
+        data-class: internal
+        r6th.io/rotation-target: "true"
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: web
+        image: public.ecr.aws/nginx/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet: {path: /, port: http}
+          periodSeconds: 5
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {memory: 64Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      volumes:
+      - name: tmp
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-api
+  labels:
+    app.kubernetes.io/name: demo-api
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  selector:
+    app.kubernetes.io/name: demo-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: http

@@ -26,26 +26,35 @@ server with production, it must leave production alone, and its values see to it
 
 - **Its own policies only.** `policyNamespaces: [phorvex-staging]`: the manager
   reconciles and ticks, the sensor lists and the actuator authorizes only the
-  PhorvexPolicies of its namespace, of which there are none yet. Without the
-  scope, the manager would write production's policy status and act on its
-  policies.
-- **No actuation.** The global kill switch is on: production's Phoenix acts on
-  every SecurityEvent in the cluster.
+  PhorvexPolicies of its namespace. Without the scope, the manager would write
+  production's policy status and act on its policies.
+- **Its own hands.** The native backend (`actuator: native`) creates no
+  SecurityEvent or AMTD for production's Phoenix to act on, and changes workloads
+  only in `actuatorNamespaces: [phorvex-staging]`. Production's Phoenix acts on
+  every SecurityEvent, but its AMTDs cover only production's namespaces. The
+  global kill switch stays on until the console and the attacks service run here.
 - **No cluster-wide admission.** Its admission webhooks and the SecurityEvent
   identity policy are off, since they would also admit production's requests.
   Without that policy, no external detector is trusted.
 - **No shared cluster-scoped object.** The CRDs are skipped (they are
   production's), and every ClusterRole and binding carries the release name.
+- **Its own monitoring.** Its series carry `environment=staging`. Its dashboard and
+  severity-info alerts filter on it, and production's one unscoped rule never sees
+  its cost counter (`deploy/monitoring/README.md`).
 
-Staging therefore shows the services running, connected and healthy from the
-released images, not decisions on real workloads.
+`phorvex-demo-staging` (`demo-staging.yaml`) deploys `deploy/demo`: a stateless
+`demo-api` for the services to defend, and its PhorvexPolicy, which selects only
+its Pods and enables only the native backend's rotate and quarantine. Its Pods are
+the console's workload attack targets (`r6th.io/rotation-target`), never a
+Phorvex service Pod. The console is reachable at `staging-console.phorvex.ai`,
+through its own ALB and Cognito app client.
 
 ## Applying
 
 1. Argo CD reads this repository over HTTPS with the credential it uses for the
    production repository, in a repository Secret for this repository's URL. The
    enterprise disables deploy keys.
-2. Apply `project.yaml`, then `applicationset.yaml`.
+2. Apply `project.yaml`, then `applicationset.yaml` and `demo-staging.yaml`.
 
 The services start in any order: the manager waits up to two minutes for each
 handshake and restarts until every service answers. Deleting the ApplicationSet

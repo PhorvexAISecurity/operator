@@ -1,0 +1,29 @@
+# The workload staging's services defend (deploy/demo), as its own
+# Application in the services project, so Argo CD confines it to phorvex-staging.
+# Applied by hand, like applicationset.yaml.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phorvex-demo-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/environment: staging
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: phorvex-services
+  source:
+    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+    targetRevision: main
+    path: deploy/demo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: phorvex-staging
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - ServerSideApply=true
