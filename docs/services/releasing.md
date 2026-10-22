@@ -42,6 +42,65 @@ go -C phorvex run ./tools/servicerelease affected --base origin/main
 ```
 
 PR validation reports the services each change affects in the go-unit job's
-summary. Tagging, building and pushing the images, and writing them into
-`deploy/environments`, is the release workflow. It needs write access and
-registry credentials, so it lands as its own reviewed change.
+summary.
+
+## The release workflow
+
+`.github/workflows/release.yml` runs on every push to main.
+
+1. **The release PR.** The `release-pr` job brings the PR from `release/next`
+   up to date (`servicerelease prepare`, then `pull-request`). The PR holds
+   `release/versions.json`, the versions to release, and each service's
+   changelog, `release/<service>.md`. Every merged change that affects a
+   service updates it.
+2. **Merging it publishes.** The `pending` job finds the versions in
+   `release/versions.json` that have no tag yet (`servicerelease pending`). For
+   each one, the `publish` job:
+   - builds the image from the merge commit;
+   - pushes it to ECR as `phorvex/<service>:<version>`;
+   - tags the commit `<service>-v<version>`;
+   - pins staging to the pushed digest (`servicerelease deploy`), in
+     `deploy/environments/staging/<service>.yaml`, or `manager.yaml` for the
+     manager and console.
+
+   One commit to main records the pins of every release that succeeded, and
+   Argo CD syncs it. A service whose build or push fails is not tagged, so a
+   rerun builds it again.
+
+The workflow is the only one in this repository that writes or reaches AWS.
+`ReleaseWorkflowTests` in `tools/test_pr_validation.py` holds it to that shape:
+it runs only for main, only the publish job assumes an AWS role, and it does so
+inside the `release` environment.
+
+### Setup
+
+In place since 2026-10-22:
+
+- **ECR.** The repositories `phorvex/manager`, `phorvex/brain`,
+  `phorvex/sensor`, `phorvex/actuator` and `phorvex/console` exist in account
+  753556437180, us-east-2: mutable tags, scan on push, AES256. The production
+  stack's repositories (`phorvex`, `phorvex-console`) are not used.
+- **IAM.** The role `phorvex-refactored-release` trusts GitHub's OIDC provider
+  for exactly `repo:PhorvexSecurity/operator-refactored:environment:release`.
+  Its only policy, `phorvex-refactored-release-ecr`, allows `ecr:GetAuthorizationToken`
+  and pushing to those five repositories. The production repository's role,
+  `github-actions-phorvex`, is unchanged.
+- **The repository variable.** `PHORVEX_RELEASE_ROLE_ARN` names that role. The
+  publish job refuses to run without it.
+- **The `release` environment.** It admits deployments from `main` only. This
+  plan cannot require reviewers on it, so merging the release PR is the approval.
+- **Pushes to main.** Branch protection is not available on this plan, so
+  `github-actions[bot]` can push the staging pins. If protection is added
+  later, it must allow that actor.
+- **Opening the release PR.** The organization lets GitHub Actions create pull
+  requests (enabled 2026-10-22), so the release-pr job opens the PR itself. If
+  that is ever refused, the job writes a link to open the PR into its job summary
+  instead, and keeps the PR up to date once it is open.
+- **CI on the release PR.** GitHub starts no `pull_request` run for a PR the
+  workflow's token opened or updated. The release-pr job therefore starts PR
+  validation, the E2E harness contracts and the native RBAC contract on
+  `release/next` itself (`servicerelease dispatch`), and their checks show on
+  the PR.
+- **Runner disk.** The image builds share the runner's Docker daemon, whose
+  default build cache nothing else prunes. Both PR validation's image builds and
+  the publish job keep that cache at 10GB at most.

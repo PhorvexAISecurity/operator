@@ -5,6 +5,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Started by the release workflow on the release PR (see pr-validation.yml).
+  workflow_dispatch: {}
 
 concurrency:
   group: >-

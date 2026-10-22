@@ -10,6 +10,10 @@
 //
 //	servicerelease affected --base <rev>   the services a change affects
 //	servicerelease plan                    each service's next version and its commits
+//	servicerelease prepare                 write the release PR: versions and changelogs
+//	servicerelease pending                 the prepared releases not yet tagged
+//	servicerelease deploy                  pin a released image in an environment
+//	servicerelease pull-request            open or update the release PR
 package main
 
 // Component is one released service: one image, versioned by the tag
@@ -27,6 +31,29 @@ type Component struct {
 	Paths []string
 	// Initial is the version of its first release, when it has no tag yet.
 	Initial string
+	// Repository is its image repository in the release registry.
+	Repository string
+	// BuildArgs are its image's build arguments; {version} becomes the release version.
+	BuildArgs map[string]string
+	// Deploy is where an environment pins its image.
+	Deploy ImageValues
+}
+
+// ImageValues locate a component's image in deploy/environments/<env>/<File>.yaml:
+// the key path of the image values and the names of the values the release sets.
+type ImageValues struct {
+	File       string
+	Path       []string
+	Repository string
+	Tag        string
+	Digest     string
+	// Source names the value that records the released commit; empty when the chart has none.
+	Source string
+}
+
+// serviceImage is where a service chart (deploy/charts/phorvex-<name>) takes its image.
+func serviceImage(name string) ImageValues {
+	return ImageValues{File: name, Path: []string{"image"}, Repository: "repository", Tag: "tag", Digest: "digest"}
 }
 
 // Build is a set of main packages compiled in one Go module.
@@ -43,22 +70,25 @@ var Components = []Component{
 		Builds: []Build{{Module: "phorvex", Packages: []string{"./cmd", "./cmd/brain-replay", "./cmd/recovery",
 			"./cmd/mig-allocation-helper", "./cmd/loss-observer", "./cmd/current-inventory-observer"}}},
 		// Continues the 0.4.x line the manager was released under before the split.
-		Initial: "0.5.0",
+		Initial:    "0.5.0",
+		Repository: "phorvex/manager",
+		Deploy: ImageValues{File: "manager", Path: []string{"phorvex", "image"},
+			Repository: "repository", Tag: "tag", Digest: "releaseDigest", Source: "releaseSourceSHA"},
 	},
 	{
 		Name: "brain", Image: "brain", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-brain",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/brain"}}},
-		Initial: "0.1.0",
+		Initial: "0.1.0", Repository: "phorvex/brain", BuildArgs: map[string]string{"SERVICE": "brain"}, Deploy: serviceImage("brain"),
 	},
 	{
 		Name: "sensor", Image: "sensor", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-sensor",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/sensor"}}},
-		Initial: "0.1.0",
+		Initial: "0.1.0", Repository: "phorvex/sensor", BuildArgs: map[string]string{"SERVICE": "sensor"}, Deploy: serviceImage("sensor"),
 	},
 	{
 		Name: "actuator", Image: "actuator", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-actuator",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/actuator"}}},
-		Initial: "0.1.0",
+		Initial: "0.1.0", Repository: "phorvex/actuator", BuildArgs: map[string]string{"SERVICE": "actuator"}, Deploy: serviceImage("actuator"),
 	},
 	{
 		// The manager chart deploys the console.
@@ -68,7 +98,12 @@ var Components = []Component{
 			{Module: "build/test-harness", Packages: []string{"./cmd/harness", "./cmd/nats-owned-observer"}},
 		},
 		// The web UI, and the harness data the image ships under /data.
-		Paths:   []string{"dashboard-web", "build/test-harness"},
-		Initial: "0.5.0",
+		Paths:      []string{"dashboard-web", "build/test-harness"},
+		Initial:    "0.5.0",
+		Repository: "phorvex/console",
+		// The console reports the version it was built as.
+		BuildArgs: map[string]string{"CONSOLE_VERSION": "{version}"},
+		Deploy: ImageValues{File: "manager", Path: []string{"phorvex", "console", "image"},
+			Repository: "repository", Tag: "tag", Digest: "releaseDigest", Source: "releaseSourceSHA"},
 	},
 }

@@ -159,9 +159,12 @@ class PRValidationTests(unittest.TestCase):
 
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
-        # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change.
+        # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change;
+        # the one that has, release.yml, is held to its exact shape by ReleaseWorkflowTests.
         # Every job runs on the shared build runner, never on a runner with live access.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
+            if path.name == 'release.yml':
+                continue
             raw = path.read_text()
             doc = yaml.load(raw, Loader=yaml.BaseLoader)
             with self.subTest(workflow=path.name):
@@ -198,6 +201,87 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('FROM gcr.io/distroless/static:nonroot', dockerfile)
         self.assertIn('USER 65532:65532', dockerfile)
 
+
+
+RELEASE_RAW = (ROOT / '.github/workflows/release.yml').read_text()
+RELEASE = yaml.load(RELEASE_RAW, Loader=yaml.BaseLoader)
+AWS_ACTIONS = {'aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a',
+               'aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd'}
+
+
+class ReleaseWorkflowTests(unittest.TestCase):
+    """The one workflow that writes and reaches AWS (docs/services/releasing.md), held to its shape."""
+
+    def test_it_runs_only_for_main(self):
+        self.assertEqual(set(RELEASE['on']), {'push', 'workflow_dispatch'})
+        self.assertEqual(RELEASE['on']['push'], {'branches': ['main']})
+        self.assertEqual(RELEASE['permissions'], {'contents': 'read'})
+        self.assertEqual(RELEASE['concurrency'], {'group': 'release', 'cancel-in-progress': 'false'})
+        for forbidden in ('secrets.', 'pull_request', 'phorvex-isolated-aws', 'ssh ', 'kubectl ', 'continue-on-error', '|| true'):
+            self.assertNotIn(forbidden, RELEASE_RAW)
+
+    def test_only_the_publish_job_reaches_aws(self):
+        jobs = RELEASE['jobs']
+        self.assertEqual(set(jobs), {'pending', 'publish', 'release-pr'})
+        for name, job in jobs.items():
+            with self.subTest(job=name):
+                self.assertEqual(job['runs-on'], BUILD_RUNNER)
+                self.assertNotIn('container', job)
+                uses = {s['uses'] for s in job['steps'] if 'uses' in s}
+                if name == 'publish':
+                    self.assertEqual(job['environment'], 'release')
+                    self.assertEqual(job['permissions'], {'contents': 'write', 'id-token': 'write'})
+                    self.assertLessEqual(AWS_ACTIONS, uses)
+                    role = next(s for s in job['steps'] if s.get('uses', '').startswith('aws-actions/configure-aws-credentials@'))
+                    self.assertEqual(role['with']['role-to-assume'], '${{ vars.PHORVEX_RELEASE_ROLE_ARN }}')
+                else:
+                    self.assertNotIn('environment', job)
+                    self.assertFalse({u for u in uses if u.startswith('aws-actions/')})
+                    self.assertNotIn('id-token', job.get('permissions', {}))
+                self.assertLessEqual({u.split('@')[0] for u in uses},
+                                     {'actions/checkout', 'actions/setup-go', 'aws-actions/configure-aws-credentials', 'aws-actions/amazon-ecr-login'})
+        self.assertEqual(jobs['pending'].get('permissions'), None)
+        self.assertEqual(jobs['release-pr']['permissions'], {'contents': 'write', 'pull-requests': 'write', 'actions': 'write'})
+        pending_checkout = next(s for s in jobs['pending']['steps'] if s.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(pending_checkout['with']['persist-credentials'], 'false')
+
+    def test_the_role_is_checked_before_it_is_assumed(self):
+        steps = RELEASE['jobs']['publish']['steps']
+        names = [s.get('name') or s.get('uses', '') for s in steps]
+        check = names.index('Require the release role')
+        assume = next(i for i, n in enumerate(names) if n.startswith('aws-actions/configure-aws-credentials@'))
+        self.assertLess(check, assume)
+        self.assertIn('PHORVEX_RELEASE_ROLE_ARN', steps[check]['run'])
+
+    def test_staging_is_pinned_by_digest_and_releases_are_tagged(self):
+        run = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['publish']['steps'])
+        self.assertIn('./tools/servicerelease pending', run)
+        self.assertIn('servicerelease deploy --environment "$ENVIRONMENT"', run)
+        self.assertIn('--digest "${digest#*@}"', run)
+        self.assertIn('git tag "$component-v$version" "$GITHUB_SHA"', run)
+        self.assertEqual(RELEASE['env']['ENVIRONMENT'], 'staging')
+        pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
+        self.assertIn('./tools/servicerelease prepare', pr)
+        self.assertIn('servicerelease pull-request --head release/next --base main', pr)
+
+    def test_the_release_pr_gets_its_checks(self):
+        # GitHub starts no pull_request run for a PR the workflow's token opened or
+        # updated, so release-pr starts the PR checks on the branch itself.
+        pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
+        line = next(l for l in pr.splitlines() if '--workflows ' in l)
+        dispatched = line.split('--workflows ')[1].split()[0].split(',')
+        self.assertIn('servicerelease dispatch --ref release/next', pr)
+        self.assertEqual(sorted(dispatched), ['e2e-contract.yml', 'native-rbac.yml', 'pr-validation.yml'])
+        for workflow in dispatched:
+            doc = yaml.load((ROOT / '.github/workflows' / workflow).read_text(), Loader=yaml.BaseLoader)
+            self.assertIn('workflow_dispatch', doc['on'], workflow)
+            self.assertIn('pull_request', doc['on'], workflow)
+
+    def test_image_builds_bound_the_shared_build_cache(self):
+        for doc, job in ((DOC, 'images'), (RELEASE, 'publish')):
+            step = next(s for s in doc['jobs'][job]['steps'] if s.get('name') == 'Bound the shared build cache')
+            self.assertEqual(step['if'], 'always()')
+            self.assertEqual(step['run'], 'docker builder prune --force --keep-storage 10GB')
 
 if __name__ == '__main__':
     unittest.main()
