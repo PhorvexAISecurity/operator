@@ -223,7 +223,13 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertTrue(scope)
                 for policy_namespace in scope:
                     self.assertTrue(policy_namespace.startswith(namespace + '-'), policy_namespace)
-                self.assertIs(values['globalKillSwitch'], True)
+                # It acts, if at all, with its own hands in its own namespaces.
+                acts = not values['globalKillSwitch']
+                if acts:
+                    self.assertEqual(values['actuator'], 'native')
+                    self.assertTrue(values['actuatorNamespaces'])
+                    for actuator_namespace in values['actuatorNamespaces']:
+                        self.assertTrue(actuator_namespace.startswith(namespace + '-'), actuator_namespace)
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
                 for service, element in by_service.items():
@@ -236,7 +242,7 @@ class EnvironmentRenderTests(unittest.TestCase):
                         args = pod['containers'][0]['args']
                         self.assertIn(f"--policy-namespaces={','.join(scope)}", args, service)
                         if service == 'manager':
-                            self.assertIn('--global-kill-switch=true', args)
+                            self.assertEqual('--global-kill-switch=true' in args, not acts)
 
 
 

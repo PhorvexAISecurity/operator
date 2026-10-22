@@ -32,8 +32,8 @@ server with production, it must leave production alone, and its values see to it
 - **Its own hands.** The native backend (`actuator: native`) creates no
   SecurityEvent or AMTD for production's Phoenix to act on, and changes workloads
   only in `actuatorNamespaces: [phorvex-staging-demo]`. Production's Phoenix acts
-  on every SecurityEvent, but its AMTDs cover only production's namespaces. The
-  global kill switch stays on until the console and the attacks service run here.
+  on every SecurityEvent, but its AMTDs cover only production's namespaces. With
+  only those hands, the global kill switch is off.
 - **No cluster-wide admission.** Its admission webhooks and the SecurityEvent
   identity policy are off, since they would also admit production's requests.
   Without that policy, no external detector is trusted.
@@ -44,10 +44,15 @@ server with production, it must leave production alone, and its values see to it
   its cost counter (`deploy/monitoring/README.md`).
 
 Production does not leave staging alone in one respect. Its manager has no policy
-scope, so it also reconciles and ticks staging's policies, writes their status and
-records their decisions in its audit. It holds no RBAC in staging's namespaces and
-trusts none of staging's detectors, so it decides there but cannot act. Scoping
-production's manager to its own namespaces closes this.
+scope, so it also reconciles and ticks staging's policies:
+- It writes their status and records their decisions in its audit.
+- It maintains its standing AMTD for each of them in staging's namespaces. The AMTD
+  maps only production's own `PhorvexController` signals, which production raises
+  only on threats from detectors it trusts.
+- It holds no RBAC in staging's namespaces and trusts none of staging's detectors,
+  so it decides there but does not act.
+
+Scoping production's manager to its own namespaces closes this.
 
 `phorvex-demo-staging` (`demo-staging.yaml`) deploys `deploy/demo` into its own
 namespace, `phorvex-staging-demo`:
@@ -85,6 +90,26 @@ The grant confines it to `phorvex-staging-demo`, like the operator's.
 The services start in any order: the manager waits up to two minutes for each
 handshake and restarts until every service answers. Deleting the ApplicationSet
 removes the Applications and, through their finalizers, everything they created.
+
+## Operating staging
+
+- **A new namespace.** `project.yaml` and `demo-staging.yaml` are applied by hand.
+  Apply the project before a change that renders into a new namespace syncs, or
+  the services' Applications fail with "namespace ... is not permitted in project".
+- **A changed scope.** The ApplicationSet does not prune, so changing
+  `policyNamespaces`, `actuatorNamespaces` or `console.attackNamespaces` leaves the
+  old namespace's Roles in place, with their grants. Prune exactly those
+  `Role`/`RoleBinding` objects with a selective Argo CD sync (`prune: true` and
+  their `resources`).
+- **The manager's first Recreate.** Enabling audit persistence switches the
+  manager to `strategy: Recreate`. Under server-side apply the defaulted
+  `rollingUpdate` stays unowned, and the API refuses it beside Recreate. Replace
+  the strategy once, then sync:
+
+  ```sh
+  kubectl -n phorvex-staging patch deploy staging-phorvex --type json \
+    -p '[{"op":"replace","path":"/spec/strategy","value":{"type":"Recreate"}}]'
+  ```
 
 ## Webhook certificate
 
