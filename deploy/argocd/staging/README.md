@@ -23,7 +23,7 @@ Secrets that hold credentials are created out of band, never in git:
   policy disables deploy keys. A GitHub App with read access to this repository
   alone would narrow it.
 - **The cluster.** A cluster Secret in `argocd` for
-  `https://phorvex-staging.phorvex-staging.svc:443`, built from the kubeconfig the
+  `https://phorvex-staging.phorvex-staging:443`, built from the kubeconfig the
   vcluster writes into the Secret `vc-phorvex-staging`. It carries the label
   `phorvex.ai/environment: staging`, which the services' ApplicationSet selects.
 

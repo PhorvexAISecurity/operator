@@ -17,7 +17,7 @@ spec:
     directory:
       include: '{amtd.r6security.com_securityevents.yaml,amtd.r6security.com_adaptivemovingtargetdefenses.yaml}'
   destination:
-    server: https://phorvex-staging.phorvex-staging.svc:443
+    server: https://phorvex-staging.phorvex-staging:443
   syncPolicy:
     automated:
       enabled: true

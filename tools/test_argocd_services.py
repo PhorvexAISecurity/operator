@@ -117,7 +117,7 @@ class EnvironmentRenderTests(unittest.TestCase):
 
 
 STAGING = ROOT / 'deploy/argocd/staging'
-VCLUSTER_SERVER = 'https://phorvex-staging.phorvex-staging.svc:443'
+VCLUSTER_SERVER = 'https://phorvex-staging.phorvex-staging:443'
 
 
 class StagingInfraTests(unittest.TestCase):

@@ -16,7 +16,7 @@ spec:
   - server: https://kubernetes.default.svc
     namespace: phorvex-staging
   # The CRDs, inside the vcluster.
-  - server: https://phorvex-staging.phorvex-staging.svc:443
+  - server: https://phorvex-staging.phorvex-staging:443
     namespace: '*'
   clusterResourceWhitelist:
   - group: ''
