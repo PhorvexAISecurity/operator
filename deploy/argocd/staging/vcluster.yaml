@@ -1,0 +1,42 @@
+# The staging environment's cluster: a vcluster, with its own API server, in the
+# namespace phorvex-staging of this cluster. Its pods run on this cluster's nodes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: phorvex-staging-vcluster
+  namespace: argocd
+  finalizers:
+  - resources-finalizer.argocd.argoproj.io
+spec:
+  project: phorvex-staging-infra
+  source:
+    repoURL: https://charts.loft.sh
+    chart: vcluster
+    targetRevision: 0.37.3
+    helm:
+      releaseName: phorvex-staging
+      valuesObject:
+        # Argo CD reaches the virtual API server through its Service.
+        exportKubeConfig:
+          server: https://phorvex-staging.phorvex-staging.svc:443
+        rbac:
+          # No volume snapshots in staging: without this the vcluster may create and
+          # delete VolumeSnapshotContents across the whole cluster.
+          enableVolumeSnapshotRules:
+            enabled: false
+        sync:
+          toHost:
+            # The services' NetworkPolicies guard their plaintext gRPC ports; synced,
+            # they apply to the services' pods on this cluster.
+            networkPolicies:
+              enabled: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: phorvex-staging
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true

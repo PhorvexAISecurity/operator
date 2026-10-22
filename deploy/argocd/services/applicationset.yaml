@@ -49,7 +49,7 @@ spec:
     spec:
       project: phorvex-services
       sources:
-      - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+      - repoURL: git@github.com:PhorvexSecurity/operator-refactored.git
         targetRevision: main
         path: '{{.chart}}'
         helm:
@@ -60,7 +60,7 @@ spec:
           valueFiles:
           - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/phorvex.yaml'
           - '$values/deploy/environments/{{index .metadata.labels "phorvex.ai/environment"}}/{{.service}}.yaml'
-      - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+      - repoURL: git@github.com:PhorvexSecurity/operator-refactored.git
         targetRevision: main
         ref: values
       destination:
