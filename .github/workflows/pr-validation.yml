@@ -83,6 +83,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          # HEAD^1, the base of the change, for the affected-services report.
+          fetch-depth: 2
       - uses: actions/setup-go@v5
         with:
           # The HIGHEST `go` directive of the modules this job tests. phorvex and
@@ -106,6 +108,10 @@ jobs:
           version: v3.16.4
       - name: Phorvex unit tests (not live E2E or envtest)
         run: go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
+      # ADR-0001: each service is versioned from its own inputs, read from the
+      # import graph (phorvex/tools/servicerelease). Reported, not enforced.
+      - name: Services this change affects
+        run: go -C phorvex run ./tools/servicerelease affected --base HEAD^1 --markdown >> "$GITHUB_STEP_SUMMARY"
 
       # build/metricvalidity and build/test-harness are SEPARATE modules, so the
       # phorvex run above compiles them as dependencies without ever executing
