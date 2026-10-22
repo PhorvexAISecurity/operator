@@ -1,5 +1,10 @@
 # console changelog
 
+## 0.7.0 (2026-10-22)
+
+- feat(attacks): serve the attack routes from their own service (b00d464e)
+- feat(trust): make the injector identity configuration (4d782ff6)
+
 ## 0.6.0 (2026-10-22)
 
 - feat(scope): limit a deployment to its policy namespaces (c7e69292)
