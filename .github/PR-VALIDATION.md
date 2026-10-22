@@ -51,14 +51,13 @@ There is no paths filter or draft guard on these source checks:
   protected PR bases. Repository administrators must configure that policy separately;
   installing the workflow does not change protection settings or bypass plan limits.
 
-All jobs run on the organization's shared build runner (`[self-hosted, Linux, X64]`,
-the `phorvex` runner on the build host, which holds no cluster or AWS credentials)
-with read-only permissions, and use no secrets, OIDC tokens, AWS, SSH, image
-publication, or deployment credentials. The runner also serves the legacy
-repository, so jobs queue behind each other; images use per-run tags and are
-removed after the build. Python comes from `tools/provision-python.sh`, a pinned,
-SHA256-verified python-build-standalone build: `actions/setup-python` interpreters
-on a self-hosted runner need `LD_LIBRARY_PATH` and cannot start in the minimal
-environments several tests use. The legacy release and live-E2E
+All jobs run on fresh GitHub-hosted runners (`ubuntu-24.04`), which hold no
+cluster or AWS credentials, with read-only permissions, and use no secrets, OIDC
+tokens, AWS, SSH, image publication, or deployment credentials; the release
+workflow (`release.yml`) is the one exception, held to its shape by
+`ReleaseWorkflowTests`. Images use per-run tags and are removed after the build.
+Python comes from `tools/provision-python.sh`, a pinned, SHA256-verified
+python-build-standalone build, which starts in the minimal environments several
+tests use; `actions/setup-python` is not used. The legacy release and live-E2E
 pipeline stays in PhorvexSecurity/operator. Live E2E checks the deployed release;
 it is not a candidate-source validation verdict. This workflow does not replace live tests.

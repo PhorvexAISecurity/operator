@@ -101,6 +101,5 @@ In place since 2026-10-22:
   validation, the E2E harness contracts and the native RBAC contract on
   `release/next` itself (`servicerelease dispatch`), and their checks show on
   the PR.
-- **Runner disk.** The image builds share the runner's Docker daemon, whose
-  default build cache nothing else prunes. Both PR validation's image builds and
-  the publish job keep that cache at 10GB at most.
+- **Runners.** Every job runs on a fresh GitHub-hosted runner (`ubuntu-24.04`),
+  so nothing of one build is left for the next.

@@ -30,7 +30,7 @@ env:
 
 jobs:
   pending:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       releases: ${{ steps.pending.outputs.releases }}
@@ -54,7 +54,7 @@ jobs:
   publish:
     needs: pending
     if: needs.pending.outputs.releases != '0'
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
     permissions:
@@ -100,9 +100,6 @@ jobs:
             git tag "$component-v$version" "$GITHUB_SHA"
             echo "$component $version" >> "$RUNNER_TEMP/released"
           done < "$RUNNER_TEMP/pending.tsv"
-      - name: Bound the shared build cache
-        if: always()
-        run: docker builder prune --force --keep-storage 10GB
       - name: Record the releases
         if: always()
         run: |
@@ -123,7 +120,7 @@ jobs:
   release-pr:
     needs: [pending, publish]
     if: always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
