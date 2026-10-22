@@ -194,6 +194,8 @@ func Run(binary console.Service) int {
 	}
 	cfg.Addr = addr
 	cfg.Service, cfg.AttacksURL = serviceFor(binary, attacksURL), attacksURL
+	// An environment beside another on one cluster reaps only its own SecurityEvents.
+	cfg.SweepNamespaces = splitList(os.Getenv("PHORVEX_CONSOLE_SWEEP_NAMESPACES"))
 	if err := cfg.ValidateService(); err != nil {
 		fatal("service configuration invalid", "err", err)
 	}

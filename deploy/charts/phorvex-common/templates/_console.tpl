@@ -385,6 +385,11 @@ spec:
         - name: PHORVEX_CONSOLE_ATTACKS_URL
           value: {{ printf "http://%s" .Values.phorvex.services.attacks.endpoint | quote }}
         {{- end }}
+        {{- with .Values.phorvex.console.attackNamespaces }}
+        # Beside another environment, the red-team sweeper reaps only this one's events.
+        - name: PHORVEX_CONSOLE_SWEEP_NAMESPACES
+          value: {{ join "," . | quote }}
+        {{- end }}
         - name: PHORVEX_CONSOLE_HISTORY_MAX_BYTES
           value: {{ .Values.phorvex.console.state.historyArchiveMaxBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES
