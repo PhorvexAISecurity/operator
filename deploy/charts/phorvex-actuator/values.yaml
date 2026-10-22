@@ -21,6 +21,7 @@ phorvex:
   # "" (the binary's default), phoenix, native or hybrid.
   actuator: ""
   operatorNamespace: ""
+  policyNamespaces: []
   trustedDetectors:
   - vllm/detector-kv-canary
   - vllm/detector-adapter-inv

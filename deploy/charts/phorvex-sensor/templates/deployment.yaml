@@ -67,6 +67,9 @@ spec:
         {{- with $v.pcieClassCapacity }}
         - --pcie-class-table={{ toJson . }}
         {{- end }}
+        {{- with $v.policyNamespaces }}
+        - --policy-namespaces={{ join "," . }}
+        {{- end }}
         {{- with include "phorvex-common.trustedDetectors" $trust }}
         - --trusted-detectors={{ . }}
         {{- end }}

@@ -48,6 +48,9 @@ spec:
         {{- if $v.operatorNamespace }}
         - --operator-namespace={{ $v.operatorNamespace }}
         {{- end }}
+        {{- with $v.policyNamespaces }}
+        - --policy-namespaces={{ join "," . }}
+        {{- end }}
         {{- $quarantineCapText := toString $v.maxRetainedQuarantinesPerNamespace }}
         {{- if kindIs "float64" $v.maxRetainedQuarantinesPerNamespace }}
         {{- if or (lt $v.maxRetainedQuarantinesPerNamespace 0.0) (ne $v.maxRetainedQuarantinesPerNamespace (floor $v.maxRetainedQuarantinesPerNamespace)) }}
