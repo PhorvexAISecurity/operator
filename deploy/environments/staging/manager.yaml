@@ -3,9 +3,9 @@
 phorvex:
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager"
-    tag: "0.8.0"
-    releaseDigest: "sha256:014e522c66a891714daa52aaff2425b832bea12d9bb8dec03920734de4d87c3b"
-    releaseSourceSHA: "f3a9e4d219e5d954c2aa7021c865776a3851ed56"
+    tag: "0.9.0"
+    releaseDigest: "sha256:a5a4c4ff66c9530df2fb5683116c103d0610972e8802bc3495e8bef75240882d"
+    releaseSourceSHA: "03af77188be73315627519ce408debf044ea47e9"
   console:
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console"
