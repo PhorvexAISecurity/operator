@@ -11,7 +11,7 @@ metadata:
 spec:
   project: phorvex-staging-infra
   source:
-    repoURL: git@github.com:PhorvexSecurity/operator-refactored.git
+    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
     targetRevision: main
     path: build/phoenix-extended/config/crd/bases
     directory:

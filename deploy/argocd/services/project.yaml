@@ -9,7 +9,7 @@ metadata:
 spec:
   description: The Phorvex services (ADR-0001), one Application per service.
   sourceRepos:
-  - git@github.com:PhorvexSecurity/operator-refactored.git
+  - https://github.com/PhorvexSecurity/operator-refactored.git
   destinations:
   - server: '*'
     namespace: phorvex-system
