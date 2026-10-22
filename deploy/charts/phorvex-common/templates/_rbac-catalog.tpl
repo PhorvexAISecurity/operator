@@ -23,6 +23,10 @@ cluster:
 # M-6: GET-by-name of the two code-exec admission objects, to verify the deny-policy is in force.
 - {apiGroups: ["admissionregistration.k8s.io"], resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"], resourceNames: ["phorvex-codeexec-ephemeral"], verbs: ["get"]}
 {{- end }}
+{{- with dig "eventIdentityPolicy" "external" "" $v }}
+# M-94: GET-by-name of the creator-identity guard another release installs, to verify it is in force.
+- {apiGroups: ["admissionregistration.k8s.io"], resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"], resourceNames: [{{ . | quote }}], verbs: ["get"], readers: [sensor, dispatcher]}
+{{- end }}
 - {apiGroups: [""], resources: ["pods", "namespaces", "nodes", "services", "configmaps"], verbs: ["get", "list", "watch"]}
 - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["list"]}
 - {apiGroups: ["discovery.k8s.io"], resources: ["endpointslices"], verbs: ["get", "list", "watch"]}

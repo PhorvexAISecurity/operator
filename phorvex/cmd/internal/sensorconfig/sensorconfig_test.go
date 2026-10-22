@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	admission "k8s.io/api/admissionregistration/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/platform"
@@ -111,5 +114,19 @@ func TestDescribeComparesTheInjector(t *testing.T) {
 	}
 	if err := parse(t, "--injector-identity=not-a-service-account").ApplyTrust(); err == nil {
 		t.Fatal("an invalid injector was accepted")
+	}
+}
+
+func TestVerifyIdentityPolicyRefusesAnAbsentGuard(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := admission.AddToScheme(scheme); err != nil {
+		t.Fatal(err)
+	}
+	reader := fake.NewClientBuilder().WithScheme(scheme).Build()
+	if err := parse(t).VerifyIdentityPolicy(t.Context(), reader); err != nil {
+		t.Fatalf("no guard named, yet: %v", err)
+	}
+	if err := parse(t, "--event-identity-policy=prod-se-creator").VerifyIdentityPolicy(t.Context(), reader); err == nil {
+		t.Fatal("an absent guard was accepted")
 	}
 }
