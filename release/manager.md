@@ -1,5 +1,9 @@
 # manager changelog
 
+## 0.9.0 (2026-10-22)
+
+- feat(charts): expose the console on its own and confine its policy edits (9b828da3)
+
 ## 0.8.0 (2026-10-22)
 
 - feat(charts): scrape the services and chart them per environment (123dc5c9)
