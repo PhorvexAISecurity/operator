@@ -25,6 +25,10 @@ type Config struct {
 	// service's origin a forwarding console (ServiceConsole) sends attack routes to.
 	Service    Service
 	AttacksURL string
+	// SweepNamespaces confines the red-team sweeper to the SecurityEvents every target of
+	// which is in these namespaces, for an environment beside another on one cluster.
+	// Empty reaps every event of the swept kinds.
+	SweepNamespaces []string
 	// HistoryArchiveMaxBytes and HistoryMinFreeBytes bound the append-only durable history
 	// importer. Existing records remain readable when either limit pauses new imports.
 	HistoryArchiveMaxBytes int64

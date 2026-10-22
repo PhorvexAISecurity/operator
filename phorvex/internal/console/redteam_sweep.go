@@ -23,12 +23,17 @@
  * Best-effort and non-blocking, in the same shape as StartUptimeSampler. A restart just re-arms
  * it, and because the cut is by creation-timestamp it also cleans up whatever leaked while the
  * pod was down.
+ *
+ * SecurityEvents are cluster-scoped, so an environment beside another on one cluster
+ * (Config.SweepNamespaces) reaps only the events every target of which is its own; the other
+ * environment's events stay its own sweeper's.
  */
 
 package console
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 )
@@ -70,13 +75,13 @@ func (s *Server) sweepRedTeamEvents() {
 func (s *Server) sweepEventsBySelector(selector string, ttl time.Duration) {
 	out, err := s.cfg.execText(10*time.Second, "kubectl", "get", "securityevent",
 		"-l", selector,
-		"-o", `jsonpath={range .items[*]}{.metadata.name}|{.metadata.creationTimestamp}{"\n"}{end}`)
+		"-o", `jsonpath={range .items[*]}{.metadata.name}|{.metadata.creationTimestamp}|{.spec.targets[*]}{"\n"}{end}`)
 	if err != nil {
 		return
 	}
 	cutoff := time.Now().Add(-ttl)
 	for _, ln := range strings.Split(strings.TrimSpace(out), "\n") {
-		f := strings.SplitN(strings.TrimSpace(ln), "|", 2)
+		f := strings.SplitN(strings.TrimSpace(ln), "|", 3)
 		if len(f) < 2 || f[0] == "" {
 			continue
 		}
@@ -84,6 +89,28 @@ func (s *Server) sweepEventsBySelector(selector string, ttl time.Duration) {
 		if perr != nil || ts.After(cutoff) {
 			continue // unparseable or still within its window — leave it
 		}
+		if len(f) < 3 || !s.cfg.sweeps(strings.Fields(f[2])) {
+			continue // another environment's event
+		}
 		_, _ = s.cfg.execText(8*time.Second, "kubectl", "delete", "securityevent", f[0], "--ignore-not-found")
 	}
+}
+
+// sweeps reports whether the sweeper may reap an event with these targets
+// ("namespace/name"): any, unless Config.SweepNamespaces confines it, and then only one
+// every target of which is in those namespaces.
+func (c Config) sweeps(targets []string) bool {
+	if len(c.SweepNamespaces) == 0 {
+		return true
+	}
+	if len(targets) == 0 {
+		return false
+	}
+	for _, target := range targets {
+		namespace, _, ok := strings.Cut(target, "/")
+		if !ok || !slices.Contains(c.SweepNamespaces, namespace) {
+			return false
+		}
+	}
+	return true
 }
