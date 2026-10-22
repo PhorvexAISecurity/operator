@@ -143,6 +143,23 @@ phorvex:
   # fails loudly rather than quietly dropping the guard.
   # An event with NO creator annotation is still admitted — it is simply untrusted at ingest.
   # It does not retroactively authenticate SecurityEvents that already exist.
+  # Scraping and the services dashboard (deploy/environments/README.md). One
+  # environment file sets them for every chart.
+  metrics:
+    podMonitor:
+      enabled: false
+      interval: 30s
+      # Added to every series as environment=<value>.
+      environment: ""
+      # prometheus-operator metricRelabelings, applied to every series scraped.
+      metricRelabelings: []
+    # A Grafana dashboard of these services, filtered on podMonitor.environment.
+    dashboard:
+      enabled: false
+    # Alert rules for these services, filtered on podMonitor.environment, at severity
+    # info: they show in Prometheus and Grafana, and page no one.
+    rules:
+      enabled: false
   eventIdentityPolicy:
     enabled: true
   # Opt-in live E2E identity. Admission confines its events to one test namespace;

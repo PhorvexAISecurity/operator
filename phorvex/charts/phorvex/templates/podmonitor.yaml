@@ -1,0 +1,3 @@
+{{- include "phorvex-common.podMonitor" (dict "root" . "values" .Values.phorvex "name" (include "phorvex.fullname" .)
+  "selector" (printf "app.kubernetes.io/name: %s\napp.kubernetes.io/instance: %s\napp.kubernetes.io/component: manager" (include "phorvex.name" .) .Release.Name)
+  "labels" (include "phorvex.labels" .)) }}

@@ -17,6 +17,12 @@ managerFullname: ""
 # manager chart's (tools/test_service_charts.py), and the trust must match the
 # manager's, or the manager refuses the sensor at the handshake.
 phorvex:
+  metrics:
+    podMonitor:
+      enabled: false
+      interval: 30s
+      environment: ""
+      metricRelabelings: []
   trustedDetectors:
   - vllm/detector-kv-canary
   - vllm/detector-adapter-inv
