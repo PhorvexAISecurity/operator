@@ -1,7 +1,7 @@
 {{- $detectors := .Values.phorvex.trustedDetectors | default list -}}
 {{- if not .Values.phorvex.eventIdentityPolicy.enabled -}}
-{{- if gt (len $detectors) 0 -}}
-{{- fail "phorvex.eventIdentityPolicy.enabled=false with a non-empty phorvex.trustedDetectors: the phorvex.ai/creator-identity annotation is then only as trustworthy as the mutating stamp endpoint, which is failurePolicy=Ignore — while it is down a client keeps whatever creator it wrote, so an allowlisted detector identity can be forged (M-94). Keep the policy enabled, or set phorvex.trustedDetectors=[] and accept that no external SecurityEvent supplies belief evidence." -}}
+{{- if and (gt (len $detectors) 0) (not .Values.phorvex.eventIdentityPolicy.external) -}}
+{{- fail "phorvex.eventIdentityPolicy.enabled=false with a non-empty phorvex.trustedDetectors: the phorvex.ai/creator-identity annotation is then only as trustworthy as the mutating stamp endpoint, which is failurePolicy=Ignore — while it is down a client keeps whatever creator it wrote, so an allowlisted detector identity can be forged (M-94). Keep the policy enabled, name the guard another release on the cluster installs in phorvex.eventIdentityPolicy.external, or set phorvex.trustedDetectors=[] and accept that no external SecurityEvent supplies belief evidence." -}}
 {{- end -}}
 {{- else -}}
 {{- if not (semverCompare ">=1.30.0-0" .Capabilities.KubeVersion.Version) -}}

@@ -71,6 +71,18 @@ attacks routes are served remotely (phorvex.services.attacks.endpoint), and othe
 {{- end -}}
 
 {{/*
+phorvex-common.identityPolicyEnv: the creator-identity guard another release installs
+(phorvex.eventIdentityPolicy.external), which the manager and the sensor verify at
+startup (--event-identity-policy), or nothing.
+*/}}
+{{- define "phorvex-common.identityPolicyEnv" -}}
+{{- with dig "eventIdentityPolicy" "external" "" .values -}}
+- name: PHORVEX_EVENT_IDENTITY_POLICY
+  value: {{ . | quote }}
+{{- end -}}
+{{- end -}}
+
+{{/*
 phorvex-common.endpointLeaseEnv: the reviewed endpoint lease authority as the
 container environment the trust flags default from, or nothing when the lease is
 off. Only immutable references are accepted.

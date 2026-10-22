@@ -22,6 +22,8 @@ phorvex:
   - vllm/detector-adapter-inv
   - phorvex-system/operator-controller-manager
   injectorIdentity: ""
+  eventIdentityPolicy:
+    external: ""
   e2eDetector:
     enabled: false
   console:

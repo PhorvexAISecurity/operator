@@ -416,6 +416,10 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	if err := sensorFlags.VerifyIdentityPolicy(context.Background(), mgr.GetAPIReader()); err != nil {
+		setupLog.Error(err, "refusing to start: the SecurityEvent creator-identity guard is not in force")
+		os.Exit(1)
+	}
 	cs, csErr := kubernetes.NewForConfig(restConfig)
 	// The identity that acts must hold the actuation RBAC. In process that is this
 	// manager's; a separate actuator service checks its own before it serves.

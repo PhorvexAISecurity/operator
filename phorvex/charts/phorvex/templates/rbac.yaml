@@ -36,6 +36,14 @@ rules:
   resourceNames: ["phorvex-codeexec-ephemeral"]
   verbs: ["get"]
 {{- end }}
+{{- with .Values.phorvex.eventIdentityPolicy.external }}
+- apiGroups: ["admissionregistration.k8s.io"]
+  # M-94: GET-by-name of the creator-identity guard another release installs, so startup
+  # can verify it is in force before any detector identity is trusted.
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: [{{ . | quote }}]
+  verbs: ["get"]
+{{- end }}
 - apiGroups: [""]
   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]
