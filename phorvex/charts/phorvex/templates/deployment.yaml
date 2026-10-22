@@ -301,7 +301,7 @@ spec:
         - name: PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE
           value: {{ required "endpointLease.approvedEngineImage requires reviewed repo@sha256" .Values.phorvex.endpointLease.approvedEngineImage | quote }}
         {{- end }}
-        {{- with include "phorvex-common.injectorEnv" (dict "values" .Values.phorvex) }}
+        {{- with include "phorvex-common.injectorEnv" (dict "values" .Values.phorvex "releaseNamespace" .Release.Namespace "releaseName" .Release.Name) }}
         {{- . | nindent 8 }}
         {{- end }}
         {{- if .Values.phorvex.actuator }}

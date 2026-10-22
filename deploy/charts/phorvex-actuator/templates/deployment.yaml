@@ -1,5 +1,5 @@
 {{- $v := .Values.phorvex }}
-{{- $trust := dict "values" $v "releaseNamespace" .Release.Namespace "managerFullname" (include "phorvex-actuator.managerFullname" .) }}
+{{- $trust := dict "values" $v "releaseNamespace" .Release.Namespace "releaseName" .Release.Name "managerFullname" (include "phorvex-actuator.managerFullname" .) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

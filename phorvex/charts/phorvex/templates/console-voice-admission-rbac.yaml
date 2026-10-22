@@ -32,7 +32,7 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-console-voice-admission
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -57,6 +57,6 @@ roleRef:
   name: {{ include "phorvex.fullname" . }}-console-voice-admission-journal
 subjects:
 - kind: ServiceAccount
-  name: {{ include "phorvex.consoleServiceAccountName" . }}
+  name: {{ include "phorvex.attackServiceAccountName" . }}
   namespace: {{ .Release.Namespace }}
 {{- end }}

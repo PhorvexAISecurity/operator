@@ -1,0 +1,13 @@
+apiVersion: v2
+name: phorvex-attacks
+description: >-
+  The Phorvex attacks service (ADR-0001, phase 6): it fires the catalogue
+  attacks, runs the harness and serves their evidence behind the console's
+  identity boundary. The console forwards the attack routes to it.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+- name: phorvex-common
+  version: 0.1.0
+  repository: file://../phorvex-common

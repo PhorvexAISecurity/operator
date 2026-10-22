@@ -1,0 +1,18 @@
+{{- if .Values.phorvex.console.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: attacks
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "phorvex-attacks.selectorLabels" . | nindent 4 }}
+  ports:
+  - name: http
+    port: {{ .Values.phorvex.console.port }}
+    targetPort: http
+{{- end }}

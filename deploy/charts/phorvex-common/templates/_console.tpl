@@ -1,9 +1,22 @@
 {{/*
 phorvex-common.consoleDeployment: the console's Deployment, rendered from the root
-context of the chart that includes it (ADR-0001, phase 6). The manager chart renders
-the console with it; it reads the manager chart's keys under phorvex.
+context of the chart that includes it (ADR-0001, phase 6). It reads the manager chart's
+keys under phorvex. The manager chart renders the console with it, and the attacks
+chart (phorvex-attacks) the attacks service: the same pod, run as cmd/attacks under its
+own ServiceAccount, name, image and state.
 */}}
+{{- define "phorvex-common.attacksServiceAccountName" -}}
+{{- printf "%s-attacks" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
 {{- define "phorvex-common.consoleDeployment" -}}
+{{- $attacks := eq .Chart.Name "phorvex-attacks" }}
+{{- $remoteAttacks := and (not $attacks) .Values.phorvex.services.attacks.endpoint }}
+{{- $podServiceAccount := "" }}
+{{- if $attacks }}{{ $podServiceAccount = include "phorvex-common.attacksServiceAccountName" . }}{{ else }}{{ $podServiceAccount = include "phorvex.consoleServiceAccountName" . }}{{ end }}
+{{- /* The ServiceAccount the workload live arms create their SecurityEvents as. */}}
+{{- $injector := $podServiceAccount }}
+{{- if $remoteAttacks }}{{ $injector = include "phorvex-common.attacksServiceAccountName" . }}{{ end }}
 {{- if and .Values.phorvex.console.catalogueV1.litellm.inferenceEnabled (not .Values.phorvex.console.enabled) }}
 {{- fail "console.catalogueV1.litellm.inferenceEnabled requires console.enabled" }}
 {{- end }}
@@ -133,7 +146,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if .Values.phorvex.console.guardrailOutput.enabled }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.guardrailOutput.enabled requires catalogueV1.enabled" }}{{- end }}
 {{- if not .Values.phorvex.console.catalogueV1.scopedToken.existingSecret }}{{- fail "console.guardrailOutput.enabled requires catalogueV1.scopedToken.existingSecret" }}{{- end }}
-{{- $consoleSA := include "phorvex.consoleServiceAccountName" . }}
+{{- $consoleSA := $injector }}
 {{- $shortCreator := printf "%s/%s" .Release.Namespace $consoleSA }}
 {{- $colonCreator := printf "%s:%s" .Release.Namespace $consoleSA }}
 {{- $fullCreator := printf "system:serviceaccount:%s:%s" .Release.Namespace $consoleSA }}
@@ -170,7 +183,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if .Values.phorvex.console.endpointLease.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.endpointLease requires phorvex-system" }}{{- end }}
 {{- if not .Values.phorvex.endpointLease.enabled }}{{- fail "console.endpointLease requires native endpointLease.enabled" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.endpointLease requires reviewed console creator" }}{{- end }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}{{- end }}{{- end }}
@@ -186,7 +199,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system effective operator namespace for protected journals" }}{{- end }}
 {{- if not .Values.phorvex.console.catalogueV1.enabled }}{{- fail "console.litellmLive.enabled requires catalogueV1.enabled" }}{{- end }}
 {{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.litellmLive requires phorvex-system release namespace" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
 {{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}
@@ -215,7 +228,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if .Values.phorvex.console.voiceAgencyLive.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceAgencyLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
 {{- if not .Values.phorvex.voiceRefund.enabled }}{{- fail "console.voiceAgencyLive requires voiceRefund.enabled" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceAgencyLive requires the profile-bound console service account" }}{{- end }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
@@ -231,7 +244,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- end }}
 {{- if .Values.phorvex.console.voiceOutputLive.enabled }}
 {{- if ne .Release.Namespace "phorvex-system" }}{{- fail "console.voiceOutputLive requires phorvex-system release namespace" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceOutputLive requires the profile-bound console service account" }}{{- end }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
@@ -246,7 +259,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if .Values.phorvex.console.voiceAdmissionLive.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceAdmissionLive requires phorvex-system release and operator namespaces" }}{{- end }}
 {{- if not .Values.phorvex.voiceAdmission.enabled }}{{- fail "console.voiceAdmissionLive requires native voiceAdmission.enabled" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceAdmissionLive requires profile-bound console service account" }}{{- end }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}{{- if eq (trim .) $creator }}{{- $trusted = true }}{{- end }}{{- end }}{{- end }}
@@ -261,7 +274,7 @@ the console with it; it reads the manager chart's keys under phorvex.
 {{- if .Values.phorvex.console.voiceMCPLive.enabled }}
 {{- if or (ne .Release.Namespace "phorvex-system") (ne (default .Release.Namespace .Values.phorvex.operatorNamespace) "phorvex-system") }}{{- fail "console.voiceMCPLive requires phorvex-system release and effective operator namespaces" }}{{- end }}
 {{- if not .Values.phorvex.voiceMCP.enabled }}{{- fail "console.voiceMCPLive requires native voiceMCP.enabled" }}{{- end }}
-{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace (include "phorvex.consoleServiceAccountName" .) }}
+{{- $creator := printf "system:serviceaccount:%s:%s" .Release.Namespace $injector }}
 {{- if ne $creator "system:serviceaccount:phorvex-system:phorvex-phorvex-console" }}{{- fail "console.voiceMCPLive requires profile-bound console service account" }}{{- end }}
 {{- $trusted := false }}
 {{- range .Values.phorvex.trustedDetectors }}{{- range splitList "," . }}
@@ -280,11 +293,11 @@ the console with it; it reads the manager chart's keys under phorvex.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "phorvex.fullname" . }}-console
+  name: {{ if $attacks }}{{ $podServiceAccount }}{{ else }}{{ include "phorvex.fullname" . }}-console{{ end }}
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "phorvex.labels" . | nindent 4 }}
-    app.kubernetes.io/component: console
+    app.kubernetes.io/component: {{ if $attacks }}attacks{{ else }}console{{ end }}
 spec:
   replicas: 1
   # Initial archive compression and byte-for-byte verification can exceed ten minutes.
@@ -297,20 +310,20 @@ spec:
     rollingUpdate: null
   selector:
     matchLabels:
-      app.kubernetes.io/name: phorvex-console
+      app.kubernetes.io/name: {{ if $attacks }}phorvex-attacks{{ else }}phorvex-console{{ end }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: phorvex-console
+        app.kubernetes.io/name: {{ if $attacks }}phorvex-attacks{{ else }}phorvex-console{{ end }}
         app.kubernetes.io/instance: {{ .Release.Name }}
-        app.kubernetes.io/component: console
+        app.kubernetes.io/component: {{ if $attacks }}attacks{{ else }}console{{ end }}
       {{- if and .Values.phorvex.console.auth.grants.enabled .Values.phorvex.console.auth.grants.create }}
       annotations:
         checksum/console-grants: {{ .Values.phorvex.console.auth.grants.data | default "{\n  \"version\": 1,\n  \"subjects\": []\n}\n" | sha256sum | quote }}
       {{- end }}
     spec:
-      serviceAccountName: {{ include "phorvex.consoleServiceAccountName" . }}
+      serviceAccountName: {{ $podServiceAccount }}
       securityContext:
         runAsNonRoot: true
         fsGroup: 65532
@@ -323,6 +336,14 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
+      {{- if $attacks }}
+      - name: attacks
+        {{- with .Values.image.digest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "image.digest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end }}
+        image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - -root={{ .Values.phorvex.console.root }}
+      {{- else }}
       - name: console
         {{- with .Values.phorvex.console.image.releaseDigest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "phorvex.console.image.releaseDigest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end }}
         image: "{{ .Values.phorvex.console.image.repository }}:{{ .Values.phorvex.console.image.tag }}{{ with .Values.phorvex.console.image.releaseDigest }}@{{ . }}{{ end }}"
@@ -330,6 +351,7 @@ spec:
         args:
         - -root={{ .Values.phorvex.console.root }}
         - -web={{ .Values.phorvex.console.web }}
+      {{- end }}
         - -addr=:{{ .Values.phorvex.console.port }}
         - -state-dir={{ .Values.phorvex.console.state.mountPath }}
         {{- if .Values.phorvex.audit.enabled }}
@@ -355,8 +377,13 @@ spec:
         # Environment defaults keep chart-first rollouts compatible with older console images,
         # which ignore unknown environment variables. New binaries still allow explicit CLI
         # flags to override these defaults outside this chart.
-        {{- with include "phorvex-common.injectorEnv" (dict "values" .Values.phorvex) }}
+        {{- with include "phorvex-common.injectorEnv" (dict "values" .Values.phorvex "releaseNamespace" .Release.Namespace "releaseName" .Release.Name "default" (ternary (printf "%s/%s" .Release.Namespace $podServiceAccount) "" $attacks)) }}
         {{- . | nindent 8 }}
+        {{- end }}
+        {{- if $remoteAttacks }}
+        # The attack routes are the attacks service's (docs/services/attacks.md).
+        - name: PHORVEX_CONSOLE_ATTACKS_URL
+          value: {{ printf "http://%s" .Values.phorvex.services.attacks.endpoint | quote }}
         {{- end }}
         - name: PHORVEX_CONSOLE_HISTORY_MAX_BYTES
           value: {{ .Values.phorvex.console.state.historyArchiveMaxBytes | quote }}
@@ -747,11 +774,11 @@ spec:
           periodSeconds: 5
           failureThreshold: 720
         readinessProbe:
-          httpGet: { path: /, port: http }
+          httpGet: { path: {{ if $attacks }}/api/health{{ else }}/{{ end }}, port: http }
           initialDelaySeconds: 3
           periodSeconds: 10
         livenessProbe:
-          httpGet: { path: /, port: http }
+          httpGet: { path: {{ if $attacks }}/api/health{{ else }}/{{ end }}, port: http }
           initialDelaySeconds: 10
           periodSeconds: 20
         securityContext:
@@ -941,7 +968,11 @@ spec:
       - name: console-state
         {{- if .Values.phorvex.console.state.persistence.enabled }}
         persistentVolumeClaim:
+          {{- if $attacks }}
+          claimName: {{ printf "%s-state" $podServiceAccount }}
+          {{- else }}
           claimName: {{ .Values.phorvex.console.state.persistence.existingClaim | default (printf "%s-console-state" (include "phorvex.fullname" .)) }}
+          {{- end }}
         {{- else }}
         # Explicitly nondurable: all console mutation/experiment/uptime state is lost with the Pod.
         emptyDir: {}

@@ -38,6 +38,8 @@ spec:
             chart: deploy/charts/phorvex-sensor
           - service: actuator
             chart: deploy/charts/phorvex-actuator
+          - service: attacks
+            chart: deploy/charts/phorvex-attacks
   template:
     metadata:
       name: 'phorvex-{{.service}}-{{.environment}}'

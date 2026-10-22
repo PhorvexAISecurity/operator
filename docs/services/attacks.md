@@ -50,6 +50,47 @@ ServiceAccount once it is remote. The sensor and the actuator admit those arms o
 from the injector identity (`--injector-identity`, `phorvex.injectorIdentity`), so
 an environment that runs the attacks service sets it to that account.
 
+## Deploying
+
+`deploy/charts/phorvex-attacks` deploys it beside a manager release of the same name.
+
+- **The pod.** The chart renders the console's own Deployment template
+  (`phorvex-common.consoleDeployment`), so the attacks service gets the console's
+  whole configuration: identity, audit source, catalogue and live-arm environment,
+  mounts. It runs it as `cmd/attacks`, with these differences:
+  - its image (`image`, pinned by `digest`);
+  - its ServiceAccount, Deployment and Service, all named `<release>-attacks`;
+  - its own state claim, `<release>-attacks-state`;
+  - `/api/health` probes, and no UI.
+- **Rendering.** It renders only where `phorvex.console.enabled` is set. It reads
+  the manager chart's keys under `phorvex`; its defaults are copies of the manager's,
+  and `tools/test_service_charts.py` keeps them equal.
+- **Network.** A NetworkPolicy admits only the console's pods.
+
+Setting `phorvex.services.attacks.endpoint` (`<release>-attacks:8090`) in the
+environment's values turns the split on in the manager chart:
+
+- **Forwarding.** The console forwards the attack routes to that address
+  (`PHORVEX_CONSOLE_ATTACKS_URL`).
+- **Injector identity.** The manager, console, sensor and actuator name
+  `<namespace>/<release>-attacks` as the injector, unless `phorvex.injectorIdentity`
+  says otherwise. The attacks service names itself.
+- **Grants.** The console keeps its reads, SecurityEvent reads and the policy
+  edit. Everything it fired with moves to the attacks service's account:
+  - exec into Pods, the opted-in Pod and Service changes, and creating and
+    reaping SecurityEvents;
+  - every live arm's and catalogue run's Roles.
+
+  The two accounts together hold exactly what the console held.
+- **Namespace scope.** `phorvex.console.attackNamespaces` confines exec and
+  changes to Roles in those namespaces. SecurityEvents are cluster-scoped, so
+  creating them stays cluster-wide.
+
+Four live arms pin the reviewed production console as their injector in their
+profiles: `endpointLease`, `voiceAgencyLive`, `voiceOutputLive` and
+`voiceMCPLive`. The chart refuses them while the attacks service is remote, until
+their profiles are reviewed for its account.
+
 ## What has not moved yet
 
 The attack code still lives in package `console`. `cmd/attacks` serves it from

@@ -103,10 +103,12 @@ class EnvironmentRenderTests(unittest.TestCase):
             self.assertEqual(allowed, cluster | {('', 'Namespace')}, environment['environment'])
 
     def test_the_manager_reaches_each_services_grpc_port(self):
+        # The attacks service is the console's, over HTTP (the test below).
         for environment in ENVIRONMENTS_LISTED:
             endpoints = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['services']
+            endpoints = {k: v for k, v in endpoints.items() if k != 'attacks'}
             by_service = {e['service']: e for e in ELEMENTS}
-            self.assertEqual(set(endpoints), set(by_service) - {'manager'})
+            self.assertEqual(set(endpoints), set(by_service) - {'manager', 'attacks'})
             manager = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment')
             args = manager['spec']['template']['spec']['containers'][0]['args']
             for service, value in endpoints.items():
@@ -118,6 +120,24 @@ class EnvironmentRenderTests(unittest.TestCase):
                     self.assertIn(f"--{service}-endpoint={value['endpoint']}", args)
 
 
+
+    def test_the_console_reaches_the_attacks_services_http_port(self):
+        by_service = {e['service']: e for e in ELEMENTS}
+        for environment in ENVIRONMENTS_LISTED:
+            services = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['services']
+            endpoint = services.get('attacks', {}).get('endpoint')
+            docs = render(environment, by_service['attacks'])
+            with self.subTest(environment=environment['environment']):
+                if not endpoint:
+                    # The console serves the attack routes itself, and no attacks service runs.
+                    self.assertEqual([d for d in docs if d['kind'] == 'Deployment'], [])
+                    continue
+                svc = next(d for d in docs if d['kind'] == 'Service')
+                port = next(p['port'] for p in svc['spec']['ports'] if p['name'] == 'http')
+                self.assertEqual(endpoint, f"{svc['metadata']['name']}:{port}")
+                console = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment' and d['metadata']['name'].endswith('-console'))
+                env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
+                self.assertEqual(env['PHORVEX_CONSOLE_ATTACKS_URL'], 'http://' + endpoint)
 
     def test_an_environment_beside_production_leaves_it_alone(self):
         # On the production cluster the manager, sensor and actuator share the API

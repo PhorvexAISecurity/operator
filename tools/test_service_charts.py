@@ -567,6 +567,129 @@ class InjectorTests(unittest.TestCase):
         self.assertEqual([e for c in containers(default) for e in c.get('env', []) if e['name'] == 'PHORVEX_INJECTOR_IDENTITY'], [])
 
 
+def account_grants(docs, namespace, name):
+    """(scope, apiGroup, resource, resourceName, verb) the ServiceAccount namespace/name holds."""
+    roles = {(d['kind'], d['metadata'].get('namespace'), d['metadata']['name']): d for d in docs if d['kind'] in ('Role', 'ClusterRole')}
+    out = set()
+    for b in docs:
+        if b['kind'] not in ('RoleBinding', 'ClusterRoleBinding') or not any(
+                s.get('kind') == 'ServiceAccount' and s.get('name') == name and s.get('namespace') == namespace for s in b.get('subjects') or []):
+            continue
+        ref = b['roleRef']
+        role = roles[(ref['kind'], b['metadata'].get('namespace') if ref['kind'] == 'Role' else None, ref['name'])]
+        scope = b['metadata']['namespace'] if b['kind'] == 'RoleBinding' else '*cluster*'
+        out |= {(scope,) + g[1:] for g in grants([role])}
+    return out
+
+
+ATTACKS_CHART = CHARTS / 'phorvex-attacks'
+ATTACKS_REMOTE = ['--set', 'phorvex.services.attacks.endpoint=phorvex-attacks:8090']
+STACK = [HELM, 'template', 'phorvex', str(ROOT / 'deploy/helm/phorvex-stack'), '-n', 'phorvex-system',
+         '-f', str(ROOT / 'deploy/helm/phorvex-stack/values.yaml'), '-f', str(ROOT / 'deploy/helm/phorvex-stack/values-eks.yaml'), *PODMONITOR]
+CONSOLE_SA, ATTACKS_SA = ('phorvex-system', 'phorvex-phorvex-console'), ('phorvex-system', 'phorvex-attacks')
+# Live arms whose reviewed profiles pin the production console as their injector: the
+# chart refuses them with the attacks service remote until they are reviewed for it.
+CONSOLE_PINNED = ('endpointLease', 'voiceAgencyLive', 'voiceOutputLive', 'voiceMCPLive')
+CONSOLE_PINNED_OFF = [a for arm in CONSOLE_PINNED for a in ('--set', f'phorvex.phorvex.console.{arm}.enabled=false')]
+
+
+def stack(*args):
+    """The production stack's render; with the attacks service remote, its account is
+    trusted as the injector in place of the console's, as an environment would set it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        extra = []
+        if any('services.attacks.endpoint' in a for a in args):
+            eks = yaml.safe_load((ROOT / 'deploy/helm/phorvex-stack/values-eks.yaml').read_text())
+            console = 'system:serviceaccount:phorvex-system:phorvex-phorvex-console'
+            detectors = [d for d in eks['phorvex']['phorvex']['trustedDetectors'] if d != console]
+            trust = Path(tmp) / 'trust.yaml'
+            trust.write_text(yaml.safe_dump({'phorvex': {'phorvex': {'trustedDetectors': detectors + ['system:serviceaccount:phorvex-system:phorvex-attacks']}}}))
+            extra = ['-f', str(trust)]
+        out = subprocess.run([*STACK, *extra, *args], check=True, capture_output=True, text=True).stdout
+    return [d for d in yaml.safe_load_all(out) if d]
+
+
+def firing(granted):
+    """The grants that fire attacks: exec into workloads, change them, and inject or reap events."""
+    return {g for g in granted if g[2] == 'pods/exec' or (g[2] in ('pods', 'services') and g[4] in ('update', 'patch', 'delete'))
+            or (g[2] == 'securityevents' and g[4] in ('create', 'update', 'patch', 'delete'))}
+
+
+def container(docs, name):
+    return next(c for c in containers(docs) if c['name'] == name)
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class AttacksServiceTests(unittest.TestCase):
+    """The attacks service (docs/services/attacks.md) holds what the console fired with."""
+
+    def test_the_attacks_service_holds_the_grants_the_console_fired_with(self):
+        cases = {'console': lambda *a: helm_template(MANAGER_CHART, *CONSOLE, *a),
+                 # The production stack enables the live arms, and their grants. The arms whose
+                 # reviewed profiles pin the production console as their injector stay off.
+                 'stack': lambda *a: stack(*CONSOLE_PINNED_OFF, *[x.replace('phorvex.services', 'phorvex.phorvex.services') for x in a])}
+        for name, render in cases.items():
+            with self.subTest(values=name):
+                in_process = account_grants(render(), *CONSOLE_SA)
+                remote = render(*ATTACKS_REMOTE)
+                console, attacks = account_grants(remote, *CONSOLE_SA), account_grants(remote, *ATTACKS_SA)
+                self.assertEqual(console | attacks, in_process)
+                self.assertTrue(firing(in_process))
+                self.assertEqual(firing(console), set(), 'the console fires nothing once the attacks service does')
+
+    def test_attack_namespaces_confine_what_the_attacks_service_changes(self):
+        docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE, '--set', 'phorvex.console.allowWorkloadMutations=true',
+                             '--set', 'phorvex.console.attackNamespaces={team-a,team-b}')
+        fire = firing(account_grants(docs, *ATTACKS_SA))
+        self.assertEqual({g[0] for g in fire if g[2] != 'securityevents'}, {'team-a', 'team-b'})
+        self.assertEqual({g for g in account_grants(docs, *ATTACKS_SA) if g[0] == '*cluster*' and g[2] in ('pods', 'pods/exec', 'services')}, set())
+
+    def test_the_console_forwards_to_the_attacks_service_and_names_it_the_injector(self):
+        docs = helm_template(MANAGER_CHART, *CONSOLE, *ATTACKS_REMOTE)
+        env = {c['name']: {e['name']: e.get('value') for e in c.get('env', [])} for c in containers(docs)}
+        self.assertEqual(env['console']['PHORVEX_CONSOLE_ATTACKS_URL'], 'http://phorvex-attacks:8090')
+        for name in ('manager', 'console'):
+            self.assertEqual(env[name].get('PHORVEX_INJECTOR_IDENTITY'), 'phorvex-system/phorvex-attacks', name)
+        for service in ('sensor', 'actuator'):
+            got = container(helm_template(CHARTS / ('phorvex-' + service), *ATTACKS_REMOTE), service)
+            self.assertIn({'name': 'PHORVEX_INJECTOR_IDENTITY', 'value': 'phorvex-system/phorvex-attacks'}, got['env'], service)
+        # In process, nothing names an injector or an attacks service.
+        local = helm_template(MANAGER_CHART, *CONSOLE)
+        self.assertEqual([e for c in containers(local) for e in c.get('env', []) if e['name'] in ('PHORVEX_INJECTOR_IDENTITY', 'PHORVEX_CONSOLE_ATTACKS_URL')], [])
+
+    def test_the_attacks_service_runs_the_consoles_pod(self):
+        digest = 'sha256:' + 'c' * 64
+        attacks = helm_template(ATTACKS_CHART, *CONSOLE, '--set', 'image.repository=registry.example/phorvex/attacks',
+                                '--set', 'image.tag=0.1.0', '--set', 'image.digest=' + digest)
+        got, want = container(attacks, 'attacks'), container(helm_template(MANAGER_CHART, *CONSOLE), 'console')
+        self.assertEqual(got['image'], 'registry.example/phorvex/attacks:0.1.0@' + digest)
+        self.assertEqual(got['args'], [a for a in want['args'] if not a.startswith('-web=')])
+        self.assertEqual([e for e in got['env'] if e['name'] != 'PHORVEX_INJECTOR_IDENTITY'], want['env'])
+        self.assertIn({'name': 'PHORVEX_INJECTOR_IDENTITY', 'value': 'phorvex-system/phorvex-attacks'}, got['env'])
+        self.assertEqual(got['volumeMounts'], want['volumeMounts'])
+        self.assertEqual(got['readinessProbe']['httpGet']['path'], '/api/health')
+        pod = next(d for d in attacks if d['kind'] == 'Deployment')['spec']['template']['spec']
+        self.assertEqual(pod['serviceAccountName'], 'phorvex-attacks')
+        self.assertIn({'name': 'console-state', 'persistentVolumeClaim': {'claimName': 'phorvex-attacks-state'}}, pod['volumes'])
+        kinds = {d['kind']: d['metadata']['name'] for d in attacks}
+        self.assertEqual(kinds, {'Deployment': 'phorvex-attacks', 'Service': 'phorvex-attacks', 'ServiceAccount': 'phorvex-attacks',
+                                 'NetworkPolicy': 'phorvex-attacks', 'PersistentVolumeClaim': 'phorvex-attacks-state'})
+        policy = next(d for d in attacks if d['kind'] == 'NetworkPolicy')['spec']
+        self.assertEqual(policy['ingress'], [{'from': [{'podSelector': {'matchLabels': {'app.kubernetes.io/name': 'phorvex-console', 'app.kubernetes.io/instance': 'phorvex'}}}],
+                                              'ports': [{'port': 'http'}]}])
+        # Without the console nothing renders, and the release digest is a digest.
+        self.assertEqual(helm_template(ATTACKS_CHART), [])
+        result = subprocess.run([HELM, 'template', 'phorvex', str(ATTACKS_CHART), *CONSOLE, '--set', 'image.digest=latest'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('image.digest must be sha256', result.stderr)
+
+    def test_its_defaults_are_the_managers(self):
+        manager = yaml.safe_load(MANAGER_VALUES.read_text())['phorvex']
+        attacks = yaml.safe_load((ATTACKS_CHART / 'values.yaml').read_text())['phorvex']
+        for key, value in attacks.items():
+            self.assertEqual(value, manager[key], key)
+
+
 class VendoredLibraryTests(unittest.TestCase):
     """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
 
