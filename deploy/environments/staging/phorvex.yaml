@@ -15,6 +15,10 @@ phorvex:
       endpoint: staging-sensor:9090
     actuator:
       endpoint: staging-actuator:9090
+    # The console forwards the attack routes to the attacks service, whose account
+    # injects the workload signals and holds the attack grants (docs/services/attacks.md).
+    attacks:
+      endpoint: staging-attacks:8090
 
   # Beside production, staging must leave production's policies and requests alone.
   # It reconciles, ticks and authorizes only the PhorvexPolicies of its own
@@ -32,8 +36,18 @@ phorvex:
     enabled: false
   eventIdentityPolicy:
     enabled: false
-  # Without the identity policy, no external detector may be trusted.
-  trustedDetectors: []
+    # Production's guard stamps and checks every SecurityEvent on the cluster, staging's
+    # too. The manager and the sensor refuse to start unless it is in force.
+    external: phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0
+  # The attacks service's signals are the evidence staging's services act on.
+  trustedDetectors: [phorvex-staging/staging-attacks]
+  # The decision history the console and the attacks service read (mTLS, below).
+  audit:
+    enabled: true
+    persistence:
+      enabled: true
+      storageClass: gp2-csi
+      size: 2Gi
 
   # Telemetry from the cluster's Prometheus.
   prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
@@ -48,7 +62,8 @@ phorvex:
       # Production's PhorvexCostNaNUnactionable sums this counter over every
       # namespace; staging's own name keeps its cost failures off production's receiver.
       metricRelabelings:
-      - sourceLabels: [__name__]
+      - action: replace
+        sourceLabels: [__name__]
         regex: phorvex_cost_nan_unactionable_total
         targetLabel: __name__
         replacement: phorvex_staging_cost_nan_unactionable_total
@@ -58,6 +73,51 @@ phorvex:
       enabled: true
 
   console:
+    enabled: true
+    # Exec, workload changes and policy edits stay in this namespace.
+    attackNamespaces: [phorvex-staging]
+    state:
+      persistence:
+        storageClass: gp2-csi
+        size: 2Gi
+    # The console's and the attacks service's mTLS link to the manager's audit source.
+    # The Secrets come from deploy/eks/provision-audit-mtls.sh, run for this namespace.
+    auditTransport:
+      serverSecretName: staging-phorvex-audit-server
+      clientSecretName: staging-phorvex-audit-client
+      serverDNSName: staging-phorvex-audit-source.phorvex-staging.svc
+      clientDNSName: staging-phorvex-console.phorvex-staging.svc
+    auth:
+      # The ALB below signs the identity: its ARN, the user pool and its app client.
+      alb:
+        signerArn: arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-stagingp-140f47b908/42ff0e6e1afd5c83
+        issuer: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
+        clientId: 5njtljkiehde7iesciehr6a562
+        region: us-east-2
+      trustedOrigins: [https://staging-console.phorvex.ai]
+      grants:
+        enabled: true
+        create: true
+        data: |
+          {
+            "version": 1,
+            "subjects": [
+              {
+                "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB",
+                "subject": "71fb8550-3041-702a-5735-a33baf8836c8",
+                "roles": [
+                  "operator"
+                ],
+                "tenants": [
+                  "phorvex-staging"
+                ],
+                "targets": [
+                  "default"
+                ],
+                "note": "The production console's operator, confined to staging's tenant."
+              }
+            ]
+          }
     # staging-console.phorvex.ai: its own ALB, behind the console user pool through its
     # own app client (phorvex-staging-console-alb), with production's certificate,
     # subnets and security group. external-dns writes the record.
