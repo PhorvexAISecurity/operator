@@ -1,5 +1,10 @@
 # manager changelog
 
+## 0.11.0 (2026-10-23)
+
+- feat(console): the console's own chart and Application (fee81475)
+- feat(services): mutual TLS between the dispatcher and the services (032d14ec)
+
 ## 0.10.2 (2026-10-23)
 
 - fix(dispatcher): check a native backend's routes as native (02cad93e)
