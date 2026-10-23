@@ -40,6 +40,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/cmd/internal/actuatorconfig"
+	"github.com/phorvex/phorvex/cmd/internal/grpctlsconfig"
 	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
@@ -162,6 +163,7 @@ func main() {
 		mathLabCaptureMaxBytes         int64
 		mathLabMaxSnapshotBytes        int
 		brainEndpoint                  string
+		serviceTLS                     grpctlsconfig.Config
 		sensorFlags                    sensorconfig.Flags
 		sensorEndpoint                 string
 		actuatorEndpoint               string
@@ -230,16 +232,17 @@ func main() {
 	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
 	flag.Int64Var(&mathLabCaptureMaxBytes, "math-lab-capture-max-bytes", 1<<30, "[math-lab-capture-policies] byte bound of the snapshot store; the oldest snapshots are evicted first.")
 	flag.IntVar(&mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot; larger ticks are dropped and counted.")
-	flag.StringVar(&brainEndpoint, "brain-endpoint", "", "gRPC address of the brain service (ADR-0001). Empty (default) runs the decision engine in this process. The connection is plaintext: restrict the brain with a NetworkPolicy.")
+	flag.StringVar(&brainEndpoint, "brain-endpoint", "", "gRPC address of the brain service (ADR-0001). Empty (default) runs the decision engine in this process. The connection is mutual TLS with --grpc-tls-cert, else plaintext: restrict the brain with a NetworkPolicy.")
 	flag.DurationVar(&brainConnectTimeout, "brain-connect-timeout", 2*time.Minute, "[brain-endpoint] how long startup waits for the brain service to accept the handshake.")
 	flag.DurationVar(&brainCallTimeout, "brain-call-timeout", 5*time.Second, "[brain-endpoint] deadline of each brain call other than an evaluation.")
 	flag.DurationVar(&brainDecideTimeout, "brain-decide-timeout", time.Minute, "[brain-endpoint] deadline of one evaluation, capability questions included; an evaluation that misses it rejects the tick.")
-	flag.StringVar(&sensorEndpoint, "sensor-endpoint", "", "gRPC address of the sensor service (ADR-0001). Empty (default) observes the cluster in this process. The connection is plaintext: restrict the sensor with a NetworkPolicy.")
+	flag.StringVar(&sensorEndpoint, "sensor-endpoint", "", "gRPC address of the sensor service (ADR-0001). Empty (default) observes the cluster in this process. The connection is mutual TLS with --grpc-tls-cert, else plaintext: restrict the sensor with a NetworkPolicy.")
 	flag.DurationVar(&sensorConnectTimeout, "sensor-connect-timeout", 2*time.Minute, "[sensor-endpoint] how long startup waits for the sensor service to accept the handshake.")
 	flag.DurationVar(&sensorCallTimeout, "sensor-call-timeout", 30*time.Second, "[sensor-endpoint] deadline of one observation or telemetry read; a missed observation skips the tick.")
-	flag.StringVar(&actuatorEndpoint, "actuator-endpoint", "", "gRPC address of the actuator service (ADR-0001). Empty (default) acts in this process. The actuator then holds the actuation RBAC, runs the startup authorization preflight and reads the actuator flags; the connection is plaintext: restrict the actuator with a NetworkPolicy.")
+	flag.StringVar(&actuatorEndpoint, "actuator-endpoint", "", "gRPC address of the actuator service (ADR-0001). Empty (default) acts in this process. The actuator then holds the actuation RBAC, runs the startup authorization preflight and reads the actuator flags; the connection is mutual TLS with --grpc-tls-cert, else plaintext: restrict the actuator with a NetworkPolicy.")
 	flag.DurationVar(&actuatorConnectTimeout, "actuator-connect-timeout", 2*time.Minute, "[actuator-endpoint] how long startup waits for the actuator service to accept the handshake.")
 	flag.DurationVar(&actuatorCallTimeout, "actuator-call-timeout", 30*time.Second, "[actuator-endpoint] deadline of one capability, access, fence or capacity question; an actuation keeps the tick's own deadline.")
+	serviceTLS.RegisterClient(flag.CommandLine)
 	// One-shot Seam-1 integration proof (emit a single SecurityEvent + ensure AMTD, then exit).
 	flag.BoolVar(&integrationEmit, "integration-emit", false, "One-shot: emit one Phorvex SecurityEvent + ensure the AMTD, then exit (Seam-1 proof).")
 	flag.StringVar(&emitNamespace, "emit-namespace", "", "[integration-emit] target pod namespace.")
@@ -285,6 +288,12 @@ func main() {
 	eventtrust.ConfigureCurrentInventoryTrust(currentObservers)
 	if err := eventtrust.ConfigureInjector(sensorFlags.InjectorIdentity); err != nil {
 		setupLog.Error(err, "invalid --injector-identity")
+		os.Exit(2)
+	}
+	// The dispatcher's transport to the sensor, brain and actuator services.
+	serviceTransport, err := serviceTLS.DialOption()
+	if err != nil {
+		setupLog.Error(err, "invalid --grpc-tls-cert, --grpc-tls-key or --grpc-tls-ca")
 		os.Exit(2)
 	}
 	actuator.ConfigureAdapterDetectorIdentities(detectors.List())
@@ -469,7 +478,7 @@ func main() {
 		}
 		actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
 	} else {
-		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, actuatorconfig.Shared(operatorNS, sensorFlags.Trust, policyNamespaces),
+		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, serviceTransport, actuatorconfig.Shared(operatorNS, sensorFlags.Trust, policyNamespaces),
 			actuatorConnectTimeout, actuatorCallTimeout)
 		if actuatorErr != nil {
 			setupLog.Error(actuatorErr, "refusing to start without the actuator service", "endpoint", actuatorEndpoint)
@@ -650,7 +659,7 @@ func main() {
 	if brainEndpoint == "" {
 		rmgr.Brain = brainsvc.NewLocal(rmgr.Optimizer, rmgr.MathLab)
 	} else {
-		remote, conn, brainErr := connectBrain(brainEndpoint, rmgr.Optimizer, gpuEnvelopeMax, flowClasses,
+		remote, conn, brainErr := connectBrain(brainEndpoint, serviceTransport, rmgr.Optimizer, gpuEnvelopeMax, flowClasses,
 			brainConnectTimeout, brainCallTimeout, brainDecideTimeout)
 		if brainErr != nil {
 			setupLog.Error(brainErr, "refusing to start without the brain service", "endpoint", brainEndpoint)
@@ -666,7 +675,7 @@ func main() {
 	// The cluster is observed in this process unless --sensor-endpoint names the
 	// sensor service, which serves the same contract over gRPC (ADR-0001).
 	if sensorEndpoint != "" {
-		remote, conn, sensorErr := connectSensor(sensorEndpoint, sensorFlags.Describe(), sensorConnectTimeout, sensorCallTimeout)
+		remote, conn, sensorErr := connectSensor(sensorEndpoint, serviceTransport, sensorFlags.Describe(), sensorConnectTimeout, sensorCallTimeout)
 		if sensorErr != nil {
 			setupLog.Error(sensorErr, "refusing to start without the sensor service", "endpoint", sensorEndpoint)
 			os.Exit(1)

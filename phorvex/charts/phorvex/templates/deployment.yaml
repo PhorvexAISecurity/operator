@@ -4,6 +4,8 @@
 {{- $migProfiles := and $inProcess .Values.phorvex.mig.profiles.content }}
 {{- $servingFile := and $inProcess .Values.phorvex.servingSecurity.bindings }}
 {{- $litellmStatus := and $inProcess .Values.phorvex.litellmClientRevoke.enabled }}
+{{- /* The dispatcher's mutual TLS to the services it calls (phorvex-common.serviceTLS). */}}
+{{- $serviceTLS := and .Values.phorvex.serviceTLS.enabled (or .Values.phorvex.services.brain.endpoint .Values.phorvex.services.sensor.endpoint .Values.phorvex.services.actuator.endpoint) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -66,6 +68,9 @@ spec:
         {{- end }}
         {{- with .Values.phorvex.services.actuator.endpoint }}
         - --actuator-endpoint={{ . }}
+        {{- end }}
+        {{- if $serviceTLS }}
+        {{- include "phorvex-common.serviceTLS.args" (dict "root" . "end" "dispatcher") | nindent 8 }}
         {{- end }}
         {{- if .Values.phorvex.admissionWebhook.enabled }}
         - --admission-webhook=true
@@ -356,8 +361,11 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.phorvex.resources | nindent 10 }}
-        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus }}
+        {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus $serviceTLS }}
         volumeMounts:
+        {{- if $serviceTLS }}
+        {{- include "phorvex-common.serviceTLS.volumeMount" . | nindent 8 }}
+        {{- end }}
         {{- if $litellmStatus }}
         - name: litellm-client-revoke-status
           mountPath: /etc/phorvex-litellm-status
@@ -419,8 +427,11 @@ spec:
           mountPath: {{ .Values.phorvex.scopedOutcome.evidenceMountPath }}
         {{- end }}
         {{- end }}
-      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus }}
+      {{- if or .Values.phorvex.epss.enabled .Values.phorvex.audit.enabled .Values.phorvex.calibration.enabled .Values.phorvex.admissionWebhook.enabled $lora $migProfiles $servingFile .Values.phorvex.lossHistory.enabled .Values.phorvex.scopedOutcome.enabled $litellmStatus $serviceTLS }}
       volumes:
+      {{- if $serviceTLS }}
+      {{- include "phorvex-common.serviceTLS.volume" (dict "root" . "end" "dispatcher") | nindent 6 }}
+      {{- end }}
       {{- if $litellmStatus }}
       - name: litellm-client-revoke-status
         secret:

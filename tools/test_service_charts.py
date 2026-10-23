@@ -848,6 +848,54 @@ class ConsoleIngressTests(unittest.TestCase):
         self.assertIn('ingress.host is required', result.stderr)
 
 
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ServiceTLSTests(unittest.TestCase):
+    """Mutual TLS between the dispatcher and the services (docs/services/service-tls.md)."""
+    ON = ['--set', 'phorvex.serviceTLS.enabled=true']
+    FILES = ['--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt', '--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key',
+             '--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt']
+
+    @staticmethod
+    def pod(docs, container):
+        return next(d['spec']['template']['spec'] for d in docs if d['kind'] == 'Deployment'
+                    and d['spec']['template']['spec']['containers'][0]['name'] == container)
+
+    @staticmethod
+    def tls(pod):
+        args = [a for a in pod['containers'][0].get('args', []) if a.startswith('--grpc-tls-')]
+        secrets = [v['secret']['secretName'] for v in pod.get('volumes') or [] if v['name'] == 'grpc-tls']
+        mounts = [m for m in pod['containers'][0].get('volumeMounts') or [] if m['name'] == 'grpc-tls']
+        return args, secrets, mounts
+
+    def test_it_is_off_by_default(self):
+        renders = {service: self.pod(helm_template(CHARTS / ('phorvex-' + service)), service) for service in ('brain', 'sensor', 'actuator')}
+        renders['manager'] = self.pod(helm_template(MANAGER_CHART, *REMOTE), 'manager')
+        for end, pod in renders.items():
+            self.assertEqual(self.tls(pod), ([], [], []), end)
+
+    def test_each_service_mounts_its_secret_and_admits_only_the_dispatcher(self):
+        for service in ('brain', 'sensor', 'actuator'):
+            with self.subTest(service=service):
+                args, secrets, mounts = self.tls(self.pod(helm_template(CHARTS / ('phorvex-' + service), *self.ON), service))
+                self.assertEqual(args, self.FILES + ['--grpc-tls-peer=phorvex-dispatcher.phorvex-system.svc'])
+                self.assertEqual(secrets, [f'phorvex-{service}-grpc-tls'])
+                self.assertEqual([(m['mountPath'], m['readOnly']) for m in mounts], [('/etc/phorvex/grpc-tls', True)])
+
+    def test_the_dispatcher_dials_with_its_own_secret(self):
+        args, secrets, _ = self.tls(self.pod(helm_template(MANAGER_CHART, *REMOTE, *self.ON), 'manager'))
+        self.assertEqual(args, self.FILES)
+        self.assertEqual(secrets, ['phorvex-dispatcher-grpc-tls'])
+        # In process it calls no service, and mounts nothing.
+        self.assertEqual(self.tls(self.pod(helm_template(MANAGER_CHART, *self.ON), 'manager')), ([], [], []))
+
+    def test_the_provisioning_script_issues_what_the_charts_mount(self):
+        script = (ROOT / 'deploy/eks/provision-service-mtls.sh').read_text()
+        self.assertIn('ends=(dispatcher brain sensor actuator)', script)
+        self.assertIn("secret() { printf '%s-%s-grpc-tls' \"$RELEASE\" \"$1\"; }", script)
+        self.assertIn("printf '%s-dispatcher.%s.svc' \"$RELEASE\" \"$NAMESPACE\"", script)
+        self.assertTrue(os.access(ROOT / 'deploy/eks/provision-service-mtls.sh', os.X_OK))
+
 class VendoredLibraryTests(unittest.TestCase):
     """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
 

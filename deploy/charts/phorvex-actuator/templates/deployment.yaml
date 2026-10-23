@@ -98,6 +98,9 @@ spec:
         {{- with include "phorvex-common.trustedDetectors" $trust }}
         - --trusted-detectors={{ . }}
         {{- end }}
+        {{- if $v.serviceTLS.enabled }}
+        {{- include "phorvex-common.serviceTLS.args" (dict "root" . "end" "actuator") | nindent 8 }}
+        {{- end }}
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -141,8 +144,11 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings }}
+        {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings $v.serviceTLS.enabled }}
         volumeMounts:
+        {{- if $v.serviceTLS.enabled }}
+        {{- include "phorvex-common.serviceTLS.volumeMount" . | nindent 8 }}
+        {{- end }}
         {{- if $v.litellmClientRevoke.enabled }}
         - name: litellm-client-revoke-status
           mountPath: /etc/phorvex-litellm-status
@@ -167,8 +173,11 @@ spec:
           readOnly: true
         {{- end }}
         {{- end }}
-      {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings }}
+      {{- if or $v.litellmClientRevoke.enabled $v.loraCleanSources.content $v.mig.profiles.content $v.servingSecurity.bindings $v.serviceTLS.enabled }}
       volumes:
+      {{- if $v.serviceTLS.enabled }}
+      {{- include "phorvex-common.serviceTLS.volume" (dict "root" . "end" "actuator") | nindent 6 }}
+      {{- end }}
       {{- if $v.litellmClientRevoke.enabled }}
       - name: litellm-client-revoke-status
         secret:

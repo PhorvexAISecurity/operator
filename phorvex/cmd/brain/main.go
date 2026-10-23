@@ -33,6 +33,7 @@ import (
 	"phorvex.ai/libs/logging"
 
 	"github.com/phorvex/phorvex/cmd/internal/decisionconfig"
+	"github.com/phorvex/phorvex/cmd/internal/grpctlsconfig"
 	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/brainsvc"
@@ -45,6 +46,7 @@ import (
 
 type config struct {
 	listen, metricsAddr, probeAddr string
+	tls                            grpctlsconfig.Config
 	engine                         string
 	gpuEnvelopeMax                 float64
 	flowClasses                    string
@@ -69,6 +71,7 @@ func main() {
 	flag.IntVar(&cfg.mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot.")
 	flag.DurationVar(&cfg.shutdownGrace, "shutdown-grace", 20*time.Second, "Time in-flight evaluations get to finish on shutdown.")
 	logging.RegisterFlags(flag.CommandLine, &cfg.log)
+	cfg.tls.RegisterServer(flag.CommandLine)
 	flag.Parse()
 
 	logger, err := logging.New(os.Stderr, cfg.log)
@@ -109,7 +112,11 @@ func run(ctx context.Context, cfg config, lis net.Listener, logger *slog.Logger)
 		logger.Info("math-lab decision capture enabled", "policies", cfg.mathLabPolicies, "dir", cfg.mathLabDir)
 	}
 
-	server := grpc.NewServer(append(metrics.GRPCServerOptions(),
+	transport, err := cfg.tls.ServerOptions()
+	if err != nil {
+		return err
+	}
+	server := grpc.NewServer(append(append(metrics.GRPCServerOptions(), transport...),
 		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
@@ -133,7 +140,7 @@ func run(ctx context.Context, cfg config, lis net.Listener, logger *slog.Logger)
 	}
 	go func() { errs <- server.Serve(lis) }()
 	logger.Info("brain service ready", "listen", lis.Addr().String(), "engine", optimizer.Name(),
-		"decisionConfigSHA256", decisionConfig.SHA256(), "contractVersion", brainapi.ContractVersion)
+		"decisionConfigSHA256", decisionConfig.SHA256(), "contractVersion", brainapi.ContractVersion, "mutualTLS", cfg.tls.Enabled())
 
 	select {
 	case <-ctx.Done():

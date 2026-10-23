@@ -79,6 +79,9 @@ spec:
         {{- with include "phorvex-common.trustedCurrentInventoryObservers" $trust }}
         - --trusted-current-inventory-observers={{ . }}
         {{- end }}
+        {{- if $v.serviceTLS.enabled }}
+        {{- include "phorvex-common.serviceTLS.args" (dict "root" . "end" "sensor") | nindent 8 }}
+        {{- end }}
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -115,18 +118,28 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        {{- if $v.epss.enabled }}
+        {{- if or $v.epss.enabled $v.serviceTLS.enabled }}
         volumeMounts:
+        {{- if $v.epss.enabled }}
         - name: epss
           mountPath: {{ $v.epss.mountPath }}
           readOnly: true
         {{- end }}
+        {{- if $v.serviceTLS.enabled }}
+        {{- include "phorvex-common.serviceTLS.volumeMount" . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+      {{- if or $v.epss.enabled $v.serviceTLS.enabled }}
+      volumes:
       {{- if $v.epss.enabled }}
       # The manager chart (or the EPSS feed) owns this ConfigMap; the sensor reads it.
-      volumes:
       - name: epss
         configMap:
           name: {{ $v.epss.configMapName }}
+      {{- end }}
+      {{- if $v.serviceTLS.enabled }}
+      {{- include "phorvex-common.serviceTLS.volume" (dict "root" . "end" "sensor") | nindent 6 }}
+      {{- end }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
