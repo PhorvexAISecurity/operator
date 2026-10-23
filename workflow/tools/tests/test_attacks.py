@@ -79,7 +79,7 @@ class AttackIntegrationTests(unittest.TestCase):
     def test_catalogue_and_aliases(self):
         self.assertEqual(attacks.validate_catalogue(SOURCE_ROOT), [])
         data, cases = attacks.catalogue(SOURCE_ROOT)
-        self.assertEqual(len(cases), 67)
+        self.assertEqual(len(cases), 70)
         self.assertEqual(attacks.resolve(data, cases, 'G2'), 'B4')
         with self.assertRaises(ValueError): attacks.resolve(data, cases, 'G3')
         self.assertTrue(all('attacker_goal' in c['required_stages'] for c in cases.values() if 'defense' in c['claims']))

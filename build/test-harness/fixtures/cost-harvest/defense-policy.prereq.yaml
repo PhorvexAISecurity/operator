@@ -1,0 +1,21 @@
+# PREREQ — NOT yet appliable.
+# `throttle` is not in the PhorvexPolicy CRD actions.enabled enum
+# (phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml) nor in model.Action, so the
+# apiserver REJECTS this policy until that enum, the native throttle handler, and the
+# trusted cost-load observer (serving-rate budget) are ported from
+# phvx-actuator-costharvest-20261019. Kept here as the intended defense shape.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: cost-defense
+  namespace: phorvex-staging-cost
+spec:
+  tenant: phorvex-staging-cost
+  mode: active
+  selector: {matchLabels: {app: cost-target}}
+  objective: {lambda: "0.2", costWeights: {flowDisruption: "0.6", normSparsity: "0.4"}}
+  budget: {antiOverRotationWindow: 10s, maxGracePeriodSeconds: 30, maxMovesPerTick: 2, proactiveFloor: 10s, tickInterval: 5s}
+  slo: {costCeiling: "1.2", minAvailableReplicas: 1}
+  assetValue: {fromLabels: {app: {cost-target: "1.0"}}, weightSecrets: "0.8"}
+  triggers: {eventDriven: true, reactiveOnly: true, eventAgeHorizon: 1h}
+  actions: {enabled: [throttle]}

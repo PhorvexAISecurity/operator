@@ -1,0 +1,35 @@
+# PREREQ — NOT yet appliable.
+# `controller-stop` is not in the PhorvexPolicy CRD actions.enabled enum
+# (phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml) nor in model.Action, so the
+# apiserver REJECTS this policy until that enum, the native controller-stop handler, and
+# the feasibility controller-removal authority are ported from
+# phvx-actuator-persistence-20261019. It also needs the trusted persistence observer
+# (phorvex.attack.controller-persistence) wired. Kept here as the intended defense shape.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: persistence-defense
+  namespace: phorvex-staging-persistence
+spec:
+  tenant: phorvex-staging-persistence
+  mode: active
+  selector:
+    matchLabels:
+      phorvex.ai/attacker-planted: "true"
+  objective:
+    lambda: "0.4"
+    costWeights: {normSparsity: "0.4", flowDisruption: "0.6"}
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 5s
+    antiOverRotationWindow: 10s
+    proactiveFloor: 10s
+    maxGracePeriodSeconds: 30
+  slo:
+    minAvailableReplicas: 1
+  triggers:
+    eventDriven: true
+    reactiveOnly: true
+    eventAgeHorizon: 1h
+  actions:
+    enabled: [controller-stop]

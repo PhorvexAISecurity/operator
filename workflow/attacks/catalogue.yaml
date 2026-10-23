@@ -38,6 +38,10 @@ suites:
   defense-regression:
   - A1
   - B1
+  generic-defense-loops:
+  - GP11
+  - GP12
+  - GP13
 cases:
 - id: GP1
   aliases:
@@ -2229,3 +2233,124 @@ cases:
   - actuator
   historical: null
   limits: Probe passes establish only its declared contract; they do not establish attack mitigation.
+# Ported generic defense loops (phvx-actuator-* cases). Workload-agnostic, not tied to a
+# production app. Each is defined with the actuator it should trigger and a bounded oracle;
+# their requires tokens stay unsatisfied (BLOCKED at plan time) until the documented
+# prerequisite capability is wired. Fixtures and oracle detail live under
+# build/test-harness/fixtures/{identity-rotate,controller-stop,cost-harvest}.
+- id: GP11
+  aliases: []
+  title: Stolen pod-bound SA-token identity reuse (ported built loop)
+  kind: integration
+  actuators:
+  - identity-rotate
+  readiness: guided
+  realism:
+    score: 10
+    status: historical-unrevalidated
+    source: build/test-harness/fixtures/identity-rotate/README.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/identity.md
+  permission: attack
+  requires:
+  - controlled_target
+  - identity_policy
+  - credential_replay_probe
+  - identity_rotate_effect
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical: null
+  limits: Ported from the phvx-actuator-identity-rotate case; on the old operator cluster this loop
+    reached a live old-identity-invalidation PASS (the stolen pod-bound token TokenReviews false after
+    identity-rotate while a legitimate client keeps access). In operator-refactored identity-rotate is
+    declared-only (model.types plus the PhorvexPolicy CRD actions enum), refused for new native dispatch,
+    so a live PASS here requires porting the identity-rotate security effect (un-gate plus real credential
+    invalidation). Review the bounded procedure before execution.
+- id: GP12
+  aliases: []
+  title: Attacker controller persistence (unmanaged controller) then controller-stop
+  kind: integration
+  actuators:
+  - controller-stop
+  readiness: guided
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: build/test-harness/fixtures/controller-stop/README.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/persistence.md
+  permission: attack
+  requires:
+  - controlled_target
+  - persistence_observer
+  - controller_removal_authority
+  - controller_stop_action
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical: null
+  limits: Ported from the phvx-actuator-persistence case; selection- and bounded-completion-proven on the
+    old operator harness, with fragile native no-recreation timing under grace/kubelet retirement. PREREQS
+    in operator-refactored, both required before the brain can select the action — controller-stop is
+    absent from the action vocabulary (model.Action plus the PhorvexPolicy CRD actions enum), and the
+    trusted persistence observer (phorvex.attack.controller-persistence) is not wired. Review the bounded
+    procedure before execution.
+- id: GP13
+  aliases: []
+  title: Serving cost-harvest load abuse then throttle
+  kind: integration
+  actuators:
+  - throttle
+  readiness: guided
+  realism:
+    score: 8
+    status: historical-unrevalidated
+    source: build/test-harness/fixtures/cost-harvest/README.md
+    note: Class plausibility only; not implementation fidelity or evidence of defense.
+  procedure: procedures/cost.md
+  permission: attack
+  requires:
+  - controlled_target
+  - serving_rate_budget
+  - cost_load_observer
+  - throttle_action
+  required_stages:
+  - fixture
+  - positive_control
+  - stimulus
+  - decision
+  - dispatch
+  - effect
+  - service_health
+  - cleanup
+  signal: declared
+  expected_defense: not_evaluated
+  claims:
+  - actuator
+  historical: null
+  limits: Ported from the phvx-actuator-costharvest case; the throttle cap apply/release was proven on the
+    old operator harness. PREREQS in operator-refactored, both required before the brain can select the
+    action — throttle is absent from the action vocabulary (model.Action plus the PhorvexPolicy CRD actions
+    enum), and the trusted cost-load observer (serving-rate budget) is not wired. Review the bounded
+    procedure before execution.
