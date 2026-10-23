@@ -243,6 +243,13 @@ phorvex:
     # grants and injects the workload live arms' events.
     attacks:
       endpoint: ""
+  # Mutual TLS between the dispatcher and the brain, sensor and actuator services
+  # (ADR-0001, docs/services/service-tls.md). On, every chart mounts its end's
+  # Secret, <release>-<end>-grpc-tls, which deploy/eks/provision-service-mtls.sh
+  # writes; the services admit only the dispatcher's certificate. Off, gRPC is
+  # plaintext.
+  serviceTLS:
+    enabled: false
   # Optional, reporting-only scoped outcome observation. Enabling this mounts
   # one immutable startup config Secret, a separate mTLS Secret, and a
   # dedicated existing PVC for private evidence. The startup.json contents

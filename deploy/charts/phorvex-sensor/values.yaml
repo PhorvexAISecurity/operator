@@ -17,6 +17,13 @@ managerFullname: ""
 # manager chart's (tools/test_service_charts.py), and the trust must match the
 # manager's, or the manager refuses the sensor at the handshake.
 phorvex:
+  # Mutual TLS between the dispatcher and the brain, sensor and actuator services
+  # (ADR-0001, docs/services/service-tls.md). On, every chart mounts its end's
+  # Secret, <release>-<end>-grpc-tls, which deploy/eks/provision-service-mtls.sh
+  # writes; the services admit only the dispatcher's certificate. Off, gRPC is
+  # plaintext.
+  serviceTLS:
+    enabled: false
   metrics:
     podMonitor:
       enabled: false

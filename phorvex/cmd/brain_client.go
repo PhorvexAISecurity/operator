@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -16,16 +15,16 @@ import (
 	"github.com/phorvex/phorvex/internal/wire"
 )
 
-// connectBrain opens the brain service and completes its handshake: the brain
-// refuses a manager built against another contract or configured differently.
-func connectBrain(endpoint string, optimizer decision.Optimizer, gpuEnvelopeMax float64, flowClasses string,
+// connectBrain opens the brain service over transport and completes its handshake:
+// the brain refuses a manager built against another contract or configured differently.
+func connectBrain(endpoint string, transport grpc.DialOption, optimizer decision.Optimizer, gpuEnvelopeMax float64, flowClasses string,
 	connectTimeout, callTimeout, decideTimeout time.Duration) (*brainclient.Client, *grpc.ClientConn, error) {
 	config, err := decisionconfig.Describe(optimizer, gpuEnvelopeMax, flowClasses)
 	if err != nil {
 		return nil, nil, err
 	}
 	conn, err := grpc.NewClient(endpoint, append(metrics.GRPCDialOptions(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		transport,
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(wire.MaxMessageBytes), grpc.MaxCallSendMsgSize(wire.MaxMessageBytes)),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{Time: 30 * time.Second, Timeout: 10 * time.Second, PermitWithoutStream: true}))...)
 	if err != nil {

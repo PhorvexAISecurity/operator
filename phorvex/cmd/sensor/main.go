@@ -36,6 +36,7 @@ import (
 	"phorvex.ai/libs/logging"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/cmd/internal/grpctlsconfig"
 	"github.com/phorvex/phorvex/cmd/internal/policyscope"
 	"github.com/phorvex/phorvex/cmd/internal/sensorconfig"
 	"github.com/phorvex/phorvex/internal/buildinfo"
@@ -49,6 +50,7 @@ import (
 
 type config struct {
 	listen, metricsAddr, probeAddr string
+	tls                            grpctlsconfig.Config
 	shutdownGrace                  time.Duration
 	sensor                         sensorconfig.Flags
 	log                            logging.Options
@@ -70,6 +72,7 @@ func main() {
 	flag.DurationVar(&cfg.shutdownGrace, "shutdown-grace", 20*time.Second, "Time in-flight observations get to finish on shutdown.")
 	cfg.sensor.Register(flag.CommandLine)
 	logging.RegisterFlags(flag.CommandLine, &cfg.log)
+	cfg.tls.RegisterServer(flag.CommandLine)
 	flag.Parse()
 
 	logger, err := logging.New(os.Stderr, cfg.log)
@@ -141,7 +144,11 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 		PromURL: cfg.sensor.PrometheusURL, PCIeClasses: pcie, Metrics: metrics}
 	sensorConfig := cfg.sensor.Describe()
 
-	server := grpc.NewServer(append(phorvexmetrics.GRPCServerOptions(),
+	transport, err := cfg.tls.ServerOptions()
+	if err != nil {
+		return err
+	}
+	server := grpc.NewServer(append(append(phorvexmetrics.GRPCServerOptions(), transport...),
 		grpc.MaxRecvMsgSize(wire.MaxMessageBytes),
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
@@ -158,7 +165,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
 		healthServer.SetServingStatus(sensorpb.SensorService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
 		logger.Info("sensor service ready", "listen", lis.Addr().String(), "configSHA256", sensorConfig.SHA256(),
-			"contractVersion", sensorapi.ContractVersion, "telemetrySource", local.TelemetrySource())
+			"contractVersion", sensorapi.ContractVersion, "telemetrySource", local.TelemetrySource(), "mutualTLS", cfg.tls.Enabled())
 		errs := make(chan error, 1)
 		go func() { errs <- server.Serve(lis) }()
 		select {
