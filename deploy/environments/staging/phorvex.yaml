@@ -27,10 +27,10 @@ phorvex:
   policyNamespaces: [phorvex-staging-demo]
   # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
   # for production's Phoenix to act on, and changes workloads only in the demo's
-  # namespace. The kill switch stays on until the console and the attacks service run here.
+  # namespace, so its kill switch is off and it rotates and quarantines demo-api.
   actuator: native
   actuatorNamespaces: [phorvex-staging-demo]
-  globalKillSwitch: true
+  globalKillSwitch: false
   # Admission webhooks and policies are cluster-wide: staging's would also admit
   # production's requests.
   admissionWebhook:

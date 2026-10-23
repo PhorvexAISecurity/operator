@@ -22,8 +22,7 @@ spec:
       - list:
           elements:
           # Staging beside the production stack on this cluster: its own namespace
-          # and release name, and, in phorvex.yaml, its own policy scope and the
-          # actuation kill switch.
+          # and release name, and, in phorvex.yaml, its own policy scope and hands.
           - environment: staging
             server: https://kubernetes.default.svc
             namespace: phorvex-staging
