@@ -1,6 +1,10 @@
 # Staging's services defend demo-api, and only demo-api: the selector names its Pods.
 # Event-driven and reactive only, they act on trusted SecurityEvents, such as the attacks
-# service's workload signal, with the native backend's rotate and quarantine.
+# service's workload signal, with the native backend's rotate.
+#
+# Not quarantine: on this cluster's network-policy agent, isolating one replica cuts off
+# every replica of its ReplicaSet until they are recreated (docs/services/actuator.md,
+# "Quarantine on the AWS VPC CNI").
 apiVersion: phorvex.ai/v1alpha1
 kind: PhorvexPolicy
 metadata:
@@ -14,7 +18,7 @@ spec:
     matchLabels:
       app.kubernetes.io/name: demo-api
   actions:
-    enabled: [rotate, quarantine]
+    enabled: [rotate]
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:

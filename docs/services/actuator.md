@@ -170,6 +170,28 @@ with the dispatcher. It builds each `Request` from the selected decision and the
 view, and reads the `Result` and its error identity (`NoEffectRefusal`, context
 cancellation) to decide fallbacks.
 
+## Quarantine on the AWS VPC CNI
+
+The native quarantine isolates the target Pod in two ways:
+- it labels the Pod `phorvex.ai/quarantined`;
+- it adds a deny-all NetworkPolicy selecting that label.
+
+On EKS, the AWS VPC CNI network-policy agent (v1.4.1 on phorvex-dev-eks) enforces that
+policy in eBPF maps it shares among Pods with the same name prefix, the replicas of one
+ReplicaSet. Staging showed the consequence on 2026-10-23, when one `demo-api` replica was
+quarantined:
+- **The whole ReplicaSet was cut off.** Every replica lost its traffic, from other nodes
+  and from the same node.
+- **It looked healthy.** The Service still listed the replicas as ready, because the
+  kubelet's probes still passed.
+- **It outlived the policy.** The isolation stayed after the NetworkPolicy and its Pod
+  were deleted, until the other replicas were recreated.
+
+Until the quarantine isolates a Pod without a policy that its replicas share, it is a
+service outage on this CNI. Staging's demo policy enables rotate only, and a policy on
+an EKS cluster with the network-policy agent should not enable the native quarantine.
+Phoenix's quarantine (production's hybrid route) needs the same check.
+
 ## Testing
 
 ```sh
