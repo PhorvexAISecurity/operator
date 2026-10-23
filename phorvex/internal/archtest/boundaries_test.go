@@ -66,7 +66,7 @@ var domains = map[string]string{
 
 	"actuator": actuator, "podresources": actuator, "startupauthz": actuator, "actuatorsvc": actuator,
 
-	"cataloguev1": attacks, "lossobserver": attacks, "currentobserver": attacks,
+	"attacks": attacks, "cataloguev1": attacks, "lossobserver": attacks, "currentobserver": attacks,
 
 	"console": console,
 }

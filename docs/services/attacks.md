@@ -123,4 +123,6 @@ their profiles are reviewed for its account.
 
 The attack code still lives in package `console`. `cmd/attacks` serves it from
 there, and archtest lists the `console → cataloguev1` crossing as debt until the
-code moves into a package of the attacks domain.
+code moves into `phorvex/internal/attacks`, the attacks domain's package.
+[attacks-migration.md](attacks-migration.md) is the plan for that move: the
+inventory of the attack routes and their files, the order and the checks.
