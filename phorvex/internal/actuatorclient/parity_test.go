@@ -470,7 +470,7 @@ func TestUnansweredCallsFailClosed(t *testing.T) {
 				"observe": client.ObserveStandingPolicy(ctx, tenant), "reconcile": client.ReconcileStandingPolicy(ctx, tenant),
 			} {
 				for _, a := range []model.Action{model.ActionRotate, model.ActionQuarantine} {
-					if result.Preparation.ForAction(a) == nil {
+					if result.Preparation.ForAction(backend, a) == nil {
 						t.Fatalf("unanswered %s left %s dispatchable: %+v", name, a, result.Preparation)
 					}
 				}
@@ -479,7 +479,7 @@ func TestUnansweredCallsFailClosed(t *testing.T) {
 				}
 			}
 			preparation, err := client.PrepareRoutes(ctx, tenant)
-			if err == nil || preparation.ForAction(model.ActionRotate) == nil || preparation.ForAction(model.ActionQuarantine) == nil {
+			if err == nil || preparation.ForAction(backend, model.ActionRotate) == nil || preparation.ForAction(backend, model.ActionQuarantine) == nil {
 				t.Fatalf("unanswered route preparation = %+v, %v", preparation, err)
 			}
 			if retained, err := client.RetirePolicyBinding(ctx, "puid"); retained || err == nil {

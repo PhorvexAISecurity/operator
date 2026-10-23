@@ -193,7 +193,7 @@ func TestM091HybridForwardsRetirementAndPreservesPhoenixQuarantineRoute(t *testi
 		Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "owner",
 		EnabledActions: map[model.Action]bool{model.ActionDisable: true},
 	})
-	if err := prep.ForAction(model.ActionDisable); err != nil {
+	if err := prep.ForAction(BackendHybrid, model.ActionDisable); err != nil {
 		t.Fatal(err)
 	}
 	req := Request{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "owner", Action: model.ActionDisable}

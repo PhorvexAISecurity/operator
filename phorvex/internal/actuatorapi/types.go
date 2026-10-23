@@ -212,10 +212,11 @@ type RoutePreparation struct {
 	NativeSkipped  bool
 }
 
-// ForAction reports the preparation result for the backend that will dispatch
-// this action. The caller must check it before attempting Actuate.
-func (p RoutePreparation) ForAction(a model.Action) error {
-	if RouteFor(BackendHybrid, a) == BackendPhoenix {
+// ForAction reports the preparation result for the route backend b dispatches
+// this action on. The caller must check it before attempting Actuate. The route
+// is backend b's own: a native backend prepares no Phoenix route and needs none.
+func (p RoutePreparation) ForAction(b Backend, a model.Action) error {
+	if RouteFor(b, a) == BackendPhoenix {
 		if p.PhoenixSkipped {
 			return fmt.Errorf("Phoenix route was not prepared for action %q", a)
 		}
