@@ -1,0 +1,73 @@
+{{/* console-crm-rbac.yaml, moved from the manager chart: the manager chart renders it unless
+phorvex.console.separate, and deploy/charts/phorvex-console renders it when it is. */}}
+{{- define "phorvex-common.console.crm-rbac" -}}
+{{- with .Values.phorvex.console.catalogueV1 }}
+{{- if and .enabled .crm.enabled }}
+{{- $ns := required "console.catalogueV1.crm.namespace is required" .crm.namespace }}
+{{- $sa := required "console.catalogueV1.crm.serviceAccountName is required" .crm.serviceAccountName }}
+{{- if eq $ns $.Release.Namespace }}{{ fail "CRM fixture namespace must differ from the installed console namespace" }}{{- end }}
+{{- if eq $ns "crm" }}{{ fail "CRM fixture namespace must not be the installed CRM namespace" }}{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $sa }}
+  namespace: {{ $ns }}
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture
+  namespace: {{ $ns }}
+rules:
+# CRM exact UID cleanup and readiness use GET; no label sweep or LIST is used.
+- apiGroups: [""]
+  resources: ["pods", "configmaps"]
+  verbs: ["get", "create", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture
+  namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture
+subjects:
+- kind: ServiceAccount
+  name: {{ $sa }}
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture-namespace
+rules:
+- apiGroups: [""]
+  resources: ["namespaces"]
+  resourceNames: [{{ $ns | quote }}]
+  verbs: ["get"]
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["selfsubjectreviews"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture-namespace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" $ }}-crm-fixture-namespace
+subjects:
+- kind: ServiceAccount
+  name: {{ $sa }}
+  namespace: {{ $ns }}
+{{- end }}
+{{- end }}
+{{- end -}}

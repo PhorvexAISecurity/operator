@@ -62,9 +62,10 @@ summary.
    - pushes it to ECR as `phorvex/<service>:<version>`;
    - tags the commit `<service>-v<version>`;
    - pins staging to the pushed digest (`servicerelease deploy`), in
-     `deploy/environments/staging/<service>.yaml`, or `manager.yaml` for the
-     manager and console. Every pod pulls its image by that digest: the ECR
-     tags are mutable, so a tag alone could change what a release runs.
+     `deploy/environments/staging/<service>.yaml`: `manager.yaml` for the
+     manager, `console.yaml` for the console. Every pod pulls its image by that
+     digest: the ECR tags are mutable, so a tag alone could change what a
+     release runs.
 
    One commit to main records the pins of every release that succeeded, and
    Argo CD syncs it. A service whose build or push fails is not tagged, so a

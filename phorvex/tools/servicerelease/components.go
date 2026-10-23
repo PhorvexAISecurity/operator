@@ -93,8 +93,9 @@ var Components = []Component{
 		Initial: "0.1.0", Repository: "phorvex/actuator", BuildArgs: map[string]string{"SERVICE": "actuator"}, Deploy: serviceImage("actuator"),
 	},
 	{
-		// The manager chart deploys the console.
-		Name: "console", Image: "console", Dockerfile: "deploy/docker/console.Dockerfile",
+		// Its own chart deploys the console where phorvex.console.separate is set, the
+		// manager chart elsewhere (docs/services/console.md).
+		Name: "console", Image: "console", Dockerfile: "deploy/docker/console.Dockerfile", Chart: "deploy/charts/phorvex-console",
 		Builds: []Build{
 			// The console Dockerfile builds the attacks service too.
 			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd/attacks", "./cmd"}},
@@ -106,7 +107,7 @@ var Components = []Component{
 		Repository: "phorvex/console",
 		// The console reports the version it was built as.
 		BuildArgs: map[string]string{"CONSOLE_VERSION": "{version}"},
-		Deploy: ImageValues{File: "manager", Path: []string{"phorvex", "console", "image"},
+		Deploy: ImageValues{File: "console", Path: []string{"phorvex", "console", "image"},
 			Repository: "repository", Tag: "tag", Digest: "releaseDigest", Source: "releaseSourceSHA"},
 	},
 	{

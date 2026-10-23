@@ -1,0 +1,506 @@
+# The console (docs/services/console.md), deployed by its own chart when
+# phorvex.console.separate is set: then the manager chart renders none of the
+# console's objects and this one renders them all, named as the manager release
+# names them. It reads the manager chart's keys under phorvex. These are the
+# manager chart's defaults for the keys the console's templates read
+# (phorvex-common.console.*), copied; tools/test_service_charts.py requires them to
+# stay equal. One environment file sets them for every chart.
+phorvex:
+  image:
+    repository: phorvex/phorvex
+    pullPolicy: IfNotPresent
+    tag: "0.1.0-p0"
+    # CI-maintained published immutable release authority; never derived from a live tag.
+    # Once set, every pod that runs this image pulls it by this digest.
+    releaseDigest: ""
+    releaseSourceSHA: ""
+  litellmOutput:
+    enabled: false
+  # Prometheus base URL for telemetry ingest. Empty => K8s-only signals (no
+  # fabricated metrics).
+  prometheusUrl: ""
+  # Detector identities whose SecurityEvents may supply belief evidence (M-94). The check is
+  # made against the AUTHENTICATED creator that the admission stamp records, never against the
+  # self-declared spec.rule.source — that string is written by whoever created the event.
+  # Accepted spellings: "namespace/serviceaccount", "namespace:serviceaccount", or a full
+  # "system:serviceaccount:ns:name". An EMPTY list trusts no external detector (fail-closed):
+  # events are still ingested and recorded, they simply carry no evidence.
+  # The defaults below are the identities that actually hold securityevents-create on the
+  # EKS fleet (discovered 2026-09-06 from the bound ClusterRoles); replace them for your fleet.
+  trustedDetectors:
+    - vllm/detector-kv-canary
+    - vllm/detector-adapter-inv
+    - phorvex-system/operator-controller-manager
+  # The ServiceAccount (namespace/name) the workload live arms create their SecurityEvents
+  # as. Empty is the console of the release named phorvex in phorvex-system; any other
+  # environment names its own. Every service and the console must agree.
+  injectorIdentity: ""
+  eventIdentityPolicy:
+    enabled: true
+    # The guard another release on the cluster installs, by its ValidatingAdmissionPolicy
+    # name, where this release installs none (enabled: false) beside a production stack
+    # that does. The manager and the sensor refuse to start unless it is in force with a
+    # Deny binding of the same name (eventtrust.CheckIdentityPolicy), and trustedDetectors
+    # may then be non-empty.
+    external: ""
+  # Opt-in live E2E identity. Admission confines its events to one test namespace;
+  # the console/operator identity is NOT added to the detector allowlist.
+  e2eDetector:
+    enabled: false
+    targetNamespace: ""
+  # Namespace the operator treats as its own (where it looks for the killswitch ConfigMap
+  # and its leader-election lease). Empty => the operator's own POD_NAMESPACE.
+  operatorNamespace: ""
+  # The services the manager reaches over gRPC (ADR-0001), each deployed by its own
+  # chart under deploy/charts. An empty endpoint runs that part in this process.
+  # With a remote actuator, the actuator holds the actuation access and reads the
+  # actuator's files and credentials; this chart then binds the manager only to the
+  # dispatcher's share of the access (phorvex-common) and mounts none of them.
+  services:
+    brain:
+      endpoint: ""
+    sensor:
+      endpoint: ""
+    actuator:
+      endpoint: ""
+    # The attacks service (deploy/charts/phorvex-attacks, docs/services/attacks.md). Set,
+    # the console forwards the attack routes to it, and its account holds the attack
+    # grants and injects the workload live arms' events.
+    attacks:
+      endpoint: ""
+  # Opt-in exact Voice memory note quarantine. Requires the reviewed Voice
+  # policy ConfigMap and private state-token Secret in namespace voice.
+  voiceMemory:
+    enabled: false
+  # Opt-in exact asserted-caller/order refund pair denial in the Voice app.
+  voiceRefund:
+    enabled: false
+  # Opt-in Voice MCP descriptor pinning requires a reviewed immutable MCP image.
+  voiceAdmission:
+    enabled: false
+    sourceConfigMapName: ""
+    legacyConfigMapName: ""
+  voiceMCP:
+    enabled: false
+    approvedImage: ""
+  # Default-off endpoint lease revocation requires an independently reviewed
+  # combined proxy source digest; never derive this authority from an event.
+  endpointLease:
+    enabled: false
+    approvedSourceSHA256: ""
+    approvedProxyImage: ""
+    approvedEngineImage: ""
+  # Write the decision audit to a JSONL file. The console streams /api/live from a FILE,
+  # so without this there is nothing live to stream — which is why the in-cluster console
+  # could only ever serve the stale snapshot baked into its image.
+  audit:
+    enabled: false
+    path: /audit/live.jsonl
+    # Opt-in accidental-outage guard: reject other Pods mounting this release's
+    # RWO audit PVC. Requires Kubernetes >=1.30 and audit.persistence.enabled.
+    # This checks Deployment pod shape, not authenticated controller identity.
+    volumeGuard:
+      enabled: false
+    # 0 = unbounded. Otherwise this is a target segment size; whole records can
+    # exceed it. Nominal budget = maxBytes * (maxBackups + 1).
+    maxBytes: 536870912
+    maxBackups: 4
+    persistence:
+      # A PVC rather than an emptyDir so the decision history survives a restart. The
+      # volume is shared between the operator and the console container INSIDE ONE POD,
+      # so ReadWriteOnce is sufficient and no EFS/RWX filesystem is needed.
+      enabled: true
+      storageClass: ""
+      size: 5Gi
+
+  # Run the console as a second container in this pod.
+  #
+  # They are co-located because the console reads the audit as a local file and the
+  # operator writes it as a local file. Two Deployments cannot share a ReadWriteOnce
+  # volume, and the alternative — an RWX filesystem — means provisioning EFS for what is
+  # one file on one node. Co-location is also what already works on the jump host.
+  #
+  # The cost is a shared lifecycle: the console restarts whenever the operator does.
+  console:
+    enabled: false
+    # Its own chart deploys the console (deploy/charts/phorvex-console,
+    # docs/services/console.md), with its own Application and version; this chart
+    # then renders none of the console's objects. Off, this chart renders them.
+    separate: false
+    allowWorkloadMutations: false
+    # With the attacks service remote (services.attacks.endpoint): the namespaces it may
+    # exec into and change, and where it and the console may edit policies. Empty is
+    # every namespace, as the console had.
+    attackNamespaces: []
+    # The console's own Service and Ingress, for an environment that exposes it outside
+    # the production stack's dashboard. The Service serves port 80.
+    ingress:
+      enabled: false
+      className: ""
+      host: ""
+      annotations: {}
+    # Live attack ids (namespace/id, or */id) with no actuator wired end to end. Retired rows
+    # show in the catalogue as not-armed with a clear reason, and the fire handlers refuse them.
+    liveAttackDisabled: []
+    # Extra read grants for the fixed synthetic vLLM comparison. The shipped
+    # harness profile also requires exact reviewed pins before launch.
+    guardrailStatic:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
+      kvJournalName: ""
+    # Separate injected availability recovery suite. An operator must supply
+    # a reviewed immutable profile ConfigMap and exact raw-byte digest.
+    guardrailAvailability:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
+    # Separate pinned authority for the existing injected guardrail-effect
+    # action. Its fixed guarded baseline may stop without creating an event.
+    guardrailEffect:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-proxy
+      guardrailJournalName: ""
+    guardrailOutput:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMap: guardrail-output-fixture
+      outputPolicyConfigMapName: ""
+      outputPolicyJournalName: ""
+      targetNamespace: vllm
+    # One exact-source, fixed-model request-drain observation. A digest-pinned
+    # profile is required before this default-off arm can create an event.
+    drainLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      journalName: ""
+    # Distinct reviewed caller-credential revocation trial; endpoint-rotate
+    # remains a route-effect observation. Off until owner migration is complete.
+    endpointLease:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      callerSecretName: ""
+      sourceConfigMapName: ""
+    # Reviewed real LiteLLM Service-path client policy trial. Off until the
+    # owner has installed the gateway and pinned a complete runtime profile.
+    litellmLive:
+      enabled: false
+      configMapName: ""
+      sourceConfigMapName: phorvex-litellm-admission-gateway
+      profileSHA256: ""
+      seedSecret: ""
+      statusSecret: ""
+      journalName: phorvex-litellm-revoke-journal
+    # Reviewed direct Voice/CRM agency trial. A Deployment UID pin limits
+    # read-only journal access to that one Voice rollout and revisions 1..256.
+    voiceAgencyLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      deploymentUID: ""
+    # Separate real-provider server-owned context output objectives. Disabled
+    # until both source Secrets, output policy, profile and native action exist.
+    litellmOutput:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      documentSeedSecret: phorvex-litellm-output-document
+      promptSeedSecret: phorvex-litellm-output-prompt
+    # Reviewed real Voice synthetic output marker trial. Off until the
+    # output-policy ConfigMap, protected journal and exact profile are pinned.
+    voiceOutputLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+    voiceAdmissionLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      sourceConfigMapName: ""
+      legacyConfigMapName: ""
+    voiceMCPLive:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      deploymentUID: ""
+      sourceConfigMapName: ""
+      mcpSourceConfigMapName: ""
+    # HTTP-driven CRM cross-account refund Live producer. No reviewed profile: the console
+    # ServiceAccount reads the Service, Pods, policy and the deny-guard ConfigMap UID and
+    # drives the mini-CRM over its in-cluster Service. Enabling it also renders the console's
+    # resourceName-scoped GET of the crm-refund-guard ConfigMap (console-crm-live-rbac.yaml).
+    crmRefundLive:
+      enabled: false
+    # Fixed, opt-in synthetic NATS baseline authority. It adds no namespace
+    # create/delete or Secret/RBAC write permissions to the console identity.
+    natsExposure:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      # Adds only fixed-namespace response fixture verbs when explicitly enabled
+      # alongside natsExposure.enabled. Existing baseline grants stay narrow.
+      clientResponse:
+        enabled: false
+        configMapName: ""
+        profileSHA256: ""
+    # Opt-in authority for the fixed, unscored Mongo synthetic-document
+    # configuration exposure control. The existing document-store namespace,
+    # Service and server-owned harness config are not browser-selectable.
+    mongoExposure:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+    # One fixed, injected Pod-bound API bearer response case. Enabling this
+    # grants Voice fixture mutations, a name-bound E2E TokenRequest, and a
+    # read-only exact protected-reservation ledger check.
+    # Approval means the operator reviewed the PodMonitor selection path;
+    # fresh per-Pod samples are still checked by the case at runtime.
+    podBoundToken:
+      enabled: false
+      # Existing, operator-reviewed ConfigMap with exactly these two data keys:
+      # config.pod-bound-api-auth-response.yaml and manifest.json. The profile
+      # pins manifest bytes via podBoundTokenFixture.sourceManifestSHA256.
+      # Its own raw bytes are checked against profileSHA256 by the console.
+      configMapName: ""
+      profileSHA256: ""
+      scrapeApproved: false
+      scrapeNamespace: voice
+      podSelectorLabel: fixture.phorvex.ai/token-response
+      # Set to phorvex-quarantine-capacity-<first 20 SHA256 bytes of the live
+      # Voice Namespace UID>. The harness derives the name independently;
+      # a mismatch cannot read the ledger and leaves cleanup unsafe.
+      quarantineCapacityLedgerName: ""
+    # Separate, fixed CPU response fixture. This grants nothing until enabled
+    # with a reviewed source ConfigMap and namespace-specific scrape/ledger pins.
+    # It does not enable or alter the original Voice token-response case.
+    podBoundTokenCPU:
+      enabled: false
+      configMapName: ""
+      profileSHA256: ""
+      scrapeApproved: false
+      scrapeNamespace: phorvex-catalogue-cpu
+      podSelectorLabel: fixture.phorvex.ai/token-response
+      # Exact name derived from the live phorvex-catalogue-cpu Namespace UID.
+      quarantineCapacityLedgerName: ""
+    # Opt-in fixed functional catalogue. Rows stay visible when disabled and
+    # report their missing prerequisites; browsers cannot override any target.
+    catalogueV1:
+      enabled: false
+      loopbackURL: "http://127.0.0.1:8090"
+      allowedTenant: ""
+      deniedTenant: ""
+      deniedTarget: ""
+      expectedSubject: ""
+      scopedToken:
+        existingSecret: ""
+        key: token
+        mountPath: /etc/phorvex-catalogue-v1
+      voice:
+        enabled: false
+        namespace: ""
+        deployment: ""
+        service: ""
+        container: ""
+        port: 0
+        pdb: ""
+        transcriptSelector: ""
+        transcriptContainer: ""
+      # Disabled unless the installed guardrail source digest and fixed route
+      # are explicitly supplied. This only measures two benign classifiers.
+      guardrailCalibration:
+        enabled: false
+        namespace: vllm
+        service: vllm
+        port: 8000
+        container: guardrail
+        sourceConfigMap: guardrail-proxy
+        sourceKey: guardrail_proxy.py
+        sourceSHA256: ""
+      mcpSession:
+        enabled: false
+        namespace: mcp
+        deployment: mcp-server
+        service: mcp-server
+        container: mcp-server
+        port: 8000
+        sourceConfigMap: mcp-code
+        sourceKey: server.py
+        imageID: ""
+        sourceSHA256: ""
+      # Source-pinned two-call model-decision observation. Always opt in separately.
+      mcpVoiceModel:
+        enabled: false
+        voiceSourceSHA256: ""
+      # Fixed direct controls; enabled only against the reviewed installed routes.
+      chroma:
+        enabled: false
+        namespace: document-store
+        deployment: chroma
+        service: chroma
+        container: chroma
+        port: 8000
+        imageID: docker.io/chromadb/chroma@sha256:18e67eecc172abbcd9413d751bde64983b3d167fe497c98f979083eb24c0c942
+        versionSourceSHA256: 5458a79347d19a5d15966a76a3a5e02bdac384ef670ff0612cc93fc788c41f44
+        serverSourceSHA256: 8dae4ea1f3357edf75ac446bbe0e3973151a542dc6de184c7be3b6be82925c41
+        schemaSourceSHA256: 2b6ec7c5796309be91f9af97e3bb4379a42652550146b2dda226c801894570b1
+      litellm:
+        enabled: false
+        # A separate opt-in for bounded authenticated completion requests.
+        # The alias must be reviewed against the SHA-pinned installed config.
+        inferenceEnabled: false
+        modelAlias: ""
+        namespace: litellm
+        deployment: litellm
+        service: litellm
+        container: litellm
+        port: 4000
+        configMap: litellm-config
+        configKey: config.yaml
+        configSHA256: 14ebebce3b18a492a7aadb5c011bfcd71d8d16d8e8745e305b4f2336664daafb
+      gpu:
+        enabled: false
+        namespace: ""
+        fixtureConfigMap: ""
+        fixtureKey: config.yaml
+        mountPath: /etc/phorvex-catalogue-v1-gpu
+        runtimeSecret: ""
+        kubeconfigKey: kubeconfig
+        bearerTokenKey: bearer-token
+        runtimeMountPath: /etc/phorvex-catalogue-v1-gpu-runtime
+        kubeContext: ""
+      # Synthetic CRM functional controls. Owner provisions a dedicated labelled
+      # namespace and scoped kubeconfig. RBAC binds only the dedicated fixture SA.
+      crm:
+        enabled: false
+        namespace: ""
+        namespaceUID: ""
+        serviceAccountName: ""
+        manifestConfigMap: ""
+        manifestKey: manifest.json
+        manifestMountPath: /etc/phorvex-catalogue-v1-crm
+        manifestSHA256: ""
+        harnessSHA256: ""
+        runtimeSecret: ""
+        kubeconfigKey: kubeconfig
+        runtimeMountPath: /etc/phorvex-catalogue-v1-crm-runtime
+        kubeconfigSHA256: ""
+        kubeContext: ""
+    auditTransport:
+      port: 8445
+      serverSecretName: ""
+      clientSecretName: ""
+      serverDNSName: ""
+      clientDNSName: ""
+      vclusterPath: ""
+    image:
+      repository: ""
+      tag: ""
+      # Once set, the console pulls its image by this digest.
+      releaseDigest: ""
+      releaseSourceSHA: ""
+      pullPolicy: IfNotPresent
+    port: 8090
+    # Matches the console image's own CMD (deploy/docker/console.Dockerfile).
+    root: /data
+    web: /app/web
+    # Console-owned mutable evidence is physically separate from the manager decision audit.
+    # Keep persistence enabled in shared environments. Operators own StorageClass/claim
+    # provisioning, backup/restore, retention of the PVC, and capacity monitoring.
+    state:
+      mountPath: /var/lib/phorvex-console
+      # Zero keeps existing append-only behavior; positive values authorize expiry.
+      historyRetentionDays: 0
+      historyArchiveMaxBytes: "2147483648"
+      historyMinFreeBytes: "536870912"
+      persistence:
+        enabled: true
+        existingClaim: ""
+        storageClass: ""
+        size: 5Gi
+        accessModes: [ReadWriteOnce]
+        retainOnDelete: true
+      # Explicit development opt-out. State is lost on Pod replacement.
+      allowEphemeral: false
+    # No CPU/memory limits: phorvex-system pods run unthrottled (2026-10-13).
+    resources:
+      requests: { cpu: 10m, memory: 256Mi }
+    # ── identity and authorization (M-136) ────────────────────────────────────
+    # The console REFUSES TO START unless at least one credential path below is configured. There
+    # is no demo-trust mode: the previous build treated "no IdP" and "IdP failed to load" as
+    # permission to serve cluster controls to whoever asked.
+    #
+    # Everything here is a configuration identifier, not a secret. It is also per-environment:
+    # copying one cluster's signer ARN into another makes that cluster's load balancer a trusted
+    # issuer here, which is exactly the trust relationship you do not want to share.
+    auth:
+      # ALB Cognito — the path the browser actually uses when the ingress carries
+      # alb.ingress.kubernetes.io/auth-type: cognito. The console verifies the ES256 signature on
+      # x-amzn-oidc-data against this exact load balancer, user pool and app client.
+      alb:
+        signerArn: ""   # arn:aws:elasticloadbalancing:<region>:<account>:loadbalancer/app/<name>/<id>
+        additionalSignerArns: [] # explicit ALB allowlist, same account/region and issuer/client
+        issuer: ""      # https://cognito-idp.<region>.amazonaws.com/<user-pool-id>
+        clientId: ""    # the user-pool app-client id
+        region: ""      # optional; defaults to the region inside signerArn
+      # Bearer OIDC — for CLI and automation callers. All three fields are required together.
+      oidc:
+        issuer: ""
+        audience: ""
+        jwksUrl: ""
+        algorithms: []  # default ["RS256"]; RS256/384/512 and ES256/384/512 are supported
+      # The End-to-End pipeline's machine identity: a token-less ServiceAccount whose
+      # short-lived projected tokens (audience = oidc.audience) CI mints per run. Requires
+      # oidc.* to point at the cluster's own OIDC issuer and a grant for
+      # system:serviceaccount:<namespace>:<fullname>-console-e2e (see values-eks.yaml).
+      e2eIdentity:
+        enabled: false
+      # Exact browser origins allowed to drive state changes (the same-origin/CSRF boundary).
+      # There is no wildcard: an unlisted origin gets neither a CORS grant nor a mutation.
+      trustedOrigins: []
+      # The subject grant table. DevOps supplies it; the console never derives one.
+      #
+      # ROLLOUT PREREQUISITE: with no bindings the console authenticates callers and authorizes
+      # NOBODY. That is deliberate and visible (the startup log says so, and /api/session reports
+      # grantsConfigured: false). Bind the specific Cognito subjects who should be operators
+      # before rollout — do not grant a role because someone can log in.
+      grants:
+        enabled: false
+        create: false
+        configMapName: ""
+        mountPath: /etc/phorvex-console
+        fileName: grants.json
+        # data is the literal grant document. Example:
+        #   {
+        #     "version": 1,
+        #     "subjects": [
+        #       {"issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_XXXX",
+        #        "subject": "<cognito-sub-uuid>",
+        #        "roles": ["operator"],
+        #        "tenants": ["vllm", "litellm"],
+        #        "targets": ["default"],
+        #        "note": "platform on-call"}
+        #     ]
+        #   }
+        # "tenants": ["*"] is cross-tenant admin. Write it out only when that is the intent — and
+        # note that some surfaces REQUIRE it because they cannot be confined to one tenant:
+        # clearing the shared decision audit, the global red-team controls and artifacts, the
+        # unscoped (namespace-omitted) forms of /api/scan and /api/ablation, and the private
+        # evidence corpus (benchmarks, effectiveness, frontier, posture, matrix, ai-surface,
+        # reports, raw logs). A vendor-side identity that needs those holds the wildcard; a
+        # customer-facing operator scoped to specific tenants deliberately does not.
+        #
+        # "targets" must likewise list every cluster the identity may reach. "default" is this
+        # console's own cluster AND the host that runs harness subprocesses; a run whose config
+        # names another context needs that context listed too.
+        data: ""
+  nodeSelector: {}
+  tolerations: []

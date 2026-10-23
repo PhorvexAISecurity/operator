@@ -1,1 +1,4 @@
+{{- /* The console is the manager release's unless its own chart deploys it (phorvex.console.separate). */}}
+{{- if not .Values.phorvex.console.separate }}
 {{- include "phorvex-common.consoleDeployment" . }}
+{{- end }}

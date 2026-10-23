@@ -483,6 +483,10 @@ phorvex:
   # The cost is a shared lifecycle: the console restarts whenever the operator does.
   console:
     enabled: false
+    # Its own chart deploys the console (deploy/charts/phorvex-console,
+    # docs/services/console.md), with its own Application and version; this chart
+    # then renders none of the console's objects. Off, this chart renders them.
+    separate: false
     allowWorkloadMutations: false
     # With the attacks service remote (services.attacks.endpoint): the namespaces it may
     # exec into and change, and where it and the console may edit policies. Empty is

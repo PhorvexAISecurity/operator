@@ -78,6 +78,8 @@ phorvex:
 
   console:
     enabled: true
+    # Its own chart and Application deploy it (deploy/charts/phorvex-console).
+    separate: true
     # Exec, workload changes and policy edits stay in the demo's namespace.
     attackNamespaces: [phorvex-staging-demo]
     state:

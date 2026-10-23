@@ -896,6 +896,53 @@ class ServiceTLSTests(unittest.TestCase):
         self.assertIn("printf '%s-dispatcher.%s.svc' \"$RELEASE\" \"$NAMESPACE\"", script)
         self.assertTrue(os.access(ROOT / 'deploy/eks/provision-service-mtls.sh', os.X_OK))
 
+
+CONSOLE_CHART = CHARTS / 'phorvex-console'
+
+
+@unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
+class ConsoleChartTests(unittest.TestCase):
+    """The console's own chart (docs/services/console.md) renders what the manager chart did."""
+    SEPARATE = ['--set', 'phorvex.console.separate=true']
+
+    @staticmethod
+    def canonical(docs):
+        # The webhook certificate is generated on every render.
+        out = []
+        for d in docs:
+            if d['kind'] == 'Secret' and d['metadata']['name'].endswith('webhook-cert'):
+                d = {**d, 'data': None}
+            for w in d.get('webhooks') or []:
+                w.get('clientConfig', {}).pop('caBundle', None)
+            out.append(json.dumps(d, sort_keys=True))
+        return sorted(out)
+
+    def test_moving_the_console_changes_no_object(self):
+        cases = {
+            'console': CONSOLE,
+            'remote attacks': [*CONSOLE, *ATTACKS_REMOTE, '--set', 'phorvex.console.attackNamespaces={team-a,team-b}',
+                               '--set', 'phorvex.console.allowWorkloadMutations=true'],
+            'exposed': [*CONSOLE, '--set', 'phorvex.console.ingress.enabled=true', '--set', 'phorvex.console.ingress.host=console.example',
+                        '--set', 'phorvex.console.auth.e2eIdentity.enabled=true'],
+        }
+        for name, values in cases.items():
+            with self.subTest(values=name):
+                whole = helm_template(MANAGER_CHART, *values)
+                manager = helm_template(MANAGER_CHART, *values, *self.SEPARATE)
+                console = helm_template(CONSOLE_CHART, *values, *self.SEPARATE)
+                self.assertEqual(self.canonical(whole), self.canonical(manager + console))
+                self.assertTrue(console)
+                self.assertEqual([d for d in manager if 'console' in d['metadata']['name'] and d['kind'] == 'Deployment'], [])
+
+    def test_it_renders_only_where_the_console_is_separate(self):
+        self.assertEqual(helm_template(CONSOLE_CHART, *CONSOLE), [])
+
+    def test_its_defaults_are_the_managers(self):
+        manager = yaml.safe_load(MANAGER_VALUES.read_text())['phorvex']
+        console = yaml.safe_load((CONSOLE_CHART / 'values.yaml').read_text())['phorvex']
+        for key, value in console.items():
+            self.assertEqual(value, manager[key], key)
+
 class VendoredLibraryTests(unittest.TestCase):
     """Argo CD renders a chart's vendored charts/*.tgz, never deploy/charts/phorvex-common."""
 

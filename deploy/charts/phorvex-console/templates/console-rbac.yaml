@@ -1,0 +1,4 @@
+{{- /* This chart deploys the console when phorvex.console.separate is set. */}}
+{{- if .Values.phorvex.console.separate }}
+{{- include "phorvex-common.console.rbac" . }}
+{{- end }}

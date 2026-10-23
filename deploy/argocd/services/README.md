@@ -1,12 +1,16 @@
 # Split services (ADR-0001)
 
 `applicationset.yaml` gives every Phorvex service its own Argo CD Application in
-each environment: `phorvex-manager-<env>` (the manager and console chart in
-remote mode), `phorvex-brain-<env>`, `phorvex-sensor-<env>`,
-`phorvex-actuator-<env>` and `phorvex-attacks-<env>`. Each has its own chart,
-sync status, history and logs. The attacks service renders only where the console
-runs, and takes the attack routes once the environment names it in
-`phorvex.services.attacks.endpoint` (`docs/services/attacks.md`).
+each environment: `phorvex-manager-<env>` (the manager chart in remote mode),
+`phorvex-brain-<env>`, `phorvex-sensor-<env>`, `phorvex-actuator-<env>`,
+`phorvex-attacks-<env>` and `phorvex-console-<env>`. Each has its own chart, sync
+status, history and logs.
+- **The attacks service** renders only where the console runs. It takes the attack
+  routes once the environment names it in `phorvex.services.attacks.endpoint`
+  (`docs/services/attacks.md`).
+- **The console** renders in its own Application where the environment sets
+  `phorvex.console.separate`, and in the manager's elsewhere
+  (`docs/services/console.md`).
 `project.yaml` limits them to this repository, each environment's namespace and
 the cluster-scoped kinds the charts render there.
 

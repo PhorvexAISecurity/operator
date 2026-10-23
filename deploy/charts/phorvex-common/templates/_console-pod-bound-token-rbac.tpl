@@ -1,0 +1,164 @@
+{{/* console-pod-bound-token-rbac.yaml, moved from the manager chart: the manager chart renders it unless
+phorvex.console.separate, and deploy/charts/phorvex-console renders it when it is. */}}
+{{- define "phorvex-common.console.pod-bound-token-rbac" -}}
+{{- if .Values.phorvex.console.podBoundToken.enabled }}
+{{- if not .Values.phorvex.console.enabled }}{{ fail "podBoundToken requires console.enabled" }}{{ end }}
+{{- if ne .Release.Name "phorvex" }}{{ fail "podBoundToken fixed creator requires release name phorvex" }}{{ end }}
+{{- if ne .Release.Namespace "phorvex-system" }}{{ fail "podBoundToken fixed creator requires release namespace phorvex-system" }}{{ end }}
+{{- if not .Values.phorvex.e2eDetector.enabled }}{{ fail "podBoundToken requires the dedicated e2eDetector identity" }}{{ end }}
+{{- if ne .Values.phorvex.e2eDetector.targetNamespace "voice" }}{{ fail "podBoundToken e2eDetector must target voice" }}{{ end }}
+{{- if not .Values.phorvex.eventIdentityPolicy.enabled }}{{ fail "podBoundToken requires the SecurityEvent creator identity admission guard" }}{{ end }}
+{{- if not .Values.phorvex.console.podBoundToken.scrapeApproved }}{{ fail "podBoundToken requires explicit reviewed PodMonitor scrape approval" }}{{ end }}
+{{- if ne .Values.phorvex.console.podBoundToken.scrapeNamespace "voice" }}{{ fail "podBoundToken scrape namespace must be voice" }}{{ end }}
+{{- if ne .Values.phorvex.console.podBoundToken.podSelectorLabel "fixture.phorvex.ai/token-response" }}{{ fail "podBoundToken PodMonitor must select the fixed nonce label" }}{{ end }}
+{{- if not .Values.phorvex.prometheusUrl }}{{ fail "podBoundToken requires the manager Prometheus URL" }}{{ end }}
+{{- if not (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor") }}{{ fail "podBoundToken requires the installed PodMonitor API" }}{{ end }}
+{{- $ledger := .Values.phorvex.console.podBoundToken.quarantineCapacityLedgerName }}
+{{- if not (regexMatch "^phorvex-quarantine-capacity-[0-9a-f]{40}$" $ledger) }}{{ fail "podBoundToken requires an exact reviewed quarantineCapacityLedgerName" }}{{ end }}
+---
+# The console launches the in-cluster harness under its own ServiceAccount.
+# Kubernetes RBAC cannot scope these generated names by nonce; the fixed case
+# journals each create and verifies exact UID preconditions at cleanup.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-fixture
+  namespace: voice
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch", "update", "delete"]
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["services", "serviceaccounts"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["apps"]
+  resources: ["replicasets"]
+  verbs: ["get", "list", "watch", "delete"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "rolebindings"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["podmonitors"]
+  verbs: ["create", "get", "delete"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  verbs: ["create", "get", "list", "delete"]
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["adaptivemovingtargetdefenses"]
+  verbs: ["get", "list", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-fixture
+  namespace: voice
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-fixture
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.attackServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The console verifies the installed E2E creator's admission guard before it
+# requests a token. These policies are cluster-scoped, so a namespaced Role
+# cannot grant the two exact GETs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+rules:
+- apiGroups: ["admissionregistration.k8s.io"]
+  resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+  resourceNames: [{{ printf "%s-e2e-detector" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator-policy-read
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.attackServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The console may mint a short-lived token only for the existing admitted
+# E2E creator. That token carries event CREATE/GET/DELETE from e2e-detector's
+# separate ClusterRole and remains subject to both admission policies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: [{{ printf "%s-e2e-detector" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  resourceNames: [{{ printf "%s-e2e-detector" (include "phorvex.fullname" .) | quote }}]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-creator
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.attackServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+# The harness derives the protected reservation name from the live Voice
+# Namespace UID. The reviewed value limits this read to that single ledger.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ $ledger | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-pod-bound-token-capacity-ledger
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.attackServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end -}}

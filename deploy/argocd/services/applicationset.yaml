@@ -39,6 +39,8 @@ spec:
             chart: deploy/charts/phorvex-actuator
           - service: attacks
             chart: deploy/charts/phorvex-attacks
+          - service: console
+            chart: deploy/charts/phorvex-console
   template:
     metadata:
       name: 'phorvex-{{.service}}-{{.environment}}'

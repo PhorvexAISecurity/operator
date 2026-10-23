@@ -1,0 +1,36 @@
+{{/* console-voice-memory-rbac.yaml, moved from the manager chart: the manager chart renders it unless
+phorvex.console.separate, and deploy/charts/phorvex-console renders it when it is. */}}
+{{- define "phorvex-common.console.voice-memory-rbac" -}}
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.voiceMemory.enabled }}
+# The Voice Fire runner reads the exact Deployment-owned rule before and after
+# the run. It cannot mutate the rule or inspect manager journals.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-voice-memory
+  namespace: voice
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["voice-memory-policy"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-voice-memory
+  namespace: voice
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-console-voice-memory
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.attackServiceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end -}}

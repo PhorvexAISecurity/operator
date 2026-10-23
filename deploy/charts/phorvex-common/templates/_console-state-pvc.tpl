@@ -1,0 +1,27 @@
+{{/* console-state-pvc.yaml, moved from the manager chart: the manager chart renders it unless
+phorvex.console.separate, and deploy/charts/phorvex-console renders it when it is. */}}
+{{- define "phorvex-common.console.state-pvc" -}}
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.console.state.persistence.enabled (not .Values.phorvex.console.state.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "phorvex.fullname" . }}-console-state
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-state
+  {{- if .Values.phorvex.console.state.persistence.retainOnDelete }}
+  annotations:
+    helm.sh/resource-policy: keep
+  {{- end }}
+spec:
+  accessModes:
+    {{- toYaml .Values.phorvex.console.state.persistence.accessModes | nindent 4 }}
+  {{- with .Values.phorvex.console.state.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.phorvex.console.state.persistence.size }}
+{{- end }}
+{{- end -}}
