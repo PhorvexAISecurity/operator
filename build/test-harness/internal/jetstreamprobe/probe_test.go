@@ -332,6 +332,38 @@ func TestDistinctConsumerCleanupFailureIsSurfaced(t *testing.T) {
 	}
 }
 
+func TestOwnedConsumerDeleteOutlastsTheStoreRemovalRace(t *testing.T) {
+	race := &jetstream.APIError{Code: 500, ErrorCode: jsStreamGeneralError, Description: "unlinkat /tmp/js/obs/probe-storage-check: directory not empty"}
+	other := &jetstream.APIError{Code: 500, ErrorCode: 10052, Description: "stream store failure"}
+	for name, tc := range map[string]struct {
+		answers []error
+		calls   int
+		want    error
+	}{
+		"deleted":                  {answers: []error{nil}, calls: 1},
+		"gone after the race":      {answers: []error{race, jetstream.ErrConsumerNotFound}, calls: 2},
+		"deleted after the race":   {answers: []error{race, race, nil}, calls: 3},
+		"absent before any delete": {answers: []error{jetstream.ErrConsumerNotFound}, calls: 1, want: jetstream.ErrConsumerNotFound},
+		"another failure":          {answers: []error{other}, calls: 1, want: other},
+		"the race persists":        {answers: []error{race, race, race, race, race, race}, calls: consumerDeleteAttempts, want: race},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			probe := &Probe{deleteConsumer: func(context.Context, string) error {
+				calls++
+				return tc.answers[calls-1]
+			}}
+			err := probe.deleteOwnedConsumer(t.Context(), "probe-storage-check")
+			if !errors.Is(err, tc.want) || (tc.want == nil && err != nil) {
+				t.Fatalf("err=%v want %v", err, tc.want)
+			}
+			if calls != tc.calls {
+				t.Fatalf("deleted %d times, want %d", calls, tc.calls)
+			}
+		})
+	}
+}
+
 func TestPubAckIdentityValidatorRefusesMalformedOrWrongReceipt(t *testing.T) {
 	valid := &jetstream.PubAck{Stream: "DURABILITY", Sequence: 7}
 	if err := validatePubAck(valid, "DURABILITY", false, 7); err != nil {
