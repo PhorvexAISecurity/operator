@@ -11,8 +11,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/go-logr/logr/funcr"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/model"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -24,6 +22,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 func waitM013EventAuthorization(ctx context.Context, interval time.Duration, want bool, review func(context.Context, string) (bool, error)) error {
@@ -216,7 +218,7 @@ func TestM013RealEventSink(t *testing.T) {
 	broadcaster := record.NewBroadcaster(record.WithContext(logr.NewContext(ctx, log)))
 	defer broadcaster.Shutdown()
 	broadcaster.StartRecordingToSink(&typedcore.EventSinkImpl{Interface: cs.CoreV1().Events("")})
-	m := &Manager{ActuationRecorder: broadcaster.NewRecorder(scheme, corev1.EventSource{Component: "phorvex-actuation"}), Log: log}
+	m := &Manager{Local: &inprocess.Services{}, ActuationRecorder: broadcaster.NewRecorder(scheme, corev1.EventSource{Component: "phorvex-actuation"}), Log: log}
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "target", Namespace: "m013"}, Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "main", Image: "busybox"}}}}
 	create(pod)
 	target := actuationEventTarget(&model.WorkloadView{Pod: model.Pod{Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID)}})

@@ -6,9 +6,6 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -18,6 +15,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type m132RouteClient struct {
@@ -114,7 +116,7 @@ func m132RouteFixture(t *testing.T, selector metav1.LabelSelector) (*m132RouteCl
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &Manager{Actuator: hybrid, BoundaryReader: c, QuarantineCapacity: quarantineCapacity, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hybrid, QuarantineCapacity: quarantineCapacity}, BoundaryReader: c, Log: logr.Discard()}
 	e := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: policy.Name}, uid: string(policy.UID), namespace: "ns", tenant: "team", spec: policy.Spec}
 	pol := model.Policy{Tenant: "team", PolicyName: policy.Name, PolicyUID: string(policy.UID), MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionQuarantine: true, model.ActionRouteRotate: true}}
 	view := map[string]*model.WorkloadView{"ns/api": {Pod: model.Pod{Namespace: "ns", Name: "api", UID: "pod-uid", Ready: true, DesiredReplicas: 2, ReadyReplicas: 2, RouteService: "web-route", RouteServiceReady: true}}}

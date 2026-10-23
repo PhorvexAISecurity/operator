@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -33,7 +34,7 @@ func (f *routedDispatchFake) PrepareRoutes(_ context.Context, target actuator.Te
 
 func TestActuateRefusesOnlyFailedPreparationRoute(t *testing.T) {
 	fa := &routedDispatchFake{dispatchFakeActuator: dispatchFakeActuator{emit: true}, prep: actuator.RoutePreparation{PhoenixErr: errors.New("unrepresentable Phoenix selector")}}
-	m := &Manager{Actuator: fa, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 	pol := model.Policy{Tenant: "t", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true, model.ActionKVReset: true}}
 	e := &policyEntry{namespace: "ns"}
 	e.spec.Selector.MatchLabels = map[string]string{"app": "demo"}
@@ -122,7 +123,7 @@ func TestRouteActionsCarryStableDecisionIdentityToActuator(t *testing.T) {
 	for _, action := range []model.Action{model.ActionRouteRotate, model.ActionEndpointRotate} {
 		t.Run(string(action), func(t *testing.T) {
 			fake := &dispatchFakeActuator{emit: true}
-			manager := &Manager{Actuator: fake, Log: logr.Discard()}
+			manager := &Manager{Local: &inprocess.Services{Actuator: fake}, Log: logr.Discard()}
 			policy := model.Policy{
 				Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", MinAvailableReplicas: 1,
 				EnabledActions: map[model.Action]bool{action: true},
@@ -148,7 +149,7 @@ func TestRouteActionsCarryStableDecisionIdentityToActuator(t *testing.T) {
 
 func TestM064TraceDisabledServingActionCarriesTickAndStructuredObservation(t *testing.T) {
 	fake := &dispatchFakeActuator{emit: true}
-	manager := &Manager{Actuator: fake, Log: logr.Discard(), DecisionTraceEnabled: false}
+	manager := &Manager{Local: &inprocess.Services{Actuator: fake}, Log: logr.Discard(), DecisionTraceEnabled: false}
 	policy := model.Policy{Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", TickID: "real-tick-id", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionKVReset, Namespace: "ns", Pod: "p1"}}
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{
@@ -176,7 +177,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("ensure-policy-failed", func(t *testing.T) {
 		fa := &dispatchFakeActuator{ensureErr: errors.New("rbac denied")}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 0 {
 			t.Fatalf("actuated %d under EnsurePolicy failure", n)
@@ -191,7 +192,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("inviolability-guard", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		ds[0].Feasible = false // selected but infeasible: the invariant-violation path
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
@@ -205,7 +206,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("no-tick-view", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{})
 		if fa.calls != 0 {
@@ -218,7 +219,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("emit-boundary-infeasible", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		notReady := map[string]*model.WorkloadView{
 			"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 0}},
@@ -236,7 +237,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("dispatch-error-failed", func(t *testing.T) {
 		fa := &dispatchFakeActuator{actErr: errors.New("boom")}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
@@ -247,7 +248,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("dispatch-error-deadline-expired", func(t *testing.T) {
 		fa := &dispatchFakeActuator{actErr: context.DeadlineExceeded}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, reason := dispatchOutcomeOf(t, ds)
@@ -258,7 +259,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("emitted-false", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: false}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView)
 		outcome, _ := dispatchOutcomeOf(t, ds)
@@ -269,7 +270,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("emitted", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, feasibleView); n != 1 {
 			t.Fatalf("actuated %d, want 1", n)
@@ -282,7 +283,7 @@ func TestActuateStampsDispatchOutcomeAcrossTheGuardSurface(t *testing.T) {
 
 	t.Run("unselected-untouched", func(t *testing.T) {
 		fa := &dispatchFakeActuator{emit: true}
-		m := &Manager{Actuator: fa, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 		ds := tracedSelectedDecision()
 		ds[0].Selected = false
 		ds[0].Trace.DispatchReason = "unselected"

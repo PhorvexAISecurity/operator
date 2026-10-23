@@ -21,6 +21,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -140,7 +141,7 @@ func TestM127RealAPIDirectReaderClosesCachedDispatchWindow(t *testing.T) {
 	}
 	pol := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	directHands := newHands()
-	directManager := &Manager{Actuator: directHands, KillSwitch: &KillSwitch{Client: direct, Namespace: "m127"}, Log: logr.Discard()}
+	directManager := &Manager{Local: &inprocess.Services{Actuator: directHands}, KillSwitch: &KillSwitch{Client: direct, Namespace: "m127"}, Log: logr.Discard()}
 	directDecision := tracedSelectedDecision()
 	if got := actuateWithBoundary(t, directManager, ctx, &policyEntry{namespace: "ns"}, pol, directDecision, m127FeasibleViews("p1")); got != 0 || directHands.actuateCalls != 0 || httpCalls.Load() != 0 {
 		t.Fatalf("direct API boundary dispatched after engagement: got=%d dispatches=%d HTTP=%d", got, directHands.actuateCalls, httpCalls.Load())
@@ -151,8 +152,9 @@ func TestM127RealAPIDirectReaderClosesCachedDispatchWindow(t *testing.T) {
 
 	cachedHands := newHands()
 	cachedManager := &Manager{
-		Actuator: cachedHands, KillSwitch: &KillSwitch{Client: informerCache, Namespace: "m127"},
-		Intents: exposure.NewIntents(), Log: logr.Discard(),
+		Local:      &inprocess.Services{Actuator: cachedHands},
+		KillSwitch: &KillSwitch{Client: informerCache, Namespace: "m127"},
+		Intents:    exposure.NewIntents(), Log: logr.Discard(),
 	}
 	cachedDecision := tracedSelectedDecision()
 	if got := actuateWithBoundary(t, cachedManager, ctx, &policyEntry{namespace: "ns"}, pol, cachedDecision, m127FeasibleViews("p1")); got != 1 || cachedHands.actuateCalls != 1 || httpCalls.Load() != 1 {

@@ -21,6 +21,7 @@ import (
 	"github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -142,7 +143,7 @@ func m103RunnerDecision(scope model.ResourceScope) ([]model.Decision, map[string
 func TestM103LostClaimAcknowledgementNeverInvokesBackend(t *testing.T) {
 	store, c, scope := m103RunnerStore(t, true)
 	hands := &m019Hands{result: modelResultEmitted()}
-	m := &Manager{Actuator: hands, SharedCapacity: store, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, SharedCapacity: store, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	decisions, views, policy := m103RunnerDecision(scope)
 	if got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, policy, decisions, views); got != 0 {
 		t.Fatalf("actuated = %d", got)
@@ -166,7 +167,7 @@ func TestM103ZeroFloorDispatchCannotSpendPeerPolicyFloor(t *testing.T) {
 	ctx := context.Background()
 	store, _, scope := m103RunnerStoreWithMembers(t, false, 3)
 	hands := &m019Hands{result: modelResultEmitted()}
-	m := &Manager{Actuator: hands, SharedCapacity: store, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, SharedCapacity: store, Intents: exposure.NewIntents(), Log: logr.Discard()}
 
 	first, firstViews, firstPolicy := m103GeneratedRunnerDecision(t, scope, "target", "target-uid", "policy-a", "tick-a", 2, 3, map[string]int{})
 	if got := actuateWithBoundary(t, m, ctx, &policyEntry{namespace: "ns"}, firstPolicy, first, firstViews); got != 1 || len(hands.calls) != 1 {
@@ -187,7 +188,7 @@ func TestM103ZeroFloorDispatchCannotSpendPeerPolicyFloor(t *testing.T) {
 
 	independentStore, _, independentScope := m103RunnerStoreWithMembers(t, false, 3)
 	independentHands := &m019Hands{result: modelResultEmitted()}
-	independent := &Manager{Actuator: independentHands, SharedCapacity: independentStore, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	independent := &Manager{Local: &inprocess.Services{Actuator: independentHands}, SharedCapacity: independentStore, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	allowed, allowedViews, allowedPolicy := m103GeneratedRunnerDecision(t, independentScope, "peer", "peer-uid", "policy-zero", "tick-zero", 0, 3, map[string]int{})
 	if got := actuateWithBoundary(t, independent, ctx, &policyEntry{namespace: "ns"}, allowedPolicy, allowed, allowedViews); got != 1 || len(independentHands.calls) != 1 {
 		t.Fatalf("floor-zero policy without peer obligations was refused: actuated=%d calls=%v decision=%+v", got, independentHands.calls, allowed)

@@ -38,6 +38,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
@@ -46,7 +48,6 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/scaleprobe"
 	"github.com/phorvex/phorvex/internal/sensorsvc"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 type m137HTTPCounts struct {
@@ -919,15 +920,15 @@ func TestM137ScaleHarness(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m, err := NewManagerWithBackend(managerClient, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendNative, Source: actuator.SourceExplicit, Raw: "native", Present: true})
+	m, err := newManagerWithBackend(managerClient, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendNative, Source: actuator.SourceExplicit, Raw: "native", Present: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	native := actuator.NewNativeActuator(managerClient)
 	native.Reader, native.DryRun = direct, true
-	m.Actuator, m.OwnershipReader, m.BoundaryReader, m.VocabularyReader = native, direct, direct, direct
+	localServices(m).Actuator, m.OwnershipReader, m.BoundaryReader, m.VocabularyReader = native, direct, direct, direct
 	m.KillSwitch = &KillSwitch{Client: direct, Namespace: "m137-00"}
-	m.MetricsSource = nil
+	localServices(m).MetricsSource = nil
 	auditSink := &m137BoundedAudit{maxBytes: 2 << 20}
 	m.Audit = audit.New(logr.Discard(), auditSink)
 	for _, policy := range fixture.policies {
@@ -1191,7 +1192,7 @@ func TestM137ScaleHarness(t *testing.T) {
 
 	m137ForceDue(m)
 	deadlineSource := &m137DeadlineSource{entered: make(chan struct{})}
-	m.MetricsSource = deadlineSource
+	localServices(m).MetricsSource = deadlineSource
 	deadlineCountBefore, deadlineSumBefore, err := m137HistogramValue("phorvex_manager_tick_duration_seconds", map[string]string{"outcome": "deadline"})
 	if err != nil {
 		probeErrors = append(probeErrors, "deadline metric baseline: "+err.Error())

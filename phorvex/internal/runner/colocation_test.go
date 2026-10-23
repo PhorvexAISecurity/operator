@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/go-logr/logr/funcr"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 func TestColocationJoinsPolicySelectorAndKeepsDecisionBytes(t *testing.T) {
@@ -41,7 +43,7 @@ func TestColocationJoinsPolicySelectorAndKeepsDecisionBytes(t *testing.T) {
 	var legacy bytes.Buffer
 	var logs []string
 	logger := funcr.New(func(_, args string) { logs = append(logs, args) }, funcr.Options{})
-	m := &Manager{Audit: audit.New(logger, &legacy)}
+	m := &Manager{Local: &inprocess.Services{}, Audit: audit.New(logger, &legacy)}
 	d := model.Decision{Namespace: "a", Pod: "pod", Tenant: "A", Trace: &model.DecisionTraceV2{DecisionID: "existing-id"}}
 	before, _ := json.Marshal(audit.ToRecord(d))
 	m.recordColocation(in, d, model.Policy{TickID: "tick", GitSHA: "sha", BrainImage: "image"})

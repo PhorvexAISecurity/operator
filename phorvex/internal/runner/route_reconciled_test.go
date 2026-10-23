@@ -17,6 +17,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -123,7 +124,7 @@ func TestRouteTerminalReceiptReconcilesThroughActualNativeRunner(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ns, op, pod, svc, slice, policyObject).Build()
 	c := &routeRunnerClient{Client: base}
 	native := &actuator.NativeActuator{Client: c, Reader: c, JournalNamespace: op.Name, RouteObservationTimeout: 100 * time.Millisecond, RouteObservationInterval: time.Millisecond}
-	manager := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: native}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	policy := model.Policy{Tenant: "tenant", PolicyName: policyObject.Name, PolicyUID: string(policyObject.UID), MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRouteRotate: true}}
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: ns.Name, Name: pod.Name, UID: string(pod.UID), Ready: true, DesiredReplicas: 1, ReadyReplicas: 1}}
 	views := map[string]*model.WorkloadView{ns.Name + "/" + pod.Name: view}

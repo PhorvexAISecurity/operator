@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr/funcr"
 
 	"github.com/phorvex/phorvex/internal/eventtrust"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -14,7 +15,7 @@ import (
 // not once per tick, and clears with one line.
 func TestUntrustedEventStreamIsReportedOncePerTransition(t *testing.T) {
 	var lines []string
-	m := &Manager{Log: funcr.New(func(prefix, args string) { lines = append(lines, args) }, funcr.Options{})}
+	m := &Manager{Local: &inprocess.Services{}, Log: funcr.New(func(prefix, args string) { lines = append(lines, args) }, funcr.Options{})}
 
 	forged := []model.SecurityEventInfo{
 		{Name: "v10-forged", Source: "K3Detector", Trust: eventtrust.TrustUnstamped},

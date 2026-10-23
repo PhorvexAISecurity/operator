@@ -30,6 +30,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/console"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 )
@@ -81,7 +82,7 @@ func TestM010NativeUnavailableRefusalSurvivesRunnerAuditAndHistory(t *testing.T)
 	native.SetBoundaryReader(c)
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
-	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: native}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	view := m010KVView("pod-uid")
 	decisions := []model.Decision{{
 		Tenant: "tenant", Namespace: "ns", Pod: "p1", Action: model.ActionKVReset,
@@ -168,7 +169,7 @@ func TestM010NativeLoopbackSuccessKeepsModeledCoverageQualified(t *testing.T) {
 	native.JournalNamespace = "operator"
 	legacy, _ := actuator.LoadServingSecurityFile("", actuator.ServingSecurityLegacyPlaintext, "operator")
 	native.SetServingSecurity(legacy)
-	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: native}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	view := m010KVView("pod-uid")
 	decisions := []model.Decision{{
 		Namespace: "ns", Pod: "p1", Action: model.ActionKVReset, Selected: true, Feasible: true,
@@ -221,7 +222,7 @@ func TestM010ExplicitNilErrorRefusalUsesReservedAlternativeOnce(t *testing.T) {
 		t.Fatal("reserved alternative absent")
 	}
 	hands := &m019Hands{result: actuator.Result{NoEffect: actuator.NoEffectRefused}}
-	m := &Manager{Actuator: hands, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	if got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); got != 1 {
 		t.Fatalf("actuations = %d, calls = %v", got, hands.calls)
 	}
@@ -257,7 +258,7 @@ func (h *m010FixedHands) Actuate(context.Context, actuator.Request) (actuator.Re
 func TestM010RefusalCooldownExpirySuccessAndTargetIdentity(t *testing.T) {
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	hands := &m010FixedHands{result: actuator.Result{NoEffect: actuator.NoEffectRefused}}
-	m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
 	pol := model.Policy{Tenant: "tenant", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	view := m010KVView("uid-one")
 	viewMap := map[string]*model.WorkloadView{"ns/p1": view}
@@ -317,7 +318,7 @@ func TestM010RealCoverageEngineExcludesRepeatedRefusalThenResumes(t *testing.T) 
 	ce.Recon = profile
 	now := time.Date(2026, 9, 17, 13, 0, 0, 0, time.UTC)
 	hands := &m010FixedHands{result: actuator.Result{NoEffect: actuator.NoEffectRefused}}
-	m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
 	ce.FailureExclusion = func(v *model.WorkloadView, a model.Action) (string, bool) {
 		return m.Failures.exclusion(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, a}, now)
 	}
@@ -405,7 +406,7 @@ func TestM010ContradictoryRefusedEmissionStaysUnknownThroughRunnerEventAndAudit(
 		t.Run(tc.name, func(t *testing.T) {
 			hands := &m010FixedHands{result: tc.result}
 			events := record.NewFakeRecorder(2)
-			m := &Manager{Actuator: hands, ActuationRecorder: events, Intents: exposure.NewIntents(), Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: hands}, ActuationRecorder: events, Intents: exposure.NewIntents(), Log: logr.Discard()}
 			ds := []model.Decision{{
 				Namespace: "ns", Pod: "p1", Action: model.ActionKVReset, Selected: true, Feasible: true,
 				Engine: "p1-coverage", CoverageValue: 1.25, CoveredWeight: 0.75,
@@ -444,7 +445,7 @@ func TestM010SatisfiedReconciledAndDeclaredDoNotTeachFailure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			hands := &m010FixedHands{result: tc.result}
-			m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 			ds := []model.Decision{{Namespace: "ns", Pod: "p1", Action: model.ActionKVReset, Selected: true, Feasible: true}}
 			view := m010KVView("pod-uid")
 			if got := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, model.Policy{Tenant: "tenant"}, ds, map[string]*model.WorkloadView{"ns/p1": view}); got != 0 {

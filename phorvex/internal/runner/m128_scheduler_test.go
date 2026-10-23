@@ -63,7 +63,7 @@ func m128Manager(t *testing.T, src *m128RecordingSource, policies ...*v1alpha1.P
 	t.Helper()
 	m, _ := m140BlockedTickManager(t, src, policies...)
 	m.Calibration = nil
-	m.Actuator = nil
+	localServices(m).Actuator = nil
 	for _, policy := range policies {
 		if err := m.Upsert(policy); err != nil {
 			t.Fatal(err)
@@ -260,7 +260,7 @@ func (s *m128QueuedSource) reset() {
 func m128QueuedManager(t *testing.T, source *m128QueuedSource, policies ...*v1alpha1.PhorvexPolicy) *Manager {
 	t.Helper()
 	m, _ := m140BlockedTickManager(t, source, policies...)
-	m.Calibration, m.Actuator = nil, nil
+	m.Calibration, localServices(m).Actuator = nil, nil
 	for _, policy := range policies {
 		if err := m.Upsert(policy); err != nil {
 			t.Fatal(err)
@@ -396,7 +396,7 @@ func TestM128StartTimeoutRetriesOnlyAtFutureMaintenance(t *testing.T) {
 	m, _ := m140BlockedTickManager(t, source, policy)
 	m.BaseInterval = 100 * time.Millisecond
 	m.PerTickTimeout = 20 * time.Millisecond
-	m.Calibration, m.Actuator = nil, nil
+	m.Calibration, localServices(m).Actuator = nil, nil
 	m.scheduleClock = clock
 	if err := m.Upsert(policy); err != nil {
 		t.Fatal(err)
@@ -548,8 +548,8 @@ func TestM128CancellationAfterDispatchPreservesAttemptAuditWithoutCadence(t *tes
 	hands := &m128AttemptingActuator{cancel: cancel}
 	var records bytes.Buffer
 	optimizer := &m128SelectedOptimizer{}
-	m.Optimizer = optimizer
-	m.Actuator = hands
+	localServices(m).Optimizer = optimizer
+	localServices(m).Actuator = hands
 	m.Audit = audit.New(logr.Discard(), &records)
 	if result := m.tick(ctx); result != tickInterrupted {
 		t.Fatalf("tick result=%v actuator calls=%d decisions=%+v audit=%s", result, hands.calls, optimizer.decisions, records.String())

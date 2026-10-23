@@ -30,6 +30,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -56,7 +57,7 @@ func newEntryManager(t *testing.T, name string) (*Manager, *policyEntry) {
 	t.Helper()
 	key := types.NamespacedName{Namespace: "ns", Name: name}
 	entry := &policyEntry{key: key}
-	return &Manager{ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}, entry
+	return &Manager{Local: &inprocess.Services{}, ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}, entry
 }
 
 // settle runs the debounce to its threshold so the terminal condition is observed.
@@ -328,7 +329,7 @@ func TestStaleTrueConditionIsCorrected(t *testing.T) {
 
 	key := types.NamespacedName{Namespace: "ns", Name: "stale"}
 	entry := &policyEntry{key: key, tenant: "t"}
-	m := &Manager{Client: c, ActionsSupportedDebounce: 1, policies: map[string]*policyEntry{key.String(): entry}}
+	m := &Manager{Local: &inprocess.Services{}, Client: c, ActionsSupportedDebounce: 1, policies: map[string]*policyEntry{key.String(): entry}}
 
 	pod := model.Pod{Namespace: "ns", Name: "vllm-0", HasGPU: true, ServingEndpointReady: true}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
@@ -364,9 +365,9 @@ func TestNewManagerRefusesInvalidActuatorConfiguration(t *testing.T) {
 	c := fake.NewClientBuilder().Build()
 	for _, bad := range []string{"phoenixx", " native", "NATIVE", "   ", "kubectl"} {
 		t.Setenv(actuator.BackendEnvVar, bad)
-		m, err := NewManager(c, logr.Discard())
+		m, err := newManager(c, logr.Discard())
 		if err == nil {
-			t.Fatalf("%s=%q must fail construction, got actuator %q", actuator.BackendEnvVar, bad, m.Actuator.Name())
+			t.Fatalf("%s=%q must fail construction, got actuator %q", actuator.BackendEnvVar, bad, localServices(m).Actuator.Name())
 		}
 		if m != nil {
 			t.Fatalf("%s=%q returned a Manager alongside the error", actuator.BackendEnvVar, bad)
@@ -383,23 +384,23 @@ func TestNewManagerResolvesEveryValidBranch(t *testing.T) {
 	c := fake.NewClientBuilder().Build()
 	t.Run("omitted-selects-the-default", func(t *testing.T) {
 		t.Setenv(actuator.BackendEnvVar, "")
-		m, err := NewManager(c, logr.Discard())
+		m, err := newManager(c, logr.Discard())
 		if err != nil {
 			t.Fatalf("an omitted selector must succeed: %v", err)
 		}
-		if m.Actuator.Name() != string(actuator.DefaultBackend) {
-			t.Fatalf("omission must select %s, got %s", actuator.DefaultBackend, m.Actuator.Name())
+		if localServices(m).Actuator.Name() != string(actuator.DefaultBackend) {
+			t.Fatalf("omission must select %s, got %s", actuator.DefaultBackend, localServices(m).Actuator.Name())
 		}
 	})
 	for _, want := range []string{"phoenix", "native", "hybrid"} {
 		t.Run(want, func(t *testing.T) {
 			t.Setenv(actuator.BackendEnvVar, want)
-			m, err := NewManager(c, logr.Discard())
+			m, err := newManager(c, logr.Discard())
 			if err != nil {
 				t.Fatalf("%s must be accepted: %v", want, err)
 			}
-			if m.Actuator.Name() != want {
-				t.Fatalf("%s selected %s", want, m.Actuator.Name())
+			if localServices(m).Actuator.Name() != want {
+				t.Fatalf("%s selected %s", want, localServices(m).Actuator.Name())
 			}
 		})
 	}
@@ -411,23 +412,23 @@ func TestNewManagerResolvesEveryValidBranch(t *testing.T) {
 func TestBackendResolvedOnceAndShared(t *testing.T) {
 	c := fake.NewClientBuilder().Build()
 	t.Setenv(actuator.BackendEnvVar, "native")
-	m, err := NewManager(c, logr.Discard())
+	m, err := newManager(c, logr.Discard())
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(actuator.BackendEnvVar, "hybrid")
-	if m.Actuator.Name() != "native" {
-		t.Fatalf("the backend must be resolved once at construction, got %s after the env changed", m.Actuator.Name())
+	if localServices(m).Actuator.Name() != "native" {
+		t.Fatalf("the backend must be resolved once at construction, got %s after the env changed", localServices(m).Actuator.Name())
 	}
 
 	// The support consumer must query the instance held in m.Actuator, not a second
 	// resolution: swap in a recorder and prove the real status path consults it.
 	rec := &recordingBackend{}
-	m.Actuator = rec
+	localServices(m).Actuator = rec
 	pod := model.Pod{Namespace: "ns", Name: "p", HasGPU: true, ServingEndpointReady: true}
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	rep := capabilityGaps(pol, []*model.WorkloadView{{Pod: pod}},
-		capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, nil, localActuator(m.Actuator)))
+		capability.BuildWitness(t.Context(), capability.BuildIndex([]model.Pod{pod}, nil, nil), nil, nil, localActuator(localServices(m).Actuator)))
 	if len(rec.asked) == 0 {
 		t.Fatal("the support check never consulted m.Actuator")
 	}

@@ -24,6 +24,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/slo"
@@ -39,8 +40,9 @@ func m140Policy(name, tenant, uid string) *v1alpha1.PhorvexPolicy {
 
 func m140Manager(e *decision.CoverageEngine) *Manager {
 	return &Manager{
+		Local:    &inprocess.Services{Optimizer: e},
 		policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{},
-		Optimizer: e, Clock: exposure.NewClock(), Intents: exposure.NewIntents(),
+		Clock: exposure.NewClock(), Intents: exposure.NewIntents(),
 		Log: logr.Discard(),
 	}
 }
@@ -741,7 +743,7 @@ func TestM140_NeverSampledOwnerStaysAbsent(t *testing.T) {
 // the entry past retirement. Driven through the real Manager.actuate success path.
 func TestM140_SuccessfulEmissionMarksOwnerScopedCooldown(t *testing.T) {
 	fa := &fakeActuator{}
-	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	pol := model.Policy{Tenant: "display", PolicyUID: "owner-uid",
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "p"}}
@@ -793,7 +795,7 @@ func (*m140FailingActuator) SupportsAction(context.Context, model.Action, actuat
 // Control: a FAILED emission must not mark a cooldown, or a retry would be suppressed.
 func TestM140_FailedEmissionMarksNoCooldown(t *testing.T) {
 	fa := &m140FailingActuator{}
-	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	pol := model.Policy{Tenant: "display", PolicyUID: "owner-uid",
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	decisions := []model.Decision{{Selected: true, Feasible: true, Action: model.ActionRotate, Namespace: "ns", Pod: "p"}}
@@ -812,7 +814,7 @@ func TestM140_FailedEmissionMarksNoCooldown(t *testing.T) {
 // does not clear the other's.
 func TestM140_EmissionCooldownsAreIsolatedBetweenOwners(t *testing.T) {
 	fa := &fakeActuator{}
-	m := &Manager{Actuator: fa, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	first := model.Policy{Tenant: "shared", PolicyUID: "uid-1",
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	second := model.Policy{Tenant: "shared", PolicyUID: "uid-2",

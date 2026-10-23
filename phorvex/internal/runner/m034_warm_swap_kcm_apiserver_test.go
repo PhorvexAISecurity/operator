@@ -37,6 +37,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
 	"github.com/go-logr/logr"
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/capability"
@@ -44,8 +46,8 @@ import (
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 type m034RecordingActuator struct {
@@ -711,7 +713,7 @@ func TestM034M078SnapshotOptimizerRunnerNativeAndReplicaSetEndpointControllers(t
 		}
 		readyDone <- fmt.Errorf("replacement never appeared")
 	}()
-	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Client: c, BoundaryReader: c, Optimizer: engine, Actuator: recording, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: engine, Actuator: recording}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Client: c, BoundaryReader: c, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Log: logr.Discard()}
 	entry := &policyEntry{key: types.NamespacedName{Namespace: ns, Name: policy.Name}, uid: string(policy.UID), tenant: "m034", namespace: ns, spec: policy.Spec}
 	if n := m.actuate(ctx, entry, pol, ds, map[string]*model.WorkloadView{ns + "/" + old.Name: view}); n != 0 || ds[0].Actuated || recording.err == nil || recording.result.Emitted {
 		t.Fatalf("runner must retain the controller-readiness interval as partial: n=%d result=%+v err=%v decision=%+v", n, recording.result, recording.err, ds[0])

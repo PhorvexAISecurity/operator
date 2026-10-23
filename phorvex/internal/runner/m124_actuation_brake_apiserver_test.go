@@ -8,11 +8,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuationbrake"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/exposure"
-	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -22,6 +17,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuationbrake"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type m124RouteClient struct{ client.Client }
@@ -156,7 +158,7 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 	native.JournalNamespace = "m124-operator"
 	native.RouteObservationTimeout = 2 * time.Second
 	native.RouteObservationInterval = 10 * time.Millisecond
-	nativeManager := &Manager{Actuator: native, BoundaryReader: routeClient, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	nativeManager := &Manager{Local: &inprocess.Services{Actuator: native}, BoundaryReader: routeClient, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	nativeDecision := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionRouteRotate, Trace: &model.DecisionTraceV2{DecisionID: "m124-route-positive"}}}
 	nativePolicy := model.Policy{Tenant: "tenant", PolicyName: policy.Name, PolicyUID: string(policy.UID), MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRouteRotate: true}}
 	if got := nativeManager.actuate(ctx, entry, nativePolicy, nativeDecision, view); got != 1 || !nativeDecision[0].Actuated {
@@ -187,7 +189,7 @@ func TestM124RealAPIBrakesGuardNativeAndPhoenixDispatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	phoenixManager := &Manager{Actuator: actuator.NewPhoenixActuator(c), BoundaryReader: c, QuarantineCapacity: quarantineCapacity, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	phoenixManager := &Manager{Local: &inprocess.Services{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: quarantineCapacity}, BoundaryReader: c, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	phoenixPolicy := model.Policy{Tenant: "tenant", PolicyName: policy.Name, PolicyUID: string(policy.UID), EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 	phoenixDecision := []model.Decision{{Selected: true, Feasible: true, Namespace: "m124", Pod: "api", Action: model.ActionQuarantine, Trace: &model.DecisionTraceV2{}}}
 	if got := phoenixManager.actuate(ctx, entry, phoenixPolicy, phoenixDecision, view); got != 1 || !phoenixDecision[0].Actuated {

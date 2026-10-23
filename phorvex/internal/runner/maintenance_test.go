@@ -263,7 +263,7 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	if drainPosts.Load() != 0 {
 		t.Fatalf("post-promotion producer interruption reached drain backend: posts=%d", drainPosts.Load())
 	}
-	phoenix, err := NewManagerWithBackend(base, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendPhoenix})
+	phoenix, err := newManagerWithBackend(base, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendPhoenix})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,11 +282,11 @@ func TestIdleNativeTickRecoversWithoutDecisionSnapshot(t *testing.T) {
 	if err := base.Get(ctx, client.ObjectKey{Namespace: "ns", Name: "new"}, promoted); err != nil || promoted.UID != shadow.UID || promoted.Labels["phorvex.ai/role"] != "leader" {
 		t.Fatalf("Phoenix idle tick changed promoted survivor: %v %+v", err, promoted)
 	}
-	m, err := NewManagerWithBackend(base, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendNative})
+	m, err := newManagerWithBackend(base, logr.Discard(), actuator.BackendResolution{Backend: actuator.BackendNative})
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.Actuator = native
+	localServices(m).Actuator = native
 	m.Calibration = nil
 	m.KillSwitch.Namespace = "operator"
 	m.Client = interceptor.NewClient(base.(client.WithWatch), interceptor.Funcs{List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {

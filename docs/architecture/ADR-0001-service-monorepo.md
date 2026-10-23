@@ -68,9 +68,11 @@ operator stays a separate third-party component with its own chart.
 module: every package has a domain, a domain imports only shared code, and each
 remaining crossing is listed as debt with what removes it. The list may only
 shrink. Since phase 4 this holds for the dispatcher too: it reaches the other
-services through their contracts, and its remaining in-process crossings (the
-Local adapters it composes, and brain and sensor logic it still runs itself) are
-listed individually.
+services through their contracts. The services a process runs itself, where no
+endpoint names them, are composed outside every domain: `phorvex/internal/inprocess`
+builds the in-process brain, sensor and actuator, `cmd` hands them to the runner as
+`runner.LocalServices`, and no domain imports it. The dispatcher has no crossing
+left.
 
 ### Communication: gRPC with protobuf, driven by the dispatcher
 

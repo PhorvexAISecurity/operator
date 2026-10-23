@@ -192,18 +192,18 @@ func newRotationOwnershipTickFixture(
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).
 		WithObjects(objects...).Build()
 	resolution := actuator.BackendResolution{Backend: backend, Source: actuator.SourceExplicit, Raw: string(backend), Present: true}
-	manager, err := NewManagerWithBackend(cluster, logr.Discard(), resolution)
+	manager, err := newManagerWithBackend(cluster, logr.Discard(), resolution)
 	if err != nil {
 		t.Fatal(err)
 	}
 	manager.Calibration = nil
-	manager.MetricsSource = nil
+	localServices(manager).MetricsSource = nil
 	manager.BoundaryReader = cluster
 	if reader != nil {
 		manager.OwnershipReader = reader(cluster)
 	}
 	capture := &rotationOwnershipCapture{}
-	manager.Optimizer = capture
+	localServices(manager).Optimizer = capture
 	if err := manager.Upsert(policy); err != nil {
 		t.Fatal(err)
 	}

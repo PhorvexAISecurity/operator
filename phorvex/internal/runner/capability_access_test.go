@@ -7,6 +7,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/actuatorsvc"
 	"github.com/phorvex/phorvex/internal/authz"
+	"github.com/phorvex/phorvex/internal/inprocess"
 )
 
 // TestCapabilityAccessIsTheActingIdentitys pins whose authorization the gate
@@ -18,11 +19,11 @@ func TestCapabilityAccessIsTheActingIdentitys(t *testing.T) {
 	verbs := []authz.Verb{{Resource: "pods", Verb: "delete"}}
 	own := authz.NewCheckerWithClient(runnerDenySSAR{deny: false}, time.Minute)
 
-	m := &Manager{Authz: own}
+	m := &Manager{Local: &inprocess.Services{}, Authz: own}
 	if m.access() != nil {
 		t.Fatal("no actuator is wired, yet the gate has an access leg")
 	}
-	m.Actuator = supportsAll{}
+	localServices(m).Actuator = supportsAll{}
 	local, ok := m.access().(*actuatorsvc.Local)
 	if !ok || local.Access != own {
 		t.Fatalf("in process the gate must review this process's identity: %#v", m.access())

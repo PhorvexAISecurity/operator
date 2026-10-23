@@ -7,11 +7,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/exposure"
-	metricspkg "github.com/phorvex/phorvex/internal/metrics"
-	"github.com/phorvex/phorvex/internal/model"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -19,6 +14,13 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	metricspkg "github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type m012AuthorizationClient struct {
@@ -196,7 +198,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	observedRestricted := &m012AuthorizationClient{Client: restricted}
 	deniedNative := actuator.NewNativeActuator(observedRestricted)
 	deniedNative.SetBoundaryReader(restricted)
-	deniedManager := &Manager{Actuator: deniedNative, BoundaryReader: restricted, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	deniedManager := &Manager{Local: &inprocess.Services{Actuator: deniedNative}, BoundaryReader: restricted, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	deniedAttemptLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptRefused)}
 	deniedFailureLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate), "reason": string(metricspkg.AttemptRefused)}
 	deniedAcceptedLabels := map[string]string{"tenant": deniedTenant, "action": string(model.ActionRotate)}
@@ -227,7 +229,7 @@ func TestM012RealAPIAuthorizationDenialCountsOneAttempt(t *testing.T) {
 	allowedPolicy := model.Policy{Tenant: allowedTenant, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: cap, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	allowedNative := actuator.NewNativeActuator(admin)
 	allowedNative.SetBoundaryReader(admin)
-	allowedManager := &Manager{Actuator: allowedNative, BoundaryReader: admin, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	allowedManager := &Manager{Local: &inprocess.Services{Actuator: allowedNative}, BoundaryReader: admin, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	allowedAttemptLabels := map[string]string{"tenant": allowedTenant, "action": string(model.ActionRotate), "outcome": string(metricspkg.AttemptAccepted)}
 	allowedAcceptedLabels := map[string]string{"tenant": allowedTenant, "action": string(model.ActionRotate)}
 	allowedAttemptsBefore := m012Counter(t, "phorvex_actuation_attempts_total", allowedAttemptLabels)

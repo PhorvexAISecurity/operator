@@ -7,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -32,7 +33,7 @@ func (a *m054ReceiptActuator) Actuate(_ context.Context, req actuator.Request) (
 func TestM054RunnerPropagatesPolicyEpochCapAndOwnsReceipt(t *testing.T) {
 	receipt := &model.GracefulTerminationReceipt{PolicyUID: "policy-uid", PolicyGeneration: 9, PolicyGraceCapSeconds: 17, EffectiveGracePeriodSeconds: 17, TerminationStatus: "unconfirmed"}
 	hands := &m054ReceiptActuator{result: actuator.Result{Emitted: true, GracefulTermination: receipt}}
-	manager := &Manager{Actuator: hands, Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: hands}, Log: logr.Discard()}
 	policy := model.Policy{
 		Tenant: "tenant", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 9,
 		MaxGracePeriodSeconds: 17, MinAvailableReplicas: 1,

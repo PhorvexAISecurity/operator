@@ -15,6 +15,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -55,7 +56,7 @@ func runCadenceProducer(t *testing.T, base, policyInterval time.Duration, sample
 	m.BaseInterval = base
 	m.PerTickTimeout = 2 * time.Second
 	m.Calibration = nil
-	m.Actuator = nil
+	localServices(m).Actuator = nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +131,7 @@ func TestM174StartHonorsEqualAndNonDivisorCadence(t *testing.T) {
 func TestM174DeadlineSelectionAndMaintenanceCoalescing(t *testing.T) {
 	now := time.Unix(100, 0)
 	key := "ns/policy"
-	m := &Manager{policies: map[string]*policyEntry{key: {
+	m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{key: {
 		key: typesName("ns", "policy"), uid: "uid-A", lastTick: now,
 		spec: policySpecWithInterval(100 * time.Millisecond),
 	}}}
@@ -168,7 +169,7 @@ func policySpecWithInterval(interval time.Duration) v1alpha1.PhorvexPolicySpec {
 
 func TestM174CadenceIdentityUpdateReplacementAndRemoval(t *testing.T) {
 	now := time.Unix(200, 0)
-	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
+	m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
 	p := m140Policy("policy", "tenant", "uid-A")
 	p.Spec.Budget.TickInterval = metav1.Duration{Duration: 100 * time.Millisecond}
 	if err := m.Upsert(p); err != nil {
@@ -239,7 +240,7 @@ func TestM174SlowFailedSnapshotStillRetriesInFuture(t *testing.T) {
 	fc := &failingListClient{Client: m.Client, failureDelay: 90 * time.Millisecond, failureTimes: make(chan time.Time, 3)}
 	m.Client, m.OwnershipReader = fc, fc
 	m.KillSwitch.Client = fc
-	m.BaseInterval, m.PerTickTimeout, m.Calibration, m.Actuator = 60*time.Millisecond, time.Second, nil, nil
+	m.BaseInterval, m.PerTickTimeout, m.Calibration, localServices(m).Actuator = 60*time.Millisecond, time.Second, nil, nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +276,7 @@ func TestM174FailedSnapshotRetriesAtMaintenanceWithoutSpin(t *testing.T) {
 	fc := &failingListClient{Client: m.Client}
 	m.Client, m.OwnershipReader = fc, fc
 	m.KillSwitch.Client = fc
-	m.BaseInterval, m.PerTickTimeout, m.Calibration, m.Actuator = 80*time.Millisecond, time.Second, nil, nil
+	m.BaseInterval, m.PerTickTimeout, m.Calibration, localServices(m).Actuator = 80*time.Millisecond, time.Second, nil, nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +325,7 @@ func TestM174CancellationDuringBlockedTickStartsNoNextTick(t *testing.T) {
 	p := m140Policy("policy", "tenant", "uid-cancel")
 	p.Spec.Budget.TickInterval = metav1.Duration{Duration: 10 * time.Millisecond}
 	m, _ := m140BlockedTickManager(t, src, p)
-	m.BaseInterval, m.PerTickTimeout, m.Calibration, m.Actuator = 20*time.Millisecond, time.Second, nil, nil
+	m.BaseInterval, m.PerTickTimeout, m.Calibration, localServices(m).Actuator = 20*time.Millisecond, time.Second, nil, nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +388,7 @@ func TestM174SuccessfulOverrunCoalescesWithoutOverlap(t *testing.T) {
 	p := m140Policy("policy", "tenant", "uid-overrun")
 	p.Spec.Budget.TickInterval = metav1.Duration{Duration: 30 * time.Millisecond}
 	m, _ := m140BlockedTickManager(t, src, p)
-	m.BaseInterval, m.PerTickTimeout, m.Calibration, m.Actuator = 50*time.Millisecond, time.Second, nil, nil
+	m.BaseInterval, m.PerTickTimeout, m.Calibration, localServices(m).Actuator = 50*time.Millisecond, time.Second, nil, nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)
 	}
@@ -476,7 +477,7 @@ func TestM174ManualTimerArmsExactPolicyDeadline(t *testing.T) {
 	p := m140Policy("policy", "tenant", "uid-manual")
 	p.Spec.Budget.TickInterval = metav1.Duration{Duration: 100 * time.Millisecond}
 	m, _ := m140BlockedTickManager(t, src, p)
-	m.BaseInterval, m.PerTickTimeout, m.Calibration, m.Actuator = 200*time.Millisecond, time.Second, nil, nil
+	m.BaseInterval, m.PerTickTimeout, m.Calibration, localServices(m).Actuator = 200*time.Millisecond, time.Second, nil, nil
 	m.scheduleClock = clock
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)

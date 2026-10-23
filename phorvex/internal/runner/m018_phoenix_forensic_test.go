@@ -39,11 +39,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 // m018CreatedObject is one recorded API Create, as the server would have acknowledged it.
@@ -139,7 +141,7 @@ func m018PhoenixCapacity(t *testing.T, c client.Client) *actuator.QuarantineCapa
 func m018PhoenixManager(t *testing.T, api *m018RecordingAPI, targets ...types.NamespacedName) *Manager {
 	t.Helper()
 	c := m018PhoenixClient(t, api, m018PhoenixObjects(targets...)...)
-	return &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard()}
+	return &Manager{Local: &inprocess.Services{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c)}, Log: logr.Discard()}
 }
 
 // m018PolicyEntry is a minimal entry whose selector satisfies EnsurePolicy's
@@ -315,7 +317,7 @@ func TestM018PartialResultWithErrorKeepsFactsAndFailureOutcome(t *testing.T) {
 		},
 		err: errors.New("emit SecurityEvent: connection reset after acknowledgement"),
 	}
-	m := &Manager{Actuator: fa, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
 
 	n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1"))
@@ -364,7 +366,7 @@ func TestM018RejectedCreateFabricatesNoIdentity(t *testing.T) {
 	c := &m012CapacityClient{Client: base}
 
 	var buf bytes.Buffer
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard(),
+	m := &Manager{Local: &inprocess.Services{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c)}, Log: logr.Discard(),
 		Audit: audit.New(logr.Discard(), &buf)}
 	ds := m018SelectedPhoenixDecision("ns", "p1")
 
@@ -498,7 +500,7 @@ func TestM018SameNameDifferentUIDStayDistinct(t *testing.T) {
 		},
 	}).Build()
 	c := &m012CapacityClient{Client: base}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: m018PhoenixCapacity(t, c)}, Log: logr.Discard()}
 	got := make([]model.PhoenixForensics, 0, 2)
 	for _, pod := range []string{"p1", "p2"} {
 		ds := m018SelectedPhoenixDecision("ns", pod)
@@ -563,7 +565,7 @@ func TestM018AMTDNamespaceIsNotGuessedWithoutAnAMTD(t *testing.T) {
 			RuleType: amtdv1beta1.PhorvexRuleTypeRotate, Emitted: true,
 		},
 	}
-	m := &Manager{Actuator: fa, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 	ds := m018SelectedDecision("ns", "p1")
 	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 1 {
 		t.Fatalf("actuated %d, want 1", n)
@@ -630,8 +632,8 @@ func TestM018EnsurePolicyFailureClearsStalePhoenixEvidence(t *testing.T) {
 
 	var buf bytes.Buffer
 	m := &Manager{
-		Actuator: &m018EnsureFailActuator{err: errors.New("rbac denied")},
-		Log:      logr.Discard(), Audit: audit.New(logr.Discard(), &buf),
+		Local: &inprocess.Services{Actuator: &m018EnsureFailActuator{err: errors.New("rbac denied")}},
+		Log:   logr.Discard(), Audit: audit.New(logr.Discard(), &buf),
 	}
 	if n := actuateWithBoundary(t, m, context.Background(), m018PolicyEntry("ns"), m018Policy(), ds, m018TickView("ns", "p1")); n != 0 {
 		t.Fatalf("actuated %d under EnsurePolicy failure, want 0", n)
@@ -726,7 +728,7 @@ func TestM018ClearDoesNotSuppressGenuineEvidence(t *testing.T) {
 		RollbackRef: "rb-1", MutationKind: "reversible", Emitted: true,
 	}}
 	nd := m018SelectedDecision("ns", "p2")
-	mn := &Manager{Actuator: native, Log: logr.Discard()}
+	mn := &Manager{Local: &inprocess.Services{Actuator: native}, Log: logr.Discard()}
 	if n := actuateWithBoundary(t, mn, context.Background(), m018PolicyEntry("ns"), m018Policy(), nd, m018TickView("ns", "p2")); n != 1 {
 		t.Fatalf("native actuation actuated %d, want 1", n)
 	}

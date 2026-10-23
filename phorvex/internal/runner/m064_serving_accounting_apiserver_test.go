@@ -25,6 +25,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -186,7 +187,7 @@ func TestM064RealAPIRunnerNativeAccounting(t *testing.T) {
 	native.SetServingSecurity(m064RunnerSecurity(t, operator, binding))
 	recording := &m064RunnerNative{native: native}
 	intents := exposure.NewIntents()
-	manager := &Manager{Actuator: recording, BoundaryReader: apiClient, Intents: intents, Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: recording}, BoundaryReader: apiClient, Intents: intents, Log: logr.Discard()}
 	entry := &policyEntry{namespace: namespace, uid: string(policy.UID), key: types.NamespacedName{Namespace: namespace, Name: policy.Name}, spec: policy.Spec}
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: namespace, Name: pod.Name, UID: string(pod.UID), Labels: map[string]string{"app": "model"},

@@ -6,9 +6,11 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/model"
 	"k8s.io/client-go/tools/record"
+
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 func TestM013TruthfulNotifications(t *testing.T) {
@@ -33,7 +35,7 @@ func TestM013TruthfulNotifications(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := record.NewFakeRecorder(2)
-			m := &Manager{ActuationRecorder: r, Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{}, ActuationRecorder: r, Log: logr.Discard()}
 			m.notifyActuation(target, model.ActionRotate, tc.res, tc.err)
 			msg := <-r.Events
 			if !strings.Contains(msg, tc.reason) || strings.Contains(msg, secret) || len(msg) > 250 {
@@ -42,7 +44,7 @@ func TestM013TruthfulNotifications(t *testing.T) {
 		})
 	}
 	r := record.NewFakeRecorder(2)
-	m := &Manager{ActuationRecorder: r, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, ActuationRecorder: r, Log: logr.Discard()}
 	m.notifyActuation(nil, model.ActionRotate, actuator.Result{Emitted: true}, nil)
 	if len(r.Events) != 0 {
 		t.Fatal("missing UID fabricated notification")

@@ -2,10 +2,13 @@ package runner
 
 import (
 	"context"
-	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/model"
 	"testing"
+
+	"github.com/go-logr/logr"
+
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type coverageCapture struct {
@@ -20,7 +23,7 @@ func (f *coverageCapture) Actuate(_ context.Context, r actuator.Request) (actuat
 }
 func TestM032RunnerPreservesRawCoverage(t *testing.T) {
 	fa := &coverageCapture{}
-	m := &Manager{Actuator: fa, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 	ds := tracedSelectedDecision()
 	ds[0].CoverageValue = 8.125
 	ds[0].Engine = "p1-coverage"

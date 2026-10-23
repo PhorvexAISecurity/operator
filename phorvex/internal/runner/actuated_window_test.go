@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	v1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/inprocess"
 )
 
 // actuated_window_test.go — PHORVEXSEC-176 / M-11.
@@ -42,7 +43,7 @@ func newStatusHarness(t *testing.T, window time.Duration) statusHarness {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.PhorvexPolicy{}).WithObjects(policy).Build()
 	e := &policyEntry{key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}, tenant: "tenant-a"}
 	e.spec.Budget.AntiOverRotationWindow = metav1.Duration{Duration: window}
-	return statusHarness{m: &Manager{Client: c, Log: logr.Discard()}, e: e}
+	return statusHarness{m: &Manager{Local: &inprocess.Services{}, Client: c, Log: logr.Discard()}, e: e}
 }
 
 func (h statusHarness) tick(t *testing.T, moves, actuated int, now time.Time) v1.PhorvexPolicyStatus {
@@ -123,7 +124,7 @@ func TestActuatedDoesNotSurviveARestartAsALatch(t *testing.T) {
 	h.tick(t, 1, 1, t0)
 	// A new Manager (restart / leadership change) has no ledger. It must not inherit
 	// the persisted latch: it can only under-report, never claim an emit it did not see.
-	fresh := &Manager{Client: h.m.Client, Log: logr.Discard()}
+	fresh := &Manager{Local: &inprocess.Services{}, Client: h.m.Client, Log: logr.Discard()}
 	fresh.updateStatus(context.Background(), h.e, 3, 0, 0, false, t0.Add(time.Second))
 	var got v1.PhorvexPolicy
 	if err := h.m.Client.Get(context.Background(), h.e.key, &got); err != nil {
@@ -153,7 +154,7 @@ func TestStatusConflictRetryDoesNotDoubleCountEmits(t *testing.T) {
 				return delegate.SubResource(subresource).Update(ctx, obj, opts...)
 			},
 		}).Build()
-	m := &Manager{Client: c, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Client: c, Log: logr.Discard()}
 	e := &policyEntry{key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}}
 	t0 := time.Unix(1_000_000, 0)
 	m.updateStatus(context.Background(), e, 3, 2, 2, false, t0)

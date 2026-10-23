@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"github.com/phorvex/phorvex/internal/inprocess"
 )
 
 // Embed the production classification method, while using an observable protected
@@ -99,7 +101,7 @@ func TestM005TwoManagersAndHandoff(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				probes[i] = &m005Probe{Manager: &Manager{}, client: c, name: name}
+				probes[i] = &m005Probe{Manager: &Manager{Local: &inprocess.Services{}}, client: c, name: name}
 				if err := mgr.Add(manager.Runnable(probes[i])); err != nil {
 					t.Fatal(err)
 				}

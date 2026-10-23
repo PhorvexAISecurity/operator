@@ -115,13 +115,13 @@ func TestM131RealAPIRejectedTickAndReplacementUIDBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	m, err := NewManager(apiClient, logr.Discard())
+	m, err := newManager(apiClient, logr.Discard())
 	if err != nil {
 		t.Fatal(err)
 	}
 	engine := decision.NewCoverageEngine()
 	engine.Recon = m131Recon{collision: true}
-	m.Optimizer = engine
+	localServices(m).Optimizer = engine
 	m.Calibration = nil
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)

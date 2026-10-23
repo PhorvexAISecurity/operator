@@ -139,7 +139,7 @@ func TestM131ActualCollisionPublishesRejectedTickAndRecovers(t *testing.T) {
 	}
 	m, engine := m140BlockedTickManager(t, nil, p)
 	hands := &fakeActuator{}
-	m.Actuator = hands
+	localServices(m).Actuator = hands
 	m.Calibration = nil
 	var auditLines []string
 	var auditJSON bytes.Buffer
@@ -338,7 +338,7 @@ func TestM131ReplacementDuringSelectionCannotPublishPredecessorMetrics(t *testin
 		t.Fatal(err)
 	}
 	stale := m.policies[client.ObjectKeyFromObject(old).String()]
-	m.Optimizer = m131ReplacingOptimizer{m: m, replacement: replacement}
+	localServices(m).Optimizer = m131ReplacingOptimizer{m: m, replacement: replacement}
 	tickLabels := map[string]string{"tenant": old.Spec.Tenant, "policy": old.Name}
 	reasonLabels := map[string]string{"tenant": old.Spec.Tenant, "reason": string(metricspkg.RejectCrossBlockCollision)}
 	beforeTicks := metricValue(t, "phorvex_ticks_total", tickLabels)
@@ -356,7 +356,7 @@ func TestM131ReplacementDuringSelectionCannotPublishPredecessorMetrics(t *testin
 func TestM131GenericCheckedErrorPublishesBoundedReason(t *testing.T) {
 	p := m140Policy("generic", "m131-generic", "m131-generic-owner")
 	m, _ := m140BlockedTickManager(t, nil, p)
-	m.Optimizer = m131ErrorOptimizer{err: errors.New("sensitive arbitrary optimizer detail")}
+	localServices(m).Optimizer = m131ErrorOptimizer{err: errors.New("sensitive arbitrary optimizer detail")}
 	m.Calibration = nil
 	var auditLines []string
 	m.Audit = audit.New(funcr.New(func(_, args string) { auditLines = append(auditLines, args) }, funcr.Options{}), nil)
@@ -390,7 +390,7 @@ func TestM131RetiredOwnerIsLifecycleSkip(t *testing.T) {
 	p.Status.SelectedPods = 41
 	p.Status.LastTickTime = metav1.NewTime(time.Unix(1_700_000_000, 0))
 	m, _ := m140BlockedTickManager(t, nil, p)
-	m.Optimizer = m131ErrorOptimizer{err: decision.ErrOwnerRetired}
+	localServices(m).Optimizer = m131ErrorOptimizer{err: decision.ErrOwnerRetired}
 	m.Calibration = nil
 	m.Audit = audit.New(funcr.New(func(_, _ string) {}, funcr.Options{}), nil)
 	if err := m.Upsert(p); err != nil {

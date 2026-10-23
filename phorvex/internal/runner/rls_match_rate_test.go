@@ -10,6 +10,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/sensorapi"
@@ -89,7 +90,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 	t.Run("matched", func(t *testing.T) {
 		const tenant = "phvx10c-matched"
 		before := outcomeCount(t, tenant, "matched")
-		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&sensorapi.Observation{
@@ -107,7 +108,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 	t.Run("censored — nothing became Ready", func(t *testing.T) {
 		const tenant = "phvx10c-censored"
 		before := outcomeCount(t, tenant, "censored")
-		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
@@ -119,7 +120,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 	t.Run("abandoned — the target was never deleted", func(t *testing.T) {
 		const tenant = "phvx10c-abandoned"
 		before := outcomeCount(t, tenant, "abandoned")
-		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard()}
 		v := rotationView("old", "old-uid")
 		m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 		m.observeReadyRotations(&sensorapi.Observation{
@@ -144,7 +145,7 @@ func TestMatchRateSeparatesTheThreeOutcomes(t *testing.T) {
 func TestOutcomeIsCountedOncePerRotationNotPerTick(t *testing.T) {
 	const tenant = "phvx10c-once"
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
-	m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard()}
 	v := rotationView("old", "old-uid")
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, tenant), tenant, v, map[string]*model.WorkloadView{"ns/old": v}, startedAt)
 
@@ -234,7 +235,7 @@ func TestPendingGaugeReturnsToZeroWhenQueueDrains(t *testing.T) {
 	ce := decision.NewCoverageEngine()
 	ce.ObserveRotation(tenant, rotationView("old", "old-uid"), 0.5)
 	m := &Manager{
-		Optimizer: ce,
+		Local: &inprocess.Services{Optimizer: ce},
 		pendingRotations: map[string]pendingRotation{
 			"one": {tenant: tenant},
 		},

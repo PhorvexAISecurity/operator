@@ -69,12 +69,12 @@ func m140BlockedTickManager(t *testing.T, src ingest.MetricsSource, policies ...
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(objects...).Build()
 	e := decision.NewCoverageEngine()
-	m, err := NewManager(c, logr.Discard())
+	m, err := newManager(c, logr.Discard())
 	if err != nil {
 		t.Fatalf("NewManager: %v", err)
 	}
-	m.Optimizer = e
-	m.MetricsSource = src
+	localServices(m).Optimizer = e
+	localServices(m).MetricsSource = src
 	m.Clock = exposure.NewClock()
 	m.Intents = exposure.NewIntents()
 	return m, e
