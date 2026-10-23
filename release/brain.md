@@ -1,5 +1,10 @@
 # brain changelog
 
+## 0.5.0 (2026-10-23)
+
+- feat(console): the console's own chart and Application (fee81475)
+- feat(services): mutual TLS between the dispatcher and the services (032d14ec)
+
 ## 0.4.1 (2026-10-23)
 
 - fix(attacks): mount grants rendered in the attacks release (2b5412f6)
