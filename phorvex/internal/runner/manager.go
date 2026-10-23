@@ -929,6 +929,15 @@ func (m *Manager) actuation() actuatorapi.Actuator {
 // when one is set, else the in-process backend; nil when neither is wired.
 func (m *Manager) Actuation() actuatorapi.Actuator { return m.actuation() }
 
+// routeBackend is the backend whose routes a dispatch needs prepared. Without an
+// actuator nothing dispatches, and the hybrid routes are the conservative answer.
+func (m *Manager) routeBackend() actuatorapi.Backend {
+	if act := m.actuation(); act != nil {
+		return act.Backend()
+	}
+	return actuatorapi.BackendHybrid
+}
+
 // access is the authorization the capability gate reviews: the acting identity's,
 // answered by the actuator. It is nil when the actuator reviews none.
 func (m *Manager) access() capability.Access {
@@ -2868,7 +2877,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressInviolability)
 			continue
 		}
-		if prepErr := preparation.ForAction(decisions[i].Action); prepErr != nil {
+		if prepErr := preparation.ForAction(m.routeBackend(), decisions[i].Action); prepErr != nil {
 			m.Log.Error(prepErr, "action route preparation refused; suppressing dispatch", "tenant", pol.Tenant, "namespace", decisions[i].Namespace, "pod", decisions[i].Pod, "action", decisions[i].Action)
 			stampDispatch(model.DispatchNotAttempted, "route-preparation-failed")
 			metrics.RecordActuationSuppression(pol.Tenant, string(decisions[i].Action), metrics.SuppressRoutePreparation)

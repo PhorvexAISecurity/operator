@@ -172,7 +172,7 @@ func TestPost25M106ActualAPIMTLSNativeReceiptAndScopedAdmission(t *testing.T) {
 	hybrid.ConfigureNativeJournal(apiClient, namespace)
 	prep := hybrid.PrepareRoutes(ctx, actuator.TenantTarget{Tenant: namespace, Namespace: namespace, PolicyName: policy.Name,
 		PolicyUID: string(policy.UID), Generation: policy.Generation, MatchLabels: labels, EnabledActions: map[model.Action]bool{model.ActionRotate: true}})
-	if err := prep.ForAction(model.ActionRotate); err != nil {
+	if err := prep.ForAction(actuator.BackendHybrid, model.ActionRotate); err != nil {
 		t.Fatal(err)
 	}
 	request := actuator.Request{Tenant: namespace, Namespace: namespace, Pod: oldPod.Name, TargetUID: string(oldPod.UID),
