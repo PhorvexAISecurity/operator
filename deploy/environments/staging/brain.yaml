@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published brain image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain"
-  tag: "0.4.1"
-  digest: "sha256:2eebe575bc25cba285c585d32e0ae209ba0cad5fbf1015c82157ef9fce8818c4"
+  tag: "0.5.0"
+  digest: "sha256:7029a211c9d399bcabbc473fb18b8e71dcdb84db38258e8200ccee4bf216d888"
