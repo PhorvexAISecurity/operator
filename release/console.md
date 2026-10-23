@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.8.3 (2026-10-23)
+
+- fix(test-harness): outlast the JetStream consumer store-removal race (02c0bdd9)
+
 ## 0.8.2 (2026-10-22)
 
 - fix(console): scope a tenant-limited grant's scans to its tenant (29bc056c)
