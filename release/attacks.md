@@ -1,5 +1,9 @@
 # attacks changelog
 
+## 0.3.2 (2026-10-23)
+
+- fix(dispatcher): check a native backend's routes as native (02cad93e)
+
 ## 0.3.1 (2026-10-23)
 
 - fix(attacks): mount grants rendered in the attacks release (2b5412f6)
