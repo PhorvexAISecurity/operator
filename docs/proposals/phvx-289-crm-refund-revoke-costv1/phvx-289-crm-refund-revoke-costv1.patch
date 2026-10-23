@@ -1,0 +1,32 @@
+--- a/internal/cost/v1admission.go	2026-10-19 17:29:40.000000000 +0000
++++ b/internal/cost/v1admission.go	2026-10-23 22:02:51.177589809 +0000
+@@ -216,7 +216,7 @@
+ 			return "NOT_IN_V1:MULTI_WORKLOAD"
+ 		}
+ 	}
+-	if c.Action != "rotate" && c.Action != "request-drain" && c.Action != "quarantine" && c.Action != "kv-reset" {
++	if c.Action != "rotate" && c.Action != "request-drain" && c.Action != "quarantine" && c.Action != "kv-reset" && c.Action != "crm-refund-revoke" {
+ 		return "NOT_IN_V1:ACTION"
+ 	}
+ 	if c.Class == V1Containment {
+--- a/internal/decision/v1_candidates.go	2026-10-19 17:29:40.000000000 +0000
++++ b/internal/decision/v1_candidates.go	2026-10-23 22:05:38.345159465 +0000
+@@ -105,6 +105,18 @@
+ 			}
+ 		}
+ 	}
++	// PHVX-289 (comparison-enabling; needs team sign-off before deploy): a bound
++	// cross-record refund observation is LIVE-CORROBORATED evidence — bindCRMRefundObservation
++	// validates the deny-guard/Service/selecting-policy/target-Pod identities against the live
++	// boundary — not a bare label declaration. The I3 asset-value strip exists so that
++	// declarations alone cannot weight asset value; a corroborated business observation is a
++	// different class. To make the OLD-vs-REVISED CRM comparison apples-to-apples, preserve the
++	// policy's label-derived business asset value (data-class) for such pods instead of flooring
++	// it to minimumHeldAssetWeight. Reversible: delete this block to restore the pure I3 floor.
++	if v.Pod.HasBoundCRMRefundObservation() {
++		w.Pod.Labels = v.Pod.Labels
++		return &w, pol
++	}
+ 	pol.AssetWeightFromLabels = nil
+ 	return &w, pol
+ }

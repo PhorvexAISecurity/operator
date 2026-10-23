@@ -1,0 +1,78 @@
+{
+  "frozen_input": {
+    "file": "frozen-crm-input.json",
+    "sha256": "2c4e64b302e6ae136ed1ce577c5b628c3c03c3f0a6a5d9a4df664f67122d226e",
+    "note": "identical frozen bytes used by v6 CRM decisions; target pod crm-599ddc9c6f-m8brj (data-class:restricted) carries the bound trusted refund observation"
+  },
+  "OLD_coverage_deployed": {
+    "selected": [
+      "crm/crm-599ddc9c6f-m8brj/crm-refund-revoke"
+    ],
+    "crm_refund_revoke": {
+      "CoverageValue": 1.6579844183443522,
+      "Net": 1.600484418344352,
+      "Reason": "crm-refund-revoke: selected=true reported gain=1.60 fullValue=1.66 betaNorm=0.15 betaFlow=0.4; stage=exploit"
+    },
+    "rotate_excluded_reason": [
+      "conformal-slo: worst-case cost 1.60 > ceiling 1.20"
+    ],
+    "note": "OLD applies slo.costCeiling=1.2 -> rotate worst-case 1.60 EXCLUDED -> crm-refund-revoke selected, DEFENDS. Unaffected by the REVISED-path edits (separate engine)."
+  },
+  "REVISED_costv1": {
+    "v6_baseline_vocab_excluded": {
+      "selected": [
+        "crm/crm-599ddc9c6f-m8brj/rotate"
+      ],
+      "events": 1,
+      "m8brj": {
+        "rotate": {
+          "V": 0.001989581302013223,
+          "reason": null,
+          "admitted": true
+        },
+        "crm-refund-revoke": {
+          "V": 0.0016579844183443524,
+          "reason": "NOT_IN_V1:ACTION",
+          "admitted": false
+        }
+      }
+    },
+    "vocab_only": {
+      "selected": [
+        "crm/crm-599ddc9c6f-m8brj/rotate"
+      ],
+      "events": 1,
+      "m8brj": {
+        "rotate": {
+          "V": 0.001989581302013223,
+          "reason": null,
+          "admitted": true
+        },
+        "crm-refund-revoke": {
+          "V": 0.0016579844183443524,
+          "reason": "MAX_MOVES",
+          "admitted": false
+        }
+      }
+    },
+    "vocab_plus_value": {
+      "selected": [
+        "crm/crm-599ddc9c6f-m8brj/rotate"
+      ],
+      "events": 1,
+      "m8brj": {
+        "rotate": {
+          "V": 1.9895813020132227,
+          "reason": null,
+          "admitted": true
+        },
+        "crm-refund-revoke": {
+          "V": 1.6579844183443522,
+          "reason": "MAX_MOVES",
+          "admitted": false
+        }
+      }
+    }
+  },
+  "verdict": "Adding crm-refund-revoke to the cost-v1 vocabulary is NECESSARY but NOT SUFFICIENT. Even with its corroborated business asset value restored (V=1.6579844183443524 == OLD CoverageValue 1.6579844183443522, apples-to-apples on value), REVISED still selects the event-lifted hygiene rotate (V=1.9895813) and crm-refund-revoke is blocked only by MAX_MOVES (one move per pod/tick). The DECIDING gate is that cost-v1 removed the SLO cost-ceiling that the deployed OLD engine uses to EXCLUDE that rotate. refund-revoke's sole non-selection reason is MAX_MOVES (it passed vocab/worth/floor/quorum/budget) => it is selectable; it would be selected and DEFEND if the revised objective re-introduced cost-aware rotate suppression. That is a design change to the 281/287 revised objective and needs team sign-off."
+}
