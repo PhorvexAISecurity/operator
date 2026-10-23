@@ -1,5 +1,9 @@
 # brain changelog
 
+## 0.4.1 (2026-10-23)
+
+- fix(attacks): mount grants rendered in the attacks release (2b5412f6)
+
 ## 0.4.0 (2026-10-22)
 
 - feat(charts): confine the attacks service's SecurityEvents to its namespaces (329b7cc3)
