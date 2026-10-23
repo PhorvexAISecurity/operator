@@ -38,6 +38,34 @@ func armedList() string {
 	return strings.Join(names, ", ")
 }
 
+// attackTargetJSONPath lists a Pod per line: its name, its controller's kind, its phase
+// and its native quarantine label.
+const attackTargetJSONPath = `jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}|{.metadata.labels.phorvex\.ai/quarantined}{"\n"}{end}`
+
+// pickAttackTarget returns the first Running Pod of list (attackTargetJSONPath) that no
+// earlier run quarantined, and how many Pods it skipped as quarantined. Quarantine is
+// sticky, one per reset, and it takes the Pod out of the defended fleet: Phoenix's AMTD
+// adopts the Pod, and the native backend labels it phorvex.ai/quarantined and breaks its
+// selectors. An attack on it has nothing left to defend.
+func pickAttackTarget(list string) (string, int) {
+	skipped := 0
+	for _, ln := range strings.Split(strings.TrimSpace(list), "\n") {
+		f := strings.Split(strings.TrimSpace(ln), "|")
+		if len(f) < 3 || f[0] == "" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") || (len(f) > 3 && strings.TrimSpace(f[3]) != "") {
+			skipped++ // already quarantined by a previous run
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
+			continue
+		}
+		return strings.TrimSpace(f[0]), skipped
+	}
+	return "", skipped
+}
+
 func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "POST only"})
@@ -111,25 +139,8 @@ func (s *Server) workloadAttack(w http.ResponseWriter, r *http.Request) {
 		if labelSel != "" {
 			args = append(args, "-l", labelSel)
 		}
-		args = append(args, "-o",
-			`jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}{"\n"}{end}`)
-		list, _ := kctl(8*time.Second, args...)
-		skipped := 0
-		for _, ln := range strings.Split(strings.TrimSpace(list), "\n") {
-			f := strings.Split(strings.TrimSpace(ln), "|")
-			if len(f) < 3 || f[0] == "" {
-				continue
-			}
-			if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") {
-				skipped++ // already quarantined by a previous run
-				continue
-			}
-			if !strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
-				continue
-			}
-			return strings.TrimSpace(f[0]), skipped
-		}
-		return "", skipped
+		list, _ := kctl(8*time.Second, append(args, "-o", attackTargetJSONPath)...)
+		return pickAttackTarget(list)
 	}
 	// Prefer an explicit rotation-target pod (the original demo apps carry that label), but fall
 	// back to ANY Running pod in the namespace. Every namespace that reaches here is armed —
