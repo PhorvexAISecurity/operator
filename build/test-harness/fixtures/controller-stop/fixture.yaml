@@ -1,0 +1,108 @@
+# GP12 — attacker controller-persistence target.
+# Ported from phvx-actuator-persistence-20261019. Scoped to a dedicated staging namespace.
+#
+# Attack: an attacker plants an UNMANAGED controller (this StatefulSet) the operator
+# did not create; it recreates its Pods, surviving pod-level eviction (persistence).
+# Actuator it should trigger: controller-stop — scale the attacker's owner to 0, delete
+# the exact children, and observe sustained no-recreation past the handler window;
+# it dominates quarantine for the control-plane-persistence fact.
+#
+# The benign Deployment beside it is NOT a target: the controller-removal authority
+# must keep it Ready (hold the benign availability floor) while stopping only the
+# attacker's controller.
+#
+# STAGING WIRING: add `phorvex-staging-persistence` to policyNamespaces/actuatorNamespaces.
+# The reviewed probe self-provisions the authoritative attacker controller and fires the
+# trusted controller-persistence observation at run time; this is the representative shape.
+#
+# PREREQS (operator-refactored) — both required before the brain can select controller-stop:
+#   1) controller-stop in the action vocabulary (model.Action + the PhorvexPolicy CRD
+#      actions enum); the intended defense policy is in defense-policy.prereq.yaml.
+#   2) the trusted persistence observer emitting phorvex.attack.controller-persistence.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phorvex-staging-persistence
+  labels:
+    phorvex.ai/environment: staging
+---
+# Attacker-planted controller: unmanaged by Phorvex, declares its own availability
+# (no PodDisruptionBudget), two replicas that recreate on delete. Short grace so the
+# handler can observe absence inside its bounded-completion window.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: persistence-foothold
+  namespace: phorvex-staging-persistence
+  labels:
+    app: persistence-foothold
+    phorvex.ai/attacker-planted: "true"
+spec:
+  serviceName: persistence-foothold
+  replicas: 2
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: persistence-foothold
+  template:
+    metadata:
+      labels:
+        app: persistence-foothold
+        phorvex.ai/attacker-planted: "true"
+    spec:
+      terminationGracePeriodSeconds: 2
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: foothold
+        image: public.ecr.aws/docker/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        command: ["sh", "-c", "sleep 3600"]
+        resources:
+          requests: {cpu: 5m, memory: 8Mi}
+          limits: {memory: 16Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+---
+# Benign workload beside the attacker; the controller-removal authority keeps it Ready.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: persistence-benign
+  namespace: phorvex-staging-persistence
+  labels:
+    app: persistence-benign
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: persistence-benign
+  template:
+    metadata:
+      labels:
+        app: persistence-benign
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: app
+        image: public.ecr.aws/docker/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        command: ["sh", "-c", "sleep 3600"]
+        resources:
+          requests: {cpu: 5m, memory: 8Mi}
+          limits: {memory: 16Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]

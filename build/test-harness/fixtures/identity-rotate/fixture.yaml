@@ -1,0 +1,108 @@
+# GP11 — stolen pod-bound SA-token identity-reuse target.
+# Ported from phvx-actuator-identity-rotate-20261018 (old operator cluster:
+# live old-identity-invalidation PASS). Scoped to a dedicated staging namespace.
+#
+# Attack: the workload's mounted pod-bound ServiceAccount token is captured and
+# replayed from off-pod. Actuator it should trigger: identity-rotate — rotate the
+# ServiceAccount so its UID changes (replayed token then TokenReviews false), delete
+# any legacy token Secret, and let the workload re-authenticate with a fresh
+# projected token.
+#
+# STAGING WIRING: add `phorvex-staging-identity` to the manager's policyNamespaces
+# and actuatorNamespaces (deploy/environments/staging/phorvex.yaml).
+# RUNTIME PREREQ: in operator-refactored identity-rotate is declared-only, so new
+# native dispatch is refused until the identity-rotate security effect is ported.
+# This manifest is valid and appliable (identity-rotate is in the CRD actions enum).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phorvex-staging-identity
+  labels:
+    phorvex.ai/environment: staging
+    phorvex.ai/console-identity-fixture: owned
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: console-id-fixture
+  namespace: phorvex-staging-identity
+  labels:
+    phorvex.ai/console-identity-fixture: console-id-fixture
+automountServiceAccountToken: false
+---
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: identity-fixture-defense
+  namespace: phorvex-staging-identity
+spec:
+  tenant: phorvex-staging-identity
+  mode: active
+  selector:
+    matchLabels:
+      phorvex.ai/console-identity-fixture: console-id-fixture
+  objective:
+    lambda: "0.4"
+    costWeights: {normSparsity: "0.4", flowDisruption: "0.6"}
+  budget:
+    maxMovesPerTick: 1
+    tickInterval: 3s
+    antiOverRotationWindow: 8s
+    proactiveFloor: 6s
+  slo:
+    minAvailableReplicas: 1
+  assetValue:
+    weightSecrets: "0.8"
+    blastRadiusFromGraph: true
+  triggers:
+    eventDriven: true
+  actions:
+    enabled: [identity-rotate]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-id-fixture
+  namespace: phorvex-staging-identity
+  labels:
+    phorvex.ai/console-identity-fixture: console-id-fixture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      phorvex.ai/console-identity-fixture: console-id-fixture
+  template:
+    metadata:
+      labels:
+        phorvex.ai/console-identity-fixture: console-id-fixture
+    spec:
+      automountServiceAccountToken: false
+      serviceAccountName: console-id-fixture
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: workload
+        image: public.ecr.aws/docker/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e
+        command: ["sh", "-c", "sleep 1800"]
+        resources:
+          requests: {cpu: 5m, memory: 8Mi}
+          limits: {memory: 16Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - name: api
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
+      volumes:
+      - name: api
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: token
+              expirationSeconds: 600
