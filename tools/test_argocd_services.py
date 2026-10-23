@@ -117,12 +117,13 @@ class EnvironmentRenderTests(unittest.TestCase):
             self.assertEqual(allowed, cluster | {('', 'Namespace')}, environment['environment'])
 
     def test_the_manager_reaches_each_services_grpc_port(self):
-        # The attacks service is the console's, over HTTP (the test below).
+        # The attacks service is the console's, over HTTP (the test below); the manager
+        # calls no console.
         for environment in ENVIRONMENTS_LISTED:
             endpoints = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']['services']
             endpoints = {k: v for k, v in endpoints.items() if k != 'attacks'}
             by_service = {e['service']: e for e in ELEMENTS}
-            self.assertEqual(set(endpoints), set(by_service) - {'manager', 'attacks'})
+            self.assertEqual(set(endpoints), set(by_service) - {'manager', 'attacks', 'console'})
             manager = service_pod(render(environment, by_service['manager']), 'manager')
             args = manager['containers'][0]['args']
             for service, value in endpoints.items():
@@ -149,7 +150,9 @@ class EnvironmentRenderTests(unittest.TestCase):
                 svc = next(d for d in docs if d['kind'] == 'Service')
                 port = next(p['port'] for p in svc['spec']['ports'] if p['name'] == 'http')
                 self.assertEqual(endpoint, f"{svc['metadata']['name']}:{port}")
-                console = next(d for d in render(environment, by_service['manager']) if d['kind'] == 'Deployment' and d['metadata']['name'].endswith('-console'))
+                # The console chart deploys the console where it is separate, the manager chart elsewhere.
+                rendered = render(environment, by_service['manager']) + render(environment, by_service['console'])
+                console = next(d for d in rendered if d['kind'] == 'Deployment' and d['metadata']['name'].endswith('-console'))
                 env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
                 self.assertEqual(env['PHORVEX_CONSOLE_ATTACKS_URL'], 'http://' + endpoint)
 
@@ -192,14 +195,14 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertEqual([(s['issuer'], s['tenants'], s['targets']) for s in subjects],
                                  [(auth['oidc']['issuer'], console['attackNamespaces'], ['default'])])
                 rendered = {service: render(environment, element) for service, element in by_service.items()}
-                account = next(d for d in rendered['manager'] if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
+                account = next(d for docs in rendered.values() for d in docs if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
                 self.assertIs(account['automountServiceAccountToken'], False)
                 for service, docs in rendered.items():
                     for d in docs:
                         if d['kind'] in ('RoleBinding', 'ClusterRoleBinding'):
                             self.assertNotIn(name, [s['name'] for s in d.get('subjects') or []], (service, d['metadata']['name']))
                 # The console and the attacks service both verify its tokens.
-                consoles = [d for d in rendered['manager'] + rendered['attacks'] if d['kind'] == 'Deployment'
+                consoles = [d for docs in rendered.values() for d in docs if d['kind'] == 'Deployment'
                             and d['metadata']['name'] in (environment['release'] + '-phorvex-console', environment['release'] + '-attacks')]
                 self.assertEqual(len(consoles), 2)
                 for console in consoles:

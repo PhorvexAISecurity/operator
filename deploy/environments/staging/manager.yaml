@@ -6,9 +6,3 @@ phorvex:
     tag: "0.10.2"
     releaseDigest: "sha256:fdb1697ad329c6a2f75eca59f8f66f3c5e2534ff1d349e0329276e94c0e5d865"
     releaseSourceSHA: "d2db03de52ef4b13fbb297dcf2bf8e1c5f1155ef"
-  console:
-    image:
-      repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console"
-      tag: "0.8.4"
-      releaseDigest: "sha256:070d1bb6cbd948671db77ec36281bff047c26a5b0481b4d70a8e1e84479dd4b2"
-      releaseSourceSHA: "d2db03de52ef4b13fbb297dcf2bf8e1c5f1155ef"

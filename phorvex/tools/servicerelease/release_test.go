@@ -26,9 +26,6 @@ func TestReleasesPinValuesTheChartsRead(t *testing.T) {
 			t.Errorf("%s: repository %q, want phorvex/%s", c.Name, c.Repository, c.Name)
 		}
 		chart := c.Chart
-		if chart == "" {
-			chart = "phorvex/charts/phorvex" // the console's
-		}
 		raw, err := os.ReadFile(filepath.Join(root, chart, "values.yaml"))
 		if err != nil {
 			t.Fatal(err)
@@ -150,6 +147,7 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 	for name, content := range map[string]string{
 		"brain.yaml":   "# The brain chart's own staging values.\n{}\n",
 		"manager.yaml": "# The manager chart's values.\nphorvex:\n  leaderElect: true # kept\n",
+		"console.yaml": "# The console chart's values.\n{}\n",
 	} {
 		if err := os.WriteFile(filepath.Join(env, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -172,19 +170,29 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 		t.Errorf("brain.yaml =\n%s\nwant\n%s", brain, want)
 	}
 	manager, _ := os.ReadFile(filepath.Join(env, "manager.yaml"))
-	var values struct {
+	console, _ := os.ReadFile(filepath.Join(env, "console.yaml"))
+	type images struct {
 		Phorvex struct {
 			LeaderElect bool `yaml:"leaderElect"`
 			Image       map[string]string
 			Console     struct{ Image map[string]string }
 		}
 	}
-	if err := yaml.Unmarshal(manager, &values); err != nil {
+	var managerValues, consoleValues images
+	if err := yaml.Unmarshal(manager, &managerValues); err != nil {
 		t.Fatal(err)
 	}
-	if !values.Phorvex.LeaderElect || values.Phorvex.Image["tag"] != "0.5.1" || values.Phorvex.Image["releaseSourceSHA"] != "abc" ||
-		values.Phorvex.Console.Image["tag"] != "0.5.2" || values.Phorvex.Console.Image["releaseDigest"] != digest {
+	if err := yaml.Unmarshal(console, &consoleValues); err != nil {
+		t.Fatal(err)
+	}
+	if !managerValues.Phorvex.LeaderElect || managerValues.Phorvex.Image["tag"] != "0.5.1" || managerValues.Phorvex.Image["releaseSourceSHA"] != "abc" ||
+		managerValues.Phorvex.Console.Image != nil {
 		t.Errorf("manager.yaml =\n%s", manager)
+	}
+	// The console chart deploys the console: its image is pinned in its own file.
+	if consoleValues.Phorvex.Console.Image["tag"] != "0.5.2" || consoleValues.Phorvex.Console.Image["releaseDigest"] != digest ||
+		consoleValues.Phorvex.Console.Image["releaseSourceSHA"] != "def" {
+		t.Errorf("console.yaml =\n%s", console)
 	}
 	if !strings.Contains(string(manager), "# The manager chart's values.") || !strings.Contains(string(manager), "# kept") {
 		t.Errorf("comments lost:\n%s", manager)

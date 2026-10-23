@@ -1,0 +1,14 @@
+apiVersion: v2
+name: phorvex-console
+description: >-
+  The Phorvex console (ADR-0001): the operator UI and its API behind the
+  console's identity boundary. With phorvex.console.separate it is deployed by
+  this chart, as its own Application with its own version, instead of by the
+  manager chart.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+dependencies:
+- name: phorvex-common
+  version: 0.1.0
+  repository: file://../phorvex-common
