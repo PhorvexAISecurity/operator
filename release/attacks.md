@@ -1,5 +1,9 @@
 # attacks changelog
 
+## 0.4.2 (2026-10-23)
+
+- fix(attacks): never target a Pod the native backend quarantined (4f62fae0)
+
 ## 0.4.1 (2026-10-23)
 
 - refactor(dispatcher): compose the in-process services in cmd (bfa2e4f1)
