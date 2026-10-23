@@ -22,6 +22,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/disclosure"
 	"github.com/phorvex/phorvex/internal/eventtrust"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/representation"
@@ -118,7 +119,7 @@ func TestM100AdmittedHistorySurvivesPodAndReplicaSetReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &Manager{BoundaryReader: c, LossHistory: store}
+	m := &Manager{Local: &inprocess.Services{}, BoundaryReader: c, LossHistory: store}
 	observer := eventtrust.NewTrustedDetectors([]string{"ns/observer"})
 	eventtrust.ConfigureCompletedDisclosureTrust(observer)
 	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
@@ -213,8 +214,8 @@ func TestM100OptionalHistoryTimeoutDoesNotDisableSelectedActuation(t *testing.T)
 		t.Fatal(err)
 	}
 	fakeActuator := &dispatchFakeActuator{emit: true}
-	m := &Manager{LossHistory: store, LossHistoryReader: m100BlockingReader{}, LossHistoryReadTimeout: 10 * time.Millisecond,
-		Actuator: fakeActuator, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fakeActuator}, LossHistory: store, LossHistoryReader: m100BlockingReader{}, LossHistoryReadTimeout: 10 * time.Millisecond,
+		Log: logr.Discard()}
 	decisions := tracedSelectedDecision()
 	decisions[0].Tenant = "tenant"
 	versions := map[string]string{"ns/p1": "uid-1"}
@@ -262,8 +263,8 @@ func TestM100BlockedDurableRetentionDoesNotDisableSelectedActuation(t *testing.T
 	}
 	blocking := &m100BlockingLedger{base: base, entered: make(chan struct{}), release: make(chan struct{}), done: make(chan struct{})}
 	fakeActuator := &dispatchFakeActuator{emit: true}
-	m := &Manager{BoundaryReader: reader, LossHistoryReader: reader, LossHistory: blocking, LossHistoryReadTimeout: 10 * time.Millisecond,
-		Actuator: fakeActuator, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fakeActuator}, BoundaryReader: reader, LossHistoryReader: reader, LossHistory: blocking, LossHistoryReadTimeout: 10 * time.Millisecond,
+		Log: logr.Discard()}
 	eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors([]string{"ns/observer"}))
 	t.Cleanup(func() { eventtrust.ConfigureCompletedDisclosureTrust(eventtrust.NewTrustedDetectors(nil)) })
 	_, event := m100PayloadAndEvent(t, now)
@@ -353,7 +354,7 @@ func TestM100AdmissionRejectsUnboundCurrentState(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			m := &Manager{BoundaryReader: reader, LossHistory: store}
+			m := &Manager{Local: &inprocess.Services{}, BoundaryReader: reader, LossHistory: store}
 			gaps := m.admitCompletedDisclosures(context.Background(), []model.SecurityEventInfo{event}, policy, now)
 			if len(gaps) != 1 || gaps[0] != tc.gap {
 				t.Fatalf("gaps=%v want=%s", gaps, tc.gap)

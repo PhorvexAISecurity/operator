@@ -20,6 +20,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/capability"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -113,7 +114,7 @@ func TestCountWhileGreen(t *testing.T) {
 
 	key := types.NamespacedName{Namespace: "ns", Name: "mixed"}
 	entry := &policyEntry{key: key}
-	m := &Manager{ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
+	m := &Manager{Local: &inprocess.Services{}, ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
 
 	// Mixed: kv-reset serviceable on 1 of 2 -> stays TRUE, message carries "1/2".
 	mixed := m.debounceActionsSupported(entry, capabilityGaps(pol,
@@ -147,7 +148,7 @@ func TestGreenZeroDiffWhenNoGaps(t *testing.T) {
 	pol := model.Policy{EnabledActions: map[model.Action]bool{model.ActionKVReset: true}}
 	key := types.NamespacedName{Namespace: "ns", Name: "ok"}
 	entry := &policyEntry{key: key}
-	m := &Manager{ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
+	m := &Manager{Local: &inprocess.Services{}, ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
 	got := m.debounceActionsSupported(entry, capabilityGaps(pol,
 		[]*model.WorkloadView{{Pod: full}}, capWitness([]model.Pod{full})))
 	if got.status != metav1.ConditionTrue || got.message != "all enabled actions have matching capabilities in the selected fleet" {
@@ -204,7 +205,7 @@ func TestFlipSignatureCountFree(t *testing.T) {
 func TestActionsSupportedDebouncesAndRecovers(t *testing.T) {
 	key := types.NamespacedName{Namespace: "ns", Name: "policy"}
 	entry := &policyEntry{key: key}
-	m := &Manager{ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
+	m := &Manager{Local: &inprocess.Services{}, ActionsSupportedDebounce: 3, policies: map[string]*policyEntry{key.String(): entry}}
 	missing := []actionGap{{action: model.ActionMIGRebind, unsupported: 1, total: 1, why: "no selected pod has a MIG device"}}
 
 	for observation := 1; observation <= 2; observation++ {
@@ -227,7 +228,7 @@ func TestActionsSupportedDebouncesAndRecovers(t *testing.T) {
 }
 
 func TestUpsertPreservesDebounceOnlyWithinPolicyGeneration(t *testing.T) {
-	m := &Manager{policies: map[string]*policyEntry{}}
+	m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}}
 	// M-140: production policies always carry a UID; Upsert refuses an unidentified owner.
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{
 		Namespace: "ns", Name: "policy", UID: "uid-debounce", Generation: 1}}
@@ -264,7 +265,7 @@ func TestUnsupportedConditionEmitsOnePolicyEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(policy).Build()
 	recorder := record.NewFakeRecorder(5)
-	m := &Manager{Client: fakeClient, Recorder: recorder}
+	m := &Manager{Local: &inprocess.Services{}, Client: fakeClient, Recorder: recorder}
 	entry := &policyEntry{key: clientKey(policy), tenant: "tenant"}
 	unsupported := actionsSupportStatus{
 		status: metav1.ConditionFalse, reason: actionsUnsupportedReason,

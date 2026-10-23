@@ -38,6 +38,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+	"phorvex.ai/libs/logging"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/cmd/internal/actuatorconfig"
 	"github.com/phorvex/phorvex/cmd/internal/grpctlsconfig"
@@ -50,7 +53,6 @@ import (
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/brainapi"
-	"github.com/phorvex/phorvex/internal/brainsvc"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
@@ -63,6 +65,7 @@ import (
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/losshistory"
 	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/metrics"
@@ -72,8 +75,6 @@ import (
 	"github.com/phorvex/phorvex/internal/runner"
 	"github.com/phorvex/phorvex/internal/scopedoutcome"
 	"github.com/phorvex/phorvex/internal/startupauthz"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
-	"phorvex.ai/libs/logging"
 )
 
 const (
@@ -454,11 +455,13 @@ func main() {
 	// [M-21] Resolve the actuator BEFORE anything is registered or started. An explicit
 	// PHORVEX_ACTUATOR that names no backend is fatal here, so the operator never begins
 	// reconciling — let alone mutating — on a backend it silently substituted.
-	rmgr, err := runner.NewManagerWithBackend(mgr.GetClient(), ctrl.Log, backend)
+	// The services this process runs itself, for each one no endpoint names (ADR-0001).
+	local, err := inprocess.New(mgr.GetClient(), ctrl.Log, backend)
 	if err != nil {
 		setupLog.Error(err, "cannot construct the resolved actuator; refusing to start")
 		os.Exit(1)
 	}
+	rmgr := runner.New(mgr.GetClient(), ctrl.Log, local)
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
 	// The manager acts in this process unless --actuator-endpoint names the actuator
@@ -470,13 +473,13 @@ func main() {
 			setupLog.Error(capacityErr, "quarantine capacity guard unavailable; refusing to start")
 			os.Exit(1)
 		}
-		rmgr.QuarantineCapacity = quarantineCapacity
+		local.QuarantineCapacity = quarantineCapacity
 		voiceAdmissionEnabled, voiceAdmissionErr := actuatorconfig.VoiceAdmissionEnabled()
 		if voiceAdmissionErr != nil {
 			setupLog.Error(voiceAdmissionErr, "invalid Voice admission feature flag")
 			os.Exit(1)
 		}
-		actuatorSettings.Configure(rmgr.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
+		actuatorSettings.Configure(local.Actuator, mgr.GetAPIReader(), operatorNS, voiceAdmissionEnabled, sensorFlags.Trust)
 	} else {
 		remote, conn, actuatorErr := connectActuator(actuatorEndpoint, serviceTransport, actuatorconfig.Shared(operatorNS, sensorFlags.Trust, policyNamespaces),
 			actuatorConnectTimeout, actuatorCallTimeout)
@@ -485,7 +488,7 @@ func main() {
 			os.Exit(1)
 		}
 		defer func() { _ = conn.Close() }()
-		rmgr.Actuator = nil
+		local.Actuator = nil
 		rmgr.ActuatorService = remote
 		setupLog.Info("actuator: remote service", "endpoint", actuatorEndpoint, "backend", string(remote.Backend()),
 			"reviewsAccess", remote.ReviewsAccess())
@@ -575,8 +578,8 @@ func main() {
 		setupLog.Error(engErr, "refusing to start with an unsupported decision brain")
 		os.Exit(1)
 	}
-	rmgr.Optimizer = optimizer
-	setupLog.Info("decision brain", "engine", rmgr.Optimizer.Name())
+	local.Optimizer = optimizer
+	setupLog.Info("decision brain", "engine", local.Optimizer.Name())
 	// Kill-switch dispatch admission must bypass the informer cache: every route,
 	// selected dispatch, fallback and maintenance boundary reads current sentinel state.
 	rmgr.KillSwitch = &runner.KillSwitch{Static: killSwitch, Client: mgr.GetAPIReader(), Namespace: operatorNS}
@@ -589,9 +592,9 @@ func main() {
 
 	// Telemetry source: real Prometheus client if a URL is set, else honest nil source.
 	rmgr.PromURL = sensorFlags.PrometheusURL // also feeds the live-tick GPU-half physics witness (DCGM via Prometheus)
-	rmgr.PCIeClasses = pcieClasses           // M-114: PCIe capacity class fallback (chart value)
+	local.PCIeClasses = pcieClasses          // M-114: PCIe capacity class fallback (chart value)
 	if sensorFlags.PrometheusURL != "" {
-		rmgr.MetricsSource = ingest.NewPromHTTP(sensorFlags.PrometheusURL, nil)
+		local.MetricsSource = ingest.NewPromHTTP(sensorFlags.PrometheusURL, nil)
 		setupLog.Info("telemetry: prometheus", "url", sensorFlags.PrometheusURL)
 	} else {
 		setupLog.Info("telemetry: none (K8s-only signals; metrics not fabricated)")
@@ -648,7 +651,7 @@ func main() {
 		} else if addErr := mgr.Add(ctrlmanager.RunnableFunc(func(ctx context.Context) error { store.Run(ctx); return nil })); addErr != nil {
 			setupLog.Error(addErr, "math-lab capture disabled: cannot register the snapshot writer")
 		} else {
-			rmgr.MathLab = recorder
+			local.MathLab = recorder
 			mathLabSource = store
 			setupLog.Info("math-lab decision capture enabled", "policies", mathLabCapturePolicies, "dir", mathLabCaptureDir,
 				"maxBytes", mathLabCaptureMaxBytes, "processConfigHash", mathlab.ProcessConfigHash(processConfig))
@@ -657,9 +660,9 @@ func main() {
 	// The decision service runs in this process unless --brain-endpoint names the
 	// brain service, which serves the same contract over gRPC (ADR-0001).
 	if brainEndpoint == "" {
-		rmgr.Brain = brainsvc.NewLocal(rmgr.Optimizer, rmgr.MathLab)
+		rmgr.Brain = local.Brain()
 	} else {
-		remote, conn, brainErr := connectBrain(brainEndpoint, serviceTransport, rmgr.Optimizer, gpuEnvelopeMax, flowClasses,
+		remote, conn, brainErr := connectBrain(brainEndpoint, serviceTransport, local.Optimizer, gpuEnvelopeMax, flowClasses,
 			brainConnectTimeout, brainCallTimeout, brainDecideTimeout)
 		if brainErr != nil {
 			setupLog.Error(brainErr, "refusing to start without the brain service", "endpoint", brainEndpoint)
@@ -1011,28 +1014,29 @@ func runScan(namespace, promURL, kubeContext string, backend actuator.BackendRes
 		// [M-21] Same fail-fast on the one-shot path: a scan reports what the CONFIGURED
 		// backend would do, so an unresolvable selector must stop it rather than have it
 		// silently report the default backend's answers.
-		rmgr, mErr := runner.NewManagerWithBackend(c, ctrl.Log, backend)
+		local, mErr := inprocess.New(c, ctrl.Log, backend)
 		if mErr != nil {
 			return mErr
 		}
-		if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
+		if n, ok := local.Actuator.(*actuator.NativeActuator); ok {
 			n.SetBoundaryReader(c)
 		}
-		rmgr.PromURL = promURL // the fresh context/ablation snapshots must receive the same DCGM witness
-		rmgr.PCIeClasses = pcieClasses
+		local.PCIeClasses = pcieClasses
+		// The fresh context/ablation snapshots must receive the same DCGM witness.
+		sensor := local.ReadOnlySensor(c, promURL)
 
 		// P4a: wire live telemetry (no longer telemetry-blind). The operator-supplied
 		// --prometheus-url feeds cost/continuity/feasibility/context (the platform K8s-half
 		// PhysicsWitness is telemetry-INDEPENDENT by design). Empty => honest nil source.
 		if promURL != "" {
-			rmgr.MetricsSource = ingest.NewPromHTTP(promURL, nil)
+			local.MetricsSource = ingest.NewPromHTTP(promURL, nil)
 			names := make([]string, 0, len(snap.Pods))
 			for i := range snap.Pods {
 				if snap.Pods[i].Namespace == namespace {
 					names = append(names, snap.Pods[i].Name)
 				}
 			}
-			if tel, terr := rmgr.MetricsSource.PodMetrics(ctx, namespace, names); terr == nil {
+			if tel, terr := local.MetricsSource.PodMetrics(ctx, namespace, names); terr == nil {
 				fmt.Printf("\n=== live telemetry (Prometheus: %s) — feeds cost/continuity/feasibility/context ===\n", promURL)
 				any := false
 				for _, n := range names {
@@ -1051,10 +1055,11 @@ func runScan(namespace, promURL, kubeContext string, backend actuator.BackendRes
 		}
 
 		// P-CONTEXT: live kill-chain context (AI-stage classification + predictive horizon).
-		rows, cerr := rmgr.ContextScan(ctx, namespace, labels.Everything())
+		views, _, cerr := runner.AblationViews(ctx, sensor, namespace, labels.Everything())
 		if cerr != nil {
 			return cerr
 		}
+		rows := inprocess.ContextScan(views, namespace)
 		fmt.Printf("\n=== P-CONTEXT live kill-chain (stage + moved-before-next-stage horizon) ===\n")
 		for _, r := range rows {
 			tag := "generic"
@@ -1069,10 +1074,11 @@ func runScan(namespace, promURL, kubeContext string, backend actuator.BackendRes
 		for i := range seeds {
 			seeds[i] = int64(i + 1)
 		}
-		ab, pname, aerr := rmgr.AblateScarcity(ctx, namespace, labels.Everything(), seeds, 2)
+		views, pname, aerr := runner.AblationViews(ctx, sensor, namespace, labels.Everything())
 		if aerr != nil {
 			return aerr
 		}
+		ab := inprocess.AblateScarcity(views, namespace, seeds, 2)
 		fmt.Printf("\n=== Layer-C EMR scarcity ablation (separately ablated; platform=%s) ===\n", pname)
 		fmt.Printf("baseline (standard-recon)  per-dollar ratio = %.3f\n", ab.Baseline.Ratio)
 		fmt.Printf("scarcity (ucw-recon)       per-dollar ratio = %.3f\n", ab.Scarcity.Ratio)
@@ -1109,11 +1115,11 @@ func runAblation(namespace, selector string, budget, nseeds int, backend actuato
 	if err != nil {
 		return err
 	}
-	rmgr, err := runner.NewManagerWithBackend(c, ctrl.Log, backend)
+	local, err := inprocess.New(c, ctrl.Log, backend)
 	if err != nil {
 		return err
 	}
-	if n, ok := rmgr.Actuator.(*actuator.NativeActuator); ok {
+	if n, ok := local.Actuator.(*actuator.NativeActuator); ok {
 		n.SetBoundaryReader(c)
 	}
 	if nseeds <= 0 {
@@ -1125,10 +1131,11 @@ func runAblation(namespace, selector string, budget, nseeds int, backend actuato
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	res, err := rmgr.Ablate(ctx, namespace, sel, seeds, budget)
+	views, _, err := runner.AblationViews(ctx, local.ReadOnlySensor(c, ""), namespace, sel)
 	if err != nil {
 		return err
 	}
+	res := inprocess.Ablate(views, namespace, seeds, budget)
 	out, _ := json.MarshalIndent(res, "", "  ")
 	fmt.Println(string(out))
 	verdict := "FAIL (P1 did NOT beat random per-dollar)"

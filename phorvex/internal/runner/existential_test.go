@@ -13,7 +13,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/go-logr/logr"
+
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -37,7 +39,7 @@ func TestM99UncontainableConditionAndEvent(t *testing.T) {
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", Generation: 7}}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(policy).WithObjects(policy).Build()
 	recorder := record.NewFakeRecorder(5)
-	m := &Manager{Client: c, Recorder: recorder}
+	m := &Manager{Local: &inprocess.Services{}, Client: c, Recorder: recorder}
 	e := &policyEntry{key: clientKey(policy)}
 	ds := []model.Decision{{Namespace: "ns", Pod: "protected", Existential: &model.ExistentialDecision{Present: true, Result: "uncontainable"}}}
 	for i := 0; i < 2; i++ {
@@ -132,7 +134,7 @@ func TestM99SLOExceptionReachesDispatchAndRetainsVetoes(t *testing.T) {
 			case "actuation-failure":
 				fa.actErr = errors.New("fixture actuator failure")
 			}
-			m := &Manager{Actuator: fa, Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 			e := &policyEntry{namespace: "ns"}
 			actuateWithBoundary(t, m, context.Background(), e, p, ds, views)
 			wantCalls := 0

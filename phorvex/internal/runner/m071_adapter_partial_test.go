@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -19,7 +21,7 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 		},
 		err: errors.New("adapter inventory did not converge"),
 	}
-	m := &Manager{Actuator: act, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: act}, Log: logr.Discard()}
 	if cleanNoEffectResult(act.result) {
 		t.Fatal("protected adapter recovery debt was classified as fallback-safe no-effect")
 	}
@@ -49,7 +51,7 @@ func TestM071RunnerKeepsUncertainAdapterDispatchOutOfFallback(t *testing.T) {
 
 func TestAdapterSelectionIDsReachNativeRequest(t *testing.T) {
 	act := &dispatchFakeActuator{emit: true}
-	m := &Manager{Actuator: act, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: act}, Log: logr.Discard()}
 	decisions := tracedSelectedDecision()
 	decisions[0].Action = model.ActionAdapterRotate
 	decisions[0].Trace.DecisionID = "selected-adapter-decision"

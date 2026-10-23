@@ -13,6 +13,7 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 )
@@ -49,7 +50,7 @@ func m009Receipt(p pendingRotation, processed time.Time) model.PhoenixExecutionR
 func TestM009LegacyAcceptedEventWithoutReceiptDoesNotTrain(t *testing.T) {
 	var out bytes.Buffer
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
 	started := time.Unix(1_800_000_000, 0).UTC()
 	// Current pure-Phoenix rotate dispatch is refused because its Delete strategy
 	// cannot carry the policy grace cap. This fixture retains a historical accepted
@@ -78,7 +79,7 @@ func TestM009LegacyAcceptedEventWithoutReceiptDoesNotTrain(t *testing.T) {
 func TestM009ExactReceiptAndReadyReplacementTrain(t *testing.T) {
 	var out bytes.Buffer
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
 	started := time.Unix(1_800_000_000, 0).UTC()
 	p := m009Pending(t, m, started)
 	receipt := m009Receipt(p, started.Add(2*time.Second))
@@ -120,7 +121,7 @@ func TestM009WrongReceiptFieldsNeverConfirm(t *testing.T) {
 			r.ProcessedAt = r.ProcessedAt.Add(2 * cost.ReadyDelayReference)
 		},
 	} {
-		m := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard()}
+		m := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard()}
 		started := time.Unix(1_800_000_000, 0).UTC()
 		p := m009Pending(t, m, started)
 		r := m009Receipt(p, started.Add(time.Second))
@@ -133,7 +134,7 @@ func TestM009WrongReceiptFieldsNeverConfirm(t *testing.T) {
 
 func TestM009ReceiptUsesKubernetesTimestampPrecisionAndRejectsFuture(t *testing.T) {
 	started := time.Unix(1_800_000_000, 900_000_000).UTC()
-	m := &Manager{Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard()}
 	p := m009Pending(t, m, started)
 	r := m009Receipt(p, started.Truncate(time.Second).Add(time.Second))
 	snap := &ingest.Snapshot{Now: started.Add(2 * time.Second), PhoenixReceiptInventoryComplete: true,
@@ -150,7 +151,7 @@ func TestM009ReceiptUsesKubernetesTimestampPrecisionAndRejectsFuture(t *testing.
 
 func TestM009IncompleteReceiptInventoryNeverConfirms(t *testing.T) {
 	started := time.Unix(1_800_000_000, 0).UTC()
-	m := &Manager{Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard()}
 	p := m009Pending(t, m, started)
 	r := m009Receipt(p, started.Add(time.Second))
 	if phoenixRotationReceiptConfirmed(p, &sensorapi.Observation{Now: started.Add(2 * time.Second), PhoenixReceipts: map[string]model.PhoenixExecutionReceipt{r.EventName: r}}) {
@@ -160,7 +161,7 @@ func TestM009IncompleteReceiptInventoryNeverConfirms(t *testing.T) {
 
 func TestM009PhoenixObservationRunsWithoutLearningConsumers(t *testing.T) {
 	var out bytes.Buffer
-	m := &Manager{Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard(), Audit: audit.New(logr.Discard(), &out)}
 	started := time.Unix(1_800_000_000, 0).UTC()
 	p := m009Pending(t, m, started)
 	r := m009Receipt(p, started.Add(time.Second))

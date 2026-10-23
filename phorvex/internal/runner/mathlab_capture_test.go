@@ -63,7 +63,7 @@ func TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			m.MathLab = rec
+			localServices(m).MathLab = rec
 		}
 		if err := m.Upsert(p); err != nil {
 			t.Fatal(err)

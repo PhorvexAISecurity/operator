@@ -17,6 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
+	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
+
 	v1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/actuator"
@@ -25,8 +27,8 @@ import (
 	"github.com/phorvex/phorvex/internal/feasibility"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
-	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
 type m135RecordingClient struct {
@@ -82,10 +84,10 @@ func m135Runner(t *testing.T, policy *v1.PhorvexPolicy) (*Manager, *policyEntry,
 	recording := &m135RecordingClient{Client: base}
 	var auditSink bytes.Buffer
 	m := &Manager{
+		Local:  &inprocess.Services{Optimizer: &killSwitchOptimizer{}, Actuator: actuator.NewPhoenixActuator(recording)},
 		Client: base, BoundaryReader: base,
 		Clock: exposure.NewClock(), Intents: exposure.NewIntents(),
-		Optimizer: &killSwitchOptimizer{}, Audit: audit.New(logr.Discard(), &auditSink),
-		Actuator:   actuator.NewPhoenixActuator(recording),
+		Audit:      audit.New(logr.Discard(), &auditSink),
 		KillSwitch: &KillSwitch{Client: base, Namespace: "operator"},
 		Log:        logr.Discard(), policies: map[string]*policyEntry{},
 	}
@@ -203,7 +205,8 @@ func (m *m135Maintainer) ReconcileStandingPolicy(_ context.Context, target actua
 func m135MaintenanceUnit(t *testing.T, reader client.Reader, maintainer *m135Maintainer, policy *v1.PhorvexPolicy) (*Manager, *policyEntry, model.Policy) {
 	t.Helper()
 	m := &Manager{
-		Client: reader.(client.Client), BoundaryReader: reader, Actuator: maintainer,
+		Local:  &inprocess.Services{Actuator: maintainer},
+		Client: reader.(client.Client), BoundaryReader: reader,
 		KillSwitch: &KillSwitch{Client: reader, Namespace: "operator"},
 		policies:   map[string]*policyEntry{},
 	}

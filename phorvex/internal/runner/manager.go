@@ -32,31 +32,23 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuationbrake"
-	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/actuatorapi"
-	"github.com/phorvex/phorvex/internal/actuatorsvc"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/brainapi"
-	"github.com/phorvex/phorvex/internal/brainsvc"
 	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/capability"
 	sharedcapacity "github.com/phorvex/phorvex/internal/capacity"
 	"github.com/phorvex/phorvex/internal/currentinventory"
-	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/endpointlease"
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/feasibility"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/losshistory"
-	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/recon"
 	"github.com/phorvex/phorvex/internal/sensorapi"
-	"github.com/phorvex/phorvex/internal/sensorsvc"
 	"github.com/phorvex/phorvex/internal/slo"
 )
 
@@ -247,22 +239,16 @@ type Manager struct {
 	Failures                  actionFailures    // M-19: owner/Pod-UID/action failure feedback
 	FailureNow                func() time.Time  // exact clock seam for cooldown tests
 	fallbackDecisions         []model.Decision  // tick-local distinct audit attempts
-	Optimizer                 decision.Optimizer
 	Audit                     *audit.Logger
-	MetricsSource             ingest.MetricsSource
-	// Sensor observes the cluster and its telemetry. Nil runs the in-process sensor
-	// over this manager's readers, PromURL and MetricsSource.
+	// Sensor observes the cluster and its telemetry. Nil runs Local's sensor over this
+	// manager's readers and PromURL.
 	Sensor sensorapi.Sensor
-	// ActuatorService acts on the cluster. Nil runs the in-process actuator over
-	// Actuator, QuarantineCapacity and BoundaryReader.
+	// ActuatorService acts on the cluster. Nil runs Local's actuator over
+	// BoundaryReader, OperatorNamespace and Authz.
 	ActuatorService actuatorapi.Actuator
 	// PromURL feeds the GPU-half physics witness (DCGM via Prometheus) on the live tick; empty =
 	// K8s-only signals (GPU half stays honest-absent/neutral).
-	PromURL  string
-	Actuator actuator.Actuator
-	// QuarantineCapacity is the production hard bound shared by native, hybrid and
-	// pure-Phoenix routes. It uses the uncached reader and protected operator ledger.
-	QuarantineCapacity *actuator.QuarantineCapacity
+	PromURL string
 	// SharedCapacity is the durable cross-policy CAS ledger for hard resources
 	// whose effects can outlive a tick or this process.
 	SharedCapacity *sharedcapacity.Store
@@ -277,9 +263,7 @@ type Manager struct {
 	// real verifier + starts its periodic re-verify, so at runtime an unverified admission
 	// policy fail-closes those two actions out of both the offer set (gate: Available) and the
 	// dispatch path (pre-submit: FinalCheck).
-	CodeExec codeExecVerifier
-	// PCIeClasses is the chart's hardware-class table for the PCIe denominator (M-114).
-	PCIeClasses  ingest.PCIeClassTable
+	CodeExec     codeExecVerifier
 	KillSwitch   *KillSwitch
 	BaseInterval time.Duration
 	// PerTickTimeout bounds one tick so a slow/hung API server cannot wedge the loop
@@ -304,10 +288,11 @@ type Manager struct {
 	// Decision trace is observational. Build identity is resolved once at
 	// startup; disabling the trace is used only for non-interference tests.
 	DecisionTraceEnabled bool
-	// MathLab records allowlisted policy ticks as replayable snapshots. nil = off.
-	MathLab *mathlab.Recorder
-	// Brain is the decision service. nil serves Optimizer in process (with MathLab).
-	Brain      brainapi.Brain
+	// Brain is the decision service. Nil serves Local's brain.
+	Brain brainapi.Brain
+	// Local are the services this process runs itself, for each of Brain, Sensor and
+	// ActuatorService that is nil.
+	Local      LocalServices
 	BrainImage string
 	GitSHA     string
 
@@ -547,42 +532,18 @@ type lifecycleEvent struct {
 	newTenant string
 }
 
-// NewManager constructs a Manager, resolving PHORVEX_ACTUATOR itself.
-//
-// [M-21] It returns an error when the selector names no backend. That error MUST be
-// propagated: it is the only thing standing between an unrecognized explicit selector and
-// a process that starts reconciling on a backend nobody chose. Callers must not discard it.
-//
-// A process with SEVERAL entrypoints should resolve once at its own entrypoint and use
-// NewManagerWithBackend instead, so one invocation cannot read the environment twice.
-func NewManager(c client.Client, log logr.Logger) (*Manager, error) {
-	res, err := actuator.ResolveBackendFromEnv()
-	if err != nil {
-		return nil, err
-	}
-	return NewManagerWithBackend(c, log, res)
-}
-
-// NewManagerWithBackend constructs a Manager on an already-resolved backend. [M-21]
-func NewManagerWithBackend(c client.Client, log logr.Logger, res actuator.BackendResolution) (*Manager, error) {
-	act, err := buildActuator(c, log, res)
-	if err != nil {
-		return nil, err
-	}
-	src, _ := ingest.SourceRegistry.Default()
-	// P-PHYSICS (UCW): make the discovered-physics recon-EMR profile the engine default
-	// (byte-identical to standard-recon at nil-data; lifts only under measured dispersion).
-	recon.Registry.SetDefault("ucw-recon")
+// New constructs a Manager whose in-process services are local (internal/inprocess,
+// composed by cmd). Brain, Sensor and ActuatorService, set, replace them with the
+// remote services.
+func New(c client.Client, log logr.Logger, local LocalServices) *Manager {
 	identity := buildinfo.Current()
 	return &Manager{
 		Client:          c,
 		OwnershipReader: c,
 		Clock:           exposure.NewClock(),
 		Intents:         exposure.NewIntents(),
-		Optimizer:       decision.NewCoverageEngine(), // P1 default brain
 		Audit:           audit.New(log, nil),
-		MetricsSource:   src,
-		Actuator:        act, // P-ACTUATOR: the ONE resolved backend (dispatch + support share it)
+		Local:           local,
 		KillSwitch:      &KillSwitch{Client: c},
 		BaseInterval:    10 * time.Second,
 		Log:             log.WithName("runner"),
@@ -597,44 +558,7 @@ func NewManagerWithBackend(c client.Client, log logr.Logger, res actuator.Backen
 		policies:             map[string]*policyEntry{},
 
 		ActionsSupportedDebounce: DefaultActionsSupportedDebounceTicks,
-	}, nil
-}
-
-// backendPurpose is the operator-facing one-liner logged for the resolved backend, so
-// EVERY valid branch — including the default — is observable. Before M-21 only the two
-// explicit non-default branches logged anything, so the single most common configuration
-// (the Phoenix default) resolved in silence and a typo resolved the same silent way.
-func backendPurpose(b actuator.Backend) string {
-	switch b {
-	case actuatorapi.BackendNative:
-		return "Phorvex's own hands; direct client-go enactment, no Phoenix CRDs"
-	case actuatorapi.BackendHybrid:
-		return "native for policy-bounded rotate and AI-native moves; Phoenix for quarantine"
-	default:
-		return "drives UNMODIFIED Phoenix via SecurityEvent/AMTD CRs"
 	}
-}
-
-// buildActuator constructs the hands for an ALREADY-RESOLVED backend and logs the
-// effective choice with its source, so every valid branch — including the default — is
-// observable. [M-21]
-//
-// It takes the resolution rather than reading the environment so that a process resolves
-// PHORVEX_ACTUATOR exactly ONCE, at its entrypoint, before any code path can act. Reading
-// it again here would reintroduce the possibility of two answers in one process.
-func buildActuator(c client.Client, log logr.Logger, res actuator.BackendResolution) (actuator.Actuator, error) {
-	act, err := actuator.New(res.Backend, c)
-	if err != nil {
-		return nil, err
-	}
-	// The entrypoint reports the CONFIGURATION (what was asked for and by whom); this
-	// reports the CONSTRUCTION (what was actually wired, and what it does). Distinct facts,
-	// so a caller that never passes through cmd/main.go still observes the effective hands.
-	log.WithName("runner").Info("actuator constructed",
-		"actuator", string(res.Backend),
-		"source", res.Origin(),
-		"purpose", backendPurpose(res.Backend))
-	return act, nil
 }
 
 // Upsert adds or updates a tenant policy in the registry.
@@ -905,24 +829,20 @@ func (m *Manager) drainScopedOutcomes(limit int) []model.ScopedOutcomeDelivery {
 // actual tick snapshot. A future observed-outcome adapter therefore cannot see
 // a different policy identity depending on which manager path established it.
 func (m *Manager) brain() brainapi.Brain {
-	if m.Brain != nil {
+	if m.Brain != nil || m.Local == nil {
 		return m.Brain
 	}
-	return brainsvc.NewLocal(m.Optimizer, m.MathLab)
+	return m.Local.Brain()
 }
 
 // actuation returns the actuator the tick acts through, nil when none is wired:
-// ActuatorService when set, else the in-process actuator over this manager's
-// backend, quarantine-capacity ledger and boundary reader.
+// ActuatorService when set, else Local's actuator over this manager's boundary
+// reader, operator namespace and access checker.
 func (m *Manager) actuation() actuatorapi.Actuator {
-	if m.ActuatorService != nil {
+	if m.ActuatorService != nil || m.Local == nil {
 		return m.ActuatorService
 	}
-	if m.Actuator == nil {
-		return nil
-	}
-	return &actuatorsvc.Local{Actuator: m.Actuator, Capacity: m.QuarantineCapacity, Reader: m.BoundaryReader, OperatorNamespace: m.OperatorNamespace,
-		Access: m.Authz}
+	return m.Local.Actuation(m.BoundaryReader, m.OperatorNamespace, m.Authz)
 }
 
 // Actuation returns the actuator the manager acts through: the remote service
@@ -957,11 +877,10 @@ func (m *Manager) quarantineCapacity(ctx context.Context, namespace string) actu
 
 // sensor returns the sensor the tick observes the cluster through.
 func (m *Manager) sensor() sensorapi.Sensor {
-	if m.Sensor != nil {
+	if m.Sensor != nil || m.Local == nil {
 		return m.Sensor
 	}
-	return &sensorsvc.Local{Client: m.Client, OwnershipReader: m.OwnershipReader, BoundaryReader: m.BoundaryReader,
-		PromURL: m.PromURL, PCIeClasses: m.PCIeClasses, Metrics: m.MetricsSource}
+	return m.Local.Sensor(m.Client, m.OwnershipReader, m.BoundaryReader, m.PromURL)
 }
 
 // selectorString is a policy selector in the form sensorapi.Scope carries; nil
@@ -1090,10 +1009,11 @@ func (*Manager) NeedLeaderElection() bool { return true }
 
 // Start implements manager.Runnable: it runs the tick loop until ctx is cancelled.
 func (m *Manager) Start(ctx context.Context) error {
-	// The exact-optimality claim depends on block-disjoint cover keys. Validate every
-	// registered recon profile once, before starting the sub-second tick path.
-	if err := recon.ValidateRegistryCoverKeys(); err != nil {
-		return fmt.Errorf("recon cover-key startup invariant failed: %w", err)
+	// The in-process services' startup invariants, before the sub-second tick path.
+	if m.Local != nil {
+		if err := m.Local.Validate(); err != nil {
+			return err
+		}
 	}
 	releaseCircuitMetrics := metrics.BindActuationCircuitSource(m.currentActuationCircuits)
 	defer releaseCircuitMetrics()

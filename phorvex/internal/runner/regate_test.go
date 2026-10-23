@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -31,7 +32,7 @@ func (f *fakeActuator) SupportsAction(context.Context, model.Action, actuator.Ta
 // 0 actuations), not actuated on the stale cached bool. A present+feasible move still actuates.
 func TestEmitBoundaryFailsClosedOnMapMiss(t *testing.T) {
 	fa := &fakeActuator{}
-	m := &Manager{Actuator: fa, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa}, Log: logr.Discard()}
 	e := &policyEntry{namespace: "ns"}
 	pol := model.Policy{Tenant: "t", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	mkDec := func() []model.Decision {

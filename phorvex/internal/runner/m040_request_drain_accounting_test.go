@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
+
 	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -63,7 +65,7 @@ func TestM040RunnerAccountsConfirmedPartialAndUnknownDrainOutcomes(t *testing.T)
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			act := &m040ResultActuator{result: tc.result, err: tc.err}
-			m := &Manager{Actuator: act, Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: act}, Log: logr.Discard()}
 			decisions := tracedSelectedDecision()
 			decisions[0].Action = model.ActionRequestDrain
 			views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", UID: "pod-uid", ModelID: "fixture-model", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}}}

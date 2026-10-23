@@ -19,6 +19,7 @@ import (
 	phorvexv1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -134,7 +135,7 @@ func m091CreatePolicy(t *testing.T, f *m091Fixture, p *phorvexv1alpha1.PhorvexPo
 }
 
 func m091Manager(f *m091Fixture) *Manager {
-	return &Manager{Actuator: f.native, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Log: logr.Discard()}
+	return &Manager{Local: &inprocess.Services{Actuator: f.native}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Log: logr.Discard()}
 }
 
 func TestM091ActuateRequiresExactOwnerBeforeBoundaryReads(t *testing.T) {
@@ -321,7 +322,7 @@ func TestM091DrainCountsOwnerBindingAndSkipsMetricsOnly(t *testing.T) {
 	var lines []string
 	log := funcr.New(func(prefix, args string) { lines = append(lines, prefix+" "+args) }, funcr.Options{})
 	a := &m091LifecycleActuator{}
-	m := &Manager{Actuator: a, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Audit: audit.New(log, nil), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: a}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}, Audit: audit.New(log, nil), Log: logr.Discard()}
 	p := m091Policy("ns", "policy", "uid", "before", "app")
 	if err := m.Upsert(p); err != nil {
 		t.Fatal(err)

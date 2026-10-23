@@ -20,6 +20,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/capability"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -56,7 +57,7 @@ func fakeVocabularyReader(t *testing.T, crd *apiextv1.CustomResourceDefinition) 
 
 func TestInstalledSchemaReaderReachesRuntimeWitness(t *testing.T) {
 	reader := fakeVocabularyReader(t, policySchemaCRD("old", "rotate", "quarantine", "noop"))
-	m := &Manager{VocabularyReader: reader, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, VocabularyReader: reader, Log: logr.Discard()}
 	now := time.Now()
 	old := m.refreshVocabulary(context.Background(), now)
 	if !old.Known || !old.NotInstallable.Has(model.ActionKVReset) || old.NotInstallable.Has(model.ActionRotate) {
@@ -95,7 +96,7 @@ func TestInstalledSchemaReaderReachesRuntimeWitness(t *testing.T) {
 }
 
 func TestAbsentActionReachesCandidateStatus(t *testing.T) {
-	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("subset", "rotate", "noop")), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("subset", "rotate", "noop")), Log: logr.Discard()}
 	observed := m.refreshVocabulary(context.Background(), time.Now())
 	pod := model.Pod{Namespace: "ns", Name: "pod", UID: "pod-uid", Ready: true, DesiredReplicas: 3, ReadyReplicas: 3, MountedSecrets: []string{"secret-ref"}}
 	witness := capability.BuildWitness(context.Background(), capability.BuildIndex([]model.Pod{pod}, nil, nil), observed.NotInstallable, nil, localActuator(supportsAll{}))
@@ -179,7 +180,7 @@ func TestSchemaAmbiguityAndReadFailureRemainUnknown(t *testing.T) {
 		t.Fatal("nonstring enum verified")
 	}
 
-	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("known", "rotate")), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("known", "rotate")), Log: logr.Discard()}
 	now := time.Now()
 	if !m.refreshVocabulary(context.Background(), now).Known {
 		t.Fatal("positive control failed")
@@ -197,7 +198,7 @@ func TestSchemaAmbiguityAndReadFailureRemainUnknown(t *testing.T) {
 	if got := m.refreshVocabulary(context.Background(), now.Add(2*vocabularyRefreshInterval)); !got.Known || got.UID != "recovered" {
 		t.Fatalf("recovery failed: %+v", got)
 	}
-	other := &Manager{Log: logr.Discard()}
+	other := &Manager{Local: &inprocess.Services{}, Log: logr.Discard()}
 	if other.VocabularySnapshot().Known {
 		t.Fatal("manager instances shared global knowledge")
 	}
@@ -208,7 +209,7 @@ func TestFullVocabularyAndCancelledRead(t *testing.T) {
 	for _, action := range model.AllKnownActions() {
 		names = append(names, string(action))
 	}
-	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("full", names...)), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("full", names...)), Log: logr.Discard()}
 	now := time.Now()
 	full := m.refreshVocabulary(context.Background(), now)
 	if !full.Known || len(full.NotInstallable) != 0 {
@@ -230,7 +231,7 @@ func TestVocabularyUnknownIsPublishedOnPolicyStatus(t *testing.T) {
 	}
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", Generation: 1}}
 	policyClient := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(policy).Build()
-	m := &Manager{Client: policyClient, VocabularyReader: failureReader{err: errors.New("forbidden")}, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Client: policyClient, VocabularyReader: failureReader{err: errors.New("forbidden")}, Log: logr.Discard()}
 	entry := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}}
 	now := time.Now()
 	m.refreshVocabulary(context.Background(), now)
@@ -256,7 +257,7 @@ func TestVocabularyUnknownIsPublishedOnPolicyStatus(t *testing.T) {
 }
 
 func TestVocabularySnapshotConcurrentPublicationIsImmutable(t *testing.T) {
-	m := &Manager{VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("stable", "rotate")), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, VocabularyReader: fakeVocabularyReader(t, policySchemaCRD("stable", "rotate")), Log: logr.Discard()}
 	start := time.Now()
 	m.refreshVocabulary(context.Background(), start)
 	var group sync.WaitGroup

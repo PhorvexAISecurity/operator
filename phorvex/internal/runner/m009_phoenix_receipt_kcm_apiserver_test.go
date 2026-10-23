@@ -24,6 +24,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/slo"
 )
@@ -119,7 +120,7 @@ func TestM009ActualNativeReceiptSnapshotRunnerAndReplicaSetController(t *testing
 	view := &model.WorkloadView{Pod: model.Pod{Namespace: ns, Name: original.Name, UID: string(original.UID), OwnerKind: "ReplicaSet", OwnerName: rs.Name, Ready: true, ReadyAt: original.Status.Conditions[0].LastTransitionTime.Time, ReadyReplicas: 1}}
 	var auditOut bytes.Buffer
 	opt := &observingOptimizer{}
-	manager := &Manager{Actuator: producer, BoundaryReader: reader, Optimizer: opt, Disruption: slo.NewLedger(time.Hour), Audit: audit.New(logr.Discard(), &auditOut), Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: producer, Optimizer: opt}, BoundaryReader: reader, Disruption: slo.NewLedger(time.Hour), Audit: audit.New(logr.Discard(), &auditOut), Log: logr.Discard()}
 	entry := &policyEntry{key: types.NamespacedName{Namespace: ns, Name: policy.Name}, uid: string(policy.UID), generation: policy.Generation, tenant: "tenant", namespace: ns,
 		spec: policy.Spec}
 	pol := model.Policy{Tenant: "tenant", Namespace: ns, PolicyName: policy.Name, PolicyUID: string(policy.UID), PolicyGeneration: policy.Generation, MaxGracePeriodSeconds: cap, MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}

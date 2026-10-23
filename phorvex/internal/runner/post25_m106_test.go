@@ -13,14 +13,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/decision"
-	"github.com/phorvex/phorvex/internal/model"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type m106RunnerAuthority struct {
@@ -36,7 +38,7 @@ func (a m106RunnerAuthority) AuthorizeObservation(observation model.PersistenceO
 func TestPost25M106ManagerRegistersExactPolicyEpochWithoutBeliefTraining(t *testing.T) {
 	engine := decision.NewCoverageEngine()
 	entry := &policyEntry{namespace: "ns", key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", generation: 9, tenant: "tenant"}
-	manager := &Manager{Optimizer: engine, policies: map[string]*policyEntry{entry.key.String(): entry}}
+	manager := &Manager{Local: &inprocess.Services{Optimizer: engine}, policies: map[string]*policyEntry{entry.key.String(): entry}}
 	manager.syncOwnerLiveness()
 
 	policy := buildPolicy(entry)
@@ -99,7 +101,7 @@ func TestPost25M106ContradictoryNativeReceiptNeverFeedsProducer(t *testing.T) {
 		NoEffect: actuator.NoEffectRefused, MutationKind: "forward-only", ObjectsTouched: []string{"Pod/ns/old"}}
 	act := &m106NativeActuator{result: &contradictory}
 	producer := &m106RunnerProducer{}
-	manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: act}, ScopedOutcomeProducer: producer, Log: logr.Discard()}
 	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	entry := &policyEntry{namespace: "ns"}
@@ -116,7 +118,7 @@ func TestPost25M106NonNativeRotateRoutesNeverFeedProducer(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			act := &m106NamedActuator{m106NativeActuator: &m106NativeActuator{}, name: name}
 			producer := &m106RunnerProducer{}
-			manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+			manager := &Manager{Local: &inprocess.Services{Actuator: act}, ScopedOutcomeProducer: producer, Log: logr.Discard()}
 			policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
 				EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 			entry := &policyEntry{namespace: "ns"}
@@ -155,7 +157,7 @@ func (*m106RunnerProducer) Drain(int) []model.ScopedOutcomeDelivery { return nil
 func TestPost25M106ActualNativeDispatchFeedsOnlyNonblockingProducerHook(t *testing.T) {
 	act := &m106NativeActuator{}
 	producer := &m106RunnerProducer{}
-	manager := &Manager{Actuator: act, ScopedOutcomeProducer: producer, Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: act}, ScopedOutcomeProducer: producer, Log: logr.Discard()}
 	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
 		EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	entry := &policyEntry{namespace: "ns"}
@@ -207,7 +209,7 @@ func TestPost25M106ActualHybridNativeRotateFeedsExactReceipt(t *testing.T) {
 	hybrid := actuator.NewHybridActuator(cluster)
 	hybrid.ConfigureNativeJournal(cluster, "operator")
 	producer := &m106RunnerProducer{}
-	manager := &Manager{Actuator: hybrid, ScopedOutcomeProducer: producer, BoundaryReader: cluster, Log: logr.Discard()}
+	manager := &Manager{Local: &inprocess.Services{Actuator: hybrid}, ScopedOutcomeProducer: producer, BoundaryReader: cluster, Log: logr.Discard()}
 	policy := model.Policy{Tenant: "tenant", Namespace: "ns", PolicyName: "policy", PolicyUID: "policy-uid", PolicyGeneration: 1,
 		MaxGracePeriodSeconds: grace, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	entry := &policyEntry{namespace: "ns", tenant: "tenant", key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", generation: 1,

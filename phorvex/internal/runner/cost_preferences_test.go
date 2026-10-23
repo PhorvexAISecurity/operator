@@ -4,9 +4,11 @@ import (
 	"math"
 	"testing"
 
-	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/inprocess"
 )
 
 func TestCostPreferencesManagerRejectsBeforeRegistration(t *testing.T) {
@@ -23,7 +25,7 @@ func TestCostPreferencesManagerRejectsBeforeRegistration(t *testing.T) {
 		{"conflicting-explicit-zero", &v1alpha1.CostPreferences{Norm: "0", Flow: "0"}, "0"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			manager := &Manager{policies: map[string]*policyEntry{}}
+			manager := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}}
 			p := &v1alpha1.PhorvexPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: types.UID("uid")},
 				Spec:       v1alpha1.PhorvexPolicySpec{Objective: v1alpha1.ObjectiveSpec{CostPreferences: tc.prefs, DisruptionAversion: tc.common}},

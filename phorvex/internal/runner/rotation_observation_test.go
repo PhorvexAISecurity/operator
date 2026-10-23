@@ -11,6 +11,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/calib"
 	"github.com/phorvex/phorvex/internal/cost"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 	"github.com/phorvex/phorvex/internal/slo"
@@ -35,7 +36,7 @@ func (o *observingOptimizer) ObserveRotation(tenant string, view *model.Workload
 func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 	fa := &fakeActuator{}
 	opt := &observingOptimizer{}
-	m := &Manager{Actuator: fa, Optimizer: opt, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: fa, Optimizer: opt}, Log: logr.Discard()}
 	e := &policyEntry{namespace: "ns"}
 	pol := model.Policy{Tenant: "tenant-a", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	views := map[string]*model.WorkloadView{
@@ -85,7 +86,7 @@ func TestLiveActuationLearnsOnlyFromNewReadyReplacement(t *testing.T) {
 
 func TestSameSecondReadyTimestampIsAcceptedAtKubernetesPrecision(t *testing.T) {
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard()}
 	startedAt := time.Date(2026, 8, 2, 12, 28, 17, 600_000_000, time.UTC)
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -118,7 +119,7 @@ func TestSameSecondReadyTimestampIsAcceptedAtKubernetesPrecision(t *testing.T) {
 
 func TestUnresolvedRotationUsesCensoredMaximum(t *testing.T) {
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard()}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -138,7 +139,7 @@ func TestUnresolvedRotationUsesCensoredMaximum(t *testing.T) {
 
 func TestPendingRotationFreezesReferenceAndCensorDeadline(t *testing.T) {
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard()}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -163,18 +164,18 @@ func TestShadowCalibrationReceivesObservedCensoredAndInvalidRotations(t *testing
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
 	}}
 
-	observed := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	observed := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard(), Calibration: runtime}
 	observed.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
 	observed.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(70 * time.Second), Pods: []model.Pod{{
 		Namespace: "ns", UID: "new-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs", Ready: true,
 		ReadyAt: startedAt.Add(60 * time.Second),
 	}}})
 
-	censored := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	censored := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard(), Calibration: runtime}
 	censored.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-b"), "tenant-b", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
 	censored.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(2 * cost.ReadyDelayReference)})
 
-	invalid := &Manager{Optimizer: &observingOptimizer{}, Log: logr.Discard(), Calibration: runtime}
+	invalid := &Manager{Local: &inprocess.Services{Optimizer: &observingOptimizer{}}, Log: logr.Discard(), Calibration: runtime}
 	invalid.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-c"), "tenant-c", &model.WorkloadView{Pod: model.Pod{Namespace: "ns", Name: "ownerless"}}, nil, startedAt)
 
 	records := runtime.RotationRecords(startedAt.Add(2 * cost.ReadyDelayReference))
@@ -196,7 +197,7 @@ func TestShadowCalibrationReceivesObservedCensoredAndInvalidRotations(t *testing
 func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) {
 	opt := &observingOptimizer{}
 	ledger := slo.NewLedger(0)
-	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -242,7 +243,7 @@ func TestRecoveryAfterFrozenDeadlineIsCensoredForCalibrationButMeasuredForLedger
 	opt := &observingOptimizer{}
 	ledger := slo.NewLedger(0)
 	runtime := calib.NewRuntime(calib.RuntimeConfig{}, logr.Discard())
-	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger, Calibration: runtime}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Disruption: ledger, Calibration: runtime}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -274,7 +275,7 @@ func TestRecoveryAfterFrozenDeadlineIsCensoredForCalibrationButMeasuredForLedger
 
 func TestEmittedButUnexecutedRotationDoesNotTrain(t *testing.T) {
 	opt := &observingOptimizer{}
-	m := &Manager{Optimizer: opt, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard()}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -294,7 +295,7 @@ func TestEmittedButUnexecutedRotationDoesNotTrain(t *testing.T) {
 func TestRotationLedgerRecordsAvailabilityBreachSeparately(t *testing.T) {
 	opt := &observingOptimizer{}
 	ledger := slo.NewLedger(0)
-	m := &Manager{Optimizer: opt, Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
@@ -321,7 +322,7 @@ func TestRotationLedgerRecordsAvailabilityBreachSeparately(t *testing.T) {
 
 func TestActionLedgerRetainsStructuralZeroAndSelectionContract(t *testing.T) {
 	ledger := slo.NewLedger(0)
-	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "api", UID: "uid", ReadyReplicas: 2,
@@ -343,7 +344,7 @@ func TestActionLedgerRetainsStructuralZeroAndSelectionContract(t *testing.T) {
 
 func TestActuateWritesCompletedStructuralZeroToLedger(t *testing.T) {
 	ledger := slo.NewLedger(0)
-	m := &Manager{Actuator: &fakeActuator{}, Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{Actuator: &fakeActuator{}}, Log: logr.Discard(), Disruption: ledger}
 	e := &policyEntry{namespace: "ns"}
 	pol := model.Policy{
 		Tenant: "tenant-a", MinAvailableReplicas: 1,
@@ -366,7 +367,7 @@ func TestActuateWritesCompletedStructuralZeroToLedger(t *testing.T) {
 
 func TestActionLedgerRetainsUnknownImpactWithoutNumericZero(t *testing.T) {
 	ledger := slo.NewLedger(0)
-	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "api", UID: "uid", ReadyReplicas: 2,
@@ -384,7 +385,7 @@ func TestActionLedgerRetainsUnknownImpactWithoutNumericZero(t *testing.T) {
 
 func TestRotationLedgerWorksWithoutRLSTrainingObserver(t *testing.T) {
 	ledger := slo.NewLedger(0)
-	m := &Manager{Log: logr.Discard(), Disruption: ledger}
+	m := &Manager{Local: &inprocess.Services{}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
 		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",

@@ -27,6 +27,9 @@ const (
 	actuator   = "actuator"
 	attacks    = "attacks"
 	console    = "console"
+	// composition builds the services a process runs itself (cmd's in-process mode);
+	// no domain imports it.
+	composition = "composition"
 )
 
 // domains assigns every internal package (and the API types) to one domain.
@@ -69,6 +72,8 @@ var domains = map[string]string{
 	"attacks": attacks, "cataloguev1": attacks, "lossobserver": attacks, "currentobserver": attacks,
 
 	"console": console,
+
+	"inprocess": composition,
 }
 
 // allowed lists the domains each domain may import besides its own. Since phase 4
@@ -82,6 +87,9 @@ var allowed = map[string][]string{
 	actuator:   {shared},
 	attacks:    {shared},
 	console:    {shared},
+	// It composes the brain, sensor and actuator for the dispatcher; it imports none
+	// of the dispatcher's packages, so the runner's tests can run it in process.
+	composition: {shared, sensor, brain, actuator},
 }
 
 type edge struct{ from, to string }
@@ -93,17 +101,6 @@ var debt = map[edge]string{
 	{"console", "mathlab"}:     "the console replays Math Lab snapshots in-process; phase 4 calls the brain API",
 	{"console", "actuator"}:    "the console introspects the actuator handler registry; phase 4 reads it from the actuator API",
 	{"console", "cataloguev1"}: "cmd/attacks serves the catalogue jobs, but their code is still package console's; it moves to an attacks package",
-
-	// The in-process composition: the runner builds the Local adapters and their parts.
-	{"runner", "brainsvc"}:    "the runner builds the in-process brain adapter; the composition moves to cmd",
-	{"runner", "sensorsvc"}:   "the runner builds the in-process sensor adapter and the ablation snapshot; the composition moves to cmd",
-	{"runner", "actuatorsvc"}: "the runner builds the in-process actuator adapter; the composition moves to cmd",
-	{"runner", "actuator"}:    "the runner constructs the backend and holds the quarantine ledger; the composition moves to cmd",
-	{"runner", "mathlab"}:     "the runner holds the in-process brain's Math Lab recorder; the composition moves to cmd",
-	{"runner", "killchain"}:   "the one-shot ablation builds a kill-chain model; it moves to the brain with the ablation",
-	{"runner", "ingest"}:      "the runner holds the in-process sensor's telemetry source and PCIe class table; the composition moves to cmd",
-	{"runner", "recon"}:       "the runner sets the in-process brain's default recon profile and validates its cover keys; the composition moves to cmd",
-	{"runner", "decision"}:    "the runner builds the in-process brain's default engine and runs the one-shot ablations in process; the composition moves to cmd, the ablations to the brain",
 }
 
 func moduleRoot(t *testing.T) string {

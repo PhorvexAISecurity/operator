@@ -25,6 +25,7 @@ import (
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -58,7 +59,7 @@ func TestM158ReaderToProcessTenantTrace(t *testing.T) {
 	policy := &v1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: types.UID("policy-uid"), Generation: 1}, Spec: spec}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.PhorvexPolicy{}).WithObjects(policy).Build()
 	var auditSink bytes.Buffer
-	m := &Manager{Client: c, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Optimizer: decision.NewCoverageEngine(), Audit: audit.New(logr.Discard(), &auditSink), Actuator: m158RuntimeActuator{}, Log: logr.Discard(), DecisionTraceEnabled: true, BrainImage: "fixture", GitSHA: "fixture", policies: map[string]*policyEntry{}}
+	m := &Manager{Local: &inprocess.Services{Optimizer: decision.NewCoverageEngine(), Actuator: m158RuntimeActuator{}}, Client: c, Clock: exposure.NewClock(), Intents: exposure.NewIntents(), Audit: audit.New(logr.Discard(), &auditSink), Log: logr.Discard(), DecisionTraceEnabled: true, BrainImage: "fixture", GitSHA: "fixture", policies: map[string]*policyEntry{}}
 	if err := m158ConfigureRuntimeVocabulary(context.Background(), m, crdReader, now); err != nil {
 		t.Fatal(err)
 	}

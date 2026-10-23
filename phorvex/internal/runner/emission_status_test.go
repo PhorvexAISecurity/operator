@@ -3,15 +3,17 @@ package runner
 import (
 	"context"
 	"errors"
-	"github.com/phorvex/phorvex/internal/model"
 	"testing"
 	"time"
 
-	v1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/model"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+
+	v1 "github.com/phorvex/phorvex/api/v1alpha1"
 )
 
 func TestM011QuietExpiryFreshnessAndNoExtraWrites(t *testing.T) {
@@ -115,7 +117,7 @@ func TestM011ExpandedWindowAndClockRollbackRemainUnknown(t *testing.T) {
 func TestM011EmittedErrorStillCountsOnceAtSource(t *testing.T) {
 	h := newStatusHarness(t, time.Minute)
 	fa := &dispatchFakeActuator{emit: true, actErr: errors.New("partial result")}
-	h.m.Actuator = fa
+	localServices(h.m).Actuator = fa
 	ds := tracedSelectedDecision()
 	views := map[string]*model.WorkloadView{"ns/p1": {Pod: model.Pod{Namespace: "ns", Name: "p1", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true}}}
 	pol := model.Policy{Tenant: "t", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}

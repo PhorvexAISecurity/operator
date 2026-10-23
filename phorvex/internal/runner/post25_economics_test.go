@@ -9,12 +9,13 @@ import (
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
 func TestPost25EconomicsManagerRejectsInvalidConfigBeforeRegistration(t *testing.T) {
 	for _, raw := range []string{"-1", "10.01", "NaN", "Inf", "1e0", "+1", "01"} {
-		m := &Manager{policies: map[string]*policyEntry{}}
+		m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}}
 		p := &v1alpha1.PhorvexPolicy{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "policy", UID: types.UID("uid")},
 			Spec:       v1alpha1.PhorvexPolicySpec{Objective: v1alpha1.ObjectiveSpec{DisruptionAversion: raw}},

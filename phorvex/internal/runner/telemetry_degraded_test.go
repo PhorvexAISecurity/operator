@@ -16,6 +16,7 @@ import (
 
 	v1 "github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 )
@@ -53,7 +54,7 @@ func TestSourceOutageLogsOnceAndSetsCondition(t *testing.T) {
 		}
 	}, funcr.Options{Verbosity: 0})
 	src := &fakeSource{name: "prometheus-http"}
-	m := &Manager{Client: c, Log: log, MetricsSource: src}
+	m := &Manager{Local: &inprocess.Services{MetricsSource: src}, Client: c, Log: log}
 	e := &policyEntry{key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}, namespace: "tel", tenant: "t"}
 
 	// (f) 100 consecutive failed ticks → exactly one ERROR line.

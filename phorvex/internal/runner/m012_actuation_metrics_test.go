@@ -24,6 +24,7 @@ import (
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	metricspkg "github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -67,7 +68,7 @@ func TestM012ActualHTTPAttemptOutcomesAndPreparationSuppression(t *testing.T) {
 	}))
 	defer server.Close()
 	hands := &m019HTTPTimeoutHands{client: &http.Client{Timeout: 10 * time.Millisecond}, url: server.URL}
-	m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	labels := map[string]string{"tenant": tenant, "action": string(model.ActionKVReset), "outcome": string(metricspkg.AttemptDeadline)}
 	failureLabels := map[string]string{"tenant": tenant, "action": string(model.ActionKVReset), "reason": string(metricspkg.AttemptDeadline)}
 	beforeAttempts := m012Counter(t, "phorvex_actuation_attempts_total", labels)
@@ -84,7 +85,7 @@ func TestM012ActualHTTPAttemptOutcomesAndPreparationSuppression(t *testing.T) {
 	}
 
 	prep := &m012PreparationHands{err: errors.New("route unavailable")}
-	m.Actuator = prep
+	localServices(m).Actuator = prep
 	suppressionLabels := map[string]string{"tenant": tenant, "action": string(model.ActionKVReset), "reason": string(metricspkg.SuppressEnsurePolicy)}
 	beforeSuppressions := m012Counter(t, "phorvex_actuation_suppressions_total", suppressionLabels)
 	beforeAllAttempts := m012Counter(t, "phorvex_actuation_attempts_total", labels)
@@ -146,7 +147,7 @@ func m012CapacityFixture(t *testing.T, suffix string, limit int, failUpdate bool
 		Emitted: true, Handler: "quarantine", MutationKind: "reversible",
 		ObjectsTouched: []string{"NetworkPolicy/" + namespace + "/target"},
 	}}
-	m := &Manager{Actuator: hands, QuarantineCapacity: capacity, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands, QuarantineCapacity: capacity}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	pol := model.Policy{
 		Tenant: namespace, Namespace: namespace, PolicyName: "policy", PolicyUID: "policy-" + suffix,
 		EnabledActions: map[model.Action]bool{model.ActionQuarantine: true},
@@ -225,7 +226,7 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 		t.Fatal("reserved alternative absent")
 	}
 	hands := &m019Hands{refusal: actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))}
-	m := &Manager{Actuator: hands, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	primaryLabels := map[string]string{"tenant": pol.Tenant, "action": string(primary), "outcome": string(metricspkg.AttemptRefused)}
 	fallbackLabels := map[string]string{"tenant": pol.Tenant, "action": string(alternative.Action), "outcome": string(metricspkg.AttemptAccepted)}
 	primaryFailureLabels := map[string]string{"tenant": pol.Tenant, "action": string(primary), "reason": string(metricspkg.AttemptRefused)}
@@ -283,7 +284,7 @@ func TestM012ForbiddenAndFallbackAttemptsAreCountedOnce(t *testing.T) {
 	}).Build()
 	apiNative := actuator.NewNativeActuator(apiClient)
 	apiNative.SetBoundaryReader(apiClient)
-	apiManager := &Manager{Actuator: apiNative, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	apiManager := &Manager{Local: &inprocess.Services{Actuator: apiNative}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	apiPolicy := model.Policy{Tenant: "m012-api-forbidden", PolicyName: "policy", PolicyUID: "policy-uid", MaxGracePeriodSeconds: cap, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	apiView := m010KVView(string(apiPod.UID))
 	apiView.Pod.Name = apiPod.Name
@@ -313,7 +314,7 @@ func TestM012ActualNativeStaleUIDRefusalHasNoAcceptedCredit(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
 	native := actuator.NewNativeActuator(c)
 	native.SetBoundaryReader(c)
-	m := &Manager{Actuator: native, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: native}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	tenant := "m012-native-stale"
 	pol := model.Policy{Tenant: tenant, PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	view := m010KVView("stale-uid")
@@ -361,7 +362,7 @@ func TestM012ClosedAttemptOutcomeVocabularyAtRunnerBoundary(t *testing.T) {
 			tenant := "m012-outcome-" + tc.name
 			action := model.ActionKVReset
 			hands := &m010FixedHands{result: tc.result, err: tc.err}
-			m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 			pol := model.Policy{Tenant: tenant, EnabledActions: map[model.Action]bool{action: true}}
 			view := m010KVView("outcome-uid")
 			ds := []model.Decision{{Namespace: "ns", Pod: "p1", Action: action, Selected: true, Feasible: true}}
@@ -387,7 +388,7 @@ func TestM012ClosedAttemptOutcomeVocabularyAtRunnerBoundary(t *testing.T) {
 func TestM012SafetySuppressionAndSelectedNoopStayOutsideFailures(t *testing.T) {
 	tenant := "m012-safety"
 	hands := &m010FixedHands{result: actuator.Result{Emitted: true}}
-	m := &Manager{Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	pol := model.Policy{Tenant: tenant}
 	view := m010KVView("safety-uid")
 	ds := []model.Decision{{Namespace: "ns", Pod: "p1", Action: model.ActionNoop, Selected: true, Feasible: true}}
@@ -404,7 +405,7 @@ func TestM012SafetySuppressionAndSelectedNoopStayOutsideFailures(t *testing.T) {
 
 func TestM012CircuitProjectionExpirySuccessOwnershipAndRegistration(t *testing.T) {
 	now := time.Date(2026, 9, 17, 3, 0, 0, 0, time.UTC)
-	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
+	m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
 	first := m140Policy("first", "shared-display", "owner-a")
 	second := m140Policy("second", "shared-display", "owner-b")
 	if err := m.Upsert(first); err != nil {
@@ -435,7 +436,7 @@ func TestM012CircuitProjectionExpirySuccessOwnershipAndRegistration(t *testing.T
 	}
 
 	// A newer binding survives release of the stale source and keeps its own state.
-	replacement := &Manager{policies: map[string]*policyEntry{}}
+	replacement := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}}
 	if err := replacement.Upsert(m140Policy("replacement", "replacement-display", "owner-c")); err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +496,7 @@ func TestM012CircuitProjectionExpirySuccessOwnershipAndRegistration(t *testing.T
 
 func TestM012CircuitConcurrentObservationScrapeAndRetirement(t *testing.T) {
 	now := time.Now()
-	m := &Manager{policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
+	m := &Manager{Local: &inprocess.Services{}, policies: map[string]*policyEntry{}, emits: map[string]*emissionHistory{}}
 	if err := m.Upsert(m140Policy("policy", "m012-race", "race-owner")); err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +539,8 @@ func TestM012AcceptedRunnerAttemptClearsCurrentCircuit(t *testing.T) {
 	now := time.Date(2026, 9, 17, 4, 0, 0, 0, time.UTC)
 	hands := &m010FixedHands{result: actuator.Result{NoEffect: actuator.NoEffectRefused}}
 	m := &Manager{
-		Actuator: hands, Intents: exposure.NewIntents(), Log: logr.Discard(),
+		Local:   &inprocess.Services{Actuator: hands},
+		Intents: exposure.NewIntents(), Log: logr.Discard(),
 		FailureNow: func() time.Time { return now },
 		policies:   map[string]*policyEntry{}, emits: map[string]*emissionHistory{},
 	}

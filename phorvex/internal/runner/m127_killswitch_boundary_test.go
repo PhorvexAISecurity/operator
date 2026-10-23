@@ -19,6 +19,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -126,7 +127,7 @@ func TestM127SentinelFlipAfterRoutePreparationRefusesDispatch(t *testing.T) {
 		return actuator.Result{Emitted: resp.StatusCode == http.StatusAccepted}, nil
 	}
 	m := &Manager{
-		Actuator:   hands,
+		Local:      &inprocess.Services{Actuator: hands},
 		KillSwitch: &KillSwitch{Client: c, Namespace: "operator"},
 		Log:        logr.Discard(),
 	}
@@ -178,7 +179,7 @@ func TestM127SentinelFlipBetweenSelectedDispatchesStopsLaterMove(t *testing.T) {
 		return actuator.Result{Emitted: true}, nil
 	}
 	m := &Manager{
-		Actuator:   hands,
+		Local:      &inprocess.Services{Actuator: hands},
 		KillSwitch: &KillSwitch{Client: c, Namespace: "operator"},
 		Intents:    exposure.NewIntents(),
 		Log:        logr.Discard(),
@@ -213,8 +214,7 @@ func TestM127EngagementAfterCleanRefusalSuppressesLearningAndFallback(t *testing
 		return actuator.Result{}, actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))
 	}
 	m := &Manager{
-		Actuator:   hands,
-		Optimizer:  ce,
+		Local:      &inprocess.Services{Actuator: hands, Optimizer: ce},
 		KillSwitch: &KillSwitch{Client: c, Namespace: "operator"},
 		Intents:    exposure.NewIntents(),
 		Log:        logr.Discard(),
@@ -246,8 +246,7 @@ func TestM127DeniedPostFailureReadSuppressesLearningAndFallback(t *testing.T) {
 		return actuator.Result{}, actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))
 	}
 	m := &Manager{
-		Actuator:   hands,
-		Optimizer:  ce,
+		Local:      &inprocess.Services{Actuator: hands, Optimizer: ce},
 		KillSwitch: &KillSwitch{Client: reader, Namespace: "operator"},
 		Intents:    exposure.NewIntents(),
 		Log:        logr.Discard(),
@@ -273,7 +272,7 @@ func TestM127AutomaticMaintenanceRechecksSentinel(t *testing.T) {
 	c := m127SentinelClient(t, "true")
 	hands := &m127BoundaryActuator{}
 	m := &Manager{
-		Actuator:   hands,
+		Local:      &inprocess.Services{Actuator: hands},
 		KillSwitch: &KillSwitch{Client: c, Namespace: "operator"},
 		Log:        logr.Discard(),
 	}

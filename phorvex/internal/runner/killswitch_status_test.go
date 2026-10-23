@@ -29,6 +29,7 @@ import (
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/graph"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/platform"
 )
@@ -80,7 +81,7 @@ func TestKillSwitchStatusUsesTheBoundaryObservationCause(t *testing.T) {
 			}
 			policy := &v1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "status-cause", Name: "policy"}}
 			c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1.PhorvexPolicy{}).WithObjects(policy).Build()
-			m := &Manager{Client: c, Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{}, Client: c, Log: logr.Discard()}
 			e := &policyEntry{key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name}}
 			m.updateStatusObserved(context.Background(), e, 1, 1, 0, observation, time.Now())
 
@@ -204,13 +205,12 @@ func TestKillSwitchEngageDisengageSuppressesAndResumesActuation(t *testing.T) {
 	notifications := record.NewFakeRecorder(4)
 	var auditSink bytes.Buffer
 	m := &Manager{
+		Local:      &inprocess.Services{Optimizer: &killSwitchOptimizer{}, Actuator: fa},
 		BrainImage: "record-image", GitSHA: "record-sha",
 		Client:            c,
 		BoundaryReader:    c,
 		Clock:             exposure.NewClock(),
-		Optimizer:         &killSwitchOptimizer{},
 		Audit:             audit.New(logr.Discard(), &auditSink),
-		Actuator:          fa,
 		ActuationRecorder: notifications,
 		KillSwitch:        &KillSwitch{Client: c, Namespace: operatorNS},
 		Log:               logr.Discard(),
@@ -416,7 +416,7 @@ func TestKillSwitchStatusDisagreementSurvivesFailedTransition(t *testing.T) {
 				return errors.New("injected status conflict")
 			},
 		}).Build()
-	m := &Manager{Client: c, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Client: c, Log: logr.Discard()}
 	m.updateStatus(context.Background(), &policyEntry{
 		key: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
 	}, 1, 1, 0, true, time.Now())
@@ -469,7 +469,7 @@ func TestOperationalStatusRetriesConflictAndPreservesControllerCondition(t *test
 			},
 		}).Build()
 
-	m := &Manager{Client: c, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{}, Client: c, Log: logr.Discard()}
 	e := &policyEntry{
 		key:    types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
 		tenant: "tenant-a",

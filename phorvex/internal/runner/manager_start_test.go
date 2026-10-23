@@ -11,12 +11,13 @@ import (
 	"github.com/go-logr/logr"
 	ctrlmanager "sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 )
 
 func TestManagerTickLoopRequiresLeaderElection(t *testing.T) {
-	var runnable ctrlmanager.LeaderElectionRunnable = &Manager{}
+	var runnable ctrlmanager.LeaderElectionRunnable = &Manager{Local: &inprocess.Services{}}
 	if !runnable.NeedLeaderElection() {
 		t.Fatal("mutating tick loop must run only in the leader-elected runnable group")
 	}
@@ -56,7 +57,7 @@ func TestManagerStartFailsClosedOnCrossBlockCoverKey(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	err := (&Manager{Log: logr.Discard()}).Start(ctx)
+	err := (&Manager{Local: &inprocess.Services{}, Log: logr.Discard()}).Start(ctx)
 	if err == nil {
 		t.Fatal("manager startup accepted a cross-block cover key")
 	}

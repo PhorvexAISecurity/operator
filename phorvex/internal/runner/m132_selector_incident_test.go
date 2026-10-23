@@ -6,9 +6,6 @@ import (
 	"testing"
 
 	"github.com/go-logr/logr"
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuator"
-	"github.com/phorvex/phorvex/internal/model"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +14,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 // This fixture exercises the real runner target handoff and Phoenix AMTD
@@ -52,7 +54,7 @@ func TestM132RunnerPhoenixSelectorPreservesNarrowingExpression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := &Manager{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: capacity, Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: actuator.NewPhoenixActuator(c), QuarantineCapacity: capacity}, Log: logr.Discard()}
 	e := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "policy"}, uid: "policy-uid", namespace: "ns", tenant: "team", spec: p.Spec}
 	pol := model.Policy{Tenant: "team", PolicyName: "policy", PolicyUID: "policy-uid", EnabledActions: map[model.Action]bool{model.ActionQuarantine: true}}
 	d := m018SelectedDecision("ns", "demo-0")

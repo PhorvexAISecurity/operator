@@ -22,10 +22,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/decision"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/runner"
 )
@@ -50,11 +53,8 @@ func m140PolicyObj(uid string) *v1alpha1.PhorvexPolicy {
 func TestM140_CoalescedRecreateThroughReconcileDoesNotInheritState(t *testing.T) {
 	scheme := m140Scheme(t)
 	engine := decision.NewCoverageEngine()
-	mgr, err := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
-	mgr.Optimizer = engine
+	mgr, local := m140Manager(t, fake.NewClientBuilder().WithScheme(scheme).Build())
+	local.Optimizer = engine
 
 	old := m140PolicyObj("uid-A")
 	client := fake.NewClientBuilder().WithScheme(scheme).
@@ -105,10 +105,7 @@ func TestM140_CoalescedRecreateThroughReconcileDoesNotInheritState(t *testing.T)
 // hot-looping the workqueue.
 func TestM140_ReconcileSurfacesMissingUIDInsteadOfDowngrading(t *testing.T) {
 	scheme := m140Scheme(t)
-	mgr, err := runner.NewManager(fake.NewClientBuilder().WithScheme(scheme).Build(), logr.Discard())
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
+	mgr, _ := m140Manager(t, fake.NewClientBuilder().WithScheme(scheme).Build())
 	client := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(m140PolicyObj("")).Build()
 	r := &PhorvexPolicyReconciler{Client: client, Manager: mgr}
@@ -147,11 +144,8 @@ func TestM140_TenantCollisionConditionIsPublishedAndCleared(t *testing.T) {
 	second.Name = "policy-two" // same spec.tenant, different policy and UID
 	client := fake.NewClientBuilder().WithScheme(scheme).
 		WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(first, second).Build()
-	mgr, err := runner.NewManager(client, logr.Discard())
-	if err != nil {
-		t.Fatalf("NewManager: %v", err)
-	}
-	mgr.Optimizer = decision.NewCoverageEngine()
+	mgr, local := m140Manager(t, client)
+	local.Optimizer = decision.NewCoverageEngine()
 
 	if err := mgr.Upsert(first); err != nil {
 		t.Fatal(err)
@@ -190,4 +184,19 @@ func TestM140_TenantCollisionConditionIsPublishedAndCleared(t *testing.T) {
 	if cond == nil || cond.Status != metav1.ConditionFalse {
 		t.Fatalf("TenantCollision did not clear for the surviving unique owner: %+v", cond)
 	}
+}
+
+// m140Manager composes an in-process manager as cmd does, on the backend
+// PHORVEX_ACTUATOR names.
+func m140Manager(t *testing.T, c client.Client) (*runner.Manager, *inprocess.Services) {
+	t.Helper()
+	res, err := actuator.ResolveBackendFromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, err := inprocess.New(c, logr.Discard(), res)
+	if err != nil {
+		t.Fatalf("inprocess.New: %v", err)
+	}
+	return runner.New(c, logr.Discard(), local), local
 }

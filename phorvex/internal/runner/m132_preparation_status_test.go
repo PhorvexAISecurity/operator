@@ -6,13 +6,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/phorvex/phorvex/api/v1alpha1"
-	"github.com/phorvex/phorvex/internal/actuator"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/actuator"
+	"github.com/phorvex/phorvex/internal/inprocess"
 )
 
 func TestActuationPreparedConditionIsCurrentGenerationAndRouteQualified(t *testing.T) {
@@ -23,7 +25,7 @@ func TestActuationPreparedConditionIsCurrentGenerationAndRouteQualified(t *testi
 	policy := &v1alpha1.PhorvexPolicy{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "p", UID: "policy-uid", Generation: 8}}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.PhorvexPolicy{}).WithObjects(policy).Build()
 	e := &policyEntry{key: types.NamespacedName{Namespace: "ns", Name: "p"}, uid: "policy-uid", tenant: "team", generation: 8}
-	m := &Manager{Client: c, Actuator: &routedDispatchFake{}}
+	m := &Manager{Local: &inprocess.Services{Actuator: &routedDispatchFake{}}, Client: c}
 	status := actionsSupportStatus{status: metav1.ConditionTrue, reason: "Supported", message: "capabilities present", preparation: &actuator.RoutePreparation{PhoenixErr: errors.New("selector has unproven Exists")}}
 	m.updateStatus(t.Context(), e, 1, 1, 0, false, time.Unix(100, 0), status)
 	var got v1alpha1.PhorvexPolicy

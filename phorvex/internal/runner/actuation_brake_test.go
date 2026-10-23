@@ -26,6 +26,7 @@ import (
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -272,7 +273,7 @@ func TestM124LateNamespaceAndPodFlipsRefuseDispatchThenResume(t *testing.T) {
 				tc.flip(t, c)
 				return nil
 			}
-			m := &Manager{Actuator: hands, BoundaryReader: c, Intents: exposure.NewIntents()}
+			m := &Manager{Local: &inprocess.Services{Actuator: hands}, BoundaryReader: c, Intents: exposure.NewIntents()}
 			decisions, views := m124DecisionAndViews()
 			decisions[0].Handler = "stale"
 			decisions[0].RollbackRef = "stale"
@@ -305,7 +306,7 @@ func TestM124MissingReaderAndEmptySnapshotUIDFailClosed(t *testing.T) {
 	pol := model.Policy{Tenant: "tenant", MinAvailableReplicas: 1, EnabledActions: map[model.Action]bool{model.ActionRotate: true}}
 	t.Run("missing-reader", func(t *testing.T) {
 		hands := &m127BoundaryActuator{}
-		m := &Manager{Actuator: hands}
+		m := &Manager{Local: &inprocess.Services{Actuator: hands}}
 		decisions, views := m124DecisionAndViews()
 		if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 0 || hands.ensureCalls != 0 || hands.actuateCalls != 0 {
 			t.Fatalf("missing reader reached route/dispatch: got=%d route=%d dispatch=%d", got, hands.ensureCalls, hands.actuateCalls)
@@ -317,7 +318,7 @@ func TestM124MissingReaderAndEmptySnapshotUIDFailClosed(t *testing.T) {
 	t.Run("empty-snapshot-uid", func(t *testing.T) {
 		c := m124BoundaryClient(t, "false", "false")
 		hands := &m127BoundaryActuator{}
-		m := &Manager{Actuator: hands, BoundaryReader: c}
+		m := &Manager{Local: &inprocess.Services{Actuator: hands}, BoundaryReader: c}
 		decisions, views := m124DecisionAndViews()
 		views["ns/p1"].Pod.UID = ""
 		if got := m.actuate(context.Background(), &policyEntry{namespace: "ns"}, pol, decisions, views); got != 0 || hands.ensureCalls != 1 || hands.actuateCalls != 0 {
@@ -361,7 +362,7 @@ func TestM124LatePodOptOutSuppressesFailureLearningAndFallbackReservation(t *tes
 	ctx := context.Background()
 	ce, pol, views, decisions := m019Scenario(t)
 	hands := &m127BoundaryActuator{}
-	m := &Manager{Actuator: hands, Optimizer: ce, Intents: exposure.NewIntents()}
+	m := &Manager{Local: &inprocess.Services{Actuator: hands, Optimizer: ce}, Intents: exposure.NewIntents()}
 	viewMap := map[string]*model.WorkloadView{"ns/pod": views[0]}
 	c := configureActuationBoundary(t, m, "ns", viewMap)
 	hands.actuate = func(context.Context, actuator.Request) (actuator.Result, error) {

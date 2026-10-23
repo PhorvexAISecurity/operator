@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+
 	"github.com/phorvex/phorvex/internal/actuator"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/exposure"
+	"github.com/phorvex/phorvex/internal/inprocess"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
 )
@@ -99,7 +101,7 @@ func TestM019CleanRefusalGetsOneReservedAlternative(t *testing.T) {
 		}
 	}
 	h := &m019Hands{refusal: actuator.RefusedWithoutEffect(errors.New("precondition unavailable"))}
-	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	m := &Manager{Local: &inprocess.Services{Actuator: h, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]})
 	if n != 1 || len(h.calls) != 2 || h.calls[0] == h.calls[1] {
 		t.Fatalf("fallback not bounded/distinct: n=%d calls=%v", n, h.calls)
@@ -155,7 +157,7 @@ func TestM019AmbiguousRefusalNeverGetsAlternative(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ce, pol, views, ds := m019Scenario(t)
 			h := &m019Hands{refusal: tc.err, result: tc.result}
-			m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard()}
+			m := &Manager{Local: &inprocess.Services{Actuator: h, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 			if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
 				t.Fatalf("ambiguous effect triggered fallback: n=%d calls=%v", n, h.calls)
 			}
@@ -258,7 +260,7 @@ func TestM019OriginalDeadEndpointRunnerLoopBoundedAtHead(t *testing.T) {
 	pol.EnabledActions[model.ActionKVReset] = true
 	now := time.Date(2026, 9, 15, 1, 54, 32, 0, time.UTC)
 	h := &m019Hands{refusal: errors.New("dead inference endpoint")}
-	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
+	m := &Manager{Local: &inprocess.Services{Actuator: h, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
 	ce.FailureExclusion = func(v *model.WorkloadView, a model.Action) (string, bool) {
 		return m.Failures.exclusion(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, a}, now)
 	}
@@ -286,7 +288,7 @@ func TestM019OriginalDeadEndpointRunnerLoopBoundedAtHead(t *testing.T) {
 func TestM019RetiredOwnerCannotReceiveLateFailureFeedback(t *testing.T) {
 	ce, pol, views, ds := m019Scenario(t)
 	h := &m019Hands{refusal: errors.New("late failure")}
-	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard(),
+	m := &Manager{Local: &inprocess.Services{Actuator: h, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard(),
 		epochsTracked: true, epochs: map[string]uint64{pol.Owner(): 2}, tickEpochs: map[string]uint64{pol.Owner(): 1}}
 	if n := actuateWithBoundary(t, m, context.Background(), &policyEntry{namespace: "ns"}, pol, ds, map[string]*model.WorkloadView{"ns/pod": views[0]}); n != 0 || len(h.calls) != 1 {
 		t.Fatalf("late actuator path not exercised: n=%d calls=%v", n, h.calls)
@@ -302,7 +304,7 @@ func TestM019ActionLocalHTTPTimeoutCoolsButCanceledTickDoesNot(t *testing.T) {
 	ce, pol, views, _ := m019Scenario(t)
 	now := time.Date(2026, 9, 15, 1, 54, 32, 0, time.UTC)
 	h := &m019HTTPTimeoutHands{client: &http.Client{Timeout: 20 * time.Millisecond}, url: server.URL}
-	m := &Manager{Actuator: h, Optimizer: ce, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
+	m := &Manager{Local: &inprocess.Services{Actuator: h, Optimizer: ce}, Intents: exposure.NewIntents(), Log: logr.Discard(), FailureNow: func() time.Time { return now }}
 	ce.FailureExclusion = func(v *model.WorkloadView, a model.Action) (string, bool) {
 		return m.Failures.exclusion(failureKey{pol.Owner(), v.Pod.Namespace, v.Pod.UID, a}, now)
 	}
@@ -333,7 +335,7 @@ func TestM019ActionLocalHTTPTimeoutCoolsButCanceledTickDoesNot(t *testing.T) {
 	// returns the same deadline/cancellation family of error.
 	other, otherPol, otherViews, otherDS := m019Scenario(t)
 	otherHands := &m019HTTPTimeoutHands{client: &http.Client{Timeout: 20 * time.Millisecond}, url: server.URL}
-	otherManager := &Manager{Actuator: otherHands, Optimizer: other, Intents: exposure.NewIntents(), Log: logr.Discard()}
+	otherManager := &Manager{Local: &inprocess.Services{Actuator: otherHands, Optimizer: other}, Intents: exposure.NewIntents(), Log: logr.Discard()}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	actuateWithBoundary(t, otherManager, ctx, &policyEntry{namespace: "ns"}, otherPol, otherDS, map[string]*model.WorkloadView{"ns/pod": otherViews[0]})
