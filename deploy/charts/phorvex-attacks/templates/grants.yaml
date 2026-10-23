@@ -1,0 +1,16 @@
+{{- /* The console's subject grants, as the manager chart renders them (console-grants.yaml),
+in this release: the attacks service loads them at startup, so they must arrive with the
+pod they roll (phorvex-common.grantsConfigMapName). */}}
+{{- if and .Values.phorvex.console.enabled .Values.phorvex.console.auth.grants.enabled .Values.phorvex.console.auth.grants.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-common.grantsConfigMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-auth
+data:
+  {{ .Values.phorvex.console.auth.grants.fileName }}: |
+{{ .Values.phorvex.console.auth.grants.data | default "{\n  \"version\": 1,\n  \"subjects\": []\n}\n" | indent 4 }}
+{{- end }}

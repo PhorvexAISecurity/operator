@@ -9,6 +9,19 @@ own ServiceAccount, name, image and state.
 {{- printf "%s-attacks" .Release.Name | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{/* The grants ConfigMap the pod mounts. The pod reads it once, at startup, so the
+attacks chart renders its own copy when the grants are rendered at all: then a grants
+change and the pod it rolls arrive in the same sync, and the pod never starts on the
+manager release's older copy. */}}
+{{- define "phorvex-common.grantsConfigMapName" -}}
+{{- $grants := .Values.phorvex.console.auth.grants -}}
+{{- if and (eq .Chart.Name "phorvex-attacks") $grants.create -}}
+{{- printf "%s-attacks-grants" .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- $grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "phorvex-common.consoleDeployment" -}}
 {{- $attacks := eq .Chart.Name "phorvex-attacks" }}
 {{- $remoteAttacks := and (not $attacks) .Values.phorvex.services.attacks.endpoint }}
@@ -990,7 +1003,7 @@ spec:
       {{- if .Values.phorvex.console.auth.grants.enabled }}
       - name: console-grants
         configMap:
-          name: {{ .Values.phorvex.console.auth.grants.configMapName | default (printf "%s-console-grants" (include "phorvex.fullname" .)) }}
+          name: {{ include "phorvex-common.grantsConfigMapName" . }}
           defaultMode: 0440
       {{- end }}
       {{- if .Values.phorvex.console.podBoundToken.enabled }}
