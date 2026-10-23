@@ -1,5 +1,9 @@
 # manager changelog
 
+## 0.11.1 (2026-10-23)
+
+- refactor(dispatcher): compose the in-process services in cmd (bfa2e4f1)
+
 ## 0.11.0 (2026-10-23)
 
 - feat(console): the console's own chart and Application (fee81475)
