@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published actuator image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/actuator"
-  tag: "0.5.0"
-  digest: "sha256:cd4f6236bf53f8dfcc14cc196edd8ebaa6e2946114593db115d4420526ea8f54"
+  tag: "0.5.1"
+  digest: "sha256:f8e5ce1affbc1469a08c87ec2af1896bb38fafa2eda536b1cc3cf9ee29ee6a18"
