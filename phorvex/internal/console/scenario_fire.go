@@ -41,22 +41,9 @@ func (s *Server) resolveRunningPod(ns string) (string, error) {
 		if labelSel != "" {
 			args = append(args, "-l", labelSel)
 		}
-		args = append(args, "-o",
-			`jsonpath={range .items[*]}{.metadata.name}|{.metadata.ownerReferences[0].kind}|{.status.phase}{"\n"}{end}`)
-		out, _ := s.cfg.execText(8*time.Second, "kubectl", args...)
-		for _, ln := range strings.Split(strings.TrimSpace(out), "\n") {
-			f := strings.Split(strings.TrimSpace(ln), "|")
-			if len(f) < 3 || f[0] == "" {
-				continue
-			}
-			if strings.EqualFold(strings.TrimSpace(f[1]), "AdaptiveMovingTargetDefense") {
-				continue // already quarantined
-			}
-			if strings.EqualFold(strings.TrimSpace(f[2]), "Running") {
-				return strings.TrimSpace(f[0])
-			}
-		}
-		return ""
+		out, _ := s.cfg.execText(8*time.Second, "kubectl", append(args, "-o", attackTargetJSONPath)...)
+		pod, _ := pickAttackTarget(out)
+		return pod
 	}
 	if pod := pick("r6th.io/rotation-target=true"); pod != "" {
 		return pod, nil

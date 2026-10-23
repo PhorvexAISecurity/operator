@@ -41,6 +41,8 @@ func TestCaseTraceLegacyWorkloadSignalIsTypedAndClearRefusesWithoutUID(t *testin
 	cluster := &fakeExperimentCluster{podUID: "pod-uid", podFound: true}
 	cfg := Config{StateDir: t.TempDir(), Exec: fx.run, AttackWatchDuration: 10 * time.Millisecond, AttackWatchInterval: time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: cluster}
+	// The fired attack's watcher writes to StateDir: it finishes before the directory goes.
+	t.Cleanup(s.attackWatchers.Wait)
 
 	req := httptest.NewRequest("POST", "/api/workload/attack", strings.NewReader(`{"namespace":"demo","action":"foothold"}`))
 	rw := httptest.NewRecorder()
@@ -82,6 +84,7 @@ func TestCaseTraceLegacyLostCreateAcknowledgementPersistsUnknownOutcome(t *testi
 	stateDir := t.TempDir()
 	cfg := Config{StateDir: stateDir, Exec: fx.run, AttackWatchDuration: 10 * time.Millisecond, AttackWatchInterval: time.Millisecond}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg), experimentAPI: &fakeExperimentCluster{podUID: "pod-uid", podFound: true}}
+	t.Cleanup(s.attackWatchers.Wait)
 	rw := httptest.NewRecorder()
 	s.workloadAttack(rw, httptest.NewRequest("POST", "/api/workload/attack", strings.NewReader(`{"namespace":"demo","action":"foothold"}`)))
 	if rw.Code != 502 || !strings.Contains(rw.Body.String(), `"mutated":true`) || !strings.Contains(rw.Body.String(), `"restoration":"reconciliation-required"`) {
