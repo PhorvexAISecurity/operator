@@ -1,3 +1,6 @@
 {
-  "console": "0.8.3"
+  "actuator": "0.5.2",
+  "attacks": "0.3.2",
+  "console": "0.8.4",
+  "manager": "0.10.2"
 }

@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.8.4 (2026-10-23)
+
+- fix(dispatcher): check a native backend's routes as native (02cad93e)
+
 ## 0.8.3 (2026-10-23)
 
 - fix(test-harness): outlast the JetStream consumer store-removal race (02c0bdd9)
