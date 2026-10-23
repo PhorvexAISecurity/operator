@@ -19,6 +19,11 @@ phorvex:
     # injects the workload signals and holds the attack grants (docs/services/attacks.md).
     attacks:
       endpoint: staging-attacks:8090
+  # The dispatcher's gRPC to the brain, sensor and actuator runs over mutual TLS
+  # (docs/services/service-tls.md). deploy/eks/provision-service-mtls.sh wrote the
+  # four Secrets (NAMESPACE=phorvex-staging RELEASE=staging).
+  serviceTLS:
+    enabled: true
 
   # Beside production, staging must leave production's policies and requests alone.
   # It reconciles, ticks and authorizes only the PhorvexPolicies of the demo's

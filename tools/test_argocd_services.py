@@ -176,6 +176,22 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertGreater(segment, 0, 'an unbounded audit fills any volume')
                 self.assertLessEqual(segment * (int(flags['audit-max-backups']) + 1), capacity // 2, size)
 
+    def test_the_dispatcher_and_the_services_it_calls_agree_on_mutual_tls(self):
+        # A dispatcher dialing TLS to a plaintext service, or the reverse, refuses to start.
+        by_service = {e['service']: e for e in ELEMENTS}
+        for environment in ENVIRONMENTS_LISTED:
+            values = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']
+            enabled = values.get('serviceTLS', {}).get('enabled', False)
+            with self.subTest(environment=environment['environment']):
+                for service in ('manager', 'brain', 'sensor', 'actuator'):
+                    pod = service_pod(render(environment, by_service[service]), service)
+                    args = pod['containers'][0]['args']
+                    self.assertEqual(any(a.startswith('--grpc-tls-cert=') for a in args), enabled, service)
+                    if enabled:
+                        secrets = [v['secret']['secretName'] for v in pod['volumes'] if v['name'] == 'grpc-tls']
+                        end = 'dispatcher' if service == 'manager' else service
+                        self.assertEqual(secrets, [f"{environment['release']}-{end}-grpc-tls"], service)
+
     def test_an_end_to_end_identity_reaches_only_its_environment(self):
         # Its tokens are console credentials, never Kubernetes ones. The audience is the
         # environment's own, so another console's e2e token is refused, and the grant is
