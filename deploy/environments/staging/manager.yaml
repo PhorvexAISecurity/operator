@@ -3,6 +3,6 @@
 phorvex:
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager"
-    tag: "0.11.0"
-    releaseDigest: "sha256:598ea9ab9ca4440beff0bcc7b0f003cccafa6ee1e10c5a84929f76313e1a04fd"
-    releaseSourceSHA: "8acb43ad7ce088460a457e3055d74c53df5e67a5"
+    tag: "0.11.1"
+    releaseDigest: "sha256:d005e77ed2fa58d057e7d970731711f6dc5f8ae07cce173aa661c6aa97b3c35b"
+    releaseSourceSHA: "f34bc429582fc1418b680b9e159942c07aea4438"

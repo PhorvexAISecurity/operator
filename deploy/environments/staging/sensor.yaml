@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published sensor image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor"
-  tag: "0.6.0"
-  digest: "sha256:228141af0a62501e42c87d8016c70790b0586c0c11827797839147256674be10"
+  tag: "0.6.1"
+  digest: "sha256:29e0aefc45251a1cd717a86add49b4ebeb447ebb3ce0ce0384b5e3fd3d150aab"
