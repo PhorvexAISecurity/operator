@@ -1,7 +1,3 @@
 {
-  "actuator": "0.5.1",
-  "attacks": "0.3.1",
-  "brain": "0.4.1",
-  "manager": "0.10.1",
-  "sensor": "0.5.1"
+  "console": "0.8.3"
 }
