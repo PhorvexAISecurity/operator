@@ -16,7 +16,7 @@ files.
 
 | Environment | Cluster | State |
 |---|---|---|
-| `staging` | `phorvex-dev-eks`, beside the production stack: namespace `phorvex-staging`, release `staging`, its own policy scope, the native backend confined to its namespace, its own monitoring (`environment=staging`) and the `deploy/demo` workload to defend | applied by hand (`deploy/argocd/services/README.md`) |
+| `staging` | `phorvex-dev-eks`: service namespace `phorvex-staging`, release `staging`, native actuator, explicit tenant scopes and staging monitoring | Live: demo scope. Proposed: all 12 policy namespaces; **do not merge/sync** until [DECISION.md](../../DECISION.md) is resolved. AppProject/ApplicationSet are applied separately ([service README](../argocd/services/README.md)). |
 
-Production keeps running the stack in `deploy/helm/phorvex-stack` until the split
-services have run in staging.
+The old `operator.git` monolith remains running. Its retirement is separately
+gated by [RETIREMENT-RUNBOOK.md](../../RETIREMENT-RUNBOOK.md).

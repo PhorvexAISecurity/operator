@@ -23,40 +23,40 @@ An environment names its cluster, namespace and Helm release in the
 ApplicationSet's list, and keeps its values in `deploy/environments/<environment>/`
 (see its README).
 
-**Staging runs beside the production stack on the production cluster**, in the
-namespace `phorvex-staging` under the release name `staging`. Sharing the API
-server with production, it must leave production alone, and its values see to it
-(`tools/test_argocd_services.py` checks each):
+**The dev-eks migration proposal is held.** Read [DECISION.md](../../../DECISION.md)
+and [RETIREMENT-RUNBOOK.md](../../../RETIREMENT-RUNBOOK.md) before merging or
+syncing. The live services still watch only `phorvex-staging-demo`; proposed
+`policyNamespaces` and `actuatorNamespaces` cover all 12 namespaces in the frozen
+inventory, and `project.yaml` lists their exact destinations. The proposal does
+not establish exclusive ownership or feature parity.
 
-- **Its own policies only.** `policyNamespaces: [phorvex-staging-demo]`: the
-  manager reconciles and ticks, the sensor lists and the actuator authorizes only
-  the PhorvexPolicies of the demo's namespace. Without the scope, the manager would
-  write production's policy status and act on its policies. The services never
-  defend the namespace they run in: the actuator refuses to quarantine there.
-- **Its own hands.** The native backend (`actuator: native`) creates no
-  SecurityEvent or AMTD for production's Phoenix to act on, and changes workloads
-  only in `actuatorNamespaces: [phorvex-staging-demo]`. Production's Phoenix acts
-  on every SecurityEvent, but its AMTDs cover only production's namespaces. With
-  only those hands, the global kill switch is off.
-- **No cluster-wide admission.** Its admission webhooks and the SecurityEvent
-  identity policy are off, since they would also admit production's requests.
-  Without that policy, no external detector is trusted.
-- **No shared cluster-scoped object.** The CRDs are skipped (they are
-  production's), and every ClusterRole and binding carries the release name.
-- **Its own monitoring.** Its series carry `environment=staging`. Its dashboard and
-  severity-info alerts filter on it, and production's one unscoped rule never sees
-  its cost counter (`deploy/monitoring/README.md`).
+The old `operator.git` monolith in `phorvex-system` watches policies cluster-wide.
+Its manager and the new manager hold separate namespace-local leader leases, and
+both currently tick the demo policy. The old manager also has the temporary
+`phvx93-rotate-eviction-proof` grant there. Neither `UniqueOwner` nor the services'
+scope handshake coordinates those two managers. Do not expand this overlap or
+remove the temporary grant before a verified handoff.
 
-Production does not leave staging alone in one respect. Its manager has no policy
-scope, so it also reconciles and ticks staging's policies:
-- It writes their status and records their decisions in its audit.
-- It maintains its standing AMTD for each of them in staging's namespaces. The AMTD
-  maps only production's own `PhorvexController` signals, which production raises
-  only on threats from detectors it trusts.
-- It holds no RBAC in staging's namespaces and trusts none of staging's detectors,
-  so it decides there but does not act.
+The proposed new stack remains in `phorvex-staging`, release `staging`, with:
 
-Scoping production's manager to its own namespaces closes this.
+- Explicit tenant policy and native-actuator RBAC scope; neither operator namespace
+  is a defended tenant. Native execution creates no Phoenix SecurityEvents/AMTDs.
+- Ten established application attack scopes; the two verification fixtures are
+  defense-only, and existing console subjects retain demo-only tenant grants.
+- Admission disabled locally and the old creator-identity guard referenced
+  externally. The old admission endpoint and guard must be rehomed before retiring
+  the monolith; the shared Phoenix operator must remain untouched.
+- Shared CRDs skipped, release-prefixed ClusterRoles/bindings, and staging-specific
+  monitoring. `tools/test_argocd_services.py` checks rendered scope, permissions,
+  service handshakes, project destinations and unchanged console grants.
+
+The child Applications track `main` with automatic sync. **Merging the migration
+values would trigger deployment**; leaving a PR open does not require changing
+any live sync policy. The existing AppProject was applied separately and is not
+reconciled by the production root. Before migration, adopt its destinations under
+a reviewed operator-refactored Argo bootstrap; do not edit tenant scope with an
+ad-hoc kubectl apply. The project must permit the namespaces before the service
+Applications can sync their Roles there.
 
 `phorvex-demo-staging` (`demo-staging.yaml`) deploys `deploy/demo` into its own
 namespace, `phorvex-staging-demo`:
@@ -69,9 +69,10 @@ namespace, `phorvex-staging-demo`:
   Without a measured load the brain prices every rotation at its conservative
   bound, above the policy's cost ceiling.
 
-That namespace is also the console's attack scope and every staging grant's
-tenant. The console is reachable at `staging-console.phorvex.ai`, through its own
-ALB and Cognito app client.
+That namespace remains every existing console grant's tenant; the proposed service
+attack scope also covers the other established application tenants. The console
+is reachable at `staging-console.phorvex.ai`, through its own ALB and Cognito app
+client.
 
 End-to-End runs reach the staging console with a bearer token instead. The token
 belongs to `staging-phorvex-console-e2e`, a ServiceAccount with no RBAC, and its
@@ -84,12 +85,16 @@ kubectl -n phorvex-staging create token staging-phorvex-console-e2e \
 
 The grant confines it to `phorvex-staging-demo`, like the operator's.
 
-## Applying
+## Original installation and migration bootstrap
 
 1. Argo CD reads this repository over HTTPS with the credential it uses for the
    production repository, in a repository Secret for this repository's URL. The
    enterprise disables deploy keys.
-2. Apply `project.yaml`, then `applicationset.yaml` and `demo-staging.yaml`.
+2. The original installation applied `project.yaml`, then `applicationset.yaml`
+   and `demo-staging.yaml` manually. For this tenant migration, first adopt project
+   scope management under the reviewed refactored Argo bootstrap. All tenant
+   scope/RBAC changes must go through PR and Argo CD; the original manual install
+   procedure does not authorize a migration rollout.
 
 The services start in any order: the manager waits up to two minutes for each
 handshake and restarts until every service answers. Deleting the ApplicationSet
@@ -97,9 +102,11 @@ removes the Applications and, through their finalizers, everything they created.
 
 ## Operating staging
 
-- **A new namespace.** `project.yaml` and `demo-staging.yaml` are applied by hand.
-  Apply the project before a change that renders into a new namespace syncs, or
-  the services' Applications fail with "namespace ... is not permitted in project".
+- **A new namespace.** Commit the project destination and tenant values together.
+  Under the approved migration controls, sync the GitOps-managed project before
+  a service change renders into that namespace, or the services' Applications
+  fail with "namespace ... is not permitted in project". The current manually
+  installed project first needs the adoption described above.
 - **A changed scope.** The ApplicationSet does not prune, so changing
   `policyNamespaces`, `actuatorNamespaces` or `console.attackNamespaces` leaves the
   old namespace's Roles in place, with their grants. Prune exactly those

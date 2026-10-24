@@ -1,6 +1,7 @@
-# Staging: the split services beside the production stack on the production
-# cluster, in the namespace phorvex-staging under the release name staging
-# (ADR-0001, deploy/argocd/services/README.md).
+# Proposed dev-eks tenant migration; DO NOT MERGE OR SYNC until DECISION.md is
+# resolved. Both stacks currently reconcile the demo without a shared ownership
+# fence. This scope expansion alone cannot safely hand off the other tenants.
+# The split services remain in phorvex-staging under the release name staging.
 #
 # Every chart reads this file: the manager chart's keys under `phorvex`, which the
 # brain, sensor and actuator charts read under the same name, so the values their
@@ -25,16 +26,38 @@ phorvex:
   serviceTLS:
     enabled: true
 
-  # Beside production, staging must leave production's policies and requests alone.
-  # It reconciles, ticks and authorizes only the PhorvexPolicies of the demo's
-  # namespace (deploy/demo). The services never defend their own namespace: the
-  # actuator refuses to quarantine in it.
-  policyNamespaces: [phorvex-staging-demo]
-  # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
-  # for production's Phoenix to act on, and changes workloads only in the demo's
-  # namespace, so its kill switch is off and it rotates and quarantines demo-api.
+  # All 12 namespaces with policies in the three stable dev-eks inventories on
+  # 2026-10-24 (docs/migrations/dev-eks-20261024/baseline.json), including the two
+  # verification tenants. Never include the services' own namespace.
+  policyNamespaces:
+  - ci-reports
+  - console-identity-shared
+  - crm
+  - document-store
+  - litellm
+  - mcp
+  - nats
+  - phorvex-staging-demo
+  - phorvex-verify-m100-loss-history-v2
+  - phorvex-verify-m106-scoped-outcome-v4
+  - vllm
+  - voice
+  # Native workload writes stay with the actuator. Tenant-specific capabilities,
+  # detector trust and operation recovery still require parity work (DECISION.md).
   actuator: native
-  actuatorNamespaces: [phorvex-staging-demo]
+  actuatorNamespaces:
+  - ci-reports
+  - console-identity-shared
+  - crm
+  - document-store
+  - litellm
+  - mcp
+  - nats
+  - phorvex-staging-demo
+  - phorvex-verify-m100-loss-history-v2
+  - phorvex-verify-m106-scoped-outcome-v4
+  - vllm
+  - voice
   globalKillSwitch: false
   # Admission webhooks and policies are cluster-wide: staging's would also admit
   # production's requests.
@@ -85,8 +108,20 @@ phorvex:
     enabled: true
     # Its own chart and Application deploy it (deploy/charts/phorvex-console).
     separate: true
-    # Exec, workload changes and policy edits stay in the demo's namespace.
-    attackNamespaces: [phorvex-staging-demo]
+    # Established application targets only; the verification fixtures above are
+    # defense-only. Existing human and e2e grants remain confined to the demo.
+    # A namespace grant does not enable a disabled tenant-specific attack profile.
+    attackNamespaces:
+    - ci-reports
+    - console-identity-shared
+    - crm
+    - document-store
+    - litellm
+    - mcp
+    - nats
+    - phorvex-staging-demo
+    - vllm
+    - voice
     state:
       persistence:
         storageClass: gp2-csi

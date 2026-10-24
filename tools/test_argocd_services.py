@@ -31,6 +31,7 @@ ELEMENTS = MATRIX[1]['list']['elements']
 ENVIRONMENT_NAMES = [e['environment'] for e in ENVIRONMENTS_LISTED]
 TEMPLATE = APPLICATION_SET['spec']['template']
 IN_CLUSTER = 'https://kubernetes.default.svc'
+MIGRATION = json.loads((ROOT / 'docs/migrations/dev-eks-20261024/baseline.json').read_text())
 
 
 def value_files(environment, service):
@@ -72,9 +73,25 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual({s['repoURL'] for s in TEMPLATE['spec']['sources']}, {REPO})
         self.assertEqual(TEMPLATE['spec']['project'], PROJECT['metadata']['name'])
         self.assertEqual(TEMPLATE['spec']['destination'], {'server': '{{.server}}', 'namespace': '{{.namespace}}'})
-        demo = load(SERVICES / 'demo-staging.yaml')['spec']['destination']
-        self.assertEqual(PROJECT['spec']['destinations'], [{'server': e['server'], 'namespace': e['namespace']} for e in ENVIRONMENTS_LISTED] + [demo])
+        destinations = {(e['server'], e['namespace']) for e in ENVIRONMENTS_LISTED}
+        for e in ENVIRONMENTS_LISTED:
+            scope = load(ENVIRONMENTS / e['environment'] / 'phorvex.yaml')['phorvex']['policyNamespaces']
+            destinations.update((e['server'], ns) for ns in scope)
+        actual = PROJECT['spec']['destinations']
+        self.assertEqual({(d['server'], d['namespace']) for d in actual}, destinations)
+        self.assertEqual(len(actual), len(destinations))
         self.assertIs(TEMPLATE['spec']['sources'][0]['helm']['skipCrds'], True)
+
+    def test_staging_scope_covers_the_frozen_live_inventory(self):
+        # The observed policy inventory includes two easy-to-miss verification
+        # namespaces. Proposed scope must cover actual policies, not a guessed list.
+        observed = sorted({p['metadata']['namespace'] for p in MIGRATION['policies']})
+        values = load(ENVIRONMENTS / 'staging/phorvex.yaml')['phorvex']
+        self.assertEqual(values['policyNamespaces'], observed)
+        self.assertEqual(values['actuatorNamespaces'], observed)
+        self.assertEqual(values['console']['attackNamespaces'], MIGRATION['proposedAttackNamespaces'])
+        self.assertLessEqual(set(values['console']['attackNamespaces']), set(observed))
+        self.assertTrue({'phorvex-system', 'phorvex-staging', '*'}.isdisjoint(observed))
 
     def test_nothing_applies_these_manifests(self):
         root = load(ROOT / 'deploy/argocd/root.yaml')
@@ -98,6 +115,28 @@ class ManifestTests(unittest.TestCase):
 
 @unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
 class EnvironmentRenderTests(unittest.TestCase):
+    def test_each_staging_tenant_has_native_actuator_grants(self):
+        environment = next(e for e in ENVIRONMENTS_LISTED if e['environment'] == 'staging')
+        by_service = {e['service']: e for e in ELEMENTS}
+        docs = render(environment, by_service['actuator'])
+        pod = service_pod(docs, 'actuator')
+        subject = {'kind': 'ServiceAccount', 'name': pod['serviceAccountName'],
+                   'namespace': environment['namespace']}
+        roles = {(d['metadata']['namespace'], d['metadata']['name']): d
+                 for d in docs if d['kind'] == 'Role'}
+        granted = {'pods/eviction': set(), 'networkpolicies': set()}
+        for binding in (d for d in docs if d['kind'] == 'RoleBinding'):
+            if subject not in binding.get('subjects', []) or binding['roleRef']['kind'] != 'Role':
+                continue
+            ns = binding['metadata']['namespace']
+            role = roles[(ns, binding['roleRef']['name'])]
+            for rule in role['rules']:
+                for resource, group in [('pods/eviction', ''), ('networkpolicies', 'networking.k8s.io')]:
+                    if resource in rule['resources'] and group in rule['apiGroups'] and 'create' in rule['verbs']:
+                        granted[resource].add(ns)
+        for resource, namespaces in granted.items():
+            self.assertEqual(namespaces, set(MIGRATION['tenantNamespaces']), resource)
+
     def test_every_environment_renders_within_the_project(self):
         allowed = {(k['group'], k['kind']) for k in PROJECT['spec']['clusterResourceWhitelist']}
         for environment in ENVIRONMENTS_LISTED:
@@ -194,8 +233,8 @@ class EnvironmentRenderTests(unittest.TestCase):
 
     def test_an_end_to_end_identity_reaches_only_its_environment(self):
         # Its tokens are console credentials, never Kubernetes ones. The audience is the
-        # environment's own, so another console's e2e token is refused, and the grant is
-        # the namespaces the environment attacks.
+        # environment's own, so another console's e2e token is refused. Expanding
+        # service scope must not silently broaden the e2e identity's tenant grants.
         production = load(ROOT / 'deploy/helm/phorvex-stack/values-eks.yaml')['phorvex']['phorvex']['console']['auth']['oidc']
         by_service = {e['service']: e for e in ELEMENTS}
         for environment in ENVIRONMENTS_LISTED:
@@ -209,7 +248,8 @@ class EnvironmentRenderTests(unittest.TestCase):
                 subjects = [s for s in json.loads(auth['grants']['data'])['subjects']
                             if s['subject'] == f'system:serviceaccount:{namespace}:{name}']
                 self.assertEqual([(s['issuer'], s['tenants'], s['targets']) for s in subjects],
-                                 [(auth['oidc']['issuer'], console['attackNamespaces'], ['default'])])
+                                 [(auth['oidc']['issuer'], [environment['namespace'] + '-demo'], ['default'])])
+                self.assertLessEqual(set(subjects[0]['tenants']), set(console['attackNamespaces']))
                 rendered = {service: render(environment, element) for service, element in by_service.items()}
                 account = next(d for docs in rendered.values() for d in docs if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
                 self.assertIs(account['automountServiceAccountToken'], False)
@@ -225,10 +265,10 @@ class EnvironmentRenderTests(unittest.TestCase):
                     env = {e['name']: e.get('value') for e in console['spec']['template']['spec']['containers'][0]['env']}
                     self.assertEqual(env['PHORVEX_CONSOLE_OIDC_AUDIENCE'], auth['oidc']['audience'], console['metadata']['name'])
 
-    def test_an_environment_beside_production_leaves_it_alone(self):
-        # On the production cluster the manager, sensor and actuator share the API
-        # server with the production stack, which reconciles every policy and whose
-        # Phoenix acts on every SecurityEvent.
+    def test_an_environment_uses_explicit_scope_and_its_native_actuator(self):
+        # These checks verify chart scope and privilege boundaries. They cannot
+        # establish exclusive ownership against the unscoped old manager; DECISION.md
+        # holds the proposed migration until a safe cutover is independently proved.
         by_service = {e['service']: e for e in ELEMENTS}
         for environment in [e for e in ENVIRONMENTS_LISTED if e['server'] == IN_CLUSTER]:
             with self.subTest(environment=environment['environment']):
@@ -236,19 +276,15 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertNotEqual(namespace, 'phorvex-system')
                 self.assertNotEqual(release, 'phorvex')
                 values = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']
-                # Its own namespaces only, and never the one the services run in: the
-                # actuator refuses to quarantine there.
+                # Explicit tenants only, excluding both operator namespaces.
                 scope = values['policyNamespaces']
                 self.assertTrue(scope)
-                for policy_namespace in scope:
-                    self.assertTrue(policy_namespace.startswith(namespace + '-'), policy_namespace)
-                # It acts, if at all, with its own hands in its own namespaces.
+                self.assertTrue({namespace, 'phorvex-system', '*'}.isdisjoint(scope))
+                # It acts, if at all, with its own hands in exactly those namespaces.
                 acts = not values['globalKillSwitch']
                 if acts:
                     self.assertEqual(values['actuator'], 'native')
-                    self.assertTrue(values['actuatorNamespaces'])
-                    for actuator_namespace in values['actuatorNamespaces']:
-                        self.assertTrue(actuator_namespace.startswith(namespace + '-'), actuator_namespace)
+                    self.assertEqual(values['actuatorNamespaces'], scope)
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
                 for service, element in by_service.items():
@@ -300,14 +336,14 @@ class DemoTests(unittest.TestCase):
         self.assertNotIn('r6th.io/rotation-target', workloads['demo-load'])
         self.assertFalse(selector <= workloads['demo-load'].items())
         self.assertLessEqual(set(policy['actions']['enabled']), {'rotate', 'quarantine'})
-        # One namespace is the demo's tenant, the services' scope, their hands, the
-        # attacks' targets and every console grant.
+        # The demo remains covered after scope expansion; existing console subjects
+        # retain their original demo-only grants.
         namespace = DEMO['spec']['destination']['namespace']
         self.assertEqual(policy['tenant'], namespace)
         env = load(ENVIRONMENTS / 'staging' / 'phorvex.yaml')['phorvex']
         self.assertEqual(env['actuator'], 'native')
         for scope in (env['policyNamespaces'], env['actuatorNamespaces'], env['console']['attackNamespaces']):
-            self.assertEqual(scope, [namespace])
+            self.assertIn(namespace, scope)
         for subject in json.loads(env['console']['auth']['grants']['data'])['subjects']:
             self.assertEqual(subject['tenants'], [namespace], subject['subject'])
 

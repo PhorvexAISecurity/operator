@@ -1,6 +1,7 @@
 # The Argo CD project of the split Phorvex services (applicationset.yaml): the
-# service charts of this repository, into each environment's namespace only, with
-# exactly the cluster-scoped kinds the charts render there.
+# service charts of this repository, into the service and explicit tenant
+# namespaces, with exactly the cluster-scoped kinds the charts render there.
+# Proposed expansion only: DECISION.md blocks merging/syncing this migration.
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
@@ -13,9 +14,32 @@ spec:
   destinations:
   - server: https://kubernetes.default.svc
     namespace: phorvex-staging
-  # The workload staging defends (demo-staging.yaml).
+  # The 12 tenant namespaces in the frozen dev-eks inventory. The project is
+  # applied separately from service Applications; see RETIREMENT-RUNBOOK.md.
+  - server: https://kubernetes.default.svc
+    namespace: ci-reports
+  - server: https://kubernetes.default.svc
+    namespace: console-identity-shared
+  - server: https://kubernetes.default.svc
+    namespace: crm
+  - server: https://kubernetes.default.svc
+    namespace: document-store
+  - server: https://kubernetes.default.svc
+    namespace: litellm
+  - server: https://kubernetes.default.svc
+    namespace: mcp
+  - server: https://kubernetes.default.svc
+    namespace: nats
   - server: https://kubernetes.default.svc
     namespace: phorvex-staging-demo
+  - server: https://kubernetes.default.svc
+    namespace: phorvex-verify-m100-loss-history-v2
+  - server: https://kubernetes.default.svc
+    namespace: phorvex-verify-m106-scoped-outcome-v4
+  - server: https://kubernetes.default.svc
+    namespace: vllm
+  - server: https://kubernetes.default.svc
+    namespace: voice
   # tools/test_argocd_services.py requires this list to equal the cluster-scoped
   # kinds every environment renders, plus the namespace CreateNamespace creates.
   clusterResourceWhitelist:

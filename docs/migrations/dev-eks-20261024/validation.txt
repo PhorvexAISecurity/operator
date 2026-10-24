@@ -1,0 +1,30 @@
+test_it_deploys_into_the_environment_only (tools.test_argocd_services.DemoTests.test_it_deploys_into_the_environment_only) ... ok
+test_its_load_is_measured (tools.test_argocd_services.DemoTests.test_its_load_is_measured) ... ok
+test_the_policy_defends_only_the_demo_with_the_native_backend (tools.test_argocd_services.DemoTests.test_the_policy_defends_only_the_demo_with_the_native_backend) ... ok
+test_an_end_to_end_identity_reaches_only_its_environment (tools.test_argocd_services.EnvironmentRenderTests.test_an_end_to_end_identity_reaches_only_its_environment) ... ok
+test_an_environment_uses_explicit_scope_and_its_native_actuator (tools.test_argocd_services.EnvironmentRenderTests.test_an_environment_uses_explicit_scope_and_its_native_actuator) ... ok
+test_each_staging_tenant_has_native_actuator_grants (tools.test_argocd_services.EnvironmentRenderTests.test_each_staging_tenant_has_native_actuator_grants) ... ok
+test_every_environment_renders_within_the_project (tools.test_argocd_services.EnvironmentRenderTests.test_every_environment_renders_within_the_project) ... ok
+test_the_audit_history_fits_its_volume (tools.test_argocd_services.EnvironmentRenderTests.test_the_audit_history_fits_its_volume) ... ok
+test_the_console_reaches_the_attacks_services_http_port (tools.test_argocd_services.EnvironmentRenderTests.test_the_console_reaches_the_attacks_services_http_port) ... ok
+test_the_dispatcher_and_the_services_it_calls_agree_on_mutual_tls (tools.test_argocd_services.EnvironmentRenderTests.test_the_dispatcher_and_the_services_it_calls_agree_on_mutual_tls) ... ok
+test_the_manager_reaches_each_services_grpc_port (tools.test_argocd_services.EnvironmentRenderTests.test_the_manager_reaches_each_services_grpc_port) ... ok
+test_every_environment_has_its_value_files (tools.test_argocd_services.ManifestTests.test_every_environment_has_its_value_files) ... ok
+test_every_service_chart_has_an_application (tools.test_argocd_services.ManifestTests.test_every_service_chart_has_an_application) ... ok
+test_nothing_applies_these_manifests (tools.test_argocd_services.ManifestTests.test_nothing_applies_these_manifests) ... ok
+test_only_this_repository_is_deployed (tools.test_argocd_services.ManifestTests.test_only_this_repository_is_deployed) ... ok
+test_staging_scope_covers_the_frozen_live_inventory (tools.test_argocd_services.ManifestTests.test_staging_scope_covers_the_frozen_live_inventory) ... ok
+test_the_webhook_certificate_is_kept (tools.test_argocd_services.ManifestTests.test_the_webhook_certificate_is_kept) ... ok
+test_workload_writes_stay_with_the_actuator (tools.test_service_charts.RBACLibraryTests.test_workload_writes_stay_with_the_actuator) ... ok
+test_the_actuator_holds_the_workload_writes (tools.test_service_charts.ActuatorChartTests.test_the_actuator_holds_the_workload_writes) ... ok
+test_attack_namespaces_confine_what_the_attacks_service_changes (tools.test_service_charts.AttacksServiceTests.test_attack_namespaces_confine_what_the_attacks_service_changes) ... ok
+test_attack_namespaces_confine_policy_edits (tools.test_service_charts.AttacksServiceTests.test_attack_namespaces_confine_policy_edits) ... ok
+test_the_attacks_service_targets_only_its_namespaces (tools.test_service_charts.AttacksServiceTests.test_the_attacks_service_targets_only_its_namespaces) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 22.723s
+
+OK
+
+Additional checks: git diff --check passed; retirement Bash examples passed bash -n (not executed).
+Final read-only comparison: policy/deployment/Application specs unchanged; temporary demo grants unchanged.
