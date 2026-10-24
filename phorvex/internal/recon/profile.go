@@ -77,15 +77,17 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// mounted default-API-audience projection for this exact live Pod UID and
 	// current ServiceAccount; old-UID retirement is the eventual effect boundary.
 	if view.Pod.HasPodBoundKubeAPIAuth() {
-		addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+		credential := addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+		// LIGHT identity-rotate deletes+recreates the dedicated ServiceAccount (new UID),
+		// invalidating the externally stolen pod-bound credential while RETAINING the Pod.
+		// It covers EXACTLY that credential fact — never pod identity, memory or session,
+		// which only a full rotate (kill+respawn) invalidates. The grant requires the
+		// validated dedicated-SA external-theft observation; exact selecting-policy binding
+		// is additionally enforced by the capability gate, the generator and the handler.
+		if view.Pod.HasIdentityRotationObservation() {
+			cover[model.ActionIdentityRotate] = []string{credential.Key()}
+		}
 	}
-	// NO COVER for identity-rotate. It writes a `phorvex.ai/identity-epoch` LABEL and nothing else:
-	// the SA-token branch is `_ = ec.Client` (a no-op on modern K8s, where projected tokens rotate on
-	// their own), and nothing in the repo or on the cluster selects on that label. So the pod's identity
-	// as an attacker holds it — UID, SA token, IP, EndpointSlice membership — is UNCHANGED. Granting it
-	// podIdentity told the optimiser it had neutralised identity recon when it had only relabelled the
-	// pod, i.e. it could be selected INSTEAD of a rotate that really would have. Only actions that truly
-	// invalidate the fact may claim it.
 	memFact := addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact is always modeled; GPU/stateful only affects exposure weight.
 	sessionW := base * urg * sessionWeight

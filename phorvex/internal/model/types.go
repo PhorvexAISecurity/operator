@@ -67,11 +67,12 @@ const (
 	// Excluded from MutatingActions (never generatable) but a handler exists so the
 	// completeness enumeration stays green. Never fabricated behaviour.
 	ActionDisable Action = "disable"
-	// ActionIdentityRotate remains in stored policy vocabulary for compatibility, but is
-	// declared-only: an epoch relabel cannot rotate UID, IP or credentials. Historical
-	// relabel snapshots may still be restored through Rollback.
+	// ActionIdentityRotate is LIGHT dedicated-SA credential invalidation: on a validated
+	// dedicated-SA external-theft observation bound to the exact policy epoch, the native
+	// handler deletes+recreates the ServiceAccount (new UID) and removes legacy token
+	// Secrets, so a stolen pod-bound bearer fails TokenReview while the Pod is retained.
 	ActionIdentityRotate            Action = "identity-rotate"
-	IdentityRotateUnsupportedReason        = "identity-rotate declared-only: epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
+	IdentityRotateUnsupportedReason        = "identity-rotate requires a validated dedicated-SA external-theft observation and exact policy epoch"
 	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
 	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
 	// native-only). This changes endpoint membership while retaining the Pod UID/IP and
@@ -547,6 +548,11 @@ type Pod struct {
 	LiteLLMClientObservation    *LiteLLMClientObservation
 	CRMRefundObservation        *CRMRefundObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
+	// IdentityRotationObservation is the trusted, authoritative snapshot (built by
+	// identityfixture.Observe from a trusted pod-bound-api-auth detector event) that makes
+	// identity-rotate selectable: a dedicated non-default SA, external-token-theft-only, bound
+	// to the exact Pod UID/RV + SA UID/RV + policy epoch. nil => identity-rotate stays excluded.
+	IdentityRotationObservation *IdentityRotationObservation
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof

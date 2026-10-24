@@ -305,7 +305,10 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		return &Reason{Excluded: true, Kind: ReasonNotInstallable, Detail: "action not in installed CRD action enum"}
 	}
 	if action == model.ActionIdentityRotate {
-		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: model.IdentityRotateUnsupportedReason}
+		o := v.Pod.IdentityRotationObservation
+		if !v.Pod.HasIdentityRotationObservation() || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "identity-rotate: validated dedicated-SA external-theft observation absent or event policy identity differs from current policy"}
+		}
 	}
 	if len(coverKeys) == 0 {
 		reason := "recon-cover: action invalidates no facts for this asset"

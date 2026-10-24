@@ -31,10 +31,14 @@ import (
 var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionRotate: {{Resource: "pods", Subresource: "eviction", Verb: "create"}},
 	// Includes managed repair and proven legacy retirement; RequiredVerbs routing is unchanged.
-	model.ActionQuarantine:                    {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
-	model.ActionDebugger:                      {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
-	model.ActionCustomInject:                  {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
-	model.ActionIdentityRotate:                {{Resource: "pods", Verb: "update"}},
+	model.ActionQuarantine:   {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
+	model.ActionDebugger:     {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
+	model.ActionCustomInject: {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
+	// LIGHT identity-rotate: delete+recreate the dedicated SA (new UID) and remove legacy
+	// token Secrets. SA get/create/delete + the protected rotation journal (operator ns).
+	// Secret get/delete is appended per exact legacy-token name by IdentityRotationVerbs;
+	// SA get/delete and the journal are name-pinned there too. Never Secret list or token issuance.
+	model.ActionIdentityRotate:                {{Resource: "serviceaccounts", Verb: "get"}, {Resource: "serviceaccounts", Verb: "create"}, {Resource: "serviceaccounts", Verb: "delete"}, {Resource: "configmaps", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Verb: "create", OperatorScoped: true}, {Resource: "configmaps", Verb: "update", OperatorScoped: true}, {Resource: "configmaps", Verb: "list", OperatorScoped: true}},
 	model.ActionRouteRotate:                   {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Resource: "services", Verb: "update"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionWarmSwap:                      {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Resource: "services", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionMIGRebind:                     {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
@@ -60,7 +64,7 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// ConfigMap, so an unnamed namespace-wide update is denied and the startup preflight
 	// refuses to start once a policy enables this action without the exact grant. No journal:
 	// the guard ledger (state.json) is the idempotency record.
-	model.ActionCRMRefundRevoke: {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	model.ActionCRMRefundRevoke:     {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 }
 
@@ -98,4 +102,29 @@ func RequiredVerbsForBackend(backend Backend, a model.Action) []authz.Verb {
 // capability and boot admission pass the resolved backend to RequiredVerbsForBackend.
 func RequiredVerbs(a model.Action) []authz.Verb {
 	return RequiredVerbsForBackend(BackendHybrid, a)
+}
+
+// IdentityRotationVerbs resolves exact names for least-privilege SSAR. Namespace SA
+// create remains unnamed because Kubernetes cannot name-restrict a create grant; the
+// rotation journal (operator ns) and SA get/delete are name-pinned, and legacy Secret
+// get/delete are appended per exact token name.
+func IdentityRotationVerbs(verbs []authz.Verb, o *model.IdentityRotationObservation) []authz.Verb {
+	out := append([]authz.Verb(nil), verbs...)
+	if o == nil {
+		return out
+	}
+	for i := range out {
+		if out[i].Resource == "configmaps" && (out[i].Verb == "get" || out[i].Verb == "update") {
+			out[i].Name = identityJournalName(Request{IdentityRotationObservation: o})
+		}
+		if out[i].Resource == "serviceaccounts" && out[i].Verb != "create" {
+			out[i].Name = o.ServiceAccountName
+		}
+	}
+	for _, s := range o.LegacyTokenSecrets {
+		for _, v := range []string{"get", "delete"} {
+			out = append(out, authz.Verb{Resource: "secrets", Name: s.Name, Verb: v})
+		}
+	}
+	return out
 }

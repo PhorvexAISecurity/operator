@@ -99,14 +99,19 @@ type Request struct {
 	LiteLLMClientObservation  *model.LiteLLMClientObservation // selection-time owned-client gateway authority
 	CRMRefundObservation      *model.CRMRefundObservation     // selection-time CRM deny-guard + abused-order authority
 	EndpointLeaseObservation  *model.EndpointLeaseObservation // selection-time accepted caller lease reuse authority
-	TargetUID                 string                          // Bound identity from the selecting snapshot.
-	TargetNamespaceUID        string                          // Bound by the protected quarantine-capacity reservation.
-	OperationID               string                          // Stable decision identity for protected quarantine and route operations.
-	TickID                    string                          // Real selection tick; protected serving operation IDs are recomputed from it.
-	ServingObservation        *ServingSelectionObservation
-	PolicyName                string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID                 string
-	PolicyGeneration          int64
+	// IdentityRotationObservation + PodBoundKubeAPIAuth are the selection-time dedicated-SA
+	// theft authority for identity-rotate. The native handler rechecks both against the live
+	// cluster (identityAuthority) before any ServiceAccount mutation.
+	IdentityRotationObservation *model.IdentityRotationObservation
+	PodBoundKubeAPIAuth         *model.PodBoundKubeAPIAuthProjection
+	TargetUID                   string // Bound identity from the selecting snapshot.
+	TargetNamespaceUID          string // Bound by the protected quarantine-capacity reservation.
+	OperationID                 string // Stable decision identity for protected quarantine and route operations.
+	TickID                      string // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation          *ServingSelectionObservation
+	PolicyName                  string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID                   string
+	PolicyGeneration            int64
 	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
 	// cap. The native handler re-reads and matches it at the mutation boundary.
 	// Zero is invalid and never means force deletion.

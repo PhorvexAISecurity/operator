@@ -24,6 +24,7 @@ import (
 	"github.com/phorvex/phorvex/internal/actuationbrake"
 	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/graph"
+	"github.com/phorvex/phorvex/internal/identityfixture"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
 	"github.com/phorvex/phorvex/internal/servingcontext"
@@ -308,6 +309,28 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 	if err := c.List(ctx, &policies); err == nil {
 		snap.Policies = policies.Items
 		snap.PolicyInventoryComplete = true
+	}
+
+	// Explicit CONSOLE/TEST admission only: the authoritative dedicated-SA external-theft
+	// observation for identity-rotate. It is built by reading the cluster directly
+	// (identityfixture.Observe, active=true requires the short-lived positive-control marker
+	// the producer writes only after a stolen bearer actually authenticated, and proves no
+	// EKS Pod Identity federation), never inferred from tenant labels. Ordinary production/
+	// tenant pods get no observation; an API failure leaves the capability absent.
+	if fixture, err := identityfixture.Load(); err == nil && receiptBoundary != nil {
+		for i := range snap.Pods {
+			p := &snap.Pods[i]
+			if p.Namespace != fixture.Namespace || !strings.HasPrefix(p.ServiceAccount, identityfixture.RunPrefix) {
+				continue
+			}
+			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			observed, readErr := identityfixture.Observe(probeCtx, receiptBoundary, fixture, p.Name, p.UID, true)
+			cancel()
+			if readErr == nil && observed.Pod.ResourceVersion == p.PodResourceVersion {
+				p.PodBoundKubeAPIAuth = observed.Projection
+				p.IdentityRotationObservation = observed.Observation
+			}
+		}
 	}
 
 	// P-PHYSICS additive scan: node capacity + live PodDisruptionBudgets. The read

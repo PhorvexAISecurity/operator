@@ -90,7 +90,7 @@ var classifications = map[model.Action]Bound{
 	model.ActionNoop: zero(model.ActionNoop,
 		"no-op has no mutation path and cannot reduce a Ready serving replica"),
 	model.ActionIdentityRotate: zero(model.ActionIdentityRotate,
-		"metadata-only identity epoch update; it does not change pod UID, IP, token, readiness, or routing"),
+		"LIGHT credential invalidation deletes+recreates the dedicated ServiceAccount (new UID) and removes legacy token Secrets while RETAINING the Pod (orphan delete); it reduces no Ready serving replica, and changes no pod UID, IP, readiness, or routing"),
 	model.ActionRouteRotate: unknown(model.ActionRouteRotate, -1,
 		"Service route cutover and rollback preserve a controller membership floor but have no enforced safe-return or network data-plane deadline"),
 	model.ActionDisable: zero(model.ActionDisable,

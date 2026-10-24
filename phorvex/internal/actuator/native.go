@@ -16,6 +16,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/gpudevice"
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -51,6 +52,13 @@ type NativeActuator struct {
 	EndpointLeaseApprovedEngineImage  string            // reviewed immutable loopback engine image
 	EndpointLeaseStatusTransport      http.RoundTripper // fixed Pod-IP TLS status seam for tests
 	EndpointLeaseStatusToken          string            // test-only; production uses serving security
+	// Identity-rotate authority: an affirmative complete-plan SSAR checker (SA
+	// get/create/delete + legacy Secret get/delete), a fresh global brake, and an
+	// optional test clock. Carried separately so identity's destructive credential
+	// path cannot borrow another action's authorization. Set via SetIdentityAuthority.
+	IdentityAuthz      *authz.Checker
+	IdentityKillSwitch func(context.Context) bool
+	IdentityNow        func() time.Time
 	// KVXfer is deliberately nil in production until an independently reviewed
 	// disaggregated KV connector is installed. The built-in HTTP transfer only
 	// implements local invalidation, so it cannot authorize migration.
@@ -80,6 +88,12 @@ type tenantNamespaceBinding struct {
 
 // NewNativeActuator constructs the native actuator over a controller-runtime client.
 func NewNativeActuator(c client.Client) *NativeActuator { return &NativeActuator{Client: c} }
+
+// SetIdentityAuthority wires the identity-rotate complete-plan authorization checker and
+// the fresh global brake. Identity-rotate refuses to mutate when either is absent.
+func (n *NativeActuator) SetIdentityAuthority(az *authz.Checker, kill func(context.Context) bool) {
+	n.IdentityAuthz, n.IdentityKillSwitch = az, kill
+}
 
 func (n *NativeActuator) SetEndpointLeaseApprovedSourceSHA256(sha string) {
 	n.EndpointLeaseApprovedSourceSHA256 = sha
@@ -330,7 +344,7 @@ func (n *NativeActuator) Actuate(ctx context.Context, req Request) (Result, erro
 	if req.Action == model.ActionKVMigrateInvalidate && !kvMigrationConnectorReady(n.KVXfer) {
 		return Result{Actuator: "native", Handler: string(req.Action), NoEffect: NoEffectRefused, MutationKind: "none", Note: ReasonKVMigrationConnectorUnavailable}, RefusedWithoutEffect(fmt.Errorf("%s", ReasonKVMigrationConnectorUnavailable))
 	}
-	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, KVXfer: n.KVXfer, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, VoiceAdmissionTransport: n.VoiceAdmissionTransport, VoiceAdmissionEnabled: n.VoiceAdmissionEnabled, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
+	return dispatch(ctx, EnactCtx{Client: n.Client, Reader: n.Reader, DryRun: n.DryRun, JournalNamespace: n.JournalNamespace, IdentityAuthz: n.IdentityAuthz, IdentityKillSwitch: n.IdentityKillSwitch, IdentityNow: n.IdentityNow, AdapterSources: n.AdapterSources, MIGProfiles: n.migProfiles, ServingSecurity: n.servingSecurity, KVXfer: n.KVXfer, RouteObservationTimeout: n.RouteObservationTimeout, RouteObservationInterval: n.RouteObservationInterval, VoiceMemoryTransport: n.VoiceMemoryTransport, VoiceRefundTransport: n.VoiceRefundTransport, VoiceMCPTransport: n.VoiceMCPTransport, VoiceMCPApprovedImage: n.VoiceMCPApprovedImage, VoiceOutputTransport: n.VoiceOutputTransport, VoiceAdmissionTransport: n.VoiceAdmissionTransport, VoiceAdmissionEnabled: n.VoiceAdmissionEnabled, EndpointLeaseApprovedSourceSHA256: n.EndpointLeaseApprovedSourceSHA256, EndpointLeaseApprovedProxyImage: n.EndpointLeaseApprovedProxyImage, EndpointLeaseApprovedEngineImage: n.EndpointLeaseApprovedEngineImage, EndpointLeaseStatusTransport: n.EndpointLeaseStatusTransport, EndpointLeaseStatusToken: n.EndpointLeaseStatusToken}, req)
 }
 
 // Rollback runs a handler's compensating undo (used by the rollback proof + a future
