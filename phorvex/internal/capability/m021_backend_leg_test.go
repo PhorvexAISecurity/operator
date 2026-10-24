@@ -65,8 +65,12 @@ func TestCapableConsultsBackendForNonAIActions(t *testing.T) {
 			t.Fatalf("%s must be attributed to the backend, got %q", a, why)
 		}
 		if a == model.ActionIdentityRotate {
-			if ok, why := native.Capable(query, a); ok || !strings.Contains(why, "declared-only") {
-				t.Fatalf("native declared identity must refuse %s, got capable=%v why=%q", a, ok, why)
+			// identity-rotate now has a registered native handler, so the backend-capability
+			// leg reports it capable. The per-pod observation / policy-epoch gating is a
+			// separate gate leg (gate.go eligible), not the backend-capability leg under
+			// test here.
+			if ok, why := native.Capable(query, a); !ok {
+				t.Fatalf("native implements %s; backend-capability leg must agree, got capable=%v why=%q", a, ok, why)
 			}
 			continue
 		}

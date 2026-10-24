@@ -27,9 +27,11 @@ M-9) is evidence about ONE build, target and configuration. Current pure Phoenix
 refuses bounded rotate because its Delete strategy cannot carry the policy cap;
 select `native` or `hybrid` for bounded rotate. Historical evidence is not a standing
 guarantee for any other deployment and is deliberately absent from this table.
-`identity-rotate` is retained as stored policy vocabulary and for cleanup of historical
-epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP
-or ServiceAccount credentials. `route-rotate` is a real Service-selector restitch;
+`identity-rotate` implements LIGHT dedicated-ServiceAccount UID rotation for external
+bearer theft. Targetless rows cannot establish its exact Pod/SA/policy prerequisites;
+runtime admission requires the validated observation and affirmative scoped RBAC.
+The Pod remains; process compromise and federated credentials are outside scope.
+`route-rotate` is a real Service-selector restitch;
 the per-target capability gate requires its declared Service to select the target
 route-key with the target Ready and at least two Ready backends.
 
@@ -74,7 +76,7 @@ route-key with the target Ready and at least two Ready backends.
 | `quarantine` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
+| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
@@ -105,7 +107,7 @@ route-key with the target Ready and at least two Ready backends.
 | `quarantine` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
+| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
