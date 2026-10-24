@@ -65,10 +65,7 @@ roles:
   labelled: true
   rules:
   - {apiGroups: [""], resources: ["pods"], verbs: ["get", "list", "delete", "update", "patch"], writers: [actuator]}
-  # The dispatcher runs rotate's T1-E capability SelfSubjectAccessReview as its OWN SA (authz),
-  # so it must hold pods/eviction to self-confirm feasibility — otherwise every rotate reads
-  # no-rbac and is excluded before selection, even though the actuator is the one that evicts.
-  - {apiGroups: [""], resources: ["pods/eviction"], verbs: ["create"], writers: [actuator, dispatcher]}
+  - {apiGroups: [""], resources: ["pods/eviction"], verbs: ["create"], writers: [actuator]}
   - {apiGroups: ["networking.k8s.io"], resources: ["networkpolicies"], verbs: ["create", "get", "list", "delete", "update"], writers: [actuator]}
   - {apiGroups: ["apps"], resources: ["replicasets", "statefulsets", "daemonsets", "deployments"], verbs: ["get"]}
   - {apiGroups: [""], resources: ["replicationcontrollers"], verbs: ["get"]}
