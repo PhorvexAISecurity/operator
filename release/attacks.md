@@ -1,5 +1,9 @@
 # attacks changelog
 
+## 0.5.0 (2026-10-23)
+
+- feat(attacks): add three generic defense loops to the attack catalogue (025fd9c1)
+
 ## 0.4.2 (2026-10-23)
 
 - fix(attacks): never target a Pod the native backend quarantined (4f62fae0)
