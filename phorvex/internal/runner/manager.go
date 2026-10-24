@@ -3101,7 +3101,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
 			decisions[i].Action == model.ActionEndpointLeaseRevoke ||
-			decisions[i].Action == model.ActionCRMRefundRevoke {
+			decisions[i].Action == model.ActionCRMRefundRevoke ||
+			decisions[i].Action == model.ActionIdentityRotate {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}
