@@ -16,6 +16,10 @@ spec:
   # The workload staging defends (demo-staging.yaml).
   - server: https://kubernetes.default.svc
     namespace: phorvex-staging-demo
+  # The identity-rotate fixture's shared namespace (phorvex.identityRotate): the
+  # per-tenant RBAC Roles the actuator and sensor render to defend console-id-fixture.
+  - server: https://kubernetes.default.svc
+    namespace: console-identity-shared
   # tools/test_argocd_services.py requires this list to equal the cluster-scoped
   # kinds every environment renders, plus the namespace CreateNamespace creates.
   clusterResourceWhitelist:

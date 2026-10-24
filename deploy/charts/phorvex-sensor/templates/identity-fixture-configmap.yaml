@@ -1,0 +1,16 @@
+{{- $v := .Values.phorvex }}
+{{- /* The identity-rotate fixture profile the sensor's observation builder reads
+(identityfixture.Observe, PHORVEX_CONSOLE_IDENTITY_FIXTURE). Rendered only where the
+environment enables the feature (phorvex.identityRotate), so others are unchanged. */}}
+{{- if dig "identityRotate" "enabled" false $v }}
+{{- $profile := required "identityRotate.profile is required when identityRotate.enabled" $v.identityRotate.profile }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-sensor.fullname" . }}-identity-fixture
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex-sensor.labels" . | nindent 4 }}
+data:
+  profile.json: {{ $profile | toJson | quote }}
+{{- end }}

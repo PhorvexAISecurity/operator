@@ -3,6 +3,6 @@
 phorvex:
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager"
-    tag: "0.11.1"
-    releaseDigest: "sha256:d005e77ed2fa58d057e7d970731711f6dc5f8ae07cce173aa661c6aa97b3c35b"
-    releaseSourceSHA: "f34bc429582fc1418b680b9e159942c07aea4438"
+    tag: "idrotate-final"
+    releaseDigest: "sha256:ce80cc8c9e83c6d7a3f14c0cff6812193e189b335d8c9d1076dcf259fdcabb64"
+    releaseSourceSHA: "3be1880a6c9afb03ad3568c2ae0a1013ba4b055c"
