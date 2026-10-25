@@ -134,6 +134,18 @@ const (
 	// mini-CRM deny-guard (ConfigMap the app re-reads per request). It never authenticates a
 	// caller or touches any other CRM state; an empty guard preserves the app's behaviour.
 	ActionCRMRefundRevoke Action = "crm-refund-revoke"
+	// ActionControllerStop retires an ATTACKER-CREATED controller (Deployment/
+	// StatefulSet/ReplicaSet) end-to-end: set its exact owner's desired replicas to
+	// zero (UID/resourceVersion-bound) + remove its exact owned child Pods (UID
+	// preconditions) + observe all children absent and NO recreation over a bounded
+	// window. It is the ONLY action that makes the persistence end-state — "workload
+	// gone; owner not rescheduling" — true for a controller-owned/stateful foothold.
+	// It is LICENSED ONLY by a trusted, controller-UID-bound persistence observation
+	// (HasBoundPersistenceObservation): generic Pod drift is never authority to delete
+	// a whole owner. Its availability floor is the ATTACKER controller's OWN declared
+	// guarantee (an unmanaged attacker owner declares none => floor 0), never a shared
+	// tenant floor — see internal/feasibility controller-removal-authority law.
+	ActionControllerStop Action = "controller-stop"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -167,6 +179,9 @@ var MutatingActions = []Action{
 	ActionEndpointLeaseRevoke,
 	ActionVoiceSessionAdmissionEnforce,
 	ActionCRMRefundRevoke,
+	// Appended last so the engine's strict-`>` generation-rank tie-break order for the
+	// pre-existing actions stays byte-identical.
+	ActionControllerStop,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -554,6 +569,15 @@ type Pod struct {
 	// to the exact Pod UID/RV + SA UID/RV + policy epoch. nil => identity-rotate stays excluded.
 	IdentityRotationObservation *IdentityRotationObservation
 
+	// SuspectController is the name of an attacker-created UNMANAGED controller a
+	// trusted persistence detector flagged as owning this Pod ("" if none) ->
+	// controller-stop. PersistenceFootholdObservation carries the controller-UID
+	// binding and the declared-availability/provenance assertions that license
+	// whole-owner removal. Both are set together by ingest.bindPersistenceObservation.
+	SuspectController              string
+	PersistenceFootholdObservation *PersistenceFootholdObservation
+	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
+
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
 	ServingEndpointReady bool   // ServingDeclared plus Ready and an assigned PodIP; still not a protocol/loaded-model probe
@@ -731,6 +755,15 @@ const (
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 	AttackVectorCRMRefundAbuse     = "phorvex.attack.crm-refund-abuse"
 	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
+	// AttackVectorControllerPersistence reports an attacker-created, UNMANAGED
+	// controller (no GitOps/Helm/operator provenance, no PDB, no legitimate Service
+	// role) whose child Pods RE-APPEAR after removal — durable control-plane
+	// persistence. The persistence observer (a trusted detector) emits it bound to
+	// the exact owner UID, and ingest.bindPersistenceObservation turns it into the
+	// controller-UID-bound Pod.PersistenceFootholdObservation that licenses
+	// controller-stop. It never by itself asserts an on-Pod exploit; the owner-removal
+	// authority is the binding.
+	AttackVectorControllerPersistence = "phorvex.attack.controller-persistence"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -755,6 +788,12 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 const ConsoleTargetPodUIDAnnotation = "phorvex.ai/console-target-pod-uid"
+
+// ConsoleTargetControllerUIDAnnotation binds a persistence SecurityEvent to the exact
+// owner (controller) UID the detector observed. It is the controller analogue of the
+// Pod-UID binding: a same-NAME controller recreated with a new UID (the attacker's own
+// re-create, or a legitimate replacement) will mismatch and carry no removal authority.
+const ConsoleTargetControllerUIDAnnotation = "phorvex.ai/console-target-controller-uid"
 
 type SecurityEventInfo struct {
 	CreatedAt         time.Time
@@ -811,6 +850,15 @@ type SecurityEventInfo struct {
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	CRMRefundRaw                      string // untrusted CRM refund observation annotation; validated against live guard and policy before use
 	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
+	// PersistenceRaw is the trusted persistence detector's owner-provenance assertion
+	// (JSON): owner kind/name/namespace, declared min-available, unmanaged,
+	// no-legitimate-service-role, observed-recreation, policy epoch. It is validated and
+	// bound to the Pod's exact controller UID by ingest.bindPersistenceObservation.
+	PersistenceRaw string
+	// ControllerTargetUID is the event's owner-UID binding (from
+	// ConsoleTargetControllerUIDAnnotation). A recreated same-name owner has a new UID
+	// and mismatches, carrying no removal authority.
+	ControllerTargetUID string
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1450,6 +1498,11 @@ type Decision struct {
 	// physical termination explicitly unconfirmed.
 	GracefulTermination *GracefulTerminationReceipt
 	DrainOperation      *DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt for a controller-stop
+	// (attacker-owner scale-to-zero + exact child removal + observed no-recreation
+	// window). Present only after a successful synchronous enact; it records only a
+	// bounded absence window, never permanent erasure.
+	ControllerStop *ControllerStopReceipt
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately

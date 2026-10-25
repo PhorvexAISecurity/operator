@@ -123,6 +123,7 @@ spec:
                       - crm-refund-revoke
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
+                      - controller-stop
                       - disable
                       type: string
                     minItems: 1

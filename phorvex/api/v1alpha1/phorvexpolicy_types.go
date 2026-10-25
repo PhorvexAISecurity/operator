@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;controller-stop;disable
 type ActionType string
 
 const (
@@ -497,7 +497,10 @@ const (
 	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionCRMRefundRevoke               ActionType = "crm-refund-revoke"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
-	ActionDisable                       ActionType = "disable"
+	// ActionControllerStop retires an attacker-created controller (owner scale-to-zero
+	// + exact child Pod removal + bounded observed no-recreation).
+	ActionControllerStop ActionType = "controller-stop"
+	ActionDisable        ActionType = "disable"
 )
 
 // ModeDryRun decides + logs + emits metrics but never actuates (the P0 default).

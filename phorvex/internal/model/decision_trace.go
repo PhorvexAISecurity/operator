@@ -55,6 +55,8 @@ const (
 	DecisionActionVocabularyLive22 = "v8-live22"
 	DecisionActionVocabularyLive23 = "v9-live23"
 	DecisionActionVocabularyLive24 = "v10-live24"
+	// Live25 appends controller-stop (whole-owner removal); earlier versions stay frozen.
+	DecisionActionVocabularyLive25 = "v11-live25"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -110,6 +112,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce), nil
 	case DecisionActionVocabularyLive24:
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce, ActionCRMRefundRevoke), nil
+	case DecisionActionVocabularyLive25:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive24)
+		return append(prior, ActionControllerStop), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}
