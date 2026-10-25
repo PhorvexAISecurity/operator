@@ -210,6 +210,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionDatastoreRestore && e.Accepted {
+				if ok || !strings.HasPrefix(why, "datastore-restore:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reader or exact datastore target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
 			// The native route fails closed until a connector attests remote migration.
 			if e.Action == model.ActionKVMigrateInvalidate && e.Accepted && !ok {
 				if why != ReasonKVMigrationConnectorUnavailable {

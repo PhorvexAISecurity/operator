@@ -317,6 +317,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.HasPrefix(why, "crm-refund-revoke:") {
 				t.Fatalf("CRM refund revoke requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionDatastoreRestore:
+			if ok || !registered || !strings.HasPrefix(why, "datastore-restore:") {
+				t.Fatalf("datastore-restore requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		default:
 			if ok != registered {
 				t.Fatalf("native %s: support=%v but handler registered=%v (%s)", a, ok, registered, why)

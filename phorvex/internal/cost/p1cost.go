@@ -154,10 +154,12 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 			return NormCostServiceRekey
 		}
 		return NormCostMetadataMutation
-	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle:
+	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore:
 		// throttle installs a computation-affecting serving-admission budget at the
 		// authoritative proxy while retaining every Ready replica — the honest
 		// serving-configuration class, NOT workload replacement.
+		// datastore-restore CAS-restores a poisoned persistent store in place (serving Pods
+		// alive) — also the serving-configuration class, not workload replacement.
 		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate, model.ActionK8sObjectRevert:
 		// Reverting a drifted ConfigMap to its operator-trusted snapshot is an in-process

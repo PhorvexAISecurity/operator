@@ -97,7 +97,8 @@ type Request struct {
 	VoiceAdmissionObservation *model.VoiceAdmissionObservation
 	VoiceOutputObservation    *model.VoiceOutputObservation   // selection-time observed synthetic output marker
 	LiteLLMClientObservation  *model.LiteLLMClientObservation // selection-time owned-client gateway authority
-	CRMRefundObservation      *model.CRMRefundObservation     // selection-time CRM deny-guard + abused-order authority
+	CRMRefundObservation        *model.CRMRefundObservation         // selection-time CRM deny-guard + abused-order authority
+	DatastoreRestoreObservation *model.DatastoreRestoreObservation  // selection-time datastore store + operator-snapshot authority
 	EndpointLeaseObservation  *model.EndpointLeaseObservation // selection-time accepted caller lease reuse authority
 	// IdentityRotationObservation + PodBoundKubeAPIAuth are the selection-time dedicated-SA
 	// theft authority for identity-rotate. The native handler rechecks both against the live

@@ -7,6 +7,7 @@ package actuator
 import (
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/crmrefund"
+	"github.com/phorvex/phorvex/internal/datastore"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/persistence"
@@ -67,6 +68,10 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// refuses to start once a policy enables this action without the exact grant. No journal:
 	// the guard ledger (state.json) is the idempotency record.
 	model.ActionCRMRefundRevoke:     {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	// Namespace-parametric: the chart grants ConfigMap get/update on the app-facing datastore
+	// store CM plus read-only get on the operator-owned trusted-snapshot CM, per enabled
+	// namespace. No journal: the store content hash is the idempotency record.
+	model.ActionDatastoreRestore: {{Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "update"}, {Resource: "configmaps", Name: datastore.TrustedSnapshotConfigMapName, Verb: "get"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	// controller-stop retires an attacker-created controller end-to-end: scale the exact
 	// owner (Deployment/StatefulSet/ReplicaSet) to zero via the scale subresource

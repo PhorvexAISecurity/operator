@@ -121,6 +121,7 @@ spec:
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
                       - crm-refund-revoke
+                      - datastore-restore
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
                       - throttle

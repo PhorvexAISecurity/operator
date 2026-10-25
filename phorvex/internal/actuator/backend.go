@@ -338,6 +338,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionCRMRefundRevoke {
 					e.Prerequisite = "reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap"
 				}
+				if a == model.ActionDatastoreRestore {
+					e.Prerequisite = "reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace"
+				}
 				if a == model.ActionEndpointLeaseRevoke {
 					e.Prerequisite = "reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal"
 				}
@@ -366,6 +369,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
 				} else if a == model.ActionCRMRefundRevoke {
 					e.UnverifiedEffect = "support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order"
+				} else if a == model.ActionDatastoreRestore {
+					e.UnverifiedEffect = "support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash"
 				} else if a == model.ActionEndpointLeaseRevoke {
 					e.UnverifiedEffect = "support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior"
 				} else if a == model.ActionControllerStop {

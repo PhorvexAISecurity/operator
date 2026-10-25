@@ -61,6 +61,8 @@ const (
 	DecisionActionVocabularyLive26 = "v12-live26"
 	// Live27 appends k8s-object-revert (operator-trusted ConfigMap restore); all earlier versions stay frozen.
 	DecisionActionVocabularyLive27 = "v13-live27"
+	// Live28 appends the namespace-parametric datastore-restore; all earlier versions stay frozen.
+	DecisionActionVocabularyLive28 = "v14-live28"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -125,6 +127,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive27:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive26)
 		return append(prior, ActionK8sObjectRevert), nil
+	case DecisionActionVocabularyLive28:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive27)
+		return append(prior, ActionDatastoreRestore), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

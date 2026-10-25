@@ -68,6 +68,7 @@ route-key with the target Ready and at least two Ready backends.
 | `throttle` | phoenix | no | backend-unsupported: phoenix cannot enact "throttle" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `controller-stop` | phoenix | no | backend-unsupported: phoenix cannot enact "controller-stop" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `k8s-object-revert` | phoenix | no | backend-unsupported: phoenix cannot enact "k8s-object-revert" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `datastore-restore` | phoenix | no | backend-unsupported: phoenix cannot enact "datastore-restore" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -102,6 +103,7 @@ route-key with the target Ready and at least two Ready backends.
 | `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
 | `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
 | `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |
 
 ## hybrid
 
@@ -136,3 +138,4 @@ route-key with the target Ready and at least two Ready backends.
 | `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
 | `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
 | `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |

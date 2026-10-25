@@ -146,6 +146,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			VoiceAdmissionRaw:                    se.Annotations["phorvex.ai/voice-admission-observation-v1"],
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
 			CRMRefundRaw:                         se.Annotations["phorvex.ai/crm-refund-observation-v1"],
+			DatastoreRaw:                         se.Annotations["phorvex.ai/datastore-observation-v1"],
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
 			PersistenceRaw:                       se.Annotations["phorvex.ai/persistence-observation-v1"],
 			ControllerTargetUID:                  se.Annotations["phorvex.ai/console-target-controller-uid"],

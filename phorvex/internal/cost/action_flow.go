@@ -94,13 +94,15 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured
-	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionK8sObjectRevert:
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionK8sObjectRevert, model.ActionDatastoreRestore:
 		// throttle's disruption is the legitimate-flow loss from the admission budget,
 		// rising with observed serving load (servingLoadPressure) — the serving-state
 		// family, bounded above by CFlowMaximum like its siblings.
 		// k8s-object-revert CASes the drifted ConfigMap's .data back to its trusted snapshot in
 		// place — the consuming Pods keep running, so it is a serving-state config change, not a
 		// workload respawn (cheaper and less disruptive than rotate; selection comes from cover).
+		// datastore-restore CAS-restores a poisoned persistent store to its trusted snapshot with
+		// the serving Pods alive — same serving-state family (pod-alive, replica-retaining).
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:

@@ -2921,7 +2921,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		}
 		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceSessionAdmissionEnforce || decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionEndpointLeaseRevoke || decisions[i].Action == model.ActionAdapterRotate ||
-			decisions[i].Action == model.ActionCRMRefundRevoke) &&
+			decisions[i].Action == model.ActionCRMRefundRevoke || decisions[i].Action == model.ActionDatastoreRestore) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
@@ -2943,6 +2943,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "endpoint-lease-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionCRMRefundRevoke {
 				reason = "crm-refund-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionDatastoreRestore {
+				reason = "datastore-restore-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
@@ -3073,6 +3075,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			LiteLLMClientObservation:    v.Pod.LiteLLMClientObservation,
 			EndpointLeaseObservation:    v.Pod.EndpointLeaseObservation,
 			CRMRefundObservation:        v.Pod.CRMRefundObservation,
+			DatastoreRestoreObservation: v.Pod.DatastoreRestoreObservation,
 			IdentityRotationObservation: v.Pod.IdentityRotationObservation,
 			PodBoundKubeAPIAuth:         v.Pod.PodBoundKubeAPIAuth,
 			PersistenceObservation:       v.Pod.PersistenceFootholdObservation,
@@ -3106,7 +3109,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionCRMRefundRevoke ||
 			decisions[i].Action == model.ActionIdentityRotate ||
 			decisions[i].Action == model.ActionThrottle ||
-			decisions[i].Action == model.ActionControllerStop {
+			decisions[i].Action == model.ActionControllerStop ||
+			decisions[i].Action == model.ActionDatastoreRestore {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}

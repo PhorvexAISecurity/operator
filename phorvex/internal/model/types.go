@@ -166,6 +166,14 @@ const (
 	// only — it CASes the ConfigMap's .data back to the operator snapshot annotation (forward-only,
 	// never event-derived).
 	ActionK8sObjectRevert Action = "k8s-object-revert"
+
+	// ActionDatastoreRestore restores a poisoned persistent datastore (RAG index / agent
+	// persistent memory / tool-data store) back to an OPERATOR-OWNED trusted snapshot,
+	// verified by content sha256 == trusted sha256. It is NAMESPACE-PARAMETRIC: the namespace
+	// is carried by the trusted observation and the live pod, never hard-coded. The poison is
+	// PERSISTED (survives a pod rotate), so rotate/quarantine do not remediate it; the serving
+	// pod stays alive and the restore removes the poison while preserving the benign records.
+	ActionDatastoreRestore Action = "datastore-restore"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -206,6 +214,7 @@ var MutatingActions = []Action{
 	// pre-existing actions stays byte-identical.
 	ActionControllerStop,
 	ActionK8sObjectRevert,
+	ActionDatastoreRestore,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -588,6 +597,7 @@ type Pod struct {
 	VoiceMCPObservation         *VoiceMCPObservation
 	LiteLLMClientObservation    *LiteLLMClientObservation
 	CRMRefundObservation        *CRMRefundObservation
+	DatastoreRestoreObservation *DatastoreRestoreObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
 	// ServingRateBudgetObservation is the trusted, authoritative serving-rate-budget witness
 	// (built from a trusted cost-load detector event + the live admission proxy status) that
@@ -761,6 +771,22 @@ func (p Pod) HasBoundCRMRefundObservation() bool {
 		o.OrderAccountID != o.CallerAccountID && o.GuardConfigMapUID != "" && o.ServiceUID != ""
 }
 
+// HasBoundDatastoreRestoreObservation licenses only the datastore-restore channel from a
+// trusted datastore-poisoning observation. It is NAMESPACE-PARAMETRIC: the observation must
+// name the pod's own namespace (o.Namespace == p.Namespace) — there is no hard-coded app
+// namespace, so any lane's datastore workload is covered. It never reinterprets the content;
+// the restore bytes come only from the operator-owned trusted snapshot at enact time.
+func (p Pod) HasBoundDatastoreRestoreObservation() bool {
+	o := p.DatastoreRestoreObservation
+	return o != nil && o.Namespace != "" && o.Namespace == p.Namespace && p.UID != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.StoreName != "" && o.StoreConfigMapUID != "" && o.TrustedSnapshotConfigMapUID != "" &&
+		o.ServiceUID != "" && o.PoisonedSHA256 != "" && o.TrustedSHA256 != "" &&
+		o.PoisonedSHA256 != o.TrustedSHA256
+}
+
 // HasBoundEndpointLeaseObservation requires a fresh, source-bound synthetic
 // credential observation. The stable endpoint path alone grants no cover.
 func (p Pod) HasBoundEndpointLeaseObservation() bool {
@@ -840,6 +866,7 @@ const (
 	// trusted snapshot (AML.T0081 Modify AI Agent Configuration). Only k8s-object-revert
 	// (restore the object to the trusted snapshot) covers it.
 	AttackVectorConfigObject = "phorvex.attack.config-object"
+	AttackVectorDatastorePoison    = "phorvex.attack.datastore"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -861,6 +888,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorServingCostHarvest
 	case "k8s-object-revert":
 		return AttackVectorConfigObject
+	case "datastore-restore":
+		return AttackVectorDatastorePoison
 	}
 	return ""
 }
@@ -933,6 +962,7 @@ type SecurityEventInfo struct {
 	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	CRMRefundRaw                      string // untrusted CRM refund observation annotation; validated against live guard and policy before use
+	DatastoreRaw                      string // untrusted datastore-poisoning observation annotation; validated against live store, operator snapshot and policy before use
 	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
 	// PersistenceRaw is the trusted persistence detector's owner-provenance assertion
 	// (JSON): owner kind/name/namespace, declared min-available, unmanaged,
@@ -1177,6 +1207,30 @@ type CRMRefundObservation struct {
 	PolicyUID         string    `json:"policyUID"`
 	PolicyGeneration  int64     `json:"policyGeneration"`
 	ObservedAt        time.Time `json:"observedAt"`
+}
+
+// DatastoreRestoreObservation is the trusted, admission-stamped evidence that a persistent
+// datastore (RAG index / agent memory / tool-data store) has been poisoned and the poison is
+// persisted (its current content sha256 differs from the operator-owned trusted snapshot).
+// The actuator restores the store from the trusted snapshot in Namespace (parametric — no
+// hard-coded app namespace). It carries only public identities and content digests; never the
+// store bytes nor any replacement content (the restore bytes come only from the operator snapshot).
+type DatastoreRestoreObservation struct {
+	EventName                   string    `json:"eventName"`
+	EventUID                    string    `json:"eventUID"`
+	CreatorIdentity             string    `json:"creatorIdentity"`
+	Namespace                   string    `json:"namespace"`
+	StoreName                   string    `json:"storeName"`
+	StoreConfigMapUID           string    `json:"storeConfigMapUID"`
+	TrustedSnapshotConfigMapUID string    `json:"trustedSnapshotConfigMapUID"`
+	ServiceUID                  string    `json:"serviceUID"`
+	TargetPodUID                string    `json:"targetPodUID"`
+	PoisonedSHA256              string    `json:"poisonedSHA256"`
+	TrustedSHA256               string    `json:"trustedSHA256"`
+	PolicyName                  string    `json:"policyName"`
+	PolicyUID                   string    `json:"policyUID"`
+	PolicyGeneration            int64     `json:"policyGeneration"`
+	ObservedAt                  time.Time `json:"observedAt"`
 }
 
 // EndpointLeaseObservation contains only digests and public resource identities.

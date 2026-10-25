@@ -134,6 +134,11 @@ const (
 	// against one exact CRM order at the unauthenticated mini-CRM. The first refund is
 	// irreversible; this fact describes only further refunds of that order.
 	FactCRMRefundOrderAbuse = "crmRefundOrderAbuse"
+	// FactDatastorePoisoned is the persisted-poison path of one observed datastore-poisoning:
+	// a persistent store (RAG index / agent memory / tool-data) whose current content sha256
+	// differs from the operator-owned trusted snapshot. The poison survives a pod rotate, so
+	// only a restore-from-trusted-snapshot remediates it. Namespace-parametric.
+	FactDatastorePoisoned = "datastorePoisoned"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement
