@@ -55,8 +55,10 @@ const (
 	DecisionActionVocabularyLive22 = "v8-live22"
 	DecisionActionVocabularyLive23 = "v9-live23"
 	DecisionActionVocabularyLive24 = "v10-live24"
-	// Live25 appends controller-stop (whole-owner removal); earlier versions stay frozen.
+	// Live25 is reserved for cost-harvest: LIVE24 + throttle. Never reinterpret it.
 	DecisionActionVocabularyLive25 = "v11-live25"
+	// Live26 adds controller-stop; throttle retains its canonical slot even in builds without its handler.
+	DecisionActionVocabularyLive26 = "v12-live26"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -114,6 +116,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce, ActionCRMRefundRevoke), nil
 	case DecisionActionVocabularyLive25:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive24)
+		return append(prior, ActionThrottle), nil
+	case DecisionActionVocabularyLive26:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive25)
 		return append(prior, ActionControllerStop), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)

@@ -10,6 +10,7 @@
 package model
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -134,6 +135,16 @@ const (
 	// mini-CRM deny-guard (ConfigMap the app re-reads per request). It never authenticates a
 	// caller or touches any other CRM state; an empty guard preserves the app's behaviour.
 	ActionCRMRefundRevoke Action = "crm-refund-revoke"
+	// ActionThrottle installs a bounded request-admission budget for ONE observed abusive
+	// caller/path at an already-present authoritative serving proxy, scoped to the target
+	// Service + offending caller. It caps the cost-harvesting drive to a measured baseline
+	// while preserving a reserved budget for legitimate callers (they still get HTTP 200),
+	// keeping every Pod Ready and the replica count unchanged — it NEVER touches the HPA,
+	// evicts a Pod, or denies all traffic. It is the honest serving-configuration cost family
+	// that RETAINS replicas (NormCostServingConfiguration, like endpoint-lease-revoke). It
+	// returns Emitted=false when the limiter deployment/policy-epoch binding is absent.
+	ActionThrottle            Action = "throttle"
+	ThrottleUnsupportedReason        = "throttle requires a validated serving-rate-budget observation bound to the live limiter deployment, exact policy epoch and scoped write authority"
 	// ActionControllerStop retires an ATTACKER-CREATED controller (Deployment/
 	// StatefulSet/ReplicaSet) end-to-end: set its exact owner's desired replicas to
 	// zero (UID/resourceVersion-bound) + remove its exact owned child Pods (UID
@@ -179,6 +190,9 @@ var MutatingActions = []Action{
 	ActionEndpointLeaseRevoke,
 	ActionVoiceSessionAdmissionEnforce,
 	ActionCRMRefundRevoke,
+	// Appended last so the engine's strict-`>` tie-break order for the historical
+	// set is unchanged (serving-config cost family, replica-retaining).
+	ActionThrottle,
 	// Appended last so the engine's strict-`>` generation-rank tie-break order for the
 	// pre-existing actions stays byte-identical.
 	ActionControllerStop,
@@ -563,6 +577,13 @@ type Pod struct {
 	LiteLLMClientObservation    *LiteLLMClientObservation
 	CRMRefundObservation        *CRMRefundObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
+	// ServingRateBudgetObservation is the trusted, authoritative serving-rate-budget witness
+	// (built from a trusted cost-load detector event + the live admission proxy status) that
+	// makes throttle selectable: an installed authoritative serving limiter bound to the exact
+	// Pod UID + Service + single controller UID + limiter deployment/ConfigMap UIDs at the
+	// current policy epoch, with a measured baseline and a nonzero reserved legitimate budget.
+	// nil => throttle stays excluded.
+	ServingRateBudgetObservation *ServingRateBudgetObservation
 	// IdentityRotationObservation is the trusted, authoritative snapshot (built by
 	// identityfixture.Observe from a trusted pod-bound-api-auth detector event) that makes
 	// identity-rotate selectable: a dedicated non-default SA, external-token-theft-only, bound
@@ -731,6 +752,26 @@ func (p Pod) HasBoundEndpointLeaseObservation() bool {
 		!o.ObservedAt.IsZero()
 }
 
+// HasBoundServingRateBudgetObservation licenses only the installed, authoritative serving
+// limiter channel from a trusted cost-load observation. A raw request-rate telemetry read,
+// an HPA/CPU scale, or an annotation without a data-path limiter never satisfies it. It
+// binds the event to THIS exact Pod UID, the target Service + its single controller, the
+// live limiter deployment/ConfigMap and the selecting policy epoch; the measured baseline
+// and a nonzero reserved legitimate budget must be present (an idle/zero baseline cannot
+// also admit legitimate traffic), and the observed rate must exceed the baseline.
+func (p Pod) HasBoundServingRateBudgetObservation() bool {
+	o := p.ServingRateBudgetObservation
+	return o != nil && p.UID != "" &&
+		o.TargetPodUID == p.UID && o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ServiceUID != "" && o.ControllerUID != "" && o.ControllerUID == p.ControllerUID &&
+		o.LimiterBootID != "" && !o.ObservedAt.IsZero() &&
+		o.LimiterDeploymentUID != "" && o.LimiterConfigMapUID != "" && o.LimiterSourceSHA256 != "" &&
+		o.OffendingCallerScope != "" && o.WindowSeconds > 0 &&
+		o.BaselineReqPerSec > 0 && o.ReservedReqPerSec > 0 && !math.IsInf(o.BaselineReqPerSec, 0) && !math.IsInf(o.ReservedReqPerSec, 0) && !math.IsInf(o.ObservedReqPerSec, 0) &&
+		o.ObservedReqPerSec > o.BaselineReqPerSec
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -755,6 +796,10 @@ const (
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 	AttackVectorCRMRefundAbuse     = "phorvex.attack.crm-refund-abuse"
 	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
+	// AttackVectorServingCostHarvest reports a trusted observation of sustained request
+	// rate well above a measured per-Service baseline for one offending caller/path
+	// (AML.T0034 cost harvesting). It steers the brain to the surgical throttle actuator.
+	AttackVectorServingCostHarvest = "phorvex.attack.serving-cost-harvest"
 	// AttackVectorControllerPersistence reports an attacker-created, UNMANAGED
 	// controller (no GitOps/Helm/operator provenance, no PDB, no legitimate Service
 	// role) whose child Pods RE-APPEAR after removal — durable control-plane
@@ -781,6 +826,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorAdapter
 	case "endpoint-lease-revoke":
 		return AttackVectorEndpointLeaseReuse
+	case "throttle":
+		return AttackVectorServingCostHarvest
 	}
 	return ""
 }
@@ -859,6 +906,13 @@ type SecurityEventInfo struct {
 	// ConsoleTargetControllerUIDAnnotation). A recreated same-name owner has a new UID
 	// and mismatches, carrying no removal authority.
 	ControllerTargetUID string
+	// ServingRateBudgetRaw is the trusted cost-load detector's serving-rate-budget
+	// observation (JSON): the target Service + offending-caller scope, the installed
+	// limiter deployment/ConfigMap UIDs, the measured baseline and observed over-baseline
+	// rate, and the policy epoch. ingest.bindServingRateBudgetObservation validates it
+	// against the live limiter and binds it to the Pod's exact UID before THROTTLE can be
+	// selected; a generic trusted detector never consumes it.
+	ServingRateBudgetRaw string
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1097,6 +1151,40 @@ type EndpointLeaseObservation struct {
 	RetainedBaselineStatus         int       `json:"retainedBaselineStatus"`
 	RetainedBaselineResponseSHA256 string    `json:"retainedBaselineResponseSHA256"`
 	ObservedAt                     time.Time `json:"observedAt"`
+}
+
+// ServingRateBudgetObservation is the narrow selection-and-capability witness for the
+// throttle actuator (AML.T0034). It binds a trusted cost-load detector event to the
+// exact target Service + offending-caller scope AND to the already-installed
+// authoritative serving limiter (deployment + admission ConfigMap the proxy re-reads),
+// at the current policy epoch and with scoped write authority. It carries the MEASURED
+// per-Service baseline and the observed over-baseline rate so the rate budget and the
+// legitimate reserved budget are falsifiable, never invented. A nil/targetless/stale
+// observation fails closed (no cover, no capability): recreated objects cannot inherit
+// it because the Service/limiter/ConfigMap UIDs and policy epoch must all match.
+type ServingRateBudgetObservation struct {
+	LimiterBootID        string    `json:"limiterBootID"`
+	PriorRevision        uint64    `json:"priorRevision"`
+	EventName            string    `json:"eventName"`
+	EventUID             string    `json:"eventUID"`
+	CreatorIdentity      string    `json:"creatorIdentity"`
+	ScenarioID           string    `json:"scenarioId"`
+	EvidenceSource       string    `json:"evidenceSource"`
+	PolicyName           string    `json:"policyName"`
+	PolicyUID            string    `json:"policyUID"`
+	PolicyGeneration     int64     `json:"policyGeneration"`
+	TargetPodUID         string    `json:"targetPodUID"`
+	ServiceUID           string    `json:"serviceUID"`
+	ControllerUID        string    `json:"controllerUID"`
+	LimiterDeploymentUID string    `json:"limiterDeploymentUID"`
+	LimiterConfigMapUID  string    `json:"limiterConfigMapUID"`
+	LimiterSourceSHA256  string    `json:"limiterSourceSHA256"`
+	OffendingCallerScope string    `json:"offendingCallerScope"`
+	BaselineReqPerSec    float64   `json:"baselineReqPerSec"`
+	ObservedReqPerSec    float64   `json:"observedReqPerSec"`
+	ReservedReqPerSec    float64   `json:"reservedReqPerSec"`
+	WindowSeconds        int       `json:"windowSeconds"`
+	ObservedAt           time.Time `json:"observedAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.

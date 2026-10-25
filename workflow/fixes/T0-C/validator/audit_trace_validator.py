@@ -79,7 +79,8 @@ LIVE21_ACTIONS = LIVE20_ACTIONS + ["voice-mcp-tool-pin"]
 LIVE22_ACTIONS = LIVE21_ACTIONS + ["endpoint-lease-revoke"]
 LIVE23_ACTIONS = LIVE22_ACTIONS + ["voice-session-admission-enforce"]
 LIVE24_ACTIONS = LIVE23_ACTIONS + ["crm-refund-revoke"]
-MUTATING_ACTIONS = LIVE24_ACTIONS + ["controller-stop"]
+LIVE25_ACTIONS = LIVE24_ACTIONS + ["throttle"]
+MUTATING_ACTIONS = LIVE25_ACTIONS + ["controller-stop"]
 ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
 ACTION_VOCABULARY_VOICE17 = "v3-voice17"
 ACTION_VOCABULARY_LITELLM17 = "v3-litellm17"
@@ -91,6 +92,7 @@ ACTION_VOCABULARY_LIVE22 = "v8-live22"
 ACTION_VOCABULARY_LIVE23 = "v9-live23"
 ACTION_VOCABULARY_LIVE24 = "v10-live24"
 ACTION_VOCABULARY_LIVE25 = "v11-live25"
+ACTION_VOCABULARY_LIVE26 = "v12-live26"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 
 
@@ -123,6 +125,8 @@ def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
     if version == ACTION_VOCABULARY_LIVE24:
         return LIVE24_ACTIONS, None
     if version == ACTION_VOCABULARY_LIVE25:
+        return LIVE25_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE26:
         return MUTATING_ACTIONS, None
     return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 
