@@ -302,6 +302,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 			bindCRMRefundObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindEndpointLeaseObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindPersistenceObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindServingRateBudgetObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 		}
 	}
 

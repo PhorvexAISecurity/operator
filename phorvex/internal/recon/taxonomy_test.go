@@ -208,6 +208,7 @@ func TestNoDeadFactKinds(t *testing.T) {
 		boundVoiceMCPView(),
 		boundVoiceAdmissionView(),
 		endpointLeaseView(),
+		boundServingRateView(),
 	}
 	detectorAdapter(&views[3].Pod, "evil")
 	for _, p := range Registry.All() {

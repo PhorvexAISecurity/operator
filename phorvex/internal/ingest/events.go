@@ -20,6 +20,7 @@ import (
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingbudget"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -85,6 +86,13 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 		}
 		identity := se.Annotations[eventtrust.CreatorIdentityAnnotation]
 		trust := eventtrust.Classify(identity)
+		// The cost-load detector is NOT a global allowlist member: its serving-cost-harvest
+		// vector is admitted only by a dedicated scoped trust route that re-checks the
+		// rule/target/source/UID/limiter-sha/proxy-image, so no generic trusted detector can
+		// assert it and the detector cannot assert any other vector.
+		if identity == servingbudget.DetectorIdentity || se.Spec.Rule.Type == model.AttackVectorServingCostHarvest {
+			trust = scopedServingEventTrust(ctx, c, se, now, currentPodUIDs...)
+		}
 		metrics.RecordSecurityEvent(trust)
 		score := -1.0
 		if se.Spec.AnomalyScore != nil {
@@ -137,6 +145,7 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
 			PersistenceRaw:                       se.Annotations["phorvex.ai/persistence-observation-v1"],
 			ControllerTargetUID:                  se.Annotations["phorvex.ai/console-target-controller-uid"],
+			ServingRateBudgetRaw:                 se.Annotations["phorvex.ai/serving-rate-observation-v1"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is
