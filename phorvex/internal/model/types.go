@@ -191,6 +191,17 @@ const (
 	// channel edge — but it does NOT disown/replace the pod and does NOT cut ingress: the pod stays
 	// Ready and in-service, only its outbound channel to the attacker edge is removed. Reversible.
 	ActionNetworkIsolate Action = "network-isolate"
+	// ActionCredentialRevoke REVOKES a compromised/exfiltrated ServiceAccount bearer
+	// credential — a legacy kubernetes.io/service-account-token Secret — after a trusted
+	// observation that the token was stolen and is being reused. It deletes exactly the
+	// detector-named token Secret(s) for the named ServiceAccount (and drops the stale
+	// reference from the SA), so the apiserver's service-account-lookup stops authenticating
+	// that bearer token. It is the one defense rotate/quarantine/network-isolate cannot give:
+	// an external attacker already HOLDS the bearer token, so evicting or network-isolating the
+	// pod does nothing — only invalidating the credential defends. Forward-only (a revoked
+	// credential is not un-revoked; a fresh token is issued instead). NAMESPACE-PARAMETRIC: it
+	// pins no production namespace; the SA/Secret live in the live Pod's own namespace.
+	ActionCredentialRevoke Action = "credential-revoke"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -240,6 +251,10 @@ var MutatingActions = []Action{
 	// pre-existing action (network-isolate is opt-in per policy; a nil EnabledActions still
 	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
 	ActionNetworkIsolate,
+	// Appended LAST (Live26) so the engine's strict-`>` tie-break order is unchanged for every
+	// pre-existing action (credential-revoke is opt-in per policy; a nil EnabledActions still
+	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionCredentialRevoke,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -645,8 +660,9 @@ type Pod struct {
 	SuspectController              string
 	PersistenceFootholdObservation *PersistenceFootholdObservation
 	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
-	NodeEscapeObservation       *NodeEscapeObservation // trusted node/host-escape authority (node-cordon-drain-replace)
-	NetworkIsolateObservation   *NetworkIsolateObservation // trusted egress-edge-cut authority (network-isolate)
+	NodeEscapeObservation       *NodeEscapeObservation       // trusted node/host-escape authority (node-cordon-drain-replace)
+	NetworkIsolateObservation   *NetworkIsolateObservation   // trusted egress-edge-cut authority (network-isolate)
+	CredentialRevokeObservation *CredentialRevokeObservation // trusted stolen-SA-credential authority (credential-revoke)
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -883,6 +899,22 @@ func (p Pod) HasBoundNetworkIsolateObservation() bool {
 		len(o.ForbiddenEdges) > 0 && o.ChannelSHA256 != ""
 }
 
+// HasBoundCredentialRevokeObservation is the narrow detector authority for revoking a stolen
+// ServiceAccount bearer credential. It is NAMESPACE-PARAMETRIC — it never pins a production
+// namespace literal; the reactive policy scope bounds which Pods are evaluated and the SA/Secret
+// live in the live Pod's own namespace. It binds the assertion to this exact Pod UID, the
+// authenticated trusted event, the reactive policy epoch, the named ServiceAccount, and at least
+// one detector-named token Secret to revoke. The target Secret set is operator/detector-declared;
+// the attacker's event never widens it to an arbitrary Secret.
+func (p Pod) HasBoundCredentialRevokeObservation() bool {
+	o := p.CredentialRevokeObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ServiceAccountName != "" && len(o.CredentialSecrets) > 0 && o.CredentialSHA256 != ""
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -934,6 +966,11 @@ const (
 	// egress channel edge to an attacker edge (C2 / exfil / IMDS / east-west). It steers the
 	// engine to the surgical network-isolate (egress edge cut) over a full quarantine or rotate.
 	AttackVectorNetworkEdge = "phorvex.attack.network-edge"
+	// AttackVectorCredentialTheft reports a trusted observation that THIS pod's ServiceAccount
+	// bearer credential (a legacy service-account-token Secret) was stolen and is being reused.
+	// It steers the engine to the surgical credential-revoke (invalidate the token) over rotate /
+	// quarantine / network-isolate, none of which invalidate a bearer token the attacker holds.
+	AttackVectorCredentialTheft = "phorvex.attack.credential-theft"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -961,6 +998,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorHostEscape
 	case "network-isolate":
 		return AttackVectorNetworkEdge
+	case "credential-revoke":
+		return AttackVectorCredentialTheft
 	}
 	return ""
 }
@@ -1053,6 +1092,7 @@ type SecurityEventInfo struct {
 	ServingRateBudgetRaw string
 	NodeEscapeRaw                     string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
 	NetworkEdgeRaw                    string // untrusted event annotation naming the open egress edge; validated + bound to the live Pod before use
+	CredentialRevokeRaw               string // untrusted event annotation naming the stolen SA + token Secret(s); validated + bound to the live Pod before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1133,6 +1173,28 @@ type NetworkIsolateObservation struct {
 	ForbiddenEdges   []string  `json:"forbiddenEdges"` // CIDRs to except from egress (the channel edges)
 	ChannelSHA256    string    `json:"channelSHA256"`  // digest of the sorted forbidden-edge set (audit binding)
 	CreatedAt        time.Time `json:"createdAt"`
+}
+
+// CredentialRevokeObservation identifies the one fresh trusted detector assertion that
+// authorizes revoking a stolen ServiceAccount bearer credential for this exact Pod. It carries
+// identity, policy epoch, the named ServiceAccount and the detector-named token Secret(s) to
+// delete — never attacker-controlled remedy. CredentialSecrets are operator/detector-declared
+// names in the Pod's own namespace; the handler deletes ONLY a Secret that is actually a
+// kubernetes.io/service-account-token for ServiceAccountName, so the event can never widen the
+// revocation to an arbitrary Secret. Revoking the Secret stops the apiserver's
+// service-account-lookup from authenticating that bearer token.
+type CredentialRevokeObservation struct {
+	EventName          string    `json:"eventName"`
+	EventUID           string    `json:"eventUID"`
+	CreatorIdentity    string    `json:"creatorIdentity"`
+	TargetPodUID       string    `json:"targetPodUID"`
+	PolicyName         string    `json:"policyName"`
+	PolicyUID          string    `json:"policyUID"`
+	PolicyGeneration   int64     `json:"policyGeneration"`
+	ServiceAccountName string    `json:"serviceAccountName"` // the compromised SA, in the Pod's namespace
+	CredentialSecrets  []string  `json:"credentialSecrets"`  // token Secret name(s) for that SA to revoke
+	CredentialSHA256   string    `json:"credentialSHA256"`   // digest of the sorted SA+secret set (audit binding)
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 // SensitiveOutputObservation licenses only one source-bound response-field rule.
@@ -1695,9 +1757,10 @@ type Decision struct {
 	VoiceAdmissionObservation *VoiceAdmissionObservation  `json:"voiceAdmissionObservation,omitempty"`
 	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
 	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
-	NodeEscapeObservation     *NodeEscapeObservation      `json:"nodeEscapeObservation,omitempty"`
-	NetworkIsolateObservation *NetworkIsolateObservation  `json:"networkIsolateObservation,omitempty"`
-	Existential               *ExistentialDecision
+	NodeEscapeObservation       *NodeEscapeObservation       `json:"nodeEscapeObservation,omitempty"`
+	NetworkIsolateObservation   *NetworkIsolateObservation   `json:"networkIsolateObservation,omitempty"`
+	CredentialRevokeObservation *CredentialRevokeObservation `json:"credentialRevokeObservation,omitempty"`
+	Existential                 *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
 	Claim          *ClaimScope

@@ -159,7 +159,7 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 			return NormCostServiceRekey
 		}
 		return NormCostMetadataMutation
-	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore, model.ActionNetworkIsolate:
+	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore, model.ActionNetworkIsolate, model.ActionCredentialRevoke:
 		// throttle installs a computation-affecting serving-admission budget at the
 		// authoritative proxy while retaining every Ready replica — the honest
 		// serving-configuration class, NOT workload replacement.
@@ -168,6 +168,8 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		// network-isolate installs one surgical egress-deny NetworkPolicy (+ a selector label):
 		// a serving-configuration-tier network-channel mutation, like its channel-deny siblings.
 		// It is structurally BELOW quarantine (which additionally detaches + replaces the pod).
+		// credential-revoke deletes one leaked token Secret (+ patches the SA): a serving-
+		// configuration-tier credential mutation in the same surgical tier; the pod is untouched.
 		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate, model.ActionK8sObjectRevert:
 		// Reverting a drifted ConfigMap to its operator-trusted snapshot is an in-process

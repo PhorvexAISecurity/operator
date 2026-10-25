@@ -144,7 +144,13 @@ func ExposureVarFor(a model.Action) string {
 		return model.VarNetworkIdentity
 	case model.ActionEndpointRotate, model.ActionRouteRotate:
 		return model.VarRouteKey
-	case model.ActionIdentityRotate:
+	case model.ActionIdentityRotate, model.ActionCredentialRevoke:
+		// credential-revoke acts on the ServiceAccount identity/credential dimension (it
+		// invalidates a bearer token), so it reads the identity exposure clock. Its own handler
+		// writes no pod epoch marker (it deletes a Secret + patches the SA, the pod is untouched),
+		// so on a pod that was never identity-actuated the clock is absent and the anti-over-
+		// rotation guard fail-OPENs (its first revocation is always allowed); it shares the
+		// identity clock only to damp rapid repeat-revocation on the same pod.
 		return model.VarIdentity
 	case model.ActionAdapterRotate:
 		return model.VarAdapterEpoch

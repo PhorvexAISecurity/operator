@@ -119,6 +119,9 @@ type Request struct {
 	// NetworkIsolateObservation is the selection-time trusted egress-edge-cut authority for
 	// network-isolate.
 	NetworkIsolateObservation *model.NetworkIsolateObservation
+	// CredentialRevokeObservation is the selection-time trusted stolen-SA-credential authority
+	// for credential-revoke.
+	CredentialRevokeObservation *model.CredentialRevokeObservation
 	TargetUID             string // Bound identity from the selecting snapshot.
 	TargetNamespaceUID    string // Bound by the protected quarantine-capacity reservation.
 	OperationID           string // Stable decision identity for protected quarantine and route operations.

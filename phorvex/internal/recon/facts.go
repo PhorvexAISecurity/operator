@@ -86,6 +86,14 @@ const (
 	// Distinct from FactNetworkIdentity (quarantine's reachable-identity fact) and FactLateralEdge
 	// (an origin-owned neighbor edge): this is the pod's own outbound channel edge.
 	FactNetworkEgressChannel = "networkEgressChannel"
+	// FactCredentialReuse is one trusted-observed reuse of a STOLEN ServiceAccount bearer
+	// credential (a legacy service-account-token Secret) for this pod. It exists ONLY while that
+	// leaked credential is still live, and ONLY credential-revoke (deleting the token Secret so the
+	// apiserver stops authenticating it) covers it — so the engine selects credential invalidation
+	// for THIS attack, not rotate/quarantine/network-isolate, none of which invalidate a bearer
+	// token an external attacker already holds. Distinct from FactEndpointLeaseReuse (an app
+	// caller-lease at the serving proxy): this is a Kubernetes ServiceAccount token credential.
+	FactCredentialReuse = "credentialReuse"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap

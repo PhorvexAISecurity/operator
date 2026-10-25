@@ -108,6 +108,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// handler bounds itself to only-restore-the-operator-snapshot, so the broad verb is safe. Pod
 	// reads are broad scanner context (excluded here by the T1-E rule).
 	model.ActionK8sObjectRevert: {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}},
+	// Stolen SA credential revocation: delete the detector-named legacy service-account-token
+	// Secret(s) for the named ServiceAccount, then drop the stale reference from the SA. The
+	// handler reads the target Pod + the Secret (to confirm it is a token Secret for that SA,
+	// never an arbitrary Secret) + the SA before mutating. These are credential-specific verbs
+	// not covered by rotate/quarantine, so the lane grants them additively to the actuator AND
+	// manager SA (the T1-E manager SSAR pre-checks the same verb set) in the demo namespace.
+	model.ActionCredentialRevoke: {{Resource: "secrets", Verb: "get"}, {Resource: "secrets", Verb: "list"}, {Resource: "secrets", Verb: "delete"}, {Resource: "serviceaccounts", Verb: "get"}, {Resource: "serviceaccounts", Verb: "update"}, {Resource: "pods", Verb: "get"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

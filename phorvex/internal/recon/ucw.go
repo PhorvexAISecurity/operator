@@ -322,6 +322,24 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionNetworkIsolate] = append(af.CoverByAction[model.ActionNetworkIsolate], f.Key())
 	}
+	// Stolen ServiceAccount credential. The trusted observation authorizes deleting the leaked
+	// token Secret so the apiserver stops authenticating that bearer token. Only credential-revoke
+	// covers this fact; rotate/quarantine/network-isolate act on the pod (respawn / deny-all /
+	// egress cut) and do NOT invalidate a bearer token an external attacker already holds, so they
+	// never claim this credential fact. The multiplicative 3x keeps the surgical move dominant
+	// (same structural dominance as adapter/lease/network-isolate) while preserving zero weight at
+	// zero PHold and finite policy scaling.
+	if view.Pod.HasBoundCredentialRevokeObservation() {
+		o := view.Pod.CredentialRevokeObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactCredentialReuse, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorCredentialTheft,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorCredentialTheft, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionCredentialRevoke] = append(af.CoverByAction[model.ActionCredentialRevoke], f.Key())
+	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
 	if view.Pod.ServingEndpointReady {

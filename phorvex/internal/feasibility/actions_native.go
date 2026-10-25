@@ -167,10 +167,34 @@ func (networkIsolateObservationRequired) Check(view *model.WorkloadView, move mo
 	return feasible
 }
 
+// credentialRevokeObservationRequired is the action-SPECIFIC hard law for revoking a stolen
+// ServiceAccount credential: credential-revoke is infeasible unless this exact Pod carries a
+// trusted, bound stolen-credential observation (a detector flagged a leaked SA token being
+// reused). Without it there is nothing to revoke, so the move is never selected. Namespace-
+// parametric: the law pins no namespace — the bound observation + reactive policy scope bound
+// which Pods qualify. Non-credential-revoke moves are unaffected, so {rotate,quarantine}/AI
+// parity is byte-identical.
+type credentialRevokeObservationRequired struct{}
+
+func (credentialRevokeObservationRequired) Name() string {
+	return "credential-revoke-observation-required"
+}
+
+func (credentialRevokeObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionCredentialRevoke {
+		return feasible
+	}
+	if !view.Pod.HasBoundCredentialRevokeObservation() {
+		return Verdict{Feasible: false, Reason: "credential-revoke-observation-required: no trusted bound stolen-credential observation for this pod"}
+	}
+	return feasible
+}
+
 func init() {
 	Registry.Register(aiContextRequired{})
 	Registry.Register(migDeviceRequired{})
 	Registry.Register(codeExecGuard{})
 	Registry.Register(nodeCordonDrainReplaceObservationRequired{})
 	Registry.Register(networkIsolateObservationRequired{})
+	Registry.Register(credentialRevokeObservationRequired{})
 }

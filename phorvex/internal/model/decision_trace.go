@@ -67,6 +67,8 @@ const (
 	DecisionActionVocabularyLive29 = "v15-live29"
 	// Live30 appends the surgical network-isolate (egress edge cut); all earlier versions stay frozen.
 	DecisionActionVocabularyLive30 = "v16-live30"
+	// Live31 appends the surgical credential-revoke (stolen SA token invalidation); all earlier versions stay frozen.
+	DecisionActionVocabularyLive31 = "v17-live31"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -140,6 +142,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive30:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive29)
 		return append(prior, ActionNetworkIsolate), nil
+	case DecisionActionVocabularyLive31:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive30)
+		return append(prior, ActionCredentialRevoke), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}
