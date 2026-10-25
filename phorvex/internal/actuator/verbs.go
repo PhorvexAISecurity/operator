@@ -9,6 +9,7 @@ import (
 	"github.com/phorvex/phorvex/internal/crmrefund"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/persistence"
 )
 
 // actionVerbs is the SINGLE SOURCE OF TRUTH for the RBAC verbs the T1-E capability gate
@@ -66,6 +67,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// the guard ledger (state.json) is the idempotency record.
 	model.ActionCRMRefundRevoke:     {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
+	// controller-stop retires an attacker-created controller end-to-end: scale the exact
+	// owner (Deployment/StatefulSet/ReplicaSet) to zero via the scale subresource
+	// (UID/resourceVersion-bound JSON-patch), then delete its exact child Pods (UID
+	// preconditions). The list verbs are the no-legitimate-service-floor safety proof
+	// (persistence.CheckSafety) and the Deployment->ReplicaSet child enumeration; the
+	// operator-scoped ConfigMap get is the reviewed desired-state inventory read.
+	model.ActionControllerStop: {{Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Group: "apps", Resource: "replicasets", Verb: "list"}, {Group: "policy", Resource: "poddisruptionbudgets", Verb: "list"}, {Group: "autoscaling", Resource: "horizontalpodautoscalers", Verb: "list"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, {Resource: "configmaps", Name: persistence.InventoryName, Verb: "get", OperatorScoped: true}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

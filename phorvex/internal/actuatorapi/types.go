@@ -104,14 +104,18 @@ type Request struct {
 	// cluster (identityAuthority) before any ServiceAccount mutation.
 	IdentityRotationObservation *model.IdentityRotationObservation
 	PodBoundKubeAPIAuth         *model.PodBoundKubeAPIAuthProjection
-	TargetUID                   string // Bound identity from the selecting snapshot.
-	TargetNamespaceUID          string // Bound by the protected quarantine-capacity reservation.
-	OperationID                 string // Stable decision identity for protected quarantine and route operations.
-	TickID                      string // Real selection tick; protected serving operation IDs are recomputed from it.
-	ServingObservation          *ServingSelectionObservation
-	PolicyName                  string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID                   string
-	PolicyGeneration            int64
+	// PersistenceObservation is the selection-time, controller-UID-bound trusted
+	// persistence authority for controller-stop. The native handler rechecks it against
+	// the live cluster (validateControllerStop) before any owner scale/child deletion.
+	PersistenceObservation *model.PersistenceFootholdObservation
+	TargetUID              string // Bound identity from the selecting snapshot.
+	TargetNamespaceUID     string // Bound by the protected quarantine-capacity reservation.
+	OperationID            string // Stable decision identity for protected quarantine and route operations.
+	TickID                 string // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation     *ServingSelectionObservation
+	PolicyName             string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID              string
+	PolicyGeneration       int64
 	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
 	// cap. The native handler re-reads and matches it at the mutation boundary.
 	// Zero is invalid and never means force deletion.
@@ -177,6 +181,10 @@ type Result struct {
 	// never claims the old process exited or a replacement became ready.
 	GracefulTermination *model.GracefulTerminationReceipt
 	DrainOperation      *model.DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt for controller-stop. It
+	// rides the CBOR wire (wire.Encode/Decode) back to the manager unchanged; it
+	// records only a bounded no-recreation window, never permanent erasure.
+	ControllerStop *model.ControllerStopReceipt
 }
 
 // Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.

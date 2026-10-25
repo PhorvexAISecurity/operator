@@ -371,6 +371,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "endpoint-lease-revoke: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionControllerStop {
+		o := v.Pod.PersistenceFootholdObservation
+		if !v.Pod.HasBoundPersistenceObservation() || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "controller-stop: trusted controller-UID-bound unauthorized-owner observation absent or event policy identity differs from current policy"}
+		}
+	}
 	if ok, why := w.capable(v, action, review); !ok {
 		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: why}
 	}

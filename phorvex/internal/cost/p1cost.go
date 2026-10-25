@@ -160,6 +160,17 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		return NormCostStateReset
 	case model.ActionIdentityRotate:
 		return NormCostPartialIdentity
+	case model.ActionControllerStop:
+		// Removing the whole attacker owner retires N logical workloads: price it as N
+		// workload replacements, N = max(owner desired, observed child count, 1).
+		replicas := 1
+		if view != nil && view.Pod.DesiredReplicas > replicas {
+			replicas = view.Pod.DesiredReplicas
+		}
+		if view != nil && view.Pod.PersistenceFootholdObservation != nil && view.Pod.PersistenceFootholdObservation.Replicas > replicas {
+			replicas = view.Pod.PersistenceFootholdObservation.Replicas
+		}
+		return NormCostWorkloadReplacement * float64(replicas)
 	case model.ActionRouteRotate, model.ActionDebugger, model.ActionCustomInject, model.ActionRequestDrain:
 		return NormCostMetadataMutation
 	default:

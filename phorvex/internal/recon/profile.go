@@ -129,6 +129,19 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * networkIdentityWeight}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
+	// Control-plane persistence fact — invalidated ONLY by controller-stop (whole-owner
+	// scale-to-zero + exact child removal + observed no-recreation). Minted only on a
+	// trusted controller-UID-bound unauthorized-owner observation; exact selecting-policy
+	// binding is enforced by the capability gate, the generator and the handler. Removing
+	// the whole owner also takes out the pod-identity, in-memory, session and network facts
+	// its children carried, so controller-stop covers them too — strictly more thorough than
+	// a per-Pod rotate+quarantine pair on a foothold that would otherwise reschedule.
+	if view.Pod.HasBoundPersistenceObservation() {
+		persist := Fact{Scope: ScopePod, Asset: asset, Kind: FactControlPlanePersistence, Weight: base * urg}
+		facts = append(facts, persist)
+		cover[model.ActionControllerStop] = append(cover[model.ActionControllerStop],
+			persist.Key(), pid.Key(), memFact.Key(), sessFact.Key(), nid.Key())
+	}
 	// route-rotate deliberately receives no cover. Its successful path changes endpoint
 	// selection membership by re-keying a Pod label and restitching a Service selector,
 	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.

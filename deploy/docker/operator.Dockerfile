@@ -63,11 +63,12 @@ RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,s
 # Keep the four administrative/observer binaries' original plain ldflags.
 RUN --mount=type=cache,id=phvx-operator-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-operator-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/ \
-      ./cmd/recovery ./cmd/mig-allocation-helper ./cmd/loss-observer ./cmd/current-inventory-observer && \
+      ./cmd/recovery ./cmd/mig-allocation-helper ./cmd/loss-observer ./cmd/current-inventory-observer ./cmd/persistence-observer && \
     mv /out/recovery /phorvex-recovery && \
     mv /out/mig-allocation-helper /phorvex-mig-allocation-helper && \
     mv /out/loss-observer /loss-observer && \
-    mv /out/current-inventory-observer /current-inventory-observer
+    mv /out/current-inventory-observer /current-inventory-observer && \
+    mv /out/persistence-observer /persistence-observer
 
 # Distroless nonroot, matching the chart's runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot
@@ -77,6 +78,7 @@ COPY --from=builder /phorvex-recovery .
 COPY --from=builder /phorvex-mig-allocation-helper .
 COPY --from=builder /loss-observer .
 COPY --from=builder /current-inventory-observer .
+COPY --from=builder /persistence-observer .
 COPY --from=builder /brain-replay .
 USER 65532:65532
 ENTRYPOINT ["/manager"]

@@ -101,6 +101,8 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 		model.ActionRequestDrain:                  0.10,
 		model.ActionGuardrailRotate:               0.20,
 		model.ActionKVMigrateInvalidate:           0.20,
+		// Bare view: owner desired 0 and no observation => 1 logical workload replacement.
+		model.ActionControllerStop: 1.00,
 	}
 	for _, action := range model.MutatingActions {
 		got := normCostP1(view, model.Move{Action: action})

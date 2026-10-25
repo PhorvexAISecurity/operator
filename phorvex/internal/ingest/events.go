@@ -135,6 +135,8 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
 			CRMRefundRaw:                         se.Annotations["phorvex.ai/crm-refund-observation-v1"],
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
+			PersistenceRaw:                       se.Annotations["phorvex.ai/persistence-observation-v1"],
+			ControllerTargetUID:                  se.Annotations["phorvex.ai/console-target-controller-uid"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is

@@ -140,6 +140,8 @@ var classifications = map[model.Action]Bound{
 		"endpoint lease revocation and proxy readback have no calibrated safe-return deadline"),
 	model.ActionCRMRefundRevoke: unknown(model.ActionCRMRefundRevoke, -1,
 		"CRM refund deny-guard write and all-Pod readback have no calibrated safe-return deadline"),
+	model.ActionControllerStop: unknown(model.ActionControllerStop, -1,
+		"whole-owner scale-to-zero plus child removal has no calibrated safe-return deadline; its availability floor is the attacker owner's own declared guarantee, not a shared serving floor"),
 }
 
 func init() {

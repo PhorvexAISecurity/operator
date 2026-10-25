@@ -23,6 +23,7 @@ import (
 	"github.com/phorvex/phorvex/internal/epssmeta"
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
+	"github.com/phorvex/phorvex/internal/persistence"
 	"github.com/phorvex/phorvex/internal/platform"
 	"github.com/phorvex/phorvex/internal/sensorapi"
 )
@@ -110,6 +111,11 @@ func (f Flags) ApplyTrust() error {
 	eventtrust.ConfigureEventTrust(identities(f.TrustedDetectors))
 	eventtrust.ConfigureCompletedDisclosureTrust(identities(f.TrustedLossObservers))
 	eventtrust.ConfigureCurrentInventoryTrust(identities(f.TrustedCurrentInventoryObservers))
+	// controller-stop owner-removal authority: the dedicated persistence observer identity
+	// and the namespaces it may assert control-plane persistence in. Separate from general
+	// detector trust; empty disables controller-stop (fail-closed). The ingest binder reads
+	// persistence.ObserverAllowed/ProvenanceNamespace from this.
+	persistence.ConfigureAuthority(f.PersistenceObserverIdentity, f.PersistenceNamespaces())
 	return nil
 }
 

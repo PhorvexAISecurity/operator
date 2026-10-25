@@ -400,6 +400,16 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					continue
 				}
 			}
+			if action == model.ActionControllerStop {
+				o := v.Pod.PersistenceFootholdObservation
+				if !v.Pod.HasBoundPersistenceObservation() || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "controller-stop: trusted controller-UID-bound unauthorized-owner observation absent or event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
 			// M-52: quarantine capacity is a hard namespace-wide law, evaluated
 			// before feasibility/SLO work so existential SLO override cannot relax it.
 			// The inventory is assembled before tenant selector filtering and counts

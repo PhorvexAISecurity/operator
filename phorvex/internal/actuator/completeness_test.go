@@ -124,6 +124,12 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 	model.ActionEndpointLeaseRevoke:           {plain: "ai-context-required:"},
 	model.ActionCRMRefundRevoke:               {plain: "ai-context-required:"},
+	// controller-stop is feasibility-neutral on a bare pod: its whole-owner-removal authority
+	// (a trusted controller-UID-bound unauthorized-owner observation + exact policy epoch) is
+	// enforced by the capability gate, the actionset generator, the backend and the native
+	// handler, NOT by a feasibility veto — mirroring identity-rotate. It removes no shared
+	// Ready serving replica, so the availability floor does not gate it either.
+	model.ActionControllerStop: {},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.

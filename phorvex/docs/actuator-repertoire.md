@@ -65,6 +65,7 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "endpoint-lease-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `voice-session-admission-enforce` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-session-admission-enforce" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `crm-refund-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "crm-refund-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `controller-stop` | phoenix | no | backend-unsupported: phoenix cannot enact "controller-stop" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -96,6 +97,7 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |
 | `voice-session-admission-enforce` | native | yes | — | reviewed immutable admission wrapper, unchanged legacy bundle, canonical production auth profile, exact all-serving-Pod state and protected journal | support does not establish actual first loss, CAS enforcement, local unsigned teardown, fresh denial or useful signed speech; these require native and Console evidence |
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
+| `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
 
 ## hybrid
 
@@ -127,3 +129,4 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |
 | `voice-session-admission-enforce` | native | yes | — | reviewed immutable admission wrapper, unchanged legacy bundle, canonical production auth profile, exact all-serving-Pod state and protected journal | support does not establish actual first loss, CAS enforcement, local unsigned teardown, fresh denial or useful signed speech; these require native and Console evidence |
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
+| `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |

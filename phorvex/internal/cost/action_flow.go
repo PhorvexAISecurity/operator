@@ -17,6 +17,10 @@ const (
 	flowKVResetMeasured
 	flowServingState
 	flowLightweight
+	// flowControllerStop retires an attacker owner (scale-to-zero + child removal). Its
+	// per-replica magnitude is carried by normCostP1 (NormCostWorkloadReplacement * N),
+	// not re-scaled here, so the flow is a flat base like quarantine.
+	flowControllerStop
 )
 
 // RespawnFlowRegime identifies the input/action support behind one learned
@@ -95,6 +99,8 @@ func flowFamilyForAction(action model.Action) flowFamily {
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:
 		return flowLightweight
+	case model.ActionControllerStop:
+		return flowControllerStop
 	default:
 		return flowUnknown
 	}
@@ -121,6 +127,8 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 		return estimatedServingStateBase + estimatedServingLoadSpan*servingLoadPressure(view)
 	case flowLightweight:
 		return estimatedLightweightFlow
+	case flowControllerStop:
+		return quarantineBase
 	default:
 		return unknownActionFlowMax
 	}

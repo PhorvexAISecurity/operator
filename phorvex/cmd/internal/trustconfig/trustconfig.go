@@ -21,6 +21,8 @@ type Trust struct {
 	EndpointLeaseApprovedProxyImage  string
 	EndpointLeaseApprovedEngineImage string
 	InjectorIdentity                 string
+	PersistenceObserverIdentity      string
+	PersistenceObserverNamespaces    string
 }
 
 // Register defines the flags on fs.
@@ -30,6 +32,19 @@ func (t *Trust) Register(fs *flag.FlagSet) {
 	fs.StringVar(&t.EndpointLeaseApprovedProxyImage, "endpoint-lease-approved-proxy-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_PROXY_IMAGE"), "Reviewed immutable endpoint lease proxy repo@sha256; empty disables lease-revoke.")
 	fs.StringVar(&t.EndpointLeaseApprovedEngineImage, "endpoint-lease-approved-engine-image", os.Getenv("PHORVEX_ENDPOINT_LEASE_APPROVED_ENGINE_IMAGE"), "Reviewed immutable endpoint lease engine repo@sha256; empty disables lease-revoke.")
 	fs.StringVar(&t.InjectorIdentity, "injector-identity", os.Getenv("PHORVEX_INJECTOR_IDENTITY"), "ServiceAccount (namespace/name) the workload live arms create their SecurityEvents as; only its events open those arms. Empty = "+eventtrust.DefaultInjector+".")
+	fs.StringVar(&t.PersistenceObserverIdentity, "persistence-observer-identity", os.Getenv("PHORVEX_PERSISTENCE_OBSERVER_IDENTITY"), "Exact authenticated identity (system:serviceaccount:<ns>:<name>) of the standing persistence observer whose controller-persistence SecurityEvents license controller-stop. Separate from --trusted-detectors general belief trust. Empty = controller-stop disabled (fail-closed).")
+	fs.StringVar(&t.PersistenceObserverNamespaces, "persistence-observer-namespaces", os.Getenv("PHORVEX_PERSISTENCE_OBSERVER_NAMESPACES"), "Comma-separated namespaces in which the persistence observer identity is authorized to assert controller-persistence (owner-removal authority). Empty = none.")
+}
+
+// PersistenceNamespaces is the authorized persistence-observation namespace list, normalized.
+func (t Trust) PersistenceNamespaces() []string {
+	var out []string
+	for _, ns := range strings.Split(t.PersistenceObserverNamespaces, ",") {
+		if ns = strings.TrimSpace(ns); ns != "" {
+			out = append(out, ns)
+		}
+	}
+	return out
 }
 
 // Detectors is the trusted detector allowlist, normalized.

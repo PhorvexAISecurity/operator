@@ -3075,6 +3075,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			CRMRefundObservation:        v.Pod.CRMRefundObservation,
 			IdentityRotationObservation: v.Pod.IdentityRotationObservation,
 			PodBoundKubeAPIAuth:         v.Pod.PodBoundKubeAPIAuth,
+			PersistenceObservation:      v.Pod.PersistenceFootholdObservation,
 			PolicyName:                  pol.PolicyName,
 			PolicyUID:                   pol.PolicyUID,
 			PolicyGeneration:            pol.PolicyGeneration,
@@ -3102,7 +3103,8 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
 			decisions[i].Action == model.ActionEndpointLeaseRevoke ||
 			decisions[i].Action == model.ActionCRMRefundRevoke ||
-			decisions[i].Action == model.ActionIdentityRotate {
+			decisions[i].Action == model.ActionIdentityRotate ||
+			decisions[i].Action == model.ActionControllerStop {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}
@@ -3223,6 +3225,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -3331,6 +3334,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3358,6 +3362,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 			switch disposition {
 			case actuatorapi.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")

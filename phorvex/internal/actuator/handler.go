@@ -109,6 +109,10 @@ type HandlerResult struct {
 	MutationKind        string
 	GracefulTermination *model.GracefulTerminationReceipt
 	DrainOperation      *model.DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt a controller-stop enact
+	// returns (owner scaled to zero + exact children removed + observed no-recreation
+	// window). nil for every other handler.
+	ControllerStop *model.ControllerStopReceipt
 	// Emitted is true only for a confirmed mutation or confirmed partial
 	// mutation. It stays false for refusal, definite no-effect, and an attempted
 	// external mutation whose result is unknown.
@@ -191,6 +195,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		MutationKind:        hr.MutationKind,
 		GracefulTermination: hr.GracefulTermination,
 		DrainOperation:      model.CloneDrainOperationEvidence(hr.DrainOperation),
+		ControllerStop:      model.CloneControllerStopReceipt(hr.ControllerStop),
 	}, err
 }
 
