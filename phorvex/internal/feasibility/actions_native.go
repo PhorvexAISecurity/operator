@@ -20,7 +20,7 @@ func isAIMove(a model.Action) bool {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
 		model.ActionKVReset, model.ActionEndpointRotate,
 		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
-		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionDatastoreRestore:
+		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionDatastoreRestore, model.ActionAgentActionDeny:
 		return true
 	}
 	return false
@@ -61,6 +61,8 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		available = view.Pod.HasBoundCRMRefundObservation()
 	case model.ActionDatastoreRestore:
 		available = view.Pod.HasBoundDatastoreRestoreObservation()
+	case model.ActionAgentActionDeny:
+		available = view.Pod.HasBoundAgentActionDenyObservation()
 	case model.ActionEndpointLeaseRevoke:
 		available = view.Pod.HasBoundEndpointLeaseObservation()
 	default:

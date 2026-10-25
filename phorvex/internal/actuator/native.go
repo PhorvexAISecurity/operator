@@ -160,6 +160,9 @@ func (n *NativeActuator) SupportsAction(ctx context.Context, a model.Action, t T
 	if a == model.ActionDatastoreRestore {
 		return datastoreRestoreCapability(ctx, n.Reader, t)
 	}
+	if a == model.ActionAgentActionDeny {
+		return agentActionCapability(ctx, n.Reader, t)
+	}
 	if a == model.ActionEndpointLeaseRevoke {
 		return endpointLeaseCapability(ctx, n.Reader, n.JournalNamespace, t, n.servingSecurity, n.EndpointLeaseApprovedSourceSHA256, n.EndpointLeaseApprovedProxyImage, n.EndpointLeaseApprovedEngineImage, n.EndpointLeaseStatusTransport, n.EndpointLeaseStatusToken)
 	}

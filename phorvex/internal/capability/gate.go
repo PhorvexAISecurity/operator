@@ -80,6 +80,7 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionEndpointLeaseRevoke:           true,
 	model.ActionCRMRefundRevoke:               true,
 	model.ActionDatastoreRestore:              true,
+	model.ActionAgentActionDeny:               true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -372,6 +373,12 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "datastore-restore: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionAgentActionDeny {
+		o := v.Pod.AgentActionDenyObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "agent-action-deny: event policy identity differs from current policy"}
+		}
+	}
 	if action == model.ActionEndpointLeaseRevoke {
 		o := v.Pod.EndpointLeaseObservation
 		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
@@ -502,6 +509,8 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundCRMRefundObservation()
 	case model.ActionDatastoreRestore:
 		return pod.HasBoundDatastoreRestoreObservation()
+	case model.ActionAgentActionDeny:
+		return pod.HasBoundAgentActionDenyObservation()
 	case model.ActionEndpointLeaseRevoke:
 		return pod.HasBoundEndpointLeaseObservation()
 	default:
@@ -624,6 +633,11 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundDatastoreRestoreObservation() || pod.DatastoreRestoreObservation.PolicyName != w.policyName ||
 			pod.DatastoreRestoreObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/store-bound datastore-poisoning observation"
+		}
+	case model.ActionAgentActionDeny:
+		if !pod.HasBoundAgentActionDenyObservation() || pod.AgentActionDenyObservation.PolicyName != w.policyName ||
+			pod.AgentActionDenyObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/guard-bound agent-action-abuse observation"
 		}
 	case model.ActionEndpointLeaseRevoke:
 		if w.operatorNamespace == "" {

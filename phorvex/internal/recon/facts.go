@@ -162,6 +162,10 @@ const (
 	// differs from the operator-owned trusted snapshot. The poison survives a pod rotate, so
 	// only a restore-from-trusted-snapshot remediates it. Namespace-parametric.
 	FactDatastorePoisoned = "datastorePoisoned"
+	// FactAgentActionAbuse is the repeat path of one observed unauthorized agent action
+	// (one caller invoking one forbidden action) at an agent workload's deny-guard. It is
+	// the namespace-parametric analog of crmRefundOrderAbuse.
+	FactAgentActionAbuse = "agentActionAbuse"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement

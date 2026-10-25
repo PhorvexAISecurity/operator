@@ -5,6 +5,7 @@
 package actuator
 
 import (
+	"github.com/phorvex/phorvex/internal/agentdeny"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/crmrefund"
 	"github.com/phorvex/phorvex/internal/datastore"
@@ -86,6 +87,10 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// handler's existence reads go through the cached informer (networkpolicies list/watch already
 	// granted for quarantine's readback), so no networkpolicies:get grant is required.
 	model.ActionNetworkIsolate: {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
+	// Namespace-parametric analog of crm-refund-revoke: the chart grants ConfigMap get/update
+	// ONLY on the agent deny-guard in each enabled namespace. No journal: the guard ledger
+	// (state.json) is the idempotency record.
+	model.ActionAgentActionDeny: {{Resource: "configmaps", Name: agentdeny.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: agentdeny.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	// controller-stop retires an attacker-created controller end-to-end: scale the exact
 	// owner (Deployment/StatefulSet/ReplicaSet) to zero via the scale subresource

@@ -98,6 +98,8 @@ phorvex:
     configMapName: ""
   crmRefundRevoke:
     enabled: false
+  agentActionDeny:
+    enabled: false
   voiceMemory:
     enabled: false
   voiceOutput:

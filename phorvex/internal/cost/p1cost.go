@@ -159,7 +159,7 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 			return NormCostServiceRekey
 		}
 		return NormCostMetadataMutation
-	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore, model.ActionNetworkIsolate, model.ActionCredentialRevoke:
+	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore, model.ActionNetworkIsolate, model.ActionCredentialRevoke, model.ActionAgentActionDeny:
 		// throttle installs a computation-affecting serving-admission budget at the
 		// authoritative proxy while retaining every Ready replica — the honest
 		// serving-configuration class, NOT workload replacement.
@@ -170,6 +170,8 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		// It is structurally BELOW quarantine (which additionally detaches + replaces the pod).
 		// credential-revoke deletes one leaked token Secret (+ patches the SA): a serving-
 		// configuration-tier credential mutation in the same surgical tier; the pod is untouched.
+		// agent-action-deny CASes a deny-guard ConfigMap in place (pod alive): same serving-
+		// configuration tier, not workload replacement.
 		return NormCostServingConfiguration
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate, model.ActionK8sObjectRevert:
 		// Reverting a drifted ConfigMap to its operator-trusted snapshot is an in-process

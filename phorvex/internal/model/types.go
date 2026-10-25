@@ -202,6 +202,13 @@ const (
 	// credential is not un-revoked; a fresh token is issued instead). NAMESPACE-PARAMETRIC: it
 	// pins no production namespace; the SA/Secret live in the live Pod's own namespace.
 	ActionCredentialRevoke Action = "credential-revoke"
+
+	// ActionAgentActionDeny denies one observed abused (caller, action) pair at an agent
+	// workload's deny-guard (ConfigMap the app re-reads per request). It is the
+	// namespace-parametric generalization of crm-refund-revoke: the namespace is carried by
+	// the trusted observation and the live pod, never hard-coded. It never authenticates a
+	// caller or touches any other agent state; an empty guard preserves the app's behaviour.
+	ActionAgentActionDeny Action = "agent-action-deny"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -255,6 +262,7 @@ var MutatingActions = []Action{
 	// pre-existing action (credential-revoke is opt-in per policy; a nil EnabledActions still
 	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
 	ActionCredentialRevoke,
+	ActionAgentActionDeny,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -638,6 +646,7 @@ type Pod struct {
 	LiteLLMClientObservation    *LiteLLMClientObservation
 	CRMRefundObservation        *CRMRefundObservation
 	DatastoreRestoreObservation *DatastoreRestoreObservation
+	AgentActionDenyObservation  *AgentActionDenyObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
 	// ServingRateBudgetObservation is the trusted, authoritative serving-rate-budget witness
 	// (built from a trusted cost-load detector event + the live admission proxy status) that
@@ -830,6 +839,20 @@ func (p Pod) HasBoundDatastoreRestoreObservation() bool {
 		o.PoisonedSHA256 != o.TrustedSHA256
 }
 
+// HasBoundAgentActionDenyObservation licenses only the agent deny-guard channel from a
+// trusted agent-action-abuse observation. It is NAMESPACE-PARAMETRIC: the observation must
+// name the pod's own namespace (o.Namespace == p.Namespace) — there is no hard-coded app
+// namespace, so any lane's agent workload is covered. It never authenticates a caller.
+func (p Pod) HasBoundAgentActionDenyObservation() bool {
+	o := p.AgentActionDenyObservation
+	return o != nil && o.Namespace != "" && o.Namespace == p.Namespace && p.UID != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.CallerID != "" && o.ActionID != "" && o.AgentName != "" &&
+		o.GuardConfigMapUID != "" && o.ServiceUID != ""
+}
+
 // HasBoundEndpointLeaseObservation requires a fresh, source-bound synthetic
 // credential observation. The stable endpoint path alone grants no cover.
 func (p Pod) HasBoundEndpointLeaseObservation() bool {
@@ -971,6 +994,7 @@ const (
 	// It steers the engine to the surgical credential-revoke (invalidate the token) over rotate /
 	// quarantine / network-isolate, none of which invalidate a bearer token the attacker holds.
 	AttackVectorCredentialTheft = "phorvex.attack.credential-theft"
+	AttackVectorAgentActionAbuse   = "phorvex.attack.agent-action"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -1073,6 +1097,7 @@ type SecurityEventInfo struct {
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	CRMRefundRaw                      string // untrusted CRM refund observation annotation; validated against live guard and policy before use
 	DatastoreRaw                      string // untrusted datastore-poisoning observation annotation; validated against live store, operator snapshot and policy before use
+	AgentActionRaw                    string // untrusted agent-action deny observation annotation; validated against live guard and policy before use
 	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
 	// PersistenceRaw is the trusted persistence detector's owner-provenance assertion
 	// (JSON): owner kind/name/namespace, declared min-available, unmanaged,
@@ -1385,6 +1410,27 @@ type DatastoreRestoreObservation struct {
 	PolicyUID                   string    `json:"policyUID"`
 	PolicyGeneration            int64     `json:"policyGeneration"`
 	ObservedAt                  time.Time `json:"observedAt"`
+}
+
+// AgentActionDenyObservation is the trusted, admission-stamped evidence that an
+// unauthorized agent action landed. The actuator denies exactly (CallerID, ActionID) at
+// the agent deny-guard in Namespace. Namespace is carried here (not pinned in code), which
+// is what makes agent-action-deny lane-isolatable where crm-refund-revoke is not.
+type AgentActionDenyObservation struct {
+	EventName         string    `json:"eventName"`
+	EventUID          string    `json:"eventUID"`
+	CreatorIdentity   string    `json:"creatorIdentity"`
+	Namespace         string    `json:"namespace"`
+	AgentName         string    `json:"agentName"`
+	CallerID          string    `json:"callerId"`
+	ActionID          string    `json:"actionId"`
+	GuardConfigMapUID string    `json:"guardConfigMapUID"`
+	ServiceUID        string    `json:"serviceUID"`
+	TargetPodUID      string    `json:"targetPodUID"`
+	PolicyName        string    `json:"policyName"`
+	PolicyUID         string    `json:"policyUID"`
+	PolicyGeneration  int64     `json:"policyGeneration"`
+	ObservedAt        time.Time `json:"observedAt"`
 }
 
 // EndpointLeaseObservation contains only digests and public resource identities.

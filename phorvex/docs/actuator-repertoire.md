@@ -70,6 +70,7 @@ route-key with the target Ready and at least two Ready backends.
 | `k8s-object-revert` | phoenix | no | backend-unsupported: phoenix cannot enact "k8s-object-revert" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `datastore-restore` | phoenix | no | backend-unsupported: phoenix cannot enact "datastore-restore" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `node-cordon-drain-replace` | phoenix | no | backend-unsupported: phoenix cannot enact "node-cordon-drain-replace" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `agent-action-deny` | phoenix | no | backend-unsupported: phoenix cannot enact "agent-action-deny" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -106,6 +107,7 @@ route-key with the target Ready and at least two Ready backends.
 | `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |
 | `node-cordon-drain-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `agent-action-deny` | native | yes | — | reviewed agent workload on Ready Service Pods, one agent-action-abuse observation and the deny-guard ConfigMap in the target namespace | support does not authenticate agent callers or undo prior actions; dispatch CASes the deny-guard and checks every serving Pod denies the (caller,action) pair |
 
 ## hybrid
 
@@ -142,3 +144,4 @@ route-key with the target Ready and at least two Ready backends.
 | `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |
 | `node-cordon-drain-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `agent-action-deny` | native | yes | — | reviewed agent workload on Ready Service Pods, one agent-action-abuse observation and the deny-guard ConfigMap in the target namespace | support does not authenticate agent callers or undo prior actions; dispatch CASes the deny-guard and checks every serving Pod denies the (caller,action) pair |

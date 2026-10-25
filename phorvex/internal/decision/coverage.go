@@ -1373,7 +1373,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	trace := &model.DecisionTraceV2{
 		SchemaVersion:             traceSchemaForEconomics(economics),
-		ActionVocabularyVersion:   model.DecisionActionVocabularyLive31,
+		ActionVocabularyVersion:   model.DecisionActionVocabularyLive32,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),

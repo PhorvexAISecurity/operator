@@ -96,6 +96,16 @@ roles:
   rules:
   - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["crm-refund-guard"], verbs: ["get", "update"], writers: [actuator]}
 {{- end }}
+{{- if $v.agentActionDeny.enabled }}
+{{- if not $nativeOrHybrid }}{{- fail "agentActionDeny requires native or hybrid actuator" }}{{- end }}
+{{- range $namespace := $v.actuatorNamespaces }}
+{{- /* Namespace-parametric analog of crm-refund-revoke: granted only on the fixed guard name per enabled namespace. */}}
+- name: agent-action-deny
+  namespace: {{ $namespace | quote }}
+  rules:
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [actuator]}
+{{- end }}
+{{- end }}
 {{- if $v.endpointLease.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "endpointLease requires native or hybrid actuator" }}{{- end }}
 - name: endpoint-lease

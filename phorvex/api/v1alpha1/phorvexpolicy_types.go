@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;disable
 type ActionType string
 
 const (
@@ -496,11 +496,14 @@ const (
 	ActionVoiceMCPToolPin               ActionType = "voice-mcp-tool-pin"
 	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionCRMRefundRevoke               ActionType = "crm-refund-revoke"
-	ActionDatastoreRestore              ActionType = "datastore-restore"
+	ActionDatastoreRestore ActionType = "datastore-restore"
 	// ActionNodeCordonDrainReplace cordons/drains and recycles the node a pod runs on after a
 	// trusted container→host escape (AML.T0105), leaving the protected workload rescheduled on a
 	// clean node. The node is derived from the pod's live spec.nodeName, never from the event.
-	ActionNodeCordonDrainReplace        ActionType = "node-cordon-drain-replace"
+	ActionNodeCordonDrainReplace ActionType = "node-cordon-drain-replace"
+	// ActionAgentActionDeny denies one observed abused (caller, action) pair at an agent
+	// workload's deny-guard ConfigMap, leaving the pod Ready + in-service (namespace-parametric).
+	ActionAgentActionDeny ActionType = "agent-action-deny"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
 	// ActionThrottle installs a bounded request-admission budget for one observed abusive
 	// caller/path at an already-present authoritative serving proxy (cost-harvest defense),

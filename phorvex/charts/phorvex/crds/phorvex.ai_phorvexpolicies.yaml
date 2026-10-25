@@ -123,6 +123,7 @@ spec:
                       - crm-refund-revoke
                       - datastore-restore
                       - node-cordon-drain-replace
+                      - agent-action-deny
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
                       - throttle

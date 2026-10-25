@@ -148,6 +148,8 @@ var classifications = map[model.Action]Bound{
 		"datastore store CAS-restore and all-Pod hash readback have no calibrated safe-return deadline"),
 	model.ActionNodeCordonDrainReplace: unknown(model.ActionNodeCordonDrainReplace, -1,
 		"node cordon/drain and instance replacement + reschedule recovery have no calibrated safe-return deadline"),
+	model.ActionAgentActionDeny: unknown(model.ActionAgentActionDeny, -1,
+		"agent-action deny-guard write and all-Pod readback have no calibrated safe-return deadline"),
 }
 
 func init() {

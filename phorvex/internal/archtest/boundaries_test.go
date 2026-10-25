@@ -43,7 +43,7 @@ var domains = map[string]string{
 	"disclosure": shared, "losshistory": shared, "currentinventory": shared, "eventtrust": shared,
 	"gpudevice": shared, "servingcontext": shared, "ownership": shared,
 	"actuationbrake": shared, "epssmeta": shared, "pendinggate": shared, "scaleprobe": shared,
-	"crmrefund": shared, "datastore": shared, "endpointlease": shared, "litellmclient": shared, "outputpolicy": shared,
+	"crmrefund": shared, "datastore": shared, "agentdeny": shared, "endpointlease": shared, "litellmclient": shared, "outputpolicy": shared,
 	"identityfixture": shared,
 	"voiceadmissionpolicy": shared, "voicemcppolicy": shared, "voicememorypolicy": shared,
 	"voiceoutputpolicy": shared, "voicerefundpolicy": shared,
