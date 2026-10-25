@@ -90,7 +90,16 @@ func flowFamilyForAction(action model.Action) flowFamily {
 	case model.ActionQuarantine:
 		return flowQuarantine
 	case model.ActionWarmSwap, model.ActionModelShardReplace,
-		model.ActionEndpointRotate, model.ActionRequestDrain:
+		model.ActionEndpointRotate, model.ActionRequestDrain,
+		// node-cordon-drain-replace gracefully DRAINS the node (bounded-grace Eviction; the owning
+		// controllers respawn the pods on clean nodes — a controlled cutover/movement), NOT a cold
+		// rotation. It is deliberately NOT flowRespawn: a node evacuation's disruption is the graceful
+		// drain cutover, and routing it through the rotation-trained RLS uncertainty bound would charge
+		// it for replacement-timing uncertainty it does not have. (On the conservative respawn upper
+		// bound ~CFlowMaximum it would price far higher and could exceed the ceiling — but that bound
+		// models cold-rotation timing, which does not apply to a drain whose replicas roll onto
+		// already-Ready clean nodes. Cutover is the honest family, independent of the ceiling outcome.)
+		model.ActionNodeCordonDrainReplace:
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured

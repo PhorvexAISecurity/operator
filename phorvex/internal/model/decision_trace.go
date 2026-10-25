@@ -63,6 +63,8 @@ const (
 	DecisionActionVocabularyLive27 = "v13-live27"
 	// Live28 appends the namespace-parametric datastore-restore; all earlier versions stay frozen.
 	DecisionActionVocabularyLive28 = "v14-live28"
+	// Live29 appends the native node-cordon-drain-replace (host-escape node recycle); all earlier versions stay frozen.
+	DecisionActionVocabularyLive29 = "v15-live29"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -130,6 +132,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive28:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive27)
 		return append(prior, ActionDatastoreRestore), nil
+	case DecisionActionVocabularyLive29:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive28)
+		return append(prior, ActionNodeCordonDrainReplace), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

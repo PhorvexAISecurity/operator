@@ -122,6 +122,7 @@ spec:
                       - litellm-client-revoke
                       - crm-refund-revoke
                       - datastore-restore
+                      - node-cordon-drain-replace
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
                       - throttle

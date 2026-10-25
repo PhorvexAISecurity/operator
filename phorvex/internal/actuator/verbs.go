@@ -72,6 +72,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// store CM plus read-only get on the operator-owned trusted-snapshot CM, per enabled
 	// namespace. No journal: the store content hash is the idempotency record.
 	model.ActionDatastoreRestore: {{Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "update"}, {Resource: "configmaps", Name: datastore.TrustedSnapshotConfigMapName, Verb: "get"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	// Node recycle: cordon (patch a cluster-scoped Node), drain (create pods/eviction in the target
+	// namespace), replace (delete the Node). The gate reviews only the MUTATIONS (node patch+delete,
+	// eviction create, pod delete fallback); the handler's node/pod reads go through broadly-granted
+	// scanner reads. Node verbs are ClusterScoped (empty-namespace SSAR). The lane ClusterRole grants
+	// the manager+actuator SAs exactly these so the T1-E SSAR passes (cluster-scoped analog of the p1
+	// pods/eviction lane grant).
+	model.ActionNodeCordonDrainReplace: {{Resource: "nodes", Verb: "patch", ClusterScoped: true}, {Resource: "nodes", Verb: "delete", ClusterScoped: true}, {Resource: "pods", Subresource: "eviction", Verb: "create"}, {Resource: "pods", Verb: "delete"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	// controller-stop retires an attacker-created controller end-to-end: scale the exact
 	// owner (Deployment/StatefulSet/ReplicaSet) to zero via the scale subresource

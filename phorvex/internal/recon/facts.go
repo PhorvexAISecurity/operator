@@ -71,6 +71,13 @@ const (
 	// against the protected public inference route. Revoking that exact lease
 	// invalidates this credential fact; endpointPath remains audit-only.
 	FactEndpointLeaseReuse = "endpointLeaseReuse"
+	// FactNodeHostEscape is one trusted-observed container→host escape (AML.T0105) on the node a
+	// protected pod runs on: the whole node/host is compromised, so a pod-local rotate or quarantine
+	// does not remediate it (a respawned/isolated pod can land on or stay on the same hostile host).
+	// ONLY node-cordon-drain-replace covers it — cordon + drain + recycle the node. The node identity
+	// is the pod's live spec.nodeName, never attacker-chosen. Distinct from the pod-scoped identity/
+	// session facts the pod-local actions cover.
+	FactNodeHostEscape = "nodeHostEscape"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap

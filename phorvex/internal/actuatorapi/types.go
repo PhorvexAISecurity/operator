@@ -113,14 +113,17 @@ type Request struct {
 	// cost-harvest authority for throttle. The native handler rechecks it against the live
 	// cluster (throttleAuthority) before any admission-budget mutation.
 	ServingRateBudgetObservation *model.ServingRateBudgetObservation
-	TargetUID                    string // Bound identity from the selecting snapshot.
-	TargetNamespaceUID     string // Bound by the protected quarantine-capacity reservation.
-	OperationID            string // Stable decision identity for protected quarantine and route operations.
-	TickID                 string // Real selection tick; protected serving operation IDs are recomputed from it.
-	ServingObservation     *ServingSelectionObservation
-	PolicyName             string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID              string
-	PolicyGeneration       int64
+	// NodeEscapeObservation is the selection-time trusted node/host-escape authority for
+	// node-cordon-drain-replace (the node to recycle = the pod's live node).
+	NodeEscapeObservation *model.NodeEscapeObservation
+	TargetUID             string // Bound identity from the selecting snapshot.
+	TargetNamespaceUID    string // Bound by the protected quarantine-capacity reservation.
+	OperationID           string // Stable decision identity for protected quarantine and route operations.
+	TickID                string // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation    *ServingSelectionObservation
+	PolicyName            string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID             string
+	PolicyGeneration      int64
 	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
 	// cap. The native handler re-reads and matches it at the mutation boundary.
 	// Zero is invalid and never means force deletion.

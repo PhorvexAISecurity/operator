@@ -146,6 +146,8 @@ var classifications = map[model.Action]Bound{
 		"whole-owner scale-to-zero plus child removal has no calibrated safe-return deadline; its availability floor is the attacker owner's own declared guarantee, not a shared serving floor"),
 	model.ActionDatastoreRestore: unknown(model.ActionDatastoreRestore, -1,
 		"datastore store CAS-restore and all-Pod hash readback have no calibrated safe-return deadline"),
+	model.ActionNodeCordonDrainReplace: unknown(model.ActionNodeCordonDrainReplace, -1,
+		"node cordon/drain and instance replacement + reschedule recovery have no calibrated safe-return deadline"),
 }
 
 func init() {

@@ -141,7 +141,12 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		return NormCostWorkloadReplacement
 	case model.ActionQuarantine:
 		return NormCostWorkloadReplacement / float64(len(structuralComponents))
-	case model.ActionMIGRebind:
+	case model.ActionMIGRebind, model.ActionNodeCordonDrainReplace:
+		// node-cordon-drain-replace replaces a workload's placement AND recycles a NODE — shared
+		// cluster infrastructure. It is deliberately priced at the shared-device-mutation anchor
+		// (1.25), STRICTLY ABOVE a single-pod rotate (1.0): recycling a node is more disruptive than
+		// replacing one pod (it evacuates the node and churns shared infra). Reuses an EXISTING anchor
+		// so the curated parameter manifest / decision-config hash is unchanged (additive-only).
 		return NormCostSharedDeviceMutation
 	case model.ActionModelShardReplace:
 		parallelSize := 1

@@ -124,8 +124,32 @@ func (codeExecGuard) Check(view *model.WorkloadView, move model.Move, _ model.Po
 	return feasible
 }
 
+// nodeCordonDrainReplaceObservationRequired is the action-SPECIFIC hard law for the node recycle:
+// node-cordon-drain-replace is infeasible unless THIS exact Pod carries a trusted, bound node/
+// host-escape observation whose NodeName equals the Pod's live node. Without it there is no
+// compromised host to recycle, so the (highest-blast-radius) move is never selected. Namespace-
+// parametric: the law pins no namespace/node literal — the bound observation + reactive policy
+// scope bound which Pods qualify. Non-node-cordon moves are unaffected, so {rotate,quarantine}/AI
+// parity is byte-identical.
+type nodeCordonDrainReplaceObservationRequired struct{}
+
+func (nodeCordonDrainReplaceObservationRequired) Name() string {
+	return "node-cordon-drain-replace-observation-required"
+}
+
+func (nodeCordonDrainReplaceObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionNodeCordonDrainReplace {
+		return feasible
+	}
+	if !view.Pod.HasBoundNodeEscapeObservation() {
+		return Verdict{Feasible: false, Reason: "node-cordon-drain-replace-observation-required: no trusted bound node/host-escape observation for this pod"}
+	}
+	return feasible
+}
+
 func init() {
 	Registry.Register(aiContextRequired{})
 	Registry.Register(migDeviceRequired{})
 	Registry.Register(codeExecGuard{})
+	Registry.Register(nodeCordonDrainReplaceObservationRequired{})
 }

@@ -174,6 +174,16 @@ const (
 	// PERSISTED (survives a pod rotate), so rotate/quarantine do not remediate it; the serving
 	// pod stays alive and the restore removes the poison while preserving the benign records.
 	ActionDatastoreRestore Action = "datastore-restore"
+	// ActionNodeCordonDrainReplace responds to a trusted node/host-escape observation (AML.T0105
+	// Escape to Host) by recycling the compromised node: cordon it (spec.unschedulable=true, so no
+	// new workload lands on the hostile host), drain it (graceful Eviction of its reschedulable
+	// workload, which the owning controllers respawn on clean nodes), then trigger its replacement
+	// by deleting the Node object (in a managed node group / with a node-termination handler this
+	// recycles the underlying instance). The compromised NODE is DERIVED from the bound Pod's live
+	// spec.nodeName — never from attacker-influenceable event free-text — so a forged event cannot
+	// name an arbitrary node. Namespace-parametric; cordon is reversible, replace is terminal (like
+	// rotate's eviction of a pod, scaled to a node).
+	ActionNodeCordonDrainReplace Action = "node-cordon-drain-replace"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -215,6 +225,10 @@ var MutatingActions = []Action{
 	ActionControllerStop,
 	ActionK8sObjectRevert,
 	ActionDatastoreRestore,
+	// Appended LAST so the engine's strict-`>` tie-break order is unchanged for every pre-existing
+	// action (node-cordon-drain-replace is opt-in per policy; a nil EnabledActions still permits
+	// ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionNodeCordonDrainReplace,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -620,6 +634,7 @@ type Pod struct {
 	SuspectController              string
 	PersistenceFootholdObservation *PersistenceFootholdObservation
 	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
+	NodeEscapeObservation       *NodeEscapeObservation // trusted node/host-escape authority (node-cordon-drain-replace)
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -824,6 +839,23 @@ func (p Pod) HasBoundServingRateBudgetObservation() bool {
 		o.ObservedReqPerSec > o.BaselineReqPerSec
 }
 
+// HasBoundNodeEscapeObservation is the narrow detector authority for a node recycle. It is
+// NAMESPACE-PARAMETRIC — it never pins a production namespace/node literal; the reactive policy
+// scope already bounds which Pods are evaluated, and both the namespace and the compromised NODE
+// flow from the live Pod. It binds the assertion to this exact Pod UID, the authenticated trusted
+// event, the reactive policy epoch, and the node the Pod ACTUALLY runs on (o.NodeName == p.Node) —
+// so a forged event can never name an arbitrary node to recycle (a cluster-DoS primitive); the
+// node is always derived from the trusted pod→node binding the ingest layer validated.
+func (p Pod) HasBoundNodeEscapeObservation() bool {
+	o := p.NodeEscapeObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.NodeName != "" && o.NodeName == p.Node &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.EscapeSHA256 != ""
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -867,6 +899,10 @@ const (
 	// (restore the object to the trusted snapshot) covers it.
 	AttackVectorConfigObject = "phorvex.attack.config-object"
 	AttackVectorDatastorePoison    = "phorvex.attack.datastore"
+	// AttackVectorHostEscape reports a trusted observation that a container on THIS pod escaped to
+	// its node/host (AML.T0105). It steers the engine to node-cordon-drain-replace — recycle the
+	// whole node — over a pod-local rotate/quarantine, which would leave the compromised host intact.
+	AttackVectorHostEscape = "phorvex.attack.host-escape"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -890,6 +926,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorConfigObject
 	case "datastore-restore":
 		return AttackVectorDatastorePoison
+	case "node-cordon-drain-replace":
+		return AttackVectorHostEscape
 	}
 	return ""
 }
@@ -980,6 +1018,7 @@ type SecurityEventInfo struct {
 	// against the live limiter and binds it to the Pod's exact UID before THROTTLE can be
 	// selected; a generic trusted detector never consumes it.
 	ServingRateBudgetRaw string
+	NodeEscapeRaw                     string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1294,6 +1333,23 @@ type ServingRateBudgetObservation struct {
 	ObservedAt           time.Time `json:"observedAt"`
 }
 
+// NodeEscapeObservation is the one fresh trusted detector assertion that a container on
+// TargetPodUID escaped to its node/host (AML.T0105). NodeName is the node the Pod actually runs
+// on (the ingest binder re-derives it from the live Pod and refuses a mismatch), so the recycle
+// target is never attacker-chosen. EscapeSHA256 is the audit digest of the detector evidence.
+type NodeEscapeObservation struct {
+	EventName        string    `json:"eventName"`
+	EventUID         string    `json:"eventUID"`
+	CreatorIdentity  string    `json:"creatorIdentity"`
+	TargetPodUID     string    `json:"targetPodUID"`
+	NodeName         string    `json:"nodeName"` // re-derived from the live Pod's spec.nodeName; never trusted from the event
+	PolicyName       string    `json:"policyName"`
+	PolicyUID        string    `json:"policyUID"`
+	PolicyGeneration int64     `json:"policyGeneration"`
+	EscapeSHA256     string    `json:"escapeSHA256"` // digest of the detector's host-escape evidence (audit binding)
+	CreatedAt        time.Time `json:"createdAt"`
+}
+
 // VectorSteeringAttribution describes the one factor applied to one recon fact.
 // Multiple matching events remain references to one multiplication.
 type VectorSteeringAttribution struct {
@@ -1586,6 +1642,7 @@ type Decision struct {
 	VoiceAdmissionObservation *VoiceAdmissionObservation  `json:"voiceAdmissionObservation,omitempty"`
 	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
 	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
+	NodeEscapeObservation     *NodeEscapeObservation      `json:"nodeEscapeObservation,omitempty"`
 	Existential               *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`

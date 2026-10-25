@@ -288,6 +288,23 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionEndpointLeaseRevoke] = append(af.CoverByAction[model.ActionEndpointLeaseRevoke], f.Key())
 	}
+	// Node/host escape (AML.T0105). The trusted observation (bound to the pod's own live node)
+	// authorizes recycling the whole node — the ONLY action that remediates a compromised host;
+	// a pod-local rotate/quarantine cover is a DIFFERENT, lesser effect and does NOT claim this
+	// node-escape fact. The multiplicative 3x keeps the node-recycle dominant over the pod-local
+	// moves (same structural dominance as adapter/lease/network-edge) while preserving zero weight
+	// at zero PHold and finite policy scaling.
+	if view.Pod.HasBoundNodeEscapeObservation() {
+		o := view.Pod.NodeEscapeObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactNodeHostEscape, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorHostEscape,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorHostEscape, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionNodeCordonDrainReplace] = append(af.CoverByAction[model.ActionNodeCordonDrainReplace], f.Key())
+	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
 	if view.Pod.ServingEndpointReady {

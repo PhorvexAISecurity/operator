@@ -3076,6 +3076,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			EndpointLeaseObservation:    v.Pod.EndpointLeaseObservation,
 			CRMRefundObservation:        v.Pod.CRMRefundObservation,
 			DatastoreRestoreObservation: v.Pod.DatastoreRestoreObservation,
+			NodeEscapeObservation:       v.Pod.NodeEscapeObservation,
 			IdentityRotationObservation: v.Pod.IdentityRotationObservation,
 			PodBoundKubeAPIAuth:         v.Pod.PodBoundKubeAPIAuth,
 			PersistenceObservation:       v.Pod.PersistenceFootholdObservation,
