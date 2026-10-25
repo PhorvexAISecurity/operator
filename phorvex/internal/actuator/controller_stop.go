@@ -244,6 +244,11 @@ func (controllerStopHandler) Enact(ctx context.Context, ec EnactCtx, req Request
 	}
 
 	// 3. Delete the exact children (UID preconditions). A 404 is absence, not our delete.
+	// GracePeriodSeconds=0: the owner is already at desired==0 (step 2), so the controller will
+	// not replace these Pods; a forced delete evicts them immediately instead of waiting out the
+	// workload's termination grace. This bounds the whole SYNCHRONOUS Enact (delete -> 404 ->
+	// >=9s no-recreation observation) well inside the actuator RPC deadline. The two-phase
+	// reference observed out-of-band so it could tolerate a long grace; this port cannot.
 	sort.Slice(children, func(i, j int) bool { return children[i].Name < children[j].Name })
 	originals := map[string]bool{}
 	for i := range children {
@@ -251,10 +256,11 @@ func (controllerStopHandler) Enact(ctx context.Context, ec EnactCtx, req Request
 		originals[string(p.UID)] = true
 		receipt.Children = append(receipt.Children, model.ControllerStopChild{Name: p.Name, UID: string(p.UID)})
 	}
+	zeroGrace := int64(0)
 	for i := range children {
 		p := children[i]
 		uid := p.UID
-		err := ec.Client.Delete(ctx, &p, &client.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
+		err := ec.Client.Delete(ctx, &p, &client.DeleteOptions{GracePeriodSeconds: &zeroGrace, Preconditions: &metav1.Preconditions{UID: &uid}})
 		if err != nil && !apierrors.IsNotFound(err) {
 			return HandlerResult{ControllerStop: receipt, MutationKind: "partial", Note: "controller-stop child deletion incomplete"}, fmt.Errorf("controller-stop child deletion incomplete: %w", err)
 		}
