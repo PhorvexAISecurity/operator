@@ -152,6 +152,15 @@ const (
 	FactRetrievalState          = "retrievalState"
 	FactArtifactProvenance      = "artifactProvenance"
 	FactControlPlanePersistence = "controlPlanePersistence"
+	// FactServingRateBudget is the attacker's sustained over-baseline request-rate drive
+	// against one serving Service for one offending caller/path (AML.T0034 cost harvesting).
+	// It exists ONLY while a trusted cost-load observation binds the over-budget path to the
+	// installed authoritative limiter, and ONLY throttle (install a bounded admission budget
+	// that caps the abusive caller to the measured baseline while reserving legitimate
+	// capacity) covers it — so the engine selects the surgical throttle for THIS attack, not a
+	// replica-removing rotate/quarantine. Covering it does not claim the first over-baseline
+	// requests were refunded; it describes only the capped continuation path.
+	FactServingRateBudget = "servingRateBudget"
 )
 
 // Fact is one weighted recon fact about an asset.

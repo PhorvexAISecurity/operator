@@ -3075,8 +3075,9 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			CRMRefundObservation:        v.Pod.CRMRefundObservation,
 			IdentityRotationObservation: v.Pod.IdentityRotationObservation,
 			PodBoundKubeAPIAuth:         v.Pod.PodBoundKubeAPIAuth,
-			PersistenceObservation:      v.Pod.PersistenceFootholdObservation,
-			PolicyName:                  pol.PolicyName,
+			PersistenceObservation:       v.Pod.PersistenceFootholdObservation,
+			ServingRateBudgetObservation: v.Pod.ServingRateBudgetObservation,
+			PolicyName:                   pol.PolicyName,
 			PolicyUID:                   pol.PolicyUID,
 			PolicyGeneration:            pol.PolicyGeneration,
 			MaxGracePeriodSeconds:       pol.MaxGracePeriodSeconds,
@@ -3104,6 +3105,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionEndpointLeaseRevoke ||
 			decisions[i].Action == model.ActionCRMRefundRevoke ||
 			decisions[i].Action == model.ActionIdentityRotate ||
+			decisions[i].Action == model.ActionThrottle ||
 			decisions[i].Action == model.ActionControllerStop {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID

@@ -64,5 +64,6 @@ func ProductionNormActionPriors() map[string]float64 {
 		"cost.norm.action.debugger":                     NormCostMetadataMutation,
 		"cost.norm.action.custom-inject":                NormCostMetadataMutation,
 		"cost.norm.action.request-drain":                NormCostMetadataMutation,
+		"cost.norm.action.throttle":                     NormCostServingConfiguration,
 	}
 }

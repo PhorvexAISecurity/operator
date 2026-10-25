@@ -142,6 +142,18 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 		cover[model.ActionControllerStop] = append(cover[model.ActionControllerStop],
 			persist.Key(), pid.Key(), memFact.Key(), sessFact.Key(), nid.Key())
 	}
+	// Serving cost-harvest fact — invalidated ONLY by THROTTLE, and ONLY on the exact
+	// over-budget path: a trusted cost-load observation must bind this Pod/Service to the
+	// installed authoritative limiter and the current policy epoch (HasBoundServingRateBudget
+	// Observation). Absent that binding no cover is awarded, so throttle is never selected for
+	// a workload that is not actually being cost-harvested through an enforceable limiter.
+	// This is conditional cover for the over-budget serving path only — it grants NO Pod,
+	// credential, memory, network, session or whole-serving-surface cover.
+	if view.Pod.HasBoundServingRateBudgetObservation() {
+		srb := Fact{Scope: ScopePod, Asset: asset, Kind: FactServingRateBudget, Weight: base * urg}
+		facts = append(facts, srb)
+		cover[model.ActionThrottle] = append(cover[model.ActionThrottle], srb.Key())
+	}
 	// route-rotate deliberately receives no cover. Its successful path changes endpoint
 	// selection membership by re-keying a Pod label and restitching a Service selector,
 	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.

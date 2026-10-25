@@ -252,7 +252,7 @@ func stageFromEvent(e model.SecurityEventInfo) Stage {
 		return StagePersist
 	case model.AttackVectorKV, model.AttackVectorGuardrail, model.AttackVectorInflight, model.AttackVectorAdapter,
 		model.AttackVectorPodBoundAPIAuth, model.AttackVectorSensitiveOutput, model.AttackVectorVoiceMemory, model.AttackVectorVoiceRefund, model.AttackVectorVoiceOutput,
-		model.AttackVectorEndpointLeaseReuse:
+		model.AttackVectorEndpointLeaseReuse, model.AttackVectorServingCostHarvest:
 		// A named attack vector is an actionable observed capability — same persist-stage
 		// weight as Panic. The vector also steers the relevant fact in recon (ucw);
 		// it does not by itself establish an on-Pod exploit or select an actuator.

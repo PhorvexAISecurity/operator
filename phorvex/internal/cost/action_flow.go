@@ -94,7 +94,10 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured
-	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke:
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle:
+		// throttle's disruption is the legitimate-flow loss from the admission budget,
+		// rising with observed serving load (servingLoadPressure) — the serving-state
+		// family, bounded above by CFlowMaximum like its siblings.
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:
@@ -124,7 +127,13 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 	case flowKVResetMeasured:
 		return measuredKVResetTTFTPenaltyFraction
 	case flowServingState:
-		return estimatedServingStateBase + estimatedServingLoadSpan*servingLoadPressure(view)
+		pressure := servingLoadPressure(view)
+		// http-echo has no application exporter. The trusted bound proxy
+		// observation supplies aggregate serving pressure for this action only.
+		if action == model.ActionThrottle && view != nil && view.Pod.HasBoundServingRateBudgetObservation() {
+			pressure = max(pressure, sat(view.Pod.ServingRateBudgetObservation.ObservedReqPerSec/requestRateNormalizer))
+		}
+		return estimatedServingStateBase + estimatedServingLoadSpan*pressure
 	case flowLightweight:
 		return estimatedLightweightFlow
 	case flowControllerStop:
