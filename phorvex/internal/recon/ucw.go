@@ -305,6 +305,23 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionNodeCordonDrainReplace] = append(af.CoverByAction[model.ActionNodeCordonDrainReplace], f.Key())
 	}
+	// Surgical egress edge cut. The trusted observation authorizes a NetworkPolicy that removes
+	// exactly the forbidden channel edge (C2/exfil/IMDS) while the pod stays Ready + in-service.
+	// Only network-isolate covers this fact; quarantine's networkIdentity/lateralEdge cover is a
+	// different, heavier effect (deny-all + detach) and does NOT claim this channel-edge fact. The
+	// multiplicative 3x keeps the surgical move dominant (same structural dominance as adapter/lease)
+	// while preserving zero weight at zero PHold and finite policy scaling.
+	if view.Pod.HasBoundNetworkIsolateObservation() {
+		o := view.Pod.NetworkIsolateObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkEgressChannel, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorNetworkEdge,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorNetworkEdge, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionNetworkIsolate] = append(af.CoverByAction[model.ActionNetworkIsolate], f.Key())
+	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.
 	if view.Pod.ServingEndpointReady {

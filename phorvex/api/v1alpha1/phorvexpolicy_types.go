@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;disable
 type ActionType string
 
 const (
@@ -512,7 +512,10 @@ const (
 	// ActionK8sObjectRevert restores an operator-trusted config object (ConfigMap) to its
 	// trusted snapshot after a trusted detector flags drift (AML.T0081).
 	ActionK8sObjectRevert ActionType = "k8s-object-revert"
-	ActionDisable         ActionType = "disable"
+	// ActionNetworkIsolate surgically cuts a pod's forbidden egress channel edge
+	// (C2/exfil/IMDS/east-west) via an egress NetworkPolicy, leaving the pod Ready + in-service.
+	ActionNetworkIsolate ActionType = "network-isolate"
+	ActionDisable        ActionType = "disable"
 
 )
 

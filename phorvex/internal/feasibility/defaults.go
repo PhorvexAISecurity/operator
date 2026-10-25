@@ -135,7 +135,12 @@ func ExposureVarFor(a model.Action) string {
 		return model.VarPodIdentity
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
 		return model.VarSession
-	case model.ActionQuarantine:
+	case model.ActionQuarantine, model.ActionNetworkIsolate:
+		// network-isolate acts on the same network-reachability dimension as quarantine (it
+		// removes an egress channel edge), so it reads the networkIdentity exposure clock. On a
+		// never-quarantined pod that clock is absent and the guard fail-OPENs (its first actuation
+		// writes no podIdentity/UID change); it shares quarantine's clock to damp rapid
+		// network-containment oscillation on the same pod.
 		return model.VarNetworkIdentity
 	case model.ActionEndpointRotate, model.ActionRouteRotate:
 		return model.VarRouteKey

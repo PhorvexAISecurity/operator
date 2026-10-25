@@ -78,6 +78,14 @@ const (
 	// is the pod's live spec.nodeName, never attacker-chosen. Distinct from the pod-scoped identity/
 	// session facts the pod-local actions cover.
 	FactNodeHostEscape = "nodeHostEscape"
+	// FactNetworkEgressChannel is one trusted-observed OPEN egress channel edge from this
+	// pod to an attacker edge (C2 / exfil / IMDS / east-west). It exists ONLY while that
+	// channel is open, and ONLY network-isolate (a surgical egress NetworkPolicy that excepts
+	// the forbidden edge while leaving the pod Ready + in-service) covers it — so the engine
+	// selects the edge cut for THIS attack, not a full quarantine (deny-all + detach) or rotate.
+	// Distinct from FactNetworkIdentity (quarantine's reachable-identity fact) and FactLateralEdge
+	// (an origin-owned neighbor edge): this is the pod's own outbound channel edge.
+	FactNetworkEgressChannel = "networkEgressChannel"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap

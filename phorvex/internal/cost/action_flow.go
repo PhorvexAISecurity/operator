@@ -103,7 +103,7 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured
-	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionK8sObjectRevert, model.ActionDatastoreRestore:
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionK8sObjectRevert, model.ActionDatastoreRestore, model.ActionNetworkIsolate:
 		// throttle's disruption is the legitimate-flow loss from the admission budget,
 		// rising with observed serving load (servingLoadPressure) — the serving-state
 		// family, bounded above by CFlowMaximum like its siblings.
@@ -112,6 +112,9 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		// workload respawn (cheaper and less disruptive than rotate; selection comes from cover).
 		// datastore-restore CAS-restores a poisoned persistent store to its trusted snapshot with
 		// the serving Pods alive — same serving-state family (pod-alive, replica-retaining).
+		// network-isolate applies one egress NetworkPolicy (+ a pod label) — no replica loss,
+		// no cold load, pod stays Ready; its minor serving-state disruption prices like the other
+		// surgical channel-deny moves, far below rotate (respawn) and quarantine (0.25 freeze).
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:

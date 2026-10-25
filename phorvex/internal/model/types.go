@@ -184,6 +184,13 @@ const (
 	// name an arbitrary node. Namespace-parametric; cordon is reversible, replace is terminal (like
 	// rotate's eviction of a pod, scaled to a node).
 	ActionNodeCordonDrainReplace Action = "node-cordon-drain-replace"
+	// ActionNetworkIsolate SURGICALLY cuts a compromised pod's egress channel edge (C2 /
+	// exfil / IMDS / east-west) after a trusted observation of that channel, by applying an
+	// egress-only NetworkPolicy that allows DNS + all other egress BUT excepts the forbidden
+	// edge(s). It is EXTEND(quarantine) — quarantine's network-isolation primitive scoped to the
+	// channel edge — but it does NOT disown/replace the pod and does NOT cut ingress: the pod stays
+	// Ready and in-service, only its outbound channel to the attacker edge is removed. Reversible.
+	ActionNetworkIsolate Action = "network-isolate"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -229,6 +236,10 @@ var MutatingActions = []Action{
 	// action (node-cordon-drain-replace is opt-in per policy; a nil EnabledActions still permits
 	// ONLY rotate+quarantine, so default decisions stay byte-identical).
 	ActionNodeCordonDrainReplace,
+	// Appended LAST so the engine's strict-`>` tie-break order is unchanged for every
+	// pre-existing action (network-isolate is opt-in per policy; a nil EnabledActions still
+	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionNetworkIsolate,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -635,6 +646,7 @@ type Pod struct {
 	PersistenceFootholdObservation *PersistenceFootholdObservation
 	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
 	NodeEscapeObservation       *NodeEscapeObservation // trusted node/host-escape authority (node-cordon-drain-replace)
+	NetworkIsolateObservation   *NetworkIsolateObservation // trusted egress-edge-cut authority (network-isolate)
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -856,6 +868,21 @@ func (p Pod) HasBoundNodeEscapeObservation() bool {
 		o.EscapeSHA256 != ""
 }
 
+// HasBoundNetworkIsolateObservation is the narrow detector authority for a surgical egress
+// edge cut. It is NAMESPACE-PARAMETRIC — it never pins a production namespace literal; the
+// reactive policy scope already bounds which Pods are evaluated, and the namespace flows from
+// the live Pod. It binds the assertion to this exact Pod UID, the authenticated trusted event,
+// the reactive policy epoch, and at least one forbidden egress edge to cut. The forbidden
+// edge set is operator/detector-declared; the attacker's event never widens it.
+func (p Pod) HasBoundNetworkIsolateObservation() bool {
+	o := p.NetworkIsolateObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		len(o.ForbiddenEdges) > 0 && o.ChannelSHA256 != ""
+}
+
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
 // steer to the SURGICAL actuator for that attack — kv-reset for a KV/prompt-inject implant,
 // guardrail-rotate for a jailbreak, request-drain for a request hijack, adapter-rotate for a
@@ -903,6 +930,10 @@ const (
 	// its node/host (AML.T0105). It steers the engine to node-cordon-drain-replace — recycle the
 	// whole node — over a pod-local rotate/quarantine, which would leave the compromised host intact.
 	AttackVectorHostEscape = "phorvex.attack.host-escape"
+	// AttackVectorNetworkEdge reports a trusted observation that THIS pod holds an open
+	// egress channel edge to an attacker edge (C2 / exfil / IMDS / east-west). It steers the
+	// engine to the surgical network-isolate (egress edge cut) over a full quarantine or rotate.
+	AttackVectorNetworkEdge = "phorvex.attack.network-edge"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -928,6 +959,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorDatastorePoison
 	case "node-cordon-drain-replace":
 		return AttackVectorHostEscape
+	case "network-isolate":
+		return AttackVectorNetworkEdge
 	}
 	return ""
 }
@@ -1019,6 +1052,7 @@ type SecurityEventInfo struct {
 	// selected; a generic trusted detector never consumes it.
 	ServingRateBudgetRaw string
 	NodeEscapeRaw                     string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
+	NetworkEdgeRaw                    string // untrusted event annotation naming the open egress edge; validated + bound to the live Pod before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1080,6 +1114,25 @@ type K8sObjectRevertObservation struct {
 	ObservedSHA256  string    `json:"observedSHA256"`
 	TrustedSHA256   string    `json:"trustedSHA256"`
 	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// NetworkIsolateObservation identifies the one fresh trusted detector assertion that
+// authorizes a surgical egress edge cut on this exact Pod. It carries identity, policy
+// epoch and the forbidden egress edge(s) to remove — never attacker-controlled remedy.
+// ForbiddenEdges are operator/detector-declared CIDRs (e.g. the C2 sink, IMDS 169.254.169.254/32);
+// the egress NetworkPolicy allows DNS + all other egress and EXCEPTS exactly these edges, so the
+// pod stays Ready and in-service while its channel to the attacker edge is removed.
+type NetworkIsolateObservation struct {
+	EventName        string    `json:"eventName"`
+	EventUID         string    `json:"eventUID"`
+	CreatorIdentity  string    `json:"creatorIdentity"`
+	TargetPodUID     string    `json:"targetPodUID"`
+	PolicyName       string    `json:"policyName"`
+	PolicyUID        string    `json:"policyUID"`
+	PolicyGeneration int64     `json:"policyGeneration"`
+	ForbiddenEdges   []string  `json:"forbiddenEdges"` // CIDRs to except from egress (the channel edges)
+	ChannelSHA256    string    `json:"channelSHA256"`  // digest of the sorted forbidden-edge set (audit binding)
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 // SensitiveOutputObservation licenses only one source-bound response-field rule.
@@ -1643,6 +1696,7 @@ type Decision struct {
 	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
 	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
 	NodeEscapeObservation     *NodeEscapeObservation      `json:"nodeEscapeObservation,omitempty"`
+	NetworkIsolateObservation *NetworkIsolateObservation  `json:"networkIsolateObservation,omitempty"`
 	Existential               *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`

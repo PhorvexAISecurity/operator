@@ -147,9 +147,30 @@ func (nodeCordonDrainReplaceObservationRequired) Check(view *model.WorkloadView,
 	return feasible
 }
 
+// networkIsolateObservationRequired is the action-SPECIFIC hard law for the surgical egress
+// edge cut: network-isolate is infeasible unless this exact Pod carries a trusted, bound
+// network-edge observation (a detector flagged an open C2/exfil/IMDS egress channel). Without
+// it there is nothing to cut, so the move is never selected. Namespace-parametric: the law
+// pins no namespace — the bound observation + reactive policy scope bound which Pods qualify.
+// Non-network-isolate moves are unaffected, so {rotate,quarantine}/AI parity is byte-identical.
+type networkIsolateObservationRequired struct{}
+
+func (networkIsolateObservationRequired) Name() string { return "network-isolate-observation-required" }
+
+func (networkIsolateObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionNetworkIsolate {
+		return feasible
+	}
+	if !view.Pod.HasBoundNetworkIsolateObservation() {
+		return Verdict{Feasible: false, Reason: "network-isolate-observation-required: no trusted bound egress-edge observation for this pod"}
+	}
+	return feasible
+}
+
 func init() {
 	Registry.Register(aiContextRequired{})
 	Registry.Register(migDeviceRequired{})
 	Registry.Register(codeExecGuard{})
 	Registry.Register(nodeCordonDrainReplaceObservationRequired{})
+	Registry.Register(networkIsolateObservationRequired{})
 }

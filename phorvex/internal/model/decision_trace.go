@@ -65,6 +65,8 @@ const (
 	DecisionActionVocabularyLive28 = "v14-live28"
 	// Live29 appends the native node-cordon-drain-replace (host-escape node recycle); all earlier versions stay frozen.
 	DecisionActionVocabularyLive29 = "v15-live29"
+	// Live30 appends the surgical network-isolate (egress edge cut); all earlier versions stay frozen.
+	DecisionActionVocabularyLive30 = "v16-live30"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -135,6 +137,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive29:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive28)
 		return append(prior, ActionNodeCordonDrainReplace), nil
+	case DecisionActionVocabularyLive30:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive29)
+		return append(prior, ActionNetworkIsolate), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}
