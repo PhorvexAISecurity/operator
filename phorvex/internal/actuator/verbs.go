@@ -10,6 +10,7 @@ import (
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/persistence"
+	"github.com/phorvex/phorvex/internal/servingbudget"
 )
 
 // actionVerbs is the SINGLE SOURCE OF TRUTH for the RBAC verbs the T1-E capability gate
@@ -74,6 +75,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// (persistence.CheckSafety) and the Deployment->ReplicaSet child enumeration; the
 	// operator-scoped ConfigMap get is the reviewed desired-state inventory read.
 	model.ActionControllerStop: {{Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Group: "apps", Resource: "replicasets", Verb: "list"}, {Group: "policy", Resource: "poddisruptionbudgets", Verb: "list"}, {Group: "autoscaling", Resource: "horizontalpodautoscalers", Verb: "list"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, {Resource: "configmaps", Name: persistence.InventoryName, Verb: "get", OperatorScoped: true}},
+	// throttle writes ONLY the limiter's admission-budget ConfigMap (the proxy refreshes it
+	// every second and enforces it for every request); the chart grants get/update on exactly
+	// that named object, so an unnamed namespace-wide update is denied and the startup preflight
+	// refuses to start once a policy enables throttle without the exact grant. The journal lives
+	// in the operator namespace. No pods/eviction, no HPA (autoscaling), no deployments/scale
+	// verbs — the replica count and HPA are deliberately never mutated.
+	model.ActionThrottle: {{Group: "phorvex.ai", Resource: "phorvexpolicies", Name: "cost-defense", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Resource: "configmaps", Name: servingbudget.StatusName, Verb: "get"}, {Group: "amtd.r6security.com", Resource: "securityevents", Verb: "get", ClusterScoped: true}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "get"}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "update"}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

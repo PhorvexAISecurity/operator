@@ -344,6 +344,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionControllerStop {
 					e.Prerequisite = "fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor"
 				}
+				if a == model.ActionThrottle {
+					e.Prerequisite = "reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal"
+				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
 					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
@@ -367,6 +370,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior"
 				} else if a == model.ActionControllerStop {
 					e.UnverifiedEffect = "support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure"
+				} else if a == model.ActionThrottle {
+					e.UnverifiedEffect = "support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

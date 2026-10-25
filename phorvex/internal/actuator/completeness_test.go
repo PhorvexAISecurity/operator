@@ -130,6 +130,12 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	// handler, NOT by a feasibility veto — mirroring identity-rotate. It removes no shared
 	// Ready serving replica, so the availability floor does not gate it either.
 	model.ActionControllerStop: {},
+	// throttle installs a serving-admission budget at an already-present authoritative proxy.
+	// Its authority (a trusted serving-rate-budget observation + exact policy epoch) is enforced
+	// by the capability gate, the actionset generator, the backend and the native handler, NOT by
+	// a feasibility veto — mirroring controller-stop/identity-rotate. It retains every Ready replica,
+	// so it is not an AI move and the availability floor does not gate it.
+	model.ActionThrottle: {},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.

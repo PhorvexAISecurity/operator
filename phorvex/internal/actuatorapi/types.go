@@ -108,7 +108,11 @@ type Request struct {
 	// persistence authority for controller-stop. The native handler rechecks it against
 	// the live cluster (validateControllerStop) before any owner scale/child deletion.
 	PersistenceObservation *model.PersistenceFootholdObservation
-	TargetUID              string // Bound identity from the selecting snapshot.
+	// ServingRateBudgetObservation is the selection-time, serving-limiter-bound trusted
+	// cost-harvest authority for throttle. The native handler rechecks it against the live
+	// cluster (throttleAuthority) before any admission-budget mutation.
+	ServingRateBudgetObservation *model.ServingRateBudgetObservation
+	TargetUID                    string // Bound identity from the selecting snapshot.
 	TargetNamespaceUID     string // Bound by the protected quarantine-capacity reservation.
 	OperationID            string // Stable decision identity for protected quarantine and route operations.
 	TickID                 string // Real selection tick; protected serving operation IDs are recomputed from it.
@@ -202,6 +206,11 @@ type Target struct {
 	PolicyName     string
 	PolicyUID      string
 	ServiceAccount string
+	// PolicyGeneration + ServingRateBudgetObservation carry the selecting policy epoch
+	// and the serving-limiter-bound cost-harvest authority for the throttle capability
+	// check. They ride the CBOR target encoding; zero/nil for actions that do not use them.
+	PolicyGeneration             int64
+	ServingRateBudgetObservation *model.ServingRateBudgetObservation
 }
 
 // RuleTypeFor maps a Phorvex action to its controlled SecurityEvent rule type.
