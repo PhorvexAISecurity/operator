@@ -157,6 +157,15 @@ const (
 	// guarantee (an unmanaged attacker owner declares none => floor 0), never a shared
 	// tenant floor — see internal/feasibility controller-removal-authority law.
 	ActionControllerStop Action = "controller-stop"
+	// ActionK8sObjectRevert restores an operator-TRUSTED Kubernetes config object (a volume-mounted
+	// ConfigMap an AI agent re-reads for its instructions/config) back to its operator-declared
+	// trusted snapshot after a trusted detector flags the live object as drifted from that snapshot
+	// (AML.T0081 Modify AI Agent Configuration — a tampered tool/prompt/policy ConfigMap steering the
+	// agent). It is the move that undoes the tamper at the OBJECT: rotate/quarantine churn the POD but
+	// the poisoned ConfigMap persists and re-serves the same bad config to every replacement. Native-
+	// only — it CASes the ConfigMap's .data back to the operator snapshot annotation (forward-only,
+	// never event-derived).
+	ActionK8sObjectRevert Action = "k8s-object-revert"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -196,6 +205,7 @@ var MutatingActions = []Action{
 	// Appended last so the engine's strict-`>` generation-rank tie-break order for the
 	// pre-existing actions stays byte-identical.
 	ActionControllerStop,
+	ActionK8sObjectRevert,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -543,6 +553,8 @@ type Pod struct {
 	EndpointPath                string              // inference endpoint/API route the attacker can map (AI; "" if none)
 	SuspectAdapter              string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
 	AdapterObservation          *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
+	SuspectConfigObject         string              // name of an operator-trusted ConfigMap a detector flagged as drifted from its trusted snapshot ("" if none) -> k8s-object-revert
+	K8sObjectRevertObservation  *K8sObjectRevertObservation // authenticated event and exact current Pod identity behind SuspectConfigObject
 	OutputPolicyConfigMap       string
 	OutputPolicyRuleSHA256      string
 	OutputProxySourceSHA256     string
@@ -638,6 +650,20 @@ func (p Pod) HasBoundAdapterObservation() bool {
 	o := p.AdapterObservation
 	return o != nil && p.UID != "" && p.SuspectAdapter != "" &&
 		o.AdapterName == p.SuspectAdapter && o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
+}
+
+// HasBoundK8sObjectRevertObservation is the narrow detector authority for config-object
+// integrity. Like the adapter authority it binds the assertion to this exact Pod UID,
+// ConfigMap name, event identity and authenticated creator, and it additionally REQUIRES an
+// actual drift (observed snapshot hash != trusted snapshot hash): a ConfigMap already on its
+// trusted snapshot is not a threat and mints no fact (so the revert is reactive, never
+// proactive churn). It is namespace-PARAMETRIC — no hard-coded namespace or object name.
+func (p Pod) HasBoundK8sObjectRevertObservation() bool {
+	o := p.K8sObjectRevertObservation
+	return o != nil && p.UID != "" && p.SuspectConfigObject != "" &&
+		o.ConfigMapName == p.SuspectConfigObject && o.TargetPodUID == p.UID &&
+		o.ObservedSHA256 != "" && o.TrustedSHA256 != "" && o.ObservedSHA256 != o.TrustedSHA256 &&
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
 }
 
@@ -809,6 +835,11 @@ const (
 	// controller-stop. It never by itself asserts an on-Pod exploit; the owner-removal
 	// authority is the binding.
 	AttackVectorControllerPersistence = "phorvex.attack.controller-persistence"
+	// AttackVectorConfigObject reports that a trusted detector observed an operator-trusted
+	// ConfigMap (the agent's instruction/config object) drifted from its operator-declared
+	// trusted snapshot (AML.T0081 Modify AI Agent Configuration). Only k8s-object-revert
+	// (restore the object to the trusted snapshot) covers it.
+	AttackVectorConfigObject = "phorvex.attack.config-object"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -828,6 +859,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorEndpointLeaseReuse
 	case "throttle":
 		return AttackVectorServingCostHarvest
+	case "k8s-object-revert":
+		return AttackVectorConfigObject
 	}
 	return ""
 }
@@ -887,6 +920,10 @@ type SecurityEventInfo struct {
 	CurrentInventoryAdmissionContract string
 	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
+	ConfigObjectName                  string // event-owned phorvex.ai/config-object-name, the detector-flagged ConfigMap
+	ConfigObservedSHA256              string // event-owned phorvex.ai/config-observed-sha256, the detector-observed live-data hash
+	ConfigTrustedSHA256               string // event-owned phorvex.ai/config-trusted-sha256, the detector-asserted trusted-snapshot hash
+	ConfigTargetUID                   string // event-owned phorvex.ai/target-pod-uid for a config-object observation
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
@@ -957,6 +994,22 @@ type AdapterObservation struct {
 	CreatorIdentity string    `json:"creatorIdentity"`
 	TargetPodUID    string    `json:"targetPodUID"`
 	AdapterName     string    `json:"adapterName"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// K8sObjectRevertObservation identifies the one fresh detector assertion that authorizes
+// config-object integrity and a later k8s-object-revert. It carries the detector's observed
+// live-data hash and its asserted trusted-snapshot hash for SELECTION; the handler re-reads the
+// AUTHORITATIVE operator snapshot from the live ConfigMap annotation and never trusts these
+// bytes to choose the value it restores. Conflicting observed hashes suppress it.
+type K8sObjectRevertObservation struct {
+	EventName       string    `json:"eventName"`
+	EventUID        string    `json:"eventUID"`
+	CreatorIdentity string    `json:"creatorIdentity"`
+	TargetPodUID    string    `json:"targetPodUID"`
+	ConfigMapName   string    `json:"configMapName"`
+	ObservedSHA256  string    `json:"observedSHA256"`
+	TrustedSHA256   string    `json:"trustedSHA256"`
 	CreatedAt       time.Time `json:"createdAt"`
 }
 

@@ -59,6 +59,8 @@ const (
 	DecisionActionVocabularyLive25 = "v11-live25"
 	// Live26 adds controller-stop; throttle retains its canonical slot even in builds without its handler.
 	DecisionActionVocabularyLive26 = "v12-live26"
+	// Live27 appends k8s-object-revert (operator-trusted ConfigMap restore); all earlier versions stay frozen.
+	DecisionActionVocabularyLive27 = "v13-live27"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -120,6 +122,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive26:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive25)
 		return append(prior, ActionControllerStop), nil
+	case DecisionActionVocabularyLive27:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive26)
+		return append(prior, ActionK8sObjectRevert), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

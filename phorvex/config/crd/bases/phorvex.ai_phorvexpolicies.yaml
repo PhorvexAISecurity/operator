@@ -125,6 +125,7 @@ spec:
                       - kv-migrate-invalidate
                       - throttle
                       - controller-stop
+                      - k8s-object-revert
                       - disable
                       type: string
                     minItems: 1

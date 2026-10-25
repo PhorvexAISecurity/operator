@@ -82,6 +82,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// in the operator namespace. No pods/eviction, no HPA (autoscaling), no deployments/scale
 	// verbs — the replica count and HPA are deliberately never mutated.
 	model.ActionThrottle: {{Group: "phorvex.ai", Resource: "phorvexpolicies", Name: "cost-defense", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Resource: "configmaps", Name: servingbudget.StatusName, Verb: "get"}, {Group: "amtd.r6security.com", Resource: "securityevents", Verb: "get", ClusterScoped: true}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "get"}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "update"}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
+	// k8s-object-revert CASes a drifted operator-trusted ConfigMap's .data back to its snapshot.
+	// get is the authoritative pre-read of each referenced ConfigMap (its snapshot annotation +
+	// current data); update is the only mutation. Namespace-wide (not a fixed object name) because
+	// the action is generic over any operator-trusted ConfigMap the flagged pod references; the
+	// handler bounds itself to only-restore-the-operator-snapshot, so the broad verb is safe. Pod
+	// reads are broad scanner context (excluded here by the T1-E rule).
+	model.ActionK8sObjectRevert: {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

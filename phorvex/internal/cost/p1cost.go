@@ -159,7 +159,10 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 		// authoritative proxy while retaining every Ready replica — the honest
 		// serving-configuration class, NOT workload replacement.
 		return NormCostServingConfiguration
-	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate:
+	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate, model.ActionK8sObjectRevert:
+		// Reverting a drifted ConfigMap to its operator-trusted snapshot is an in-process
+		// config/state reset: it restores one config object, replaces no workload and re-keys no
+		// Service or identity.
 		return NormCostStateReset
 	case model.ActionIdentityRotate:
 		return NormCostPartialIdentity

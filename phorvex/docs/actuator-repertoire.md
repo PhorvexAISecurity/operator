@@ -67,6 +67,7 @@ route-key with the target Ready and at least two Ready backends.
 | `crm-refund-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "crm-refund-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `throttle` | phoenix | no | backend-unsupported: phoenix cannot enact "throttle" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `controller-stop` | phoenix | no | backend-unsupported: phoenix cannot enact "controller-stop" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `k8s-object-revert` | phoenix | no | backend-unsupported: phoenix cannot enact "k8s-object-revert" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -100,6 +101,7 @@ route-key with the target Ready and at least two Ready backends.
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
 | `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
 | `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
+| `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 
 ## hybrid
 
@@ -133,3 +135,4 @@ route-key with the target Ready and at least two Ready backends.
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
 | `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
 | `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
+| `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |

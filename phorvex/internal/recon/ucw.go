@@ -163,6 +163,21 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, ai)
 		af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 	}
+	// Config-object integrity has its own authenticated authority, like adapter integrity: a trusted
+	// detector flagged an operator-trusted ConfigMap (the agent's instruction/config object) as
+	// drifted from its operator-declared trusted snapshot. Only k8s-object-revert (restore the object
+	// to the snapshot) covers it — a generic rotate/quarantine churns the POD but the tampered
+	// ConfigMap keeps serving the same bad config. The multiplicative 3x keeps the fact dominant while
+	// preserving zero weight at zero PHold.
+	if view.Pod.HasBoundK8sObjectRevertObservation() {
+		o := view.Pod.K8sObjectRevertObservation
+		ci := Fact{Scope: ScopePod, Asset: asset, Kind: FactConfigObjectIntegrity, Weight: base * urg * vectorDominance}
+		ci.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorConfigObject, AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorConfigObject,
+				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, ci)
+		af.CoverByAction[model.ActionK8sObjectRevert] = append(af.CoverByAction[model.ActionK8sObjectRevert], ci.Key())
+	}
 	if view.Pod.HasBoundSensitiveOutputObservation() {
 		o := view.Pod.OutputPolicyObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactSensitiveOutputExposure, Weight: base * urg * vectorDominance}

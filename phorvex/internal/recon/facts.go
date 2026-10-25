@@ -93,6 +93,12 @@ const (
 	// (unload the adapter) covers it — so the engine selects adapter-rotate for THIS attack, not a
 	// generic rotate/kv-reset.
 	FactAdapterIntegrity = "adapterIntegrity"
+	// FactConfigObjectIntegrity = an operator-trusted ConfigMap (the agent's instruction/config
+	// object) drifted from its operator-declared trusted snapshot (a detector flagged the tamper).
+	// It exists ONLY while the drifted object is live, and ONLY k8s-object-revert (restore the
+	// object to the trusted snapshot) covers it — a generic rotate/quarantine churns the POD but the
+	// tampered ConfigMap keeps serving the same bad config, so they earn no cover.
+	FactConfigObjectIntegrity = "configObjectIntegrity"
 
 	// FactInflightRequests = the attacker's IN-FLIGHT request / queue / streaming-session state on a
 	// serving pod (distinct from the KV-cache session): the requests currently being served that a
