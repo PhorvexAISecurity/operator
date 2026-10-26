@@ -242,7 +242,7 @@ sed -e "s#__MODEL__#${MODEL}#g" -e "s#__VLLM_IMAGE__#${VLLM_IMAGE}#g" \
 "${KUBECTL[@]}" apply -f "$HERE/manifests/policy.yaml"
 
 say "waiting for LiteLLM (vLLM pulls the model on first start; this is slow)"
-"${KUBECTL[@]}" -n litellm rollout status deploy/vllm --timeout=30m || true
+"${KUBECTL[@]}" -n vllm rollout status deploy/vllm --timeout=30m || true
 "${KUBECTL[@]}" -n litellm rollout status deploy/litellm --timeout=5m || true
 
 cat <<DONE
