@@ -112,7 +112,25 @@ helm -n monitoring uninstall kube-prometheus-stack
 # and, to remove K3s entirely:  /usr/local/bin/k3s-uninstall.sh
 ```
 
+## Two benchmarks
+
+- `benchmark.sh` fires the generic foothold repeatedly at each workload and reports dwell
+  time per attack (rotate on litellm, quarantine configured on vllm).
+- `scenarios.sh` + `report-scenarios.py` run **named catalogue attacks** (ATLAS/OWASP
+  mapping) against the serving workloads, each defended by its designated actuator, with
+  and without the operator. Default scenarios cover Denial of AI Service (T0029), Full AI
+  Model Access (T0044), Chaff spam (T0046) and a generic compromise foothold on litellm,
+  plus one on vllm. Override the per-attack actuator with the `SCENARIOS` env var.
+
 ## Notes and limits
+
+- **Actuators exercised.** The native backend implements `rotate`, `quarantine` and
+  `endpoint-rotate`. In this harness **rotate** contains every serving foothold
+  reproducibly (~4 s on the 3-replica litellm). **quarantine** is implemented and isolates
+  a litellm pod in an isolated manual test, but did not reproduce reliably when driven
+  per-attack in-run; its NetworkPolicy is `phorvex-quarantine-<hash>` (detect by the
+  `app.kubernetes.io/managed-by=phorvex` label, not a pod-named policy). `endpoint-rotate`
+  is supported but needs the M-35 endpoint-discovery condition, not a generic foothold.
 
 - **Two tenants, one per namespace.** `litellm` (the 3-replica proxy) is defended with
   **rotate** and `vllm` (the single GPU model server) with **quarantine** — each in its own
