@@ -74,7 +74,7 @@ set_actuator() {   # $1 = target ; $2 = actuator
 reset_target() {   # $1 = target
   local ns; ns="$(ns_for "$1")"
   K delete securityevent.amtd.r6security.com -l benchmark=litellm-defense --ignore-not-found >/dev/null 2>&1 || true
-  K -n "$ns" delete networkpolicy -l app.kubernetes.io/managed-by=phorvex --ignore-not-found >/dev/null 2>&1 || true
+  K -n "$ns" delete networkpolicy --all --ignore-not-found >/dev/null 2>&1 || true   # native (phorvex-quarantine-*) or phorvex-amtd (<ns>-<pod>-policy)
   local p
   for p in $(K -n "$ns" get pod -l app.kubernetes.io/name="$1" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}' 2>/dev/null); do
     K -n "$ns" label pod "$p" phorvex.ai/quarantine-epoch- >/dev/null 2>&1 || true
@@ -131,7 +131,7 @@ YAML
        || [ -n "$(K -n "$ns" get pod "$pod" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)" ]; then
       contained_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"rotated"'; break
     fi
-    if [ -n "$(K -n "$ns" get networkpolicy -l app.kubernetes.io/managed-by=phorvex -o name 2>/dev/null)" ] \
+    if [ -n "$(K -n "$ns" get networkpolicy -o name 2>/dev/null)" ] \
        || [ -n "$(K -n "$ns" get pod "$pod" -o jsonpath='{.metadata.labels.phorvex\.ai/quarantine-epoch}' 2>/dev/null)" ]; then
       contained_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"quarantined"'; break
     fi
@@ -174,7 +174,7 @@ run_mode defended on
 run_mode undefended off
 set_defense on
 K delete securityevent.amtd.r6security.com -l benchmark=litellm-defense --ignore-not-found >/dev/null 2>&1 || true
-for t in litellm vllm; do K -n "$(ns_for "$t")" delete networkpolicy -l app.kubernetes.io/managed-by=phorvex --ignore-not-found >/dev/null 2>&1 || true; done
+for t in litellm vllm; do K -n "$(ns_for "$t")" delete networkpolicy --all --ignore-not-found >/dev/null 2>&1 || true; done
 
 say "collected $(wc -l < "$RESULTS" | tr -d ' ') scenario records in $RESULTS"
 echo "build the report:  python3 $HERE/report-scenarios.py"
