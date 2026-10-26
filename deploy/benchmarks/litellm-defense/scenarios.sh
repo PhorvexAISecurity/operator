@@ -30,13 +30,17 @@ WINDOW_UNDEF="${WINDOW_UNDEF:-45}"
 SETTLE="${SETTLE:-45}"
 POLL="${POLL:-3}"
 
+# Each serving foothold is contained by ROTATE (replace the compromised pod) — the native
+# MTD action that fires reproducibly in this harness. The attack library prefers `quarantine`
+# (isolate in place) for several of these; quarantine is implemented and fired once in an
+# isolated manual test, but did not reproduce reliably when driven in-run here, so the
+# reproducible benchmark uses rotate. See README "Notes and limits".
 SCENARIOS="${SCENARIOS:-$(cat <<'EOF'
-AML.T0029|Denial of AI Service|quarantine|litellm
-AML.T0044|Full AI Model Access|quarantine|litellm
-AML.T0046|Spamming AI System with Chaff Data|quarantine|litellm
-MTD.FOOTHOLD|Serving-pod compromise foothold|rotate|litellm
-AML.T0029|Denial of AI Service|quarantine|vllm
-MTD.FOOTHOLD|Serving-pod compromise foothold|rotate|vllm
+AML.T0029|Denial of AI Service|rotate|litellm
+AML.T0044|Full AI Model Access|rotate|litellm
+AML.T0046|Spamming AI System with Chaff Data|rotate|litellm
+MTD.FOOTHOLD|Compromised serving-pod foothold|rotate|litellm
+AML.T0029|Denial of AI Service|rotate|vllm
 EOF
 )}"
 
