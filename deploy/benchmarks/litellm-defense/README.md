@@ -122,9 +122,10 @@ helm -n monitoring uninstall kube-prometheus-stack
   a rotation under the SLO cost ceiling. With no load the brain prices rotation at its
   conservative bound and the SLO gate refuses it — which the report will show honestly as
   a `conformal-slo` / `missing-load` no-op.
-- **LiteLLM metric name.** The `PodMonitor` keeps LiteLLM's request counter under a
-  version-tolerant regex and relabels it to `http_requests_total`. If a LiteLLM version
-  renames it, update `manifests/litellm.yaml`.
+- **The request metric.** LiteLLM's own Prometheus metrics are version-dependent and
+  were absent in testing, so an nginx sidecar fronts LiteLLM in each pod and the
+  nginx-prometheus-exporter turns nginx's request count into `http_requests_total` (the
+  proven demo-api pattern). Traffic flows demo-load → Service → nginx → LiteLLM → vLLM.
 - **Single binary.** The operator runs the sensor, brain and actuator in one process, so
   there is no inter-service gRPC and the service mTLS (`docs/services/service-tls.md`) is
   not exercised here.

@@ -1,0 +1,22 @@
+# The benchmark's red-team identity. benchmark.sh fires the foothold SecurityEvent as this
+# ServiceAccount (kubectl --as), so the creator-identity ValidatingAdmissionPolicy stamps
+# it unforgeably and the operator (trustedDetectors) believes it. It can only write
+# SecurityEvents — nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: bench-redteam, namespace: phorvex-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: bench-redteam-securityevents}
+rules:
+- apiGroups: ["amtd.r6security.com"]
+  resources: ["securityevents"]
+  verbs: ["create", "get", "list", "delete", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: bench-redteam-securityevents}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: bench-redteam-securityevents}
+subjects:
+- {kind: ServiceAccount, name: bench-redteam, namespace: phorvex-system}

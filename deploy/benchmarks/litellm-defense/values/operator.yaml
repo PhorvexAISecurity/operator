@@ -14,13 +14,21 @@ phorvex:
   # dispatch while the brain still decides (defense off).
   globalKillSwitch: false
 
-  # Single-node: no cluster-wide admission, no external detector. The attacks run as the
-  # console's own ServiceAccount, which is the default injector.
+  # Single-node: no cluster-wide admission or SecurityEvent identity policy. The
+  # benchmark injects the foothold as a trusted SecurityEvent stamped with this
+  # identity (benchmark.sh), so the brain treats it as real threat evidence. On a
+  # shared cluster you would instead stamp+trust a real detector via admission.
   admissionWebhook:
     enabled: false
+  # The in-apiserver ValidatingAdmissionPolicy (no webhook, K8s >=1.30) that enforces a
+  # SecurityEvent's phorvex.ai/creator-identity == its creator's authenticated username.
+  # It makes the trusted detector below unforgeable: the benchmark fires the foothold as
+  # the bench-redteam identity (benchmark.sh, kubectl --as), the VAP admits it because the
+  # stamp matches, and the brain believes it. This also demonstrates the operator's
+  # admission-time identity enforcement.
   eventIdentityPolicy:
-    enabled: false
-  trustedDetectors: []
+    enabled: true
+  trustedDetectors: ["phorvex-system/bench-redteam"]
 
   # K3s has no AWS Prometheus; install.sh points this at the in-cluster kube-prometheus
   # stack so the brain prices rotation on litellm's measured request load.
