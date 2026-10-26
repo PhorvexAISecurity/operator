@@ -163,6 +163,15 @@ done
 "${KUBECTL[@]}" -n litellm create secret generic hf-token --from-literal=token="$HF_TOKEN" \
   --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -
 
+# ── 4b. AMTD CRDs + the benchmark's red-team identity ─────────────────────────
+# The operator watches SecurityEvents (and the rest of the AMTD API) and the chart's
+# creator-identity ValidatingAdmissionPolicy binds to the SecurityEvent resource, but the
+# chart does not ship these CRDs — install them before the operator starts. redteam-rbac
+# creates the bench-redteam ServiceAccount that benchmark.sh fires the foothold as.
+say "AMTD CRDs + red-team identity"
+"${KUBECTL[@]}" apply -f "$REPO_ROOT/build/phoenix-extended/config/crd/bases/"
+"${KUBECTL[@]}" apply -f "$HERE/manifests/redteam-rbac.yaml"
+
 # ── 5. operator image digests (pull by digest, like a release) ────────────────
 digest() { aws ecr describe-images --region "$AWS_REGION" --repository-name "phorvex/$1" \
   --image-ids imageTag="$2" --query 'imageDetails[0].imageDigest' --output text; }

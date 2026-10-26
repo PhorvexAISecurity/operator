@@ -74,13 +74,30 @@ data:
         model: openai/__MODEL__
         api_base: http://vllm:8000/v1
         api_key: none
-    litellm_settings:
-      callbacks: ["prometheus"]
     general_settings:
       # Open for the benchmark; the request counter is what the brain reads, not the content.
       disable_master_key_check: true
 ---
-# LiteLLM proxy: the PROTECTED, rotation-target workload.
+# nginx fronts LiteLLM in the same pod and counts requests in stub_status, so each
+# rotation-target pod has a deterministic request rate regardless of LiteLLM's own
+# (version-dependent, often absent) metrics — the proven demo-api pattern. The exporter
+# turns that count into http_requests_total, the metric the sensor reads per pod.
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: litellm-nginx, namespace: litellm}
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      location = /healthz { return 200 "ok\n"; }
+      location / { proxy_pass http://127.0.0.1:4000; proxy_read_timeout 120s; }
+    }
+    server {
+      listen 127.0.0.1:8081;
+      location = /stub_status { stub_status; }
+    }
+---
+# LiteLLM proxy (fronted by nginx): the PROTECTED, rotation-target workload.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -102,29 +119,49 @@ spec:
       enableServiceLinks: false
       securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
       containers:
+      - name: web
+        image: public.ecr.aws/nginx/nginx-unprivileged:1.27-alpine
+        ports: [{name: http, containerPort: 8080}]
+        readinessProbe:
+          httpGet: {path: /healthz, port: http}
+          periodSeconds: 10
+        resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+        volumeMounts:
+        - {name: nginx-conf, mountPath: /etc/nginx/conf.d, readOnly: true}
+        - {name: tmp, mountPath: /tmp}
       - name: litellm
         image: ghcr.io/berriai/litellm:main-v1.53.1
         args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
-        ports: [{name: http, containerPort: 4000}]
         readinessProbe:
-          httpGet: {path: /health/liveliness, port: http}
+          httpGet: {path: /health/liveliness, port: 4000}
           periodSeconds: 10
         resources:
           requests: {cpu: 50m, memory: 256Mi}
           limits: {memory: 512Mi}
         securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: false, capabilities: {drop: ["ALL"]}}
         volumeMounts: [{name: config, mountPath: /etc/litellm, readOnly: true}]
-      volumes: [{name: config, configMap: {name: litellm-config}}]
+      - name: exporter
+        image: public.ecr.aws/nginx/nginx-prometheus-exporter:1.4.0
+        args: ["--nginx.scrape-uri=http://127.0.0.1:8081/stub_status"]
+        ports: [{name: metrics, containerPort: 9113}]
+        resources: {requests: {cpu: 5m, memory: 16Mi}, limits: {memory: 32Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+      volumes:
+      - {name: config, configMap: {name: litellm-config}}
+      - {name: nginx-conf, configMap: {name: litellm-nginx}}
+      - {name: tmp, emptyDir: {}}
 ---
 apiVersion: v1
 kind: Service
 metadata: {name: litellm, namespace: litellm}
 spec:
   selector: {app.kubernetes.io/name: litellm}
-  ports: [{name: http, port: 4000, targetPort: http}]
+  ports: [{name: http, port: 80, targetPort: http}]   # -> nginx :8080 -> litellm :4000
 ---
-# Steady chat traffic, so every LiteLLM pod has a measured request rate; without a load
-# the brain prices a rotation at its conservative bound and the SLO gate refuses it.
+# Steady chat traffic through the Service, so every LiteLLM pod has a measured request
+# rate; without a load the brain prices a rotation at its conservative bound and the SLO
+# gate refuses it.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -148,16 +185,16 @@ spec:
         args:
         - |
           while true; do
-            curl -s -m 8 -o /dev/null -X POST http://litellm:4000/v1/chat/completions \
+            curl -s -m 8 -o /dev/null -X POST http://litellm/v1/chat/completions \
               -H 'content-type: application/json' \
               -d '{"model":"demo","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' || true
-            sleep 1
+            sleep 0.5
           done
         resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
         securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
 ---
-# Scrape LiteLLM and expose its request counter as http_requests_total, the metric the
-# sensor reads per pod. The keep-regex tolerates LiteLLM's version-dependent counter name.
+# Scrape the nginx exporter and expose its request counter as http_requests_total, the
+# metric the sensor reads per pod.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -168,15 +205,14 @@ spec:
   selector:
     matchLabels: {app.kubernetes.io/name: litellm}
   podMetricsEndpoints:
-  - port: http
-    path: /metrics
+  - port: metrics
     interval: 15s
     metricRelabelings:
     - action: keep
       sourceLabels: [__name__]
-      regex: litellm_proxy_total_requests_metric_total|litellm_requests_metric_count|litellm_request_total_latency_metric_count
+      regex: nginx_http_requests_total|nginx_up
     - action: replace
       sourceLabels: [__name__]
-      regex: .*
+      regex: nginx_http_requests_total
       targetLabel: __name__
       replacement: http_requests_total
