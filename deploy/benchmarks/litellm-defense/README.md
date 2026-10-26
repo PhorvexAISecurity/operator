@@ -114,10 +114,20 @@ helm -n monitoring uninstall kube-prometheus-stack
 
 ## Notes and limits
 
-- **Rotate, not quarantine.** The policy enables rotate only. The native quarantine adds
-  a deny-all NetworkPolicy, which on some CNIs isolates more than the target
-  (`docs/services/actuator.md`, "Quarantine on the AWS VPC CNI"); rotate replaces just the
-  compromised pod.
+- **Two tenants, one per namespace.** `litellm` (the 3-replica proxy) is defended with
+  **rotate** and `vllm` (the single GPU model server) with **quarantine** — each in its own
+  namespace, because a cluster-scoped SecurityEvent routes to a policy by its target's
+  namespace. The operator watches both (`policyNamespaces`/`actuatorNamespaces`).
+- **Observed result (build `manager:0.11.1`).** LiteLLM is contained cleanly: each foothold
+  is rotated away in a few seconds, and with actuation off the brain decides the same rotate
+  but dispatch is suppressed. vLLM is where single-replica stateful defense shows its edge:
+  rotating the sole GPU pod is *emitted-unconfirmed* (the replacement cannot schedule until
+  the one GPU is freed, so the operator will not tear down the only model server), and in
+  this build the dedicated `vllm` tenant did not turn a foothold on its pod into a
+  containment decision even though the event is attached to the pod's evidence. Independent
+  containment of a single-replica GPU model server is therefore a known gap here, worth
+  raising with the brain/actuator owners; a replicated model server, or node-level action,
+  would not hit it.
 - **The load matters.** `demo-load` keeps a request rate on LiteLLM so the brain can price
   a rotation under the SLO cost ceiling. With no load the brain prices rotation at its
   conservative bound and the SLO gate refuses it — which the report will show honestly as

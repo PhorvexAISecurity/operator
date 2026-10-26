@@ -86,9 +86,9 @@ def parse_ts(s):
     if not s:
         return None
     s = s.rstrip("Z")
-    if "." in s:  # trim nanoseconds to microseconds for fromisoformat
+    if "." in s:  # normalise any fractional precision to microseconds for fromisoformat
         head, frac = s.split(".", 1)
-        s = f"{head}.{frac[:6]}"
+        s = f"{head}.{frac[:6].ljust(6, '0')}"
     return dt.datetime.fromisoformat(s).replace(tzinfo=dt.timezone.utc)
 
 
@@ -130,7 +130,7 @@ def main():
     # report.csv — one curated row per attack.
     with (HERE / "report.csv").open("w", newline="") as f:
         cols = ["target", "mode", "defense", "attempt", "firedAt", "rotatedAt", "dwellSeconds",
-                "contained", "attackId", "targetPod"] + [c for c, _ in PARAMS] + ["decisionJson"]
+                "contained", "mechanism", "attackId", "targetPod"] + [c for c, _ in PARAMS] + ["decisionJson"]
         w = csv.DictWriter(f, fieldnames=cols)
         w.writeheader()
         for r in recs:
@@ -138,8 +138,8 @@ def main():
             row = {"target": r["target"], "mode": r["mode"], "defense": r.get("defense"),
                    "attempt": r.get("attempt"), "firedAt": r.get("firedAt"),
                    "rotatedAt": r.get("rotatedAt"), "dwellSeconds": r["_dwell"],
-                   "contained": r["_contained"], "attackId": r.get("attackId"),
-                   "targetPod": r.get("targetPod"),
+                   "contained": r["_contained"], "mechanism": r.get("mechanism"),
+                   "attackId": r.get("attackId"), "targetPod": r.get("targetPod"),
                    "decisionJson": json.dumps(d, separators=(",", ":"))}
             for col, keys in PARAMS:
                 row[col] = find(d, keys)
@@ -205,6 +205,7 @@ def render(recs):
                     f"<td class={'ok' if r['_contained'] else 'bad'}>{'yes' if r['_contained'] else 'no'}</td>"
                     f"<td>{cell(r['_dwell'])}</td>"
                     f"<td>{cell(find(d, ['action']))}</td>"
+                    f"<td>{cell(r.get('mechanism'))}</td>"
                     f"<td>{cell(find(d, ['dispatchOutcome']))}</td>"
                     f"<td>{cell(find(d, ['cost']))}</td>"
                     f"<td>{cell(find(d, ['why']))}</td>"
@@ -259,7 +260,7 @@ nothing rotates the target, so the attacker is never contained within the observ
 
 <h2>Every attack</h2>
 <table><tr><th>workload</th><th>mode</th><th>#</th><th>contained</th><th>dwell (s)</th>
-<th>action</th><th>dispatch</th><th>cost</th><th>why</th><th>target pod</th></tr>
+<th>action</th><th>via</th><th>dispatch</th><th>cost</th><th>why</th><th>target pod</th></tr>
 {attacks}
 </table>
 

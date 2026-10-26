@@ -5,11 +5,12 @@
 # namespace only, with the native backend's rotate. install.sh fills the image digests
 # from ECR and the console's OIDC issuer from K3s.
 phorvex:
-  # Defend the litellm workload's namespace, and act only there. The operator never
-  # defends its own namespace.
-  policyNamespaces: [litellm]
+  # Defend both workload namespaces, and act only there. The operator never defends its
+  # own namespace. A cluster-scoped SecurityEvent routes to a policy by its target's
+  # namespace, so litellm and vllm are independent tenants.
+  policyNamespaces: [litellm, vllm]
   actuator: native
-  actuatorNamespaces: [litellm]
+  actuatorNamespaces: [litellm, vllm]
   # The benchmark sets this: false lets the actuator rotate (defense on), true suppresses
   # dispatch while the brain still decides (defense off).
   globalKillSwitch: false
@@ -56,7 +57,7 @@ phorvex:
     enabled: true
     # One VM: the console is the manager pod's sidecar, not its own chart.
     separate: false
-    attackNamespaces: [litellm]
+    attackNamespaces: [litellm, vllm]
     state:
       persistence:
         storageClass: local-path
