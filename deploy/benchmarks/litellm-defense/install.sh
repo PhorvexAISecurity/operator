@@ -59,6 +59,11 @@ metadata: {name: nvidia}
 handler: nvidia
 YAML
 "${KUBECTL[@]}" apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.17.0/deployments/static/nvidia-device-plugin.yml
+# K3s auto-detects /usr/bin/nvidia-container-runtime and adds a `nvidia` containerd
+# runtime; the device plugin must run under it to enumerate the GPU.
+"${KUBECTL[@]}" -n kube-system patch daemonset nvidia-device-plugin-daemonset --type merge \
+  -p '{"spec":{"template":{"spec":{"runtimeClassName":"nvidia"}}}}'
+"${KUBECTL[@]}" -n kube-system rollout status ds/nvidia-device-plugin-daemonset --timeout=180s || true
 
 # ── 3. Helm + kube-prometheus-stack ──────────────────────────────────────────
 if ! command -v helm >/dev/null 2>&1; then
@@ -122,7 +127,13 @@ helm upgrade --install "$RELEASE" "$CHART" --namespace "$OPNS" -f "$VALUES" \
   --set-string phorvex.console.auth.oidc.issuer="$ISSUER" \
   --set-string phorvex.console.auth.oidc.jwksUrl="$JWKS" \
   --set 'imagePullSecrets[0].name=ecr' \
-  --wait --timeout 8m || true
+  --timeout 8m || true
+# The manager chart renders no imagePullSecret; bind the ECR secret to the operator
+# ServiceAccounts so their pods can pull the private images, then roll them.
+for sa in "${RELEASE}-phorvex-manager" "${RELEASE}-phorvex-console"; do
+  "${KUBECTL[@]}" -n "$OPNS" patch serviceaccount "$sa" -p '{"imagePullSecrets":[{"name":"ecr"}]}' || true
+done
+"${KUBECTL[@]}" -n "$OPNS" rollout restart deploy/"${RELEASE}-phorvex" deploy/"${RELEASE}-phorvex-console" || true
 "${KUBECTL[@]}" -n "$OPNS" rollout status deploy/"${RELEASE}-phorvex" --timeout=5m || true
 "${KUBECTL[@]}" -n "$OPNS" rollout status deploy/"${RELEASE}-phorvex-console" --timeout=5m || true
 
