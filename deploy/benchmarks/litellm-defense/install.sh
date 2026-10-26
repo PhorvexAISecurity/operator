@@ -46,6 +46,9 @@ AWS_REGION="${AWS_REGION:-us-east-2}"
 MANAGER_TAG="${MANAGER_TAG:-0.11.1}"
 CONSOLE_TAG="${CONSOLE_TAG:-0.10.0}"
 HF_TOKEN="${HF_TOKEN:-}"
+ECR_PASSWORD="${ECR_PASSWORD:-}"       # set with the two digests below => no AWS CLI/creds on this host
+MANAGER_DIGEST="${MANAGER_DIGEST:-}"   # sha256:...  (resolve off-host to keep AWS creds off the VM)
+CONSOLE_DIGEST="${CONSOLE_DIGEST:-}"   # sha256:...
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -67,13 +70,20 @@ for b in curl tar gzip; do command -v "$b" >/dev/null 2>&1 || pkg_install "$b"; 
 command -v gpg >/dev/null 2>&1 || pkg_install gnupg || true
 command -v python3 >/dev/null 2>&1 || pkg_install python3 || die "python3 is required for the reports"
 
-if ! command -v aws >/dev/null 2>&1; then
-  say "installing the AWS CLI v2"
-  command -v unzip >/dev/null 2>&1 || pkg_install unzip
-  tmpz="$(mktemp -d)"; curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "$tmpz/aws.zip"
-  unzip -q -o "$tmpz/aws.zip" -d "$tmpz"; $SUDO "$tmpz/aws/install" --update; rm -rf "$tmpz"
+# ECR access: either this host has AWS credentials, or the caller pre-supplies the ECR login
+# password AND both image digests (ECR_PASSWORD/MANAGER_DIGEST/CONSOLE_DIGEST) — resolved on a
+# host that does have credentials — in which case no AWS credentials are needed here at all.
+if [ -n "$ECR_PASSWORD" ] && [ -n "$MANAGER_DIGEST" ] && [ -n "$CONSOLE_DIGEST" ]; then
+  say "using pre-supplied ECR credentials and image digests (no AWS CLI needed on this host)"
+else
+  if ! command -v aws >/dev/null 2>&1; then
+    say "installing the AWS CLI v2"
+    command -v unzip >/dev/null 2>&1 || pkg_install unzip
+    tmpz="$(mktemp -d)"; curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "$tmpz/aws.zip"
+    unzip -q -o "$tmpz/aws.zip" -d "$tmpz"; $SUDO "$tmpz/aws/install" --update; rm -rf "$tmpz"
+  fi
+  aws sts get-caller-identity >/dev/null 2>&1 || die "the AWS CLI cannot authenticate; configure credentials able to pull from $ECR (env AWS_ACCESS_KEY_ID/SECRET, ~/.aws, an instance profile), or pass ECR_PASSWORD + MANAGER_DIGEST + CONSOLE_DIGEST resolved off-host"
 fi
-aws sts get-caller-identity >/dev/null 2>&1 || die "the AWS CLI cannot authenticate; configure credentials able to pull from $ECR (env AWS_ACCESS_KEY_ID/SECRET, ~/.aws, or an instance profile)"
 
 nvidia-smi >/dev/null 2>&1 || die "nvidia-smi failed — install the NVIDIA GPU driver for this host first (distro-specific, needs a reboot), then re-run"
 DRIVER="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)"
@@ -154,7 +164,7 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
 # ── 4. Namespaces + ECR pull secret + HF token ───────────────────────────────
 say "namespaces + ECR pull secret"
 for ns in "$OPNS" litellm; do "${KUBECTL[@]}" create namespace "$ns" --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -; done
-ECR_PW="$(aws ecr get-login-password --region "$AWS_REGION")"
+ECR_PW="${ECR_PASSWORD:-$(aws ecr get-login-password --region "$AWS_REGION")}"
 for ns in "$OPNS" litellm; do
   "${KUBECTL[@]}" -n "$ns" create secret docker-registry ecr \
     --docker-server="$ECR" --docker-username=AWS --docker-password="$ECR_PW" \
@@ -176,8 +186,8 @@ say "AMTD CRDs + red-team identity"
 digest() { aws ecr describe-images --region "$AWS_REGION" --repository-name "phorvex/$1" \
   --image-ids imageTag="$2" --query 'imageDetails[0].imageDigest' --output text; }
 say "resolving ECR digests for manager:$MANAGER_TAG console:$CONSOLE_TAG"
-MANAGER_DIGEST="$(digest manager "$MANAGER_TAG")"
-CONSOLE_DIGEST="$(digest console "$CONSOLE_TAG")"
+MANAGER_DIGEST="${MANAGER_DIGEST:-$(digest manager "$MANAGER_TAG")}"
+CONSOLE_DIGEST="${CONSOLE_DIGEST:-$(digest console "$CONSOLE_TAG")}"
 echo "    manager $MANAGER_DIGEST"
 echo "    console $CONSOLE_DIGEST"
 
