@@ -1,0 +1,87 @@
+# operator-refactored on single-node K3s, native backend, in-process console.
+#
+# The manager runs the sensor, brain and actuator in one process (no endpoints set),
+# with the console as a sidecar sharing the audit volume. It defends the `litellm`
+# namespace only, with the native backend's rotate. install.sh fills the image digests
+# from ECR and the console's OIDC issuer from K3s.
+phorvex:
+  # Defend the litellm workload's namespace, and act only there. The operator never
+  # defends its own namespace.
+  policyNamespaces: [litellm]
+  actuator: native
+  actuatorNamespaces: [litellm]
+  # The benchmark sets this: false lets the actuator rotate (defense on), true suppresses
+  # dispatch while the brain still decides (defense off).
+  globalKillSwitch: false
+
+  # Single-node: no cluster-wide admission, no external detector. The attacks run as the
+  # console's own ServiceAccount, which is the default injector.
+  admissionWebhook:
+    enabled: false
+  eventIdentityPolicy:
+    enabled: false
+  trustedDetectors: []
+
+  # K3s has no AWS Prometheus; install.sh points this at the in-cluster kube-prometheus
+  # stack so the brain prices rotation on litellm's measured request load.
+  prometheusUrl: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+
+  metrics:
+    podMonitor:
+      enabled: true
+      environment: bench
+    dashboard:
+      enabled: true
+    rules:
+      enabled: true
+
+  # The decision history the console serves. On K3s a local-path PVC holds it.
+  audit:
+    enabled: true
+    maxBytes: 134217728
+    persistence:
+      enabled: true
+      storageClass: local-path
+      size: 2Gi
+
+  console:
+    enabled: true
+    # One VM: the console is the manager pod's sidecar, not its own chart.
+    separate: false
+    attackNamespaces: [litellm]
+    state:
+      persistence:
+        storageClass: local-path
+        size: 1Gi
+    auditTransport:
+      serverSecretName: bench-audit-server
+      clientSecretName: bench-audit-client
+      serverDNSName: bench-phorvex-audit-source.phorvex-system.svc
+      clientDNSName: bench-phorvex-console.phorvex-system.svc
+    auth:
+      # A machine identity for the benchmark to fire with, verified against K3s's own
+      # OIDC issuer (install.sh writes issuer/jwksUrl). No browser, no Cognito.
+      oidc:
+        issuer: ""
+        audience: phorvex-bench-console
+        jwksUrl: ""
+      e2eIdentity:
+        enabled: true
+      trustedOrigins: []
+      grants:
+        enabled: true
+        create: true
+        data: |
+          {
+            "version": 1,
+            "subjects": [
+              {
+                "issuer": "__K3S_ISSUER__",
+                "subject": "system:serviceaccount:phorvex-system:bench-phorvex-console-e2e",
+                "roles": ["operator"],
+                "tenants": ["litellm"],
+                "targets": ["default"],
+                "note": "The benchmark's machine identity; token minted per run, never stored."
+              }
+            ]
+          }

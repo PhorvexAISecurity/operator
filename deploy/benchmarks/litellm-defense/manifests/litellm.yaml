@@ -1,0 +1,169 @@
+# The protected workload: a LiteLLM proxy in front of a GPU-backed vLLM model, in its
+# own namespace `litellm`. The LiteLLM Deployment is the rotation target (it carries
+# r6th.io/rotation-target and the policy selector); vLLM is its GPU upstream; demo-load
+# gives it a measured request rate so the brain can price a rotation.
+#
+# Images are pinned to tags install.sh does not rewrite. Adjust MODEL / GPU in install.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: litellm
+  labels:
+    app.kubernetes.io/part-of: litellm-defense-benchmark
+---
+# vLLM: the GPU model behind LiteLLM. Not a rotation target; the policy does not select it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: litellm
+  labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: vllm}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
+    spec:
+      runtimeClassName: nvidia
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:v0.6.3.post1
+        args: ["--model", "__MODEL__", "--max-model-len", "4096", "--gpu-memory-utilization", "0.6", "--port", "8000"]
+        ports: [{name: http, containerPort: 8000}]
+        env:
+        - {name: HF_HOME, value: /tmp/hf}
+        readinessProbe:
+          httpGet: {path: /health, port: http}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 60
+        resources:
+          limits: {nvidia.com/gpu: 1}
+          requests: {cpu: "1", memory: 4Gi}
+        volumeMounts: [{name: cache, mountPath: /tmp/hf}]
+      volumes: [{name: cache, emptyDir: {}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: vllm, namespace: litellm}
+spec:
+  selector: {app.kubernetes.io/name: vllm}
+  ports: [{name: http, port: 8000, targetPort: http}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: litellm-config, namespace: litellm}
+data:
+  config.yaml: |
+    model_list:
+    - model_name: demo
+      litellm_params:
+        model: openai/__MODEL__
+        api_base: http://vllm:8000/v1
+        api_key: none
+    litellm_settings:
+      callbacks: ["prometheus"]
+    general_settings:
+      # Open for the benchmark; the request counter is what the brain reads, not the content.
+      disable_master_key_check: true
+---
+# LiteLLM proxy: the PROTECTED, rotation-target workload.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: litellm
+  namespace: litellm
+  labels: {app.kubernetes.io/name: litellm, app.kubernetes.io/part-of: litellm-defense-benchmark}
+spec:
+  replicas: 3
+  selector:
+    matchLabels: {app.kubernetes.io/name: litellm}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: litellm
+        app.kubernetes.io/part-of: litellm-defense-benchmark
+        data-class: internal
+        r6th.io/rotation-target: "true"
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: litellm
+        image: ghcr.io/berriai/litellm:main-v1.53.1
+        args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+        ports: [{name: http, containerPort: 4000}]
+        readinessProbe:
+          httpGet: {path: /health/liveliness, port: http}
+          periodSeconds: 10
+        resources:
+          requests: {cpu: 50m, memory: 256Mi}
+          limits: {memory: 512Mi}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: false, capabilities: {drop: ["ALL"]}}
+        volumeMounts: [{name: config, mountPath: /etc/litellm, readOnly: true}]
+      volumes: [{name: config, configMap: {name: litellm-config}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: litellm, namespace: litellm}
+spec:
+  selector: {app.kubernetes.io/name: litellm}
+  ports: [{name: http, port: 4000, targetPort: http}]
+---
+# Steady chat traffic, so every LiteLLM pod has a measured request rate; without a load
+# the brain prices a rotation at its conservative bound and the SLO gate refuses it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-load
+  namespace: litellm
+  labels: {app.kubernetes.io/name: demo-load, app.kubernetes.io/part-of: litellm-defense-benchmark}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app.kubernetes.io/name: demo-load}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: demo-load, app.kubernetes.io/part-of: litellm-defense-benchmark}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 65534, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: load
+        image: curlimages/curl:8.11.0
+        command: ["sh", "-c"]
+        args:
+        - |
+          while true; do
+            curl -s -m 8 -o /dev/null -X POST http://litellm:4000/v1/chat/completions \
+              -H 'content-type: application/json' \
+              -d '{"model":"demo","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' || true
+            sleep 1
+          done
+        resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
+---
+# Scrape LiteLLM and expose its request counter as http_requests_total, the metric the
+# sensor reads per pod. The keep-regex tolerates LiteLLM's version-dependent counter name.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: litellm
+  namespace: litellm
+  labels: {app.kubernetes.io/name: litellm, app.kubernetes.io/part-of: litellm-defense-benchmark}
+spec:
+  selector:
+    matchLabels: {app.kubernetes.io/name: litellm}
+  podMetricsEndpoints:
+  - port: http
+    path: /metrics
+    interval: 15s
+    metricRelabelings:
+    - action: keep
+      sourceLabels: [__name__]
+      regex: litellm_proxy_total_requests_metric_total|litellm_requests_metric_count|litellm_request_total_latency_metric_count
+    - action: replace
+      sourceLabels: [__name__]
+      regex: .*
+      targetLabel: __name__
+      replacement: http_requests_total
