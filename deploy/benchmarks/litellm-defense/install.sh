@@ -179,7 +179,12 @@ done
 # chart does not ship these CRDs — install them before the operator starts. redteam-rbac
 # creates the bench-redteam ServiceAccount that benchmark.sh fires the foothold as.
 say "AMTD CRDs + red-team identity"
-"${KUBECTL[@]}" apply -f "$REPO_ROOT/build/phoenix-extended/config/crd/bases/"
+# Server-side apply, one file at a time: these CRD schemas are large and the client-side
+# last-applied annotation would exceed the 256KB metadata limit (warminferencesets). The
+# glob also matches only the real manifests, not any stray editor/archive sidecar files.
+for crd in "$REPO_ROOT"/build/phoenix-extended/config/crd/bases/amtd.r6security.com_*.yaml; do
+  "${KUBECTL[@]}" apply --server-side --force-conflicts -f "$crd"
+done
 "${KUBECTL[@]}" apply -f "$HERE/manifests/redteam-rbac.yaml"
 
 # ── 5. operator image digests (pull by digest, like a release) ────────────────
