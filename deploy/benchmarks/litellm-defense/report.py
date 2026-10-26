@@ -200,8 +200,8 @@ table.kv th{{width:42%;font-weight:400;color:var(--muted)}} code{{color:var(--ac
 {summary('undefended')}
 </table>
 <p class=muted>Dwell time is from the foothold firing to the actuator rotating the target pod away.
-Undefended runs with the operator's actuation off (kill switch engaged): the brain still
-evaluates the trusted signal, but nothing acts, so the attacker is never contained within the window.</p>
+Undefended runs with the operator's actuation disabled (kill switch engaged): nothing rotates the
+target, so the attacker is never contained within the observation window and no rotation is recorded.</p>
 
 <h2>The brain's decision, side by side</h2>
 <table class=cmp><tr><th>parameter</th><th>defended</th><th>undefended</th></tr>
