@@ -1,0 +1,2 @@
+# Benchmark runs and reports are generated locally, not committed.
+*.json

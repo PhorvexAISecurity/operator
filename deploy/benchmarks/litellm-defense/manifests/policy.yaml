@@ -1,0 +1,45 @@
+# The policy operator-refactored defends LiteLLM with: event-driven, reactive, rotate
+# only. Rotate (not quarantine) because a deny-all NetworkPolicy can isolate more than
+# the target on some CNIs (docs/services/actuator.md, "Quarantine on the AWS VPC CNI").
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: litellm-defense
+  namespace: litellm
+  labels:
+    app.kubernetes.io/part-of: litellm-defense-benchmark
+spec:
+  tenant: litellm
+  mode: active
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: litellm
+  actions:
+    enabled: [rotate]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 90s
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 5s
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    disruptionAversion: "1"
+    lambda: "0"
+  slo:
+    costCeiling: "1.2"
+    minAvailableReplicas: 2
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: true
