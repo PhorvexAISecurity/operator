@@ -50,9 +50,11 @@ spec:
     eventDriven: true
     reactiveOnly: true
 ---
-# vLLM: a single GPU-backed replica. minAvailableReplicas 0 lets the operator rotate the
-# sole replica (a brief model-reload outage is the containment cost), and a wider cost
-# ceiling keeps that rotation feasible so the two-mode contrast is visible on vLLM too.
+# vLLM: a single GPU-backed replica. Rotate is the wrong tool for it — evicting the sole
+# GPU pod cannot be confirmed (the replacement cannot schedule until the old pod frees the
+# one GPU), so the operator would dispatch but safely decline to leave no model server.
+# Quarantine is the right actuator here: it network-isolates the compromised pod in place
+# (a deny-all NetworkPolicy) without destroying the only model server.
 apiVersion: phorvex.ai/v1alpha1
 kind: PhorvexPolicy
 metadata:
@@ -67,7 +69,7 @@ spec:
     matchLabels:
       app.kubernetes.io/name: vllm
   actions:
-    enabled: [rotate]
+    enabled: [quarantine]
   assetValue:
     blastRadiusFromGraph: true
     fromLabels:

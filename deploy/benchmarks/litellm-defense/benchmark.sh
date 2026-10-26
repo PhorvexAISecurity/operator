@@ -111,27 +111,34 @@ spec:
   targets: ["$NS/$pod"]
 YAML
 
-  local rotated_at="null" decision="null" t=0
+  # Containment is observed as either effect: the target pod rotated away (deleted), or the
+  # target network-isolated in place by a quarantine NetworkPolicy / quarantine-epoch label.
+  local rotated_at="null" mechanism="null" decision="null" t=0
   while [ "$t" -lt "$window" ]; do
     local d; d="$(capture_decision "$pod")"
     [ "$d" != "null" ] && decision="$d"
     if ! K -n "$NS" get pod "$pod" >/dev/null 2>&1 \
        || [ -n "$(K -n "$NS" get pod "$pod" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)" ]; then
-      rotated_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; break
+      rotated_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"rotated"'; break
+    fi
+    if K -n "$NS" get networkpolicy "phorvex-quarantine-$pod" >/dev/null 2>&1 \
+       || [ -n "$(K -n "$NS" get pod "$pod" -o jsonpath='{.metadata.labels.phorvex\.ai/quarantine-epoch}' 2>/dev/null)" ]; then
+      rotated_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"quarantined"'; break
     fi
     sleep "$POLL"; t=$((t + POLL))
   done
   [ "$decision" = null ] && decision="$(capture_decision "$pod")"
 
-  python3 - "$RESULTS" "$mode" "$2" "$target" "$attempt" "$fired_at" "$rotated_at" "$event" "$pod" "$decision" <<'PY'
+  python3 - "$RESULTS" "$mode" "$2" "$target" "$attempt" "$fired_at" "$rotated_at" "$mechanism" "$event" "$pod" "$decision" <<'PY'
 import sys, json
-path, mode, defense, target, attempt, fired, rotated, ev, pod, decision = sys.argv[1:]
+path, mode, defense, target, attempt, fired, rotated, mechanism, ev, pod, decision = sys.argv[1:]
 rec = {"mode": mode, "defense": defense, "target": target, "attempt": int(attempt),
-       "firedAt": fired, "rotatedAt": json.loads(rotated), "attackId": ev,
-       "targetPod": pod, "decision": json.loads(decision)}
+       "firedAt": fired, "rotatedAt": json.loads(rotated), "mechanism": json.loads(mechanism),
+       "attackId": ev, "targetPod": pod, "decision": json.loads(decision)}
 with open(path, "a") as f:
     f.write(json.dumps(rec) + "\n")
-print("  recorded", mode, target, "#"+attempt, "rotated=" + ("yes" if rotated != "null" else "no"))
+print("  recorded", mode, target, "#"+attempt,
+      "contained=" + ("no" if rotated == "null" else json.loads(mechanism)))
 PY
 }
 
