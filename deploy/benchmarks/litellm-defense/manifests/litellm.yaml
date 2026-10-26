@@ -1,11 +1,11 @@
-# The protected workloads, in their own namespace `litellm`:
-#   - litellm : a LiteLLM proxy (3 replicas), the original rotation target
-#   - vllm    : the GPU-backed model behind LiteLLM (1 replica), ALSO a rotation target here
-#   - demo-load : steady chat traffic so both carry a measured request rate
+# The protected workloads, each in its OWN namespace so the operator defends each as its
+# own tenant (a cluster-scoped SecurityEvent routes to a policy by its target's namespace):
+#   - namespace litellm : the LiteLLM proxy (3 replicas) + demo-load traffic
+#   - namespace vllm    : the GPU-backed model server (1 replica)
 #
 # Both litellm and vllm are fronted by an nginx sidecar that counts requests in stub_status;
 # the exporter turns that into http_requests_total per pod — the metric the sensor reads so
-# the brain can price a rotation. Without that load, rotate is refused (missing-load).
+# the brain can price an action. Without that load, an action is refused (missing-load).
 #
 # Images are pinned to tags install.sh does not rewrite. Adjust MODEL / GPU in install.sh.
 apiVersion: v1
@@ -15,14 +15,23 @@ metadata:
   labels:
     app.kubernetes.io/part-of: litellm-defense-benchmark
 ---
-# vLLM: the GPU model behind LiteLLM, fronted by an nginx sidecar and labelled as a
-# rotation target so the benchmark can attack it too. One GPU set cannot host two vLLM
-# pods, so it replaces in place (Recreate) and its policy tolerates a single replica.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vllm
+  labels:
+    app.kubernetes.io/part-of: litellm-defense-benchmark
+---
+# vLLM: the GPU model server, in its own namespace/tenant. Single replica (one GPU set),
+# fronted by an nginx sidecar so it carries a measured request rate and the brain can price
+# an action. Labelled as a target; its policy (manifests/policy.yaml) defends it with
+# quarantine — network-isolating the compromised pod in place rather than destroying the
+# only model server.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: vllm
-  namespace: litellm
+  namespace: vllm
   labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
 spec:
   replicas: 1
@@ -86,14 +95,14 @@ spec:
 ---
 apiVersion: v1
 kind: Service
-metadata: {name: vllm, namespace: litellm}
+metadata: {name: vllm, namespace: vllm}
 spec:
   selector: {app.kubernetes.io/name: vllm}
   ports: [{name: http, port: 8000, targetPort: http}]   # -> nginx :8080 -> vLLM :8000
 ---
 apiVersion: v1
 kind: ConfigMap
-metadata: {name: vllm-nginx, namespace: litellm}
+metadata: {name: vllm-nginx, namespace: vllm}
 data:
   default.conf: |
     server {
@@ -106,6 +115,28 @@ data:
       location = /stub_status { stub_status; }
     }
 ---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm
+  namespace: vllm
+  labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
+spec:
+  selector:
+    matchLabels: {app.kubernetes.io/name: vllm}
+  podMetricsEndpoints:
+  - port: metrics
+    interval: 15s
+    metricRelabelings:
+    - action: keep
+      sourceLabels: [__name__]
+      regex: nginx_http_requests_total|nginx_up
+    - action: replace
+      sourceLabels: [__name__]
+      regex: nginx_http_requests_total
+      targetLabel: __name__
+      replacement: http_requests_total
+---
 apiVersion: v1
 kind: ConfigMap
 metadata: {name: litellm-config, namespace: litellm}
@@ -115,7 +146,7 @@ data:
     - model_name: demo
       litellm_params:
         model: openai/__MODEL__
-        api_base: http://vllm:8000/v1
+        api_base: http://vllm.vllm.svc.cluster.local:8000/v1
         api_key: none
     general_settings:
       # Open for the benchmark; the request counter is what the brain reads, not the content.
@@ -203,7 +234,7 @@ spec:
   ports: [{name: http, port: 80, targetPort: http}]   # -> nginx :8080 -> litellm :4000
 ---
 # Steady chat traffic through the Service, so every LiteLLM pod (and vLLM behind it) has a
-# measured request rate; without a load the brain prices a rotation at its conservative
+# measured request rate; without a load the brain prices an action at its conservative
 # bound and the SLO gate refuses it.
 apiVersion: apps/v1
 kind: Deployment
@@ -236,8 +267,8 @@ spec:
         resources: {requests: {cpu: 10m, memory: 32Mi}, limits: {memory: 64Mi}}
         securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}
 ---
-# Scrape each workload's nginx exporter and expose its request counter as
-# http_requests_total, the metric the sensor reads per pod.
+# Scrape the LiteLLM nginx exporter and expose its request counter as http_requests_total,
+# the metric the sensor reads per pod.
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -247,28 +278,6 @@ metadata:
 spec:
   selector:
     matchLabels: {app.kubernetes.io/name: litellm}
-  podMetricsEndpoints:
-  - port: metrics
-    interval: 15s
-    metricRelabelings:
-    - action: keep
-      sourceLabels: [__name__]
-      regex: nginx_http_requests_total|nginx_up
-    - action: replace
-      sourceLabels: [__name__]
-      regex: nginx_http_requests_total
-      targetLabel: __name__
-      replacement: http_requests_total
----
-apiVersion: monitoring.coreos.com/v1
-kind: PodMonitor
-metadata:
-  name: vllm
-  namespace: litellm
-  labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
-spec:
-  selector:
-    matchLabels: {app.kubernetes.io/name: vllm}
   podMetricsEndpoints:
   - port: metrics
     interval: 15s

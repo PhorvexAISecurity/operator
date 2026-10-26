@@ -59,7 +59,7 @@ apiVersion: phorvex.ai/v1alpha1
 kind: PhorvexPolicy
 metadata:
   name: vllm-defense
-  namespace: litellm
+  namespace: vllm
   labels:
     app.kubernetes.io/part-of: litellm-defense-benchmark
 spec:

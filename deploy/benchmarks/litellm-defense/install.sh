@@ -163,15 +163,17 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
 
 # ── 4. Namespaces + ECR pull secret + HF token ───────────────────────────────
 say "namespaces + ECR pull secret"
-for ns in "$OPNS" litellm; do "${KUBECTL[@]}" create namespace "$ns" --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -; done
+for ns in "$OPNS" litellm vllm; do "${KUBECTL[@]}" create namespace "$ns" --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -; done
 ECR_PW="${ECR_PASSWORD:-$(aws ecr get-login-password --region "$AWS_REGION")}"
-for ns in "$OPNS" litellm; do
+for ns in "$OPNS" litellm vllm; do
   "${KUBECTL[@]}" -n "$ns" create secret docker-registry ecr \
     --docker-server="$ECR" --docker-username=AWS --docker-password="$ECR_PW" \
     --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -
 done
-"${KUBECTL[@]}" -n litellm create secret generic hf-token --from-literal=token="$HF_TOKEN" \
-  --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -
+for ns in litellm vllm; do
+  "${KUBECTL[@]}" -n "$ns" create secret generic hf-token --from-literal=token="$HF_TOKEN" \
+    --dry-run=client -o yaml | "${KUBECTL[@]}" apply -f -
+done
 
 # ── 4b. AMTD CRDs + the benchmark's red-team identity ─────────────────────────
 # The operator watches SecurityEvents (and the rest of the AMTD API) and the chart's
