@@ -127,7 +127,7 @@ YAML
        || [ -n "$(K -n "$ns" get pod "$pod" -o jsonpath='{.metadata.deletionTimestamp}' 2>/dev/null)" ]; then
       contained_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"rotated"'; break
     fi
-    if K -n "$ns" get networkpolicy "phorvex-quarantine-$pod" >/dev/null 2>&1 \
+    if [ -n "$(K -n "$ns" get networkpolicy -l app.kubernetes.io/managed-by=phorvex -o name 2>/dev/null)" ] \
        || [ -n "$(K -n "$ns" get pod "$pod" -o jsonpath='{.metadata.labels.phorvex\.ai/quarantine-epoch}' 2>/dev/null)" ]; then
       contained_at="\"$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)\""; mechanism='"quarantined"'; break
     fi
