@@ -32,7 +32,7 @@ TARGETS="${TARGETS:-litellm vllm}"   # workloads to attack (deployment == app.ku
 ATTACKS="${ATTACKS:-3}"              # attacks per workload per mode (3..5)
 WINDOW_DEF="${WINDOW_DEF:-120}"      # defended: seconds to wait for containment
 WINDOW_UNDEF="${WINDOW_UNDEF:-45}"   # undefended: seconds to confirm non-containment
-SETTLE="${SETTLE:-20}"               # seconds for fresh pods to accumulate a request rate
+SETTLE="${SETTLE:-45}"               # seconds for a fresh (just-rotated) pod to re-accumulate a request rate
 POLL="${POLL:-3}"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -59,7 +59,16 @@ set_defense() {    # $1 = on|off  (on => kill switch false => actuator acts)
 reset_target() {   # $1 = deployment/app name
   K delete securityevent.amtd.r6security.com -l benchmark=litellm-defense --ignore-not-found >/dev/null 2>&1 || true
   K -n "$NS" rollout status deploy/"$1" --timeout=6m >/dev/null 2>&1 || true
-  sleep "$SETTLE"   # let the (possibly fresh) pods accumulate a request rate before pricing
+  # Wait out any still-terminating pod from a previous rotation, so the next attack targets a
+  # fresh, live pod rather than one already being deleted (vLLM terminates slowly).
+  local i term
+  for i in $(seq 1 60); do
+    term="$(K -n "$NS" get pod -l app.kubernetes.io/name="$1" \
+      -o jsonpath='{range .items[*]}{.metadata.deletionTimestamp}{"\n"}{end}' 2>/dev/null | grep -c . || true)"
+    [ "${term:-0}" -eq 0 ] && break
+    sleep 3
+  done
+  sleep "$SETTLE"   # let the (possibly fresh) single-replica pod re-accumulate a request rate
 }
 
 # The latest decision record the manager logged for a pod, as compact JSON (or "null").
@@ -77,8 +86,11 @@ run_attack() {   # $1 = mode (defended|undefended) ; $2 = defense on|off ; $3 = 
   local window="$WINDOW_DEF"; [ "$mode" = undefended ] && window="$WINDOW_UNDEF"
   reset_target "$target"
 
+  # Pick a Running pod that is NOT already terminating (empty deletionTimestamp).
   local pod; pod="$(K -n "$NS" get pod -l app.kubernetes.io/name="$target" \
-    --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)"
+    --field-selector=status.phase=Running \
+    -o jsonpath='{range .items[*]}{.metadata.deletionTimestamp}{"~"}{.metadata.name}{"\n"}{end}' 2>/dev/null \
+    | awk -F'~' '$1==""{print $2; exit}')"
   [ -n "$pod" ] || { echo "  no running $target pod to target; skipping" >&2; return 0; }
 
   local event="redteam-${mode}-${target}-${attempt}-$(date +%s)"
