@@ -1,6 +1,12 @@
-# The policy operator-refactored defends LiteLLM with: event-driven, reactive, rotate
-# only. Rotate (not quarantine) because a deny-all NetworkPolicy can isolate more than
-# the target on some CNIs (docs/services/actuator.md, "Quarantine on the AWS VPC CNI").
+# operator-refactored defends two workloads in the `litellm` namespace with: event-driven,
+# reactive, rotate only. Rotate (not quarantine) because a deny-all NetworkPolicy can
+# isolate more than the target on some CNIs (docs/services/actuator.md).
+#
+# antiOverRotationWindow is short (20s) so the benchmark can fire several attacks at the
+# same workload in succession and see each one rotate, rather than the second being
+# rate-limited as an over-rotation.
+---
+# LiteLLM proxy: 3 replicas, so keep 2 available across a rotation.
 apiVersion: phorvex.ai/v1alpha1
 kind: PhorvexPolicy
 metadata:
@@ -25,7 +31,7 @@ spec:
         restricted: "1.0"
     weightSecrets: "0.8"
   budget:
-    antiOverRotationWindow: 90s
+    antiOverRotationWindow: 20s
     maxGracePeriodSeconds: 30
     maxMovesPerTick: 1
     proactiveFloor: 15m
@@ -39,6 +45,52 @@ spec:
   slo:
     costCeiling: "1.2"
     minAvailableReplicas: 2
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: true
+---
+# vLLM: a single GPU-backed replica. minAvailableReplicas 0 lets the operator rotate the
+# sole replica (a brief model-reload outage is the containment cost), and a wider cost
+# ceiling keeps that rotation feasible so the two-mode contrast is visible on vLLM too.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: vllm-defense
+  namespace: litellm
+  labels:
+    app.kubernetes.io/part-of: litellm-defense-benchmark
+spec:
+  tenant: vllm
+  mode: active
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm
+  actions:
+    enabled: [rotate]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 20s
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 5s
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    disruptionAversion: "1"
+    lambda: "0"
+  slo:
+    costCeiling: "5.0"
+    minAvailableReplicas: 0
   triggers:
     eventAgeHorizon: 1h
     eventDriven: true
