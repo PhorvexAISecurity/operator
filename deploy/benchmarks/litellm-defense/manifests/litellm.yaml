@@ -20,6 +20,8 @@ metadata:
   labels: {app.kubernetes.io/name: vllm, app.kubernetes.io/part-of: litellm-defense-benchmark}
 spec:
   replicas: 1
+  # One GPU set cannot host two vLLM pods, so replace in place rather than roll.
+  strategy: {type: Recreate}
   selector:
     matchLabels: {app.kubernetes.io/name: vllm}
   template:
@@ -30,21 +32,29 @@ spec:
       runtimeClassName: nvidia
       containers:
       - name: vllm
-        image: vllm/vllm-openai:v0.6.3.post1
-        args: ["--model", "__MODEL__", "--max-model-len", "4096", "--gpu-memory-utilization", "0.6", "--port", "8000"]
+        image: __VLLM_IMAGE__
+        # Tensor-parallel across the pod's GPUs (TP=1 on a single GPU).
+        args: ["--model", "__MODEL__", "--tensor-parallel-size", "__TP__", "--dtype", "__DTYPE__", "--max-model-len", "__MAX_LEN__", "--gpu-memory-utilization", "__GPU_MEM_UTIL__", "--port", "8000"]
         ports: [{name: http, containerPort: 8000}]
         env:
         - {name: HF_HOME, value: /tmp/hf}
+        # Optional; needed only for gated models. install.sh creates the (possibly empty) secret.
+        - {name: HUGGING_FACE_HUB_TOKEN, valueFrom: {secretKeyRef: {name: hf-token, key: token, optional: true}}}
         readinessProbe:
           httpGet: {path: /health, port: http}
           initialDelaySeconds: 30
           periodSeconds: 10
-          failureThreshold: 60
+          failureThreshold: 90
         resources:
-          limits: {nvidia.com/gpu: 1}
-          requests: {cpu: "1", memory: 4Gi}
-        volumeMounts: [{name: cache, mountPath: /tmp/hf}]
-      volumes: [{name: cache, emptyDir: {}}]
+          # No memory limit: loading a large model needs more host RAM than a tight cap allows.
+          limits: {nvidia.com/gpu: __GPUS__}
+          requests: {cpu: "2", memory: 8Gi}
+        volumeMounts:
+        - {name: cache, mountPath: /tmp/hf}
+        - {name: shm, mountPath: /dev/shm}   # NCCL needs shared memory for multi-GPU TP
+      volumes:
+      - {name: cache, emptyDir: {}}
+      - {name: shm, emptyDir: {medium: Memory, sizeLimit: 8Gi}}
 ---
 apiVersion: v1
 kind: Service
