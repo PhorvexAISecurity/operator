@@ -40,7 +40,7 @@ func TestM109GeneratorGateAndTraceRetainExactGPUEnvelopeProvenance(t *testing.T)
 		t.Fatal(err)
 	}
 
-	newFixture := func(t *testing.T, residual float64) (*CoverageEngine, *model.WorkloadView, model.Policy, cost.P1Evaluation) {
+	newFixture := func(t *testing.T, residual float64, observations int) (*CoverageEngine, *model.WorkloadView, model.Policy, cost.P1Evaluation) {
 		t.Helper()
 		e := fixedTraceEngine()
 		pol := decisionTracePolicy(1, true)
@@ -50,9 +50,11 @@ func TestM109GeneratorGateAndTraceRetainExactGPUEnvelopeProvenance(t *testing.T)
 		cpu := covView("m109-cpu-observation", true, 2*time.Hour, false)
 		cpu.Pod.HasGPU = false
 		bucket := e.costFor(pol.Owner(), pol.Lambda)
-		measured := bucket.RLS.Predict(cost.Features(cpu)) + residual
-		e.ObserveRotation(pol.Owner(), cpu, measured)
-		if !bucket.RLS.Primed() || bucket.RLS.Updates() != 1 {
+		for i := 0; i < observations; i++ {
+			measured := bucket.RLS.Predict(cost.Features(cpu)) + residual
+			e.ObserveRotation(pol.Owner(), cpu, measured)
+		}
+		if !bucket.RLS.Primed() || bucket.RLS.Updates() != observations {
 			t.Fatalf("actual owner bucket did not consume CPU observation: primed=%t updates=%d", bucket.RLS.Primed(), bucket.RLS.Updates())
 		}
 		evaluation := bucket.Evaluation(gpu, model.Move{Action: model.ActionRotate}, pol)
@@ -60,7 +62,7 @@ func TestM109GeneratorGateAndTraceRetainExactGPUEnvelopeProvenance(t *testing.T)
 	}
 
 	t.Run("included row", func(t *testing.T) {
-		e, gpu, pol, evaluation := newFixture(t, 0)
+		e, gpu, pol, evaluation := newFixture(t, 0, 1)
 		pol.CostCeiling = 100
 		decision := e.Decide([]*model.WorkloadView{gpu}, pol)[0]
 		if decision.Trace == nil {
@@ -85,7 +87,7 @@ func TestM109GeneratorGateAndTraceRetainExactGPUEnvelopeProvenance(t *testing.T)
 	})
 
 	t.Run("SLO-excluded row", func(t *testing.T) {
-		e, gpu, pol, evaluation := newFixture(t, 0)
+		e, gpu, pol, evaluation := newFixture(t, 0, 1)
 		quantile, ok := e.costFor(pol.Owner()).ConformalQuantile()
 		if !ok {
 			t.Fatal("generic conformal quantile unavailable")
@@ -118,7 +120,8 @@ func TestM109GeneratorGateAndTraceRetainExactGPUEnvelopeProvenance(t *testing.T)
 	})
 
 	t.Run("larger generic uncertainty", func(t *testing.T) {
-		e, gpu, pol, evaluation := newFixture(t, 0.8)
+		// The generic slack replaces the cold-start value only once the window is calibrated.
+		e, gpu, pol, evaluation := newFixture(t, 0.8, cost.ConformalMinimumSamples)
 		pol.CostCeiling = 100
 		decision := e.Decide([]*model.WorkloadView{gpu}, pol)[0]
 		if decision.Trace == nil {

@@ -179,3 +179,60 @@ func TestMeasuredT4GPUEnvelopeConfiguresCHi(t *testing.T) {
 		t.Fatal("invalid calibration changed the active GPU envelope")
 	}
 }
+
+func TestConformalBoundIsOneSidedAndGatedOnCalibration(t *testing.T) {
+	b := NewConformalBound()
+	b.Observe(-0.7)
+	if b.residuals[0] != 0 {
+		t.Fatalf("over-prediction stored as %v, want 0 (one-sided upper bound)", b.residuals[0])
+	}
+	for len(b.residuals) < ConformalMinimumSamples-1 {
+		b.Observe(5)
+	}
+	if b.Calibrated() || b.Quantile() != ColdStartSlack {
+		t.Fatalf("uncalibrated window (n=%d) replaced the cold-start slack: q=%v", len(b.residuals), b.Quantile())
+	}
+
+	b = NewConformalBound()
+	for i := 1; i <= ConformalMinimumSamples; i++ {
+		b.Observe(float64(i) / 100)
+	}
+	// Finite-sample split-conformal rank ceil((20+1)*0.9) = 19 -> the 19th smallest.
+	if got := b.Quantile(); math.Abs(got-0.19) > 1e-12 {
+		t.Fatalf("calibrated quantile = %v, want 0.19", got)
+	}
+}
+
+// Staging regression (2026-10-26): a rotation that was Ready in ~1 s (C_flow 0.0025
+// against a Warm prior of ~0.7) widened the conformal slack 0.1 -> 0.70 and pushed
+// rotate C_hi past demo-api-defense's 1.2 SLO ceiling. New residuals only come from
+// executed rotations, so rotate stayed excluded for that owner.
+func TestFastRotationDoesNotLockRotateOutOfSLO(t *testing.T) {
+	const costCeiling = 1.2 // demo-api-defense slo.costCeiling
+	pol := model.Policy{NormSparsity: 0.4, FlowDisruption: 0.6}
+	view := &model.WorkloadView{
+		Pod:       model.Pod{Namespace: "phorvex-staging-demo", Name: "demo-api"},
+		Phase:     model.PhaseWarm,
+		Telemetry: model.Telemetry{ReqRate: model.PresentSignal(5, "test")},
+	}
+	rotate := model.Move{Action: model.ActionRotate}
+	c := NewP1Cost()
+
+	if before := c.Evaluation(view, rotate, pol); before.CHi > costCeiling {
+		t.Fatalf("cold-start rotate CHi = %v, want <= %v", before.CHi, costCeiling)
+	}
+	c.ObserveRotation(view, 0.0025)
+	after := c.Evaluation(view, rotate, pol)
+	if after.CHi > costCeiling {
+		t.Fatalf("one fast rotation locked rotate out: CHi = %v > ceiling %v (q=%v)", after.CHi, costCeiling, c.Conformal.Quantile())
+	}
+	if q, _ := c.ConformalQuantile(); q != ColdStartSlack {
+		t.Fatalf("conformal slack after one sample = %v, want cold-start %v", q, ColdStartSlack)
+	}
+	for i := 0; i < 2*ConformalMinimumSamples; i++ {
+		c.ObserveRotation(view, 0.0025)
+		if got := c.Evaluation(view, rotate, pol); got.CHi > costCeiling {
+			t.Fatalf("rotation %d locked rotate out: CHi = %v > ceiling %v", i+2, got.CHi, costCeiling)
+		}
+	}
+}

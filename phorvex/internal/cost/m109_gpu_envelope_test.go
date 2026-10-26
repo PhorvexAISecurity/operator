@@ -49,7 +49,7 @@ func TestM109GPUEnvelopeSurvivesUnrelatedGenericCalibration(t *testing.T) {
 	if c.Conformal.Calibrated() {
 		t.Fatal("one generic residual unexpectedly reported calibrated")
 	}
-	requireM109Close(t, "zero-residual quantile", c.Conformal.Quantile(), 0)
+	requireM109Close(t, "uncalibrated quantile keeps the cold-start slack", c.Conformal.Quantile(), ColdStartSlack)
 
 	after := c.Evaluation(gpu, rotate, pol)
 	requireM109Close(t, "GPU expected cost after zero innovation", after.Total, before.Total)
@@ -63,7 +63,7 @@ func TestM109GPUEnvelopeSurvivesUnrelatedGenericCalibration(t *testing.T) {
 	if cpuEval.GPUEnvelopeApplied || cpuEval.GPUEnvelopeSlack != 0 {
 		t.Fatalf("CPU rotate acquired GPU envelope provenance: %+v", cpuEval)
 	}
-	requireM109Close(t, "CPU robust slack", cpuEval.CHi-cpuEval.Total, 0)
+	requireM109Close(t, "CPU robust slack", cpuEval.CHi-cpuEval.Total, ColdStartSlack)
 
 	for c.RLS.Updates() < 20 {
 		c.ObserveRotation(cpu, c.RLS.Predict(Features(cpu)))
@@ -87,8 +87,10 @@ func TestM109GenericUncertaintyAndMeanLearningRemainLive(t *testing.T) {
 	rotate := model.Move{Action: model.ActionRotate}
 
 	largeResidual := NewP1Cost()
-	prediction := largeResidual.RLS.Predict(Features(cpu))
-	largeResidual.ObserveRotation(cpu, prediction+0.8)
+	for !largeResidual.Conformal.Calibrated() {
+		prediction := largeResidual.RLS.Predict(Features(cpu))
+		largeResidual.ObserveRotation(cpu, prediction+0.8)
+	}
 	eval := largeResidual.Evaluation(gpu, rotate, pol)
 	if !eval.GPUEnvelopeApplied {
 		t.Fatal("larger generic uncertainty hid the configured GPU envelope provenance")

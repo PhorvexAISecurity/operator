@@ -401,15 +401,15 @@ func TestNaNFeatureFailsConservativeWithDistinctCategory(t *testing.T) {
 }
 
 // The CHi >= ECost contract rests on the conformal slack never being negative. Verify the
-// mechanism rather than assuming it: ConformalBound.Observe stores |residual|, so the quantile
-// is an order statistic over non-negative values no matter what is observed.
+// mechanism rather than assuming it: ConformalBound.Observe stores max(0, residual), so the
+// quantile is an order statistic over non-negative values no matter what is observed.
 func TestPart3_ConformalSlackIsNeverNegative(t *testing.T) {
 	c := NewP1Cost()
 	for _, r := range []float64{-0.9, -5, -1e6, 0, 0.3, 7} {
 		c.Conformal.Observe(r)
 	}
 	if q := c.Conformal.Quantile(); q < 0 {
-		t.Errorf("conformal quantile = %v after negative observations, want >= 0 (Observe must store |residual|)", q)
+		t.Errorf("conformal quantile = %v after negative observations, want >= 0 (Observe must clamp residuals at 0)", q)
 	}
 	// and the end-to-end contract still holds on that populated window
 	pol := defaultPolicy()
