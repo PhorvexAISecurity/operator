@@ -200,7 +200,7 @@ echo "    console $CONSOLE_DIGEST"
 say "audit mTLS Secrets"
 NAMESPACE="$OPNS" SERVER_SECRET="${RELEASE}-audit-server" CLIENT_SECRET="${RELEASE}-audit-client" \
   SERVER_DNS="${RELEASE}-phorvex-audit-source.${OPNS}.svc" CLIENT_DNS="${RELEASE}-phorvex-console.${OPNS}.svc" \
-  KUBECONFIG="$KUBECONFIG" $SUDO -E bash "$REPO_ROOT/deploy/eks/provision-audit-mtls.sh"
+  KUBECONFIG="$KUBECONFIG" ${SUDO:+$SUDO -E} bash "$REPO_ROOT/deploy/eks/provision-audit-mtls.sh"
 
 # ── 7. the K3s OIDC issuer, for the console's bearer identity ─────────────────
 ISSUER="$("${KUBECTL[@]}" get --raw /.well-known/openid-configuration | sed -n 's/.*"issuer":"\([^"]*\)".*/\1/p')"
