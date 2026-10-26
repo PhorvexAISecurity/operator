@@ -49,6 +49,8 @@ HF_TOKEN="${HF_TOKEN:-}"
 ECR_PASSWORD="${ECR_PASSWORD:-}"       # set with the two digests below => no AWS CLI/creds on this host
 MANAGER_DIGEST="${MANAGER_DIGEST:-}"   # sha256:...  (resolve off-host to keep AWS creds off the VM)
 CONSOLE_DIGEST="${CONSOLE_DIGEST:-}"   # sha256:...
+BACKEND="${BACKEND:-native}"           # native | hybrid : hybrid deploys phorvex-amtd and routes
+                                       # quarantine through it (brain = operator-refactored, hands = phorvex-amtd)
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -212,9 +214,25 @@ say "console bearer identity verified against $ISSUER"
 VALUES="$(mktemp)"; trap 'rm -f "$VALUES"' EXIT
 sed "s#__K3S_ISSUER__#${ISSUER}#g" "$HERE/values/operator.yaml" > "$VALUES"
 
+# ── 7b. optional phorvex-amtd backend (hybrid actuator) ───────────────────────
+# In hybrid, operator-refactored's brain decides and the upstream AMTD engine (deployed here
+# as "phorvex-amtd") enacts quarantine through an AdaptiveMovingTargetDefense CR; rotate stays
+# native. The chart bundles the AMTD CRDs under templates/crds, but they are already installed
+# (section 4b), so install from a copy with those templates removed to avoid ownership conflict.
+ACTUATOR_SET=""
+if [ "$BACKEND" != native ]; then
+  say "phorvex-amtd (AMTD backend) for the $BACKEND actuator"
+  AMTD_SRC="$REPO_ROOT/build/phoenix-extended/charts/phoenix"
+  AMTD_CHART="$(mktemp -d)/phoenix"; cp -r "$AMTD_SRC" "$AMTD_CHART"
+  rm -f "$AMTD_CHART"/templates/crds/*.yaml 2>/dev/null || true; rmdir "$AMTD_CHART"/templates/crds 2>/dev/null || true
+  helm upgrade --install phorvex-amtd "$AMTD_CHART" -n phorvex-amtd --create-namespace --wait --timeout 5m || true
+  "${KUBECTL[@]}" -n phorvex-amtd rollout status deploy/operator-controller-manager --timeout=4m || true
+  ACTUATOR_SET="--set phorvex.actuator=$BACKEND"
+fi
+
 # ── 8. operator-refactored ────────────────────────────────────────────────────
-say "operator-refactored (native, console on) into $OPNS"
-helm upgrade --install "$RELEASE" "$CHART" --namespace "$OPNS" -f "$VALUES" \
+say "operator-refactored ($BACKEND actuator, console on) into $OPNS"
+helm upgrade --install "$RELEASE" "$CHART" --namespace "$OPNS" -f "$VALUES" $ACTUATOR_SET \
   --set phorvex.image.repository="$ECR/phorvex/manager" \
   --set phorvex.image.tag="$MANAGER_TAG" \
   --set phorvex.image.releaseDigest="$MANAGER_DIGEST" \

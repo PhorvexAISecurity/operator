@@ -133,6 +133,13 @@ helm -n monitoring uninstall kube-prometheus-stack
   must exceed the number of quarantine attacks (set to 16 here); at the default 1 the
   second attack onward is refused for lack of capacity. `endpoint-rotate` is supported but
   needs the M-35 endpoint-discovery condition, not a generic foothold.
+- **Two backends (native vs hybrid).** By default the operator's own native backend enacts
+  rotate and quarantine directly. `BACKEND=hybrid ... install.sh` instead deploys the upstream
+  AMTD engine as **phorvex-amtd** (`ghcr.io/r6security/phoenix/amtd-operator`) and runs the
+  manager in hybrid: the operator-refactored brain decides and phorvex-amtd's hands enact
+  quarantine through an AdaptiveMovingTargetDefense CR (the resulting NetworkPolicy is
+  `<ns>-<pod>-policy`, owned by that CR), while rotate stays native. The scenario benchmark's
+  containment detection is backend-agnostic (any NetworkPolicy on the target, or pod rotation).
 - **Single-replica vLLM.** The GPU model server has one replica, so it cannot be rotated or
   quarantined without a total outage; the operator declines to contain it (it evaluates the
   foothold but produces no containment move). A replicated model server, or a route-level
