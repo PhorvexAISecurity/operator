@@ -11,6 +11,11 @@ phorvex:
   policyNamespaces: [litellm, vllm]
   actuator: native
   actuatorNamespaces: [litellm, vllm]
+  # A quarantine retains its NetworkPolicy until recovered, and each consumes one slot of
+  # per-namespace capacity. The benchmark fires several quarantine attacks in succession, so
+  # raise the default (1) well above that; otherwise the second attack onward is refused for
+  # lack of capacity even after the prior NetworkPolicy is cleared.
+  maxRetainedQuarantinesPerNamespace: 16
   # The benchmark sets this: false lets the actuator rotate (defense on), true suppresses
   # dispatch while the brain still decides (defense off).
   globalKillSwitch: false

@@ -125,12 +125,18 @@ helm -n monitoring uninstall kube-prometheus-stack
 ## Notes and limits
 
 - **Actuators exercised.** The native backend implements `rotate`, `quarantine` and
-  `endpoint-rotate`. In this harness **rotate** contains every serving foothold
-  reproducibly (~4 s on the 3-replica litellm). **quarantine** is implemented and isolates
-  a litellm pod in an isolated manual test, but did not reproduce reliably when driven
-  per-attack in-run; its NetworkPolicy is `phorvex-quarantine-<hash>` (detect by the
-  `app.kubernetes.io/managed-by=phorvex` label, not a pod-named policy). `endpoint-rotate`
-  is supported but needs the M-35 endpoint-discovery condition, not a generic foothold.
+  `endpoint-rotate`. On the 3-replica litellm, **rotate** replaces the compromised pod
+  (~4 s) and **quarantine** isolates it in place with a deny-all NetworkPolicy
+  (`phorvex-quarantine-<hash>` — detect by the `app.kubernetes.io/managed-by=phorvex`
+  label, not a pod-named policy). Quarantine retains its NetworkPolicy and consumes one
+  slot of per-namespace capacity until recovered, so `maxRetainedQuarantinesPerNamespace`
+  must exceed the number of quarantine attacks (set to 16 here); at the default 1 the
+  second attack onward is refused for lack of capacity. `endpoint-rotate` is supported but
+  needs the M-35 endpoint-discovery condition, not a generic foothold.
+- **Single-replica vLLM.** The GPU model server has one replica, so it cannot be rotated or
+  quarantined without a total outage; the operator declines to contain it (it evaluates the
+  foothold but produces no containment move). A replicated model server, or a route-level
+  action, would be contained; this is a real limit worth the brain/actuator owners' attention.
 
 - **Two tenants, one per namespace.** `litellm` (the 3-replica proxy) is defended with
   **rotate** and `vllm` (the single GPU model server) with **quarantine** — each in its own

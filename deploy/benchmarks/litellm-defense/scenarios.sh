@@ -30,17 +30,17 @@ WINDOW_UNDEF="${WINDOW_UNDEF:-45}"
 SETTLE="${SETTLE:-45}"
 POLL="${POLL:-3}"
 
-# Each serving foothold is contained by ROTATE (replace the compromised pod) — the native
-# MTD action that fires reproducibly in this harness. The attack library prefers `quarantine`
-# (isolate in place) for several of these; quarantine is implemented and fired once in an
-# isolated manual test, but did not reproduce reliably when driven in-run here, so the
-# reproducible benchmark uses rotate. See README "Notes and limits".
+# Each attack is contained by the actuator the attack library assigns it, scoped to what the
+# native backend implements (quarantine, rotate). On the replicated LiteLLM proxy the operator
+# isolates the compromised replica in place (quarantine) or replaces it (rotate). The single
+# GPU-backed vLLM replica is included to show the operator's behaviour there (it cannot be
+# isolated or rotated without a total outage). See README "Notes and limits".
 SCENARIOS="${SCENARIOS:-$(cat <<'EOF'
-AML.T0029|Denial of AI Service|rotate|litellm
-AML.T0044|Full AI Model Access|rotate|litellm
-AML.T0046|Spamming AI System with Chaff Data|rotate|litellm
+AML.T0029|Denial of AI Service|quarantine|litellm
+AML.T0044|Full AI Model Access|quarantine|litellm
+AML.T0046|Spamming AI System with Chaff Data|quarantine|litellm
 MTD.FOOTHOLD|Compromised serving-pod foothold|rotate|litellm
-AML.T0029|Denial of AI Service|rotate|vllm
+AML.T0029|Denial of AI Service|quarantine|vllm
 EOF
 )}"
 
@@ -162,6 +162,14 @@ EOF
 }
 
 mkdir -p "$DATA"; : > "$RESULTS"
+# Free any quarantine capacity retained by a previous run. A quarantine keeps its slot in the
+# per-namespace capacity ledger until the operator recovers it; deleting the NetworkPolicy by
+# hand (as reset_target does) does not free the slot, so stale slots accumulate across runs and
+# would eventually refuse new quarantines. The operator rebuilds these ConfigMaps empty.
+K -n "$OPNS" get configmap -o name 2>/dev/null \
+  | grep -E 'phorvex-operation-|phorvex-quarantine-capacity-' \
+  | xargs -r -n1 K -n "$OPNS" delete >/dev/null 2>&1 || true
+
 run_mode defended on
 run_mode undefended off
 set_defense on
