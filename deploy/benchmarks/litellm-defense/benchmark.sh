@@ -58,6 +58,15 @@ set_defense() {    # $1 = on|off  (on => kill switch false => actuator acts)
 # Bring a target deployment back to a clean, loaded state before the next attack.
 reset_target() {   # $1 = deployment/app name
   K delete securityevent.amtd.r6security.com -l benchmark=litellm-defense --ignore-not-found >/dev/null 2>&1 || true
+  # Clear any quarantine left by a previous attack so each attack starts from an un-isolated
+  # pod. The threat (SecurityEvent) is already deleted, so the operator will not re-create it;
+  # this also covers the switch into undefended mode, where the operator is off and cannot
+  # recover its own quarantine.
+  K -n "$NS" delete networkpolicy -l app.kubernetes.io/managed-by=phorvex --ignore-not-found >/dev/null 2>&1 || true
+  local p
+  for p in $(K -n "$NS" get pod -l app.kubernetes.io/name="$1" -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}' 2>/dev/null); do
+    K -n "$NS" label pod "$p" phorvex.ai/quarantine-epoch- >/dev/null 2>&1 || true
+  done
   K -n "$NS" rollout status deploy/"$1" --timeout=6m >/dev/null 2>&1 || true
   # Wait out any still-terminating pod from a previous rotation, so the next attack targets a
   # fresh, live pod rather than one already being deleted (vLLM terminates slowly).
