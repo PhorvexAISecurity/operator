@@ -32,11 +32,11 @@ const (
 	ServiceName                  = "rag-store"
 	AppLabel                     = "app"
 	AppLabelValue                = "rag-store"
-	StoreConfigMapName           = "datastore-content"            // app-facing persistent store (poisoned, then restored)
-	StoreKey                     = "store.json"                   // the datastore records the app serves
-	TrustedSnapshotConfigMapName = "datastore-trusted-snapshot"   // operator-owned baseline; attacker never writes it
-	TrustedContentKey            = "store.json"                   // the trusted known-good records
-	TrustedSHAKey                = "store.sha256"                 // the trusted canonical sha256 (recomputed, never trusted blindly)
+	StoreConfigMapName           = "datastore-content"          // app-facing persistent store (poisoned, then restored)
+	StoreKey                     = "store.json"                 // the datastore records the app serves
+	TrustedSnapshotConfigMapName = "datastore-trusted-snapshot" // operator-owned baseline; attacker never writes it
+	TrustedContentKey            = "store.json"                 // the trusted known-good records
+	TrustedSHAKey                = "store.sha256"               // the trusted canonical sha256 (recomputed, never trusted blindly)
 	StoreMountPath               = "/etc/phorvex-datastore"
 	ReadbackPath                 = "/phorvex-store/hash"
 	GetPath                      = "/phorvex-store/get"

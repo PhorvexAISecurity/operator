@@ -89,18 +89,18 @@ type PolicyMaintenanceResult struct {
 
 // Request is one actuation: perform Action on Namespace/Pod for Tenant.
 type Request struct {
-	AdapterObservation        *model.AdapterObservation         // selection-time detector assertion; runtime rechecks event
-	OutputPolicyObservation   *model.SensitiveOutputObservation // selection-time exact response-field authority
-	VoiceMemoryObservation    *model.VoiceMemoryObservation     // selection-time exact caller/note digest authority
-	VoiceRefundObservation    *model.VoiceRefundObservation     // selection-time asserted caller/order pair authority
-	VoiceMCPObservation       *model.VoiceMCPObservation        // selection-time installed Voice/MCP source authority
-	VoiceAdmissionObservation *model.VoiceAdmissionObservation
-	VoiceOutputObservation    *model.VoiceOutputObservation   // selection-time observed synthetic output marker
-	LiteLLMClientObservation  *model.LiteLLMClientObservation // selection-time owned-client gateway authority
+	AdapterObservation          *model.AdapterObservation         // selection-time detector assertion; runtime rechecks event
+	OutputPolicyObservation     *model.SensitiveOutputObservation // selection-time exact response-field authority
+	VoiceMemoryObservation      *model.VoiceMemoryObservation     // selection-time exact caller/note digest authority
+	VoiceRefundObservation      *model.VoiceRefundObservation     // selection-time asserted caller/order pair authority
+	VoiceMCPObservation         *model.VoiceMCPObservation        // selection-time installed Voice/MCP source authority
+	VoiceAdmissionObservation   *model.VoiceAdmissionObservation
+	VoiceOutputObservation      *model.VoiceOutputObservation      // selection-time observed synthetic output marker
+	LiteLLMClientObservation    *model.LiteLLMClientObservation    // selection-time owned-client gateway authority
 	CRMRefundObservation        *model.CRMRefundObservation        // selection-time CRM deny-guard + abused-order authority
 	DatastoreRestoreObservation *model.DatastoreRestoreObservation // selection-time datastore store + operator-snapshot authority
 	AgentActionDenyObservation  *model.AgentActionDenyObservation  // selection-time agent deny-guard + abused (caller,action) authority
-	EndpointLeaseObservation  *model.EndpointLeaseObservation // selection-time accepted caller lease reuse authority
+	EndpointLeaseObservation    *model.EndpointLeaseObservation    // selection-time accepted caller lease reuse authority
 	// IdentityRotationObservation + PodBoundKubeAPIAuth are the selection-time dedicated-SA
 	// theft authority for identity-rotate. The native handler rechecks both against the live
 	// cluster (identityAuthority) before any ServiceAccount mutation.
@@ -123,14 +123,14 @@ type Request struct {
 	// CredentialRevokeObservation is the selection-time trusted stolen-SA-credential authority
 	// for credential-revoke.
 	CredentialRevokeObservation *model.CredentialRevokeObservation
-	TargetUID             string // Bound identity from the selecting snapshot.
-	TargetNamespaceUID    string // Bound by the protected quarantine-capacity reservation.
-	OperationID           string // Stable decision identity for protected quarantine and route operations.
-	TickID                string // Real selection tick; protected serving operation IDs are recomputed from it.
-	ServingObservation    *ServingSelectionObservation
-	PolicyName            string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID             string
-	PolicyGeneration      int64
+	TargetUID                   string // Bound identity from the selecting snapshot.
+	TargetNamespaceUID          string // Bound by the protected quarantine-capacity reservation.
+	OperationID                 string // Stable decision identity for protected quarantine and route operations.
+	TickID                      string // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation          *ServingSelectionObservation
+	PolicyName                  string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID                   string
+	PolicyGeneration            int64
 	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
 	// cap. The native handler re-reads and matches it at the mutation boundary.
 	// Zero is invalid and never means force deletion.

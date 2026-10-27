@@ -79,7 +79,7 @@ func bindAgentActionDenyObservation(ctx context.Context, reader client.Reader, p
 		CallerID: payload.CallerID, ActionID: payload.ActionID,
 		GuardConfigMapUID: payload.GuardConfigMapUID, ServiceUID: payload.ServiceUID,
 		TargetPodUID: payload.TargetPodUID,
-		PolicyName: payload.PolicyName, PolicyUID: payload.PolicyUID, PolicyGeneration: payload.PolicyGeneration,
+		PolicyName:   payload.PolicyName, PolicyUID: payload.PolicyUID, PolicyGeneration: payload.PolicyGeneration,
 		ObservedAt: payload.ObservedAt,
 	}
 }

@@ -610,20 +610,20 @@ type Pod struct {
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---
-	ImageID                     string              // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
-	CPURequestMilli             int64               // sum of container CPU requests (millicores) — scheduler-slack input
-	MemRequestBytes             int64               // sum of container memory requests (bytes) — scheduler-slack input
-	GPURequestCount             int64               // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
-	VRAMRequestBytes            int64               // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
-	SMFraction                  float64             // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
-	ModelID                     string              // served model identity/version fingerprint (AI; "" if not a model server)
-	EndpointPath                string              // inference endpoint/API route the attacker can map (AI; "" if none)
-	SuspectAdapter              string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
-	AdapterObservation          *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
-	SuspectConfigObject         string              // name of an operator-trusted ConfigMap a detector flagged as drifted from its trusted snapshot ("" if none) -> k8s-object-revert
+	ImageID                     string                      // container image digest (image-rarity + CVE/EPSS keying); "" if unknown
+	CPURequestMilli             int64                       // sum of container CPU requests (millicores) — scheduler-slack input
+	MemRequestBytes             int64                       // sum of container memory requests (bytes) — scheduler-slack input
+	GPURequestCount             int64                       // sum of nvidia.com/gpu (+ mig) device requests — GPU-conservation input
+	VRAMRequestBytes            int64                       // per-pod GPU VRAM request bytes (AI; 0 = unmeasured; PHORVEXSEC-87)
+	SMFraction                  float64                     // per-pod streaming-multiprocessor compute share [0,1] (AI; 0 = unmeasured)
+	ModelID                     string                      // served model identity/version fingerprint (AI; "" if not a model server)
+	EndpointPath                string                      // inference endpoint/API route the attacker can map (AI; "" if none)
+	SuspectAdapter              string                      // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
+	AdapterObservation          *AdapterObservation         // authenticated event and exact current Pod identity behind SuspectAdapter
+	SuspectConfigObject         string                      // name of an operator-trusted ConfigMap a detector flagged as drifted from its trusted snapshot ("" if none) -> k8s-object-revert
 	K8sObjectRevertObservation  *K8sObjectRevertObservation // authenticated event and exact current Pod identity behind SuspectConfigObject
-	SuspectImageDigest          string              // RUNNING container image digest a detector flagged as drifted from the trusted pin ("" if none) -> registry-rollback
-	ImageObservation            *ImageObservation   // authenticated event and exact current Pod identity behind SuspectImageDigest
+	SuspectImageDigest          string                      // RUNNING container image digest a detector flagged as drifted from the trusted pin ("" if none) -> registry-rollback
+	ImageObservation            *ImageObservation           // authenticated event and exact current Pod identity behind SuspectImageDigest
 	OutputPolicyConfigMap       string
 	OutputPolicyRuleSHA256      string
 	OutputProxySourceSHA256     string
@@ -680,10 +680,10 @@ type Pod struct {
 	// whole-owner removal. Both are set together by ingest.bindPersistenceObservation.
 	SuspectController              string
 	PersistenceFootholdObservation *PersistenceFootholdObservation
-	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
-	NodeEscapeObservation       *NodeEscapeObservation       // trusted node/host-escape authority (node-cordon-drain-replace)
-	NetworkIsolateObservation   *NetworkIsolateObservation   // trusted egress-edge-cut authority (network-isolate)
-	CredentialRevokeObservation *CredentialRevokeObservation // trusted stolen-SA-credential authority (credential-revoke)
+	PersistenceControllerUID       string                       // validated top-level owner; direct ControllerUID remains unchanged
+	NodeEscapeObservation          *NodeEscapeObservation       // trusted node/host-escape authority (node-cordon-drain-replace)
+	NetworkIsolateObservation      *NetworkIsolateObservation   // trusted egress-edge-cut authority (network-isolate)
+	CredentialRevokeObservation    *CredentialRevokeObservation // trusted stolen-SA-credential authority (credential-revoke)
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -1003,8 +1003,8 @@ const (
 	// ConfigMap (the agent's instruction/config object) drifted from its operator-declared
 	// trusted snapshot (AML.T0081 Modify AI Agent Configuration). Only k8s-object-revert
 	// (restore the object to the trusted snapshot) covers it.
-	AttackVectorConfigObject = "phorvex.attack.config-object"
-	AttackVectorDatastorePoison    = "phorvex.attack.datastore"
+	AttackVectorConfigObject    = "phorvex.attack.config-object"
+	AttackVectorDatastorePoison = "phorvex.attack.datastore"
 	// AttackVectorHostEscape reports a trusted observation that a container on THIS pod escaped to
 	// its node/host (AML.T0105). It steers the engine to node-cordon-drain-replace — recycle the
 	// whole node — over a pod-local rotate/quarantine, which would leave the compromised host intact.
@@ -1017,8 +1017,8 @@ const (
 	// bearer credential (a legacy service-account-token Secret) was stolen and is being reused.
 	// It steers the engine to the surgical credential-revoke (invalidate the token) over rotate /
 	// quarantine / network-isolate, none of which invalidate a bearer token the attacker holds.
-	AttackVectorCredentialTheft = "phorvex.attack.credential-theft"
-	AttackVectorAgentActionAbuse   = "phorvex.attack.agent-action"
+	AttackVectorCredentialTheft  = "phorvex.attack.credential-theft"
+	AttackVectorAgentActionAbuse = "phorvex.attack.agent-action"
 	// AttackVectorImage reports that a workload's RUNNING container image digest has drifted from
 	// the owner-declared trusted pin (a poisoned supply-chain artifact is executing) -> registry-rollback.
 	AttackVectorImage = "phorvex.attack.image"
@@ -1146,9 +1146,9 @@ type SecurityEventInfo struct {
 	// against the live limiter and binds it to the Pod's exact UID before THROTTLE can be
 	// selected; a generic trusted detector never consumes it.
 	ServingRateBudgetRaw string
-	NodeEscapeRaw                     string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
-	NetworkEdgeRaw                    string // untrusted event annotation naming the open egress edge; validated + bound to the live Pod before use
-	CredentialRevokeRaw               string // untrusted event annotation naming the stolen SA + token Secret(s); validated + bound to the live Pod before use
+	NodeEscapeRaw        string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
+	NetworkEdgeRaw       string // untrusted event annotation naming the open egress edge; validated + bound to the live Pod before use
+	CredentialRevokeRaw  string // untrusted event annotation naming the stolen SA + token Secret(s); validated + bound to the live Pod before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -1843,13 +1843,13 @@ func CloneDrainOperationEvidence(in *DrainOperationEvidence) *DrainOperationEvid
 // Decision is the per-pod outcome of one tick — the unit written to the audit log
 // and Prometheus, and (in active mode only) handed to the actuator.
 type Decision struct {
-	AdapterObservation        *AdapterObservation         `json:"adapterObservation,omitempty"`
-	OutputPolicyObservation   *SensitiveOutputObservation `json:"outputPolicyObservation,omitempty"`
-	VoiceMemoryObservation    *VoiceMemoryObservation     `json:"voiceMemoryObservation,omitempty"`
-	VoiceRefundObservation    *VoiceRefundObservation     `json:"voiceRefundObservation,omitempty"`
-	VoiceAdmissionObservation *VoiceAdmissionObservation  `json:"voiceAdmissionObservation,omitempty"`
-	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
-	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
+	AdapterObservation          *AdapterObservation          `json:"adapterObservation,omitempty"`
+	OutputPolicyObservation     *SensitiveOutputObservation  `json:"outputPolicyObservation,omitempty"`
+	VoiceMemoryObservation      *VoiceMemoryObservation      `json:"voiceMemoryObservation,omitempty"`
+	VoiceRefundObservation      *VoiceRefundObservation      `json:"voiceRefundObservation,omitempty"`
+	VoiceAdmissionObservation   *VoiceAdmissionObservation   `json:"voiceAdmissionObservation,omitempty"`
+	VoiceOutputObservation      *VoiceOutputObservation      `json:"voiceOutputObservation,omitempty"`
+	VoiceMCPObservation         *VoiceMCPObservation         `json:"voiceMcpObservation,omitempty"`
 	NodeEscapeObservation       *NodeEscapeObservation       `json:"nodeEscapeObservation,omitempty"`
 	NetworkIsolateObservation   *NetworkIsolateObservation   `json:"networkIsolateObservation,omitempty"`
 	CredentialRevokeObservation *CredentialRevokeObservation `json:"credentialRevokeObservation,omitempty"`

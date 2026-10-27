@@ -43,15 +43,15 @@ const (
 )
 
 var (
-	shaPattern    = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	idPattern     = regexp.MustCompile(`^[A-Za-z0-9:_.-]{1,64}$`)
-	actionKeyPat  = regexp.MustCompile(`^[A-Za-z0-9:_.-]{1,64}::[A-Za-z0-9:_.-]{1,64}$`)
-	nsPattern     = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+	shaPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	idPattern    = regexp.MustCompile(`^[A-Za-z0-9:_.-]{1,64}$`)
+	actionKeyPat = regexp.MustCompile(`^[A-Za-z0-9:_.-]{1,64}::[A-Za-z0-9:_.-]{1,64}$`)
+	nsPattern    = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
-func SHA256(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
-func ValidSHA(s string) bool   { return shaPattern.MatchString(s) }
-func ValidID(s string) bool    { return idPattern.MatchString(s) }
+func SHA256(raw []byte) string     { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
+func ValidSHA(s string) bool       { return shaPattern.MatchString(s) }
+func ValidID(s string) bool        { return idPattern.MatchString(s) }
 func ValidNamespace(s string) bool { return nsPattern.MatchString(s) }
 func ValidActionKey(s string) bool { return actionKeyPat.MatchString(s) }
 
