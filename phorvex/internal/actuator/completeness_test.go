@@ -257,6 +257,58 @@ func aiViewForAction(action model.Action) *model.WorkloadView {
 		}
 		return v
 	}
+	if action == model.ActionDatastoreRestore {
+		v.Pod.Namespace = "tenant-demo"
+		v.Pod.DatastoreRestoreObservation = &model.DatastoreRestoreObservation{
+			EventName: "datastore-observed", EventUID: "aaaa1111-1111-4111-8111-111111111111",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			Namespace: "tenant-demo", StoreName: "rag-store", StoreConfigMapUID: "store-uid",
+			TrustedSnapshotConfigMapUID: "trusted-uid", ServiceUID: "svc-uid", TargetPodUID: v.Pod.UID,
+			PoisonedSHA256: strings.Repeat("a", 64), TrustedSHA256: strings.Repeat("b", 64),
+			PolicyName: "datastore-defense", PolicyUID: "bbbb2222-2222-4222-8222-222222222222", PolicyGeneration: 1,
+			ObservedAt: time.Now().UTC()}
+		return v
+	}
+	if action == model.ActionAgentActionDeny {
+		v.Pod.Namespace = "tenant-demo"
+		v.Pod.AgentActionDenyObservation = &model.AgentActionDenyObservation{
+			EventName: "agent-observed", EventUID: "cccc3333-3333-4333-8333-333333333333",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			Namespace: "tenant-demo", AgentName: "agent-sim", CallerID: "caller-x", ActionID: "refund",
+			GuardConfigMapUID: "guard-uid", ServiceUID: "svc-uid", TargetPodUID: v.Pod.UID,
+			PolicyName: "agent-defense", PolicyUID: "dddd4444-4444-4444-8444-444444444444", PolicyGeneration: 1,
+			ObservedAt: time.Now().UTC()}
+		return v
+	}
+	if action == model.ActionNodeCordonDrainReplace {
+		v.Pod.Node = "worker-node-x"
+		v.Pod.NodeEscapeObservation = &model.NodeEscapeObservation{
+			EventName: "host-escape", EventUID: "eeee5555-5555-4555-8555-555555555555",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, NodeName: "worker-node-x",
+			PolicyName: "node-defense", PolicyUID: "ffff6666-6666-4666-8666-666666666666", PolicyGeneration: 1,
+			EscapeSHA256: strings.Repeat("c", 64)}
+		return v
+	}
+	if action == model.ActionNetworkIsolate {
+		v.Pod.NetworkIsolateObservation = &model.NetworkIsolateObservation{
+			EventName: "netedge", EventUID: "7777aaaa-7777-4777-8777-777777777777",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, PolicyName: "net-defense",
+			PolicyUID: "8888bbbb-8888-4888-8888-888888888888", PolicyGeneration: 1,
+			ForbiddenEdges: []string{"169.254.169.254/32"}, ChannelSHA256: strings.Repeat("d", 64)}
+		return v
+	}
+	if action == model.ActionCredentialRevoke {
+		v.Pod.CredentialRevokeObservation = &model.CredentialRevokeObservation{
+			EventName: "credtheft", EventUID: "9999cccc-9999-4999-8999-999999999999",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, PolicyName: "cred-defense",
+			PolicyUID: "aaaadddd-aaaa-4aaa-8aaa-aaaaaaaaaaaa", PolicyGeneration: 1,
+			ServiceAccountName: "demo-api-cred", CredentialSecrets: []string{"demo-api-cred-token"},
+			CredentialSHA256: strings.Repeat("e", 64)}
+		return v
+	}
 	if action != model.ActionVoiceOutputPolicyActivate && action != model.ActionVoiceMCPToolPin {
 		return v
 	}
