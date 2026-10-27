@@ -216,6 +216,12 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 				}
 				continue
 			}
+			if e.Action == model.ActionAgentActionDeny && e.Accepted {
+				if ok || !strings.HasPrefix(why, "agent-action-deny:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reader or exact agent target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
 			// The native route fails closed until a connector attests remote migration.
 			if e.Action == model.ActionKVMigrateInvalidate && e.Accepted && !ok {
 				if why != ReasonKVMigrationConnectorUnavailable {

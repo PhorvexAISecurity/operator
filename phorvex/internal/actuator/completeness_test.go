@@ -136,6 +136,19 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	// a feasibility veto — mirroring controller-stop/identity-rotate. It retains every Ready replica,
 	// so it is not an AI move and the availability floor does not gate it.
 	model.ActionThrottle: {},
+	// Combined in-place actuators. k8s-object-revert and registry-rollback carry NO feasibility
+	// law (their authority is the recon cover + capability gate + native handler, like
+	// controller-stop), so they are feasibility-neutral on a bare pod. datastore-restore and
+	// agent-action-deny are AI/detector moves gated by the shared ai-context law; node-cordon-
+	// drain-replace / network-isolate / credential-revoke each carry their own observation-
+	// required law. All refuse a bare pod with no bound observation.
+	model.ActionK8sObjectRevert:        {},
+	model.ActionRegistryRollback:       {},
+	model.ActionDatastoreRestore:       {plain: "ai-context-required:"},
+	model.ActionAgentActionDeny:        {plain: "ai-context-required:"},
+	model.ActionNodeCordonDrainReplace: {plain: "node-cordon-drain-replace-observation-required:"},
+	model.ActionNetworkIsolate:         {plain: "network-isolate-observation-required:"},
+	model.ActionCredentialRevoke:       {plain: "credential-revoke-observation-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -365,6 +378,23 @@ func TestFeasibilityVerdictsPerAction(t *testing.T) {
 // and rotate (only) is refused on a stateful pod.
 func TestFeasibilityActionSpecificLaws(t *testing.T) {
 	pol := model.Policy{}
+	// obsGatedFamily names the veto a combined in-place actuator earns on a generic AI view that
+	// carries no bound observation for it: its own action-specific law (or the shared AI-context
+	// law for the crm/voice-deny generalizations) refuses it until the trusted observation is
+	// present. These are the same on both the kube-system and stateful fixtures.
+	obsGatedFamily := func(a model.Action) string {
+		switch a {
+		case model.ActionDatastoreRestore, model.ActionAgentActionDeny:
+			return "ai-context-required:"
+		case model.ActionNodeCordonDrainReplace:
+			return "node-cordon-drain-replace-observation-required:"
+		case model.ActionNetworkIsolate:
+			return "network-isolate-observation-required:"
+		case model.ActionCredentialRevoke:
+			return "credential-revoke-observation-required:"
+		}
+		return ""
+	}
 	for _, a := range actionset.GeneratableActions() {
 		move := model.Move{Action: a}
 		system := aiView()
@@ -376,12 +406,18 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionVoiceSessionAdmissionEnforce || a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke || a == model.ActionCRMRefundRevoke {
 			family = "ai-context-required:"
 		}
+		if f := obsGatedFamily(a); f != "" {
+			family = f
+		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
 		stateful := aiViewForAction(a)
 		stateful.Pod.Stateful = true
 		family = ""
 		if a == model.ActionRotate {
 			family = "stateful-integrity:"
+		}
+		if f := obsGatedFamily(a); f != "" {
+			family = f
 		}
 		assertVerdict(t, "stateful pod", a, feasibility.Evaluate(stateful, move, pol), family)
 	}
