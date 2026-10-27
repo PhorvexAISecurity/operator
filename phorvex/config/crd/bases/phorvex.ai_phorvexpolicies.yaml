@@ -109,28 +109,28 @@ spec:
                       - mig-rebind
                       - kv-reset
                       - endpoint-rotate
+                      - endpoint-lease-revoke
                       - model-shard-replace
                       - adapter-rotate
                       - request-drain
                       - guardrail-rotate
+                      - kv-migrate-invalidate
                       - sensitive-output-policy-activate
                       - voice-memory-note-revoke
                       - voice-refund-pair-deny
                       - voice-output-policy-activate
-                      - voice-session-admission-enforce
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
+                      - voice-session-admission-enforce
                       - crm-refund-revoke
-                      - datastore-restore
-                      - node-cordon-drain-replace
-                      - agent-action-deny
-                      - endpoint-lease-revoke
-                      - kv-migrate-invalidate
                       - throttle
                       - controller-stop
                       - k8s-object-revert
+                      - datastore-restore
+                      - node-cordon-drain-replace
                       - network-isolate
                       - credential-revoke
+                      - agent-action-deny
                       - registry-rollback
                       - disable
                       type: string
@@ -261,6 +261,20 @@ spec:
                     x-kubernetes-validations:
                     - message: antiOverRotationWindow must be a positive duration
                       rule: duration(self) > duration('0s')
+                  maxGracePeriodSeconds:
+                    default: 30
+                    description: |-
+                      MaxGracePeriodSeconds bounds the graceful termination requested by the
+                      native rotate handler. Nil defaults to 30 seconds. The handler still honors
+                      a shorter workload grace period; this cap never authorizes a zero-grace
+                      deletion or bypasses availability safeguards.
+
+                      This is intentionally a pointer so omission remains distinguishable from an
+                      invalid explicit zero in direct/internal objects as well as at admission.
+                    format: int64
+                    maximum: 300
+                    minimum: 1
+                    type: integer
                   maxMovesPerTick:
                     default: 3
                     description: |-
@@ -269,15 +283,6 @@ spec:
                       log without selecting an actuation. YAML/JSON remains maxMovesPerTick: <integer>;
                       direct Go constructors must supply an *int when overriding the default.
                     minimum: 0
-                    type: integer
-                  maxGracePeriodSeconds:
-                    default: 30
-                    description: |-
-                      MaxGracePeriodSeconds bounds the graceful termination requested by the
-                      native rotate handler. Nil defaults to 30 seconds. A shorter workload
-                      grace remains shorter; this cap does not establish physical termination.
-                    maximum: 300
-                    minimum: 1
                     type: integer
                   proactiveFloor:
                     description: |-
@@ -331,9 +336,8 @@ spec:
                 type: string
               objective:
                 description: |-
-                  ObjectiveSpec is the cost-weighted objective. Legacy policies use adaptive
-                  runtime lambda; disruptionAversion sets a fixed common coefficient and
-                  costPreferences sets independent fixed coefficients on CNorm and CFlow.
+                  Objective is the cost-weighted optimization objective: maximize
+                  E[security] - lambda * E[switching-cost]. (PRD: objective{lambda,costWeights}.)
                 properties:
                   costPreferences:
                     description: |-
@@ -343,14 +347,16 @@ spec:
                       not learned resource multipliers or physical resource allowances.
                     properties:
                       flow:
-                        description: Flow multiplies the action's dimensionless CFlow directly.
+                        description: Flow multiplies the action's dimensionless CFlow
+                          directly.
                         pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
                         type: string
                         x-kubernetes-validations:
                         - message: flow preference must be between 0 and 10
                           rule: double(self) <= 10.0
                       norm:
-                        description: Norm multiplies the action's dimensionless CNorm directly.
+                        description: Norm multiplies the action's dimensionless CNorm
+                          directly.
                         pattern: ^(0|[1-9][0-9]*)(\.[0-9]+)?$
                         type: string
                         x-kubernetes-validations:
@@ -404,8 +410,10 @@ spec:
                       rule: self == '' || double(self) <= 10.0
                 type: object
                 x-kubernetes-validations:
-                - message: costPreferences and nonempty disruptionAversion are mutually exclusive
-                  rule: '!has(self.costPreferences) || !has(self.disruptionAversion) || size(self.disruptionAversion) == 0'
+                - message: costPreferences and nonempty disruptionAversion are mutually
+                    exclusive
+                  rule: '!has(self.costPreferences) || !has(self.disruptionAversion)
+                    || size(self.disruptionAversion) == 0'
               selector:
                 description: |-
                   Selector chooses the pods this policy protects, including matchExpressions.

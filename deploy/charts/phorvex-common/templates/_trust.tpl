@@ -71,6 +71,19 @@ attacks routes are served remotely (phorvex.services.attacks.endpoint), and othe
 {{- end -}}
 
 {{/*
+phorvex-common.persistenceObserverArgs: the controller-stop persistence-observer trust
+(--persistence-observer-identity / --persistence-observer-namespaces). Every service and
+the manager pass it alike (ADR-0001), so the handshakes agree on which standing observer's
+controller-persistence SecurityEvents license owner removal. Empty = controller-stop
+disabled (fail-closed). Argument: values (the `phorvex` values).
+*/}}
+{{- define "phorvex-common.persistenceObserverArgs" -}}
+{{- $po := .values.persistenceObserver | default dict -}}
+- --persistence-observer-identity={{ $po.identity | default "" }}
+- --persistence-observer-namespaces={{ $po.namespaces | default "" }}
+{{- end -}}
+
+{{/*
 phorvex-common.identityPolicyEnv: the creator-identity guard another release installs
 (phorvex.eventIdentityPolicy.external), which the manager and the sensor verify at
 startup (--event-identity-policy), or nothing.

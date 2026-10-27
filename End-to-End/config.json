@@ -149,7 +149,10 @@
       "tokens-floor",
       "code-exec-guard",
       "native-rotation-owner",
-      "panicking-law"
+      "panicking-law",
+      "node-cordon-drain-replace-observation-required",
+      "network-isolate-observation-required",
+      "credential-revoke-observation-required"
     ],
     "_law_reason_prefixes": "A law's Verdict.Reason does not always start with its Name() — e.g. availability-floor writes 'availability:'. These are the literal prefixes in internal/feasibility/*.go, so the check matches the code instead of guessing.",
     "law_reason_prefixes": {
@@ -191,6 +194,15 @@
       ],
       "panicking-law": [
         "feasibility law "
+      ],
+      "node-cordon-drain-replace-observation-required": [
+        "node-cordon-drain-replace-observation-required:"
+      ],
+      "network-isolate-observation-required": [
+        "network-isolate-observation-required:"
+      ],
+      "credential-revoke-observation-required": [
+        "credential-revoke-observation-required:"
       ]
     },
     "_reason_fullmatch_patterns": "Anchored producer contracts for parameterized law reasons and reviewed capability gates. These stay separate from broad prefixes so arbitrary text under a known family remains an F01 failure.",

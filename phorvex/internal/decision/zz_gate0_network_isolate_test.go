@@ -28,11 +28,11 @@ func TestGate0NetworkIsolateSelectableFrozenBrain(t *testing.T) {
 	v.Neighbors = nil
 	v.Pod.NetworkIsolateObservation = &model.NetworkIsolateObservation{
 		EventName: "p3-netedge-1", EventUID: "event-uid", CreatorIdentity: "system:serviceaccount:p3:p3-attacks",
-		TargetPodUID:     v.Pod.UID,
-		PolicyName:       "demo-api-defense", PolicyUID: "policy-uid", PolicyGeneration: 1,
-		ForbiddenEdges:   []string{"169.254.169.254/32", "10.0.0.5/32"},
-		ChannelSHA256:    "edge-sha",
-		CreatedAt:        time.Now(),
+		TargetPodUID: v.Pod.UID,
+		PolicyName:   "demo-api-defense", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		ForbiddenEdges: []string{"169.254.169.254/32", "10.0.0.5/32"},
+		ChannelSHA256:  "edge-sha",
+		CreatedAt:      time.Now(),
 	}
 
 	pol := covPolicy(1)

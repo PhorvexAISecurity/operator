@@ -26,11 +26,11 @@ func TestGate0NodeCordonDrainReplaceSelectableFrozenBrain(t *testing.T) {
 	v.Pod.Node = "worker-node-a"
 	v.Pod.NodeEscapeObservation = &model.NodeEscapeObservation{
 		EventName: "p4-host-escape-1", EventUID: "event-uid", CreatorIdentity: "system:serviceaccount:p4:p4-attacks",
-		TargetPodUID:     v.Pod.UID,
-		NodeName:         "worker-node-a",
-		PolicyName:       "node-defense", PolicyUID: "policy-uid", PolicyGeneration: 1,
-		EscapeSHA256:     "escape-sha",
-		CreatedAt:        time.Now(),
+		TargetPodUID: v.Pod.UID,
+		NodeName:     "worker-node-a",
+		PolicyName:   "node-defense", PolicyUID: "policy-uid", PolicyGeneration: 1,
+		EscapeSHA256: "escape-sha",
+		CreatedAt:    time.Now(),
 	}
 
 	pol := covPolicy(1)

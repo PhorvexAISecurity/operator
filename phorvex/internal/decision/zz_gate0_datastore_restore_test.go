@@ -20,7 +20,7 @@ import (
 // policy scope, proven separately in the lane).
 func TestGate0DatastoreRestoreSelectedParametricNamespace(t *testing.T) {
 	creator := "system:serviceaccount:p3:p3-attacks" // a lane trusted detector, NOT a prod console injector
-	ns := "p3-demo"                                   // parametric: any namespace, no literal in the brain path
+	ns := "p3-demo"                                  // parametric: any namespace, no literal in the brain path
 	pod := model.Pod{Namespace: ns, Name: "rag-store-1", UID: "55555555-5555-4555-8555-555555555555",
 		Ready: true, ReadyReplicas: 1, StartedAt: time.Now().Add(-2 * time.Hour)}
 	pod.DatastoreRestoreObservation = &model.DatastoreRestoreObservation{
