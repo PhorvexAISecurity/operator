@@ -64,20 +64,48 @@ func TestDecisionTraceActionVocabularyKeepsHistoricalRows(t *testing.T) {
 	if err != nil || len(live25Actions) != 25 || !slices.Equal(live25Actions[:24], live24Actions) || live25Actions[24] != model.ActionThrottle {
 		t.Fatalf("Live25 action vocabulary (LIVE24 + throttle) changed: %v, error %v", live25Actions, err)
 	}
-	currentActions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive26)
-	if err != nil || len(currentActions) != 26 || !slices.Equal(currentActions, model.MutatingActions) ||
-		!slices.Equal(currentActions[:25], live25Actions) || currentActions[25] != model.ActionControllerStop {
+	live26Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive26)
+	if err != nil || len(live26Actions) != 26 || !slices.Equal(live26Actions[:25], live25Actions) || live26Actions[25] != model.ActionControllerStop {
+		t.Fatalf("Live26 action vocabulary (LIVE25 + controller-stop) changed: %v, error %v", live26Actions, err)
+	}
+	live27Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive27)
+	if err != nil || len(live27Actions) != 27 || !slices.Equal(live27Actions[:26], live26Actions) || live27Actions[26] != model.ActionK8sObjectRevert {
+		t.Fatalf("Live27 action vocabulary (LIVE26 + k8s-object-revert) changed: %v, error %v", live27Actions, err)
+	}
+	live28Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive28)
+	if err != nil || len(live28Actions) != 28 || !slices.Equal(live28Actions[:27], live27Actions) || live28Actions[27] != model.ActionDatastoreRestore {
+		t.Fatalf("Live28 action vocabulary (LIVE27 + datastore-restore) changed: %v, error %v", live28Actions, err)
+	}
+	live29Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive29)
+	if err != nil || len(live29Actions) != 29 || !slices.Equal(live29Actions[:28], live28Actions) || live29Actions[28] != model.ActionNodeCordonDrainReplace {
+		t.Fatalf("Live29 action vocabulary (LIVE28 + node-cordon-drain-replace) changed: %v, error %v", live29Actions, err)
+	}
+	live30Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive30)
+	if err != nil || len(live30Actions) != 30 || !slices.Equal(live30Actions[:29], live29Actions) || live30Actions[29] != model.ActionNetworkIsolate {
+		t.Fatalf("Live30 action vocabulary (LIVE29 + network-isolate) changed: %v, error %v", live30Actions, err)
+	}
+	live31Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive31)
+	if err != nil || len(live31Actions) != 31 || !slices.Equal(live31Actions[:30], live30Actions) || live31Actions[30] != model.ActionCredentialRevoke {
+		t.Fatalf("Live31 action vocabulary (LIVE30 + credential-revoke) changed: %v, error %v", live31Actions, err)
+	}
+	live32Actions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive32)
+	if err != nil || len(live32Actions) != 32 || !slices.Equal(live32Actions[:31], live31Actions) || live32Actions[31] != model.ActionAgentActionDeny {
+		t.Fatalf("Live32 action vocabulary (LIVE31 + agent-action-deny) changed: %v, error %v", live32Actions, err)
+	}
+	currentActions, err := model.DecisionTraceActions(model.DecisionActionVocabularyLive33)
+	if err != nil || len(currentActions) != 33 || !slices.Equal(currentActions, model.MutatingActions) ||
+		!slices.Equal(currentActions[:32], live32Actions) || currentActions[32] != model.ActionRegistryRollback {
 		t.Fatalf("combined current action vocabulary differs from the emitted optimizer order: %v, error %v", currentActions, err)
 	}
 	trace := fixedTraceEngine().Decide([]*model.WorkloadView{covView("vocab", true, 2*time.Hour, false)}, decisionTracePolicy(1, true))[0].Trace
-	if trace == nil || trace.ActionVocabularyVersion != model.DecisionActionVocabularyLive26 {
+	if trace == nil || trace.ActionVocabularyVersion != model.DecisionActionVocabularyLive33 {
 		t.Fatalf("new production trace lacks named action vocabulary: %+v", trace)
 	}
 	if err := trace.Validate(); err != nil {
 		t.Fatalf("new trace invalid: %v", err)
 	}
 	currentJSON, err := json.Marshal(trace)
-	if err != nil || !strings.Contains(string(currentJSON), `"actionVocabularyVersion":"v12-live26"`) {
+	if err != nil || !strings.Contains(string(currentJSON), `"actionVocabularyVersion":"v19-live33"`) {
 		t.Fatalf("new trace did not serialize its vocabulary marker: %v, %s", err, currentJSON)
 	}
 	output := *trace

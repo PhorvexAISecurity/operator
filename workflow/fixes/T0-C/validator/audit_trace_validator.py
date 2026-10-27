@@ -80,7 +80,14 @@ LIVE22_ACTIONS = LIVE21_ACTIONS + ["endpoint-lease-revoke"]
 LIVE23_ACTIONS = LIVE22_ACTIONS + ["voice-session-admission-enforce"]
 LIVE24_ACTIONS = LIVE23_ACTIONS + ["crm-refund-revoke"]
 LIVE25_ACTIONS = LIVE24_ACTIONS + ["throttle"]
-MUTATING_ACTIONS = LIVE25_ACTIONS + ["controller-stop"]
+LIVE26_ACTIONS = LIVE25_ACTIONS + ["controller-stop"]
+LIVE27_ACTIONS = LIVE26_ACTIONS + ["k8s-object-revert"]
+LIVE28_ACTIONS = LIVE27_ACTIONS + ["datastore-restore"]
+LIVE29_ACTIONS = LIVE28_ACTIONS + ["node-cordon-drain-replace"]
+LIVE30_ACTIONS = LIVE29_ACTIONS + ["network-isolate"]
+LIVE31_ACTIONS = LIVE30_ACTIONS + ["credential-revoke"]
+LIVE32_ACTIONS = LIVE31_ACTIONS + ["agent-action-deny"]
+MUTATING_ACTIONS = LIVE32_ACTIONS + ["registry-rollback"]
 ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
 ACTION_VOCABULARY_VOICE17 = "v3-voice17"
 ACTION_VOCABULARY_LITELLM17 = "v3-litellm17"
@@ -93,6 +100,13 @@ ACTION_VOCABULARY_LIVE23 = "v9-live23"
 ACTION_VOCABULARY_LIVE24 = "v10-live24"
 ACTION_VOCABULARY_LIVE25 = "v11-live25"
 ACTION_VOCABULARY_LIVE26 = "v12-live26"
+ACTION_VOCABULARY_LIVE27 = "v13-live27"
+ACTION_VOCABULARY_LIVE28 = "v14-live28"
+ACTION_VOCABULARY_LIVE29 = "v15-live29"
+ACTION_VOCABULARY_LIVE30 = "v16-live30"
+ACTION_VOCABULARY_LIVE31 = "v17-live31"
+ACTION_VOCABULARY_LIVE32 = "v18-live32"
+ACTION_VOCABULARY_LIVE33 = "v19-live33"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 
 
@@ -127,6 +141,20 @@ def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
     if version == ACTION_VOCABULARY_LIVE25:
         return LIVE25_ACTIONS, None
     if version == ACTION_VOCABULARY_LIVE26:
+        return LIVE26_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE27:
+        return LIVE27_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE28:
+        return LIVE28_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE29:
+        return LIVE29_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE30:
+        return LIVE30_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE31:
+        return LIVE31_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE32:
+        return LIVE32_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE33:
         return MUTATING_ACTIONS, None
     return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 

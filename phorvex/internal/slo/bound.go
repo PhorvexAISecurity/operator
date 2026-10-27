@@ -150,6 +150,14 @@ var classifications = map[model.Action]Bound{
 		"node cordon/drain and instance replacement + reschedule recovery have no calibrated safe-return deadline"),
 	model.ActionAgentActionDeny: unknown(model.ActionAgentActionDeny, -1,
 		"agent-action deny-guard write and all-Pod readback have no calibrated safe-return deadline"),
+	model.ActionK8sObjectRevert: unknown(model.ActionK8sObjectRevert, -1,
+		"operator-trusted ConfigMap CAS-restore and in-place kubelet re-projection have no calibrated safe-return deadline"),
+	model.ActionNetworkIsolate: unknown(model.ActionNetworkIsolate, -1,
+		"surgical egress NetworkPolicy edge-cut and CNI effective-enforcement readback have no calibrated safe-return deadline"),
+	model.ActionCredentialRevoke: unknown(model.ActionCredentialRevoke, -1,
+		"stolen service-account-token Secret deletion and apiserver lookup-invalidation have no calibrated safe-return deadline"),
+	model.ActionRegistryRollback: unknown(model.ActionRegistryRollback, -1,
+		"owning-controller image reset to the trusted pin and clean-Pod rollout have no calibrated safe-return deadline"),
 }
 
 func init() {

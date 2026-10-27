@@ -321,6 +321,10 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 			if ok || !registered || !strings.HasPrefix(why, "datastore-restore:") {
 				t.Fatalf("datastore-restore requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
 			}
+		case model.ActionAgentActionDeny:
+			if ok || !registered || !strings.HasPrefix(why, "agent-action-deny:") {
+				t.Fatalf("agent-action-deny requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
+			}
 		default:
 			if ok != registered {
 				t.Fatalf("native %s: support=%v but handler registered=%v (%s)", a, ok, registered, why)

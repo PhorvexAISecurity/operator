@@ -104,6 +104,16 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 		model.ActionKVMigrateInvalidate:           0.20,
 		// Bare view: owner desired 0 and no observation => 1 logical workload replacement.
 		model.ActionControllerStop: 1.00,
+		// Combined in-place actuators (serving-configuration / channel-deny tier, replica-retaining).
+		model.ActionK8sObjectRevert:  0.20,
+		model.ActionDatastoreRestore: 0.25,
+		model.ActionNetworkIsolate:   0.25,
+		model.ActionCredentialRevoke: 0.25,
+		model.ActionAgentActionDeny:  0.25,
+		// node-cordon-drain-replace recycles the node (pod replacement scaled to a node).
+		model.ActionNodeCordonDrainReplace: 1.25,
+		// registry-rollback resets the owning controller image (one logical workload replacement).
+		model.ActionRegistryRollback: 1.00,
 	}
 	for _, action := range model.MutatingActions {
 		got := normCostP1(view, model.Move{Action: action})
