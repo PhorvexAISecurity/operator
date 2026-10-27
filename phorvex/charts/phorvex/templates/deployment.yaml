@@ -170,6 +170,7 @@ spec:
         {{- with $detectors }}
         - --trusted-detectors={{ join "," . }}
         {{- end }}
+        {{- include "phorvex-common.persistenceObserverArgs" (dict "values" .Values.phorvex) | nindent 8 }}
         {{- if and .Values.phorvex.lossHistory.currentInventory.enabled (not .Values.phorvex.lossHistory.enabled) }}{{ fail "phorvex.lossHistory.currentInventory.enabled requires phorvex.lossHistory.enabled" }}{{- end }}
         {{- if .Values.phorvex.lossHistory.enabled }}
         {{- if not .Values.phorvex.admissionWebhook.enabled }}{{ fail "phorvex.lossHistory.enabled requires admissionWebhook.enabled" }}{{- end }}

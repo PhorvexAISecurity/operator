@@ -19,6 +19,11 @@ phorvex:
   # Enable BEFORE any policy enables the action, or startup preflight refuses to start.
   crmRefundRevoke:
     enabled: false
+  # Exact get/update grant on the agent-deny-guard ConfigMap per enabled namespace
+  # for agent-action-deny (the namespace-parametric analog of crm-refund-revoke).
+  # Enable BEFORE any policy enables the action, or startup preflight refuses to start.
+  agentActionDeny:
+    enabled: false
   litellmOutput:
     enabled: false
   # Base tick interval for the decision loop (per-tenant cadence honored on top).

@@ -79,6 +79,7 @@ spec:
         {{- with include "phorvex-common.trustedCurrentInventoryObservers" $trust }}
         - --trusted-current-inventory-observers={{ . }}
         {{- end }}
+        {{- include "phorvex-common.persistenceObserverArgs" $trust | nindent 8 }}
         {{- if $v.serviceTLS.enabled }}
         {{- include "phorvex-common.serviceTLS.args" (dict "root" . "end" "sensor") | nindent 8 }}
         {{- end }}

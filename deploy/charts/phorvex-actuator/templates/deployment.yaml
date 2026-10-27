@@ -98,6 +98,7 @@ spec:
         {{- with include "phorvex-common.trustedDetectors" $trust }}
         - --trusted-detectors={{ . }}
         {{- end }}
+        {{- include "phorvex-common.persistenceObserverArgs" $trust | nindent 8 }}
         {{- if $v.serviceTLS.enabled }}
         {{- include "phorvex-common.serviceTLS.args" (dict "root" . "end" "actuator") | nindent 8 }}
         {{- end }}
