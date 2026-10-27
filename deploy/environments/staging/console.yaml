@@ -5,6 +5,6 @@ phorvex:
   console:
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console"
-      tag: "0.10.0"
-      releaseDigest: "sha256:8301793fcbed5dcac5626e4deab0e3d1e7aaf3687b7de1aeb7b1b376d56c9ea0"
-      releaseSourceSHA: "c6b661b81f10f23095325ececdb693892813cd93"
+      tag: "0.11.0"
+      releaseDigest: "sha256:cda8b74869eaadcc0e469e570af3b2a9d30fede1bac4107e5a9623aa833c6023"
+      releaseSourceSHA: "83a84e11e46dcd3842a398844224f49148de0503"
