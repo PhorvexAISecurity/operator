@@ -1,5 +1,23 @@
 # sensor changelog
 
+## 0.7.0 (2026-10-27)
+
+- fix(charts): complete agent-action-deny + controller-stop chart wiring; re-vendor (7d0c2226)
+- style: gofmt the changed Go files (9bd5c170)
+- registry-rollback: port partial lane source + reconstruct handler/ExposureVar/vocab (Live33) from k8s-object-revert sibling (a118f768)
+- lane p4: NEW namespace-parametric actuator agent-action-deny (EXTEND crm/voice deny) (ff4d653a)
+- credential-revoke (lane p3): NEW namespace-parametric actuator (Live26) (30625635)
+- network-isolate (lane p3): surgical egress edge-cut actuator (9480b969)
+- lane p4: NEW native actuator node-cordon-drain-replace (AML.T0105 Escape to Host) (d6ce72f0)
+- datastore-restore (lane p3): NEW namespace-parametric datastore-restore actuator (6ce41049)
+- k8s-object-revert: NEW native actuator (lane p1) — restore tampered operator-trusted ConfigMap to its trusted snapshot (AML.T0081) (74a21c3d)
+- feat(ingest): trusted serving-rate-budget binder + scoped detector trust (722d99b7)
+- feat(model): throttle + serving-rate-budget vocabulary + servingbudget contract (aade7183)
+- feat(actuator): port controller-stop synchronous owner-removal + wiring (615116dc)
+- feat(model): controller-stop vocabulary + persistence authority package (4eb11f3c)
+- deploy(staging): enable identity-rotate for the console-identity-shared fixture (5dc3a99d)
+- feat(actuator): port LIGHT identity-rotate credential invalidation (brain core) (5879529c)
+
 ## 0.6.1 (2026-10-23)
 
 - refactor(dispatcher): compose the in-process services in cmd (bfa2e4f1)
