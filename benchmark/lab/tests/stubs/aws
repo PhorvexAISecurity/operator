@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Offline stand-in for the AWS CLI. Logs every call to $STUB_LOG and answers
+# from STUB_* variables; any call it does not know fails loudly.
+set -euo pipefail
+(IFS=$'\t'; printf 'aws\t%s\n' "$*") >>"$STUB_LOG"
+case "$1 $2" in
+  'sts get-caller-identity') echo "${STUB_ACCOUNT:?}" ;;
+  'ecr describe-repositories')
+    case ${STUB_REPO_STATE:-absent} in
+      absent) echo 'An error occurred (RepositoryNotFoundException) when calling the DescribeRepositories operation' >&2; exit 254 ;;
+      denied) echo 'An error occurred (AccessDeniedException) when calling the DescribeRepositories operation' >&2; exit 254 ;;
+      ours|foreign) echo 'arn:aws:ecr:us-east-2:000000000000:repository/stub' ;;
+    esac ;;
+  'ecr list-tags-for-resource')
+    if [[ $STUB_REPO_STATE == ours ]]; then
+      printf '{"tags":[{"Key":"phorvex-bench-run","Value":"%s"}]}\n' "${STUB_RUN_ID:?}"
+    else
+      echo '{"tags":[{"Key":"phorvex-bench-run","Value":"someone-else"}]}'
+    fi ;;
+  'ecr create-repository'|'ecr put-lifecycle-policy') echo '{}' ;;
+  'ecr get-login-password') echo 'stub-registry-password' ;;
+  'ecr describe-images') echo "${STUB_DIGEST:?}" ;;
+  *) echo "aws stub: unexpected call: $*" >&2; exit 99 ;;
+esac

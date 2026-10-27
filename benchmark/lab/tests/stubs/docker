@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Offline stand-in for the Docker CLI. Logs every call to $STUB_LOG; for a build
+# it also records what the build context holds, so tests can check the source.
+set -euo pipefail
+(IFS=$'\t'; printf 'docker\t%s\n' "$*") >>"$STUB_LOG"
+case $1 in
+  login)
+    password=$(cat)
+    printf 'login-password\t%s\nlogin-config\t%s\n' "$password" "${DOCKER_CONFIG:-}" >>"$STUB_LOG" ;;
+  build)
+    [[ ${STUB_BUILD_FAIL:-0} == 1 ]] && { echo 'docker stub: build failed' >&2; exit 1; }
+    ctx=${!#}
+    printf 'context-head\t%s\n' "$(cat "$ctx/.git/HEAD")" >>"$STUB_LOG"
+    printf 'context-version\t%s\n' "$(cat "$ctx/phorvex/VERSION")" >>"$STUB_LOG"
+    printf 'context-untracked\t%s\n' "$([[ -e $ctx/untracked.txt ]] && echo present || echo absent)" >>"$STUB_LOG"
+    echo 'docker stub: build output' ;;
+  push) echo 'docker stub: push output' ;;
+  image) ;;
+  *) echo "docker stub: unexpected call: $*" >&2; exit 99 ;;
+esac
