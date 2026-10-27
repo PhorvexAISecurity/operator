@@ -96,6 +96,16 @@ roles:
   rules:
   - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["crm-refund-guard"], verbs: ["get", "update"], writers: [actuator]}
 {{- end }}
+{{- if $v.agentActionDeny.enabled }}
+{{- if not $nativeOrHybrid }}{{- fail "agentActionDeny requires native or hybrid actuator" }}{{- end }}
+{{- range $namespace := $v.actuatorNamespaces }}
+{{- /* Namespace-parametric analog of crm-refund-revoke: granted only on the fixed guard name per enabled namespace. */}}
+- name: agent-action-deny
+  namespace: {{ $namespace | quote }}
+  rules:
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [actuator]}
+{{- end }}
+{{- end }}
 {{- if $v.endpointLease.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "endpointLease requires native or hybrid actuator" }}{{- end }}
 - name: endpoint-lease
@@ -110,6 +120,37 @@ roles:
   namespace: {{ $operatorNamespace | quote }}
   rules:
   - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["phorvex-endpoint-lease-journal"], verbs: ["get", "update"], writers: [actuator]}
+{{- end }}
+{{- /*
+LIGHT identity-rotate (actuator/handlers_k8s.go, identity_rotation.go): the actuator
+deletes and recreates the dedicated fixture ServiceAccount (a new UID) and removes its
+legacy token Secrets; the sensor's observation builder (identityfixture.Observe) watches
+the fixture. `dig` keeps the feature off where the values omit it, so the manager chart's
+defaults and the library probe render unchanged (tools/test_service_charts.py).
+*/}}
+{{- if dig "identityRotate" "enabled" false $v }}
+{{- if not $nativeOrHybrid }}{{- fail "identityRotate requires native or hybrid actuator" }}{{- end }}
+{{- $idNamespace := required "identityRotate.targetNamespace is required" $v.identityRotate.targetNamespace }}
+{{- $idServiceAccount := required "identityRotate.serviceAccountName is required" $v.identityRotate.serviceAccountName }}
+# The actuator's SA-mutation authority: it gets+deletes the pinned fixture ServiceAccount
+# and creates its successor (K8s cannot name-restrict create), and gets+deletes the legacy
+# token Secrets in the namespace (K8s SSAR checks per-name, the handler touches only exact
+# legacy Secret names). Modelled on the live phorvex-phorvex-identity-rotation-0 role.
+- name: identity-rotate
+  namespace: {{ $idNamespace | quote }}
+  rules:
+  - {apiGroups: [""], resources: ["serviceaccounts"], resourceNames: [{{ $idServiceAccount | quote }}], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
+  - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["create"], writers: [actuator]}
+  - {apiGroups: [""], resources: ["secrets"], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
+# The sensor's observation of the fixture (identityfixture.Observe): the pinned
+# ServiceAccount, the namespace's Secrets, and the Deployment/ReplicaSet behind it. Pods,
+# namespaces, configmaps and phorvexpolicies are already read cluster-wide (above).
+- name: identity-rotate-observe
+  namespace: {{ $idNamespace | quote }}
+  rules:
+  - {apiGroups: [""], resources: ["serviceaccounts"], resourceNames: [{{ $idServiceAccount | quote }}], verbs: ["get"], readers: [sensor]}
+  - {apiGroups: [""], resources: ["secrets"], verbs: ["list"], readers: [sensor]}
+  - {apiGroups: ["apps"], resources: ["deployments", "replicasets"], verbs: ["get"], readers: [sensor]}
 {{- end }}
 {{- range $feature, $policy := dict "voiceMemory" "voice-memory-policy" "voiceOutput" "voice-output-policy" "voiceRefund" "voice-refund-policy" "voiceMCP" "voice-mcp-tool-policy" }}
 {{- if (index $v $feature).enabled }}

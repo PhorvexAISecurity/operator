@@ -124,6 +124,31 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionLiteLLMClientRevoke:           {plain: "ai-context-required:"},
 	model.ActionEndpointLeaseRevoke:           {plain: "ai-context-required:"},
 	model.ActionCRMRefundRevoke:               {plain: "ai-context-required:"},
+	// controller-stop is feasibility-neutral on a bare pod: its whole-owner-removal authority
+	// (a trusted controller-UID-bound unauthorized-owner observation + exact policy epoch) is
+	// enforced by the capability gate, the actionset generator, the backend and the native
+	// handler, NOT by a feasibility veto — mirroring identity-rotate. It removes no shared
+	// Ready serving replica, so the availability floor does not gate it either.
+	model.ActionControllerStop: {},
+	// throttle installs a serving-admission budget at an already-present authoritative proxy.
+	// Its authority (a trusted serving-rate-budget observation + exact policy epoch) is enforced
+	// by the capability gate, the actionset generator, the backend and the native handler, NOT by
+	// a feasibility veto — mirroring controller-stop/identity-rotate. It retains every Ready replica,
+	// so it is not an AI move and the availability floor does not gate it.
+	model.ActionThrottle: {},
+	// Combined in-place actuators. k8s-object-revert and registry-rollback carry NO feasibility
+	// law (their authority is the recon cover + capability gate + native handler, like
+	// controller-stop), so they are feasibility-neutral on a bare pod. datastore-restore and
+	// agent-action-deny are AI/detector moves gated by the shared ai-context law; node-cordon-
+	// drain-replace / network-isolate / credential-revoke each carry their own observation-
+	// required law. All refuse a bare pod with no bound observation.
+	model.ActionK8sObjectRevert:        {},
+	model.ActionRegistryRollback:       {},
+	model.ActionDatastoreRestore:       {plain: "ai-context-required:"},
+	model.ActionAgentActionDeny:        {plain: "ai-context-required:"},
+	model.ActionNodeCordonDrainReplace: {plain: "node-cordon-drain-replace-observation-required:"},
+	model.ActionNetworkIsolate:         {plain: "network-isolate-observation-required:"},
+	model.ActionCredentialRevoke:       {plain: "credential-revoke-observation-required:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -230,6 +255,58 @@ func aiViewForAction(action model.Action) *model.WorkloadView {
 			PolicyName: "crm-defense", PolicyUID: "99999999-9999-4999-8999-999999999999", PolicyGeneration: 1,
 			ObservedAt: time.Now().UTC(),
 		}
+		return v
+	}
+	if action == model.ActionDatastoreRestore {
+		v.Pod.Namespace = "tenant-demo"
+		v.Pod.DatastoreRestoreObservation = &model.DatastoreRestoreObservation{
+			EventName: "datastore-observed", EventUID: "aaaa1111-1111-4111-8111-111111111111",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			Namespace: "tenant-demo", StoreName: "rag-store", StoreConfigMapUID: "store-uid",
+			TrustedSnapshotConfigMapUID: "trusted-uid", ServiceUID: "svc-uid", TargetPodUID: v.Pod.UID,
+			PoisonedSHA256: strings.Repeat("a", 64), TrustedSHA256: strings.Repeat("b", 64),
+			PolicyName: "datastore-defense", PolicyUID: "bbbb2222-2222-4222-8222-222222222222", PolicyGeneration: 1,
+			ObservedAt: time.Now().UTC()}
+		return v
+	}
+	if action == model.ActionAgentActionDeny {
+		v.Pod.Namespace = "tenant-demo"
+		v.Pod.AgentActionDenyObservation = &model.AgentActionDenyObservation{
+			EventName: "agent-observed", EventUID: "cccc3333-3333-4333-8333-333333333333",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			Namespace: "tenant-demo", AgentName: "agent-sim", CallerID: "caller-x", ActionID: "refund",
+			GuardConfigMapUID: "guard-uid", ServiceUID: "svc-uid", TargetPodUID: v.Pod.UID,
+			PolicyName: "agent-defense", PolicyUID: "dddd4444-4444-4444-8444-444444444444", PolicyGeneration: 1,
+			ObservedAt: time.Now().UTC()}
+		return v
+	}
+	if action == model.ActionNodeCordonDrainReplace {
+		v.Pod.Node = "worker-node-x"
+		v.Pod.NodeEscapeObservation = &model.NodeEscapeObservation{
+			EventName: "host-escape", EventUID: "eeee5555-5555-4555-8555-555555555555",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, NodeName: "worker-node-x",
+			PolicyName: "node-defense", PolicyUID: "ffff6666-6666-4666-8666-666666666666", PolicyGeneration: 1,
+			EscapeSHA256: strings.Repeat("c", 64)}
+		return v
+	}
+	if action == model.ActionNetworkIsolate {
+		v.Pod.NetworkIsolateObservation = &model.NetworkIsolateObservation{
+			EventName: "netedge", EventUID: "7777aaaa-7777-4777-8777-777777777777",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, PolicyName: "net-defense",
+			PolicyUID: "8888bbbb-8888-4888-8888-888888888888", PolicyGeneration: 1,
+			ForbiddenEdges: []string{"169.254.169.254/32"}, ChannelSHA256: strings.Repeat("d", 64)}
+		return v
+	}
+	if action == model.ActionCredentialRevoke {
+		v.Pod.CredentialRevokeObservation = &model.CredentialRevokeObservation{
+			EventName: "credtheft", EventUID: "9999cccc-9999-4999-8999-999999999999",
+			CreatorIdentity: "system:serviceaccount:phorvex-system:phorvex-phorvex-console",
+			TargetPodUID: v.Pod.UID, PolicyName: "cred-defense",
+			PolicyUID: "aaaadddd-aaaa-4aaa-8aaa-aaaaaaaaaaaa", PolicyGeneration: 1,
+			ServiceAccountName: "demo-api-cred", CredentialSecrets: []string{"demo-api-cred-token"},
+			CredentialSHA256: strings.Repeat("e", 64)}
 		return v
 	}
 	if action != model.ActionVoiceOutputPolicyActivate && action != model.ActionVoiceMCPToolPin {
@@ -353,6 +430,23 @@ func TestFeasibilityVerdictsPerAction(t *testing.T) {
 // and rotate (only) is refused on a stateful pod.
 func TestFeasibilityActionSpecificLaws(t *testing.T) {
 	pol := model.Policy{}
+	// obsGatedFamily names the veto a combined in-place actuator earns on a generic AI view that
+	// carries no bound observation for it: its own action-specific law (or the shared AI-context
+	// law for the crm/voice-deny generalizations) refuses it until the trusted observation is
+	// present. These are the same on both the kube-system and stateful fixtures.
+	obsGatedFamily := func(a model.Action) string {
+		switch a {
+		case model.ActionDatastoreRestore, model.ActionAgentActionDeny:
+			return "ai-context-required:"
+		case model.ActionNodeCordonDrainReplace:
+			return "node-cordon-drain-replace-observation-required:"
+		case model.ActionNetworkIsolate:
+			return "network-isolate-observation-required:"
+		case model.ActionCredentialRevoke:
+			return "credential-revoke-observation-required:"
+		}
+		return ""
+	}
 	for _, a := range actionset.GeneratableActions() {
 		move := model.Move{Action: a}
 		system := aiView()
@@ -364,6 +458,9 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionVoiceSessionAdmissionEnforce || a == model.ActionLiteLLMClientRevoke || a == model.ActionVoiceOutputPolicyActivate || a == model.ActionVoiceMCPToolPin || a == model.ActionEndpointLeaseRevoke || a == model.ActionCRMRefundRevoke {
 			family = "ai-context-required:"
 		}
+		if f := obsGatedFamily(a); f != "" {
+			family = f
+		}
 		assertVerdict(t, "kube-system", a, feasibility.Evaluate(system, move, pol), family)
 		stateful := aiViewForAction(a)
 		stateful.Pod.Stateful = true
@@ -371,6 +468,10 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionRotate {
 			family = "stateful-integrity:"
 		}
+		// aiViewForAction binds each action's own observation, so the obs-gated combined
+		// actuators are FEASIBLE here (their law is satisfied); only rotate's stateful-integrity
+		// law still vetoes. (The kube-system branch above uses the bare aiView() with no bound
+		// observation, so there they correctly earn their obsGatedFamily veto.)
 		assertVerdict(t, "stateful pod", a, feasibility.Evaluate(stateful, move, pol), family)
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/phorvex/phorvex/internal/actuatorapi"
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/model"
 )
 
@@ -48,6 +49,12 @@ func (h *HybridActuator) Name() string { return "hybrid" }
 
 func (h *HybridActuator) PendingOutputPolicyOperation(ctx context.Context, namespace, podUID string) (bool, error) {
 	return h.native.PendingOutputPolicyOperation(ctx, namespace, podUID)
+}
+
+// SetIdentityAuthority wires identity-rotate's complete-plan authorization and global
+// brake onto the native leg (identity-rotate is a native-only move).
+func (h *HybridActuator) SetIdentityAuthority(az *authz.Checker, kill func(context.Context) bool) {
+	h.native.SetIdentityAuthority(az, kill)
 }
 
 // ConfigureNativeJournal wires only the native leg. Phoenix actions never enter it.

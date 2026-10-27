@@ -20,7 +20,7 @@ func isAIMove(a model.Action) bool {
 	case model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
 		model.ActionKVReset, model.ActionEndpointRotate,
 		model.ActionAdapterRotate, model.ActionRequestDrain, model.ActionGuardrailRotate, model.ActionKVMigrateInvalidate,
-		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke:
+		model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionDatastoreRestore, model.ActionAgentActionDeny:
 		return true
 	}
 	return false
@@ -59,6 +59,10 @@ func (aiContextRequired) Check(view *model.WorkloadView, move model.Move, _ mode
 		available = view.Pod.HasBoundLiteLLMClientObservation()
 	case model.ActionCRMRefundRevoke:
 		available = view.Pod.HasBoundCRMRefundObservation()
+	case model.ActionDatastoreRestore:
+		available = view.Pod.HasBoundDatastoreRestoreObservation()
+	case model.ActionAgentActionDeny:
+		available = view.Pod.HasBoundAgentActionDenyObservation()
 	case model.ActionEndpointLeaseRevoke:
 		available = view.Pod.HasBoundEndpointLeaseObservation()
 	default:
@@ -122,8 +126,77 @@ func (codeExecGuard) Check(view *model.WorkloadView, move model.Move, _ model.Po
 	return feasible
 }
 
+// nodeCordonDrainReplaceObservationRequired is the action-SPECIFIC hard law for the node recycle:
+// node-cordon-drain-replace is infeasible unless THIS exact Pod carries a trusted, bound node/
+// host-escape observation whose NodeName equals the Pod's live node. Without it there is no
+// compromised host to recycle, so the (highest-blast-radius) move is never selected. Namespace-
+// parametric: the law pins no namespace/node literal — the bound observation + reactive policy
+// scope bound which Pods qualify. Non-node-cordon moves are unaffected, so {rotate,quarantine}/AI
+// parity is byte-identical.
+type nodeCordonDrainReplaceObservationRequired struct{}
+
+func (nodeCordonDrainReplaceObservationRequired) Name() string {
+	return "node-cordon-drain-replace-observation-required"
+}
+
+func (nodeCordonDrainReplaceObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionNodeCordonDrainReplace {
+		return feasible
+	}
+	if !view.Pod.HasBoundNodeEscapeObservation() {
+		return Verdict{Feasible: false, Reason: "node-cordon-drain-replace-observation-required: no trusted bound node/host-escape observation for this pod"}
+	}
+	return feasible
+}
+
+// networkIsolateObservationRequired is the action-SPECIFIC hard law for the surgical egress
+// edge cut: network-isolate is infeasible unless this exact Pod carries a trusted, bound
+// network-edge observation (a detector flagged an open C2/exfil/IMDS egress channel). Without
+// it there is nothing to cut, so the move is never selected. Namespace-parametric: the law
+// pins no namespace — the bound observation + reactive policy scope bound which Pods qualify.
+// Non-network-isolate moves are unaffected, so {rotate,quarantine}/AI parity is byte-identical.
+type networkIsolateObservationRequired struct{}
+
+func (networkIsolateObservationRequired) Name() string { return "network-isolate-observation-required" }
+
+func (networkIsolateObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionNetworkIsolate {
+		return feasible
+	}
+	if !view.Pod.HasBoundNetworkIsolateObservation() {
+		return Verdict{Feasible: false, Reason: "network-isolate-observation-required: no trusted bound egress-edge observation for this pod"}
+	}
+	return feasible
+}
+
+// credentialRevokeObservationRequired is the action-SPECIFIC hard law for revoking a stolen
+// ServiceAccount credential: credential-revoke is infeasible unless this exact Pod carries a
+// trusted, bound stolen-credential observation (a detector flagged a leaked SA token being
+// reused). Without it there is nothing to revoke, so the move is never selected. Namespace-
+// parametric: the law pins no namespace — the bound observation + reactive policy scope bound
+// which Pods qualify. Non-credential-revoke moves are unaffected, so {rotate,quarantine}/AI
+// parity is byte-identical.
+type credentialRevokeObservationRequired struct{}
+
+func (credentialRevokeObservationRequired) Name() string {
+	return "credential-revoke-observation-required"
+}
+
+func (credentialRevokeObservationRequired) Check(view *model.WorkloadView, move model.Move, _ model.Policy) Verdict {
+	if move.Action != model.ActionCredentialRevoke {
+		return feasible
+	}
+	if !view.Pod.HasBoundCredentialRevokeObservation() {
+		return Verdict{Feasible: false, Reason: "credential-revoke-observation-required: no trusted bound stolen-credential observation for this pod"}
+	}
+	return feasible
+}
+
 func init() {
 	Registry.Register(aiContextRequired{})
 	Registry.Register(migDeviceRequired{})
 	Registry.Register(codeExecGuard{})
+	Registry.Register(nodeCordonDrainReplaceObservationRequired{})
+	Registry.Register(networkIsolateObservationRequired{})
+	Registry.Register(credentialRevokeObservationRequired{})
 }

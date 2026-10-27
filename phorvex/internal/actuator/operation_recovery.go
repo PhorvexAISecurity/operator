@@ -83,6 +83,7 @@ func (n *NativeActuator) recoverOperations(ctx context.Context, globalKill bool,
 	events = append(events, litellmEvents...)
 	events = append(events, leaseEvents...)
 	events = append(events, liteOutputEvents...)
+	events = append(events, recoverThrottleRelease(ctx, ec, allow)...)
 	for i := range entries {
 		entry := &entries[i]
 		r := entry.Receipt

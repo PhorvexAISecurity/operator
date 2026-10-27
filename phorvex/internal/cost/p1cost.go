@@ -135,13 +135,19 @@ var structuralComponents = []string{
 // route Service, and model-shard-replace is additive over affected ranks.
 func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 	switch move.Action {
-	case model.ActionRotate, model.ActionWarmSwap:
-		// Both retire one logical serving workload. Warm-swap's lower disruption
-		// belongs to C_flow, not C_norm.
+	case model.ActionRotate, model.ActionWarmSwap, model.ActionRegistryRollback:
+		// All retire one logical serving workload. Warm-swap's lower disruption and
+		// registry-rollback's controller-driven rollout both belong to C_flow, not C_norm;
+		// the normalized disruption of replacing the logical workload is the same 1.00.
 		return NormCostWorkloadReplacement
 	case model.ActionQuarantine:
 		return NormCostWorkloadReplacement / float64(len(structuralComponents))
-	case model.ActionMIGRebind:
+	case model.ActionMIGRebind, model.ActionNodeCordonDrainReplace:
+		// node-cordon-drain-replace replaces a workload's placement AND recycles a NODE — shared
+		// cluster infrastructure. It is deliberately priced at the shared-device-mutation anchor
+		// (1.25), STRICTLY ABOVE a single-pod rotate (1.0): recycling a node is more disruptive than
+		// replacing one pod (it evacuates the node and churns shared infra). Reuses an EXISTING anchor
+		// so the curated parameter manifest / decision-config hash is unchanged (additive-only).
 		return NormCostSharedDeviceMutation
 	case model.ActionModelShardReplace:
 		parallelSize := 1
@@ -154,12 +160,38 @@ func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 			return NormCostServiceRekey
 		}
 		return NormCostMetadataMutation
-	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke:
+	case model.ActionAdapterRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionDatastoreRestore, model.ActionNetworkIsolate, model.ActionCredentialRevoke, model.ActionAgentActionDeny:
+		// throttle installs a computation-affecting serving-admission budget at the
+		// authoritative proxy while retaining every Ready replica — the honest
+		// serving-configuration class, NOT workload replacement.
+		// datastore-restore CAS-restores a poisoned persistent store in place (serving Pods
+		// alive) — also the serving-configuration class, not workload replacement.
+		// network-isolate installs one surgical egress-deny NetworkPolicy (+ a selector label):
+		// a serving-configuration-tier network-channel mutation, like its channel-deny siblings.
+		// It is structurally BELOW quarantine (which additionally detaches + replaces the pod).
+		// credential-revoke deletes one leaked token Secret (+ patches the SA): a serving-
+		// configuration-tier credential mutation in the same surgical tier; the pod is untouched.
+		// agent-action-deny CASes a deny-guard ConfigMap in place (pod alive): same serving-
+		// configuration tier, not workload replacement.
 		return NormCostServingConfiguration
-	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate:
+	case model.ActionKVReset, model.ActionKVMigrateInvalidate, model.ActionGuardrailRotate, model.ActionK8sObjectRevert:
+		// Reverting a drifted ConfigMap to its operator-trusted snapshot is an in-process
+		// config/state reset: it restores one config object, replaces no workload and re-keys no
+		// Service or identity.
 		return NormCostStateReset
 	case model.ActionIdentityRotate:
 		return NormCostPartialIdentity
+	case model.ActionControllerStop:
+		// Removing the whole attacker owner retires N logical workloads: price it as N
+		// workload replacements, N = max(owner desired, observed child count, 1).
+		replicas := 1
+		if view != nil && view.Pod.DesiredReplicas > replicas {
+			replicas = view.Pod.DesiredReplicas
+		}
+		if view != nil && view.Pod.PersistenceFootholdObservation != nil && view.Pod.PersistenceFootholdObservation.Replicas > replicas {
+			replicas = view.Pod.PersistenceFootholdObservation.Replicas
+		}
+		return NormCostWorkloadReplacement * float64(replicas)
 	case model.ActionRouteRotate, model.ActionDebugger, model.ActionCustomInject, model.ActionRequestDrain:
 		return NormCostMetadataMutation
 	default:

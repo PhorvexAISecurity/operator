@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published sensor image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor"
-  tag: "0.6.1"
-  digest: "sha256:29e0aefc45251a1cd717a86add49b4ebeb447ebb3ce0ce0384b5e3fd3d150aab"
+  tag: "idrotate-final"
+  digest: "sha256:b813059d1ed485cda43dd3e7be283f4bfc3f07efa8276ae80fd6c7bdfa3e901f"

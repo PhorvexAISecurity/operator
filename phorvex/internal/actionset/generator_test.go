@@ -361,8 +361,13 @@ func TestM033IdentityVocabularyProducesDeclaredRefusal(t *testing.T) {
 	}
 	for _, ex := range set.Excluded {
 		if ex.Action == model.ActionIdentityRotate {
-			if ex.Reason != model.IdentityRotateUnsupportedReason || ex.EligibilityKind != "capability-unsupported" {
-				t.Fatalf("identity exclusion lacks declared reason: %+v", ex)
+			// Without a validated dedicated-SA external-theft observation (or on policy
+			// identity/epoch drift) identity-rotate is excluded by the policy-binding
+			// gate as a capability-unsupported action, like the other observation-gated
+			// actions, rather than as a declared-only / unsupported-vocabulary refusal.
+			if ex.Gate != GatePolicyBinding || ex.EligibilityKind != "capability-unsupported" ||
+				ex.Reason != "identity-rotate: validated dedicated-SA external-theft observation absent or event policy identity/epoch differs from selecting policy" {
+				t.Fatalf("identity exclusion is not the expected policy-binding capability-unsupported exclusion: %+v", ex)
 			}
 			return
 		}

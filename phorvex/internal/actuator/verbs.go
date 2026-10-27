@@ -5,10 +5,14 @@
 package actuator
 
 import (
+	"github.com/phorvex/phorvex/internal/agentdeny"
 	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/crmrefund"
+	"github.com/phorvex/phorvex/internal/datastore"
 	"github.com/phorvex/phorvex/internal/litellmclient"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/persistence"
+	"github.com/phorvex/phorvex/internal/servingbudget"
 )
 
 // actionVerbs is the SINGLE SOURCE OF TRUTH for the RBAC verbs the T1-E capability gate
@@ -31,10 +35,14 @@ import (
 var actionVerbs = map[model.Action][]authz.Verb{
 	model.ActionRotate: {{Resource: "pods", Subresource: "eviction", Verb: "create"}},
 	// Includes managed repair and proven legacy retirement; RequiredVerbs routing is unchanged.
-	model.ActionQuarantine:                    {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
-	model.ActionDebugger:                      {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
-	model.ActionCustomInject:                  {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
-	model.ActionIdentityRotate:                {{Resource: "pods", Verb: "update"}},
+	model.ActionQuarantine:   {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
+	model.ActionDebugger:     {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
+	model.ActionCustomInject: {{Resource: "pods", Subresource: "ephemeralcontainers", Verb: "update"}},
+	// LIGHT identity-rotate: delete+recreate the dedicated SA (new UID) and remove legacy
+	// token Secrets. SA get/create/delete + the protected rotation journal (operator ns).
+	// Secret get/delete is appended per exact legacy-token name by IdentityRotationVerbs;
+	// SA get/delete and the journal are name-pinned there too. Never Secret list or token issuance.
+	model.ActionIdentityRotate:                {{Resource: "serviceaccounts", Verb: "get"}, {Resource: "serviceaccounts", Verb: "create"}, {Resource: "serviceaccounts", Verb: "delete"}, {Resource: "configmaps", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Verb: "create", OperatorScoped: true}, {Resource: "configmaps", Verb: "update", OperatorScoped: true}, {Resource: "configmaps", Verb: "list", OperatorScoped: true}},
 	model.ActionRouteRotate:                   {{Resource: "pods", Verb: "patch"}, {Resource: "services", Verb: "get"}, {Resource: "services", Verb: "list"}, {Resource: "services", Verb: "update"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionWarmSwap:                      {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Resource: "services", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
 	model.ActionMIGRebind:                     {{Resource: "pods", Verb: "update"}, {Resource: "pods", Verb: "delete"}},
@@ -60,8 +68,62 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// ConfigMap, so an unnamed namespace-wide update is denied and the startup preflight
 	// refuses to start once a policy enables this action without the exact grant. No journal:
 	// the guard ledger (state.json) is the idempotency record.
-	model.ActionCRMRefundRevoke: {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	model.ActionCRMRefundRevoke:     {{Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: crmrefund.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	// Namespace-parametric: the chart grants ConfigMap get/update on the app-facing datastore
+	// store CM plus read-only get on the operator-owned trusted-snapshot CM, per enabled
+	// namespace. No journal: the store content hash is the idempotency record.
+	model.ActionDatastoreRestore: {{Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: datastore.StoreConfigMapName, Verb: "update"}, {Resource: "configmaps", Name: datastore.TrustedSnapshotConfigMapName, Verb: "get"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
+	// Node recycle: cordon (patch a cluster-scoped Node), drain (create pods/eviction in the target
+	// namespace), replace (delete the Node). The gate reviews only the MUTATIONS (node patch+delete,
+	// eviction create, pod delete fallback); the handler's node/pod reads go through broadly-granted
+	// scanner reads. Node verbs are ClusterScoped (empty-namespace SSAR). The lane ClusterRole grants
+	// the manager+actuator SAs exactly these so the T1-E SSAR passes (cluster-scoped analog of the p1
+	// pods/eviction lane grant).
+	model.ActionNodeCordonDrainReplace: {{Resource: "nodes", Verb: "patch", ClusterScoped: true}, {Resource: "nodes", Verb: "delete", ClusterScoped: true}, {Resource: "pods", Subresource: "eviction", Verb: "create"}, {Resource: "pods", Verb: "delete"}},
+	// Surgical egress edge cut: create/reconcile/delete one egress NetworkPolicy + stamp the
+	// selector label on the exact target Pod. No eviction, no detach (contrast quarantine). The
+	// gated verb set is deliberately IDENTICAL to quarantine's proven lane grant (networkpolicies
+	// create/update/delete + pods update) so the T1-E manager SSAR passes with no new RBAC; the
+	// handler's existence reads go through the cached informer (networkpolicies list/watch already
+	// granted for quarantine's readback), so no networkpolicies:get grant is required.
+	model.ActionNetworkIsolate: {{Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "create"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "update"}, {Group: "networking.k8s.io", Resource: "networkpolicies", Verb: "delete"}, {Resource: "pods", Verb: "update"}},
+	// Namespace-parametric analog of crm-refund-revoke: the chart grants ConfigMap get/update
+	// ONLY on the agent deny-guard in each enabled namespace. No journal: the guard ledger
+	// (state.json) is the idempotency record.
+	model.ActionAgentActionDeny: {{Resource: "configmaps", Name: agentdeny.GuardConfigMapName, Verb: "get"}, {Resource: "configmaps", Name: agentdeny.GuardConfigMapName, Verb: "update"}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}},
 	model.ActionEndpointLeaseRevoke: {{Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-policy", Verb: "update"}, {Resource: "configmaps", Name: "guardrail-proxy", Verb: "get"}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: "phorvex-endpoint-lease-journal", Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
+	// controller-stop retires an attacker-created controller end-to-end: scale the exact
+	// owner (Deployment/StatefulSet/ReplicaSet) to zero via the scale subresource
+	// (UID/resourceVersion-bound JSON-patch), then delete its exact child Pods (UID
+	// preconditions). The list verbs are the no-legitimate-service-floor safety proof
+	// (persistence.CheckSafety) and the Deployment->ReplicaSet child enumeration; the
+	// operator-scoped ConfigMap get is the reviewed desired-state inventory read.
+	model.ActionControllerStop: {{Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "deployments", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "statefulsets", Subresource: "scale", Verb: "patch"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "get"}, {Group: "apps", Resource: "replicasets", Subresource: "scale", Verb: "patch"}, {Resource: "pods", Verb: "delete"}, {Group: "apps", Resource: "replicasets", Verb: "list"}, {Group: "policy", Resource: "poddisruptionbudgets", Verb: "list"}, {Group: "autoscaling", Resource: "horizontalpodautoscalers", Verb: "list"}, {Resource: "services", Verb: "list"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}, {Resource: "configmaps", Name: persistence.InventoryName, Verb: "get", OperatorScoped: true}},
+	// throttle writes ONLY the limiter's admission-budget ConfigMap (the proxy refreshes it
+	// every second and enforces it for every request); the chart grants get/update on exactly
+	// that named object, so an unnamed namespace-wide update is denied and the startup preflight
+	// refuses to start once a policy enables throttle without the exact grant. The journal lives
+	// in the operator namespace. No pods/eviction, no HPA (autoscaling), no deployments/scale
+	// verbs — the replica count and HPA are deliberately never mutated.
+	model.ActionThrottle: {{Group: "phorvex.ai", Resource: "phorvexpolicies", Name: "cost-defense", Verb: "get"}, {Group: "apps", Resource: "replicasets", Verb: "get"}, {Resource: "configmaps", Name: servingbudget.StatusName, Verb: "get"}, {Group: "amtd.r6security.com", Resource: "securityevents", Verb: "get", ClusterScoped: true}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "get"}, {Resource: "configmaps", Name: servingbudget.ConfigName, Verb: "update"}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "get", OperatorScoped: true}, {Resource: "configmaps", Name: servingbudget.JournalName, Verb: "update", OperatorScoped: true}, {Resource: "pods", Verb: "get"}, {Resource: "pods", Verb: "list"}, {Resource: "services", Verb: "get"}, {Group: "apps", Resource: "deployments", Verb: "get"}, {Group: "discovery.k8s.io", Resource: "endpointslices", Verb: "list"}},
+	// k8s-object-revert CASes a drifted operator-trusted ConfigMap's .data back to its snapshot.
+	// get is the authoritative pre-read of each referenced ConfigMap (its snapshot annotation +
+	// current data); update is the only mutation. Namespace-wide (not a fixed object name) because
+	// the action is generic over any operator-trusted ConfigMap the flagged pod references; the
+	// handler bounds itself to only-restore-the-operator-snapshot, so the broad verb is safe. Pod
+	// reads are broad scanner context (excluded here by the T1-E rule).
+	model.ActionK8sObjectRevert: {{Resource: "configmaps", Verb: "get"}, {Resource: "configmaps", Verb: "update"}},
+	// Stolen SA credential revocation: delete the detector-named legacy service-account-token
+	// Secret(s) for the named ServiceAccount, then drop the stale reference from the SA. The
+	// handler reads the target Pod + the Secret (to confirm it is a token Secret for that SA,
+	// never an arbitrary Secret) + the SA before mutating. These are credential-specific verbs
+	// not covered by rotate/quarantine, so the lane grants them additively to the actuator AND
+	// manager SA (the T1-E manager SSAR pre-checks the same verb set) in the demo namespace.
+	model.ActionCredentialRevoke: {{Resource: "secrets", Verb: "get"}, {Resource: "secrets", Verb: "list"}, {Resource: "secrets", Verb: "delete"}, {Resource: "serviceaccounts", Verb: "get"}, {Resource: "serviceaccounts", Verb: "update"}, {Resource: "pods", Verb: "get"}},
+	// registry-rollback patches the owning controller's pod-template image back to the trusted pin.
+	// Gated on the MUTATION (apps/deployments patch); the owner-chain reads (deployments/replicasets
+	// get, pods get/list) are the broadly-granted scanner reads excluded by the P-BOUNDED-AUTHZ note.
+	model.ActionRegistryRollback: {{Group: "apps", Resource: "deployments", Verb: "patch"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the
@@ -98,4 +160,29 @@ func RequiredVerbsForBackend(backend Backend, a model.Action) []authz.Verb {
 // capability and boot admission pass the resolved backend to RequiredVerbsForBackend.
 func RequiredVerbs(a model.Action) []authz.Verb {
 	return RequiredVerbsForBackend(BackendHybrid, a)
+}
+
+// IdentityRotationVerbs resolves exact names for least-privilege SSAR. Namespace SA
+// create remains unnamed because Kubernetes cannot name-restrict a create grant; the
+// rotation journal (operator ns) and SA get/delete are name-pinned, and legacy Secret
+// get/delete are appended per exact token name.
+func IdentityRotationVerbs(verbs []authz.Verb, o *model.IdentityRotationObservation) []authz.Verb {
+	out := append([]authz.Verb(nil), verbs...)
+	if o == nil {
+		return out
+	}
+	for i := range out {
+		if out[i].Resource == "configmaps" && (out[i].Verb == "get" || out[i].Verb == "update") {
+			out[i].Name = identityJournalName(Request{IdentityRotationObservation: o})
+		}
+		if out[i].Resource == "serviceaccounts" && out[i].Verb != "create" {
+			out[i].Name = o.ServiceAccountName
+		}
+	}
+	for _, s := range o.LegacyTokenSecrets {
+		for _, v := range []string{"get", "delete"} {
+			out = append(out, authz.Verb{Resource: "secrets", Name: s.Name, Verb: v})
+		}
+	}
+	return out
 }

@@ -121,8 +121,17 @@ spec:
                       - voice-mcp-tool-pin
                       - litellm-client-revoke
                       - crm-refund-revoke
+                      - datastore-restore
+                      - node-cordon-drain-replace
+                      - agent-action-deny
                       - endpoint-lease-revoke
                       - kv-migrate-invalidate
+                      - throttle
+                      - controller-stop
+                      - k8s-object-revert
+                      - network-isolate
+                      - credential-revoke
+                      - registry-rollback
                       - disable
                       type: string
                     minItems: 1

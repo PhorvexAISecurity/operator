@@ -27,15 +27,36 @@ phorvex:
 
   # Beside production, staging must leave production's policies and requests alone.
   # It reconciles, ticks and authorizes only the PhorvexPolicies of the demo's
-  # namespace (deploy/demo). The services never defend their own namespace: the
+  # namespace (deploy/demo) and the identity-rotate fixture's shared namespace
+  # (identityRotate, below). The services never defend their own namespace: the
   # actuator refuses to quarantine in it.
-  policyNamespaces: [phorvex-staging-demo]
+  policyNamespaces: [phorvex-staging-demo, console-identity-shared]
   # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
   # for production's Phoenix to act on, and changes workloads only in the demo's
   # namespace, so its kill switch is off and it rotates and quarantines demo-api.
   actuator: native
-  actuatorNamespaces: [phorvex-staging-demo]
+  actuatorNamespaces: [phorvex-staging-demo, console-identity-shared]
   globalKillSwitch: false
+
+  # LIGHT identity-rotate (actuator/handlers_k8s.go, identity_rotation.go): the
+  # actuator deletes and recreates the dedicated fixture ServiceAccount
+  # console-id-fixture (a new UID) and removes its legacy token Secrets,
+  # invalidating a stolen pod-bound token. The fixture (Deployment+SA, both named
+  # console-id-fixture) lives in the shared namespace console-identity-shared; the
+  # sensor's observation builder (identityfixture.Observe) reads the profile below.
+  identityRotate:
+    enabled: true
+    targetNamespace: console-identity-shared
+    serviceAccountName: console-id-fixture
+    profile:
+      journalNamespace: phorvex-staging
+      namespace: console-identity-shared
+      namespaceUID: fe759ca8-6039-4899-be8c-14e45b0b0613
+      policyName: console-id-fixture
+      policyUID: ac3a6044-a88f-42b0-abe0-fc5a0fbdadcc
+      policyGeneration: 1
+      eksCluster: phorvex-dev-eks
+      awsRegion: us-east-2
   # Admission webhooks and policies are cluster-wide: staging's would also admit
   # production's requests.
   admissionWebhook:
@@ -85,8 +106,9 @@ phorvex:
     enabled: true
     # Its own chart and Application deploy it (deploy/charts/phorvex-console).
     separate: true
-    # Exec, workload changes and policy edits stay in the demo's namespace.
-    attackNamespaces: [phorvex-staging-demo]
+    # Exec, workload changes and policy edits stay in the demo's namespace and the
+    # identity-rotate fixture's shared namespace (phorvex.identityRotate).
+    attackNamespaces: [phorvex-staging-demo, console-identity-shared]
     state:
       persistence:
         storageClass: gp2-csi

@@ -62,21 +62,24 @@ func TestRouteRotateRefusesFloorTwoBeforeMutation(t *testing.T) {
 	}
 }
 
-func TestIdentityRotateDeclaredHandlerRefusesWithoutWrites(t *testing.T) {
+func TestIdentityRotateUnsupportedProfileRefusesWithoutWrites(t *testing.T) {
+	// With no validated dedicated-SA external-theft observation on the request, the handler
+	// refuses before any mutation (the unsupported reason), and touches neither the Pod nor
+	// its ServiceAccount — only an admitted observation + exact policy epoch authorizes a rotation.
 	pod := aiPod("ns", "target", map[string]string{"app": "web"})
 	pod.Spec.ServiceAccountName = "workload-sa"
 	c := fakeC(pod)
 	result, err := (identityRotateHandler{}).Enact(context.Background(), EnactCtx{Client: c}, Request{
 		Namespace: "ns", Pod: "target", Action: model.ActionIdentityRotate,
 	})
-	if err == nil || result.Emitted || !strings.Contains(err.Error(), "declared-only") {
-		t.Fatalf("identity handler result=%+v err=%v, want declared refusal", result, err)
+	if err == nil || result.Emitted || !strings.Contains(err.Error(), model.IdentityRotateUnsupportedReason) {
+		t.Fatalf("identity handler result=%+v err=%v, want unsupported refusal", result, err)
 	}
 	var got corev1.Pod
 	if err := c.Get(context.Background(), client.ObjectKey{Namespace: "ns", Name: "target"}, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Annotations[identitySnapAnno] != "" || got.Labels["phorvex.ai/identity-epoch"] != "" || got.Spec.ServiceAccountName != "workload-sa" {
+	if got.Spec.ServiceAccountName != "workload-sa" {
 		t.Fatalf("identity refusal changed pod: %+v", got)
 	}
 }

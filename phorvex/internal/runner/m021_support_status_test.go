@@ -198,9 +198,12 @@ func TestSupportedActionsRemainSupported(t *testing.T) {
 	if len(rep.gaps) != 0 {
 		t.Fatalf("native implements configured kv-reset, route-rotate and rotate; want no gaps, got %+v", rep.gaps)
 	}
+	// identity-rotate is now natively implemented: the backend-capability leg reports it
+	// capable, so it is NOT a native status gap. Its per-observation / policy-epoch gating
+	// is enforced in a separate capability gate leg, not surfaced as a native support gap.
 	identity := capabilityGaps(model.Policy{EnabledActions: map[model.Action]bool{model.ActionIdentityRotate: true}}, views, witness)
-	if len(identity.gaps) != 1 || identity.gaps[0].action != model.ActionIdentityRotate || !strings.Contains(identity.gaps[0].why, "declared-only") {
-		t.Fatalf("declared identity must be a visible native status gap, got %+v", identity.gaps)
+	if len(identity.gaps) != 0 {
+		t.Fatalf("identity-rotate is now natively implemented; it must not be a native status gap, got %+v", identity.gaps)
 	}
 	m, entry := newEntryManager(t, "green")
 	got := m.debounceActionsSupported(entry, rep)

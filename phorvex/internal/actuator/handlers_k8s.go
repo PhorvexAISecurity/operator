@@ -366,24 +366,22 @@ func (disableHandler) Enact(_ context.Context, _ EnactCtx, _ Request) (HandlerRe
 	return HandlerResult{Emitted: false, NoEffect: NoEffectDeclared, MutationKind: "declared", Note: "disable is declared-not-implemented (matches Phoenix posture); no fabricated behaviour"}, nil
 }
 
-// --- 6. identity-rotate (declared-only; historical metadata rollback) ------------------
+// --- 6. identity-rotate (LIGHT dedicated-SA credential invalidation) --------------------
 //
-// The old handler only relabeled identity-epoch. No UID, IP, projected credential or
-// EndpointSlice membership changed, so new dispatch refuses before any Pod access.
-// Rollback remains registered solely to restore snapshots left by older builds.
+// Genuine credential invalidation: on a trusted dedicated-SA external-theft observation
+// (identityfixture.Observe, bound to a trusted pod-bound-api-auth detector event and the
+// exact policy epoch) the handler deletes the ServiceAccount and recreates it with a new
+// UID — so every bound token issued under the old UID, including a stolen pod-bound bearer,
+// fails TokenReview — then removes legacy token Secrets, retaining the Pod. The full
+// journaled forward-only state machine is in identity_rotation.go (enactIdentityRotation).
+// It is forward-only: there is no credential un-rotation, so no Rollback is implemented.
 
 type identityRotateHandler struct{}
 
 func (identityRotateHandler) Name() string { return string(model.ActionIdentityRotate) }
 
-const identitySnapAnno = "phorvex.ai/identity-snapshot"
-
 func (identityRotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
-	return HandlerResult{}, fmt.Errorf("%s", model.IdentityRotateUnsupportedReason)
-}
-
-func (identityRotateHandler) Rollback(ctx context.Context, ec EnactCtx, req Request, ref string) error {
-	return restoreLabels(ctx, ec, req, identitySnapAnno)
+	return enactIdentityRotation(ctx, ec, req)
 }
 
 // --- 7. route-rotate (advanced K8s; native-only) — protected reversible cutover -----------

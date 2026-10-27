@@ -52,9 +52,11 @@ func renderRepertoire() string {
 	b.WriteString("refuses bounded rotate because its Delete strategy cannot carry the policy cap;\n")
 	b.WriteString("select `native` or `hybrid` for bounded rotate. Historical evidence is not a standing\n")
 	b.WriteString("guarantee for any other deployment and is deliberately absent from this table.\n")
-	b.WriteString("`identity-rotate` is retained as stored policy vocabulary and for cleanup of historical\n")
-	b.WriteString("epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP\n")
-	b.WriteString("or ServiceAccount credentials. `route-rotate` is a real Service-selector restitch;\n")
+	b.WriteString("`identity-rotate` implements LIGHT dedicated-ServiceAccount UID rotation for external\n")
+	b.WriteString("bearer theft. Targetless rows cannot establish its exact Pod/SA/policy prerequisites;\n")
+	b.WriteString("runtime admission requires the validated observation and affirmative scoped RBAC.\n")
+	b.WriteString("The Pod remains; process compromise and federated credentials are outside scope.\n")
+	b.WriteString("`route-rotate` is a real Service-selector restitch;\n")
 	b.WriteString("the per-target capability gate requires its declared Service to select the target\n")
 	b.WriteString("route-key with the target Ready and at least two Ready backends.\n")
 	for _, backend := range Backends() {
@@ -205,6 +207,18 @@ func TestRepertoireAgreesWithSupportsAction(t *testing.T) {
 			if e.Action == model.ActionCRMRefundRevoke && e.Accepted {
 				if ok || !strings.HasPrefix(why, "crm-refund-revoke:") || e.Prerequisite == "" {
 					t.Fatalf("%s/%s: missing reader or exact CRM target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
+			if e.Action == model.ActionDatastoreRestore && e.Accepted {
+				if ok || !strings.HasPrefix(why, "datastore-restore:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reader or exact datastore target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
+				}
+				continue
+			}
+			if e.Action == model.ActionAgentActionDeny && e.Accepted {
+				if ok || !strings.HasPrefix(why, "agent-action-deny:") || e.Prerequisite == "" {
+					t.Fatalf("%s/%s: missing reader or exact agent target must refuse: ok=%v why=%q prerequisite=%q", backend, e.Action, ok, why, e.Prerequisite)
 				}
 				continue
 			}

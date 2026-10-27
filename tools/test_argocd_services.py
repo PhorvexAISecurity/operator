@@ -31,6 +31,13 @@ ELEMENTS = MATRIX[1]['list']['elements']
 ENVIRONMENT_NAMES = [e['environment'] for e in ENVIRONMENTS_LISTED]
 TEMPLATE = APPLICATION_SET['spec']['template']
 IN_CLUSTER = 'https://kubernetes.default.svc'
+# The identity-rotate fixture's shared namespace (deploy/environments/staging/phorvex.yaml,
+# phorvex.identityRotate; deploy/charts/phorvex-common _rbac-catalog.tpl): the actuator and
+# sensor render per-tenant RBAC Roles there to defend console-id-fixture. It is a defended
+# fixture namespace beside the demo, never a production or the system namespace, so the guards
+# below allow this one known namespace in addition to the demo without otherwise widening
+# their reach (the console grants, and production safety, are asserted unchanged).
+FIXTURE_NAMESPACES = {'console-identity-shared'}
 
 
 def value_files(environment, service):
@@ -73,7 +80,13 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(TEMPLATE['spec']['project'], PROJECT['metadata']['name'])
         self.assertEqual(TEMPLATE['spec']['destination'], {'server': '{{.server}}', 'namespace': '{{.namespace}}'})
         demo = load(SERVICES / 'demo-staging.yaml')['spec']['destination']
-        self.assertEqual(PROJECT['spec']['destinations'], [{'server': e['server'], 'namespace': e['namespace']} for e in ENVIRONMENTS_LISTED] + [demo])
+        # The environments and the demo, plus the identity-rotate fixture namespaces (on the
+        # same cluster) the per-tenant Roles need; the fixture destinations widen nothing else.
+        want = [{'server': e['server'], 'namespace': e['namespace']} for e in ENVIRONMENTS_LISTED] + [demo]
+        fixtures = [d for d in PROJECT['spec']['destinations'] if d['namespace'] in FIXTURE_NAMESPACES]
+        self.assertEqual([d for d in PROJECT['spec']['destinations'] if d not in fixtures], want)
+        for d in fixtures:
+            self.assertEqual(d['server'], IN_CLUSTER, d)
         self.assertIs(TEMPLATE['spec']['sources'][0]['helm']['skipCrds'], True)
 
     def test_nothing_applies_these_manifests(self):
@@ -208,8 +221,11 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertNotEqual(auth['oidc']['audience'], production['audience'])
                 subjects = [s for s in json.loads(auth['grants']['data'])['subjects']
                             if s['subject'] == f'system:serviceaccount:{namespace}:{name}']
+                # The e2e identity attacks the environment's workloads, not the defended
+                # identity-rotate fixture, so its grant is the attack namespaces minus the fixture.
+                attacked = [n for n in console['attackNamespaces'] if n not in FIXTURE_NAMESPACES]
                 self.assertEqual([(s['issuer'], s['tenants'], s['targets']) for s in subjects],
-                                 [(auth['oidc']['issuer'], console['attackNamespaces'], ['default'])])
+                                 [(auth['oidc']['issuer'], attacked, ['default'])])
                 rendered = {service: render(environment, element) for service, element in by_service.items()}
                 account = next(d for docs in rendered.values() for d in docs if d['kind'] == 'ServiceAccount' and d['metadata']['name'] == name)
                 self.assertIs(account['automountServiceAccountToken'], False)
@@ -241,14 +257,16 @@ class EnvironmentRenderTests(unittest.TestCase):
                 scope = values['policyNamespaces']
                 self.assertTrue(scope)
                 for policy_namespace in scope:
-                    self.assertTrue(policy_namespace.startswith(namespace + '-'), policy_namespace)
+                    # Its own sub-namespaces, or a known identity-rotate fixture namespace it
+                    # defends; never production's or the system namespace.
+                    self.assertTrue(policy_namespace.startswith(namespace + '-') or policy_namespace in FIXTURE_NAMESPACES, policy_namespace)
                 # It acts, if at all, with its own hands in its own namespaces.
                 acts = not values['globalKillSwitch']
                 if acts:
                     self.assertEqual(values['actuator'], 'native')
                     self.assertTrue(values['actuatorNamespaces'])
                     for actuator_namespace in values['actuatorNamespaces']:
-                        self.assertTrue(actuator_namespace.startswith(namespace + '-'), actuator_namespace)
+                        self.assertTrue(actuator_namespace.startswith(namespace + '-') or actuator_namespace in FIXTURE_NAMESPACES, actuator_namespace)
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
                 for service, element in by_service.items():
@@ -306,8 +324,10 @@ class DemoTests(unittest.TestCase):
         self.assertEqual(policy['tenant'], namespace)
         env = load(ENVIRONMENTS / 'staging' / 'phorvex.yaml')['phorvex']
         self.assertEqual(env['actuator'], 'native')
+        # The demo's tenant, plus the identity-rotate fixture namespaces the services also
+        # defend; nothing else is in scope, and the console grants stay the demo's alone (below).
         for scope in (env['policyNamespaces'], env['actuatorNamespaces'], env['console']['attackNamespaces']):
-            self.assertEqual(scope, [namespace])
+            self.assertEqual([n for n in scope if n not in FIXTURE_NAMESPACES], [namespace])
         for subject in json.loads(env['console']['auth']['grants']['data'])['subjects']:
             self.assertEqual(subject['tenants'], [namespace], subject['subject'])
 

@@ -16,6 +16,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/phorvex/phorvex/internal/authz"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/registry"
 )
@@ -46,14 +47,20 @@ type Rollbacker interface {
 // implementations when nil (production); tests inject mocks so the handler logic is exercised
 // without GPU hardware (see gpu_stack.go).
 type EnactCtx struct {
-	Reader                            client.Reader // authoritative boundary reader
-	Client                            client.Client
-	JournalNamespace                  string // protected operator namespace; empty refuses recoverable writes
-	DryRun                            bool
-	VLLM                              vLLMClient           // serving-stack control plane; nil => real httpVLLM default
-	MIG                               migController        // GPU MIG control plane; nil => real nvidia-smi default
-	Guardrail                         guardrailController  // safety/guardrail-tier control plane; nil => real default
-	KVXfer                            kvTransferController // disaggregated KV-transfer control plane; nil => real default
+	Reader           client.Reader // authoritative boundary reader
+	Client           client.Client
+	JournalNamespace string // protected operator namespace; empty refuses recoverable writes
+	DryRun           bool
+	// Identity-rotate requires affirmative complete-plan authorization, a fresh global
+	// brake and an optional test clock, carried separately so identity's destructive
+	// SA get/create/delete path cannot borrow another action's authority.
+	IdentityAuthz                     *authz.Checker             // affirmative complete-plan SSAR for SA get/create/delete + Secret get/delete
+	IdentityKillSwitch                func(context.Context) bool // fresh global brake; nil refuses identity writes
+	IdentityNow                       func() time.Time           // test clock for age/cooldown; nil uses time.Now
+	VLLM                              vLLMClient                 // serving-stack control plane; nil => real httpVLLM default
+	MIG                               migController              // GPU MIG control plane; nil => real nvidia-smi default
+	Guardrail                         guardrailController        // safety/guardrail-tier control plane; nil => real default
+	KVXfer                            kvTransferController       // disaggregated KV-transfer control plane; nil => real default
 	AdapterSources                    AdapterSources
 	MIGProfiles                       *MIGProfiles
 	ServingSecurity                   *ServingSecurityConfig
@@ -102,6 +109,10 @@ type HandlerResult struct {
 	MutationKind        string
 	GracefulTermination *model.GracefulTerminationReceipt
 	DrainOperation      *model.DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt a controller-stop enact
+	// returns (owner scaled to zero + exact children removed + observed no-recreation
+	// window). nil for every other handler.
+	ControllerStop *model.ControllerStopReceipt
 	// Emitted is true only for a confirmed mutation or confirmed partial
 	// mutation. It stays false for refusal, definite no-effect, and an attempted
 	// external mutation whose result is unknown.
@@ -124,9 +135,6 @@ var errDryRunGuard = fmt.Errorf("native actuator: handler invoked with DryRun se
 func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 	if ec.DryRun {
 		return Result{}, errDryRunGuard
-	}
-	if req.Action == model.ActionIdentityRotate {
-		return Result{}, fmt.Errorf("native actuator: %s", model.IdentityRotateUnsupportedReason)
 	}
 	if req.Action != model.ActionSensitiveOutputPolicyActivate && ec.Reader != nil && ec.JournalNamespace != "" && req.TargetUID != "" {
 		_, receipt, fenceErr := outputPolicyJournalGet(ctx, ec, req.TargetUID)
@@ -187,6 +195,7 @@ func dispatch(ctx context.Context, ec EnactCtx, req Request) (Result, error) {
 		MutationKind:        hr.MutationKind,
 		GracefulTermination: hr.GracefulTermination,
 		DrainOperation:      model.CloneDrainOperationEvidence(hr.DrainOperation),
+		ControllerStop:      model.CloneControllerStopReceipt(hr.ControllerStop),
 	}, err
 }
 

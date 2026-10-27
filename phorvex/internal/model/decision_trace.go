@@ -55,6 +55,24 @@ const (
 	DecisionActionVocabularyLive22 = "v8-live22"
 	DecisionActionVocabularyLive23 = "v9-live23"
 	DecisionActionVocabularyLive24 = "v10-live24"
+	// Live25 is reserved for cost-harvest: LIVE24 + throttle. Never reinterpret it.
+	DecisionActionVocabularyLive25 = "v11-live25"
+	// Live26 adds controller-stop; throttle retains its canonical slot even in builds without its handler.
+	DecisionActionVocabularyLive26 = "v12-live26"
+	// Live27 appends k8s-object-revert (operator-trusted ConfigMap restore); all earlier versions stay frozen.
+	DecisionActionVocabularyLive27 = "v13-live27"
+	// Live28 appends the namespace-parametric datastore-restore; all earlier versions stay frozen.
+	DecisionActionVocabularyLive28 = "v14-live28"
+	// Live29 appends the native node-cordon-drain-replace (host-escape node recycle); all earlier versions stay frozen.
+	DecisionActionVocabularyLive29 = "v15-live29"
+	// Live30 appends the surgical network-isolate (egress edge cut); all earlier versions stay frozen.
+	DecisionActionVocabularyLive30 = "v16-live30"
+	// Live31 appends the surgical credential-revoke (stolen SA token invalidation); all earlier versions stay frozen.
+	DecisionActionVocabularyLive31 = "v17-live31"
+	// Live32 appends the namespace-parametric agent-action-deny; all earlier versions stay frozen.
+	DecisionActionVocabularyLive32 = "v18-live32"
+	// Live33 appends registry-rollback (image-drift reset to the trusted pin); all earlier versions stay frozen.
+	DecisionActionVocabularyLive33 = "v19-live33"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -110,6 +128,33 @@ func DecisionTraceActions(version string) ([]Action, error) {
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce), nil
 	case DecisionActionVocabularyLive24:
 		return append(actions, ActionSensitiveOutputPolicyActivate, ActionVoiceMemoryNoteRevoke, ActionLiteLLMClientRevoke, ActionVoiceRefundPairDeny, ActionVoiceOutputPolicyActivate, ActionVoiceMCPToolPin, ActionEndpointLeaseRevoke, ActionVoiceSessionAdmissionEnforce, ActionCRMRefundRevoke), nil
+	case DecisionActionVocabularyLive25:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive24)
+		return append(prior, ActionThrottle), nil
+	case DecisionActionVocabularyLive26:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive25)
+		return append(prior, ActionControllerStop), nil
+	case DecisionActionVocabularyLive27:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive26)
+		return append(prior, ActionK8sObjectRevert), nil
+	case DecisionActionVocabularyLive28:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive27)
+		return append(prior, ActionDatastoreRestore), nil
+	case DecisionActionVocabularyLive29:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive28)
+		return append(prior, ActionNodeCordonDrainReplace), nil
+	case DecisionActionVocabularyLive30:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive29)
+		return append(prior, ActionNetworkIsolate), nil
+	case DecisionActionVocabularyLive31:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive30)
+		return append(prior, ActionCredentialRevoke), nil
+	case DecisionActionVocabularyLive32:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive31)
+		return append(prior, ActionAgentActionDeny), nil
+	case DecisionActionVocabularyLive33:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive32)
+		return append(prior, ActionRegistryRollback), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

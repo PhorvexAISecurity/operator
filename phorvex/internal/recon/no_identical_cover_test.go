@@ -105,6 +105,11 @@ func coverArchetypes() []coverArchetype {
 			Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}})
 	out = append(out, coverArchetype{name: "voice-mcp-observed", view: boundVoiceMCPView(),
 		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1}})
+	cfgPod := model.Pod{Namespace: "ns", Name: "config-drift", Node: "node-a"}
+	detectorConfigObject(&cfgPod)
+	out = append(out, coverArchetype{name: "config-object-observed", view: &model.WorkloadView{Pod: cfgPod, Physics: model.NeutralPhysics()},
+		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1,
+			Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}})
 	return out
 }
 

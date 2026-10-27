@@ -96,6 +96,11 @@ spec:
         {{- with include "phorvex-common.identityPolicyEnv" $trust }}
         {{- . | nindent 8 }}
         {{- end }}
+        {{- if dig "identityRotate" "enabled" false $v }}
+        # The identity-rotate fixture profile the observation builder reads.
+        - name: PHORVEX_CONSOLE_IDENTITY_FIXTURE
+          value: /etc/phorvex/identity-fixture/profile.json
+        {{- end }}
         ports:
         - name: grpc
           containerPort: 9090
@@ -118,24 +123,35 @@ spec:
             drop: ["ALL"]
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        {{- if or $v.epss.enabled $v.serviceTLS.enabled }}
+        {{- if or $v.epss.enabled $v.serviceTLS.enabled (dig "identityRotate" "enabled" false $v) }}
         volumeMounts:
         {{- if $v.epss.enabled }}
         - name: epss
           mountPath: {{ $v.epss.mountPath }}
           readOnly: true
         {{- end }}
+        {{- if dig "identityRotate" "enabled" false $v }}
+        - name: identity-fixture
+          mountPath: /etc/phorvex/identity-fixture
+          readOnly: true
+        {{- end }}
         {{- if $v.serviceTLS.enabled }}
         {{- include "phorvex-common.serviceTLS.volumeMount" . | nindent 8 }}
         {{- end }}
         {{- end }}
-      {{- if or $v.epss.enabled $v.serviceTLS.enabled }}
+      {{- if or $v.epss.enabled $v.serviceTLS.enabled (dig "identityRotate" "enabled" false $v) }}
       volumes:
       {{- if $v.epss.enabled }}
       # The manager chart (or the EPSS feed) owns this ConfigMap; the sensor reads it.
       - name: epss
         configMap:
           name: {{ $v.epss.configMapName }}
+      {{- end }}
+      {{- if dig "identityRotate" "enabled" false $v }}
+      # The identity-rotate fixture profile ConfigMap this chart renders beside the pod.
+      - name: identity-fixture
+        configMap:
+          name: {{ include "phorvex-sensor.fullname" . }}-identity-fixture
       {{- end }}
       {{- if $v.serviceTLS.enabled }}
       {{- include "phorvex-common.serviceTLS.volume" (dict "root" . "end" "sensor") | nindent 6 }}

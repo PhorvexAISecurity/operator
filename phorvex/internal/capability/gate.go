@@ -79,6 +79,8 @@ var AICapabilityActions = map[model.Action]bool{
 	model.ActionLiteLLMClientRevoke:           true,
 	model.ActionEndpointLeaseRevoke:           true,
 	model.ActionCRMRefundRevoke:               true,
+	model.ActionDatastoreRestore:              true,
+	model.ActionAgentActionDeny:               true,
 }
 
 // Reason is the gate verdict for one (asset, action): nil = eligible-and-clean.
@@ -305,7 +307,10 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 		return &Reason{Excluded: true, Kind: ReasonNotInstallable, Detail: "action not in installed CRD action enum"}
 	}
 	if action == model.ActionIdentityRotate {
-		return &Reason{Excluded: true, Kind: ReasonCapability, Detail: model.IdentityRotateUnsupportedReason}
+		o := v.Pod.IdentityRotationObservation
+		if !v.Pod.HasIdentityRotationObservation() || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "identity-rotate: validated dedicated-SA external-theft observation absent or event policy identity differs from current policy"}
+		}
 	}
 	if len(coverKeys) == 0 {
 		reason := "recon-cover: action invalidates no facts for this asset"
@@ -362,10 +367,34 @@ func (w Witness) eligible(v *model.WorkloadView, action model.Action, coverKeys 
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "crm-refund-revoke: event policy identity differs from current policy"}
 		}
 	}
+	if action == model.ActionDatastoreRestore {
+		o := v.Pod.DatastoreRestoreObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "datastore-restore: event policy identity differs from current policy"}
+		}
+	}
+	if action == model.ActionAgentActionDeny {
+		o := v.Pod.AgentActionDenyObservation
+		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "agent-action-deny: event policy identity differs from current policy"}
+		}
+	}
 	if action == model.ActionEndpointLeaseRevoke {
 		o := v.Pod.EndpointLeaseObservation
 		if o == nil || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
 			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "endpoint-lease-revoke: event policy identity differs from current policy"}
+		}
+	}
+	if action == model.ActionControllerStop {
+		o := v.Pod.PersistenceFootholdObservation
+		if !v.Pod.HasBoundPersistenceObservation() || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "controller-stop: trusted controller-UID-bound unauthorized-owner observation absent or event policy identity differs from current policy"}
+		}
+	}
+	if action == model.ActionThrottle {
+		o := v.Pod.ServingRateBudgetObservation
+		if !v.Pod.HasBoundServingRateBudgetObservation() || o.PolicyName != w.policyName || o.PolicyUID != w.policyUID || w.policyUID == "" {
+			return &Reason{Excluded: true, Kind: ReasonCapability, Detail: "throttle: validated serving-rate-budget observation absent or event policy identity differs from current policy"}
 		}
 	}
 	if ok, why := w.capable(v, action, review); !ok {
@@ -478,6 +507,10 @@ func actionContextAvailable(pod *model.Pod, action model.Action) bool {
 		return pod.HasBoundLiteLLMClientObservation()
 	case model.ActionCRMRefundRevoke:
 		return pod.HasBoundCRMRefundObservation()
+	case model.ActionDatastoreRestore:
+		return pod.HasBoundDatastoreRestoreObservation()
+	case model.ActionAgentActionDeny:
+		return pod.HasBoundAgentActionDenyObservation()
 	case model.ActionEndpointLeaseRevoke:
 		return pod.HasBoundEndpointLeaseObservation()
 	default:
@@ -595,6 +628,16 @@ func (w Witness) configWhy(pod *model.Pod, action model.Action) string {
 		if !pod.HasBoundCRMRefundObservation() || pod.CRMRefundObservation.PolicyName != w.policyName ||
 			pod.CRMRefundObservation.PolicyUID != w.policyUID || w.policyUID == "" {
 			return "pod has no current UID/guard-bound CRM refund-abuse observation"
+		}
+	case model.ActionDatastoreRestore:
+		if !pod.HasBoundDatastoreRestoreObservation() || pod.DatastoreRestoreObservation.PolicyName != w.policyName ||
+			pod.DatastoreRestoreObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/store-bound datastore-poisoning observation"
+		}
+	case model.ActionAgentActionDeny:
+		if !pod.HasBoundAgentActionDenyObservation() || pod.AgentActionDenyObservation.PolicyName != w.policyName ||
+			pod.AgentActionDenyObservation.PolicyUID != w.policyUID || w.policyUID == "" {
+			return "pod has no current UID/guard-bound agent-action-abuse observation"
 		}
 	case model.ActionEndpointLeaseRevoke:
 		if w.operatorNamespace == "" {
@@ -721,5 +764,6 @@ func (w Witness) targetFrom(v *model.WorkloadView) actuatorapi.Target {
 		Namespace: v.Pod.Namespace, Pod: v.Pod.Name, UID: v.Pod.UID,
 		Labels: v.Pod.Labels, NodeName: v.Pod.Node, HasGPU: v.Pod.HasGPU, MIGResource: v.Pod.MIGDevice,
 		PolicyName: w.policyName, PolicyUID: w.policyUID, ServiceAccount: v.Pod.ServiceAccount,
+		ServingRateBudgetObservation: v.Pod.ServingRateBudgetObservation,
 	}
 }

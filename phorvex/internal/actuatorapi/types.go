@@ -97,16 +97,40 @@ type Request struct {
 	VoiceAdmissionObservation *model.VoiceAdmissionObservation
 	VoiceOutputObservation    *model.VoiceOutputObservation   // selection-time observed synthetic output marker
 	LiteLLMClientObservation  *model.LiteLLMClientObservation // selection-time owned-client gateway authority
-	CRMRefundObservation      *model.CRMRefundObservation     // selection-time CRM deny-guard + abused-order authority
+	CRMRefundObservation        *model.CRMRefundObservation        // selection-time CRM deny-guard + abused-order authority
+	DatastoreRestoreObservation *model.DatastoreRestoreObservation // selection-time datastore store + operator-snapshot authority
+	AgentActionDenyObservation  *model.AgentActionDenyObservation  // selection-time agent deny-guard + abused (caller,action) authority
 	EndpointLeaseObservation  *model.EndpointLeaseObservation // selection-time accepted caller lease reuse authority
-	TargetUID                 string                          // Bound identity from the selecting snapshot.
-	TargetNamespaceUID        string                          // Bound by the protected quarantine-capacity reservation.
-	OperationID               string                          // Stable decision identity for protected quarantine and route operations.
-	TickID                    string                          // Real selection tick; protected serving operation IDs are recomputed from it.
-	ServingObservation        *ServingSelectionObservation
-	PolicyName                string // Selecting PhorvexPolicy identity for recoverable native operations.
-	PolicyUID                 string
-	PolicyGeneration          int64
+	// IdentityRotationObservation + PodBoundKubeAPIAuth are the selection-time dedicated-SA
+	// theft authority for identity-rotate. The native handler rechecks both against the live
+	// cluster (identityAuthority) before any ServiceAccount mutation.
+	IdentityRotationObservation *model.IdentityRotationObservation
+	PodBoundKubeAPIAuth         *model.PodBoundKubeAPIAuthProjection
+	// PersistenceObservation is the selection-time, controller-UID-bound trusted
+	// persistence authority for controller-stop. The native handler rechecks it against
+	// the live cluster (validateControllerStop) before any owner scale/child deletion.
+	PersistenceObservation *model.PersistenceFootholdObservation
+	// ServingRateBudgetObservation is the selection-time, serving-limiter-bound trusted
+	// cost-harvest authority for throttle. The native handler rechecks it against the live
+	// cluster (throttleAuthority) before any admission-budget mutation.
+	ServingRateBudgetObservation *model.ServingRateBudgetObservation
+	// NodeEscapeObservation is the selection-time trusted node/host-escape authority for
+	// node-cordon-drain-replace (the node to recycle = the pod's live node).
+	NodeEscapeObservation *model.NodeEscapeObservation
+	// NetworkIsolateObservation is the selection-time trusted egress-edge-cut authority for
+	// network-isolate.
+	NetworkIsolateObservation *model.NetworkIsolateObservation
+	// CredentialRevokeObservation is the selection-time trusted stolen-SA-credential authority
+	// for credential-revoke.
+	CredentialRevokeObservation *model.CredentialRevokeObservation
+	TargetUID             string // Bound identity from the selecting snapshot.
+	TargetNamespaceUID    string // Bound by the protected quarantine-capacity reservation.
+	OperationID           string // Stable decision identity for protected quarantine and route operations.
+	TickID                string // Real selection tick; protected serving operation IDs are recomputed from it.
+	ServingObservation    *ServingSelectionObservation
+	PolicyName            string // Selecting PhorvexPolicy identity for recoverable native operations.
+	PolicyUID             string
+	PolicyGeneration      int64
 	// MaxGracePeriodSeconds is the selecting policy's resolved native rotate
 	// cap. The native handler re-reads and matches it at the mutation boundary.
 	// Zero is invalid and never means force deletion.
@@ -172,6 +196,10 @@ type Result struct {
 	// never claims the old process exited or a replacement became ready.
 	GracefulTermination *model.GracefulTerminationReceipt
 	DrainOperation      *model.DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt for controller-stop. It
+	// rides the CBOR wire (wire.Encode/Decode) back to the manager unchanged; it
+	// records only a bounded no-recreation window, never permanent erasure.
+	ControllerStop *model.ControllerStopReceipt
 }
 
 // Target is the per-asset context the capability gate (T1-E) passes to SupportsAction.
@@ -189,6 +217,11 @@ type Target struct {
 	PolicyName     string
 	PolicyUID      string
 	ServiceAccount string
+	// PolicyGeneration + ServingRateBudgetObservation carry the selecting policy epoch
+	// and the serving-limiter-bound cost-harvest authority for the throttle capability
+	// check. They ride the CBOR target encoding; zero/nil for actions that do not use them.
+	PolicyGeneration             int64
+	ServingRateBudgetObservation *model.ServingRateBudgetObservation
 }
 
 // RuleTypeFor maps a Phorvex action to its controlled SecurityEvent rule type.

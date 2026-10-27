@@ -2921,7 +2921,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		}
 		if (decisions[i].Action == model.ActionSensitiveOutputPolicyActivate || decisions[i].Action == model.ActionVoiceMemoryNoteRevoke || decisions[i].Action == model.ActionVoiceRefundPairDeny || decisions[i].Action == model.ActionVoiceOutputPolicyActivate || decisions[i].Action == model.ActionVoiceSessionAdmissionEnforce || decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke || decisions[i].Action == model.ActionEndpointLeaseRevoke || decisions[i].Action == model.ActionAdapterRotate ||
-			decisions[i].Action == model.ActionCRMRefundRevoke) &&
+			decisions[i].Action == model.ActionCRMRefundRevoke || decisions[i].Action == model.ActionDatastoreRestore || decisions[i].Action == model.ActionAgentActionDeny) &&
 			(decisions[i].Trace == nil || decisions[i].Trace.DecisionID == "" || pol.TickID == "") {
 			recordExistentialEffect(&decisions[i], false)
 			reason := "sensitive-output-selection-id-unavailable"
@@ -2943,6 +2943,10 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				reason = "endpoint-lease-selection-id-unavailable"
 			} else if decisions[i].Action == model.ActionCRMRefundRevoke {
 				reason = "crm-refund-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionDatastoreRestore {
+				reason = "datastore-restore-selection-id-unavailable"
+			} else if decisions[i].Action == model.ActionAgentActionDeny {
+				reason = "agent-action-selection-id-unavailable"
 			}
 			stampDispatch(model.DispatchNotAttempted, reason)
 			continue
@@ -3063,29 +3067,38 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 		actuationStarted := time.Now()
 		recordExistentialEffect(&decisions[i], true)
 		request := actuatorapi.Request{
-			AdapterObservation:        v.Pod.AdapterObservation,
-			OutputPolicyObservation:   v.Pod.OutputPolicyObservation,
-			VoiceMemoryObservation:    v.Pod.VoiceMemoryObservation,
-			VoiceRefundObservation:    v.Pod.VoiceRefundObservation,
-			VoiceMCPObservation:       v.Pod.VoiceMCPObservation,
-			VoiceOutputObservation:    v.Pod.VoiceOutputObservation,
-			VoiceAdmissionObservation: v.Pod.VoiceAdmissionObservation,
-			LiteLLMClientObservation:  v.Pod.LiteLLMClientObservation,
-			EndpointLeaseObservation:  v.Pod.EndpointLeaseObservation,
-			CRMRefundObservation:      v.Pod.CRMRefundObservation,
-			PolicyName:                pol.PolicyName,
-			PolicyUID:                 pol.PolicyUID,
-			PolicyGeneration:          pol.PolicyGeneration,
-			MaxGracePeriodSeconds:     pol.MaxGracePeriodSeconds,
-			Tenant:                    pol.Tenant,
-			Namespace:                 decisions[i].Namespace,
-			Pod:                       decisions[i].Pod,
-			Action:                    decisions[i].Action,
-			Reason:                    decisions[i].Reason,
-			Score:                     score,
-			CoverageValue:             coverageValue,
-			TargetUID:                 v.Pod.UID,
-			TickID:                    pol.TickID,
+			AdapterObservation:          v.Pod.AdapterObservation,
+			OutputPolicyObservation:     v.Pod.OutputPolicyObservation,
+			VoiceMemoryObservation:      v.Pod.VoiceMemoryObservation,
+			VoiceRefundObservation:      v.Pod.VoiceRefundObservation,
+			VoiceMCPObservation:         v.Pod.VoiceMCPObservation,
+			VoiceOutputObservation:      v.Pod.VoiceOutputObservation,
+			VoiceAdmissionObservation:   v.Pod.VoiceAdmissionObservation,
+			LiteLLMClientObservation:    v.Pod.LiteLLMClientObservation,
+			EndpointLeaseObservation:    v.Pod.EndpointLeaseObservation,
+			CRMRefundObservation:        v.Pod.CRMRefundObservation,
+			DatastoreRestoreObservation: v.Pod.DatastoreRestoreObservation,
+			AgentActionDenyObservation:  v.Pod.AgentActionDenyObservation,
+			NodeEscapeObservation:       v.Pod.NodeEscapeObservation,
+			NetworkIsolateObservation:   v.Pod.NetworkIsolateObservation,
+			CredentialRevokeObservation: v.Pod.CredentialRevokeObservation,
+			IdentityRotationObservation: v.Pod.IdentityRotationObservation,
+			PodBoundKubeAPIAuth:         v.Pod.PodBoundKubeAPIAuth,
+			PersistenceObservation:       v.Pod.PersistenceFootholdObservation,
+			ServingRateBudgetObservation: v.Pod.ServingRateBudgetObservation,
+			PolicyName:                   pol.PolicyName,
+			PolicyUID:                   pol.PolicyUID,
+			PolicyGeneration:            pol.PolicyGeneration,
+			MaxGracePeriodSeconds:       pol.MaxGracePeriodSeconds,
+			Tenant:                      pol.Tenant,
+			Namespace:                   decisions[i].Namespace,
+			Pod:                         decisions[i].Pod,
+			Action:                      decisions[i].Action,
+			Reason:                      decisions[i].Reason,
+			Score:                       score,
+			CoverageValue:               coverageValue,
+			TargetUID:                   v.Pod.UID,
+			TickID:                      pol.TickID,
 			ServingObservation: &actuatorapi.ServingSelectionObservation{
 				KVReset: v.Pod.KVResetEpoch, KVMigrate: v.Pod.KVMigrateEpoch,
 				KVLocalEffect: v.Pod.KVLocalEffectEpoch, Guardrail: v.Pod.GuardrailEpochObservation,
@@ -3099,7 +3112,12 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].Action == model.ActionVoiceMCPToolPin ||
 			decisions[i].Action == model.ActionLiteLLMClientRevoke ||
 			decisions[i].Action == model.ActionEndpointLeaseRevoke ||
-			decisions[i].Action == model.ActionCRMRefundRevoke {
+			decisions[i].Action == model.ActionCRMRefundRevoke ||
+			decisions[i].Action == model.ActionIdentityRotate ||
+			decisions[i].Action == model.ActionThrottle ||
+			decisions[i].Action == model.ActionControllerStop ||
+			decisions[i].Action == model.ActionDatastoreRestore ||
+			decisions[i].Action == model.ActionAgentActionDeny {
 			if decisions[i].Trace != nil {
 				request.OperationID = decisions[i].Trace.DecisionID
 			}
@@ -3220,6 +3238,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 
 			outcome := slo.OutcomeFailed
 			dispatchOutcome := model.DispatchError
@@ -3328,6 +3347,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 			actuated++
 			metrics.RecordActuation(pol.Tenant, string(decisions[i].Action))
 			if decisions[i].Action == model.ActionRotate {
@@ -3355,6 +3375,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 			decisions[i].MutationKind = res.MutationKind
 			decisions[i].GracefulTermination = cloneGracefulTermination(res.GracefulTermination)
 			decisions[i].DrainOperation = model.CloneDrainOperationEvidence(res.DrainOperation)
+			decisions[i].ControllerStop = model.CloneControllerStopReceipt(res.ControllerStop)
 			switch disposition {
 			case actuatorapi.NoEffectSatisfied:
 				stampDispatch(model.DispatchSatisfied, "already-satisfied")

@@ -52,9 +52,18 @@ import (
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/metrics"
+	"github.com/phorvex/phorvex/internal/persistence"
+	"github.com/phorvex/phorvex/internal/runner"
 	"github.com/phorvex/phorvex/internal/startupauthz"
 	"github.com/phorvex/phorvex/internal/wire"
 )
+
+// identitySafetyConfigurable is implemented by the native and hybrid actuators. The
+// identity-rotate handler refuses to mutate credentials unless both the complete-plan
+// SSAR checker and a fresh global brake are wired here (never a default-allow).
+type identitySafetyConfigurable interface {
+	SetIdentityAuthority(*authz.Checker, func(context.Context) bool)
+}
 
 type config struct {
 	listen, metricsAddr, probeAddr string
@@ -148,6 +157,10 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 		return err
 	}
 	actuator.ConfigureAdapterDetectorIdentities(cfg.trust.Detectors().List())
+	// controller-stop owner-removal authority: the native handler re-checks
+	// persistence.ObserverAllowed against this before any owner scale/child deletion.
+	// Separate from general detector trust; empty disables controller-stop (fail-closed).
+	persistence.ConfigureAuthority(cfg.trust.PersistenceObserverIdentity, cfg.trust.PersistenceNamespaces(), cfg.operatorNamespace)
 
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                  newScheme(),
@@ -177,6 +190,13 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	act, err := actuator.New(backend.Backend, mgr.GetClient())
 	if err != nil {
 		return fmt.Errorf("cannot construct the resolved actuator: %w", err)
+	}
+	// Identity-rotate requires affirmative complete-plan authorization and a fresh global
+	// brake, carried separately from other actions. Wire the actuator's own SSAR checker
+	// and a dynamic kill-switch observer (sentinel ConfigMap in the operator namespace).
+	if ic, ok := act.(identitySafetyConfigurable); ok {
+		identityKill := &runner.KillSwitch{Client: mgr.GetAPIReader(), Namespace: cfg.operatorNamespace, Name: runner.DefaultKillSwitchName}
+		ic.SetIdentityAuthority(authz.NewChecker(cs, authz.DefaultTTL), identityKill.Engaged)
 	}
 	settings.Configure(act, mgr.GetAPIReader(), cfg.operatorNamespace, voiceAdmission, cfg.trust)
 	capacity, err := actuator.NewQuarantineCapacity(mgr.GetClient(), mgr.GetAPIReader(), cfg.operatorNamespace, cfg.actuator.MaxRetainedQuarantines)

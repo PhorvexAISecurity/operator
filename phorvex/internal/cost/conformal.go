@@ -53,9 +53,9 @@ func GPUEnvelopeMax() float64 {
 	return math.Float64frombits(gpuEnvelopeMaxBits.Load())
 }
 
-// ConformalBound maintains a sliding window of |observed - predicted| cost residuals
-// and returns their (1-alpha) empirical quantile — the conformal slack added to E[C]
-// to get a long-run-coverage upper bound.
+// ConformalBound maintains a sliding window of one-sided max(0, observed - predicted)
+// cost residuals and returns their finite-sample (1-alpha) split-conformal quantile —
+// the conformal slack added to E[C] to get a long-run-coverage upper bound.
 type ConformalBound struct {
 	residuals []float64
 	cap       int
@@ -67,13 +67,15 @@ func NewConformalBound() *ConformalBound {
 	return &ConformalBound{cap: ConformalWindow, alpha: ConformalAlpha}
 }
 
-// Observe records one absolute residual.
+// Observe records one signed residual (observed - predicted). C_hi is a one-sided
+// UPPER bound, so an over-prediction (the action was cheaper than predicted) is stored
+// as zero: good news must not widen the bound.
 func (c *ConformalBound) Observe(residual float64) {
 	if math.IsNaN(residual) || math.IsInf(residual, 0) {
 		return
 	}
 	if residual < 0 {
-		residual = -residual
+		residual = 0
 	}
 	c.residuals = append(c.residuals, residual)
 	if len(c.residuals) > c.cap {
@@ -81,24 +83,32 @@ func (c *ConformalBound) Observe(residual float64) {
 	}
 }
 
-// ColdStartSlack is the modest general residual slack used before any cost residual
-// has been observed (the measured GPU envelope is applied separately, in CHi, only
+// ColdStartSlack is the modest general residual slack used until the residual window
+// is Calibrated (the measured GPU envelope is applied separately, in CHi, only
 // for GPU pods — so non-GPU rotates are not over-pruned at cold-start).
 const ColdStartSlack = 0.1
 
-// Quantile returns the conformal slack q (the (1-alpha) empirical quantile of
-// residuals). With no data it returns a modest cold-start slack.
+// Quantile returns the conformal slack q: the ceil((n+1)(1-alpha))-th smallest
+// residual (finite-sample split-conformal rank). Until the window is Calibrated, or
+// while that rank exceeds n (the quantile is +Inf), it returns the cold-start slack.
+// A few uncalibrated residuals must never replace it: new residuals come only from
+// executed rotations, so one outlier would exclude rotate with no path back.
 func (c *ConformalBound) Quantile() float64 {
-	if len(c.residuals) == 0 {
+	n := len(c.residuals)
+	if n < ConformalMinimumSamples {
 		return ColdStartSlack
+	}
+	// The epsilon keeps float noise in (n+1)(1-alpha) from bumping an exact rank.
+	k := int(math.Ceil(float64(n+1)*(1-c.alpha) - 1e-9))
+	if k > n {
+		return ColdStartSlack
+	}
+	if k < 1 {
+		k = 1
 	}
 	s := append([]float64(nil), c.residuals...)
 	sort.Float64s(s)
-	idx := int(float64(len(s)-1) * (1 - c.alpha))
-	if idx < 0 {
-		idx = 0
-	}
-	return s[idx]
+	return s[k-1]
 }
 
 // Calibrated reports whether enough residuals exist for a meaningful (non-cold-start)

@@ -27,9 +27,11 @@ M-9) is evidence about ONE build, target and configuration. Current pure Phoenix
 refuses bounded rotate because its Delete strategy cannot carry the policy cap;
 select `native` or `hybrid` for bounded rotate. Historical evidence is not a standing
 guarantee for any other deployment and is deliberately absent from this table.
-`identity-rotate` is retained as stored policy vocabulary and for cleanup of historical
-epoch-label snapshots. It is declared-only for new dispatch: it cannot rotate UID, IP
-or ServiceAccount credentials. `route-rotate` is a real Service-selector restitch;
+`identity-rotate` implements LIGHT dedicated-ServiceAccount UID rotation for external
+bearer theft. Targetless rows cannot establish its exact Pod/SA/policy prerequisites;
+runtime admission requires the validated observation and affirmative scoped RBAC.
+The Pod remains; process compromise and federated credentials are outside scope.
+`route-rotate` is a real Service-selector restitch;
 the per-target capability gate requires its declared Service to select the target
 route-key with the target Ready and at least two Ready backends.
 
@@ -63,6 +65,15 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "endpoint-lease-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `voice-session-admission-enforce` | phoenix | no | backend-unsupported: phoenix cannot enact "voice-session-admission-enforce" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 | `crm-refund-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "crm-refund-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `throttle` | phoenix | no | backend-unsupported: phoenix cannot enact "throttle" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `controller-stop` | phoenix | no | backend-unsupported: phoenix cannot enact "controller-stop" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `k8s-object-revert` | phoenix | no | backend-unsupported: phoenix cannot enact "k8s-object-revert" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `datastore-restore` | phoenix | no | backend-unsupported: phoenix cannot enact "datastore-restore" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `node-cordon-drain-replace` | phoenix | no | backend-unsupported: phoenix cannot enact "node-cordon-drain-replace" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `network-isolate` | phoenix | no | backend-unsupported: phoenix cannot enact "network-isolate" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `credential-revoke` | phoenix | no | backend-unsupported: phoenix cannot enact "credential-revoke" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `agent-action-deny` | phoenix | no | backend-unsupported: phoenix cannot enact "agent-action-deny" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
+| `registry-rollback` | phoenix | no | backend-unsupported: phoenix cannot enact "registry-rollback" (no accepted Phoenix controlled route; this backend enacts only quarantine) | — | — |
 
 ## native
 
@@ -74,7 +85,7 @@ route-key with the target Ready and at least two Ready backends.
 | `quarantine` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
+| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
@@ -94,6 +105,15 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |
 | `voice-session-admission-enforce` | native | yes | — | reviewed immutable admission wrapper, unchanged legacy bundle, canonical production auth profile, exact all-serving-Pod state and protected journal | support does not establish actual first loss, CAS enforcement, local unsigned teardown, fresh denial or useful signed speech; these require native and Console evidence |
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
+| `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
+| `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
+| `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |
+| `node-cordon-drain-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `network-isolate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `credential-revoke` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `agent-action-deny` | native | yes | — | reviewed agent workload on Ready Service Pods, one agent-action-abuse observation and the deny-guard ConfigMap in the target namespace | support does not authenticate agent callers or undo prior actions; dispatch CASes the deny-guard and checks every serving Pod denies the (caller,action) pair |
+| `registry-rollback` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 
 ## hybrid
 
@@ -105,7 +125,7 @@ route-key with the target Ready and at least two Ready backends.
 | `quarantine` | phoenix | yes | unverified: phoenix-amtd-repertoire — P-08 | — | Phoenix receives the SecurityEvent; execution and security effect are not verified here |
 | `debugger` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `custom-inject` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
-| `identity-rotate` | native | no | backend-unsupported: native cannot enact "identity-rotate" (declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials) | — | — |
+| `identity-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `route-rotate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `warm-swap` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
 | `mig-rebind` | native | yes | — | transport-unwired is reported unless the node-exec transport is wired (M-79) | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
@@ -125,3 +145,12 @@ route-key with the target Ready and at least two Ready backends.
 | `endpoint-lease-revoke` | native | yes | — | reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal | support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior |
 | `voice-session-admission-enforce` | native | yes | — | reviewed immutable admission wrapper, unchanged legacy bundle, canonical production auth profile, exact all-serving-Pod state and protected journal | support does not establish actual first loss, CAS enforcement, local unsigned teardown, fresh denial or useful signed speech; these require native and Console evidence |
 | `crm-refund-revoke` | native | yes | — | reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap | support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order |
+| `throttle` | native | yes | — | reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal | support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe |
+| `controller-stop` | native | yes | — | fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor | support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure |
+| `k8s-object-revert` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `datastore-restore` | native | yes | — | reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace | support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash |
+| `node-cordon-drain-replace` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `network-isolate` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `credential-revoke` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |
+| `agent-action-deny` | native | yes | — | reviewed agent workload on Ready Service Pods, one agent-action-abuse observation and the deny-guard ConfigMap in the target namespace | support does not authenticate agent callers or undo prior actions; dispatch CASes the deny-guard and checks every serving Pod denies the (caller,action) pair |
+| `registry-rollback` | native | yes | — | — | handler is registered; per-target fixtures, emission and effect are verified elsewhere |

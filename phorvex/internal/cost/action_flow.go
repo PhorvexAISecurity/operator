@@ -17,6 +17,10 @@ const (
 	flowKVResetMeasured
 	flowServingState
 	flowLightweight
+	// flowControllerStop retires an attacker owner (scale-to-zero + child removal). Its
+	// per-replica magnitude is carried by normCostP1 (NormCostWorkloadReplacement * N),
+	// not re-scaled here, so the flow is a flat base like quarantine.
+	flowControllerStop
 )
 
 // RespawnFlowRegime identifies the input/action support behind one learned
@@ -81,20 +85,48 @@ func flowFamilyForAction(action model.Action) flowFamily {
 	switch action {
 	case model.ActionNoop:
 		return flowNone
-	case model.ActionRotate, model.ActionMIGRebind:
+	case model.ActionRotate, model.ActionMIGRebind, model.ActionRegistryRollback:
+		// registry-rollback patches the controller image to the trusted pin; the controller then
+		// rolls out fresh Pods on the clean digest — a full respawn of the workload's Pods.
 		return flowRespawn
 	case model.ActionQuarantine:
 		return flowQuarantine
 	case model.ActionWarmSwap, model.ActionModelShardReplace,
-		model.ActionEndpointRotate, model.ActionRequestDrain:
+		model.ActionEndpointRotate, model.ActionRequestDrain,
+		// node-cordon-drain-replace gracefully DRAINS the node (bounded-grace Eviction; the owning
+		// controllers respawn the pods on clean nodes — a controlled cutover/movement), NOT a cold
+		// rotation. It is deliberately NOT flowRespawn: a node evacuation's disruption is the graceful
+		// drain cutover, and routing it through the rotation-trained RLS uncertainty bound would charge
+		// it for replacement-timing uncertainty it does not have. (On the conservative respawn upper
+		// bound ~CFlowMaximum it would price far higher and could exceed the ceiling — but that bound
+		// models cold-rotation timing, which does not apply to a drain whose replicas roll onto
+		// already-Ready clean nodes. Cutover is the honest family, independent of the ceiling outcome.)
+		model.ActionNodeCordonDrainReplace:
 		return flowCutover
 	case model.ActionKVReset:
 		return flowKVResetMeasured
-	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke:
+	case model.ActionKVMigrateInvalidate, model.ActionAdapterRotate, model.ActionGuardrailRotate, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle, model.ActionK8sObjectRevert, model.ActionDatastoreRestore, model.ActionNetworkIsolate, model.ActionCredentialRevoke, model.ActionAgentActionDeny:
+		// throttle's disruption is the legitimate-flow loss from the admission budget,
+		// rising with observed serving load (servingLoadPressure) — the serving-state
+		// family, bounded above by CFlowMaximum like its siblings.
+		// k8s-object-revert CASes the drifted ConfigMap's .data back to its trusted snapshot in
+		// place — the consuming Pods keep running, so it is a serving-state config change, not a
+		// workload respawn (cheaper and less disruptive than rotate; selection comes from cover).
+		// datastore-restore CAS-restores a poisoned persistent store to its trusted snapshot with
+		// the serving Pods alive — same serving-state family (pod-alive, replica-retaining).
+		// network-isolate applies one egress NetworkPolicy (+ a pod label) — no replica loss,
+		// no cold load, pod stays Ready; its minor serving-state disruption prices like the other
+		// surgical channel-deny moves, far below rotate (respawn) and quarantine (0.25 freeze).
+		// credential-revoke deletes one token Secret (+ patches the SA) — the pod is likewise
+		// untouched, so it prices in the same surgical credential/channel-deny tier.
+		// agent-action-deny CASes a deny-guard ConfigMap (+ a pod-local label) with the pod alive —
+		// same serving-state family (pod-alive, replica-retaining).
 		return flowServingState
 	case model.ActionIdentityRotate, model.ActionRouteRotate,
 		model.ActionDebugger, model.ActionCustomInject:
 		return flowLightweight
+	case model.ActionControllerStop:
+		return flowControllerStop
 	default:
 		return flowUnknown
 	}
@@ -118,9 +150,17 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 	case flowKVResetMeasured:
 		return measuredKVResetTTFTPenaltyFraction
 	case flowServingState:
-		return estimatedServingStateBase + estimatedServingLoadSpan*servingLoadPressure(view)
+		pressure := servingLoadPressure(view)
+		// http-echo has no application exporter. The trusted bound proxy
+		// observation supplies aggregate serving pressure for this action only.
+		if action == model.ActionThrottle && view != nil && view.Pod.HasBoundServingRateBudgetObservation() {
+			pressure = max(pressure, sat(view.Pod.ServingRateBudgetObservation.ObservedReqPerSec/requestRateNormalizer))
+		}
+		return estimatedServingStateBase + estimatedServingLoadSpan*pressure
 	case flowLightweight:
 		return estimatedLightweightFlow
+	case flowControllerStop:
+		return quarantineBase
 	default:
 		return unknownActionFlowMax
 	}

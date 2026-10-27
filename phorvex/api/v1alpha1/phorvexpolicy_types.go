@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;registry-rollback;disable
 type ActionType string
 
 const (
@@ -496,8 +496,36 @@ const (
 	ActionVoiceMCPToolPin               ActionType = "voice-mcp-tool-pin"
 	ActionLiteLLMClientRevoke           ActionType = "litellm-client-revoke"
 	ActionCRMRefundRevoke               ActionType = "crm-refund-revoke"
+	ActionDatastoreRestore ActionType = "datastore-restore"
+	// ActionNodeCordonDrainReplace cordons/drains and recycles the node a pod runs on after a
+	// trusted container→host escape (AML.T0105), leaving the protected workload rescheduled on a
+	// clean node. The node is derived from the pod's live spec.nodeName, never from the event.
+	ActionNodeCordonDrainReplace ActionType = "node-cordon-drain-replace"
+	// ActionAgentActionDeny denies one observed abused (caller, action) pair at an agent
+	// workload's deny-guard ConfigMap, leaving the pod Ready + in-service (namespace-parametric).
+	ActionAgentActionDeny ActionType = "agent-action-deny"
 	ActionKVMigrateInvalidate           ActionType = "kv-migrate-invalidate"
-	ActionDisable                       ActionType = "disable"
+	// ActionThrottle installs a bounded request-admission budget for one observed abusive
+	// caller/path at an already-present authoritative serving proxy (cost-harvest defense),
+	// capping the abusive drive to a measured baseline while reserving legitimate budget.
+	ActionThrottle ActionType = "throttle"
+	// ActionControllerStop retires an attacker-created controller (owner scale-to-zero
+	// + exact child Pod removal + bounded observed no-recreation).
+	ActionControllerStop ActionType = "controller-stop"
+	// ActionK8sObjectRevert restores an operator-trusted config object (ConfigMap) to its
+	// trusted snapshot after a trusted detector flags drift (AML.T0081).
+	ActionK8sObjectRevert ActionType = "k8s-object-revert"
+	// ActionNetworkIsolate surgically cuts a pod's forbidden egress channel edge
+	// (C2/exfil/IMDS/east-west) via an egress NetworkPolicy, leaving the pod Ready + in-service.
+	ActionNetworkIsolate ActionType = "network-isolate"
+	// ActionCredentialRevoke invalidates a stolen ServiceAccount bearer credential by deleting
+	// its detector-named legacy service-account-token Secret, leaving the pod Ready + in-service.
+	ActionCredentialRevoke ActionType = "credential-revoke"
+	// ActionRegistryRollback resets a drifted running container image back to the owner-declared
+	// trusted pin by patching the owning controller's pod-template image (AI supply-chain compromise).
+	ActionRegistryRollback ActionType = "registry-rollback"
+	ActionDisable          ActionType = "disable"
+
 )
 
 // ModeDryRun decides + logs + emits metrics but never actuates (the P0 default).

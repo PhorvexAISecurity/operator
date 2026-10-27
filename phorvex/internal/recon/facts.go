@@ -71,6 +71,29 @@ const (
 	// against the protected public inference route. Revoking that exact lease
 	// invalidates this credential fact; endpointPath remains audit-only.
 	FactEndpointLeaseReuse = "endpointLeaseReuse"
+	// FactNodeHostEscape is one trusted-observed container→host escape (AML.T0105) on the node a
+	// protected pod runs on: the whole node/host is compromised, so a pod-local rotate or quarantine
+	// does not remediate it (a respawned/isolated pod can land on or stay on the same hostile host).
+	// ONLY node-cordon-drain-replace covers it — cordon + drain + recycle the node. The node identity
+	// is the pod's live spec.nodeName, never attacker-chosen. Distinct from the pod-scoped identity/
+	// session facts the pod-local actions cover.
+	FactNodeHostEscape = "nodeHostEscape"
+	// FactNetworkEgressChannel is one trusted-observed OPEN egress channel edge from this
+	// pod to an attacker edge (C2 / exfil / IMDS / east-west). It exists ONLY while that
+	// channel is open, and ONLY network-isolate (a surgical egress NetworkPolicy that excepts
+	// the forbidden edge while leaving the pod Ready + in-service) covers it — so the engine
+	// selects the edge cut for THIS attack, not a full quarantine (deny-all + detach) or rotate.
+	// Distinct from FactNetworkIdentity (quarantine's reachable-identity fact) and FactLateralEdge
+	// (an origin-owned neighbor edge): this is the pod's own outbound channel edge.
+	FactNetworkEgressChannel = "networkEgressChannel"
+	// FactCredentialReuse is one trusted-observed reuse of a STOLEN ServiceAccount bearer
+	// credential (a legacy service-account-token Secret) for this pod. It exists ONLY while that
+	// leaked credential is still live, and ONLY credential-revoke (deleting the token Secret so the
+	// apiserver stops authenticating it) covers it — so the engine selects credential invalidation
+	// for THIS attack, not rotate/quarantine/network-isolate, none of which invalidate a bearer
+	// token an external attacker already holds. Distinct from FactEndpointLeaseReuse (an app
+	// caller-lease at the serving proxy): this is a Kubernetes ServiceAccount token credential.
+	FactCredentialReuse = "credentialReuse"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap
@@ -93,6 +116,20 @@ const (
 	// (unload the adapter) covers it — so the engine selects adapter-rotate for THIS attack, not a
 	// generic rotate/kv-reset.
 	FactAdapterIntegrity = "adapterIntegrity"
+	// FactConfigObjectIntegrity = an operator-trusted ConfigMap (the agent's instruction/config
+	// object) drifted from its operator-declared trusted snapshot (a detector flagged the tamper).
+	// It exists ONLY while the drifted object is live, and ONLY k8s-object-revert (restore the
+	// object to the trusted snapshot) covers it — a generic rotate/quarantine churns the POD but the
+	// tampered ConfigMap keeps serving the same bad config, so they earn no cover.
+	FactConfigObjectIntegrity = "configObjectIntegrity"
+	// FactImageIntegrity = the RUNNING container image digest has drifted from the owner-declared
+	// trusted pin (a poisoned supply-chain artifact/image is EXECUTING). It exists ONLY while a
+	// trusted detector observation of that drift is bound to the pod, and ONLY registry-rollback
+	// (reset the controller image to the pin so clean Pods roll out) covers it — a plain rotate
+	// respawns the SAME drifted image, so the engine selects registry-rollback for THIS attack.
+	// Distinct from the Tier-3 FactArtifactProvenance (copied-knowledge, uninvalidatable): this
+	// fact is the live executing-poison state a rollback physically invalidates.
+	FactImageIntegrity = "imageIntegrity"
 
 	// FactInflightRequests = the attacker's IN-FLIGHT request / queue / streaming-session state on a
 	// serving pod (distinct from the KV-cache session): the requests currently being served that a
@@ -128,6 +165,15 @@ const (
 	// against one exact CRM order at the unauthenticated mini-CRM. The first refund is
 	// irreversible; this fact describes only further refunds of that order.
 	FactCRMRefundOrderAbuse = "crmRefundOrderAbuse"
+	// FactDatastorePoisoned is the persisted-poison path of one observed datastore-poisoning:
+	// a persistent store (RAG index / agent memory / tool-data) whose current content sha256
+	// differs from the operator-owned trusted snapshot. The poison survives a pod rotate, so
+	// only a restore-from-trusted-snapshot remediates it. Namespace-parametric.
+	FactDatastorePoisoned = "datastorePoisoned"
+	// FactAgentActionAbuse is the repeat path of one observed unauthorized agent action
+	// (one caller invoking one forbidden action) at an agent workload's deny-guard. It is
+	// the namespace-parametric analog of crmRefundOrderAbuse.
+	FactAgentActionAbuse = "agentActionAbuse"
 	// FactPodBoundKubeAPIAuthPotential is a structural exposure: an admitted,
 	// started Pod mounts a projected default-audience API token tied to its exact
 	// UID and current ServiceAccount. Rotate has planned cover because retirement
@@ -152,6 +198,15 @@ const (
 	FactRetrievalState          = "retrievalState"
 	FactArtifactProvenance      = "artifactProvenance"
 	FactControlPlanePersistence = "controlPlanePersistence"
+	// FactServingRateBudget is the attacker's sustained over-baseline request-rate drive
+	// against one serving Service for one offending caller/path (AML.T0034 cost harvesting).
+	// It exists ONLY while a trusted cost-load observation binds the over-budget path to the
+	// installed authoritative limiter, and ONLY throttle (install a bounded admission budget
+	// that caps the abusive caller to the measured baseline while reserving legitimate
+	// capacity) covers it — so the engine selects the surgical throttle for THIS attack, not a
+	// replica-removing rotate/quarantine. Covering it does not claim the first over-baseline
+	// requests were refunded; it describes only the capped continuation path.
+	FactServingRateBudget = "servingRateBudget"
 )
 
 // Fact is one weighted recon fact about an asset.

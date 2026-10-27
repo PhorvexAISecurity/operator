@@ -77,15 +77,17 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// mounted default-API-audience projection for this exact live Pod UID and
 	// current ServiceAccount; old-UID retirement is the eventual effect boundary.
 	if view.Pod.HasPodBoundKubeAPIAuth() {
-		addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+		credential := addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+		// LIGHT identity-rotate deletes+recreates the dedicated ServiceAccount (new UID),
+		// invalidating the externally stolen pod-bound credential while RETAINING the Pod.
+		// It covers EXACTLY that credential fact — never pod identity, memory or session,
+		// which only a full rotate (kill+respawn) invalidates. The grant requires the
+		// validated dedicated-SA external-theft observation; exact selecting-policy binding
+		// is additionally enforced by the capability gate, the generator and the handler.
+		if view.Pod.HasIdentityRotationObservation() {
+			cover[model.ActionIdentityRotate] = []string{credential.Key()}
+		}
 	}
-	// NO COVER for identity-rotate. It writes a `phorvex.ai/identity-epoch` LABEL and nothing else:
-	// the SA-token branch is `_ = ec.Client` (a no-op on modern K8s, where projected tokens rotate on
-	// their own), and nothing in the repo or on the cluster selects on that label. So the pod's identity
-	// as an attacker holds it — UID, SA token, IP, EndpointSlice membership — is UNCHANGED. Granting it
-	// podIdentity told the optimiser it had neutralised identity recon when it had only relabelled the
-	// pod, i.e. it could be selected INSTEAD of a rotate that really would have. Only actions that truly
-	// invalidate the fact may claim it.
 	memFact := addRotate(FactInMemory, base*urg)
 	// Session/KV-cache fact is always modeled; GPU/stateful only affects exposure weight.
 	sessionW := base * urg * sessionWeight
@@ -127,6 +129,31 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	nid := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkIdentity, Weight: base * urg * networkIdentityWeight}
 	facts = append(facts, nid)
 	cover[model.ActionQuarantine] = append(cover[model.ActionQuarantine], nid.Key())
+	// Control-plane persistence fact — invalidated ONLY by controller-stop (whole-owner
+	// scale-to-zero + exact child removal + observed no-recreation). Minted only on a
+	// trusted controller-UID-bound unauthorized-owner observation; exact selecting-policy
+	// binding is enforced by the capability gate, the generator and the handler. Removing
+	// the whole owner also takes out the pod-identity, in-memory, session and network facts
+	// its children carried, so controller-stop covers them too — strictly more thorough than
+	// a per-Pod rotate+quarantine pair on a foothold that would otherwise reschedule.
+	if view.Pod.HasBoundPersistenceObservation() {
+		persist := Fact{Scope: ScopePod, Asset: asset, Kind: FactControlPlanePersistence, Weight: base * urg}
+		facts = append(facts, persist)
+		cover[model.ActionControllerStop] = append(cover[model.ActionControllerStop],
+			persist.Key(), pid.Key(), memFact.Key(), sessFact.Key(), nid.Key())
+	}
+	// Serving cost-harvest fact — invalidated ONLY by THROTTLE, and ONLY on the exact
+	// over-budget path: a trusted cost-load observation must bind this Pod/Service to the
+	// installed authoritative limiter and the current policy epoch (HasBoundServingRateBudget
+	// Observation). Absent that binding no cover is awarded, so throttle is never selected for
+	// a workload that is not actually being cost-harvested through an enforceable limiter.
+	// This is conditional cover for the over-budget serving path only — it grants NO Pod,
+	// credential, memory, network, session or whole-serving-surface cover.
+	if view.Pod.HasBoundServingRateBudgetObservation() {
+		srb := Fact{Scope: ScopePod, Asset: asset, Kind: FactServingRateBudget, Weight: base * urg}
+		facts = append(facts, srb)
+		cover[model.ActionThrottle] = append(cover[model.ActionThrottle], srb.Key())
+	}
 	// route-rotate deliberately receives no cover. Its successful path changes endpoint
 	// selection membership by re-keying a Pod label and restitching a Service selector,
 	// while retaining the old Pod UID/IP and the stable Service UID/ClusterIP/DNS locator.

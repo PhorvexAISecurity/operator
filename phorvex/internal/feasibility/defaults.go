@@ -120,7 +120,16 @@ func (antiOverRotation) Name() string { return "anti-over-rotation" }
 func ExposureVarFor(a model.Action) string {
 	switch a {
 	case model.ActionRotate, model.ActionWarmSwap, model.ActionMIGRebind, model.ActionModelShardReplace,
-		model.ActionDebugger, model.ActionCustomInject, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke:
+		model.ActionControllerStop,
+		model.ActionK8sObjectRevert,
+		model.ActionDatastoreRestore,
+		// node-cordon-drain-replace evicts + reschedules the protected pod (a pod replacement, onto a
+		// clean node), so it reads the always-on podIdentity freshness floor — the same short same-Pod
+		// cooldown as rotate, damping repeated node-recycles triggered on the same pod.
+		model.ActionNodeCordonDrainReplace,
+		model.ActionAgentActionDeny,
+		model.ActionRegistryRollback,
+		model.ActionDebugger, model.ActionCustomInject, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle:
 		// Output policy activation is Pod-local but has no Pod epoch annotation:
 		// the protected ConfigMap revision is its durable operation clock.
 		// Pod identity is the always-on freshness floor here; the emitted intent
@@ -128,11 +137,22 @@ func ExposureVarFor(a model.Action) string {
 		return model.VarPodIdentity
 	case model.ActionKVReset, model.ActionKVMigrateInvalidate:
 		return model.VarSession
-	case model.ActionQuarantine:
+	case model.ActionQuarantine, model.ActionNetworkIsolate:
+		// network-isolate acts on the same network-reachability dimension as quarantine (it
+		// removes an egress channel edge), so it reads the networkIdentity exposure clock. On a
+		// never-quarantined pod that clock is absent and the guard fail-OPENs (its first actuation
+		// writes no podIdentity/UID change); it shares quarantine's clock to damp rapid
+		// network-containment oscillation on the same pod.
 		return model.VarNetworkIdentity
 	case model.ActionEndpointRotate, model.ActionRouteRotate:
 		return model.VarRouteKey
-	case model.ActionIdentityRotate:
+	case model.ActionIdentityRotate, model.ActionCredentialRevoke:
+		// credential-revoke acts on the ServiceAccount identity/credential dimension (it
+		// invalidates a bearer token), so it reads the identity exposure clock. Its own handler
+		// writes no pod epoch marker (it deletes a Secret + patches the SA, the pod is untouched),
+		// so on a pod that was never identity-actuated the clock is absent and the anti-over-
+		// rotation guard fail-OPENs (its first revocation is always allowed); it shares the
+		// identity clock only to damp rapid repeat-revocation on the same pod.
 		return model.VarIdentity
 	case model.ActionAdapterRotate:
 		return model.VarAdapterEpoch

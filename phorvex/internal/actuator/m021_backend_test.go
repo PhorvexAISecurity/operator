@@ -259,8 +259,12 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 				t.Fatal("fixture: disable is expected to keep its registered handler")
 			}
 		case model.ActionIdentityRotate:
-			if ok || !registered || !strings.Contains(why, "declared-only") {
-				t.Fatalf("identity-rotate must remain registered for historical rollback but unsupported for new dispatch: ok=%v registered=%v why=%q", ok, registered, why)
+			// identity-rotate is now a real implemented action: a handler is registered
+			// and nativeAccepts returns true, so native support is affirmative here. The
+			// per-observation / policy-epoch gating lives in the capability gate leg
+			// (actionset / capability), not in native support (M-21).
+			if !ok || !registered || why != "" {
+				t.Fatalf("identity-rotate is now natively supported (handler registered, nativeAccepts true): ok=%v registered=%v why=%q", ok, registered, why)
 			}
 		case model.ActionMIGRebind:
 			if ok {
@@ -312,6 +316,14 @@ func TestNativeSupportMatchesItsRegistry(t *testing.T) {
 		case model.ActionCRMRefundRevoke:
 			if ok || !registered || !strings.HasPrefix(why, "crm-refund-revoke:") {
 				t.Fatalf("CRM refund revoke requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
+			}
+		case model.ActionDatastoreRestore:
+			if ok || !registered || !strings.HasPrefix(why, "datastore-restore:") {
+				t.Fatalf("datastore-restore requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
+			}
+		case model.ActionAgentActionDeny:
+			if ok || !registered || !strings.HasPrefix(why, "agent-action-deny:") {
+				t.Fatalf("agent-action-deny requires a reader and exact target: ok=%v registered=%v why=%q", ok, registered, why)
 			}
 		default:
 			if ok != registered {

@@ -249,8 +249,6 @@ func nativeAccepts(a model.Action) (bool, string) {
 		return false, detailSentinel
 	case a == model.ActionDisable:
 		return false, detailDeclaredOnly
-	case a == model.ActionIdentityRotate:
-		return false, "declared-only: identity-epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
 	case !KnownAction(a):
 		return false, detailUnknownAction
 	}
@@ -340,8 +338,20 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionCRMRefundRevoke {
 					e.Prerequisite = "reviewed mini-CRM on two Ready Service Pods, one cross-record-refund observation and the deny-guard ConfigMap"
 				}
+				if a == model.ActionDatastoreRestore {
+					e.Prerequisite = "reviewed datastore workload on Ready Service Pods, one datastore-poisoning observation, the app-facing store ConfigMap and the operator-owned trusted snapshot in the target namespace"
+				}
+				if a == model.ActionAgentActionDeny {
+					e.Prerequisite = "reviewed agent workload on Ready Service Pods, one agent-action-abuse observation and the deny-guard ConfigMap in the target namespace"
+				}
 				if a == model.ActionEndpointLeaseRevoke {
 					e.Prerequisite = "reviewed proxy source and proxy/engine images, exact A/B policy, authenticated Ready proxy status and protected journal"
+				}
+				if a == model.ActionControllerStop {
+					e.Prerequisite = "fresh trusted controller-UID-bound unauthorized-owner observation, reviewed desired-state inventory, attacker-CREATE provenance, scale authority and no dependent legitimate Service/PDB/HPA floor"
+				}
+				if a == model.ActionThrottle {
+					e.Prerequisite = "reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal"
 				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
@@ -362,8 +372,16 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not revoke LiteLLM's master key or undo prior queries; dispatch checks CAS and both gateway readbacks"
 				} else if a == model.ActionCRMRefundRevoke {
 					e.UnverifiedEffect = "support does not authenticate CRM callers or undo prior refunds; dispatch CASes the deny-guard and checks every serving Pod denies the order"
+				} else if a == model.ActionDatastoreRestore {
+					e.UnverifiedEffect = "support does not prove the poison entered or undo downstream reads; dispatch CASes the store from the operator snapshot and checks every serving Pod serves the trusted hash"
+				} else if a == model.ActionAgentActionDeny {
+					e.UnverifiedEffect = "support does not authenticate agent callers or undo prior actions; dispatch CASes the deny-guard and checks every serving Pod denies the (caller,action) pair"
 				} else if a == model.ActionEndpointLeaseRevoke {
 					e.UnverifiedEffect = "support does not prove old accepted responses closed or public A denial/B continuity; dispatch checks original proxy drain and console checks public behavior"
+				} else if a == model.ActionControllerStop {
+					e.UnverifiedEffect = "support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure"
+				} else if a == model.ActionThrottle {
+					e.UnverifiedEffect = "support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

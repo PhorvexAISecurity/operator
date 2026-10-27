@@ -129,12 +129,18 @@ func TestM033IdentityDirectDispatchRefusesWithoutPodAccess(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if ok, why := act.SupportsAction(t.Context(), model.ActionIdentityRotate, Target{Namespace: "ns", Pod: "target"}); ok || !strings.Contains(why, "declared-only") {
-				t.Fatalf("identity support=%v why=%q, want declared-only refusal", ok, why)
+			// identity-rotate is now natively supported (handler registered); the
+			// observation / policy-epoch gating is a separate capability-gate leg, so
+			// native SupportsAction accepts unconditionally here.
+			if ok, why := act.SupportsAction(t.Context(), model.ActionIdentityRotate, Target{Namespace: "ns", Pod: "target"}); !ok || why != "" {
+				t.Fatalf("identity support=%v why=%q, want native support", ok, why)
 			}
 			spy.reset()
 			res, err := act.Actuate(t.Context(), Request{Namespace: "ns", Pod: "target", Action: model.ActionIdentityRotate})
-			if err == nil || !strings.Contains(err.Error(), "declared-only") || res.Emitted || spy.reads != 0 || spy.writes != 0 {
+			// Dispatch now reaches the real handler, which refuses forward-only (no
+			// Rollback, no RollbackRef) because the Request carries no validated
+			// dedicated-SA observation and exact policy epoch, before any read or write.
+			if err == nil || !strings.Contains(err.Error(), model.IdentityRotateUnsupportedReason) || res.Emitted || res.RollbackRef != "" || spy.reads != 0 || spy.writes != 0 {
 				t.Fatalf("identity dispatch result=%+v err=%v reads=%d writes=%d", res, err, spy.reads, spy.writes)
 			}
 			got := m087Pod(t, c, "ns", "target")

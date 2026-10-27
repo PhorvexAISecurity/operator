@@ -20,6 +20,7 @@ import (
 	"github.com/phorvex/phorvex/internal/eventtrust"
 	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/servingbudget"
 	amtdv1beta1 "github.com/r6security/phoenix/api/v1beta1"
 )
 
@@ -85,6 +86,13 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 		}
 		identity := se.Annotations[eventtrust.CreatorIdentityAnnotation]
 		trust := eventtrust.Classify(identity)
+		// The cost-load detector is NOT a global allowlist member: its serving-cost-harvest
+		// vector is admitted only by a dedicated scoped trust route that re-checks the
+		// rule/target/source/UID/limiter-sha/proxy-image, so no generic trusted detector can
+		// assert it and the detector cannot assert any other vector.
+		if identity == servingbudget.DetectorIdentity || se.Spec.Rule.Type == model.AttackVectorServingCostHarvest {
+			trust = scopedServingEventTrust(ctx, c, se, now, currentPodUIDs...)
+		}
 		metrics.RecordSecurityEvent(trust)
 		score := -1.0
 		if se.Spec.AnomalyScore != nil {
@@ -125,6 +133,12 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			Age:                                  age,
 			AdapterName:                          se.Annotations["phorvex.ai/adapter-name"],
 			AdapterTargetUID:                     se.Annotations["phorvex.ai/target-pod-uid"],
+			ConfigObjectName:                     se.Annotations["phorvex.ai/config-object-name"],
+			ConfigObservedSHA256:                 se.Annotations["phorvex.ai/config-observed-sha256"],
+			ConfigTrustedSHA256:                  se.Annotations["phorvex.ai/config-trusted-sha256"],
+			ConfigTargetUID:                      se.Annotations["phorvex.ai/target-pod-uid"],
+			ImageRunningDigest:                   se.Annotations["phorvex.ai/running-image-digest"],
+			ImageTrustedPin:                      se.Annotations["phorvex.ai/trusted-image-digest"],
 			SensitiveOutputRaw:                   se.Annotations["phorvex.ai/sensitive-output-observation-v1"],
 			VoiceMemoryRaw:                       se.Annotations["phorvex.ai/voice-memory-observation-v1"],
 			VoiceRefundRaw:                       se.Annotations["phorvex.ai/voice-refund-observation-v1"],
@@ -134,7 +148,15 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			VoiceAdmissionRaw:                    se.Annotations["phorvex.ai/voice-admission-observation-v1"],
 			LiteLLMClientRaw:                     se.Annotations["phorvex.ai/litellm-client-observation-v1"],
 			CRMRefundRaw:                         se.Annotations["phorvex.ai/crm-refund-observation-v1"],
+			DatastoreRaw:                         se.Annotations["phorvex.ai/datastore-observation-v1"],
+			AgentActionRaw:                       se.Annotations["phorvex.ai/agent-action-observation-v1"],
 			EndpointLeaseRaw:                     se.Annotations["phorvex.ai/endpoint-lease-observation-v1"],
+			PersistenceRaw:                       se.Annotations["phorvex.ai/persistence-observation-v1"],
+			ControllerTargetUID:                  se.Annotations["phorvex.ai/console-target-controller-uid"],
+			ServingRateBudgetRaw:                 se.Annotations["phorvex.ai/serving-rate-observation-v1"],
+			NodeEscapeRaw:                        se.Annotations["phorvex.ai/node-escape-observation-v1"],
+			NetworkEdgeRaw:                       se.Annotations["phorvex.ai/network-edge-observation-v1"],
+			CredentialRevokeRaw:                  se.Annotations["phorvex.ai/credential-revoke-observation-v1"],
 		}
 		// A cluster-scoped target ("/name") has no namespace, so it cannot be keyed to a pod.
 		// It used to be turned into a bare name that matched no key — silently dropped. It is

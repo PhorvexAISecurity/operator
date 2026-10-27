@@ -163,6 +163,36 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, ai)
 		af.CoverByAction[model.ActionAdapterRotate] = append(af.CoverByAction[model.ActionAdapterRotate], ai.Key())
 	}
+	// Config-object integrity has its own authenticated authority, like adapter integrity: a trusted
+	// detector flagged an operator-trusted ConfigMap (the agent's instruction/config object) as
+	// drifted from its operator-declared trusted snapshot. Only k8s-object-revert (restore the object
+	// to the snapshot) covers it — a generic rotate/quarantine churns the POD but the tampered
+	// ConfigMap keeps serving the same bad config. The multiplicative 3x keeps the fact dominant while
+	// preserving zero weight at zero PHold.
+	if view.Pod.HasBoundK8sObjectRevertObservation() {
+		o := view.Pod.K8sObjectRevertObservation
+		ci := Fact{Scope: ScopePod, Asset: asset, Kind: FactConfigObjectIntegrity, Weight: base * urg * vectorDominance}
+		ci.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorConfigObject, AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorConfigObject,
+				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, ci)
+		af.CoverByAction[model.ActionK8sObjectRevert] = append(af.CoverByAction[model.ActionK8sObjectRevert], ci.Key())
+	}
+	// Image integrity has its own authenticated detector authority (a running-digest drift from
+	// the owner-declared trusted pin). It requires no model/GPU/serving context — a supply-chain
+	// compromise targets any workload. The ×3 dominance keeps the fact dominant over the generic
+	// rotate cover so the engine steers to registry-rollback, while preserving zero weight at zero
+	// PHold and finite policy scaling. ONLY registry-rollback covers it (rotate respawns the same
+	// drifted image).
+	if view.Pod.HasBoundImageObservation() {
+		o := view.Pod.ImageObservation
+		ii := Fact{Scope: ScopePod, Asset: asset, Kind: FactImageIntegrity, Weight: base * urg * vectorDominance}
+		ii.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorImage, AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorImage,
+				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, ii)
+		af.CoverByAction[model.ActionRegistryRollback] = append(af.CoverByAction[model.ActionRegistryRollback], ii.Key())
+	}
 	if view.Pod.HasBoundSensitiveOutputObservation() {
 		o := view.Pod.OutputPolicyObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactSensitiveOutputExposure, Weight: base * urg * vectorDominance}
@@ -251,6 +281,28 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionCRMRefundRevoke] = append(af.CoverByAction[model.ActionCRMRefundRevoke], f.Key())
 	}
+	if view.Pod.HasBoundDatastoreRestoreObservation() {
+		o := view.Pod.DatastoreRestoreObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactDatastorePoisoned, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorDatastorePoison,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorDatastorePoison, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionDatastoreRestore] = append(af.CoverByAction[model.ActionDatastoreRestore], f.Key())
+	}
+	if view.Pod.HasBoundAgentActionDenyObservation() {
+		o := view.Pod.AgentActionDenyObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactAgentActionAbuse, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorAgentActionAbuse,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorAgentActionAbuse, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionAgentActionDeny] = append(af.CoverByAction[model.ActionAgentActionDeny], f.Key())
+	}
 	if view.Pod.HasBoundEndpointLeaseObservation() {
 		o := view.Pod.EndpointLeaseObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactEndpointLeaseReuse, Weight: base * urg * vectorDominance}
@@ -261,6 +313,58 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
 		af.Facts = append(af.Facts, f)
 		af.CoverByAction[model.ActionEndpointLeaseRevoke] = append(af.CoverByAction[model.ActionEndpointLeaseRevoke], f.Key())
+	}
+	// Node/host escape (AML.T0105). The trusted observation (bound to the pod's own live node)
+	// authorizes recycling the whole node — the ONLY action that remediates a compromised host;
+	// a pod-local rotate/quarantine cover is a DIFFERENT, lesser effect and does NOT claim this
+	// node-escape fact. The multiplicative 3x keeps the node-recycle dominant over the pod-local
+	// moves (same structural dominance as adapter/lease/network-edge) while preserving zero weight
+	// at zero PHold and finite policy scaling.
+	if view.Pod.HasBoundNodeEscapeObservation() {
+		o := view.Pod.NodeEscapeObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactNodeHostEscape, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorHostEscape,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorHostEscape, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionNodeCordonDrainReplace] = append(af.CoverByAction[model.ActionNodeCordonDrainReplace], f.Key())
+	}
+	// Surgical egress edge cut. The trusted observation authorizes a NetworkPolicy that removes
+	// exactly the forbidden channel edge (C2/exfil/IMDS) while the pod stays Ready + in-service.
+	// Only network-isolate covers this fact; quarantine's networkIdentity/lateralEdge cover is a
+	// different, heavier effect (deny-all + detach) and does NOT claim this channel-edge fact. The
+	// multiplicative 3x keeps the surgical move dominant (same structural dominance as adapter/lease)
+	// while preserving zero weight at zero PHold and finite policy scaling.
+	if view.Pod.HasBoundNetworkIsolateObservation() {
+		o := view.Pod.NetworkIsolateObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactNetworkEgressChannel, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorNetworkEdge,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorNetworkEdge, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionNetworkIsolate] = append(af.CoverByAction[model.ActionNetworkIsolate], f.Key())
+	}
+	// Stolen ServiceAccount credential. The trusted observation authorizes deleting the leaked
+	// token Secret so the apiserver stops authenticating that bearer token. Only credential-revoke
+	// covers this fact; rotate/quarantine/network-isolate act on the pod (respawn / deny-all /
+	// egress cut) and do NOT invalidate a bearer token an external attacker already holds, so they
+	// never claim this credential fact. The multiplicative 3x keeps the surgical move dominant
+	// (same structural dominance as adapter/lease/network-isolate) while preserving zero weight at
+	// zero PHold and finite policy scaling.
+	if view.Pod.HasBoundCredentialRevokeObservation() {
+		o := view.Pod.CredentialRevokeObservation
+		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactCredentialReuse, Weight: base * urg * vectorDominance}
+		f.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorCredentialTheft,
+			AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID,
+				RuleType: model.AttackVectorCredentialTheft, TrustVerdict: "trusted",
+				CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, f)
+		af.CoverByAction[model.ActionCredentialRevoke] = append(af.CoverByAction[model.ActionCredentialRevoke], f.Key())
 	}
 	// Both session erasers use the same ingestion-produced endpoint prerequisite and the
 	// one session fact minted by standard recon. GPU/model facts remain independently scoped.

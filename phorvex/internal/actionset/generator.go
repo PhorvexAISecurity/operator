@@ -380,6 +380,26 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					continue
 				}
 			}
+			if action == model.ActionDatastoreRestore {
+				o := v.Pod.DatastoreRestoreObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "datastore-restore: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
+			if action == model.ActionAgentActionDeny {
+				o := v.Pod.AgentActionDenyObservation
+				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "agent-action-deny: event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
 			if action == model.ActionEndpointLeaseRevoke {
 				o := v.Pod.EndpointLeaseObservation
 				if o == nil || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
@@ -391,14 +411,34 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 				}
 			}
 			if action == model.ActionIdentityRotate {
-				out.Excluded = append(out.Excluded, Exclusion{
-					GenerationRank: generationRank, Key: key, Action: action,
-					Gate:            GateUnsupportedAction,
-					Reason:          model.IdentityRotateUnsupportedReason,
-					EligibilityKind: "capability-unsupported",
-					CoverKeys:       append([]string(nil), coverKeys...),
-				})
-				continue
+				o := v.Pod.IdentityRotationObservation
+				if !v.Pod.HasIdentityRotationObservation() || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "identity-rotate: validated dedicated-SA external-theft observation absent or event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
+			if action == model.ActionControllerStop {
+				o := v.Pod.PersistenceFootholdObservation
+				if !v.Pod.HasBoundPersistenceObservation() || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "controller-stop: trusted controller-UID-bound unauthorized-owner observation absent or event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
+			}
+			if action == model.ActionThrottle {
+				o := v.Pod.ServingRateBudgetObservation
+				if !v.Pod.HasBoundServingRateBudgetObservation() || o.PolicyName != pol.PolicyName || o.PolicyUID != pol.PolicyUID ||
+					o.PolicyGeneration != pol.PolicyGeneration || pol.PolicyUID == "" || pol.PolicyGeneration <= 0 {
+					out.Excluded = append(out.Excluded, Exclusion{Gate: GatePolicyBinding, GenerationRank: generationRank, Key: key,
+						Action: action, Reason: "throttle: validated serving-rate-budget observation absent or event policy identity/epoch differs from selecting policy",
+						EligibilityKind: "capability-unsupported", CoverKeys: append([]string(nil), coverKeys...)})
+					continue
+				}
 			}
 			// M-52: quarantine capacity is a hard namespace-wide law, evaluated
 			// before feasibility/SLO work so existential SLO override cannot relax it.

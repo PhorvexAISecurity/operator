@@ -10,6 +10,7 @@
 package model
 
 import (
+	"math"
 	"strings"
 	"time"
 
@@ -67,11 +68,12 @@ const (
 	// Excluded from MutatingActions (never generatable) but a handler exists so the
 	// completeness enumeration stays green. Never fabricated behaviour.
 	ActionDisable Action = "disable"
-	// ActionIdentityRotate remains in stored policy vocabulary for compatibility, but is
-	// declared-only: an epoch relabel cannot rotate UID, IP or credentials. Historical
-	// relabel snapshots may still be restored through Rollback.
+	// ActionIdentityRotate is LIGHT dedicated-SA credential invalidation: on a validated
+	// dedicated-SA external-theft observation bound to the exact policy epoch, the native
+	// handler deletes+recreates the ServiceAccount (new UID) and removes legacy token
+	// Secrets, so a stolen pod-bound bearer fails TokenReview while the Pod is retained.
 	ActionIdentityRotate            Action = "identity-rotate"
-	IdentityRotateUnsupportedReason        = "identity-rotate declared-only: epoch relabel cannot rotate UID, IP or ServiceAccount credentials"
+	IdentityRotateUnsupportedReason        = "identity-rotate requires a validated dedicated-SA external-theft observation and exact policy epoch"
 	// ActionRouteRotate re-keys `phorvex.ai/route-key` on the pod and restitches the
 	// selector of its explicitly declared `phorvex.ai/route-service` (advanced K8s;
 	// native-only). This changes endpoint membership while retaining the Pod UID/IP and
@@ -133,6 +135,89 @@ const (
 	// mini-CRM deny-guard (ConfigMap the app re-reads per request). It never authenticates a
 	// caller or touches any other CRM state; an empty guard preserves the app's behaviour.
 	ActionCRMRefundRevoke Action = "crm-refund-revoke"
+	// ActionThrottle installs a bounded request-admission budget for ONE observed abusive
+	// caller/path at an already-present authoritative serving proxy, scoped to the target
+	// Service + offending caller. It caps the cost-harvesting drive to a measured baseline
+	// while preserving a reserved budget for legitimate callers (they still get HTTP 200),
+	// keeping every Pod Ready and the replica count unchanged — it NEVER touches the HPA,
+	// evicts a Pod, or denies all traffic. It is the honest serving-configuration cost family
+	// that RETAINS replicas (NormCostServingConfiguration, like endpoint-lease-revoke). It
+	// returns Emitted=false when the limiter deployment/policy-epoch binding is absent.
+	ActionThrottle            Action = "throttle"
+	ThrottleUnsupportedReason        = "throttle requires a validated serving-rate-budget observation bound to the live limiter deployment, exact policy epoch and scoped write authority"
+	// ActionControllerStop retires an ATTACKER-CREATED controller (Deployment/
+	// StatefulSet/ReplicaSet) end-to-end: set its exact owner's desired replicas to
+	// zero (UID/resourceVersion-bound) + remove its exact owned child Pods (UID
+	// preconditions) + observe all children absent and NO recreation over a bounded
+	// window. It is the ONLY action that makes the persistence end-state — "workload
+	// gone; owner not rescheduling" — true for a controller-owned/stateful foothold.
+	// It is LICENSED ONLY by a trusted, controller-UID-bound persistence observation
+	// (HasBoundPersistenceObservation): generic Pod drift is never authority to delete
+	// a whole owner. Its availability floor is the ATTACKER controller's OWN declared
+	// guarantee (an unmanaged attacker owner declares none => floor 0), never a shared
+	// tenant floor — see internal/feasibility controller-removal-authority law.
+	ActionControllerStop Action = "controller-stop"
+	// ActionK8sObjectRevert restores an operator-TRUSTED Kubernetes config object (a volume-mounted
+	// ConfigMap an AI agent re-reads for its instructions/config) back to its operator-declared
+	// trusted snapshot after a trusted detector flags the live object as drifted from that snapshot
+	// (AML.T0081 Modify AI Agent Configuration — a tampered tool/prompt/policy ConfigMap steering the
+	// agent). It is the move that undoes the tamper at the OBJECT: rotate/quarantine churn the POD but
+	// the poisoned ConfigMap persists and re-serves the same bad config to every replacement. Native-
+	// only — it CASes the ConfigMap's .data back to the operator snapshot annotation (forward-only,
+	// never event-derived).
+	ActionK8sObjectRevert Action = "k8s-object-revert"
+
+	// ActionDatastoreRestore restores a poisoned persistent datastore (RAG index / agent
+	// persistent memory / tool-data store) back to an OPERATOR-OWNED trusted snapshot,
+	// verified by content sha256 == trusted sha256. It is NAMESPACE-PARAMETRIC: the namespace
+	// is carried by the trusted observation and the live pod, never hard-coded. The poison is
+	// PERSISTED (survives a pod rotate), so rotate/quarantine do not remediate it; the serving
+	// pod stays alive and the restore removes the poison while preserving the benign records.
+	ActionDatastoreRestore Action = "datastore-restore"
+	// ActionNodeCordonDrainReplace responds to a trusted node/host-escape observation (AML.T0105
+	// Escape to Host) by recycling the compromised node: cordon it (spec.unschedulable=true, so no
+	// new workload lands on the hostile host), drain it (graceful Eviction of its reschedulable
+	// workload, which the owning controllers respawn on clean nodes), then trigger its replacement
+	// by deleting the Node object (in a managed node group / with a node-termination handler this
+	// recycles the underlying instance). The compromised NODE is DERIVED from the bound Pod's live
+	// spec.nodeName — never from attacker-influenceable event free-text — so a forged event cannot
+	// name an arbitrary node. Namespace-parametric; cordon is reversible, replace is terminal (like
+	// rotate's eviction of a pod, scaled to a node).
+	ActionNodeCordonDrainReplace Action = "node-cordon-drain-replace"
+	// ActionNetworkIsolate SURGICALLY cuts a compromised pod's egress channel edge (C2 /
+	// exfil / IMDS / east-west) after a trusted observation of that channel, by applying an
+	// egress-only NetworkPolicy that allows DNS + all other egress BUT excepts the forbidden
+	// edge(s). It is EXTEND(quarantine) — quarantine's network-isolation primitive scoped to the
+	// channel edge — but it does NOT disown/replace the pod and does NOT cut ingress: the pod stays
+	// Ready and in-service, only its outbound channel to the attacker edge is removed. Reversible.
+	ActionNetworkIsolate Action = "network-isolate"
+	// ActionCredentialRevoke REVOKES a compromised/exfiltrated ServiceAccount bearer
+	// credential — a legacy kubernetes.io/service-account-token Secret — after a trusted
+	// observation that the token was stolen and is being reused. It deletes exactly the
+	// detector-named token Secret(s) for the named ServiceAccount (and drops the stale
+	// reference from the SA), so the apiserver's service-account-lookup stops authenticating
+	// that bearer token. It is the one defense rotate/quarantine/network-isolate cannot give:
+	// an external attacker already HOLDS the bearer token, so evicting or network-isolating the
+	// pod does nothing — only invalidating the credential defends. Forward-only (a revoked
+	// credential is not un-revoked; a fresh token is issued instead). NAMESPACE-PARAMETRIC: it
+	// pins no production namespace; the SA/Secret live in the live Pod's own namespace.
+	ActionCredentialRevoke Action = "credential-revoke"
+
+	// ActionAgentActionDeny denies one observed abused (caller, action) pair at an agent
+	// workload's deny-guard (ConfigMap the app re-reads per request). It is the
+	// namespace-parametric generalization of crm-refund-revoke: the namespace is carried by
+	// the trusted observation and the live pod, never hard-coded. It never authenticates a
+	// caller or touches any other agent state; an empty guard preserves the app's behaviour.
+	ActionAgentActionDeny Action = "agent-action-deny"
+	// ActionRegistryRollback resets a workload whose RUNNING container image digest has drifted
+	// from the owner-declared trusted pin (AI supply-chain compromise: a poisoned artifact/image
+	// is executing) back to that trusted pin, by patching the owning controller's pod-template
+	// image to the pinned ref so the controller rolls out clean Pods (running digest == pin).
+	// It is the ONLY move that invalidates the "poisoned image executing" fact: a plain rotate
+	// respawns the SAME drifted image. The trusted pin is read from the LIVE controller
+	// annotation at dispatch, never from the event, so a detector assertion cannot steer what the
+	// workload is rolled TO. Forward-only: undoing it would reintroduce the poisoned image.
+	ActionRegistryRollback Action = "registry-rollback"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -166,6 +251,28 @@ var MutatingActions = []Action{
 	ActionEndpointLeaseRevoke,
 	ActionVoiceSessionAdmissionEnforce,
 	ActionCRMRefundRevoke,
+	// Appended last so the engine's strict-`>` tie-break order for the historical
+	// set is unchanged (serving-config cost family, replica-retaining).
+	ActionThrottle,
+	// Appended last so the engine's strict-`>` generation-rank tie-break order for the
+	// pre-existing actions stays byte-identical.
+	ActionControllerStop,
+	ActionK8sObjectRevert,
+	ActionDatastoreRestore,
+	// Appended LAST so the engine's strict-`>` tie-break order is unchanged for every pre-existing
+	// action (node-cordon-drain-replace is opt-in per policy; a nil EnabledActions still permits
+	// ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionNodeCordonDrainReplace,
+	// Appended LAST so the engine's strict-`>` tie-break order is unchanged for every
+	// pre-existing action (network-isolate is opt-in per policy; a nil EnabledActions still
+	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionNetworkIsolate,
+	// Appended LAST (Live26) so the engine's strict-`>` tie-break order is unchanged for every
+	// pre-existing action (credential-revoke is opt-in per policy; a nil EnabledActions still
+	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
+	ActionCredentialRevoke,
+	ActionAgentActionDeny,
+	ActionRegistryRollback,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -513,6 +620,10 @@ type Pod struct {
 	EndpointPath                string              // inference endpoint/API route the attacker can map (AI; "" if none)
 	SuspectAdapter              string              // name of an UNAUTHORIZED LoRA/adapter a detector flagged on this pod (AI; "" if none) -> adapter-rotate
 	AdapterObservation          *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
+	SuspectConfigObject         string              // name of an operator-trusted ConfigMap a detector flagged as drifted from its trusted snapshot ("" if none) -> k8s-object-revert
+	K8sObjectRevertObservation  *K8sObjectRevertObservation // authenticated event and exact current Pod identity behind SuspectConfigObject
+	SuspectImageDigest          string              // RUNNING container image digest a detector flagged as drifted from the trusted pin ("" if none) -> registry-rollback
+	ImageObservation            *ImageObservation   // authenticated event and exact current Pod identity behind SuspectImageDigest
 	OutputPolicyConfigMap       string
 	OutputPolicyRuleSHA256      string
 	OutputProxySourceSHA256     string
@@ -546,7 +657,33 @@ type Pod struct {
 	VoiceMCPObservation         *VoiceMCPObservation
 	LiteLLMClientObservation    *LiteLLMClientObservation
 	CRMRefundObservation        *CRMRefundObservation
+	DatastoreRestoreObservation *DatastoreRestoreObservation
+	AgentActionDenyObservation  *AgentActionDenyObservation
 	EndpointLeaseObservation    *EndpointLeaseObservation
+	// ServingRateBudgetObservation is the trusted, authoritative serving-rate-budget witness
+	// (built from a trusted cost-load detector event + the live admission proxy status) that
+	// makes throttle selectable: an installed authoritative serving limiter bound to the exact
+	// Pod UID + Service + single controller UID + limiter deployment/ConfigMap UIDs at the
+	// current policy epoch, with a measured baseline and a nonzero reserved legitimate budget.
+	// nil => throttle stays excluded.
+	ServingRateBudgetObservation *ServingRateBudgetObservation
+	// IdentityRotationObservation is the trusted, authoritative snapshot (built by
+	// identityfixture.Observe from a trusted pod-bound-api-auth detector event) that makes
+	// identity-rotate selectable: a dedicated non-default SA, external-token-theft-only, bound
+	// to the exact Pod UID/RV + SA UID/RV + policy epoch. nil => identity-rotate stays excluded.
+	IdentityRotationObservation *IdentityRotationObservation
+
+	// SuspectController is the name of an attacker-created UNMANAGED controller a
+	// trusted persistence detector flagged as owning this Pod ("" if none) ->
+	// controller-stop. PersistenceFootholdObservation carries the controller-UID
+	// binding and the declared-availability/provenance assertions that license
+	// whole-owner removal. Both are set together by ingest.bindPersistenceObservation.
+	SuspectController              string
+	PersistenceFootholdObservation *PersistenceFootholdObservation
+	PersistenceControllerUID       string // validated top-level owner; direct ControllerUID remains unchanged
+	NodeEscapeObservation       *NodeEscapeObservation       // trusted node/host-escape authority (node-cordon-drain-replace)
+	NetworkIsolateObservation   *NetworkIsolateObservation   // trusted egress-edge-cut authority (network-isolate)
+	CredentialRevokeObservation *CredentialRevokeObservation // trusted stolen-SA-credential authority (credential-revoke)
 
 	// Typed workload and capability witnesses projected from Kubernetes declarations.
 	ServingDeclared      bool   // nonblank model-id or a valid explicit serving-port; declaration is not runtime proof
@@ -587,6 +724,32 @@ func (p Pod) HasBoundAdapterObservation() bool {
 	o := p.AdapterObservation
 	return o != nil && p.UID != "" && p.SuspectAdapter != "" &&
 		o.AdapterName == p.SuspectAdapter && o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
+}
+
+// HasBoundK8sObjectRevertObservation is the narrow detector authority for config-object
+// integrity. Like the adapter authority it binds the assertion to this exact Pod UID,
+// ConfigMap name, event identity and authenticated creator, and it additionally REQUIRES an
+// actual drift (observed snapshot hash != trusted snapshot hash): a ConfigMap already on its
+// trusted snapshot is not a threat and mints no fact (so the revert is reactive, never
+// proactive churn). It is namespace-PARAMETRIC — no hard-coded namespace or object name.
+func (p Pod) HasBoundK8sObjectRevertObservation() bool {
+	o := p.K8sObjectRevertObservation
+	return o != nil && p.UID != "" && p.SuspectConfigObject != "" &&
+		o.ConfigMapName == p.SuspectConfigObject && o.TargetPodUID == p.UID &&
+		o.ObservedSHA256 != "" && o.TrustedSHA256 != "" && o.ObservedSHA256 != o.TrustedSHA256 &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
+}
+
+// HasBoundImageObservation is the narrow detector authority for image-integrity. It binds a
+// fresh trusted assertion to this exact Pod UID and requires the observed running digest to
+// differ from the trusted pin (an identical digest is not a drift and mints no fact). The pin
+// and running digest must both be present so the steered fact always carries full attribution.
+func (p Pod) HasBoundImageObservation() bool {
+	o := p.ImageObservation
+	return o != nil && p.UID != "" && p.SuspectImageDigest != "" &&
+		o.RunningDigest == p.SuspectImageDigest && o.TargetPodUID == p.UID &&
+		o.RunningDigest != "" && o.TrustedPin != "" && o.RunningDigest != o.TrustedPin &&
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
 }
 
@@ -684,6 +847,36 @@ func (p Pod) HasBoundCRMRefundObservation() bool {
 		o.OrderAccountID != o.CallerAccountID && o.GuardConfigMapUID != "" && o.ServiceUID != ""
 }
 
+// HasBoundDatastoreRestoreObservation licenses only the datastore-restore channel from a
+// trusted datastore-poisoning observation. It is NAMESPACE-PARAMETRIC: the observation must
+// name the pod's own namespace (o.Namespace == p.Namespace) — there is no hard-coded app
+// namespace, so any lane's datastore workload is covered. It never reinterprets the content;
+// the restore bytes come only from the operator-owned trusted snapshot at enact time.
+func (p Pod) HasBoundDatastoreRestoreObservation() bool {
+	o := p.DatastoreRestoreObservation
+	return o != nil && o.Namespace != "" && o.Namespace == p.Namespace && p.UID != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.StoreName != "" && o.StoreConfigMapUID != "" && o.TrustedSnapshotConfigMapUID != "" &&
+		o.ServiceUID != "" && o.PoisonedSHA256 != "" && o.TrustedSHA256 != "" &&
+		o.PoisonedSHA256 != o.TrustedSHA256
+}
+
+// HasBoundAgentActionDenyObservation licenses only the agent deny-guard channel from a
+// trusted agent-action-abuse observation. It is NAMESPACE-PARAMETRIC: the observation must
+// name the pod's own namespace (o.Namespace == p.Namespace) — there is no hard-coded app
+// namespace, so any lane's agent workload is covered. It never authenticates a caller.
+func (p Pod) HasBoundAgentActionDenyObservation() bool {
+	o := p.AgentActionDenyObservation
+	return o != nil && o.Namespace != "" && o.Namespace == p.Namespace && p.UID != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.CallerID != "" && o.ActionID != "" && o.AgentName != "" &&
+		o.GuardConfigMapUID != "" && o.ServiceUID != ""
+}
+
 // HasBoundEndpointLeaseObservation requires a fresh, source-bound synthetic
 // credential observation. The stable endpoint path alone grants no cover.
 func (p Pod) HasBoundEndpointLeaseObservation() bool {
@@ -699,6 +892,74 @@ func (p Pod) HasBoundEndpointLeaseObservation() bool {
 		o.AcceptedStatus == 200 && o.AcceptedResponseSHA256 != "" &&
 		o.RetainedBaselineStatus == 200 && o.RetainedBaselineResponseSHA256 != "" &&
 		!o.ObservedAt.IsZero()
+}
+
+// HasBoundServingRateBudgetObservation licenses only the installed, authoritative serving
+// limiter channel from a trusted cost-load observation. A raw request-rate telemetry read,
+// an HPA/CPU scale, or an annotation without a data-path limiter never satisfies it. It
+// binds the event to THIS exact Pod UID, the target Service + its single controller, the
+// live limiter deployment/ConfigMap and the selecting policy epoch; the measured baseline
+// and a nonzero reserved legitimate budget must be present (an idle/zero baseline cannot
+// also admit legitimate traffic), and the observed rate must exceed the baseline.
+func (p Pod) HasBoundServingRateBudgetObservation() bool {
+	o := p.ServingRateBudgetObservation
+	return o != nil && p.UID != "" &&
+		o.TargetPodUID == p.UID && o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ServiceUID != "" && o.ControllerUID != "" && o.ControllerUID == p.ControllerUID &&
+		o.LimiterBootID != "" && !o.ObservedAt.IsZero() &&
+		o.LimiterDeploymentUID != "" && o.LimiterConfigMapUID != "" && o.LimiterSourceSHA256 != "" &&
+		o.OffendingCallerScope != "" && o.WindowSeconds > 0 &&
+		o.BaselineReqPerSec > 0 && o.ReservedReqPerSec > 0 && !math.IsInf(o.BaselineReqPerSec, 0) && !math.IsInf(o.ReservedReqPerSec, 0) && !math.IsInf(o.ObservedReqPerSec, 0) &&
+		o.ObservedReqPerSec > o.BaselineReqPerSec
+}
+
+// HasBoundNodeEscapeObservation is the narrow detector authority for a node recycle. It is
+// NAMESPACE-PARAMETRIC — it never pins a production namespace/node literal; the reactive policy
+// scope already bounds which Pods are evaluated, and both the namespace and the compromised NODE
+// flow from the live Pod. It binds the assertion to this exact Pod UID, the authenticated trusted
+// event, the reactive policy epoch, and the node the Pod ACTUALLY runs on (o.NodeName == p.Node) —
+// so a forged event can never name an arbitrary node to recycle (a cluster-DoS primitive); the
+// node is always derived from the trusted pod→node binding the ingest layer validated.
+func (p Pod) HasBoundNodeEscapeObservation() bool {
+	o := p.NodeEscapeObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.NodeName != "" && o.NodeName == p.Node &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.EscapeSHA256 != ""
+}
+
+// HasBoundNetworkIsolateObservation is the narrow detector authority for a surgical egress
+// edge cut. It is NAMESPACE-PARAMETRIC — it never pins a production namespace literal; the
+// reactive policy scope already bounds which Pods are evaluated, and the namespace flows from
+// the live Pod. It binds the assertion to this exact Pod UID, the authenticated trusted event,
+// the reactive policy epoch, and at least one forbidden egress edge to cut. The forbidden
+// edge set is operator/detector-declared; the attacker's event never widens it.
+func (p Pod) HasBoundNetworkIsolateObservation() bool {
+	o := p.NetworkIsolateObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		len(o.ForbiddenEdges) > 0 && o.ChannelSHA256 != ""
+}
+
+// HasBoundCredentialRevokeObservation is the narrow detector authority for revoking a stolen
+// ServiceAccount bearer credential. It is NAMESPACE-PARAMETRIC — it never pins a production
+// namespace literal; the reactive policy scope bounds which Pods are evaluated and the SA/Secret
+// live in the live Pod's own namespace. It binds the assertion to this exact Pod UID, the
+// authenticated trusted event, the reactive policy epoch, the named ServiceAccount, and at least
+// one detector-named token Secret to revoke. The target Secret set is operator/detector-declared;
+// the attacker's event never widens it to an arbitrary Secret.
+func (p Pod) HasBoundCredentialRevokeObservation() bool {
+	o := p.CredentialRevokeObservation
+	return o != nil && p.UID != "" && p.Namespace != "" &&
+		o.TargetPodUID == p.UID &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != "" &&
+		o.PolicyName != "" && o.PolicyUID != "" && o.PolicyGeneration > 0 &&
+		o.ServiceAccountName != "" && len(o.CredentialSecrets) > 0 && o.CredentialSHA256 != ""
 }
 
 // Attack-vector SecurityEvent rule types. A fired attack NAMES its vector so the engine can
@@ -725,6 +986,42 @@ const (
 	AttackVectorLiteLLMClientAbuse = "phorvex.attack.litellm-client-abuse"
 	AttackVectorCRMRefundAbuse     = "phorvex.attack.crm-refund-abuse"
 	AttackVectorEndpointLeaseReuse = "phorvex.attack.endpoint-lease-reuse"
+	// AttackVectorServingCostHarvest reports a trusted observation of sustained request
+	// rate well above a measured per-Service baseline for one offending caller/path
+	// (AML.T0034 cost harvesting). It steers the brain to the surgical throttle actuator.
+	AttackVectorServingCostHarvest = "phorvex.attack.serving-cost-harvest"
+	// AttackVectorControllerPersistence reports an attacker-created, UNMANAGED
+	// controller (no GitOps/Helm/operator provenance, no PDB, no legitimate Service
+	// role) whose child Pods RE-APPEAR after removal — durable control-plane
+	// persistence. The persistence observer (a trusted detector) emits it bound to
+	// the exact owner UID, and ingest.bindPersistenceObservation turns it into the
+	// controller-UID-bound Pod.PersistenceFootholdObservation that licenses
+	// controller-stop. It never by itself asserts an on-Pod exploit; the owner-removal
+	// authority is the binding.
+	AttackVectorControllerPersistence = "phorvex.attack.controller-persistence"
+	// AttackVectorConfigObject reports that a trusted detector observed an operator-trusted
+	// ConfigMap (the agent's instruction/config object) drifted from its operator-declared
+	// trusted snapshot (AML.T0081 Modify AI Agent Configuration). Only k8s-object-revert
+	// (restore the object to the trusted snapshot) covers it.
+	AttackVectorConfigObject = "phorvex.attack.config-object"
+	AttackVectorDatastorePoison    = "phorvex.attack.datastore"
+	// AttackVectorHostEscape reports a trusted observation that a container on THIS pod escaped to
+	// its node/host (AML.T0105). It steers the engine to node-cordon-drain-replace — recycle the
+	// whole node — over a pod-local rotate/quarantine, which would leave the compromised host intact.
+	AttackVectorHostEscape = "phorvex.attack.host-escape"
+	// AttackVectorNetworkEdge reports a trusted observation that THIS pod holds an open
+	// egress channel edge to an attacker edge (C2 / exfil / IMDS / east-west). It steers the
+	// engine to the surgical network-isolate (egress edge cut) over a full quarantine or rotate.
+	AttackVectorNetworkEdge = "phorvex.attack.network-edge"
+	// AttackVectorCredentialTheft reports a trusted observation that THIS pod's ServiceAccount
+	// bearer credential (a legacy service-account-token Secret) was stolen and is being reused.
+	// It steers the engine to the surgical credential-revoke (invalidate the token) over rotate /
+	// quarantine / network-isolate, none of which invalidate a bearer token the attacker holds.
+	AttackVectorCredentialTheft = "phorvex.attack.credential-theft"
+	AttackVectorAgentActionAbuse   = "phorvex.attack.agent-action"
+	// AttackVectorImage reports that a workload's RUNNING container image digest has drifted from
+	// the owner-declared trusted pin (a poisoned supply-chain artifact is executing) -> registry-rollback.
+	AttackVectorImage = "phorvex.attack.image"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -742,6 +1039,20 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorAdapter
 	case "endpoint-lease-revoke":
 		return AttackVectorEndpointLeaseReuse
+	case "throttle":
+		return AttackVectorServingCostHarvest
+	case "k8s-object-revert":
+		return AttackVectorConfigObject
+	case "datastore-restore":
+		return AttackVectorDatastorePoison
+	case "node-cordon-drain-replace":
+		return AttackVectorHostEscape
+	case "network-isolate":
+		return AttackVectorNetworkEdge
+	case "credential-revoke":
+		return AttackVectorCredentialTheft
+	case "registry-rollback":
+		return AttackVectorImage
 	}
 	return ""
 }
@@ -749,6 +1060,12 @@ func AttackVectorForActuator(actuator string) string {
 // SecurityEventInfo is a Phorvex-side projection of a Phoenix SecurityEvent used as
 // belief evidence (Phorvex consumes the SAME feed Phoenix ingests).
 const ConsoleTargetPodUIDAnnotation = "phorvex.ai/console-target-pod-uid"
+
+// ConsoleTargetControllerUIDAnnotation binds a persistence SecurityEvent to the exact
+// owner (controller) UID the detector observed. It is the controller analogue of the
+// Pod-UID binding: a same-NAME controller recreated with a new UID (the attacker's own
+// re-create, or a legitimate replacement) will mismatch and carry no removal authority.
+const ConsoleTargetControllerUIDAnnotation = "phorvex.ai/console-target-controller-uid"
 
 type SecurityEventInfo struct {
 	CreatedAt         time.Time
@@ -795,6 +1112,12 @@ type SecurityEventInfo struct {
 	CurrentInventoryAdmissionContract string
 	AdapterName                       string // event-owned phorvex.ai/adapter-name, never copied from a Pod
 	AdapterTargetUID                  string // event-owned phorvex.ai/target-pod-uid
+	ConfigObjectName                  string // event-owned phorvex.ai/config-object-name, the detector-flagged ConfigMap
+	ConfigObservedSHA256              string // event-owned phorvex.ai/config-observed-sha256, the detector-observed live-data hash
+	ConfigTrustedSHA256               string // event-owned phorvex.ai/config-trusted-sha256, the detector-asserted trusted-snapshot hash
+	ConfigTargetUID                   string // event-owned phorvex.ai/target-pod-uid for a config-object observation
+	ImageRunningDigest                string // event-owned phorvex.ai/running-image-digest (the drifted running digest the detector observed)
+	ImageTrustedPin                   string // event-owned phorvex.ai/trusted-image-digest (the pin the detector compared against); handler re-reads it live, never from here
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
@@ -804,7 +1127,28 @@ type SecurityEventInfo struct {
 	VoiceMCPRaw                       string // run-owned Voice/MCP descriptor observation; never replacement bytes
 	LiteLLMClientRaw                  string // untrusted event annotation, validated against live gateway and policy before use
 	CRMRefundRaw                      string // untrusted CRM refund observation annotation; validated against live guard and policy before use
+	DatastoreRaw                      string // untrusted datastore-poisoning observation annotation; validated against live store, operator snapshot and policy before use
+	AgentActionRaw                    string // untrusted agent-action deny observation annotation; validated against live guard and policy before use
 	EndpointLeaseRaw                  string // untrusted event annotation; requires current proxy/lease authority
+	// PersistenceRaw is the trusted persistence detector's owner-provenance assertion
+	// (JSON): owner kind/name/namespace, declared min-available, unmanaged,
+	// no-legitimate-service-role, observed-recreation, policy epoch. It is validated and
+	// bound to the Pod's exact controller UID by ingest.bindPersistenceObservation.
+	PersistenceRaw string
+	// ControllerTargetUID is the event's owner-UID binding (from
+	// ConsoleTargetControllerUIDAnnotation). A recreated same-name owner has a new UID
+	// and mismatches, carrying no removal authority.
+	ControllerTargetUID string
+	// ServingRateBudgetRaw is the trusted cost-load detector's serving-rate-budget
+	// observation (JSON): the target Service + offending-caller scope, the installed
+	// limiter deployment/ConfigMap UIDs, the measured baseline and observed over-baseline
+	// rate, and the policy epoch. ingest.bindServingRateBudgetObservation validates it
+	// against the live limiter and binds it to the Pod's exact UID before THROTTLE can be
+	// selected; a generic trusted detector never consumes it.
+	ServingRateBudgetRaw string
+	NodeEscapeRaw                     string // untrusted node/host-escape observation annotation; the node is re-derived from the live pod, never trusted from here
+	NetworkEdgeRaw                    string // untrusted event annotation naming the open egress edge; validated + bound to the live Pod before use
+	CredentialRevokeRaw               string // untrusted event annotation naming the stolen SA + token Secret(s); validated + bound to the live Pod before use
 	// UnresolvedTargets lists targets that carry no namespace (a cluster-scoped "/name"
 	// reference). They cannot be keyed to a pod, so they are recorded here instead of being
 	// silently dropped (M-94, second half).
@@ -850,6 +1194,79 @@ type AdapterObservation struct {
 	TargetPodUID    string    `json:"targetPodUID"`
 	AdapterName     string    `json:"adapterName"`
 	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// K8sObjectRevertObservation identifies the one fresh detector assertion that authorizes
+// config-object integrity and a later k8s-object-revert. It carries the detector's observed
+// live-data hash and its asserted trusted-snapshot hash for SELECTION; the handler re-reads the
+// AUTHORITATIVE operator snapshot from the live ConfigMap annotation and never trusts these
+// bytes to choose the value it restores. Conflicting observed hashes suppress it.
+type K8sObjectRevertObservation struct {
+	EventName       string    `json:"eventName"`
+	EventUID        string    `json:"eventUID"`
+	CreatorIdentity string    `json:"creatorIdentity"`
+	TargetPodUID    string    `json:"targetPodUID"`
+	ConfigMapName   string    `json:"configMapName"`
+	ObservedSHA256  string    `json:"observedSHA256"`
+	TrustedSHA256   string    `json:"trustedSHA256"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// ImageObservation identifies the one fresh detector assertion that a workload's RUNNING
+// container image digest has drifted from the owner-declared trusted pin (AI supply-chain
+// compromise). It binds the assertion to this exact Pod UID and carries the observed running
+// digest and the trusted pin the detector compared it against. The digests are evidence only:
+// the registry-rollback handler re-reads the trusted pin from the LIVE controller annotation at
+// dispatch, never from this observation, so the detector cannot steer what the workload rolls TO.
+type ImageObservation struct {
+	EventName       string    `json:"eventName"`
+	EventUID        string    `json:"eventUID"`
+	CreatorIdentity string    `json:"creatorIdentity"`
+	TargetPodUID    string    `json:"targetPodUID"`
+	RunningDigest   string    `json:"runningDigest"`
+	TrustedPin      string    `json:"trustedPin"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// NetworkIsolateObservation identifies the one fresh trusted detector assertion that
+// authorizes a surgical egress edge cut on this exact Pod. It carries identity, policy
+// epoch and the forbidden egress edge(s) to remove — never attacker-controlled remedy.
+// ForbiddenEdges are operator/detector-declared CIDRs (e.g. the C2 sink, IMDS 169.254.169.254/32);
+// the egress NetworkPolicy allows DNS + all other egress and EXCEPTS exactly these edges, so the
+// pod stays Ready and in-service while its channel to the attacker edge is removed.
+type NetworkIsolateObservation struct {
+	EventName        string    `json:"eventName"`
+	EventUID         string    `json:"eventUID"`
+	CreatorIdentity  string    `json:"creatorIdentity"`
+	TargetPodUID     string    `json:"targetPodUID"`
+	PolicyName       string    `json:"policyName"`
+	PolicyUID        string    `json:"policyUID"`
+	PolicyGeneration int64     `json:"policyGeneration"`
+	ForbiddenEdges   []string  `json:"forbiddenEdges"` // CIDRs to except from egress (the channel edges)
+	ChannelSHA256    string    `json:"channelSHA256"`  // digest of the sorted forbidden-edge set (audit binding)
+	CreatedAt        time.Time `json:"createdAt"`
+}
+
+// CredentialRevokeObservation identifies the one fresh trusted detector assertion that
+// authorizes revoking a stolen ServiceAccount bearer credential for this exact Pod. It carries
+// identity, policy epoch, the named ServiceAccount and the detector-named token Secret(s) to
+// delete — never attacker-controlled remedy. CredentialSecrets are operator/detector-declared
+// names in the Pod's own namespace; the handler deletes ONLY a Secret that is actually a
+// kubernetes.io/service-account-token for ServiceAccountName, so the event can never widen the
+// revocation to an arbitrary Secret. Revoking the Secret stops the apiserver's
+// service-account-lookup from authenticating that bearer token.
+type CredentialRevokeObservation struct {
+	EventName          string    `json:"eventName"`
+	EventUID           string    `json:"eventUID"`
+	CreatorIdentity    string    `json:"creatorIdentity"`
+	TargetPodUID       string    `json:"targetPodUID"`
+	PolicyName         string    `json:"policyName"`
+	PolicyUID          string    `json:"policyUID"`
+	PolicyGeneration   int64     `json:"policyGeneration"`
+	ServiceAccountName string    `json:"serviceAccountName"` // the compromised SA, in the Pod's namespace
+	CredentialSecrets  []string  `json:"credentialSecrets"`  // token Secret name(s) for that SA to revoke
+	CredentialSHA256   string    `json:"credentialSHA256"`   // digest of the sorted SA+secret set (audit binding)
+	CreatedAt          time.Time `json:"createdAt"`
 }
 
 // SensitiveOutputObservation licenses only one source-bound response-field rule.
@@ -1018,6 +1435,51 @@ type CRMRefundObservation struct {
 	ObservedAt        time.Time `json:"observedAt"`
 }
 
+// DatastoreRestoreObservation is the trusted, admission-stamped evidence that a persistent
+// datastore (RAG index / agent memory / tool-data store) has been poisoned and the poison is
+// persisted (its current content sha256 differs from the operator-owned trusted snapshot).
+// The actuator restores the store from the trusted snapshot in Namespace (parametric — no
+// hard-coded app namespace). It carries only public identities and content digests; never the
+// store bytes nor any replacement content (the restore bytes come only from the operator snapshot).
+type DatastoreRestoreObservation struct {
+	EventName                   string    `json:"eventName"`
+	EventUID                    string    `json:"eventUID"`
+	CreatorIdentity             string    `json:"creatorIdentity"`
+	Namespace                   string    `json:"namespace"`
+	StoreName                   string    `json:"storeName"`
+	StoreConfigMapUID           string    `json:"storeConfigMapUID"`
+	TrustedSnapshotConfigMapUID string    `json:"trustedSnapshotConfigMapUID"`
+	ServiceUID                  string    `json:"serviceUID"`
+	TargetPodUID                string    `json:"targetPodUID"`
+	PoisonedSHA256              string    `json:"poisonedSHA256"`
+	TrustedSHA256               string    `json:"trustedSHA256"`
+	PolicyName                  string    `json:"policyName"`
+	PolicyUID                   string    `json:"policyUID"`
+	PolicyGeneration            int64     `json:"policyGeneration"`
+	ObservedAt                  time.Time `json:"observedAt"`
+}
+
+// AgentActionDenyObservation is the trusted, admission-stamped evidence that an
+// unauthorized agent action landed. The actuator denies exactly (CallerID, ActionID) at
+// the agent deny-guard in Namespace. Namespace is carried here (not pinned in code), which
+// is what makes agent-action-deny lane-isolatable where crm-refund-revoke is not.
+type AgentActionDenyObservation struct {
+	EventName         string    `json:"eventName"`
+	EventUID          string    `json:"eventUID"`
+	CreatorIdentity   string    `json:"creatorIdentity"`
+	Namespace         string    `json:"namespace"`
+	AgentName         string    `json:"agentName"`
+	CallerID          string    `json:"callerId"`
+	ActionID          string    `json:"actionId"`
+	GuardConfigMapUID string    `json:"guardConfigMapUID"`
+	ServiceUID        string    `json:"serviceUID"`
+	TargetPodUID      string    `json:"targetPodUID"`
+	PolicyName        string    `json:"policyName"`
+	PolicyUID         string    `json:"policyUID"`
+	PolicyGeneration  int64     `json:"policyGeneration"`
+	ObservedAt        time.Time `json:"observedAt"`
+}
+
 // EndpointLeaseObservation contains only digests and public resource identities.
 // The caller credential bytes and signing seed never enter model or audit rows.
 type EndpointLeaseObservation struct {
@@ -1043,6 +1505,57 @@ type EndpointLeaseObservation struct {
 	RetainedBaselineStatus         int       `json:"retainedBaselineStatus"`
 	RetainedBaselineResponseSHA256 string    `json:"retainedBaselineResponseSHA256"`
 	ObservedAt                     time.Time `json:"observedAt"`
+}
+
+// ServingRateBudgetObservation is the narrow selection-and-capability witness for the
+// throttle actuator (AML.T0034). It binds a trusted cost-load detector event to the
+// exact target Service + offending-caller scope AND to the already-installed
+// authoritative serving limiter (deployment + admission ConfigMap the proxy re-reads),
+// at the current policy epoch and with scoped write authority. It carries the MEASURED
+// per-Service baseline and the observed over-baseline rate so the rate budget and the
+// legitimate reserved budget are falsifiable, never invented. A nil/targetless/stale
+// observation fails closed (no cover, no capability): recreated objects cannot inherit
+// it because the Service/limiter/ConfigMap UIDs and policy epoch must all match.
+type ServingRateBudgetObservation struct {
+	LimiterBootID        string    `json:"limiterBootID"`
+	PriorRevision        uint64    `json:"priorRevision"`
+	EventName            string    `json:"eventName"`
+	EventUID             string    `json:"eventUID"`
+	CreatorIdentity      string    `json:"creatorIdentity"`
+	ScenarioID           string    `json:"scenarioId"`
+	EvidenceSource       string    `json:"evidenceSource"`
+	PolicyName           string    `json:"policyName"`
+	PolicyUID            string    `json:"policyUID"`
+	PolicyGeneration     int64     `json:"policyGeneration"`
+	TargetPodUID         string    `json:"targetPodUID"`
+	ServiceUID           string    `json:"serviceUID"`
+	ControllerUID        string    `json:"controllerUID"`
+	LimiterDeploymentUID string    `json:"limiterDeploymentUID"`
+	LimiterConfigMapUID  string    `json:"limiterConfigMapUID"`
+	LimiterSourceSHA256  string    `json:"limiterSourceSHA256"`
+	OffendingCallerScope string    `json:"offendingCallerScope"`
+	BaselineReqPerSec    float64   `json:"baselineReqPerSec"`
+	ObservedReqPerSec    float64   `json:"observedReqPerSec"`
+	ReservedReqPerSec    float64   `json:"reservedReqPerSec"`
+	WindowSeconds        int       `json:"windowSeconds"`
+	ObservedAt           time.Time `json:"observedAt"`
+}
+
+// NodeEscapeObservation is the one fresh trusted detector assertion that a container on
+// TargetPodUID escaped to its node/host (AML.T0105). NodeName is the node the Pod actually runs
+// on (the ingest binder re-derives it from the live Pod and refuses a mismatch), so the recycle
+// target is never attacker-chosen. EscapeSHA256 is the audit digest of the detector evidence.
+type NodeEscapeObservation struct {
+	EventName        string    `json:"eventName"`
+	EventUID         string    `json:"eventUID"`
+	CreatorIdentity  string    `json:"creatorIdentity"`
+	TargetPodUID     string    `json:"targetPodUID"`
+	NodeName         string    `json:"nodeName"` // re-derived from the live Pod's spec.nodeName; never trusted from the event
+	PolicyName       string    `json:"policyName"`
+	PolicyUID        string    `json:"policyUID"`
+	PolicyGeneration int64     `json:"policyGeneration"`
+	EscapeSHA256     string    `json:"escapeSHA256"` // digest of the detector's host-escape evidence (audit binding)
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 // VectorSteeringAttribution describes the one factor applied to one recon fact.
@@ -1337,7 +1850,10 @@ type Decision struct {
 	VoiceAdmissionObservation *VoiceAdmissionObservation  `json:"voiceAdmissionObservation,omitempty"`
 	VoiceOutputObservation    *VoiceOutputObservation     `json:"voiceOutputObservation,omitempty"`
 	VoiceMCPObservation       *VoiceMCPObservation        `json:"voiceMcpObservation,omitempty"`
-	Existential               *ExistentialDecision
+	NodeEscapeObservation       *NodeEscapeObservation       `json:"nodeEscapeObservation,omitempty"`
+	NetworkIsolateObservation   *NetworkIsolateObservation   `json:"networkIsolateObservation,omitempty"`
+	CredentialRevokeObservation *CredentialRevokeObservation `json:"credentialRevokeObservation,omitempty"`
+	Existential                 *ExistentialDecision
 	// Claim is attached after selection by the reporting boundary.
 	Representation *Representation `json:",omitempty"`
 	Claim          *ClaimScope
@@ -1444,6 +1960,11 @@ type Decision struct {
 	// physical termination explicitly unconfirmed.
 	GracefulTermination *GracefulTerminationReceipt
 	DrainOperation      *DrainOperationEvidence
+	// ControllerStop is the bounded native absence receipt for a controller-stop
+	// (attacker-owner scale-to-zero + exact child removal + observed no-recreation
+	// window). Present only after a successful synchronous enact; it records only a
+	// bounded absence window, never permanent erasure.
+	ControllerStop *ControllerStopReceipt
 
 	// --- M-18 Phoenix forensic identity of THIS emission attempt (nil = the adapter
 	// supplied none; never a placeholder). Set from the actuator Result immediately
