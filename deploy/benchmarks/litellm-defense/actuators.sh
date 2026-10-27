@@ -20,6 +20,7 @@
 set -uo pipefail
 
 OPNS="${OPNS:-phorvex-system}"; RELEASE="${RELEASE:-bench}"; NS="${NS:-litellm}"
+APP="${APP:-litellm}"; POLICY="${POLICY:-$APP-defense}"; NGINX="${NGINX:-$APP-nginx}"  # target workload (override for vllm)
 REDTEAM="${REDTEAM:-system:serviceaccount:phorvex-system:bench-redteam}"
 WINDOW_DEF="${WINDOW_DEF:-120}"; WINDOW_UNDEF="${WINDOW_UNDEF:-45}"; POLL="${POLL:-4}"
 HERE="$(cd "$(dirname "$0")" && pwd)"; REPO_ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -69,33 +70,33 @@ set_defense(){ local kill=true; [ "$1" = on ] && kill=false
   helm upgrade "$RELEASE" "$CHART" -n "$OPNS" --reuse-values --set phorvex.globalKillSwitch="$kill" --wait --timeout 6m >/dev/null
   K -n "$OPNS" rollout status deploy/"$mgr" --timeout=5m >/dev/null; }
 
-set_actuator(){ K -n "$NS" patch phorvexpolicy litellm-defense --type merge -p "{\"spec\":{\"actions\":{\"enabled\":[\"$1\"]}}}" >/dev/null 2>&1 || true; }
+set_actuator(){ K -n "$NS" patch phorvexpolicy "$POLICY" --type merge -p "{\"spec\":{\"actions\":{\"enabled\":[\"$1\"]}}}" >/dev/null 2>&1 || true; }
 
 clean(){ # reset all per-scenario state
   K delete securityevent.amtd.r6security.com -l benchmark=litellm-defense --ignore-not-found >/dev/null 2>&1 || true
   K -n "$NS" delete networkpolicy --all --ignore-not-found >/dev/null 2>&1 || true
   K -n "$NS" delete secret stolen-sa-token --ignore-not-found >/dev/null 2>&1 || true
-  K -n "$NS" patch configmap litellm-nginx --type json -p '[{"op":"remove","path":"/data/benchmark-drift"}]' >/dev/null 2>&1 || true
-  K -n "$NS" annotate configmap litellm-nginx phorvex.ai/trusted-config-snapshot- >/dev/null 2>&1 || true
-  K -n "$NS" annotate deploy litellm phorvex.ai/trusted-image-ref- >/dev/null 2>&1 || true
-  K -n "$NS" set image deploy/litellm web=public.ecr.aws/nginx/nginx-unprivileged:1.27-alpine >/dev/null 2>&1 || true  # reset after a registry-rollback
-  local p; for p in $(K -n "$NS" get pod -l app.kubernetes.io/name=litellm -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}' 2>/dev/null); do
+  K -n "$NS" patch configmap "$NGINX" --type json -p '[{"op":"remove","path":"/data/benchmark-drift"}]' >/dev/null 2>&1 || true
+  K -n "$NS" annotate configmap "$NGINX" phorvex.ai/trusted-config-snapshot- >/dev/null 2>&1 || true
+  K -n "$NS" annotate deploy "$APP" phorvex.ai/trusted-image-ref- >/dev/null 2>&1 || true
+  K -n "$NS" set image deploy/"$APP" web=public.ecr.aws/nginx/nginx-unprivileged:1.27-alpine >/dev/null 2>&1 || true  # reset after a registry-rollback
+  local p; for p in $(K -n "$NS" get pod -l app.kubernetes.io/name=$APP -o jsonpath='{range .items[*]}{.metadata.name}{" "}{end}' 2>/dev/null); do
     K -n "$NS" label pod "$p" phorvex.ai/quarantine-epoch- >/dev/null 2>&1 || true; done
   K -n "$OPNS" get configmap -o name 2>/dev/null | grep -E 'phorvex-operation-|phorvex-quarantine-capacity-' | xargs -r -n1 K -n "$OPNS" delete >/dev/null 2>&1 || true
 }
 
-pick_pod(){ K -n "$NS" get pod -l app.kubernetes.io/name=litellm --field-selector=status.phase=Running \
+pick_pod(){ K -n "$NS" get pod -l app.kubernetes.io/name=$APP --field-selector=status.phase=Running \
   -o jsonpath='{range .items[*]}{.metadata.deletionTimestamp}{"~"}{.metadata.name}{"\n"}{end}' 2>/dev/null | awk -F'~' '$1==""{print $2; exit}'; }
 
 # setup_and_fire <actuator> <pod> <puid> : set up precondition + create the typed SecurityEvent. Echoes nothing.
 setup_and_fire(){
   local act="$1" pod="$2" puid="$3"
-  local poluid polgen; poluid="$(K -n "$NS" get phorvexpolicy litellm-defense -o jsonpath='{.metadata.uid}')"
-  polgen="$(K -n "$NS" get phorvexpolicy litellm-defense -o jsonpath='{.metadata.generation}')"
+  local poluid polgen; poluid="$(K -n "$NS" get phorvexpolicy "$POLICY" -o jsonpath='{.metadata.uid}')"
+  polgen="$(K -n "$NS" get phorvexpolicy "$POLICY" -o jsonpath='{.metadata.generation}')"
   local ev="redteam-${act}-$(date +%s)"
   case "$act" in
     k8s-object-revert)
-      K -n "$NS" get configmap litellm-nginx -o json > /tmp/cm.json
+      K -n "$NS" get configmap "$NGINX" -o json > /tmp/cm.json
       python3 - <<PY
 import json,hashlib
 cm=json.load(open("/tmp/cm.json")); data={k:v for k,v in cm.get("data",{}).items() if k!="benchmark-drift"}
@@ -105,7 +106,7 @@ drifted=dict(data); drifted["benchmark-drift"]="x"
 open("/tmp/ev.env","w").write("OSHA=sha256:%s\nTSHA=sha256:%s\n"%(hashlib.sha256(json.dumps(drifted,sort_keys=True).encode()).hexdigest(),hashlib.sha256(json.dumps(data,sort_keys=True).encode()).hexdigest()))
 PY
       . /tmp/ev.env
-      K -n "$NS" patch configmap litellm-nginx --type merge --patch-file /tmp/patch.json >/dev/null
+      K -n "$NS" patch configmap "$NGINX" --type merge --patch-file /tmp/patch.json >/dev/null
       cat <<YAML | K create --as="$REDTEAM" -f - >/dev/null
 apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
@@ -114,7 +115,7 @@ spec: {description: "tampered agent ConfigMap", rule: {source: ExternalDetector,
 YAML
       ;;
     network-isolate)
-      local payload; payload="$(python3 -c "import json;print(json.dumps({'targetPodUID':'$puid','policyName':'litellm-defense','policyUID':'$poluid','policyGeneration':$polgen,'forbiddenEdges':['203.0.113.10/32']}))")"
+      local payload; payload="$(python3 -c "import json;print(json.dumps({'targetPodUID':'$puid','policyName':'$POLICY','policyUID':'$poluid','policyGeneration':$polgen,'forbiddenEdges':['203.0.113.10/32']}))")"
       cat <<YAML | K create --as="$REDTEAM" -f - >/dev/null
 apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
@@ -123,7 +124,7 @@ spec: {description: "C2 egress channel", rule: {source: ExternalDetector, threat
 YAML
       ;;
     registry-rollback)
-      K -n "$NS" annotate deploy litellm "phorvex.ai/trusted-image-ref=$PIN" --overwrite >/dev/null
+      K -n "$NS" annotate deploy "$APP" "phorvex.ai/trusted-image-ref=$PIN" --overwrite >/dev/null
       local rdg tdg; rdg="sha256:$(printf 'a%.0s' $(seq 64))"; tdg="sha256:$(printf 'c%.0s' $(seq 64))"
       cat <<YAML | K create --as="$REDTEAM" -f - >/dev/null
 apiVersion: amtd.r6security.com/v1beta1
@@ -139,7 +140,7 @@ kind: Secret
 metadata: {name: stolen-sa-token, namespace: $NS, annotations: {kubernetes.io/service-account.name: default}}
 type: kubernetes.io/service-account-token
 YAML
-      local payload; payload="$(python3 -c "import json;print(json.dumps({'targetPodUID':'$puid','policyName':'litellm-defense','policyUID':'$poluid','policyGeneration':$polgen,'serviceAccountName':'default','credentialSecrets':['stolen-sa-token']}))")"
+      local payload; payload="$(python3 -c "import json;print(json.dumps({'targetPodUID':'$puid','policyName':'$POLICY','policyUID':'$poluid','policyGeneration':$polgen,'serviceAccountName':'default','credentialSecrets':['stolen-sa-token']}))")"
       cat <<YAML | K create --as="$REDTEAM" -f - >/dev/null
 apiVersion: amtd.r6security.com/v1beta1
 kind: SecurityEvent
@@ -163,9 +164,9 @@ YAML
 detect(){
   local act="$1" pod="$2"
   case "$act" in
-    k8s-object-revert) [ -z "$(K -n "$NS" get configmap litellm-nginx -o jsonpath='{.data.benchmark-drift}' 2>/dev/null)" ] && echo "config-restored" ;;
+    k8s-object-revert) [ -z "$(K -n "$NS" get configmap "$NGINX" -o jsonpath='{.data.benchmark-drift}' 2>/dev/null)" ] && echo "config-restored" ;;
     network-isolate)   K -n "$NS" get networkpolicy -o name 2>/dev/null | grep -q netisolate && echo "egress-isolated" ;;
-    registry-rollback) [ "$(K -n "$NS" get deploy litellm -o jsonpath='{.spec.template.spec.containers[?(@.name=="web")].image}')" = "$PIN" ] && echo "image-rolled-back" ;;
+    registry-rollback) [ "$(K -n "$NS" get deploy "$APP" -o jsonpath='{.spec.template.spec.containers[?(@.name=="web")].image}')" = "$PIN" ] && echo "image-rolled-back" ;;
     credential-revoke) ! K -n "$NS" get secret stolen-sa-token >/dev/null 2>&1 && echo "credential-revoked" ;;
     quarantine)        K -n "$NS" get networkpolicy -o name 2>/dev/null | grep -q quarantine && echo "quarantined" ;;
   esac
@@ -175,7 +176,7 @@ run_one(){ # mode defense atlas name actuator
   local mode="$1" defense="$2" atlas="$3" name="$4" act="$5"
   local window="$WINDOW_DEF"; [ "$mode" = undefended ] && window="$WINDOW_UNDEF"
   clean; set_actuator "$act"
-  K -n "$NS" rollout status deploy/litellm --timeout=5m >/dev/null 2>&1 || true
+  K -n "$NS" rollout status deploy/"$APP" --timeout=5m >/dev/null 2>&1 || true
   sleep 15
   local pod puid; pod="$(pick_pod)"; [ -n "$pod" ] || { echo "  no pod; skip $atlas"; return 0; }
   puid="$(K -n "$NS" get pod "$pod" -o jsonpath='{.metadata.uid}')"
@@ -189,12 +190,12 @@ run_one(){ # mode defense atlas name actuator
   done
   local dec; dec="$(K -n "$OPNS" logs deploy/"$mgr" -c manager --since=5m 2>/dev/null | { grep '"msg":"decision"' || true; } | { grep -- "$act" || true; } | tail -1)"
   [ -n "$dec" ] || dec=null
-  python3 - "$RESULTS" "$mode" "$defense" "$atlas" "$name" "$act" "$fired_at" "$contained_at" "${mech:-}" "$ev" "$pod" "$dec" <<'PY'
+  python3 - "$RESULTS" "$mode" "$defense" "$atlas" "$name" "$act" "$fired_at" "$contained_at" "${mech:-}" "$ev" "$pod" "$dec" "$APP" <<'PY'
 import sys,json
-path,mode,defense,atlas,name,act,fired,contained,mech,ev,pod,dec=sys.argv[1:]
+path,mode,defense,atlas,name,act,fired,contained,mech,ev,pod,dec,app=sys.argv[1:]
 try: d=json.loads(dec)
 except Exception: d=None
-rec={"mode":mode,"defense":defense,"atlasId":atlas,"name":name,"actuator":act,"target":"litellm",
+rec={"mode":mode,"defense":defense,"atlasId":atlas,"name":name,"actuator":act,"target":app,
      "firedAt":fired,"containedAt":json.loads(contained) if contained!="null" else None,
      "mechanism":mech or None,"attackId":ev,"targetPod":pod,"decision":d}
 open(path,"a").write(json.dumps(rec)+"\n")
