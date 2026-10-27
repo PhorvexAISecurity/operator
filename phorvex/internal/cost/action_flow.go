@@ -85,7 +85,9 @@ func flowFamilyForAction(action model.Action) flowFamily {
 	switch action {
 	case model.ActionNoop:
 		return flowNone
-	case model.ActionRotate, model.ActionMIGRebind:
+	case model.ActionRotate, model.ActionMIGRebind, model.ActionRegistryRollback:
+		// registry-rollback patches the controller image to the trusted pin; the controller then
+		// rolls out fresh Pods on the clean digest — a full respawn of the workload's Pods.
 		return flowRespawn
 	case model.ActionQuarantine:
 		return flowQuarantine

@@ -209,6 +209,15 @@ const (
 	// the trusted observation and the live pod, never hard-coded. It never authenticates a
 	// caller or touches any other agent state; an empty guard preserves the app's behaviour.
 	ActionAgentActionDeny Action = "agent-action-deny"
+	// ActionRegistryRollback resets a workload whose RUNNING container image digest has drifted
+	// from the owner-declared trusted pin (AI supply-chain compromise: a poisoned artifact/image
+	// is executing) back to that trusted pin, by patching the owning controller's pod-template
+	// image to the pinned ref so the controller rolls out clean Pods (running digest == pin).
+	// It is the ONLY move that invalidates the "poisoned image executing" fact: a plain rotate
+	// respawns the SAME drifted image. The trusted pin is read from the LIVE controller
+	// annotation at dispatch, never from the event, so a detector assertion cannot steer what the
+	// workload is rolled TO. Forward-only: undoing it would reintroduce the poisoned image.
+	ActionRegistryRollback Action = "registry-rollback"
 )
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
@@ -263,6 +272,7 @@ var MutatingActions = []Action{
 	// permits ONLY rotate+quarantine, so default decisions stay byte-identical).
 	ActionCredentialRevoke,
 	ActionAgentActionDeny,
+	ActionRegistryRollback,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -612,6 +622,8 @@ type Pod struct {
 	AdapterObservation          *AdapterObservation // authenticated event and exact current Pod identity behind SuspectAdapter
 	SuspectConfigObject         string              // name of an operator-trusted ConfigMap a detector flagged as drifted from its trusted snapshot ("" if none) -> k8s-object-revert
 	K8sObjectRevertObservation  *K8sObjectRevertObservation // authenticated event and exact current Pod identity behind SuspectConfigObject
+	SuspectImageDigest          string              // RUNNING container image digest a detector flagged as drifted from the trusted pin ("" if none) -> registry-rollback
+	ImageObservation            *ImageObservation   // authenticated event and exact current Pod identity behind SuspectImageDigest
 	OutputPolicyConfigMap       string
 	OutputPolicyRuleSHA256      string
 	OutputProxySourceSHA256     string
@@ -726,6 +738,18 @@ func (p Pod) HasBoundK8sObjectRevertObservation() bool {
 	return o != nil && p.UID != "" && p.SuspectConfigObject != "" &&
 		o.ConfigMapName == p.SuspectConfigObject && o.TargetPodUID == p.UID &&
 		o.ObservedSHA256 != "" && o.TrustedSHA256 != "" && o.ObservedSHA256 != o.TrustedSHA256 &&
+		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
+}
+
+// HasBoundImageObservation is the narrow detector authority for image-integrity. It binds a
+// fresh trusted assertion to this exact Pod UID and requires the observed running digest to
+// differ from the trusted pin (an identical digest is not a drift and mints no fact). The pin
+// and running digest must both be present so the steered fact always carries full attribution.
+func (p Pod) HasBoundImageObservation() bool {
+	o := p.ImageObservation
+	return o != nil && p.UID != "" && p.SuspectImageDigest != "" &&
+		o.RunningDigest == p.SuspectImageDigest && o.TargetPodUID == p.UID &&
+		o.RunningDigest != "" && o.TrustedPin != "" && o.RunningDigest != o.TrustedPin &&
 		o.EventName != "" && o.EventUID != "" && o.CreatorIdentity != ""
 }
 
@@ -995,6 +1019,9 @@ const (
 	// quarantine / network-isolate, none of which invalidate a bearer token the attacker holds.
 	AttackVectorCredentialTheft = "phorvex.attack.credential-theft"
 	AttackVectorAgentActionAbuse   = "phorvex.attack.agent-action"
+	// AttackVectorImage reports that a workload's RUNNING container image digest has drifted from
+	// the owner-declared trusted pin (a poisoned supply-chain artifact is executing) -> registry-rollback.
+	AttackVectorImage = "phorvex.attack.image"
 )
 
 // AttackVectorForActuator maps the actuator a red-team fire EXPECTS to the vector rule type it
@@ -1024,6 +1051,8 @@ func AttackVectorForActuator(actuator string) string {
 		return AttackVectorNetworkEdge
 	case "credential-revoke":
 		return AttackVectorCredentialTheft
+	case "registry-rollback":
+		return AttackVectorImage
 	}
 	return ""
 }
@@ -1087,6 +1116,8 @@ type SecurityEventInfo struct {
 	ConfigObservedSHA256              string // event-owned phorvex.ai/config-observed-sha256, the detector-observed live-data hash
 	ConfigTrustedSHA256               string // event-owned phorvex.ai/config-trusted-sha256, the detector-asserted trusted-snapshot hash
 	ConfigTargetUID                   string // event-owned phorvex.ai/target-pod-uid for a config-object observation
+	ImageRunningDigest                string // event-owned phorvex.ai/running-image-digest (the drifted running digest the detector observed)
+	ImageTrustedPin                   string // event-owned phorvex.ai/trusted-image-digest (the pin the detector compared against); handler re-reads it live, never from here
 	SensitiveOutputRaw                string // untrusted event annotation, validated against live source before use
 	VoiceMemoryRaw                    string // observed caller/note digest assertion; never raw note
 	VoiceRefundRaw                    string // asserted caller/order hashes from owned CRM observation
@@ -1178,6 +1209,22 @@ type K8sObjectRevertObservation struct {
 	ConfigMapName   string    `json:"configMapName"`
 	ObservedSHA256  string    `json:"observedSHA256"`
 	TrustedSHA256   string    `json:"trustedSHA256"`
+	CreatedAt       time.Time `json:"createdAt"`
+}
+
+// ImageObservation identifies the one fresh detector assertion that a workload's RUNNING
+// container image digest has drifted from the owner-declared trusted pin (AI supply-chain
+// compromise). It binds the assertion to this exact Pod UID and carries the observed running
+// digest and the trusted pin the detector compared it against. The digests are evidence only:
+// the registry-rollback handler re-reads the trusted pin from the LIVE controller annotation at
+// dispatch, never from this observation, so the detector cannot steer what the workload rolls TO.
+type ImageObservation struct {
+	EventName       string    `json:"eventName"`
+	EventUID        string    `json:"eventUID"`
+	CreatorIdentity string    `json:"creatorIdentity"`
+	TargetPodUID    string    `json:"targetPodUID"`
+	RunningDigest   string    `json:"runningDigest"`
+	TrustedPin      string    `json:"trustedPin"`
 	CreatedAt       time.Time `json:"createdAt"`
 }
 

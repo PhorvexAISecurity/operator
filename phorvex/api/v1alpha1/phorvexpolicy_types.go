@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;registry-rollback;disable
 type ActionType string
 
 const (
@@ -521,6 +521,9 @@ const (
 	// ActionCredentialRevoke invalidates a stolen ServiceAccount bearer credential by deleting
 	// its detector-named legacy service-account-token Secret, leaving the pod Ready + in-service.
 	ActionCredentialRevoke ActionType = "credential-revoke"
+	// ActionRegistryRollback resets a drifted running container image back to the owner-declared
+	// trusted pin by patching the owning controller's pod-template image (AI supply-chain compromise).
+	ActionRegistryRollback ActionType = "registry-rollback"
 	ActionDisable          ActionType = "disable"
 
 )

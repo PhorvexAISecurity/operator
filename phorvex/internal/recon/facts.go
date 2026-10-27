@@ -122,6 +122,14 @@ const (
 	// object to the trusted snapshot) covers it — a generic rotate/quarantine churns the POD but the
 	// tampered ConfigMap keeps serving the same bad config, so they earn no cover.
 	FactConfigObjectIntegrity = "configObjectIntegrity"
+	// FactImageIntegrity = the RUNNING container image digest has drifted from the owner-declared
+	// trusted pin (a poisoned supply-chain artifact/image is EXECUTING). It exists ONLY while a
+	// trusted detector observation of that drift is bound to the pod, and ONLY registry-rollback
+	// (reset the controller image to the pin so clean Pods roll out) covers it — a plain rotate
+	// respawns the SAME drifted image, so the engine selects registry-rollback for THIS attack.
+	// Distinct from the Tier-3 FactArtifactProvenance (copied-knowledge, uninvalidatable): this
+	// fact is the live executing-poison state a rollback physically invalidates.
+	FactImageIntegrity = "imageIntegrity"
 
 	// FactInflightRequests = the attacker's IN-FLIGHT request / queue / streaming-session state on a
 	// serving pod (distinct from the KV-cache session): the requests currently being served that a

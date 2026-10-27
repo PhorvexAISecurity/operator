@@ -293,6 +293,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		for i := range snap.Pods {
 			bindAdapterObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindK8sObjectRevertObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
+			bindImageObservation(&snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindSensitiveOutputObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceMemoryObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])
 			bindVoiceRefundObservation(ctx, eventReader, &snap.Pods[i], byPod[snap.Pods[i].Namespace+"/"+snap.Pods[i].Name])

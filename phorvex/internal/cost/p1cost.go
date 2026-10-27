@@ -135,9 +135,10 @@ var structuralComponents = []string{
 // route Service, and model-shard-replace is additive over affected ranks.
 func normCostP1(view *model.WorkloadView, move model.Move) float64 {
 	switch move.Action {
-	case model.ActionRotate, model.ActionWarmSwap:
-		// Both retire one logical serving workload. Warm-swap's lower disruption
-		// belongs to C_flow, not C_norm.
+	case model.ActionRotate, model.ActionWarmSwap, model.ActionRegistryRollback:
+		// All retire one logical serving workload. Warm-swap's lower disruption and
+		// registry-rollback's controller-driven rollout both belong to C_flow, not C_norm;
+		// the normalized disruption of replacing the logical workload is the same 1.00.
 		return NormCostWorkloadReplacement
 	case model.ActionQuarantine:
 		return NormCostWorkloadReplacement / float64(len(structuralComponents))

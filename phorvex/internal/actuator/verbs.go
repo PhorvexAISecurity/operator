@@ -120,6 +120,10 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// not covered by rotate/quarantine, so the lane grants them additively to the actuator AND
 	// manager SA (the T1-E manager SSAR pre-checks the same verb set) in the demo namespace.
 	model.ActionCredentialRevoke: {{Resource: "secrets", Verb: "get"}, {Resource: "secrets", Verb: "list"}, {Resource: "secrets", Verb: "delete"}, {Resource: "serviceaccounts", Verb: "get"}, {Resource: "serviceaccounts", Verb: "update"}, {Resource: "pods", Verb: "get"}},
+	// registry-rollback patches the owning controller's pod-template image back to the trusted pin.
+	// Gated on the MUTATION (apps/deployments patch); the owner-chain reads (deployments/replicasets
+	// get, pods get/list) are the broadly-granted scanner reads excluded by the P-BOUNDED-AUTHZ note.
+	model.ActionRegistryRollback: {{Group: "apps", Resource: "deployments", Verb: "patch"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

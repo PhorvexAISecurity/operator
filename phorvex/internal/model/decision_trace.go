@@ -71,6 +71,8 @@ const (
 	DecisionActionVocabularyLive31 = "v17-live31"
 	// Live32 appends the namespace-parametric agent-action-deny; all earlier versions stay frozen.
 	DecisionActionVocabularyLive32 = "v18-live32"
+	// Live33 appends registry-rollback (image-drift reset to the trusted pin); all earlier versions stay frozen.
+	DecisionActionVocabularyLive33 = "v19-live33"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -150,6 +152,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive32:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive31)
 		return append(prior, ActionAgentActionDeny), nil
+	case DecisionActionVocabularyLive33:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive32)
+		return append(prior, ActionRegistryRollback), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

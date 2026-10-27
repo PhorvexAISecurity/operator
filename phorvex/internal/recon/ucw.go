@@ -178,6 +178,21 @@ func (ucwRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) AssetFact
 		af.Facts = append(af.Facts, ci)
 		af.CoverByAction[model.ActionK8sObjectRevert] = append(af.CoverByAction[model.ActionK8sObjectRevert], ci.Key())
 	}
+	// Image integrity has its own authenticated detector authority (a running-digest drift from
+	// the owner-declared trusted pin). It requires no model/GPU/serving context — a supply-chain
+	// compromise targets any workload. The ×3 dominance keeps the fact dominant over the generic
+	// rotate cover so the engine steers to registry-rollback, while preserving zero weight at zero
+	// PHold and finite policy scaling. ONLY registry-rollback covers it (rotate respawns the same
+	// drifted image).
+	if view.Pod.HasBoundImageObservation() {
+		o := view.Pod.ImageObservation
+		ii := Fact{Scope: ScopePod, Asset: asset, Kind: FactImageIntegrity, Weight: base * urg * vectorDominance}
+		ii.SteeredBy = &model.VectorSteeringAttribution{RuleType: model.AttackVectorImage, AppliedMultiplier: vectorDominance,
+			Events: []model.VectorSteeringEvent{{EventName: o.EventName, EventUID: o.EventUID, RuleType: model.AttackVectorImage,
+				TrustVerdict: "trusted", CreatorIdentity: o.CreatorIdentity, TargetPodUID: o.TargetPodUID}}}
+		af.Facts = append(af.Facts, ii)
+		af.CoverByAction[model.ActionRegistryRollback] = append(af.CoverByAction[model.ActionRegistryRollback], ii.Key())
+	}
 	if view.Pod.HasBoundSensitiveOutputObservation() {
 		o := view.Pod.OutputPolicyObservation
 		f := Fact{Scope: ScopePod, Asset: asset, Kind: FactSensitiveOutputExposure, Weight: base * urg * vectorDominance}

@@ -137,6 +137,8 @@ func collectEventsAndReceipts(ctx context.Context, c client.Reader, now time.Tim
 			ConfigObservedSHA256:                 se.Annotations["phorvex.ai/config-observed-sha256"],
 			ConfigTrustedSHA256:                  se.Annotations["phorvex.ai/config-trusted-sha256"],
 			ConfigTargetUID:                      se.Annotations["phorvex.ai/target-pod-uid"],
+			ImageRunningDigest:                   se.Annotations["phorvex.ai/running-image-digest"],
+			ImageTrustedPin:                      se.Annotations["phorvex.ai/trusted-image-digest"],
 			SensitiveOutputRaw:                   se.Annotations["phorvex.ai/sensitive-output-observation-v1"],
 			VoiceMemoryRaw:                       se.Annotations["phorvex.ai/voice-memory-observation-v1"],
 			VoiceRefundRaw:                       se.Annotations["phorvex.ai/voice-refund-observation-v1"],
