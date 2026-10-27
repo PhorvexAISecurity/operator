@@ -468,9 +468,10 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 		if a == model.ActionRotate {
 			family = "stateful-integrity:"
 		}
-		if f := obsGatedFamily(a); f != "" {
-			family = f
-		}
+		// aiViewForAction binds each action's own observation, so the obs-gated combined
+		// actuators are FEASIBLE here (their law is satisfied); only rotate's stateful-integrity
+		// law still vetoes. (The kube-system branch above uses the bare aiView() with no bound
+		// observation, so there they correctly earn their obsGatedFamily veto.)
 		assertVerdict(t, "stateful pod", a, feasibility.Evaluate(stateful, move, pol), family)
 	}
 }
