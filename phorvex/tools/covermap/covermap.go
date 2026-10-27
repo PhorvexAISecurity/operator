@@ -83,6 +83,9 @@ type PodSpec struct {
 	MIGDevice                 string                               `json:"migDevice,omitempty"`
 	ModelID                   string                               `json:"modelID,omitempty"`
 	SuspectAdapter            string                               `json:"suspectAdapter,omitempty"`
+	SuspectConfigObject       string                               `json:"suspectConfigObject,omitempty"`
+	SuspectImageDigest        string                               `json:"suspectImageDigest,omitempty"`
+	ControllerUID             string                               `json:"controllerUID,omitempty"`
 	RouteService              string                               `json:"routeService,omitempty"`
 	Stateful                  bool                                 `json:"stateful,omitempty"`
 	ServingEndpointReady      bool                                 `json:"servingEndpointReady,omitempty"`
@@ -127,6 +130,17 @@ type BoundSpec struct {
 	LiteLLMClientObservation    *model.LiteLLMClientObservation  `json:"litellmClientObservation,omitempty"`
 	EndpointLeaseObservation    *model.EndpointLeaseObservation  `json:"endpointLeaseObservation,omitempty"`
 	CRMRefundObservation        *model.CRMRefundObservation      `json:"crmRefundObservation,omitempty"`
+	// The seven combined-actuator witnesses, each the narrow authenticated authority behind one
+	// native action. K8sObjectRevert/Image are paired with the Pod-side SuspectConfigObject/
+	// SuspectImageDigest pins; the rest bind through the Pod UID/namespace/node the fixture sets.
+	K8sObjectRevertObservation   *model.K8sObjectRevertObservation   `json:"k8sObjectRevertObservation,omitempty"`
+	ImageObservation             *model.ImageObservation             `json:"imageObservation,omitempty"`
+	DatastoreRestoreObservation  *model.DatastoreRestoreObservation  `json:"datastoreRestoreObservation,omitempty"`
+	AgentActionDenyObservation   *model.AgentActionDenyObservation   `json:"agentActionDenyObservation,omitempty"`
+	NodeEscapeObservation        *model.NodeEscapeObservation        `json:"nodeEscapeObservation,omitempty"`
+	NetworkIsolateObservation    *model.NetworkIsolateObservation    `json:"networkIsolateObservation,omitempty"`
+	CredentialRevokeObservation  *model.CredentialRevokeObservation  `json:"credentialRevokeObservation,omitempty"`
+	ServingRateBudgetObservation *model.ServingRateBudgetObservation `json:"servingRateBudgetObservation,omitempty"`
 }
 
 // PhysicsSpec is the dispersion witness a fixture supplies. nil means model.NeutralPhysics().
@@ -335,6 +349,56 @@ func Fixtures() []Fixture {
 				CallerAccountID: "AC-1001", GuardConfigMapUID: uid(93), ServiceUID: uid(94), TargetPodUID: uid(91), PeerPodUID: uid(95),
 				PolicyName: "crm-defense", PolicyUID: uid(96), PolicyGeneration: 1, ObservedAt: at}}),
 	}
+	// nativeScoped are the seven combined/native actuators plus throttle. Each carries the exact
+	// admitted witness its HasBound* authority requires (model.Pod), so the matching fact is minted
+	// at 3x (ucw) or 1x (throttle, standard-recon) and only its dedicated action covers it. The
+	// config-object/image witnesses pair with the Pod-side SuspectConfigObject/SuspectImageDigest
+	// pins; datastore/agent-action are namespace-parametric (observation namespace == pod namespace);
+	// node-escape binds to the pod's own live node; throttle binds to the pod's controller UID.
+	imgRunning, imgPin := "sha256:"+sha("d"), "sha256:"+sha("c")
+	nativeScoped := []Fixture{
+		{Name: "config-object", Why: "Admitted trusted observation that an operator-trusted ConfigMap drifted from its snapshot, bound to the exact Pod UID and object name: configObjectIntegrity appears at 3x and only k8s-object-revert covers it.",
+			Pod: PodSpec{Namespace: ns, Name: "config-object", UID: uid(101), Node: "node-a", SuspectConfigObject: "agent-config",
+				Bound: &BoundSpec{K8sObjectRevertObservation: &model.K8sObjectRevertObservation{
+					EventName: "observed", EventUID: uid(102), CreatorIdentity: consoleCreator, TargetPodUID: uid(101),
+					ConfigMapName: "agent-config", ObservedSHA256: sha("a"), TrustedSHA256: sha("b"), CreatedAt: at}}}, Ctx: unit},
+		{Name: "image-integrity", Why: "Admitted trusted observation that the running image digest drifted from the owner-declared pin, bound to the exact Pod UID: imageIntegrity appears at 3x and only registry-rollback covers it.",
+			Pod: PodSpec{Namespace: ns, Name: "image-integrity", UID: uid(111), Node: "node-a", SuspectImageDigest: imgRunning,
+				Bound: &BoundSpec{ImageObservation: &model.ImageObservation{
+					EventName: "observed", EventUID: uid(112), CreatorIdentity: consoleCreator, TargetPodUID: uid(111),
+					RunningDigest: imgRunning, TrustedPin: imgPin, CreatedAt: at}}}, Ctx: unit},
+		boundFixture("datastore-poisoned", "Admitted trusted datastore-poisoning observation in the pod's own namespace: datastorePoisoned appears at 3x and only datastore-restore covers it.",
+			ns, uid(121), BoundSpec{DatastoreRestoreObservation: &model.DatastoreRestoreObservation{
+				EventName: "observed", EventUID: uid(122), CreatorIdentity: consoleCreator, Namespace: ns, StoreName: "rag-index",
+				StoreConfigMapUID: uid(123), TrustedSnapshotConfigMapUID: uid(124), ServiceUID: uid(125), TargetPodUID: uid(121),
+				PoisonedSHA256: sha("a"), TrustedSHA256: sha("b"), PolicyName: "defense", PolicyUID: uid(126), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("agent-action-abuse", "Admitted trusted unauthorized-agent-action observation in the pod's own namespace: agentActionAbuse appears at 3x and only agent-action-deny covers it.",
+			ns, uid(131), BoundSpec{AgentActionDenyObservation: &model.AgentActionDenyObservation{
+				EventName: "observed", EventUID: uid(132), CreatorIdentity: consoleCreator, Namespace: ns, AgentName: "agent",
+				CallerID: "caller-1", ActionID: "refund", GuardConfigMapUID: uid(133), ServiceUID: uid(134), TargetPodUID: uid(131),
+				PolicyName: "defense", PolicyUID: uid(135), PolicyGeneration: 1, ObservedAt: at}}),
+		boundFixture("node-host-escape", "Admitted trusted container->host escape observation bound to the pod's own live node: nodeHostEscape appears at 3x and only node-cordon-drain-replace covers it.",
+			ns, uid(141), BoundSpec{NodeEscapeObservation: &model.NodeEscapeObservation{
+				EventName: "observed", EventUID: uid(142), CreatorIdentity: consoleCreator, TargetPodUID: uid(141), NodeName: "node-a",
+				PolicyName: "defense", PolicyUID: uid(143), PolicyGeneration: 1, EscapeSHA256: sha("a"), CreatedAt: at}}),
+		boundFixture("network-egress-channel", "Admitted trusted open-egress-channel observation with a forbidden edge to cut: networkEgressChannel appears at 3x and only network-isolate covers it.",
+			ns, uid(151), BoundSpec{NetworkIsolateObservation: &model.NetworkIsolateObservation{
+				EventName: "observed", EventUID: uid(152), CreatorIdentity: consoleCreator, TargetPodUID: uid(151),
+				PolicyName: "defense", PolicyUID: uid(153), PolicyGeneration: 1, ForbiddenEdges: []string{"169.254.169.254/32"}, ChannelSHA256: sha("a"), CreatedAt: at}}),
+		boundFixture("credential-reuse", "Admitted trusted stolen-ServiceAccount-token observation naming a token Secret to revoke: credentialReuse appears at 3x and only credential-revoke covers it.",
+			ns, uid(161), BoundSpec{CredentialRevokeObservation: &model.CredentialRevokeObservation{
+				EventName: "observed", EventUID: uid(162), CreatorIdentity: consoleCreator, TargetPodUID: uid(161),
+				PolicyName: "defense", PolicyUID: uid(163), PolicyGeneration: 1, ServiceAccountName: "workload",
+				CredentialSecrets: []string{"workload-token"}, CredentialSHA256: sha("a"), CreatedAt: at}}),
+		{Name: "serving-rate-budget", Why: "Admitted trusted cost-load observation bound to the installed authoritative limiter, the pod's controller UID and a measured over-baseline rate: servingRateBudget appears and only throttle covers it (standard-recon).",
+			Pod: PodSpec{Namespace: ns, Name: "serving-rate-budget", UID: uid(171), Node: "node-a", ControllerUID: "rs-171",
+				Bound: &BoundSpec{ServingRateBudgetObservation: &model.ServingRateBudgetObservation{
+					EventName: "observed", EventUID: uid(172), CreatorIdentity: consoleCreator, TargetPodUID: uid(171), ControllerUID: "rs-171",
+					PolicyName: "defense", PolicyUID: uid(173), PolicyGeneration: 1, ServiceUID: uid(174), LimiterDeploymentUID: uid(175),
+					LimiterConfigMapUID: uid(176), LimiterSourceSHA256: sha("a"), LimiterBootID: "boot", OffendingCallerScope: "caller|/",
+					BaselineReqPerSec: 42, ReservedReqPerSec: 42, ObservedReqPerSec: 1821, WindowSeconds: 60, ObservedAt: at}}}, Ctx: unit},
+	}
+	appScoped = append(appScoped, nativeScoped...)
 	return append([]Fixture{
 		{Name: "plain", Why: "CPU pod, no model, no neighbours, no event: the six base facts, rotate process-state grants and the quarantine network grant; route selector changes are coverless.",
 			Pod: PodSpec{Namespace: ns, Name: "plain", Node: "node-a"}, Ctx: unit},
@@ -413,7 +477,9 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		OutputProxySourceSHA256: f.Pod.OutputProxySourceSHA256, OutputSupportSourceSHA256: f.Pod.OutputSupportSourceSHA256,
 		OutputEventCreator: f.Pod.OutputEventCreator, OutputPolicyObservation: f.Pod.OutputPolicyObservation,
 		HasGPU: f.Pod.HasGPU, MIGDevice: f.Pod.MIGDevice, ModelID: f.Pod.ModelID,
-		SuspectAdapter: f.Pod.SuspectAdapter, RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
+		SuspectAdapter: f.Pod.SuspectAdapter, SuspectConfigObject: f.Pod.SuspectConfigObject,
+		SuspectImageDigest: f.Pod.SuspectImageDigest, ControllerUID: f.Pod.ControllerUID,
+		RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
 		WarmPoolConfigured:   f.Pod.WarmPoolConfigured, WarmPoolOwnerUID: f.Pod.WarmPoolOwnerUID,
 	}
@@ -444,6 +510,14 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		pod.LiteLLMClientObservation = b.LiteLLMClientObservation
 		pod.EndpointLeaseObservation = b.EndpointLeaseObservation
 		pod.CRMRefundObservation = b.CRMRefundObservation
+		pod.K8sObjectRevertObservation = b.K8sObjectRevertObservation
+		pod.ImageObservation = b.ImageObservation
+		pod.DatastoreRestoreObservation = b.DatastoreRestoreObservation
+		pod.AgentActionDenyObservation = b.AgentActionDenyObservation
+		pod.NodeEscapeObservation = b.NodeEscapeObservation
+		pod.NetworkIsolateObservation = b.NetworkIsolateObservation
+		pod.CredentialRevokeObservation = b.CredentialRevokeObservation
+		pod.ServingRateBudgetObservation = b.ServingRateBudgetObservation
 	}
 	if pod.SuspectAdapter != "" {
 		pod.UID = "fixture-pod-uid"

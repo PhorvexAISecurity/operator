@@ -70,7 +70,8 @@ var Components = []Component{
 	{
 		Name: "manager", Image: "operator", Dockerfile: "deploy/docker/operator.Dockerfile", Chart: "phorvex/charts/phorvex",
 		Builds: []Build{{Module: "phorvex", Packages: []string{"./cmd", "./cmd/brain-replay", "./cmd/recovery",
-			"./cmd/mig-allocation-helper", "./cmd/loss-observer", "./cmd/current-inventory-observer"}}},
+			"./cmd/mig-allocation-helper", "./cmd/loss-observer", "./cmd/current-inventory-observer",
+			"./cmd/cost-budget-admin", "./cmd/persistence-observer"}}},
 		// Continues the 0.4.x line the manager was released under before the split.
 		Initial:    "0.5.0",
 		Repository: "phorvex/manager",
