@@ -4,6 +4,27 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## Playbook refresh — 2026-10-28
+
+Documentation commit `1f04c275` synchronizes the Persian and English playbooks
+with document uploads, validate-only captions, optional sections, batch summaries
+and activity cards. Both HTML editions have 11 sections. The Persian PDF has
+18 pages and the English PDF has 19. All embedded file examples matched the
+bundled templates and parsed with the actual request parser. Both editions
+passed browser layout and interaction checks at 320–1440 px.
+
+The four guide assets were updated in the active `bot-ebc3dbce` directory using
+staged atomic file replacements, with previous files retained privately. No bot
+code or unit was changed: PID and start time were unchanged, as were dashboard
+identity, API uptime and the paired owner.
+
+An operator-invoked `/guide` handler sent the refreshed English HTML and PDF;
+Telegram accepted them as messages 148 and 149. Both attachments were downloaded
+again through Telegram, and their SHA256 digests matched the committed assets.
+This was a delivery check, not an incoming user command. All four services were
+active. Private installation and delivery evidence is under
+`~/phorvex-benchmark/bot-validation-20261028/guide-refresh-1f04c275/`.
+
 ## Document batches and activity cards — 2026-10-28
 
 Bot release `bot-ebc3dbce` adds Markdown/TXT/DOCX uploads, `/upload`,
