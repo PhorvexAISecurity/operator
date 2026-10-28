@@ -3,6 +3,7 @@ package console
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -124,6 +125,33 @@ func TestPolicyEditWithoutTenantIsUnchangedAndAudited(t *testing.T) {
 	entries := auditEntries(t, auditPath)
 	if len(entries) != 1 || entries[0].Verdict != "applied" || entries[0].Field != "spec" || !strings.Contains(entries[0].Patch, `"mode":"dryRun"`) {
 		t.Fatalf("audit entries = %+v", entries)
+	}
+}
+
+// Both boolean values are real edits. In particular, false must be present in the merge patch so
+// an operator can turn reactive-only OFF and restore proactive exposure-driven decisions.
+func TestPolicyEditReactiveOnlyPatchesBothBooleanStates(t *testing.T) {
+	for _, reactiveOnly := range []bool{true, false} {
+		t.Run(fmt.Sprintf("reactiveOnly=%t", reactiveOnly), func(t *testing.T) {
+			s, calls, auditPath := guardServer(t, "phorvexpolicy.phorvex.ai/demo-defense patched", nil)
+			body := fmt.Sprintf(`{"namespace":"demo","name":"demo-defense","reactiveOnly":%t}`, reactiveOnly)
+			w, resp := postEdit(t, s, body)
+			if w.Code != http.StatusOK || resp["ok"] != true {
+				t.Fatalf("status %d resp %v", w.Code, resp)
+			}
+			if len(*calls) != 1 {
+				t.Fatalf("calls = %+v", *calls)
+			}
+			args := strings.Join((*calls)[0].args, " ")
+			want := fmt.Sprintf(`"triggers":{"reactiveOnly":%t}`, reactiveOnly)
+			if !strings.Contains(args, want) {
+				t.Fatalf("kubectl args = %s; want %s", args, want)
+			}
+			entries := auditEntries(t, auditPath)
+			if len(entries) != 1 || entries[0].Verdict != "applied" || !strings.Contains(entries[0].Patch, want) {
+				t.Fatalf("audit entries = %+v; want patch %s", entries, want)
+			}
+		})
 	}
 }
 
