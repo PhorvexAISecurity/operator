@@ -11,9 +11,9 @@ import { useQueries } from "@tanstack/react-query";
 // PolicyControlPanel — LIVE editing of the PhorvexPolicy that governs each app.
 //
 // This is the console's write control plane: change the operator mode (active/dry-run), the
-// dry-run flag, the per-tick move budget, and the enabled actuator set, and it patches the real
-// PhorvexPolicy CR in the cluster. It is gated to the operator lens behind the Cognito auth on
-// console.phorvex.ai, which is what makes a cluster write from a browser safe.
+// reactive/proactive trigger mode, the per-tick move budget, and the enabled actuator set, and it
+// patches the real PhorvexPolicy CR in the cluster. It is gated to the operator lens behind the
+// Cognito auth on console.phorvex.ai, which is what makes a cluster write from a browser safe.
 //
 // Not read-only: what you change here changes what Phorvex is allowed to do to your cluster.
 // Fallback actuator set, used only until the per-app applicable list loads (or if it can't be
@@ -23,13 +23,14 @@ import { useQueries } from "@tanstack/react-query";
 // brain still decides WHICH of the enabled actuators to run.
 const GENERIC_ACTUATORS = ["rotate", "quarantine", "noop", "debugger", "custom-inject"];
 
-type Draft = { mode: string; maxMovesPerTick: string; enabled: string[] };
+type Draft = { mode: string; reactiveOnly: boolean; maxMovesPerTick: string; enabled: string[] };
 
 function readDraft(p: PolicyView): Draft {
   const spec = p.spec || {};
   return {
     // "dryRun" is the decide-but-never-enact mode (the CRD enum is active | dryRun).
     mode: spec.mode || p.mode || "active",
+    reactiveOnly: spec.triggers?.reactiveOnly === true,
     maxMovesPerTick: String(spec.budget?.maxMovesPerTick ?? ""),
     enabled: spec.actions?.enabled || [],
   };
@@ -61,7 +62,19 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
   const compatibilityDenied = compatibilityReads.some((read) => read.error instanceof ApiError && (read.error.status === 401 || read.error.status === 403));
   const compatibilityError = compatibilityReads.find((read) => read.error)?.error;
   const actuatorsByNs = Object.fromEntries(compatibilityReads.flatMap((read, index) => read.error instanceof ApiError && (read.error.status === 401 || read.error.status === 403) ? [] : read.data?.policyActuators ? [[namespaces[index], read.data.policyActuators ?? []]] : []));
-  const load = () => { setErr(""); void clusterRead.refetch(); compatibilityReads.forEach((read) => void read.refetch()); };
+  const load = async () => {
+    setErr("");
+    compatibilityReads.forEach((read) => void read.refetch());
+    const result = await clusterRead.refetch();
+    const refreshedPolicies = result.data?.policies;
+    if (refreshedPolicies) {
+      // Rehydrate directly from the forced network read. Depending only on the effect above is
+      // insufficient when React Query structurally shares an unchanged server response.
+      previousDraftScope.current = draftScope;
+      setDrafts(Object.fromEntries(refreshedPolicies.map((p) => [`${p.namespace}/${p.name}`, readDraft(p)])));
+    }
+    return refreshedPolicies;
+  };
 
   const key = (p: PolicyView) => `${p.namespace}/${p.name}`;
   const set = (k: string, patch: Partial<Draft>) => setDrafts((d) => ({ ...d, [k]: { ...d[k], ...patch } }));
@@ -76,6 +89,7 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     setSaving(k); setMsg(""); setErr("");
     const body: PolicyEdit = { namespace: p.namespace, name: p.name };
     if (d.mode) body.mode = d.mode as "active" | "dryRun";
+    body.reactiveOnly = d.reactiveOnly;
     if (d.maxMovesPerTick.trim() !== "") {
       const n = parseInt(d.maxMovesPerTick, 10);
       if (!Number.isNaN(n)) body.maxMovesPerTick = n;
@@ -83,8 +97,12 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
     body.enabledActions = d.enabled;
     try {
       const r = await api.policyEdit(body, lens, mutationTarget.context);
-      setMsg(`Patched ${r.namespace}/${r.name} — live now.`);
-      load();
+      const refreshedPolicies = await load();
+      const confirmed = refreshedPolicies?.find((candidate) => key(candidate) === k);
+      if (!confirmed || readDraft(confirmed).reactiveOnly !== d.reactiveOnly) {
+        throw new Error("Policy write was not confirmed by the cluster read-back.");
+      }
+      setMsg(`Patched ${r.namespace}/${r.name} — confirmed from the cluster.`);
     } catch (e: any) {
       setErr(String(e.message || e));
     } finally {
@@ -119,8 +137,9 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span className="font-medium text-[13px]">{p.namespace}/{p.name}</span>
               <Badge variant={d.mode === "active" ? "real" : "neutral"}>{d.mode}</Badge>
+              <Badge variant={d.reactiveOnly ? "accent" : "real"}>{d.reactiveOnly ? "reactive" : "proactive + reactive"}</Badge>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {/* mode */}
               <label className="text-[12px]">
                 <div className="mb-1 text-muted-foreground">Mode</div>
@@ -130,6 +149,23 @@ export function PolicyControlPanel({ lens }: { lens: Lens }) {
                   <option value="dryRun">dry-run — decides only (no enact)</option>
                 </select>
               </label>
+              {/* trigger mode — this writes spec.triggers.reactiveOnly on the live policy. */}
+              <div className="text-[12px]">
+                <div className="mb-1 text-muted-foreground">Defense trigger</div>
+                <div className="grid grid-cols-2 rounded-md border border-border bg-elevated/30 p-0.5" role="group" aria-label="Defense trigger mode">
+                  <button type="button" aria-pressed={d.reactiveOnly} onClick={() => set(k, { reactiveOnly: true })}
+                    className={cn("rounded px-2 py-1 text-[12px] transition-colors", d.reactiveOnly ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                    Reactive
+                  </button>
+                  <button type="button" aria-pressed={!d.reactiveOnly} onClick={() => set(k, { reactiveOnly: false })}
+                    className={cn("rounded px-2 py-1 text-[12px] transition-colors", !d.reactiveOnly ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+                    Proactive
+                  </button>
+                </div>
+                <div className="mt-1 text-[10px] leading-snug text-muted-foreground/70">
+                  {d.reactiveOnly ? "Waits for detector-backed attack evidence." : "Also permits exposure-only moves without a detector event."}
+                </div>
+              </div>
               {/* budget */}
               <label className="text-[12px]">
                 <div className="mb-1 text-muted-foreground">Max moves per tick</div>

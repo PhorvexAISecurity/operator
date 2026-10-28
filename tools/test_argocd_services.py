@@ -306,6 +306,20 @@ class DemoTests(unittest.TestCase):
             self.assertNotIn('namespace', d['metadata'], d['metadata']['name'])
             self.assertNotIn(d['kind'], CLUSTER_SCOPED)
 
+    def test_live_policy_controls_survive_gitops_self_heal(self):
+        spec = DEMO['spec']
+        self.assertIn('RespectIgnoreDifferences=true', spec['syncPolicy']['syncOptions'])
+        policy = next(i for i in spec['ignoreDifferences']
+                      if i.get('group') == 'phorvex.ai' and i['kind'] == 'PhorvexPolicy')
+        self.assertEqual(policy['name'], 'demo-api-defense')
+        self.assertEqual(policy['namespace'], spec['destination']['namespace'])
+        self.assertEqual(set(policy['jsonPointers']), {
+            '/spec/mode',
+            '/spec/triggers/reactiveOnly',
+            '/spec/budget/maxMovesPerTick',
+            '/spec/actions/enabled',
+        })
+
     def test_the_policy_defends_only_the_demo_with_the_native_backend(self):
         docs = demo_manifests()
         policy = next(d for d in docs if d['kind'] == 'PhorvexPolicy')['spec']
