@@ -4,6 +4,31 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## English interface and guide delivery — 2026-10-28
+
+Bot release `bot-ed00c1f6` serves `/guide` and includes the English HTML
+playbook and its 15-page PDF. All 76 offline bot tests passed, including
+authorized member downloads, stranger refusal, missing-file handling, upload
+failure/retry and duplicate requests without blocking other commands. Browser
+checks passed at widths 320, 390, 768, 1024 and 1440, including the command
+builder, copy fallback and print output. PDF text extraction verified English
+content, `/guide` and the expanded FAQ.
+
+Telegram read-back confirmed the English name, descriptions and nine-command
+menu for default, English and Persian locales. Startup reapplies these settings.
+The running service handled a **real incoming `/guide`** at 19:41:48 UTC:
+Telegram accepted its HTML and PDF attachments as messages 90 and 91.
+The uploaded release contains the 70,434-byte HTML and 215,920-byte PDF.
+Telegram reports the HTML as `application/octet-stream` and the PDF as
+`application/pdf`; the download filenames retain their correct extensions.
+
+Private verification evidence is in
+`~/phorvex-benchmark/bot-validation-20261028/english-guide/delivery.json`.
+The dashboard release pointer and API uptime matched the pre-install baseline,
+and all four benchmark services were active. The paired owner's file was
+unchanged. One new member joined through a valid invitation during verification;
+that membership was preserved and its invitation event was verified.
+
 ## Executed checks
 
 - Telegram `getMe`: token identifies `@phorvexbot`; no webhook is configured.
