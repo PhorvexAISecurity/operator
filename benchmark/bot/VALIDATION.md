@@ -4,6 +4,38 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## Document batches and activity cards — 2026-10-28
+
+Bot release `bot-ebc3dbce` adds Markdown/TXT/DOCX uploads, `/upload`,
+`/validate` captions and `/templates`. All **93 offline bot tests** passed,
+including mixed bench/param execution, optional sections, registry domains,
+malformed documents, ZIP/XML bounds, authorization, cancellation, partial
+runtime failures, and editable heartbeat cards. The combined code/parameter
+test uses the existing fake-Go/model/dashboard fixtures; it establishes routing
+and evidence behavior, not a new live candidate's quality.
+
+The updated English guide passed browser checks at 320–1440 px. Its **18-page
+PDF** includes the upload examples, validation modes and activity explanation.
+Five completed examples are shipped, including a real `.docx` document.
+
+Host verification used the same document handler with actual Telegram file IDs
+and `getFile` downloads. It was **operator-invoked, not an incoming user update**:
+all five template documents were accepted by Telegram; the Word document parsed
+both sections in validate-only mode without queuing; a mislabeled binary file
+was rejected without a queued experiment.
+
+The uploaded parameter-only TXT became batch `fd6c55c5b647`, child job
+`9093f5e2030e`. It completed through the real dashboard with `MATCHED_REPLAY`
+and **16 control-matched ticks**. The per-experiment report and batch JSON/CSV
+were delivered. Four activity cards received **22 successful edits**, including
+terminal states; no Telegram API errors were recorded. There were 11 accepted
+attachments across template, sample and report delivery.
+
+Private evidence is retained in
+`~/phorvex-benchmark/bot-validation-20261028/file-batches/delivery.json`.
+All four services remained active; the dashboard pointer, API uptime and paired
+owner matched the pre-install baseline, and membership records remained valid.
+
 ## English interface and guide delivery — 2026-10-28
 
 Bot release `bot-ed00c1f6` serves `/guide` and includes the English HTML
