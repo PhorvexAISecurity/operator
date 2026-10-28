@@ -3,8 +3,9 @@
  *
  * POST /api/policy/edit is a REAL cluster write: it patches a PhorvexPolicy CR with kubectl
  * (--type merge). It makes the
- * operator-facing knobs editable from the dashboard — mode (active/dryRun), the per-tick move
- * budget, and the enabled actuator set — instead of an out-of-band kubectl/Helm change.
+ * operator-facing knobs editable from the dashboard — mode (active/dryRun), reactive/proactive
+ * triggering, the per-tick move budget, and the enabled actuator set — instead of an out-of-band
+ * kubectl/Helm change.
  *
  * This is safe to expose now because the console.phorvex.ai ALB enforces Cognito login before
  * any request reaches the pod (values-eks.yaml auth-* annotations), and the endpoint is scoped
@@ -30,6 +31,7 @@ type policyEditReq struct {
 	Name            string   `json:"name"`
 	MaxMovesPerTick *int     `json:"maxMovesPerTick,omitempty"`
 	Mode            string   `json:"mode,omitempty"` // "" leaves it; else "active" | "dryRun"
+	ReactiveOnly    *bool    `json:"reactiveOnly,omitempty"`
 	EnabledActions  []string `json:"enabledActions,omitempty"`
 }
 
@@ -103,6 +105,12 @@ func (s *Server) policyEdit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		spec["mode"] = req.Mode
+	}
+	if req.ReactiveOnly != nil {
+		// A pointer is intentional: both true (detector-backed reactions only) and false
+		// (restore proactive exposure-only moves) are meaningful writes, while omission leaves
+		// the existing policy untouched. JSON merge patch preserves the other trigger fields.
+		spec["triggers"] = map[string]any{"reactiveOnly": *req.ReactiveOnly}
 	}
 	// dryRun is intentionally NOT patched: the PhorvexPolicy CRD has no spec.dryRun field
 	// (verified against the schema), so sending it produced an "unknown field" warning and

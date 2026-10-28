@@ -385,7 +385,7 @@ export interface NodeInfo { name: string; allocCPUm: number; allocMemMi: number;
 export interface ScanResult { platform: string; nodes: number; pods: number; nodeList: NodeInfo[]; witness: PhysWitness[]; killchain: KillchainRow[]; graphNodes: GraphNode[]; graphEdges: GraphEdge[]; emr: { baseline: number; scarcity: number; lift: number; note: string }; raw: string }
 export interface PolicyView { name: string; namespace: string; tenant: string; mode: string; spec: any; status: any }
 // A partial live edit to one PhorvexPolicy — only the present fields are patched.
-export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; enabledActions?: string[] }
+export interface PolicyEdit { namespace: string; name: string; maxMovesPerTick?: number; mode?: "active" | "dryRun"; reactiveOnly?: boolean; enabledActions?: string[] }
 // Runtime optimizer parameters (optimizer_runtime.go): the economic knobs of every visible app
 // policy, the values the brain's newest decision trace carries, and the audited change log.
 export type EconomicsMode = "legacy" | "fixed" | "independent";

@@ -28,3 +28,16 @@ spec:
     syncOptions:
     - ServerSideApply=true
     - CreateNamespace=true
+    # These fields are deliberately owned by the audited Live Policy Control in the console.
+    # Keep Argo self-heal from immediately erasing an operator's live change.
+    - RespectIgnoreDifferences=true
+  ignoreDifferences:
+  - group: phorvex.ai
+    kind: PhorvexPolicy
+    name: demo-api-defense
+    namespace: phorvex-staging-demo
+    jsonPointers:
+    - /spec/mode
+    - /spec/triggers/reactiveOnly
+    - /spec/budget/maxMovesPerTick
+    - /spec/actions/enabled
