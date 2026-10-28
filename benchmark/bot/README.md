@@ -75,7 +75,8 @@ on the hypothesis and safety metrics.
   `run_isolated`), and it has no network or Kubernetes client.
 - **Unit-test environment.** Builds and tests use a separate home directory,
   no inherited service/cloud secrets, `KUBECONFIG=/dev/null` and
-  `USE_EXISTING_CLUSTER=false`. Go parallelism is limited to two workers.
+  `USE_EXISTING_CLUSTER=false`. Builds use at most two workers; test packages
+  run one at a time so deadline checks do not compete with another test package.
 - **Secrets stay out of output.** The Telegram token, the dashboard password
   and the OpenAI key are never logged or sent. The tests check this.
 - **Job directories** (`BOT_STATE_DIR/jobs/<id>`, mode 700) keep the prompt,

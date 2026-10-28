@@ -78,7 +78,9 @@ def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLC
     if _git(src, 'rev-parse', 'HEAD') != commit or _git(src, 'status', '--porcelain'):
         raise BuildError('tests require a clean checkout of %s' % commit)
     packages = sorted(set(packages))
-    cmd = [go, 'test', '-json', '-count=1', '-p=2', '-timeout=10m',
+    # Each package can spawn CPU-bound deadline checks. Do not run two test
+    # packages together on the small jump host; keep their original deadlines.
+    cmd = [go, 'test', '-json', '-count=1', '-p=1', '-timeout=10m',
            '-ldflags=-X %s=%s' % (LDFLAG, commit), *packages]
     timed_out = False
     try:

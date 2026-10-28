@@ -20,17 +20,26 @@ MAX_SNAPSHOT_BYTES = 64 << 20
 
 
 def read_header(path_or_bytes):
+    def length(prefix):
+        if prefix[:len(MAGIC)] != MAGIC:
+            raise ValueError('not a math-lab snapshot')
+        if len(prefix) != len(MAGIC) + 4:
+            raise ValueError('snapshot header length out of range')
+        size = struct.unpack('>I', prefix[len(MAGIC):])[0]
+        if not 0 < size <= (1 << 20):
+            raise ValueError('snapshot header length out of range')
+        return size
+
     if isinstance(path_or_bytes, (bytes, bytearray)):
-        raw = bytes(path_or_bytes[:len(MAGIC) + 4 + (1 << 20)])
+        size = length(path_or_bytes[:len(MAGIC) + 4])
+        raw = bytes(path_or_bytes[len(MAGIC) + 4:len(MAGIC) + 4 + size])
     else:
         with open(path_or_bytes, 'rb') as f:
-            raw = f.read(len(MAGIC) + 4 + (1 << 20))
-    if raw[:len(MAGIC)] != MAGIC:
-        raise ValueError('not a math-lab snapshot')
-    (size,) = struct.unpack('>I', raw[len(MAGIC):len(MAGIC) + 4])
-    if size == 0 or size > (1 << 20) or len(raw) < len(MAGIC) + 4 + size:
+            size = length(f.read(len(MAGIC) + 4))
+            raw = f.read(size)
+    if len(raw) != size:
         raise ValueError('snapshot header length out of range')
-    header = json.loads(raw[len(MAGIC) + 4:len(MAGIC) + 4 + size])
+    header = json.loads(raw)
     if header.get('schema') != 'math-lab.snapshot.v1':
         raise ValueError('unsupported snapshot schema')
     return header

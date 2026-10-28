@@ -88,6 +88,7 @@ if (directory / 'fail-build').exists() and args[0] == 'build':
 assert not any(k in os.environ for k in ('OPENAI_API_KEY', 'TELEGRAM_BOT_TOKEN', 'DASHBOARD_PASSWORD', 'AWS_SECRET_ACCESS_KEY'))
 assert os.environ['KUBECONFIG'] == '/dev/null'
 if args[0] == 'test':
+    assert '-p=1' in args, 'deadline-sensitive test packages must run serially'
     threshold = re.search(r'RotateThreshold = (\d+)', pathlib.Path('internal/decision/decision.go').read_text()).group(1)
     failed = (directory / 'fail-tests').exists() and (directory / 'fail-tests').read_text() == threshold
     for package in (a for a in args if a.startswith('./')):
