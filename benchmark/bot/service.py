@@ -1,0 +1,561 @@
+#!/usr/bin/env python3
+"""The Phorvex benchmark Telegram bot.
+
+  /param P-FEA-006 1.2 1.5 [policy=ns/name] [ticks=N] [nosync]
+      A Math Lab parameter experiment, run by the benchmark dashboard: the same
+      recorded production ticks replayed on the deployed brain with each value.
+  /bench [policy=ns/name] [ticks=N] [nosync] <the brain change, in words>
+      An LLM writes the change against the deployed commit (planner.py); it
+      lands on a throwaway branch (candidate.py); brain-replay is built from
+      the deployed commit and from the candidate (replay_build.py); and both
+      are replayed against the deployed brain on recorded ticks
+      (code_experiment.py).
+  /status, /runs, /cancel, /help
+
+Both return a summary, report.html and metrics.csv in the chat; /bench also
+returns the candidate diff. Everything is replay: no cluster is touched, no
+action is dispatched, nothing is merged or pushed, and nothing is written to
+the dashboard's data or the repository.
+
+Only the Telegram user ids in BOT_ALLOWED_USER_IDS are served. Anyone else gets
+no reply, and their id is logged so an operator can add it. The update offset
+is persisted, and any backlog that exists at the first start is skipped, so a
+restart never replays old commands. One job runs at a time.
+
+Configuration is environment only (deploy/bot.env.example). Secrets
+(TELEGRAM_BOT_TOKEN, DASHBOARD_PASSWORD, OPENAI_API_KEY) are never logged.
+"""
+import json
+import os
+import re
+import shutil
+import signal
+import sys
+import threading
+import time
+import traceback
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import candidate  # noqa: E402
+import code_experiment  # noqa: E402
+import planner  # noqa: E402
+import replay_build  # noqa: E402
+import report  # noqa: E402
+from dashboard import Dashboard, DashboardError  # noqa: E402
+from telegram import Telegram, TelegramError  # noqa: E402
+
+POLICY = re.compile(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
+PARAMETER = re.compile(r'^P-[A-Z]{3}-\d{3}$')
+MAX_QUEUE = 5
+HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is deployed or dispatched)
+
+/bench [policy=ns/name] [ticks=N] [nosync] <brain change in words>
+  An LLM changes the brain's Go code; the candidate is compared with the deployed brain.
+/param <P-XXX-000> <value> [value...] [policy=ns/name] [ticks=N] [nosync]
+  Replays the deployed brain with each parameter value (Math Lab).
+/status   the running job and the queue
+/runs     the last results
+/cancel   stop the running job after its current step
+
+Defaults: policy=%(policy)s, ticks=%(ticks)d."""
+
+
+def utc():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def log(message):
+    print('%s %s' % (utc(), message), file=sys.stderr, flush=True)
+
+
+def private_dir(path):
+    """Create `path` mode 700 if it does not exist; an existing one is left as is (--check reports it)."""
+    path = Path(path)
+    if not path.exists():
+        path.mkdir(parents=True, mode=0o700)
+        path.chmod(0o700)
+    return path
+
+
+class ConfigError(Exception):
+    pass
+
+
+class JobError(Exception):
+    """A user-facing failure: its message is sent to the chat."""
+
+
+class Config:
+    def __init__(self, env):
+        self.token = env.get('TELEGRAM_BOT_TOKEN', '')
+        try:
+            self.allowed = {int(x) for x in env.get('BOT_ALLOWED_USER_IDS', '').replace(' ', '').split(',') if x}
+        except ValueError:
+            raise ConfigError('BOT_ALLOWED_USER_IDS must be comma-separated numeric Telegram user ids')
+        if not self.allowed:
+            raise ConfigError('BOT_ALLOWED_USER_IDS is empty; the bot serves nobody without it')
+        self.state = Path(env.get('BOT_STATE_DIR') or Path.home() / 'phorvex-benchmark' / 'bot')
+        self.repo = env.get('BOT_REPO') or None
+        self.data = env.get('MATHLAB_DATA_DIR') or None
+        self.policy = env.get('BOT_DEFAULT_POLICY', 'vllm/vllm-defense')
+        self.ticks = int(env.get('BOT_MAX_TICKS', '500'))
+        self.go = env.get('BOT_GO', 'go')
+        self.dashboard_url = env.get('DASHBOARD_URL') or None
+        self.dashboard_password = env.get('DASHBOARD_PASSWORD', '')
+        self.dashboard_origin = env.get('DASHBOARD_ORIGIN') or None
+        self.dashboard_ca = env.get('DASHBOARD_CA') or None
+        if not POLICY.match(self.policy):
+            raise ConfigError('BOT_DEFAULT_POLICY must be namespace/name')
+
+    def dashboard(self):
+        if not self.dashboard_url or not self.dashboard_password:
+            return None
+        return Dashboard(self.dashboard_url, self.dashboard_password, self.dashboard_origin, self.dashboard_ca)
+
+
+class Job:
+    def __init__(self, kind, chat_id, user, text):
+        self.id = uuid.uuid4().hex[:12]
+        self.kind, self.chat_id, self.user, self.text = kind, chat_id, user, text
+        self.created, self.state, self.step = utc(), 'QUEUED', ''
+        self.cancel = threading.Event()
+
+
+def parse_options(words, cfg):
+    """Leading key=value options and flags; returns (options, remaining words)."""
+    opts = {'policy': cfg.policy, 'ticks': cfg.ticks, 'sync': True}
+    rest = list(words)
+    while rest:
+        w = rest[0]
+        if w.startswith('policy='):
+            opts['policy'] = w[7:]
+            if not POLICY.match(opts['policy']):
+                raise JobError('policy must be namespace/name, like vllm/vllm-defense')
+        elif w.startswith('ticks='):
+            if not w[6:].isdigit() or not 1 <= int(w[6:]) <= 5000:
+                raise JobError('ticks must be 1 to 5000')
+            opts['ticks'] = int(w[6:])
+        elif w == 'nosync':
+            opts['sync'] = False
+        else:
+            break
+        rest.pop(0)
+    return opts, rest
+
+
+class BenchBot:
+    def __init__(self, cfg, telegram, dashboard=None, openai_transport=planner.openai_transport, sleep=time.sleep):
+        self.cfg, self.tg, self.dashboard = cfg, telegram, dashboard
+        self.openai_transport, self.sleep = openai_transport, sleep
+        self.queue, self.current, self.lock = [], None, threading.Lock()
+        self.wake, self.stopping = threading.Event(), threading.Event()
+        private_dir(cfg.state)
+        private_dir(cfg.state / 'jobs')
+
+    # ── chat ───────────────────────────────────────────────────────────────
+    def say(self, chat_id, text):
+        try:
+            self.tg.send_message(chat_id, text)
+        except TelegramError as err:
+            log('sendMessage failed: %s' % err)
+
+    def send_file(self, chat_id, name, data, caption=None):
+        try:
+            self.tg.send_document(chat_id, name, data, caption)
+        except TelegramError as err:
+            log('sendDocument %s failed: %s' % (name, err))
+
+    def handle(self, update):
+        msg = update.get('message') or {}
+        user = msg.get('from') or {}
+        chat_id, text = (msg.get('chat') or {}).get('id'), (msg.get('text') or '').strip()
+        if not chat_id or not text:
+            return
+        if user.get('id') not in self.cfg.allowed:
+            log('ignored a message from Telegram user id %s (@%s): not in BOT_ALLOWED_USER_IDS'
+                % (user.get('id'), user.get('username', '')))
+            return
+        command, _, rest = text.partition(' ')
+        command = command.split('@')[0].lower()
+        who = '%s (@%s)' % (user.get('id'), user.get('username', ''))
+        if command in ('/start', '/help'):
+            self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
+        elif command == '/status':
+            self.say(chat_id, self.status())
+        elif command == '/runs':
+            self.say(chat_id, self.runs())
+        elif command == '/cancel':
+            with self.lock:
+                job = self.current
+            if job:
+                job.cancel.set()
+                self.say(chat_id, 'Cancelling job %s after its current step (%s).' % (job.id, job.step))
+            else:
+                self.say(chat_id, 'Nothing is running.')
+        elif command in ('/bench', '/param'):
+            if not rest.strip():
+                self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
+                return
+            with self.lock:
+                if len(self.queue) >= MAX_QUEUE:
+                    self.say(chat_id, 'The queue is full (%d jobs); try again later.' % MAX_QUEUE)
+                    return
+                job = Job(command[1:], chat_id, who, rest.strip())
+                self.queue.append(job)
+                ahead = len(self.queue) - 1 + (1 if self.current else 0)
+            log('queued %s job %s from %s' % (job.kind, job.id, who))
+            self.say(chat_id, 'Queued %s job %s%s.' % (job.kind, job.id, ' (%d ahead)' % ahead if ahead else ''))
+            self.wake.set()
+        else:
+            self.say(chat_id, 'Unknown command. /help lists them.')
+
+    def status(self):
+        with self.lock:
+            job, queued = self.current, list(self.queue)
+        lines = ['Running: %s job %s, %s' % (job.kind, job.id, job.step) if job else 'Running: nothing']
+        lines += ['Queued: %s job %s from %s' % (j.kind, j.id, j.user) for j in queued] or ['Queue: empty']
+        return '\n'.join(lines)
+
+    def runs(self, n=5):
+        path = self.cfg.state / 'history.jsonl'
+        if not path.exists():
+            return 'No runs yet.'
+        rows = [json.loads(line) for line in path.read_text().splitlines()[-n:]]
+        return '\n'.join('%s %s %s %s: %s' % (r['finished'], r['kind'], r['id'], r['state'], r.get('headline', ''))
+                         for r in reversed(rows))
+
+    # ── jobs ───────────────────────────────────────────────────────────────
+    def step(self, job, label):
+        if job.cancel.is_set():
+            raise JobError('cancelled before: %s' % label)
+        job.step = label
+        log('job %s: %s' % (job.id, label))
+        self.say(job.chat_id, '[%s] %s' % (job.id, label))
+
+    def run_next(self):
+        with self.lock:
+            if not self.queue:
+                return False
+            job = self.current = self.queue.pop(0)
+        job.state = 'RUNNING'
+        job.dir = self.cfg.state / 'jobs' / job.id
+        job.dir.mkdir(parents=True)
+        headline = ''
+        try:
+            headline = (self.run_param if job.kind == 'param' else self.run_bench)(job)
+            job.state = 'DONE'
+        except JobError as err:
+            job.state = 'CANCELLED' if job.cancel.is_set() else 'FAILED'
+            headline = str(err)
+            self.say(job.chat_id, '[%s] %s: %s' % (job.id, job.state.lower(), err))
+        except Exception as err:  # a bug, not a user error: details go to the job log only
+            job.state = 'FAILED'
+            headline = '%s during %s' % (type(err).__name__, job.step)
+            (job.dir / 'error.txt').write_text(traceback.format_exc())
+            log('job %s failed: %s' % (job.id, traceback.format_exc()))
+            self.say(job.chat_id, '[%s] failed during "%s" (%s); details are in %s/error.txt on the host.'
+                     % (job.id, job.step, type(err).__name__, job.dir))
+        finally:
+            for clone in ('candidate-src', 'base-src'):
+                shutil.rmtree(job.dir / clone, ignore_errors=True)
+            with open(self.cfg.state / 'history.jsonl', 'a') as f:
+                f.write(json.dumps({'id': job.id, 'kind': job.kind, 'user': job.user, 'state': job.state,
+                                    'created': job.created, 'finished': utc(), 'request': job.text[:300],
+                                    'headline': headline[:300]}) + '\n')
+            with self.lock:
+                self.current = None
+        return True
+
+    def need_dashboard(self):
+        if self.dashboard is None:
+            raise JobError('the dashboard is not configured (DASHBOARD_URL, DASHBOARD_PASSWORD)')
+        return self.dashboard
+
+    def sync(self, job, policy):
+        dash = self.need_dashboard()
+        self.step(job, 'syncing recorded ticks for %s' % policy)
+        try:
+            started = dash.sync(policy)
+            if started:
+                done = dash.wait_job(started['id'], cancelled=job.cancel.is_set)
+                if done.get('status') != 'COMPLETE':
+                    raise JobError('sync failed: %s' % (done.get('message') or done.get('status')))
+        except DashboardError as err:
+            raise JobError('sync: %s' % err)
+
+    def deliver(self, job, meta, result, rows, extra=(), limitations=()):
+        text = report.summary(meta, result, rows)
+        self.say(job.chat_id, text)
+        html = report.page(meta, result, rows, limitations).encode()
+        csv = report.table(rows)
+        (job.dir / 'report.html').write_bytes(html)
+        (job.dir / 'metrics.csv').write_bytes(csv)
+        self.send_file(job.chat_id, 'report-%s.html' % job.id, html, 'Report %s' % job.id)
+        self.send_file(job.chat_id, 'metrics-%s.csv' % job.id, csv)
+        for name, data in extra:
+            self.send_file(job.chat_id, name, data)
+        changed = next((r for r in rows if r['metric_id'] == 'M-P21' and r['arm_id'] != 'control'
+                        and r['arm_id'] != 'base-local' and r.get('dimension') is None), None)
+        return 'changed decisions %s' % report.fmt(changed) if changed else (result.get('state') or '')
+
+    def run_param(self, job):
+        words = job.text.split()
+        if not words or not PARAMETER.match(words[0]):
+            raise JobError('usage: /param P-XXX-000 <value> [value...]; for example /param P-FEA-006 1.2 1.5')
+        parameter, rest = words[0], words[1:]
+        values = [w for w in rest if '=' not in w and w != 'nosync']
+        opts, _ = parse_options([w for w in rest if '=' in w or w == 'nosync'], self.cfg)
+        if not 1 <= len(values) <= 11:
+            raise JobError('give 1 to 11 values to compare with the recorded value')
+        arms = [{'arm_id': 'control', 'value_source': 'RECORDED_EFFECTIVE'}]
+        for v in values:
+            if v == 'unset':
+                arms.append({'arm_id': 'unset', 'unset': True})
+                continue
+            try:
+                number = float(v)
+            except ValueError:
+                raise JobError('%s is not a number' % v)
+            arms.append({'arm_id': ('v%s' % v)[:40], 'value': number})
+        if opts['sync']:
+            self.sync(job, opts['policy'])
+        dash = self.need_dashboard()
+        request = {'title': 'Telegram %s: %s %s' % (job.id, parameter, ' '.join(values)), 'mode': 'REPLAY',
+                   'parameter_id': parameter, 'policy': opts['policy'], 'arms': arms,
+                   'cohort': {'max_snapshots': opts['ticks'], 'spacing': 'even'},
+                   'hypothesis': 'Requested from Telegram by %s' % job.user, 'primary_metric_id': 'M-P21',
+                   'secondary_metric_ids': ['M-P26', 'M-P19', 'M-P22', 'M-P25'], 'safety_metric_ids': []}
+        try:
+            self.step(job, 'preflight')
+            pf = dash.preflight(request)
+            if pf.get('status') != 'PASS':
+                bad = ['%s: %s' % (c.get('id'), c.get('message')) for c in pf.get('checks', []) if c.get('status') == 'FAIL']
+                errs = ['%s %s' % (e.get('error_code'), e.get('reason')) for e in pf.get('errors', [])]
+                raise JobError('preflight failed:\n' + '\n'.join(bad + errs or [str(pf.get('status'))]))
+            self.step(job, 'replaying on the dashboard')
+            experiment = dash.create(request)
+            done = dash.wait_experiment(experiment['id'], cancelled=job.cancel.is_set,
+                                        progress=lambda m: self.say(job.chat_id, '[%s] %s' % (job.id, m)))
+            if done['status'] in ('FAILED', 'INTERRUPTED', 'PREFLIGHT_FAILED', 'INVALID'):
+                raise JobError('the experiment ended %s: %s' % (done['status'], done.get('message') or ''))
+            rows = dash.metrics(experiment['id'])
+            md = dash.artifact(experiment['id'], 'report.md')
+        except DashboardError as err:
+            raise JobError(str(err) + ('\n' + json.dumps(err.body)[:800] if err.body else ''))
+        result = {**(done.get('result') or {}), 'state': done['status']}
+        meta = {'kind': 'Parameter experiment', 'title': request['title'], 'policy': opts['policy'],
+                'parameter': parameter, 'job': job.id}
+        return self.deliver(job, meta, result, rows, [('math-lab-report-%s.md' % job.id, md)],
+                            (done.get('manifest') or {}).get('limitations') or [])
+
+    def run_bench(self, job):
+        opts, words = parse_options(job.text.split(), self.cfg)
+        prompt = ' '.join(words).strip()
+        if len(prompt) < 10:
+            raise JobError('describe the brain change in words, for example: /bench raise the rotate threshold for vllm')
+        if not self.cfg.repo or not self.cfg.data:
+            raise JobError('the bot needs BOT_REPO (a clean operator clone) and MATHLAB_DATA_DIR for /bench')
+        if opts['sync']:
+            self.sync(job, opts['policy'])
+        ns, name = opts['policy'].split('/')
+
+        self.step(job, 'reading the deployed brain')
+        control = json.loads((Path(self.cfg.data) / 'mathlab' / 'bin' / 'current.json').read_text()) \
+            if (Path(self.cfg.data) / 'mathlab' / 'bin' / 'current.json').exists() else None
+        if not control or not control.get('git_sha') or not Path(control.get('path', '')).exists():
+            raise JobError('no verified deployed brain-replay yet; run a sync on the dashboard (or drop nosync)')
+        if replay_build.sha256_file(control['path']) != control.get('binary_sha256'):
+            raise JobError('the deployed brain-replay on disk does not match its recorded sha256; re-sync on the dashboard')
+        base = control['git_sha']
+        tags = replay_build.tags_at(self.cfg.repo, base)
+        tag = tags[0] if tags else None
+        if not tag:
+            raise JobError('no tag in BOT_REPO points at the deployed commit %s; fetch tags there' % base[:12])
+
+        self.step(job, 'asking the LLM for a change against %s (%s)' % (tag, base[:12]))
+        (job.dir / 'prompt.txt').write_text(prompt + '\n')
+        try:
+            plan_record, _ = planner.plan(planner.parse_args([
+                '--src-repo', self.cfg.repo, '--base-commit', base, '--prompt-file', str(job.dir / 'prompt.txt'),
+                '--out-diff', str(job.dir / 'brain.diff'), '--out', str(job.dir / 'PLAN.json')]), self.openai_transport)
+        except planner.PlannerError as err:
+            raise JobError('the LLM step failed: %s' % err)
+
+        self.step(job, 'landing the change on a throwaway branch')
+        try:
+            cand = candidate.make_candidate(candidate.parse_args([
+                '--src-repo', self.cfg.repo, '--run-dir', str(job.dir), '--run-id', job.id, '--base-tag', tag,
+                '--base-commit', base, '--diff', str(job.dir / 'brain.diff'), '--prompt-file', str(job.dir / 'prompt.txt'),
+                '--summary', prompt[:60], '--planner', 'openai', '--model', plan_record['model'],
+                '--out', str(job.dir / 'CANDIDATE.json')]))
+        except candidate.CandidateError as err:
+            raise JobError('the proposed change was refused: %s' % err)
+
+        try:
+            self.step(job, 'building brain-replay from the deployed commit and from the candidate')
+            base_src = replay_build.checkout(self.cfg.repo, base, job.dir / 'base-src')
+            replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go, log=job.dir / 'build-base.log')
+            replay_build.build(cand['repo'], cand['candidateCommit'], job.dir / 'bin' / 'candidate', go=self.cfg.go,
+                               log=job.dir / 'build-candidate.log')
+            base_local = code_experiment.identity(job.dir / 'bin' / 'base-local')
+            cand_id = code_experiment.identity(job.dir / 'bin' / 'candidate')
+        except replay_build.BuildError as err:
+            raise JobError('the build failed (the candidate may not compile): %s' % err)
+
+        self.step(job, 'replaying recorded ticks: deployed, deployed-built-here, candidate')
+        request = {'experiment_id': 'bot-' + job.id, 'title': prompt[:200], 'namespace': ns, 'policy': name,
+                   'cohort': {'max_snapshots': opts['ticks'], 'spacing': 'even'}, 'base_commit': base,
+                   'candidate_commit': cand['candidateCommit'], 'created_at': job.created,
+                   'hypothesis': 'Requested from Telegram by %s' % job.user,
+                   'provenance': {'base_tag': tag, 'candidate_tag': cand['candidateTag'], 'changed_paths': cand['changedPaths'],
+                                  'model': plan_record['model'], 'prompt_sha256': cand['promptSha256'], 'diff_sha256': cand['diffSha256']}}
+        try:
+            result, rows = code_experiment.run(self.cfg.data, job.dir / 'experiment', request, control, base_local, cand_id)
+        except code_experiment.CodeExperimentError as err:
+            raise JobError(str(err))
+        meta = {'kind': 'Code experiment (LLM candidate vs deployed brain)', 'title': prompt[:200], 'policy': opts['policy'],
+                'base': '%s %s' % (tag, base[:12]), 'candidate': '%s %s' % (cand['candidateTag'], cand['candidateCommit'][:12]),
+                'changed': ', '.join(c['path'] for c in cand['changedPaths']), 'request': prompt, 'job': job.id}
+        manifest = json.loads((job.dir / 'experiment' / 'experiment_manifest.json').read_text())
+        return self.deliver(job, meta, result, rows, [('candidate-%s.diff' % job.id, (job.dir / 'brain.diff').read_bytes())],
+                            manifest.get('limitations') or [])
+
+    # ── loops ──────────────────────────────────────────────────────────────
+    def worker(self):
+        while not self.stopping.is_set():
+            if not self.run_next():
+                self.wake.wait(5)
+                self.wake.clear()
+
+    def skip_backlog(self):
+        """At the first start, confirm and ignore anything already waiting."""
+        offset_file = self.cfg.state / 'offset'
+        if offset_file.exists():
+            return int(offset_file.read_text())
+        updates = self.tg.get_updates(timeout=0)
+        offset = (max(u['update_id'] for u in updates) + 1) if updates else 0
+        if updates:
+            log('first start: skipped %d waiting update(s) without running them' % len(updates))
+        offset_file.write_text(str(offset))
+        return offset
+
+    def poll_once(self, offset):
+        for update in self.tg.get_updates(offset=offset or None) or []:
+            offset = update['update_id'] + 1
+            (self.cfg.state / 'offset').write_text(str(offset))
+            self.handle(update)
+        return offset
+
+    def serve(self):
+        offset = self.skip_backlog()
+        threading.Thread(target=self.worker, name='bench-worker', daemon=True).start()
+        backoff = 1
+        log('serving Telegram user ids %s' % sorted(self.cfg.allowed))
+        while not self.stopping.is_set():
+            try:
+                offset = self.poll_once(offset)
+                backoff = 1
+            except TelegramError as err:
+                log('getUpdates failed: %s; retrying in %ds' % (err, backoff))
+                self.sleep(backoff)
+                backoff = min(backoff * 2, 60)
+
+
+def check(cfg, env, telegram=None, out=print):
+    """Preflight every dependency; print one line each, never a secret value.
+    The Telegram token, the allowlist and the state directory are essential;
+    anything else only disables the commands named."""
+    import subprocess
+    rows, essential_failed = [], False
+
+    def item(name, fn, essential=False, disables=''):
+        nonlocal essential_failed
+        try:
+            rows.append(('PASS', name, fn() or ''))
+        except Exception as err:  # each check reports its own reason
+            if essential:
+                essential_failed = True
+            rows.append(('FAIL' if essential else 'WARN', name, '%s%s' % (err, '; disables ' + disables if disables else '')))
+
+    item('telegram token', lambda: 'bot @%s' % (telegram or Telegram(cfg.token)).call('getMe')['username'], essential=True)
+    item('allowlist', lambda: '%d Telegram user id(s)' % len(cfg.allowed), essential=True)
+
+    def state():
+        private_dir(cfg.state)
+        if cfg.state.stat().st_mode & 0o077:
+            raise ConfigError('%s is readable by others; chmod 700 it' % cfg.state)
+        return str(cfg.state)
+    item('state directory', state, essential=True)
+
+    def dash():
+        d = cfg.dashboard()
+        if d is None:
+            raise ConfigError('DASHBOARD_URL and DASHBOARD_PASSWORD are not set')
+        policies = d.policies()
+        return 'logged in; capture policies %s' % ', '.join(p['policy'] for p in policies.get('policies', []))
+    item('dashboard', dash, disables='/param and the sync before /bench')
+
+    def deployed():
+        if not cfg.data:
+            raise ConfigError('MATHLAB_DATA_DIR is not set')
+        current = Path(cfg.data) / 'mathlab' / 'bin' / 'current.json'
+        ident = json.loads(current.read_text())
+        if replay_build.sha256_file(ident['path']) != ident.get('binary_sha256'):
+            raise ConfigError('%s does not match its recorded sha256' % ident['path'])
+        ns, name = cfg.policy.split('/')
+        ticks = len(list((Path(cfg.data) / 'mathlab' / 'snapshots' / ns / name).glob('*.pxms')))
+        return 'brain %s; %d recorded ticks for %s' % (ident['git_sha'][:12], ticks, cfg.policy)
+    item('deployed brain-replay', deployed, disables='/bench')
+
+    def repo():
+        if not cfg.repo:
+            raise ConfigError('BOT_REPO is not set')
+        if replay_build._git(cfg.repo, 'status', '--porcelain'):
+            raise ConfigError('%s has uncommitted changes' % cfg.repo)
+        return '%s at %s' % (cfg.repo, replay_build._git(cfg.repo, 'rev-parse', '--short', 'HEAD'))
+    item('operator repository', repo, disables='/bench')
+    item('go', lambda: subprocess.run([cfg.go, 'version'], capture_output=True, text=True, check=True).stdout.strip(),
+         disables='/bench')
+
+    def openai():
+        missing = [k for k in ('OPENAI_API_KEY', 'OPENAI_MODEL') if not env.get(k)]
+        if missing:
+            raise ConfigError('%s not set' % ' and '.join(missing))
+        return 'model %s at %s' % (env['OPENAI_MODEL'], env.get('OPENAI_BASE_URL') or planner.DEFAULT_BASE_URL)
+    item('openai', openai, disables='/bench')
+    for status, name, detail in rows:
+        out('%-4s %-22s %s' % (status, name, detail))
+    return 1 if essential_failed else 0
+
+
+def main():
+    try:
+        cfg = Config(os.environ)
+        if sys.argv[1:] == ['--check']:
+            return check(cfg, os.environ)
+        bot = BenchBot(cfg, Telegram(cfg.token), cfg.dashboard())
+    except (ConfigError, TelegramError) as err:
+        log('configuration error: %s' % err)
+        return 2
+
+    def stop(*_):
+        bot.stopping.set()
+        with bot.lock:
+            job = bot.current
+        if job:
+            bot.say(job.chat_id, '[%s] the bot is restarting; this job is interrupted. Send it again.' % job.id)
+        log('stopping')
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGINT, stop)
+    bot.serve()
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

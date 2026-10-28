@@ -1,0 +1,24 @@
+[Unit]
+Description=Phorvex benchmark Telegram bot (replay experiments on recorded ticks)
+After=network-online.target phorvex-benchmark-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hami/phorvex-benchmark/current/benchmark/bot
+# Secrets live only here (mode 600, outside Git): see bot.env.example.
+EnvironmentFile=/home/hami/phorvex-benchmark/config/bot.env
+Environment=PATH=/home/hami/phorvex-benchmark/runtime/go/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+Environment=BOT_STATE_DIR=/home/hami/phorvex-benchmark/bot
+Environment=MATHLAB_DATA_DIR=/home/hami/phorvex-benchmark/data
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/home/hami/phorvex-benchmark/runtime/python/bin/python -B service.py
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
