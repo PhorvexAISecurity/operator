@@ -17,12 +17,13 @@ returns the candidate diff. Everything is replay: no cluster is touched, no
 action is dispatched, nothing is merged or pushed, and nothing is written to
 the dashboard's data or the repository.
 
-Only the Telegram user ids in BOT_ALLOWED_USER_IDS are served. Anyone else gets
-no reply, and their id is logged so an operator can add it. The update offset
+Only configured owners, the paired owner and invited members are served.
+Anyone else gets no reply, and their id is logged. The update offset
 is persisted, and any backlog that exists at the first start is skipped, so a
 restart never replays old commands. One job runs at a time.
 
-Configuration is environment only (deploy/bot.env.example). Secrets
+Configuration uses the environment (deploy/bot.env.example); owner/member
+authorization persists privately in the state directory. Secrets
 (TELEGRAM_BOT_TOKEN, DASHBOARD_PASSWORD, OPENAI_API_KEY) are never logged.
 """
 import json
@@ -30,6 +31,7 @@ import hashlib
 import hmac
 import os
 import re
+import secrets
 import shutil
 import signal
 import sys
@@ -62,6 +64,7 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
 /status   the running job and the queue
 /runs     the last results
 /check    check Telegram, dashboard, source, recorded ticks, disk and model access
+/invite   owner: create a one-use member link, valid for 24 hours
 /cancel   stop the running job after its current step
 
 Defaults: policy=%(policy)s, ticks=%(ticks)d."""
@@ -92,6 +95,22 @@ class JobError(Exception):
     """A user-facing failure: its message is sent to the chat."""
 
 
+def read_members(state):
+    path = Path(state) / 'members.json'
+    if not path.exists():
+        return []
+    try:
+        rows = json.loads(path.read_text())
+        if path.stat().st_mode & 0o077 or not isinstance(rows, list):
+            raise ValueError()
+        if any(not isinstance(row, dict) or type(row.get('id')) is not int or row['id'] <= 0
+               or type(row.get('invited_by')) is not int or row['invited_by'] <= 0 for row in rows):
+            raise ValueError()
+        return rows
+    except (OSError, ValueError):
+        raise ConfigError('members.json must be private and contain valid member records')
+
+
 class Config:
     def __init__(self, env):
         self.token = env.get('TELEGRAM_BOT_TOKEN', '')
@@ -108,6 +127,8 @@ class Config:
             if owner.stat().st_mode & 0o077 or not isinstance(data.get('id'), int) or data['id'] <= 0:
                 raise ConfigError('owner.json must be private and contain a positive Telegram user id')
             self.allowed = {data['id']}
+        self.admins = self.allowed - {0}
+        self.allowed.update(row['id'] for row in read_members(self.state) if row['invited_by'] in self.admins)
         self.repo = env.get('BOT_REPO') or None
         self.data = env.get('MATHLAB_DATA_DIR') or None
         self.policy = env.get('BOT_DEFAULT_POLICY', 'vllm/vllm-defense')
@@ -189,7 +210,7 @@ class BenchBot:
         if not chat_id or not text:
             return
         if user.get('id') not in self.cfg.allowed:
-            if self.pair_owner(msg, text):
+            if self.pair_owner(msg, text) or self.join_member(msg, text):
                 self.say(chat_id, 'Your account is now authorized.\n' + HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
                 return
             log('ignored a message from Telegram user id %s (@%s): not in BOT_ALLOWED_USER_IDS'
@@ -210,6 +231,13 @@ class BenchBot:
                 check(self.cfg, os.environ, self.tg, lines.append)
                 self.say(chat_id, '\n'.join(lines))
             threading.Thread(target=dependency_check, name='bench-check', daemon=True).start()
+        elif command == '/invite':
+            if user.get('id') not in self.cfg.admins:
+                self.say(chat_id, 'Only a bot owner can create invitations.')
+            elif (msg.get('chat') or {}).get('type') != 'private' or chat_id != user['id']:
+                self.say(chat_id, 'Create invitations in your private chat with the bot.')
+            else:
+                self.say(chat_id, 'One-use member invite (valid for 24 hours):\n' + self.create_invite(user['id']))
         elif command == '/cancel':
             with self.lock:
                 job = self.current
@@ -257,8 +285,63 @@ class BenchBot:
             owner.chmod(0o600)
             json.dump({'id': user_id}, f)
         self.cfg.allowed = {user_id}
+        self.cfg.admins = {user_id}
         pairing.unlink()
         log('paired Telegram owner id %s' % user_id)
+        return True
+
+    def create_invite(self, invited_by):
+        if invited_by not in self.cfg.admins:
+            raise JobError('only a bot owner can create invitations')
+        username = self.tg.call('getMe')['username']
+        payload = 'join_' + secrets.token_urlsafe(24)
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        directory = private_dir(self.cfg.state / 'invites')
+        fd = os.open(directory / (digest + '.json'), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as f:
+            json.dump({'expires_at': int(time.time()) + 86400, 'invited_by': invited_by}, f)
+        return 'https://t.me/%s?start=%s' % (username, payload)
+
+    def join_member(self, msg, text):
+        parts = text.split()
+        user_id = (msg.get('from') or {}).get('id')
+        chat = msg.get('chat') or {}
+        if (not self.cfg.admins or len(parts) != 2 or parts[0] != '/start'
+                or not parts[1].startswith('join_') or chat.get('type') != 'private'
+                or type(user_id) is not int or user_id <= 0 or chat.get('id') != user_id):
+            return False
+        digest = hashlib.sha256(parts[1].encode()).hexdigest()
+        invite = self.cfg.state / 'invites' / (digest + '.json')
+        try:
+            data = json.loads(invite.read_text())
+            if (invite.stat().st_mode & 0o077 or time.time() >= data['expires_at']
+                    or data['invited_by'] not in self.cfg.admins):
+                return False
+        except (OSError, ValueError, KeyError, TypeError):
+            return False
+        # Claim the token before writing membership, so another consumer cannot
+        # use the same invite even if the process stops during the write.
+        claimed = invite.with_suffix('.used')
+        try:
+            invite.rename(claimed)
+        except OSError:
+            return False
+        temp = self.cfg.state / ('members-' + uuid.uuid4().hex + '.tmp')
+        try:
+            rows = [row for row in read_members(self.cfg.state) if row['id'] != user_id]
+            rows.append({'id': user_id, 'invited_by': data['invited_by'], 'joined_at': utc()})
+            fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, 'w') as f:
+                json.dump(rows, f)
+            temp.replace(self.cfg.state / 'members.json')
+        except (OSError, ConfigError):
+            temp.unlink(missing_ok=True)
+            claimed.replace(invite)
+            log('member authorization could not be persisted')
+            return False
+        self.cfg.allowed.add(user_id)
+        claimed.unlink(missing_ok=True)
+        log('authorized Telegram member id %s by invite' % user_id)
         return True
 
     def status(self):

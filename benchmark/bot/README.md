@@ -18,6 +18,7 @@ those need the live lab (`benchmark/run.sh`, still being built).
 | `/bench [policy=ns/name] [ticks=N] [nosync] <change in words>` | The steps below. |
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
 | `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
+| `/invite` | Owner only, in private chat: a one-use member invitation valid for 24 hours. |
 
 `/bench` runs these steps:
 1. An LLM writes the change against the **deployed** commit (`planner.py`).
@@ -56,9 +57,9 @@ on the hypothesis and safety metrics.
 
 ## Safety
 
-- **Only listed users are served.** Telegram user ids not in
-  `BOT_ALLOWED_USER_IDS` get no reply, so strangers cannot discover the bot.
-  Their id is logged so you can add it.
+- **Only authorized users are served.** Configured/paired owners and users who
+  consumed a valid owner invitation can use the commands. Everyone else gets
+  no reply; their id is logged for the operator.
 - **No replay of old commands.** The first start skips any waiting backlog,
   and the offset is persisted, so a restart never re-runs a command.
 - **Candidate scope** (`candidate.py`): only `phorvex/**/*.go`, never
@@ -141,6 +142,14 @@ privately with the owner. The bot accepts it only in a private chat, consumes
 it once, and stores the owner id in mode-600 `owner.json`. Expired, invalid or
 reused links cannot authorize another account. An explicit nonzero env allowlist
 takes precedence over the stored owner.
+
+After pairing, use `/invite` in the owner's private chat to add another
+account. Each link grants benchmark-command access to one new member, expires
+after 24 hours, and works only in a private chat. It preserves the current
+owner. Invited members cannot create invitations. Membership is stored in
+mode-600 `members.json`, bound to the inviter's current owner status, and
+survives a service restart. Invite files contain only token hashes, expiration
+and inviter metadata; raw links are returned only to the owner.
 
 The existing dashboard gateway uses `OPENAI_BASE_URL=https://codex.algoty.com/v1`
 and `OPENAI_API=responses`; it is not the public OpenAI endpoint. The planner

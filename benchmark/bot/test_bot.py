@@ -331,11 +331,92 @@ class BotTest(unittest.TestCase):
         self.assertEqual(bot.cfg.allowed, {0})
         bot.handle(update(OWNER, '/start one-time-code'))
         self.assertEqual(bot.cfg.allowed, {OWNER})
+        self.assertEqual(bot.cfg.admins, {OWNER})
         self.assertFalse(pairing.exists())
         self.assertEqual(self.bot(BOT_ALLOWED_USER_IDS='0').cfg.allowed, {OWNER})
         bot.handle(update(STRANGER, '/start one-time-code'))
         self.assertEqual(bot.cfg.allowed, {OWNER})
         self.assertNotIn('one-time-code', '\n'.join(self.logged))
+
+    @staticmethod
+    def private_message(user, text, kind='private'):
+        update = message(user, text)
+        update['message']['chat']['type'] = kind
+        return update
+
+    def invite_payload(self, bot):
+        bot.handle(self.private_message(OWNER, '/invite'))
+        return self.fake.texts()[-1].split('start=', 1)[1]
+
+    def test_invite_adds_a_member_without_replacing_the_paired_owner(self):
+        import hashlib
+        state = service.private_dir(self.tmp / 'state')
+        owner = state / 'owner.json'
+        owner.write_text(json.dumps({'id': OWNER}))
+        owner.chmod(0o600)
+        bot = self.bot(BOT_ALLOWED_USER_IDS='0')
+        payload = self.invite_payload(bot)
+        path = state / 'invites' / (hashlib.sha256(payload.encode()).hexdigest() + '.json')
+        self.assertNotIn(payload, path.read_text())
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        bot.handle(self.private_message(STRANGER, '/start ' + payload))
+        self.assertEqual(bot.cfg.allowed, {OWNER, STRANGER})
+        self.assertEqual(bot.cfg.admins, {OWNER})
+        self.assertEqual(json.loads(owner.read_text()), {'id': OWNER})
+        self.assertFalse(path.exists())
+        restored = self.bot(BOT_ALLOWED_USER_IDS='0')
+        self.assertEqual(restored.cfg.allowed, {OWNER, STRANGER})
+        self.assertEqual(restored.cfg.admins, {OWNER})
+        restored.handle(self.private_message(STRANGER + 1, '/start ' + payload))
+        self.assertNotIn(STRANGER + 1, restored.cfg.allowed)
+        restored.handle(self.private_message(STRANGER, '/invite'))
+        self.assertEqual(self.fake.texts()[-1], 'Only a bot owner can create invitations.')
+        self.assertNotIn(payload, '\n'.join(self.logged))
+        self.assert_no_secret_shown()
+
+    def test_member_invite_rejects_wrong_expired_and_group_joins(self):
+        import hashlib
+        import time
+        bot = self.bot()
+        payload = self.invite_payload(bot)
+        path = bot.cfg.state / 'invites' / (hashlib.sha256(payload.encode()).hexdigest() + '.json')
+        bot.handle(self.private_message(STRANGER, '/start join_wrong'))
+        bot.handle(self.private_message(STRANGER, '/start ' + payload, 'group'))
+        self.assertEqual(bot.cfg.allowed, {OWNER})
+        saved = json.loads(path.read_text())
+        path.write_text(json.dumps({**saved, 'expires_at': int(time.time()) - 1}))
+        bot.handle(self.private_message(STRANGER, '/start ' + payload))
+        self.assertEqual(bot.cfg.allowed, {OWNER})
+        self.assertTrue(path.exists())
+        self.assertFalse((bot.cfg.state / 'members.json').exists())
+
+    def test_invites_require_an_active_owner_and_a_private_owner_chat(self):
+        bot = self.bot()
+        bot.handle(self.private_message(OWNER, '/invite', 'group'))
+        self.assertIn('private chat', self.fake.texts()[-1])
+        self.assertFalse((bot.cfg.state / 'invites').exists())
+        payload = self.invite_payload(bot)
+        replacement = self.bot(BOT_ALLOWED_USER_IDS=str(OWNER + 10))
+        replacement.handle(self.private_message(STRANGER, '/start ' + payload))
+        self.assertNotIn(STRANGER, replacement.cfg.allowed)
+        with self.assertRaises(service.JobError):
+            replacement.create_invite(STRANGER)
+        unpaired = self.bot(BOT_ALLOWED_USER_IDS='0')
+        unpaired.handle(self.private_message(STRANGER, '/start ' + payload))
+        self.assertEqual(unpaired.cfg.allowed, {0})
+
+    def test_membership_file_requires_private_valid_records(self):
+        state = service.private_dir(self.tmp / 'state')
+        path = state / 'members.json'
+        for value in ('not JSON', json.dumps([{'id': True, 'invited_by': OWNER}])):
+            path.write_text(value)
+            path.chmod(0o600)
+            with self.assertRaises(service.ConfigError):
+                self.bot()
+        path.write_text(json.dumps([{'id': STRANGER, 'invited_by': OWNER}]))
+        path.chmod(0o644)
+        with self.assertRaises(service.ConfigError):
+            self.bot()
 
     def test_first_start_skips_the_backlog_and_restarts_resume(self):
         self.fake.updates = [message(OWNER, '/bench an old command from before the deploy', 7)]
