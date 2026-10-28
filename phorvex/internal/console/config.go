@@ -42,6 +42,15 @@ type Config struct {
 	// AuditSourceIdentity binds durable history to the configured endpoint. Production sets this
 	// to the remote origin and TLS server identity; it contains no credential material.
 	AuditSourceIdentity string
+	// AttackCatalogEnabled installs the sole reviewed launch adapter (AML.T0012). The 192
+	// metadata rows stay visible when it is false. The tenant and profile path are
+	// deployment-owned and are never accepted from an API caller. The browser-facing Console
+	// uses only the tenant to authorize the proxy hop; only attacks-service receives the profile.
+	AttackCatalogEnabled             bool
+	AttackCatalogIdentityTenant      string
+	AttackCatalogIdentityProfilePath string
+	AttackCatalogRunTimeout          time.Duration
+	AttackCatalogPollInterval        time.Duration
 	// MongoExposureEnabled is set only by the opt-in chart installation that
 	// grants the fixed document-store fixture permissions.
 	MongoExposureEnabled bool

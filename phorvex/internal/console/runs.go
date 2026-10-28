@@ -138,6 +138,7 @@ type RunManager struct {
 	natsPrincipals               map[string]Principal
 	podBoundTokenPrincipals      map[string]Principal
 	guardrailAvailabilityCancels map[string]context.CancelFunc
+	attackCatalogCancels         map[string]context.CancelFunc
 	// Installed only by Server; a run-private file can trigger this named callback,
 	// but never supplies Kubernetes or audit authority.
 	natsResponse          func(context.Context, string, string) error
@@ -148,7 +149,7 @@ type RunManager struct {
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}, attackCatalogCancels: map[string]context.CancelFunc{}}
 	rm.loadErr = rm.loadStatuses()
 	if rm.loadErr == nil {
 		rm.startupReconcile.Add(1)
@@ -199,9 +200,9 @@ func (rm *RunManager) loadStatuses() error {
 		}
 		cp := p.Run
 		if cp.State == "running" || cp.State == "queued" {
-			if (cp.ExecutionKind == "fixed-suite" || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig || cp.Config == mongoExposureConfig || podBoundNamedCase(cp.Config) || cp.Config == guardrailAvailabilityConfig) && cp.State == "running" {
+			if (cp.ExecutionKind == "fixed-suite" || cp.ExecutionKind == attackCatalogExecutionKind || cp.Config == natsBaselineConfig || cp.Config == natsResponseConfig || cp.Config == mongoExposureConfig || podBoundNamedCase(cp.Config) || cp.Config == guardrailAvailabilityConfig) && cp.State == "running" {
 				cp.State = "partial"
-				cp.Error = "named suite interrupted by console restart; exact cleanup reconciliation pending"
+				cp.Error = "named or catalogue suite interrupted by service restart; exact cleanup reconciliation pending"
 				cp.UnsafeToRetry = true
 			} else {
 				cp.State = "error"
@@ -651,6 +652,9 @@ func (rm *RunManager) Stop(id string) error {
 	rm.stopping[id] = true
 	cmd := rm.procs[id]
 	cancel := rm.guardrailAvailabilityCancels[id]
+	if catalogueCancel := rm.attackCatalogCancels[id]; catalogueCancel != nil {
+		cancel = catalogueCancel
+	}
 	rm.mu.Unlock()
 	if cancel != nil {
 		cancel()

@@ -109,6 +109,8 @@ phorvex:
     # Exec, workload changes and policy edits stay in the demo's namespace and the
     # identity-rotate fixture's shared namespace (phorvex.identityRotate).
     attackNamespaces: [phorvex-staging-demo, console-identity-shared]
+    attackCatalog:
+      enabled: true
     state:
       persistence:
         storageClass: gp2-csi
@@ -154,12 +156,13 @@ phorvex:
                   "operator"
                 ],
                 "tenants": [
-                  "phorvex-staging-demo"
+                  "phorvex-staging-demo",
+                  "console-identity-shared"
                 ],
                 "targets": [
                   "default"
                 ],
-                "note": "The production console's operator, confined to staging's demo tenant."
+                "note": "The production console's operator, confined to staging's demo tenant and the dedicated identity-rotation fixture."
               },
               {
                 "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
@@ -168,12 +171,13 @@ phorvex:
                   "operator"
                 ],
                 "tenants": [
-                  "phorvex-staging-demo"
+                  "phorvex-staging-demo",
+                  "console-identity-shared"
                 ],
                 "targets": [
                   "default"
                 ],
-                "note": "Staging End-to-End runs against the demo workloads; token minted per run, never stored."
+                "note": "Staging End-to-End runs against the demo workloads and dedicated identity-rotation fixture; token minted per run, never stored."
               }
             ]
           }

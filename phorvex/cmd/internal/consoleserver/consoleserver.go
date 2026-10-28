@@ -57,6 +57,8 @@ import (
 	"github.com/phorvex/phorvex/internal/cataloguev1"
 	"github.com/phorvex/phorvex/internal/console"
 	"github.com/phorvex/phorvex/internal/eventtrust"
+	"github.com/phorvex/phorvex/internal/identityfixture"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -340,6 +342,24 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 		return false, fmt.Errorf("%s must be true or false", name)
 	}
 	read := func(name string) string { value, _ := lookup(name); return strings.TrimSpace(value) }
+	attackCatalogEnabled, err := readBool("PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED")
+	if err != nil {
+		return err
+	}
+	attackCatalogProfile := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE")
+	attackCatalogTenant := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT")
+	if attackCatalogTenant != "" && (!strings.HasPrefix(attackCatalogTenant, identityfixture.NamespacePrefix) || len(validation.IsDNS1123Label(attackCatalogTenant)) != 0) {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT must name the fixed owned identity-fixture tenant")
+	}
+	if attackCatalogEnabled && attackCatalogProfile != "/etc/phorvex-attack-catalog/identity-profile.json" {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE must be the fixed deployment path when enabled")
+	}
+	if attackCatalogEnabled && attackCatalogTenant == "" {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT is required when the launch adapter is enabled")
+	}
+	cfg.AttackCatalogEnabled = attackCatalogEnabled
+	cfg.AttackCatalogIdentityTenant = attackCatalogTenant
+	cfg.AttackCatalogIdentityProfilePath = attackCatalogProfile
 	enabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED")
 	if err != nil {
 		return err

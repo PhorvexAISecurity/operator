@@ -14,7 +14,7 @@ import (
 // firing, the harness runs, and the evidence and records they produce. A route moves
 // between the services only by changing this list together with the table.
 var attackRoutes = []string{
-	"/api/suites", "/api/catalog", "/api/threat-matrix",
+	"/api/suites", "/api/catalog", "/api/catalog/launch", "/api/threat-matrix",
 	"/api/effectiveness", "/api/frontier", "/api/benchmarks", "/api/posture", "/api/rawlog", "/api/matrix",
 	"/api/ai-surface", "/api/reports", "/api/benchmark-sim",
 	"/api/attack-results", "/api/attack-monitoring", "/api/availability-arms", "/api/workload/attacks",
@@ -96,6 +96,30 @@ func TestAForwardingConsoleSendsTheAttackRoutesToTheAttacksService(t *testing.T)
 	// The console's own routes stay here.
 	if w := f.do(f.albReq(t, http.MethodGet, "/api/version", "")); w.Code != http.StatusOK || upstream.calls.Load() != 1 {
 		t.Fatalf("console route answered %d, attacks service calls %d", w.Code, upstream.calls.Load())
+	}
+}
+
+func TestConsoleScopesAndForwardsAttackCatalogueLaunch(t *testing.T) {
+	upstream := newAttacksUpstream(t)
+	cfg := Config{Root: ".", Service: ServiceConsole, AttacksURL: upstream.URL,
+		AttackCatalogIdentityTenant: "console-identity-test"}
+	allowed := newAuthFixture(t, cfg,
+		operatorGrant("alb-subject-1", []string{"console-identity-test"}, []string{defaultTargetID}))
+	req := allowed.albReq(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0012"}`)
+	if w := allowed.do(req); w.Code != http.StatusAccepted {
+		t.Fatalf("catalogue proxy answered %d %s", w.Code, w.Body.String())
+	}
+	if upstream.path != "/api/catalog/launch" || upstream.body != `{"id":"AML.T0012"}` || upstream.calls.Load() != 1 {
+		t.Fatalf("catalogue proxy sent path=%q body=%q calls=%d", upstream.path, upstream.body, upstream.calls.Load())
+	}
+
+	denied := newAuthFixture(t, cfg,
+		operatorGrant("alb-subject-2", []string{"other-tenant"}, []string{defaultTargetID}))
+	if w := denied.do(denied.albReq(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0012"}`)); w.Code != http.StatusForbidden {
+		t.Fatalf("out-of-scope catalogue proxy answered %d %s", w.Code, w.Body.String())
+	}
+	if upstream.calls.Load() != 1 {
+		t.Fatalf("out-of-scope catalogue launch reached attacks service; calls=%d", upstream.calls.Load())
 	}
 }
 

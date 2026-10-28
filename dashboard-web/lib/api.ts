@@ -148,13 +148,15 @@ export interface CatalogItem {
   entryID?: string; name: string; product: "k8s" | "ai" | "structural" | "application" | "platform"; category: string; r6Tag: string;
   techniques: string[]; exercisedTechniques: string[]; caps: string[]; hasRun: boolean;
   realism?: string; benignControl?: boolean;
-  expectedActuators?: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
+  expectedActuators?: string[]; responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "reviewed-catalogue-metadata" | "none";
   responseGuidance?: string; meaningfulWhen?: string; runnableNote?: string; prereqs?: string[];
-  launchKind?: "harness-scenario" | "fixed-suite" | "named-suite" | "live-vllm-effect";
+  launchKind?: "harness-scenario" | "fixed-suite" | "named-suite" | "live-vllm-effect" | "catalogue-entry";
   claimClass?: "security" | "functional" | "effect" | "calibration";
   eventMode?: string;
   profile?: string; available?: boolean; unavailableReason?: string;
   runtimeContext?: string;
+  catalogueID?: string; catalogueOrder?: number; description?: string; family?: string;
+  expectedAction?: string; reactiveCompatible?: boolean;
 }
 export type FunctionalAdmissionReason = "READY" | "CONFIG_UNAVAILABLE" | "RUNTIME_UNAVAILABLE" | "RETAINED_STATE_UNAVAILABLE" | "PRIOR_UNSAFE_FIXED_SUITE" | "CONCURRENCY_LIMIT" | "RATE_LIMIT";
 export interface FunctionalAdmission {
@@ -273,6 +275,8 @@ export const api = {
     post<{ id: string }>("/api/runs/start", { config, nativeActuator, startedAt: new Date().toLocaleTimeString() }, lens),
   startFunctional: (profile: string, lens: Lens) =>
     post<{ id: string; context: string }>("/api/runs/functional", { profile, startedAt: new Date().toLocaleTimeString() }, lens),
+  launchCatalogEntry: (id: string, lens: Lens) =>
+    post<{ id: string; context: string; catalogueID: string }>("/api/catalog/launch", { id }, lens),
   functionalAdmission: (profile: string, lens: Lens, signal?: AbortSignal) =>
     get<FunctionalAdmission>(`/api/runs/functional/admission?profile=${encodeURIComponent(profile)}`, lens, signal),
   version: (lens: Lens, signal?: AbortSignal) => get<{ console: string; operator?: string; operatorImage?: string }>("/api/version", lens, signal),
@@ -926,7 +930,18 @@ export interface PodBoundTokenResult {
   telemetry?: { producerStatus?: string; firstAt?: string; secondAt?: string; firstValue?: number; secondValue?: number; sourcePodName?: string; podMonitorUID?: string; querySHA256?: string };
   cleanup?: { status?: string; inventorySHA256?: string; absent?: boolean };
 }
-export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; note: string }
+export interface AttackCatalogueResult {
+  schema: "phorvex.attack-catalogue-result.v1"; catalogueID: string; runID: string;
+  visible: boolean; available: boolean; launched: boolean; reactiveOnly: boolean; expectedAction: string;
+  startedAt: string; finishedAt: string; verdict: "DEFENDED" | "NOT_DEFENDED" | "INCONCLUSIVE" | "ERROR";
+  reason: string; unsafeToRetry: boolean;
+  signal: { created: boolean; observed: boolean; name?: string; uid?: string; creator?: string; targetUID?: string };
+  decision: { observed: boolean; id?: string; selected: boolean; feasible: boolean; action?: string; dispatchOutcome?: string };
+  actuator: { receiptObserved: boolean; handler?: string; objectsTouched?: string[] };
+  physicalValidation: { validated: boolean; oldServiceAccountUID?: string; newServiceAccountUID?: string; credentialAuthenticatedBefore: boolean; credentialAuthenticatedAfter: boolean; podRetained: boolean; podUID?: string };
+  cleanup: { attempted: boolean; eventDeleted: boolean; markerDeleted: boolean; verified: boolean; reason?: string };
+}
+export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; attackCatalogueResult?: AttackCatalogueResult; note: string }
 
 export interface LiveHistoryPage {
   events: { id: string; event: any }[];
