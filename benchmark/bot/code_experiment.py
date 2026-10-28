@@ -25,7 +25,7 @@ sys.path.insert(0, str(WORKER))
 from mathlab import analysis, binary, exports  # noqa: E402
 from mathlab.common import read_json, sha256_file, sha256_json, utc, write_json  # noqa: E402
 from mathlab.experiment import select_cohort  # noqa: E402
-from mathlab.snapshots import corpus_summary  # noqa: E402
+from mathlab.snapshots import corpus_summary, local_index  # noqa: E402
 
 ARMS = ('control', 'base-local', 'candidate')
 HEADLINE = ('M-P21', 'M-P26', 'M-P19', 'M-P22', 'M-P25', 'M-P28')
@@ -117,9 +117,10 @@ def run(data_dir, root, request, control, base_local, candidate, timeout=3600):
             'After the candidate diverges from the control, later recorded states no longer follow from its decisions.',
             'Base-local fidelity %s: the deployed commit built here %s the deployed brain.' % (
                 fidelity, 'decides exactly like' if fidelity == 'EXACT' else 'does NOT decide exactly like')],
-        'started_at': request.get('created_at'), 'finished_at': utc()}
+        'tests': request.get('tests'), 'started_at': request.get('created_at'), 'finished_at': utc()}
     result = {'schema_version': 'phorvex-bench.code-experiment-result.v1', 'experiment_id': request['experiment_id'],
               'comparison_status': 'OBSERVATIONAL', 'toolchain_fidelity': fidelity, 'population': population,
+              'tests': request.get('tests'),
               'arm_values': ctx['arm_values'], 'replay_summaries': {a: read_json(root / ('replay-summary-%s.json' % a)) for a in ARMS},
               'finished_at': utc()}
     write_json(root / 'experiment_manifest.json', manifest)

@@ -210,6 +210,16 @@ class ReportTest(unittest.TestCase):
         text = report.summary(meta, {'comparison_status': 'OBSERVATIONAL', 'population': {'control_eligible': 6}}, self.ROWS)
         self.assertIn('candidate    33.3% [9.7-70.0] (2/6)', text)
 
+    def test_deltas_require_fidelity_and_full_candidate_coverage(self):
+        rows = [{'arm_id': arm, 'metric_id': 'M-P26', 'metric_name': 'Moves per tick', 'unit': 'count',
+                 'value': value} for arm, value in (('control', 2), ('candidate', 1))]
+        result = {'toolchain_fidelity': 'EXACT', 'population': {'control_eligible': 6, 'matched_by_arm': {'candidate': 6}}}
+        self.assertIn('delta -1', report.comparison_lines(result, rows)[0])
+        self.assertEqual(report.comparison_lines({**result, 'toolchain_fidelity': 'DIVERGED'}, rows), [])
+        result['population']['matched_by_arm']['candidate'] = 5
+        self.assertIn('incomplete', report.comparison_lines(result, rows)[0])
+        self.assertNotIn('delta -1', report.comparison_lines(result, rows)[0])
+
 
 class FakeDashboard:
     def __init__(self, preflight_status='PASS'):
@@ -288,6 +298,31 @@ class BotTest(unittest.TestCase):
         self.assertEqual(bot.queue, [])
         self.assertTrue(any('666' in m and 'not in BOT_ALLOWED_USER_IDS' in m for m in self.logged))
 
+    def test_owner_pairing_is_private_expiring_single_use_and_survives_restart(self):
+        import hashlib
+        import time
+        bot = self.bot(BOT_ALLOWED_USER_IDS='0')
+        pairing = bot.cfg.state / 'pairing.json'
+        def setup(expires):
+            pairing.write_text(json.dumps({'sha256': hashlib.sha256(b'one-time-code').hexdigest(), 'expires_at': expires}))
+            pairing.chmod(0o600)
+        def update(uid, text, kind='private'):
+            return {'message': {'from': {'id': uid}, 'chat': {'id': uid, 'type': kind}, 'text': text}}
+        setup(time.time() - 1)
+        bot.handle(update(OWNER, '/start one-time-code'))
+        self.assertEqual(bot.cfg.allowed, {0})
+        setup(time.time() + 60)
+        bot.handle(update(OWNER, '/start wrong'))
+        bot.handle(update(OWNER, '/start one-time-code', 'group'))
+        self.assertEqual(bot.cfg.allowed, {0})
+        bot.handle(update(OWNER, '/start one-time-code'))
+        self.assertEqual(bot.cfg.allowed, {OWNER})
+        self.assertFalse(pairing.exists())
+        self.assertEqual(self.bot(BOT_ALLOWED_USER_IDS='0').cfg.allowed, {OWNER})
+        bot.handle(update(STRANGER, '/start one-time-code'))
+        self.assertEqual(bot.cfg.allowed, {OWNER})
+        self.assertNotIn('one-time-code', '\n'.join(self.logged))
+
     def test_first_start_skips_the_backlog_and_restarts_resume(self):
         self.fake.updates = [message(OWNER, '/bench an old command from before the deploy', 7)]
         bot = self.bot()
@@ -339,6 +374,18 @@ class BotTest(unittest.TestCase):
         self.assertIn('usage: /param', self.fake.texts()[-1])
         self.assertEqual([h['state'] for h in self.history()], ['FAILED', 'FAILED'])
 
+    def test_parameter_window_excludes_other_source_revisions(self):
+        repo, base, data, go = self.bench_setup()
+        folder = data / 'mathlab/snapshots/vllm/vllm-defense'
+        testkit.make_snapshot(folder, 'f' * 40, 9, True, '2026-10-29T00:00:00Z')
+        dash = FakeDashboard()
+        bot = self.bot(dash, MATHLAB_DATA_DIR=str(data))
+        bot.handle(message(OWNER, '/param P-FEA-006 1.2 nosync'))
+        bot.run_next()
+        request = next(payload for method, payload in dash.calls if method == 'create')
+        self.assertEqual(request['cohort']['since'], '2026-10-28T00:00:00Z')
+        self.assertEqual(request['cohort']['until'], '2026-10-29T00:00:00Z')
+
     def bench_setup(self):
         repo = self.tmp / 'operator'
         base = testkit.make_repo(repo, threshold=3)
@@ -377,7 +424,7 @@ class BotTest(unittest.TestCase):
         self.assertIn('base-local   0.0%', summary)
         self.assertIn('changed: phorvex/internal/decision/decision.go', summary)
         docs = self.fake.documents()
-        self.assertEqual(len(docs), 3)  # report.html, metrics.csv, candidate.diff
+        self.assertEqual(len(docs), 4)  # report.html, metrics.csv, candidate.diff, tests.json
         self.assertIn(b'+const RotateThreshold = 5', docs[2])
         job = self.history()[-1]
         self.assertEqual(job['state'], 'DONE')
@@ -385,7 +432,8 @@ class BotTest(unittest.TestCase):
         jobdir = self.tmp / 'state/jobs' / job['id']
         self.assertFalse((jobdir / 'candidate-src').exists())
         self.assertFalse((jobdir / 'base-src').exists())
-        for kept in ('brain.diff', 'PLAN.json', 'CANDIDATE.json', 'report.html', 'experiment/evidence.zip'):
+        for kept in ('brain.diff', 'PLAN.json', 'CANDIDATE.json', 'TESTS.json', 'tests-candidate.jsonl',
+                     'report.html', 'experiment/evidence.zip'):
             self.assertTrue((jobdir / kept).exists(), kept)
         self.assertEqual((testkit.git(repo, 'status', '--porcelain'), testkit.git(repo, 'for-each-ref')), before)
         self.assert_no_secret_shown()
@@ -399,13 +447,30 @@ class BotTest(unittest.TestCase):
         bot.run_next()
         self.assertIn('the LLM step failed: no in-scope diff', self.fake.texts()[-1])
 
-        os.environ['FAKE_GO_FAIL'] = '1'
-        self.addCleanup(os.environ.pop, 'FAKE_GO_FAIL', None)
+        (go.parent / 'fail-build').touch()
         bot.openai_transport = self.openai_returning(testkit.threshold_diff(3, 4))
         bot.handle(message(OWNER, '/bench nosync lower the threshold a little bit'))
         bot.run_next()
         self.assertIn('the build failed (the candidate may not compile)', self.fake.texts()[-1])
         self.assertEqual([h['state'] for h in self.history()], ['FAILED', 'FAILED'])
+
+    def test_failed_candidate_tests_stop_before_build_and_replay(self):
+        repo, base, data, go = self.bench_setup()
+        (go.parent / 'fail-tests').write_text('5')
+        bot = self.bot(None, self.openai_returning(testkit.threshold_diff(3, 5)),
+                       BOT_REPO=str(repo), MATHLAB_DATA_DIR=str(data), BOT_GO=str(go))
+        bot.handle(message(OWNER, '/bench nosync raise the rotate threshold from 3 to 5'))
+        bot.run_next()
+        self.assertIn('candidate Go tests FAIL; benchmark stopped', self.fake.texts()[-1])
+        job = self.history()[-1]
+        jobdir = self.tmp / 'state/jobs' / job['id']
+        tests = json.loads((jobdir / 'TESTS.json').read_text())
+        self.assertEqual(tests['base-local']['status'], 'PASS')
+        self.assertEqual(tests['candidate']['status'], 'FAIL')
+        self.assertFalse((jobdir / 'bin').exists())
+        self.assertFalse((jobdir / 'experiment').exists())
+        self.assertTrue(self.fake.documents())
+        self.assert_no_secret_shown()
 
     def test_bench_refuses_a_tampered_deployed_binary(self):
         repo, base, data, go = self.bench_setup()
@@ -443,7 +508,7 @@ class BotTest(unittest.TestCase):
         cfg = service.Config(env)
         cfg.dashboard = lambda: FakeDashboard()
         lines = []
-        self.assertEqual(service.check(cfg, env, Telegram(TOKEN, self.fake), lines.append), 0)
+        self.assertEqual(service.check(cfg, env, Telegram(TOKEN, self.fake), lines.append, model_probe=lambda env: None), 0)
         text = '\n'.join(lines)
         for name in ('telegram token', 'allowlist', 'state directory', 'dashboard', 'deployed brain-replay',
                      'operator repository', 'free disk', 'go', 'openai'):
@@ -456,12 +521,12 @@ class BotTest(unittest.TestCase):
         # Only the essentials fail the check; the rest warn and name what they disable.
         lines = []
         bare = service.Config(self.env)
-        self.assertEqual(service.check(bare, self.env, Telegram(TOKEN, self.fake), lines.append), 0)
+        self.assertEqual(service.check(bare, self.env, Telegram(TOKEN, self.fake), lines.append, model_probe=lambda env: None), 0)
         self.assertRegex('\n'.join(lines), r'(?m)^WARN openai .*disables /bench')
 
         def no_telegram(url, data, headers, timeout):
             return b'{"ok": false, "description": "Unauthorized"}'
-        self.assertEqual(service.check(bare, self.env, Telegram(TOKEN, no_telegram), lambda line: None), 1)
+        self.assertEqual(service.check(bare, self.env, Telegram(TOKEN, no_telegram), lambda line: None, model_probe=lambda env: None), 1)
 
     def test_cancel_stops_before_the_next_step(self):
         repo, base, data, go = self.bench_setup()

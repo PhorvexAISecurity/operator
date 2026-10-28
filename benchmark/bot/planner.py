@@ -95,6 +95,7 @@ def rank_context_files(repo, commit, prompt, limit=40):
     tokens = sorted({t.lower() for t in IDENTIFIER.findall(prompt)})
     listed = _git(repo, "ls-tree", "-r", "--name-only", commit, "--", "phorvex").stdout.splitlines()
     scoped = [p for p in listed if in_scope(p)]
+    mentioned = [p for p in scoped if p in prompt]
     if not tokens or not scoped:
         return []
     pattern = "|".join(re.escape(t) for t in tokens)
@@ -107,7 +108,8 @@ def rank_context_files(repo, commit, prompt, limit=40):
         path, _, count = rest.rpartition(":")
         if path in set(scoped) and count.isdigit():
             counts[path] = int(count)
-    return [p for p, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))][:limit]
+    ranked = [p for p, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if p not in mentioned]
+    return (mentioned + ranked)[:limit]
 
 
 def gather_context(repo, commit, paths, max_bytes):
@@ -186,17 +188,43 @@ def openai_transport(url, headers, payload, timeout):  # pragma: no cover - netw
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")[:500]
-        raise PlannerError(9, f"OpenAI API returned HTTP {error.code}: {detail}")
+        # Providers sometimes echo credentials in an authentication error.
+        raise PlannerError(9, f"OpenAI API returned HTTP {error.code}; check the configured endpoint, key and model")
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         raise PlannerError(9, f"OpenAI API request failed: {error}")
 
 
 def message_content(response):
+    if 'output' in response or 'output_text' in response:
+        if response.get('status') not in (None, 'completed'):
+            raise PlannerError(9, 'OpenAI response was not completed (%s)' % response.get('status'))
+        if isinstance(response.get('output_text'), str):
+            return response['output_text']
+        return '\n'.join(part['text'] for item in response.get('output', []) if item.get('type') == 'message'
+                         for part in item.get('content', []) if part.get('type') == 'output_text')
     try:
         return response["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
         raise PlannerError(9, "OpenAI API response had no message content")
+
+
+def check_model(env):
+    """Check real authentication and model access without generating a completion."""
+    import urllib.request
+    import urllib.error
+    key, model = env.get('OPENAI_API_KEY', '').strip(), env.get('OPENAI_MODEL', '').strip()
+    base = (env.get('OPENAI_BASE_URL') or DEFAULT_BASE_URL).rstrip('/')
+    req = urllib.request.Request(base + '/models', headers={'Authorization': 'Bearer ' + key,
+                                                          'User-Agent': 'PhorvexBenchmark/1.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            models = json.load(response)
+    except urllib.error.HTTPError as err:
+        raise PlannerError(9, 'model access check returned HTTP %s; check endpoint and key' % err.code)
+    except (urllib.error.URLError, OSError, ValueError):
+        raise PlannerError(9, 'model access check failed; check endpoint connectivity')
+    if model not in {m.get('id') for m in models.get('data', [])}:
+        raise PlannerError(9, 'configured model is not listed by this endpoint')
 
 
 def plan(args, transport):
@@ -207,8 +235,11 @@ def plan(args, transport):
     if not model:
         raise PlannerError(2, "set the model with --model or OPENAI_MODEL")
     base_url = (os.environ.get("OPENAI_BASE_URL", "").strip() or DEFAULT_BASE_URL).rstrip("/")
-    url = f"{base_url}/chat/completions"
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    api = os.environ.get('OPENAI_API', 'chat').strip()
+    if api not in ('chat', 'responses'):
+        raise PlannerError(2, 'OPENAI_API must be chat or responses')
+    url = f"{base_url}/" + ('responses' if api == 'responses' else 'chat/completions')
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "PhorvexBenchmark/1.0"}
 
     prompt = Path(args.prompt_file).read_text()
     if not prompt.strip():
@@ -225,11 +256,20 @@ def plan(args, transport):
 
     attempts, failure, diff_text = [], None, ""
     for n in range(1, args.max_attempts + 1):
-        payload = {"model": model, "messages": build_messages(prompt, context, failure), **extra}
+        messages = build_messages(prompt, context, failure)
+        if api == 'responses':
+            options = dict(extra)
+            effort = options.pop('reasoning_effort', None)
+            payload = {'model': model, 'instructions': messages[0]['content'], 'input': messages[1]['content'],
+                       'max_output_tokens': 16000, **options}
+            if effort:
+                payload['reasoning'] = {'effort': effort}
+        else:
+            payload = {"model": model, "messages": messages, **extra}
         response = transport(url, headers, payload, args.timeout)
         content = message_content(response)
         candidate_diff = extract_diff(content)
-        record = {"attempt": n, "finishReason": (response.get("choices") or [{}])[0].get("finish_reason")}
+        record = {"attempt": n, "finishReason": response.get('status') or (response.get("choices") or [{}])[0].get("finish_reason")}
         if not candidate_diff:
             record["result"] = "no diff" if content.strip() != "NO CHANGE POSSIBLE" else "model declined"
             failure = "You did not return a unified diff. Return only a unified diff, or exactly NO CHANGE POSSIBLE."
@@ -255,6 +295,7 @@ def plan(args, transport):
         "schema": SCHEMA,
         "provider": "openai",
         "baseUrl": base_url,
+        "api": api,
         "model": model,
         "baseCommit": args.base_commit,
         "promptSha256": sha256_text(prompt),

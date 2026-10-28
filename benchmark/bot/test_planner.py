@@ -77,7 +77,7 @@ class PlannerTest(unittest.TestCase):
         self.env = {"OPENAI_API_KEY": KEY, "OPENAI_MODEL": "test-model"}
         self._restore = {k: os.environ.get(k) for k in
                          ("OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_BASE_URL",
-                          "OPENAI_REASONING_EFFORT", "OPENAI_TEMPERATURE")}
+                          "OPENAI_REASONING_EFFORT", "OPENAI_TEMPERATURE", "OPENAI_API")}
         self.addCleanup(self._restore_env)
         for k in self._restore:
             os.environ.pop(k, None)
@@ -129,6 +129,22 @@ class PlannerTest(unittest.TestCase):
         for path in (self.tmp / "PLAN.json", self.tmp / "brain.diff"):
             self.assertNotIn(KEY, path.read_text(), path.name)
         self.assertNotIn(KEY, json.dumps(json.loads((self.tmp / "PLAN.json").read_text())))
+
+    def test_responses_api_with_reasoning_and_mixed_output(self):
+        good = diff_for(self.decision, 'const RotateThreshold = 3', 'const RotateThreshold = 9')
+        os.environ.update(OPENAI_API='responses', OPENAI_REASONING_EFFORT='high')
+        transport = FakeTransport([{'status': 'completed', 'output': [
+            {'type': 'reasoning', 'summary': []},
+            {'type': 'message', 'content': [{'type': 'output_text', 'text': good}]}]}])
+        record, text = planner.plan(self.args(context=[self.decision]), transport)
+        self.assertEqual(text, good)
+        self.assertTrue(transport.calls[0]['url'].endswith('/responses'))
+        self.assertEqual(transport.calls[0]['payload']['reasoning'], {'effort': 'high'})
+        self.assertNotIn('messages', transport.calls[0]['payload'])
+        self.assertIn('const RotateThreshold = 3', transport.calls[0]['payload']['input'])
+        self.assertEqual(record['api'], 'responses')
+        with self.assertRaisesRegex(planner.PlannerError, 'not completed'):
+            planner.message_content({'status': 'incomplete', 'output': []})
 
     def test_retries_on_prose_then_succeeds(self):
         good = diff_for(self.decision, "const RotateThreshold = 3", "const RotateThreshold = 5")

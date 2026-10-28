@@ -8,6 +8,7 @@ Dockerfile's: go1.26.1, -trimpath, -s -w, CGO off, -mod=readonly. VCS stamping
 is off, because the Docker build has no .git.
 """
 import hashlib
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -36,6 +37,59 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def go_environment(src, toolchain=TOOLCHAIN):
+    """Use the host's Go caches, but give tested code no service/cloud credentials."""
+    home = Path(src).parent / 'go-home'
+    home.mkdir(exist_ok=True, mode=0o700)
+    return {
+        'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'),
+        'HOME': str(home), 'LANG': 'C.UTF-8',
+        'GOCACHE': os.environ.get('GOCACHE', str(Path.home() / '.cache/go-build')),
+        'GOPATH': os.environ.get('GOPATH', str(Path.home() / 'go')),
+        'GOMODCACHE': os.environ.get('GOMODCACHE', str(Path.home() / 'go/pkg/mod')),
+        'GOTOOLCHAIN': toolchain, 'GOFLAGS': '-mod=readonly -buildvcs=false',
+        'CGO_ENABLED': '0', 'GOMAXPROCS': '2', 'KUBECONFIG': os.devnull,
+        'KUBEBUILDER_ASSETS': '', 'USE_EXISTING_CLUSTER': 'false',
+        'AWS_EC2_METADATA_DISABLED': 'true',
+    }
+
+
+def test(src, commit, packages, go='go', timeout=1800, log=None):
+    """Run uncached unit tests; return counts and preserve the complete JSON log."""
+    src = Path(src)
+    if _git(src, 'rev-parse', 'HEAD') != commit or _git(src, 'status', '--porcelain'):
+        raise BuildError('tests require a clean checkout of %s' % commit)
+    packages = sorted(set(packages))
+    cmd = [go, 'test', '-json', '-count=1', '-p=2', '-timeout=10m',
+           '-ldflags=-X %s=%s' % (LDFLAG, commit), *packages]
+    timed_out = False
+    try:
+        result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=go_environment(src),
+                                text=True, capture_output=True, timeout=timeout)
+        output, returncode = result.stdout + result.stderr, result.returncode
+    except subprocess.TimeoutExpired as err:
+        timed_out = True
+        def decoded(value):
+            return value.decode('utf-8', 'replace') if isinstance(value, bytes) else (value or '')
+        output, returncode = decoded(err.stdout) + decoded(err.stderr), None
+    if log is not None:
+        Path(log).write_text(output)
+    counts = {'pass': 0, 'fail': 0, 'skip': 0}
+    completed = set()
+    for line in output.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        action = event.get('Action')
+        if event.get('Test') and action in counts:
+            counts[action] += 1
+        elif not event.get('Test') and action == 'pass':
+            completed.add(event.get('Package'))
+    return {'commit': commit, 'packages': packages, 'counts': counts, 'returncode': returncode,
+            'status': 'PASS' if returncode == 0 and completed else ('TIMEOUT' if timed_out else 'FAIL')}
+
+
 def build(src, commit, out, go='go', toolchain=TOOLCHAIN, timeout=1800, log=None):
     """Compile <src>/phorvex/cmd/brain-replay at `commit` into `out`; return its sha256."""
     src, out = Path(src), Path(out)
@@ -46,8 +100,8 @@ def build(src, commit, out, go='go', toolchain=TOOLCHAIN, timeout=1800, log=None
     if dirty:
         raise BuildError('%s has uncommitted changes; a build must be the commit alone' % src)
     out.parent.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, 'GOTOOLCHAIN': toolchain, 'GOFLAGS': '-mod=readonly -buildvcs=false', 'CGO_ENABLED': '0'}
-    cmd = [go, 'build', '-trimpath', '-ldflags=-s -w -X %s=%s' % (LDFLAG, commit), '-o', str(out), './cmd/brain-replay']
+    env = go_environment(src, toolchain)
+    cmd = [go, 'build', '-p=2', '-trimpath', '-ldflags=-s -w -X %s=%s' % (LDFLAG, commit), '-o', str(out), './cmd/brain-replay']
     result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=env, text=True, capture_output=True, timeout=timeout)
     if log is not None:
         Path(log).write_text(result.stdout + result.stderr)

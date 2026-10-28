@@ -111,6 +111,16 @@ class CodeExperimentTest(unittest.TestCase):
         with self.assertRaisesRegex(code_experiment.CodeExperimentError, 'no recorded ticks'):
             code_experiment.run(self.data, self.tmp / 'e', req, {}, {}, {})
 
+    def test_revision_filter_applies_before_even_sampling(self):
+        folder = self.data / 'mathlab/snapshots/vllm/vllm-defense'
+        testkit.make_snapshot(folder, 'f' * 40, 9, True, '2026-10-29T00:00:00Z')
+        request = self.request('e' * 40)
+        request['cohort'] = {'max_snapshots': 2, 'spacing': 'even', 'git_sha': self.base}
+        selected = code_experiment.select_cohort(self.data, request)
+        self.assertEqual(len(selected), 2)
+        self.assertTrue(all(e['header']['gitSHA'] == self.base for e in selected))
+        self.assertEqual([e['header']['capturedAt'] for e in selected], ['2026-10-28T00:00:00Z', '2026-10-28T00:00:05Z'])
+
 
 class ReplayBuildTest(unittest.TestCase):
     def setUp(self):
@@ -136,8 +146,7 @@ class ReplayBuildTest(unittest.TestCase):
         with self.assertRaisesRegex(replay_build.BuildError, 'uncommitted'):
             replay_build.build(src, self.base, self.tmp / 'x', go=str(self.go))
         (src / 'phorvex/stray.go').unlink()
-        os.environ['FAKE_GO_FAIL'] = '1'
-        self.addCleanup(os.environ.pop, 'FAKE_GO_FAIL', None)
+        (self.go.parent / 'fail-build').touch()
         with self.assertRaisesRegex(replay_build.BuildError, 'go build of brain-replay'):
             replay_build.build(src, self.base, self.tmp / 'x', go=str(self.go))
 

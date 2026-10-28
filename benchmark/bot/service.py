@@ -26,6 +26,8 @@ Configuration is environment only (deploy/bot.env.example). Secrets
 (TELEGRAM_BOT_TOKEN, DASHBOARD_PASSWORD, OPENAI_API_KEY) are never logged.
 """
 import json
+import hashlib
+import hmac
 import os
 import re
 import shutil
@@ -59,6 +61,7 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
   Replays the deployed brain with each parameter value (Math Lab).
 /status   the running job and the queue
 /runs     the last results
+/check    check Telegram, dashboard, source, recorded ticks, disk and model access
 /cancel   stop the running job after its current step
 
 Defaults: policy=%(policy)s, ticks=%(ticks)d."""
@@ -99,6 +102,12 @@ class Config:
         if not self.allowed:
             raise ConfigError('BOT_ALLOWED_USER_IDS is empty; the bot serves nobody without it')
         self.state = Path(env.get('BOT_STATE_DIR') or Path.home() / 'phorvex-benchmark' / 'bot')
+        owner = self.state / 'owner.json'
+        if self.allowed == {0} and owner.exists():
+            data = json.loads(owner.read_text())
+            if owner.stat().st_mode & 0o077 or not isinstance(data.get('id'), int) or data['id'] <= 0:
+                raise ConfigError('owner.json must be private and contain a positive Telegram user id')
+            self.allowed = {data['id']}
         self.repo = env.get('BOT_REPO') or None
         self.data = env.get('MATHLAB_DATA_DIR') or None
         self.policy = env.get('BOT_DEFAULT_POLICY', 'vllm/vllm-defense')
@@ -180,6 +189,9 @@ class BenchBot:
         if not chat_id or not text:
             return
         if user.get('id') not in self.cfg.allowed:
+            if self.pair_owner(msg, text):
+                self.say(chat_id, 'Your account is now authorized.\n' + HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
+                return
             log('ignored a message from Telegram user id %s (@%s): not in BOT_ALLOWED_USER_IDS'
                 % (user.get('id'), user.get('username', '')))
             return
@@ -192,6 +204,12 @@ class BenchBot:
             self.say(chat_id, self.status())
         elif command == '/runs':
             self.say(chat_id, self.runs())
+        elif command == '/check':
+            def dependency_check():
+                lines = []
+                check(self.cfg, os.environ, self.tg, lines.append)
+                self.say(chat_id, '\n'.join(lines))
+            threading.Thread(target=dependency_check, name='bench-check', daemon=True).start()
         elif command == '/cancel':
             with self.lock:
                 job = self.current
@@ -216,6 +234,32 @@ class BenchBot:
             self.wake.set()
         else:
             self.say(chat_id, 'Unknown command. /help lists them.')
+
+    def pair_owner(self, msg, text):
+        """Consume an operator-created, expiring /start link while no owner is set."""
+        pairing = self.cfg.state / 'pairing.json'
+        parts = text.split()
+        user_id = (msg.get('from') or {}).get('id')
+        chat = msg.get('chat') or {}
+        if (self.cfg.allowed != {0} or len(parts) != 2 or parts[0] != '/start'
+                or chat.get('type') != 'private' or not isinstance(user_id, int) or user_id <= 0
+                or chat.get('id') != user_id or not pairing.exists()):
+            return False
+        try:
+            data = json.loads(pairing.read_text())
+            if (pairing.stat().st_mode & 0o077 or time.time() >= data['expires_at']
+                    or not hmac.compare_digest(hashlib.sha256(parts[1].encode()).hexdigest(), data['sha256'])):
+                return False
+        except (ValueError, KeyError, OSError, TypeError):
+            return False
+        owner = self.cfg.state / 'owner.json'
+        with owner.open('x') as f:
+            owner.chmod(0o600)
+            json.dump({'id': user_id}, f)
+        self.cfg.allowed = {user_id}
+        pairing.unlink()
+        log('paired Telegram owner id %s' % user_id)
+        return True
 
     def status(self):
         with self.lock:
@@ -305,6 +349,8 @@ class BenchBot:
         self.send_file(job.chat_id, 'metrics-%s.csv' % job.id, csv)
         for name, data in extra:
             self.send_file(job.chat_id, name, data)
+        if result.get('state') in ('INVALID', 'FAILED') or result.get('toolchain_fidelity') == 'DIVERGED':
+            raise JobError('comparison is invalid or the local baseline diverged; inspect the attached report before using this candidate')
         changed = next((r for r in rows if r['metric_id'] == 'M-P21' and r['arm_id'] != 'control'
                         and r['arm_id'] != 'base-local' and r.get('dimension') is None), None)
         return 'changed decisions %s' % report.fmt(changed) if changed else (result.get('state') or '')
@@ -331,9 +377,11 @@ class BenchBot:
         if opts['sync']:
             self.sync(job, opts['policy'])
         dash = self.need_dashboard()
+        cohort = {'max_snapshots': opts['ticks'], 'spacing': 'even'}
+        cohort.update(self.recorded_window(opts['policy']))
         request = {'title': 'Telegram %s: %s %s' % (job.id, parameter, ' '.join(values)), 'mode': 'REPLAY',
                    'parameter_id': parameter, 'policy': opts['policy'], 'arms': arms,
-                   'cohort': {'max_snapshots': opts['ticks'], 'spacing': 'even'},
+                   'cohort': cohort,
                    'hypothesis': 'Requested from Telegram by %s' % job.user, 'primary_metric_id': 'M-P21',
                    'secondary_metric_ids': ['M-P26', 'M-P19', 'M-P22', 'M-P25'], 'safety_metric_ids': []}
         try:
@@ -359,6 +407,27 @@ class BenchBot:
         return self.deliver(job, meta, result, rows, [('math-lab-report-%s.md' % job.id, md)],
                             (done.get('manifest') or {}).get('limitations') or [])
 
+    def recorded_window(self, policy):
+        """A contiguous deployed-revision window, using the dashboard's existing time filters."""
+        if not self.cfg.data:
+            return {}
+        current = Path(self.cfg.data) / 'mathlab/bin/current.json'
+        if not current.exists():
+            raise JobError('no deployed brain-replay identity; sync first')
+        base = json.loads(current.read_text())['git_sha']
+        ns, name = policy.split('/')
+        entries = code_experiment.local_index(self.cfg.data, ns, name)
+        indices = [i for i, entry in enumerate(entries) if entry['header'].get('gitSHA') == base]
+        if not indices:
+            raise JobError('no recorded ticks from deployed commit %s; sync current snapshots first' % base[:12])
+        last = first = indices[-1]
+        while first > 0 and entries[first - 1]['header'].get('gitSHA') == base:
+            first -= 1
+        window = {'since': entries[first]['header']['capturedAt']}
+        if last + 1 < len(entries):
+            window['until'] = entries[last + 1]['header']['capturedAt']
+        return window
+
     def run_bench(self, job):
         opts, words = parse_options(job.text.split(), self.cfg)
         prompt = ' '.join(words).strip()
@@ -383,11 +452,22 @@ class BenchBot:
         if replay_build.sha256_file(control['path']) != control.get('binary_sha256'):
             raise JobError('the deployed brain-replay on disk does not match its recorded sha256; re-sync on the dashboard')
         base = control['git_sha']
-        if replay_build._git(self.cfg.repo, 'cat-file', '-t', base + '^{commit}') != 'commit':
+        try:
+            present = replay_build._git(self.cfg.repo, 'cat-file', '-t', base + '^{commit}') == 'commit'
+        except replay_build.BuildError:
+            present = False
+        if not present:
             raise JobError('BOT_REPO does not contain the deployed commit %s; fetch it there' % base[:12])
         tags = replay_build.tags_at(self.cfg.repo, base)
         tag = tags[0] if tags else None  # the deployed binary's sha256 and git_sha are the base's provenance
         base_name = '%s (%s)' % (tag, base[:12]) if tag else base[:12]
+
+        self.step(job, 'selecting recorded ticks from deployed commit %s' % base[:12])
+        cohort_request = {'max_snapshots': opts['ticks'], 'spacing': 'even', 'git_sha': base}
+        cohort = code_experiment.select_cohort(self.cfg.data, {'namespace': ns, 'policy': name, 'cohort': cohort_request})
+        if not cohort:
+            raise JobError('no recorded ticks from deployed commit %s; sync current snapshots before benchmarking' % base[:12])
+        cohort_request['digests'] = [entry['digest'] for entry in cohort]
 
         self.step(job, 'asking the LLM for a change against %s' % base_name)
         (job.dir / 'prompt.txt').write_text(prompt + '\n')
@@ -409,8 +489,24 @@ class BenchBot:
             raise JobError('the proposed change was refused: %s' % err)
 
         try:
-            self.step(job, 'building brain-replay from the deployed commit and from the candidate')
             base_src = replay_build.checkout(self.cfg.repo, base, job.dir / 'base-src')
+            packages = sorted({'./internal/decision', './cmd/brain-replay'} | {
+                './' + str(Path(c['path']).parent.relative_to('phorvex')) for c in cand['changedPaths']})
+            tests = {}
+            for arm, src, commit in (('base-local', base_src, base),
+                                     ('candidate', cand['repo'], cand['candidateCommit'])):
+                # A newly added package has no baseline tests.
+                selected = [p for p in packages if (Path(src) / 'phorvex' / p).is_dir()]
+                self.step(job, 'running Go unit tests: %s (%s)' % (arm, ', '.join(selected)))
+                tests[arm] = replay_build.test(src, commit, selected, go=self.cfg.go,
+                                               log=job.dir / ('tests-%s.jsonl' % arm))
+                (job.dir / 'TESTS.json').write_text(json.dumps(tests, indent=2) + '\n')
+                if tests[arm]['status'] != 'PASS':
+                    self.send_file(job.chat_id, 'tests-%s-%s.jsonl' % (arm, job.id),
+                                   (job.dir / ('tests-%s.jsonl' % arm)).read_bytes())
+                    raise JobError('%s Go tests %s; benchmark stopped. See the attached test log.'
+                                   % (arm, tests[arm]['status']))
+            self.step(job, 'building brain-replay from the deployed commit and from the candidate')
             replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go, log=job.dir / 'build-base.log')
             replay_build.build(cand['repo'], cand['candidateCommit'], job.dir / 'bin' / 'candidate', go=self.cfg.go,
                                log=job.dir / 'build-candidate.log')
@@ -421,8 +517,9 @@ class BenchBot:
 
         self.step(job, 'replaying recorded ticks: deployed, deployed-built-here, candidate')
         request = {'experiment_id': 'bot-' + job.id, 'title': prompt[:200], 'namespace': ns, 'policy': name,
-                   'cohort': {'max_snapshots': opts['ticks'], 'spacing': 'even'}, 'base_commit': base,
+                   'cohort': cohort_request, 'base_commit': base,
                    'candidate_commit': cand['candidateCommit'], 'created_at': job.created,
+                   'tests': tests,
                    'hypothesis': 'Requested from Telegram by %s' % job.user,
                    'provenance': {'base_tag': tag, 'candidate_tag': cand['candidateTag'], 'changed_paths': cand['changedPaths'],
                                   'model': plan_record['model'], 'prompt_sha256': cand['promptSha256'], 'diff_sha256': cand['diffSha256']}}
@@ -430,11 +527,13 @@ class BenchBot:
             result, rows = code_experiment.run(self.cfg.data, job.dir / 'experiment', request, control, base_local, cand_id)
         except code_experiment.CodeExperimentError as err:
             raise JobError(str(err))
+        result['tests'] = tests
         meta = {'kind': 'Code experiment (LLM candidate vs deployed brain)', 'title': prompt[:200], 'policy': opts['policy'],
                 'base': base_name, 'candidate': '%s %s' % (cand['candidateTag'], cand['candidateCommit'][:12]),
                 'changed': ', '.join(c['path'] for c in cand['changedPaths']), 'request': prompt, 'job': job.id}
         manifest = json.loads((job.dir / 'experiment' / 'experiment_manifest.json').read_text())
-        return self.deliver(job, meta, result, rows, [('candidate-%s.diff' % job.id, (job.dir / 'brain.diff').read_bytes())],
+        return self.deliver(job, meta, result, rows, [('candidate-%s.diff' % job.id, (job.dir / 'brain.diff').read_bytes()),
+                            ('tests-%s.json' % job.id, (job.dir / 'TESTS.json').read_bytes())],
                             manifest.get('limitations') or [])
 
     # ── loops ──────────────────────────────────────────────────────────────
@@ -478,7 +577,7 @@ class BenchBot:
                 backoff = min(backoff * 2, 60)
 
 
-def check(cfg, env, telegram=None, out=print):
+def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model):
     """Preflight every dependency; print one line each, never a secret value.
     The Telegram token, the allowlist and the state directory are essential;
     anything else only disables the commands named."""
@@ -495,7 +594,10 @@ def check(cfg, env, telegram=None, out=print):
             rows.append(('FAIL' if essential else 'WARN', name, '%s%s' % (err, '; disables ' + disables if disables else '')))
 
     item('telegram token', lambda: 'bot @%s' % (telegram or Telegram(cfg.token)).call('getMe')['username'], essential=True)
-    item('allowlist', lambda: '%d Telegram user id(s)' % len(cfg.allowed), essential=True)
+    if cfg.allowed == {0}:
+        rows.append(('WARN', 'allowlist', 'owner pairing pending; no Telegram account is authorized'))
+    else:
+        item('allowlist', lambda: '%d Telegram user id(s)' % len(cfg.allowed), essential=True)
 
     def state():
         private_dir(cfg.state)
@@ -520,8 +622,12 @@ def check(cfg, env, telegram=None, out=print):
         if replay_build.sha256_file(ident['path']) != ident.get('binary_sha256'):
             raise ConfigError('%s does not match its recorded sha256' % ident['path'])
         ns, name = cfg.policy.split('/')
-        ticks = len(list((Path(cfg.data) / 'mathlab' / 'snapshots' / ns / name).glob('*.pxms')))
-        return 'brain %s; %d recorded ticks for %s' % (ident['git_sha'][:12], ticks, cfg.policy)
+        entries = code_experiment.select_cohort(cfg.data, {'namespace': ns, 'policy': name,
+                                                         'cohort': {'max_snapshots': 5000, 'git_sha': ident['git_sha']}})
+        ticks = sum(e['header'].get('gitSHA') == ident['git_sha'] for e in entries)
+        if not ticks:
+            raise ConfigError('brain %s; no recorded ticks from this commit; sync current snapshots' % ident['git_sha'][:12])
+        return 'brain %s; %d recorded ticks for %s from this commit (up to 5000 inspected)' % (ident['git_sha'][:12], ticks, cfg.policy)
     item('deployed brain-replay', deployed, disables='/bench')
 
     def repo():
@@ -548,7 +654,11 @@ def check(cfg, env, telegram=None, out=print):
         missing = [k for k in ('OPENAI_API_KEY', 'OPENAI_MODEL') if not env.get(k)]
         if missing:
             raise ConfigError('%s not set' % ' and '.join(missing))
-        return 'model %s at %s' % (env['OPENAI_MODEL'], env.get('OPENAI_BASE_URL') or planner.DEFAULT_BASE_URL)
+        if env.get('OPENAI_API', 'chat') not in ('chat', 'responses'):
+            raise ConfigError('OPENAI_API must be chat or responses')
+        model_probe(env)
+        return 'authenticated; model %s at %s (%s)' % (env['OPENAI_MODEL'],
+            env.get('OPENAI_BASE_URL') or planner.DEFAULT_BASE_URL, env.get('OPENAI_API', 'chat'))
     item('openai', openai, disables='/bench')
     for status, name, detail in rows:
         out('%-4s %-22s %s' % (status, name, detail))

@@ -17,18 +17,24 @@ those need the live lab (`benchmark/run.sh`, still being built).
 |---|---|
 | `/bench [policy=ns/name] [ticks=N] [nosync] <change in words>` | The steps below. |
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
-| `/status`, `/runs`, `/cancel`, `/help` | The running job and queue, the last results, stop after the current step, usage. |
+| `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
 
 `/bench` runs these steps:
 1. An LLM writes the change against the **deployed** commit (`planner.py`).
 2. The change lands on a throwaway branch (`candidate.py`).
-3. `brain-replay` is built twice: from the deployed commit and from the
+3. Uncached Go unit tests run on both commits: `internal/decision`,
+   `cmd/brain-replay`, and each changed package. A failure stops the job and
+   returns its full test log. These are targeted unit tests, not the full CI suite.
+4. `brain-replay` is built twice: from the deployed commit and from the
    candidate (`replay_build.py`).
-4. Three arms are replayed on the same ticks (`code_experiment.py`).
+5. Three arms are replayed on the same ticks (`code_experiment.py`).
 
 Defaults: `policy=vllm/vllm-defense`, `ticks=500`, chosen evenly across the
 corpus. Each command first syncs fresh ticks through the dashboard, unless you
 say `nosync`. One job runs at a time, and up to 5 wait in a queue.
+Code experiments filter snapshots by the deployed source commit **before**
+sampling and freeze the selected digests. Parameter experiments use the latest
+contiguous window from that revision through the dashboard's time filters.
 
 ## Reading a `/bench` result
 
@@ -42,7 +48,11 @@ say `nosync`. One job runs at a time, and up to 5 wait in a queue.
 selects differently from production. The report also shows M-P26 (moves per
 tick), M-P19 (no-op under attack), M-P22, M-P25 and M-P28, each with its
 interval. A missing value is shown as missing, never as 0. `/bench` also returns
-the candidate diff.
+the candidate diff and `tests.json` with both commits, test packages and counts.
+When the local base reproduces control and candidate coverage is complete,
+the report also shows the observed metric deltas. A changed-decision percentage
+is not an improvement score; fewer moves may be helpful or harmful depending
+on the hypothesis and safety metrics.
 
 ## Safety
 
@@ -63,6 +73,9 @@ the candidate diff.
   from `BOT_REPO` rather than copied.
 - **Isolated replay.** `brain-replay` runs with no credentials (Math Lab's
   `run_isolated`), and it has no network or Kubernetes client.
+- **Unit-test environment.** Builds and tests use a separate home directory,
+  no inherited service/cloud secrets, `KUBECONFIG=/dev/null` and
+  `USE_EXISTING_CLUSTER=false`. Go parallelism is limited to two workers.
 - **Secrets stay out of output.** The Telegram token, the dashboard password
   and the OpenAI key are never logged or sent. The tests check this.
 - **Job directories** (`BOT_STATE_DIR/jobs/<id>`, mode 700) keep the prompt,
@@ -116,6 +129,21 @@ dashboard's `current` nor restarts the dashboard.
    ```
    Logs: `journalctl --user -u phorvex-benchmark-bot -f`.
 
+For one-time owner setup without manually editing the allowlist, an operator
+may leave `BOT_ALLOWED_USER_IDS=0` and create `BOT_STATE_DIR/pairing.json`
+(mode 600) with `sha256` of a cryptographically random Telegram `/start`
+payload and an `expires_at` Unix timestamp. Share the corresponding start link
+privately with the owner. The bot accepts it only in a private chat, consumes
+it once, and stores the owner id in mode-600 `owner.json`. Expired, invalid or
+reused links cannot authorize another account. An explicit nonzero env allowlist
+takes precedence over the stored owner.
+
+The existing dashboard gateway uses `OPENAI_BASE_URL=https://codex.algoty.com/v1`
+and `OPENAI_API=responses`; it is not the public OpenAI endpoint. The planner
+also supports the public Chat Completions API with `OPENAI_API=chat` (default).
+Responses uses `instructions`, `input` and structured reasoning options as
+documented in [OpenAI text generation](https://developers.openai.com/api/docs/guides/text).
+
 ## Modules
 
 | File | Role |
@@ -150,7 +178,7 @@ changes decisions, end to end, from a Telegram message to the files sent back.
   cluster (ticket Parts 1–2: `run.sh` P2–P7, the fixtures, `harness281`) are
   not wired to the bot yet. That will be a separate `/lab` command once
   `run.sh` runs end to end.
-- **Real-world checks.** These cannot run here: the first `/bench` on the jump
-  host (a real Go build of the repository's `brain-replay`), the real dashboard
-  login through Caddy's CA, and the Telegram and OpenAI endpoints. `--check`
-  covers the configuration side of each before the service starts.
+- **Current production comparison.** See `VALIDATION.md` for executed checks,
+  historical replay evidence and the current source/capture blockers. A healthy
+  Telegram service or a successful archived smoke test does not establish that
+  the currently deployed source and snapshots are available.

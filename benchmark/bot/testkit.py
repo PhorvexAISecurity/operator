@@ -74,18 +74,28 @@ if '-summary' in args:
 '''
 
 FAKE_GO = r'''#!/usr/bin/env python3
-import os, re, sys, pathlib
+import json, os, re, sys, pathlib
 args = sys.argv[1:]
 if args[:1] == ['version']:
     print('go version go1.26.4 linux/amd64'); sys.exit(0)
-if os.environ.get('FAKE_GO_FAIL'):
+directory = pathlib.Path(__file__).parent
+if (directory / 'fail-build').exists() and args[0] == 'build':
     print('fake go: build failed', file=sys.stderr); sys.exit(1)
+assert not any(k in os.environ for k in ('OPENAI_API_KEY', 'TELEGRAM_BOT_TOKEN', 'DASHBOARD_PASSWORD', 'AWS_SECRET_ACCESS_KEY'))
+assert os.environ['KUBECONFIG'] == '/dev/null'
+if args[0] == 'test':
+    threshold = re.search(r'RotateThreshold = (\d+)', pathlib.Path('internal/decision/decision.go').read_text()).group(1)
+    failed = (directory / 'fail-tests').exists() and (directory / 'fail-tests').read_text() == threshold
+    for package in (a for a in args if a.startswith('./')):
+        print(json.dumps({'Action': 'fail' if failed else 'pass', 'Package': package, 'Test': 'TestThreshold'}))
+        print(json.dumps({'Action': 'fail' if failed else 'pass', 'Package': package}))
+    sys.exit(1 if failed else 0)
 assert args[0] == 'build' and args[-1] == './cmd/brain-replay', args
 assert os.environ.get('GOFLAGS') == '-mod=readonly -buildvcs=false' and os.environ.get('CGO_ENABLED') == '0', os.environ
 sha = re.search(r'linkedGitSHA=([0-9a-f]{40})', ' '.join(args)).group(1)
 out = args[args.index('-o') + 1]
 threshold = int(re.search(r'RotateThreshold = (\d+)', pathlib.Path('internal/decision/decision.go').read_text()).group(1))
-pathlib.Path(out).write_text(open(os.environ['FAKE_REPLAY_TEMPLATE']).read() % {'git_sha': sha, 'threshold': threshold})
+pathlib.Path(out).write_text((directory / 'replay.template').read_text() % {'git_sha': sha, 'threshold': threshold})
 os.chmod(out, 0o755)
 '''
 

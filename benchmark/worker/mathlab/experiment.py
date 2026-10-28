@@ -42,6 +42,8 @@ def select_cohort(data_dir, request):
     wanted = set(cohort.get('digests') or [])
     out = []
     for e in entries:
+        if cohort.get('git_sha') and e['header'].get('gitSHA') != cohort['git_sha']:
+            continue
         captured = _parse_time(e['header'].get('capturedAt'))
         if wanted and e['digest'] not in wanted:
             continue

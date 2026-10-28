@@ -46,6 +46,34 @@ def fmt(row):
     return text + ci + counts
 
 
+def comparison_lines(result, rows):
+    """Describe observed deltas without treating changed decisions as a quality score."""
+    if result.get('toolchain_fidelity') != 'EXACT':
+        return []
+    pop = result.get('population') or {}
+    if (pop.get('matched_by_arm') or {}).get('candidate') != pop.get('control_eligible'):
+        return ['Candidate coverage is incomplete; deltas are unavailable.']
+    indexed = {(r['arm_id'], r['metric_id']): r for r in headline(rows)}
+    lines = []
+    for mid in ('M-P26', 'M-P19', 'M-P22', 'M-P25', 'M-P28'):
+        control, changed = indexed.get(('control', mid)), indexed.get(('candidate', mid))
+        if not control or not changed:
+            continue
+        before, after = _num(control.get('value')), _num(changed.get('value'))
+        if before is None or after is None:
+            continue
+        delta = ('%+.1f percentage points' % (100 * (after - before)) if changed.get('unit') == 'proportion'
+                 else '%+.4g' % (after - before))
+        lines.append('%s: %s -> %s (delta %s)' % (mid, fmt(control), fmt(changed), delta))
+    return lines
+
+
+def test_lines(result):
+    return ['Go tests %s: %s (%d passed, %d failed, %d skipped)' % (
+        arm, data['status'], data['counts']['pass'], data['counts']['fail'], data['counts']['skip'])
+        for arm, data in (result.get('tests') or {}).items()]
+
+
 def summary(meta, result, rows):
     """Plain text for Telegram (no markup, so nothing needs escaping)."""
     pop = result.get('population') or {}
@@ -53,10 +81,12 @@ def summary(meta, result, rows):
         result.get('state') or meta.get('state') or '?', result.get('comparison_status', '?'))]
     if result.get('toolchain_fidelity'):
         lines.append('toolchain fidelity (deployed commit built here): %s' % result['toolchain_fidelity'])
+    lines.extend(test_lines(result))
     lines.append('ticks: %s control-eligible; matched per arm %s' % (pop.get('control_eligible', '?'), pop.get('matched_by_arm', {})))
     for key in ('policy', 'base', 'candidate', 'parameter', 'changed'):
         if meta.get(key):
             lines.append('%s: %s' % (key, meta[key]))
+    lines.extend(comparison_lines(result, rows))
     lines.append('')
     current = None
     for r in headline(rows):
@@ -64,7 +94,7 @@ def summary(meta, result, rows):
             current = r['metric_id']
             lines.append('%s %s' % (r['metric_id'], r.get('metric_name')))
         lines.append('  %-12s %s' % (r['arm_id'], fmt(r)))
-    lines += ['', 'Replay only: decision mechanism on recorded ticks; no defense or SLO outcome is measured.']
+    lines += ['', 'Replay only: changed decisions are not an improvement score; no defense or SLO outcome is measured.']
     text = '\n'.join(lines)
     return text if len(text) <= TELEGRAM_LIMIT else text[:TELEGRAM_LIMIT - 20] + '\n... (see report.html)'
 
@@ -88,6 +118,9 @@ def page(meta, result, rows, limitations=()):
         ('matched per arm', (result.get('population') or {}).get('matched_by_arm')),
         *((k, meta.get(k)) for k in ('policy', 'parameter', 'base', 'candidate', 'changed', 'request', 'job'))) if v not in (None, ''))
     notes = ''.join('<li>%s</li>' % e(str(x)) for x in limitations)
+    facts += ''.join('<tr><th>%s</th><td>%s</td></tr>' % (e(label), e(line))
+                     for label, lines in (('tests', test_lines(result)), ('observed delta', comparison_lines(result, rows)))
+                     for line in lines)
     return ('<!doctype html><html><head><meta charset="utf-8"><title>%s</title><style>'
             'body{font:14px system-ui,sans-serif;margin:24px;color:#111}table{border-collapse:collapse;margin:12px 0}'
             'th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;vertical-align:top}thead th{background:#f2f2f2}'
