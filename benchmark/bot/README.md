@@ -18,6 +18,9 @@ those need the live lab (`benchmark/run.sh`, still being built).
 | `/bench [policy=ns/name] [ticks=N] [nosync] <change in words>` | The steps below. |
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
 | `/guide` | Sends the English step-by-step playbook to the requesting chat as HTML and PDF attachments. |
+| `/upload` | File-submission instructions. Upload a `.md`, `.txt` or `.docx` document to execute its valid experiments automatically. |
+| `/validate` | Use as an uploaded document's caption to validate structure and values without queuing anything. |
+| `/templates` | Download five completed examples, covering both sections, single sections, Word and command lists. |
 | `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
 | `/invite` | Owner only, in private chat: a one-use member invitation valid for 24 hours. |
 
@@ -33,6 +36,64 @@ can be retried. Releases include [guide-en.html](guide-en.html) and
 so serving the guide needs no browser or PDF generator on the host. Update both
 files together after editing the guide. The HTML's Print / PDF button provides
 the print layout, including expanded FAQ answers.
+
+## Uploading experiment files
+
+Upload a document directly into the chat. An authorized account can use either
+`[bench]` / `[params]` sections (also `## Bench` / `## Params` headings), or a
+file containing one complete `/bench` or `/param` command per line. Each section
+has its own `policy`, `ticks` and `sync` options. Put options before `change:`;
+the brain change may continue over several lines. Parameter entries use a
+registry ID followed by numeric trial values, separated by spaces or commas:
+
+```text
+[bench]
+policy: vllm/vllm-defense
+ticks: 64
+sync: false
+change:
+In phorvex/internal/decision/ablation.go, add one explanatory comment before
+the existing if base.Ratio > 0 branch. Preserve executable code and behavior.
+
+[params]
+policy: vllm/vllm-defense
+ticks: 64
+sync: false
+P-FEA-006: 1.0 1.2 1.5
+```
+
+Either section can be omitted. A present empty/invalid section rejects the
+whole upload: nothing is queued until every section, option and registry value
+parses. This structural validation does not establish that proposed code
+compiles or passes tests; Go tests and runtime replay preflight remain mandatory.
+Use the `/validate` caption for structural validation only. Google Docs should
+be exported as `.docx` or text; legacy binary `.doc` is not supported.
+
+An accepted file becomes one batch of up to five independent experiments,
+executed in file order by the existing single worker. A parameter section with
+two IDs creates two experiments. Each experiment has its own control and report;
+parameters are not overlaid onto the code candidate. A runtime failure is
+reported and independent remaining experiments continue. `/cancel` cancels the
+current batch and skips its remaining experiments. The batch finishes with
+JSON/CSV summaries and `DONE`, `PARTIAL`, `FAILED` or `CANCELLED` status.
+
+Uploads are capped at 2 MiB and extracted text at 256 KiB. DOCX extraction reads
+paragraphs from the main document only, without loading external links or
+executing macros. ZIP expansion and XML declarations are bounded/rejected.
+Originals and normalized `VALIDATION.json` records remain privately under
+`BOT_STATE_DIR/uploads/<id>/`; each batch keeps `BATCH.json` in its job folder.
+Completed examples are bundled in [templates/](templates/).
+
+## Activity and progress
+
+Queued jobs show a waiting card. Running jobs, file download/validation, guide
+and example uploads, dependency checks and invitation creation show an editable
+activity card with the current task and elapsed time. While a backend call or
+build blocks, the card refreshes every eight seconds. The moving bar indicates
+activity; it does not invent a completion percentage or ETA. Batch cards include
+the experiment number and task. Cards end as done, partial, failed, cancelled or
+interrupted. Telegram edit failures do not abort an experiment. Restart notices
+mark in-flight cards interrupted so unfinished work can be resubmitted.
 
 `/bench` runs these steps:
 1. An LLM writes the change against the **deployed** commit (`planner.py`).

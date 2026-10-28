@@ -32,11 +32,24 @@ def urllib_transport(url, data, headers, timeout):  # pragma: no cover - network
         raise TelegramError('Telegram API unreachable: %s' % getattr(err, 'reason', type(err).__name__))
 
 
+def urllib_download(url, max_bytes, timeout):  # pragma: no cover - network
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            if int(response.headers.get('Content-Length') or 0) > max_bytes:
+                raise TelegramError('Document exceeds the download limit')
+            return response.read(max_bytes + 1)
+    except urllib.error.HTTPError as err:
+        raise TelegramError('Document download failed (HTTP %d)' % err.code) from None
+    except (urllib.error.URLError, OSError, ValueError):
+        raise TelegramError('Document download failed; try uploading the file again') from None
+
+
 class Telegram:
-    def __init__(self, token, transport=urllib_transport, api=API):
+    def __init__(self, token, transport=urllib_transport, api=API, download_transport=urllib_download):
         if not TOKEN.match(token or ''):
             raise TelegramError('TELEGRAM_BOT_TOKEN is missing or malformed')
         self._token, self.transport, self.api = token, transport, api.rstrip('/')
+        self.download_transport = download_transport
 
     def call(self, method, params=None, files=None, timeout=70):
         url = '%s/bot%s/%s' % (self.api, self._token, method)
@@ -60,9 +73,27 @@ class Telegram:
         return self.call('getUpdates', params, timeout=timeout + 20)
 
     def send_message(self, chat_id, text):
+        receipt = None
         for start in range(0, max(len(text), 1), MESSAGE_LIMIT):
-            self.call('sendMessage', {'chat_id': chat_id, 'text': text[start:start + MESSAGE_LIMIT],
+            receipt = self.call('sendMessage', {'chat_id': chat_id, 'text': text[start:start + MESSAGE_LIMIT],
                                       'disable_web_page_preview': True})
+        return receipt
+
+    def edit_message(self, chat_id, message_id, text):
+        return self.call('editMessageText', {'chat_id': chat_id, 'message_id': message_id,
+                                           'text': text[:MESSAGE_LIMIT], 'disable_web_page_preview': True})
+
+    def download_document(self, file_id, max_bytes):
+        info = self.call('getFile', {'file_id': file_id}) or {}
+        if info.get('file_size', 0) > max_bytes:
+            raise TelegramError('Document exceeds the download limit')
+        path = info.get('file_path') or ''
+        if not re.fullmatch(r'[A-Za-z0-9_./-]+', path) or any(part in ('', '.', '..') for part in path.split('/')):
+            raise TelegramError('Telegram returned an invalid document path')
+        data = self.download_transport('%s/file/bot%s/%s' % (self.api, self._token, path), max_bytes, 60)
+        if not isinstance(data, bytes) or len(data) > max_bytes:
+            raise TelegramError('Document exceeds the download limit')
+        return data
 
     def send_document(self, chat_id, filename, data, caption=None):
         params = {'chat_id': str(chat_id)}

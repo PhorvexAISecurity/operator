@@ -36,6 +36,7 @@ class FakeTelegram:
 
     def __init__(self):
         self.updates, self.calls = [], []
+        self.files = {}
 
     def __call__(self, url, data, headers, timeout):
         method = url.rsplit('/', 1)[1]
@@ -46,6 +47,12 @@ class FakeTelegram:
             self.calls.append((method, json.loads(data)))
         if method == 'getMe':
             return json.dumps({'ok': True, 'result': {'username': 'phbenchbot'}}).encode()
+        if method == 'sendMessage':
+            return json.dumps({'ok': True, 'result': {'message_id': len(self.calls)}}).encode()
+        if method == 'getFile':
+            fid = json.loads(data)['file_id']
+            return json.dumps({'ok': True, 'result': {'file_path': 'documents/' + fid,
+                                                     'file_size': len(self.files[fid])}}).encode()
         if method == 'getUpdates':
             params = json.loads(data)
             out = [u for u in self.updates if u['update_id'] >= params.get('offset', 0)]

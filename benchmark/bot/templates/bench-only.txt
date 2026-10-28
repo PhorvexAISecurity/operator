@@ -1,0 +1,11 @@
+[bench]
+policy: vllm/vllm-defense
+ticks: 64
+sync: false
+change:
+In phorvex/internal/model/economics.go, change EconomicsMetadata.CostPenalty in
+independent-cost-preferences-v1 mode from
+m.NormPreference.Value*norm + m.FlowPreference.Value*flow to
+1.2*m.NormPreference.Value*norm + m.FlowPreference.Value*flow.
+Preserve legacy and fixed-beta behavior, feasibility gates, SLO checks and budgets.
+Keep the patch minimal.

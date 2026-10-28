@@ -28,6 +28,8 @@ authorization persists privately in the state directory. Secrets
 (TELEGRAM_BOT_TOKEN, DASHBOARD_PASSWORD, OPENAI_API_KEY) are never logged.
 """
 import json
+import csv
+import io
 import hashlib
 import hmac
 import os
@@ -50,6 +52,8 @@ import code_experiment  # noqa: E402
 import planner  # noqa: E402
 import replay_build  # noqa: E402
 import report  # noqa: E402
+import file_requests  # noqa: E402
+from progress import Progress  # noqa: E402
 from dashboard import Dashboard, DashboardError  # noqa: E402
 from telegram import Telegram, TelegramError  # noqa: E402
 
@@ -63,6 +67,9 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
 /param <P-XXX-000> <value> [value...] [policy=ns/name] [ticks=N] [nosync]
   Replays the deployed brain with each parameter value (Math Lab).
 /guide    download the English step-by-step guide as HTML and PDF
+/upload   how to submit a .md, .txt or .docx experiment file
+/validate validate an attached file without running it (use as its caption)
+/templates download completed example files
 /status   the running job and the queue
 /runs     the last results
 /check    check Telegram, dashboard, source, recorded ticks, disk and model access
@@ -71,6 +78,9 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
 
 Defaults: policy=%(policy)s, ticks=%(ticks)d."""
 COMMANDS = [
+    {'command': 'upload', 'description': 'Run experiments from a Markdown, TXT or Word file'},
+    {'command': 'templates', 'description': 'Download completed experiment-file examples'},
+    {'command': 'validate', 'description': 'Validate a file: attach it with /validate as caption'},
     {'command': 'guide', 'description': 'Download the English guide (HTML and PDF)'},
     {'command': 'bench', 'description': 'Test a brain code or formula change'},
     {'command': 'param', 'description': 'Compare brain parameter values'},
@@ -87,6 +97,13 @@ BOT_DESCRIPTION = ('Benchmark brain changes before release. Compare parameters, 
                    'Use /guide to download the English HTML and PDF playbook. '
                    'Authorized members only. Replay results do not deploy changes or measure live defense outcomes.')
 BOT_SHORT_DESCRIPTION = 'Brain replay benchmarks: code, formulas and parameters. Use /guide for the English HTML and PDF playbook.'
+UPLOAD_HELP = """Send a .md, .txt or .docx document in this chat.
+Use [bench] and/or [params] sections, or a list of /bench and /param commands.
+The entire file is parsed and its options and parameter domains are validated before anything is queued.
+Valid uploads run automatically as one batch, with up to 5 independent experiments executed in order.
+Use /validate as the file caption to check structure and values without running it.
+Go tests and live replay preflight still run for each experiment. /templates sends completed examples.
+Limits: 2 MiB per document, 256 KiB extracted text. Export older .doc or Google Docs to .docx or .txt."""
 
 
 def configure_interface(telegram):
@@ -216,11 +233,25 @@ class BenchBot:
         self.openai_transport, self.sleep = openai_transport, sleep
         self.queue, self.current, self.lock = [], None, threading.Lock()
         self.guide_chats = set()
+        self.upload_chats, self.activities = set(), set()
         self.wake, self.stopping = threading.Event(), threading.Event()
         private_dir(cfg.state)
         private_dir(cfg.state / 'jobs')
 
     # ── chat ───────────────────────────────────────────────────────────────
+    def activity(self, chat_id, title, phase, running=True):
+        progress = Progress(self.tg, chat_id, title, phase)
+        with self.lock:
+            self.activities.add(progress)
+        if running:
+            progress.start()
+        return progress
+
+    def finish_activity(self, progress, state='DONE', phase='Finished'):
+        progress.finish(state, phase)
+        with self.lock:
+            self.activities.discard(progress)
+
     def say(self, chat_id, text):
         try:
             self.tg.send_message(chat_id, text)
@@ -237,7 +268,7 @@ class BenchBot:
         msg = update.get('message') or {}
         user = msg.get('from') or {}
         chat_id, text = (msg.get('chat') or {}).get('id'), (msg.get('text') or '').strip()
-        if not chat_id or not text:
+        if not chat_id:
             return
         if user.get('id') not in self.cfg.allowed:
             if self.pair_owner(msg, text) or self.join_member(msg, text):
@@ -249,27 +280,50 @@ class BenchBot:
         command, _, rest = text.partition(' ')
         command = command.split('@')[0].lower()
         who = '%s (@%s)' % (user.get('id'), user.get('username', ''))
+        if msg.get('document'):
+            return self.start_document(msg, who)
+        if not text:
+            return
         if command in ('/start', '/help'):
             self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
         elif command == '/guide':
             return self.start_guide(chat_id)
+        elif command in ('/upload', '/validate'):
+            self.say(chat_id, UPLOAD_HELP)
+        elif command == '/templates':
+            return self.start_templates(chat_id)
         elif command == '/status':
             self.say(chat_id, self.status())
         elif command == '/runs':
             self.say(chat_id, self.runs())
         elif command == '/check':
             def dependency_check():
-                lines = []
-                check(self.cfg, os.environ, self.tg, lines.append)
-                self.say(chat_id, '\n'.join(lines))
-            threading.Thread(target=dependency_check, name='bench-check', daemon=True).start()
+                progress = self.activity(chat_id, 'Dependency check', 'Checking benchmark dependencies')
+                try:
+                    lines = []
+                    code = check(self.cfg, os.environ, self.tg, lines.append,
+                                 stage=lambda name: progress.update('Checking ' + name))
+                    self.say(chat_id, '\n'.join(lines))
+                    self.finish_activity(progress, 'FAILED' if code else 'DONE', 'Dependency check complete; read PASS/WARN/FAIL above')
+                except Exception as err:
+                    self.say(chat_id, 'Dependency check failed (%s). Please try /check again.' % type(err).__name__)
+                    self.finish_activity(progress, 'FAILED', 'Dependency check failed')
+            worker = threading.Thread(target=dependency_check, name='bench-check', daemon=True)
+            worker.start()
+            return worker
         elif command == '/invite':
             if user.get('id') not in self.cfg.admins:
                 self.say(chat_id, 'Only a bot owner can create invitations.')
             elif (msg.get('chat') or {}).get('type') != 'private' or chat_id != user['id']:
                 self.say(chat_id, 'Create invitations in your private chat with the bot.')
             else:
-                self.say(chat_id, 'One-use member invite (valid for 24 hours):\n' + self.create_invite(user['id']))
+                progress = self.activity(chat_id, 'Member invitation', 'Creating a one-use link')
+                try:
+                    self.say(chat_id, 'One-use member invite (valid for 24 hours):\n' + self.create_invite(user['id']))
+                    self.finish_activity(progress)
+                except (JobError, TelegramError) as err:
+                    self.say(chat_id, 'Could not create an invitation: %s' % err)
+                    self.finish_activity(progress, 'FAILED', 'Invitation failed')
         elif command == '/cancel':
             with self.lock:
                 job = self.current
@@ -282,18 +336,122 @@ class BenchBot:
             if not rest.strip():
                 self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
                 return
-            with self.lock:
-                if len(self.queue) >= MAX_QUEUE:
-                    self.say(chat_id, 'The queue is full (%d jobs); try again later.' % MAX_QUEUE)
-                    return
-                job = Job(command[1:], chat_id, who, rest.strip())
-                self.queue.append(job)
-                ahead = len(self.queue) - 1 + (1 if self.current else 0)
-            log('queued %s job %s from %s' % (job.kind, job.id, who))
-            self.say(chat_id, 'Queued %s job %s%s.' % (job.kind, job.id, ' (%d ahead)' % ahead if ahead else ''))
-            self.wake.set()
+            self.enqueue(Job(command[1:], chat_id, who, rest.strip()))
         else:
             self.say(chat_id, 'Unknown command. /help lists them.')
+
+    def enqueue(self, job):
+        if not getattr(job, 'progress', None):
+            job.progress = self.activity(job.chat_id, '%s job %s' % (job.kind.upper(), job.id),
+                                         'Waiting in the queue', running=False)
+        with self.lock:
+            full = len(self.queue) >= MAX_QUEUE
+            if not full:
+                self.queue.append(job)
+                ahead = len(self.queue) - 1 + (1 if self.current else 0)
+        if full:
+            self.say(job.chat_id, 'The queue is full (%d jobs); try again later.' % MAX_QUEUE)
+            self.finish_activity(job.progress, 'FAILED', 'Queue full; try again later')
+            return False
+        job.progress.update('Waiting in the queue (%d ahead)' % ahead, state='QUEUED')
+        log('queued %s job %s from %s' % (job.kind, job.id, job.user))
+        self.say(job.chat_id, 'Queued %s job %s%s.' % (job.kind, job.id, ' (%d ahead)' % ahead if ahead else ''))
+        self.wake.set()
+        return True
+
+    def start_document(self, msg, who):
+        chat_id, document = msg['chat']['id'], msg['document']
+        name = str(document.get('file_name') or '')
+        caption = (msg.get('caption') or '').strip().split()
+        if Path(name).suffix.lower() not in file_requests.EXTENSIONS:
+            self.say(chat_id, UPLOAD_HELP)
+            return None
+        if document.get('file_size', 0) > file_requests.MAX_FILE_BYTES:
+            self.say(chat_id, 'File rejected: maximum document size is 2 MiB.')
+            return None
+        if caption and caption[0].startswith('/') and caption[0].split('@')[0] not in ('/validate', '/upload'):
+            self.say(chat_id, 'Use an empty file caption to run, or /validate to validate without running.')
+            return None
+        with self.lock:
+            busy = chat_id in self.upload_chats or len(self.upload_chats) >= 3
+            if not busy:
+                self.upload_chats.add(chat_id)
+        if busy:
+            self.say(chat_id, 'A file is already being processed. Please wait and upload again.')
+            return None
+        dry_run = bool(caption and caption[0].split('@')[0] == '/validate')
+        worker = threading.Thread(target=self.receive_document, args=(chat_id, who, document, dry_run),
+                                  name='bench-upload', daemon=True)
+        worker.start()
+        return worker
+
+    def receive_document(self, chat_id, who, document, dry_run=False):
+        progress = self.activity(chat_id, 'File: ' + Path(str(document.get('file_name') or 'request')).name[:80],
+                                 'Downloading the Telegram document')
+        queued, state, phase = False, 'FAILED', 'File rejected; nothing queued'
+        try:
+            data = self.tg.download_document(document['file_id'], file_requests.MAX_FILE_BYTES)
+            progress.update('Extracting text from the document')
+            name = str(document.get('file_name') or '')
+            text = file_requests.document_text(name, data)
+            progress.update('Parsing every section and validating options and parameter values')
+            tasks = file_requests.parse(text, self.cfg.policy, self.cfg.ticks)
+            upload_id = uuid.uuid4().hex[:12]
+            folder = private_dir(self.cfg.state / 'uploads' / upload_id)
+            (folder / ('source' + Path(name).suffix.lower())).write_bytes(data)
+            record = {'id': upload_id, 'source_name': Path(name).name[:200], 'source_sha256': hashlib.sha256(data).hexdigest(),
+                      'created': utc(), 'user': who, 'validation': 'STRUCTURE_AND_PARAMETER_DOMAINS_PASS',
+                      'mode': 'VALIDATE_ONLY' if dry_run else 'RUN', 'experiments': tasks}
+            (folder / 'VALIDATION.json').write_text(json.dumps(record, indent=2) + '\n')
+            self.say(chat_id, 'File validation PASS: %d experiment(s): %s.\n'
+                     'Structure, options and registry parameter values are valid. Go tests and replay preflight run during execution.'
+                     % (len(tasks), ', '.join(task['kind'] for task in tasks)))
+            if dry_run:
+                state, phase = 'DONE', 'Validation passed; no experiments were queued'
+                self.say(chat_id, 'Validation only: nothing was run. Send the file without /validate to execute it.')
+            else:
+                job = Job('batch', chat_id, who, '%s: %d experiments' % (Path(name).name[:100], len(tasks)))
+                progress.title = 'BATCH job %s (%d experiments)' % (job.id, len(tasks))
+                job.specs, job.progress, job.upload_id = tasks, progress, upload_id
+                queued = self.enqueue(job)
+                record['batch_id'] = job.id if queued else None
+                (folder / 'VALIDATION.json').write_text(json.dumps(record, indent=2) + '\n')
+                if not queued:
+                    phase = 'Queue full; send the file again later'
+        except (file_requests.RequestError, TelegramError) as err:
+            self.say(chat_id, 'File rejected: %s\nNothing was queued. Use /templates for valid examples.' % err)
+        except Exception as err:
+            log('document processing failed: %s' % type(err).__name__)
+            if queued:
+                self.say(chat_id, 'The batch is queued, but its upload record could not be updated (%s). Use /status to follow it.' % type(err).__name__)
+            else:
+                self.say(chat_id, 'File processing failed (%s). Nothing was queued; please try again.' % type(err).__name__)
+        finally:
+            with self.lock:
+                self.upload_chats.discard(chat_id)
+            if not queued:
+                self.finish_activity(progress, state, phase)
+
+    def start_templates(self, chat_id):
+        def send():
+            progress = self.activity(chat_id, 'Example files', 'Preparing completed Markdown, TXT and Word examples')
+            state = 'DONE'
+            try:
+                self.say(chat_id, 'Examples: both sections, bench only, params only, a Word file, and a command list. '
+                         'Edit an example and upload it here. Use /validate as its caption to check without running.')
+                for path in sorted((HERE / 'templates').iterdir()):
+                    if path.suffix not in ('.md', '.txt', '.docx'):
+                        continue
+                    progress.update('Uploading ' + path.name)
+                    self.tg.send_document(chat_id, path.name, path.read_bytes(), 'Completed example: ' + path.stem)
+            except (OSError, TelegramError) as err:
+                state = 'FAILED'
+                self.say(chat_id, 'Could not send all examples (%s). Please try /templates again.' % type(err).__name__)
+            finally:
+                self.finish_activity(progress, state, 'Example-file delivery ' + state.lower())
+        worker = threading.Thread(target=send, name='bench-templates', daemon=True)
+        worker.start()
+        return worker
 
     def start_guide(self, chat_id):
         """Upload independently of the benchmark queue and the polling thread."""
@@ -314,26 +472,32 @@ class BenchBot:
         return worker
 
     def deliver_guide(self, chat_id):
+        progress = self.activity(chat_id, 'English guide', 'Preparing HTML and PDF attachments')
+        state = 'DONE'
         try:
             # Read both before uploading, so an incomplete release cannot send half a guide.
             try:
                 files = [(extension, (HERE / ('guide-en.' + extension)).read_bytes())
                          for extension in ('html', 'pdf')]
             except OSError as err:
+                state = 'FAILED'
                 log('guide files unavailable: %s' % type(err).__name__)
                 self.say(chat_id, 'The English guide is unavailable in this release. Please ask the operator to restore its HTML and PDF files.')
                 return
             self.say(chat_id, 'English Brain Benchmark Playbook: HTML for offline reading and the command builder; PDF for reading and printing.')
             for extension, data in files:
+                progress.update('Uploading the English ' + extension.upper() + ' guide')
                 try:
                     receipt = self.tg.send_document(chat_id, 'phorvex-brain-benchmark-guide-en.' + extension, data,
                                                   'English Brain Benchmark Playbook (' + extension.upper() + ')')
                     log('guide %s delivered to chat %s (message %s)' % (extension, chat_id,
                                                                     (receipt or {}).get('message_id', '?')))
                 except TelegramError as err:
+                    state = 'FAILED'
                     log('guide %s upload failed: %s' % (extension, err))
                     self.say(chat_id, 'Could not send the %s guide. Please try /guide again.' % extension.upper())
         finally:
+            self.finish_activity(progress, state, 'Guide delivery ' + state.lower())
             with self.lock:
                 self.guide_chats.discard(chat_id)
 
@@ -438,6 +602,12 @@ class BenchBot:
         if job.cancel.is_set():
             raise JobError('cancelled before: %s' % label)
         job.step = label
+        parent = getattr(job, 'parent', None)
+        if parent:
+            parent.step = '%s: %s' % (job.batch_position, label)
+        progress = getattr(job, 'progress', None)
+        if progress:
+            progress.update(('%s: ' % job.batch_position if parent else '') + label)
         log('job %s: %s' % (job.id, label))
         self.say(job.chat_id, '[%s] %s' % (job.id, label))
 
@@ -446,13 +616,27 @@ class BenchBot:
             if not self.queue:
                 return False
             job = self.current = self.queue.pop(0)
+        try:
+            self.execute_job(job)
+        finally:
+            with self.lock:
+                self.current = None
+        return True
+
+    def execute_job(self, job):
         job.state = 'RUNNING'
         job.dir = self.cfg.state / 'jobs' / job.id
         job.dir.mkdir(parents=True)
+        parent = getattr(job, 'parent', None)
+        if not getattr(job, 'progress', None):
+            job.progress = self.activity(job.chat_id, '%s job %s' % (job.kind.upper(), job.id), 'Preparing the experiment')
+        elif not parent:
+            job.progress.start('Preparing the experiment')
         headline = ''
         try:
-            headline = (self.run_param if job.kind == 'param' else self.run_bench)(job)
-            job.state = 'DONE'
+            headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch}[job.kind](job)
+            if job.state == 'RUNNING':
+                job.state = 'DONE'
         except JobError as err:
             job.state = 'CANCELLED' if job.cancel.is_set() else 'FAILED'
             headline = str(err)
@@ -470,10 +654,40 @@ class BenchBot:
             with open(self.cfg.state / 'history.jsonl', 'a') as f:
                 f.write(json.dumps({'id': job.id, 'kind': job.kind, 'user': job.user, 'state': job.state,
                                     'created': job.created, 'finished': utc(), 'request': job.text[:300],
+                                    'batch_id': parent.id if parent else None,
                                     'headline': headline[:300]}) + '\n')
-            with self.lock:
-                self.current = None
-        return True
+            if not parent:
+                self.finish_activity(job.progress, job.state, headline or 'Experiment ' + job.state.lower())
+        return headline
+
+    def run_batch(self, job):
+        results = []
+        for index, spec in enumerate(job.specs, 1):
+            if job.cancel.is_set():
+                results.append({'index': index, 'kind': spec['kind'], 'state': 'CANCELLED', 'job': None})
+                continue
+            child = Job(spec['kind'], job.chat_id, job.user, spec['text'])
+            child.parent, child.cancel, child.progress = job, job.cancel, job.progress
+            child.batch_position = 'Experiment %d/%d (%s)' % (index, len(job.specs), spec['kind'])
+            self.step(job, child.batch_position)
+            headline = self.execute_job(child)
+            results.append({'index': index, 'kind': child.kind, 'state': child.state, 'job': child.id, 'headline': headline})
+        completed = sum(row['state'] == 'DONE' for row in results)
+        job.state = ('CANCELLED' if job.cancel.is_set() else 'DONE' if completed == len(results)
+                     else 'PARTIAL' if completed else 'FAILED')
+        payload = {'batch_id': job.id, 'upload_id': job.upload_id, 'state': job.state, 'results': results,
+                   'semantics': 'Independent experiments, executed sequentially; each report has its own control.'}
+        raw = (json.dumps(payload, indent=2) + '\n').encode()
+        (job.dir / 'BATCH.json').write_bytes(raw)
+        table = io.StringIO(newline='')
+        writer = csv.writer(table)
+        writer.writerow(('batch_id', 'index', 'kind', 'state', 'job_id'))
+        writer.writerows((job.id, r['index'], r['kind'], r['state'], r['job'] or '') for r in results)
+        self.send_file(job.chat_id, 'batch-%s.json' % job.id, raw)
+        self.send_file(job.chat_id, 'batch-%s.csv' % job.id, table.getvalue().encode())
+        summary = 'Batch %s: %d/%d experiments succeeded; state %s.' % (job.id, completed, len(results), job.state)
+        self.say(job.chat_id, summary)
+        return summary
 
     def free_gb(self):
         return shutil.disk_usage(self.cfg.state).free / 2 ** 30
@@ -496,6 +710,7 @@ class BenchBot:
             raise JobError('sync: %s' % err)
 
     def deliver(self, job, meta, result, rows, extra=(), limitations=()):
+        self.step(job, 'sending benchmark reports and attachments')
         text = report.summary(meta, result, rows)
         self.say(job.chat_id, text)
         html = report.page(meta, result, rows, limitations).encode()
@@ -551,7 +766,7 @@ class BenchBot:
             self.step(job, 'replaying on the dashboard')
             experiment = dash.create(request)
             done = dash.wait_experiment(experiment['id'], cancelled=job.cancel.is_set,
-                                        progress=lambda m: self.say(job.chat_id, '[%s] %s' % (job.id, m)))
+                                        progress=lambda m: self.step(job, m))
             if done['status'] in ('FAILED', 'INTERRUPTED', 'PREFLIGHT_FAILED', 'INVALID'):
                 raise JobError('the experiment ended %s: %s' % (done['status'], done.get('message') or ''))
             rows = dash.metrics(experiment['id'])
@@ -745,7 +960,7 @@ class BenchBot:
                 backoff = min(backoff * 2, 60)
 
 
-def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model):
+def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model, stage=None):
     """Preflight every dependency; print one line each, never a secret value.
     The Telegram token, the allowlist and the state directory are essential;
     anything else only disables the commands named."""
@@ -754,6 +969,8 @@ def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model):
 
     def item(name, fn, essential=False, disables=''):
         nonlocal essential_failed
+        if stage:
+            stage(name)
         try:
             rows.append(('PASS', name, fn() or ''))
         except Exception as err:  # each check reports its own reason
@@ -853,6 +1070,9 @@ def main():
         bot.stopping.set()
         with bot.lock:
             job = bot.current
+            activities = list(bot.activities)
+        for activity in activities:
+            bot.finish_activity(activity, 'INTERRUPTED', 'Bot restarting; resend unfinished requests')
         if job:
             bot.say(job.chat_id, '[%s] the bot is restarting; this job is interrupted. Send it again.' % job.id)
         log('stopping')
