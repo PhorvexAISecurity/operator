@@ -143,6 +143,14 @@ class ReplayBuildTest(unittest.TestCase):
         self.assertEqual(sha, replay_build.sha256_file(self.tmp / 'out/brain-replay'))
         self.assertEqual(code_experiment.identity(self.tmp / 'out/brain-replay')['git_sha'], self.base)
 
+    def test_uses_deployed_build_metadata_instead_of_the_installed_go_version(self):
+        self.assertEqual(replay_build.deployed_toolchain(self.tmp / 'binary', go=str(self.go)), 'go1.26.10')
+        invalid = self.tmp / 'invalid-go'
+        invalid.write_text('#!/bin/sh\nprintf "go version go1.26.4 linux/amd64\\n"\n')
+        invalid.chmod(0o755)
+        with self.assertRaisesRegex(replay_build.BuildError, 'no supported Go release metadata'):
+            replay_build.deployed_toolchain(self.tmp / 'binary', go=str(invalid))
+
     def test_refuses_a_wrong_commit_or_a_dirty_tree_or_a_failed_build(self):
         src = replay_build.checkout(self.repo, self.base, self.tmp / 'src')
         with self.assertRaisesRegex(replay_build.BuildError, 'not'):

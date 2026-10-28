@@ -411,6 +411,7 @@ class BotTest(unittest.TestCase):
             'path': str(deployed), 'git_sha': base, 'binary_sha256': testkit.hashlib.sha256(deployed.read_bytes()).hexdigest(),
             'image_digest': 'sha256:' + 'e' * 64}))
         go, template = testkit.write_fake_go(self.tmp / 'fakego')
+        (go.parent / 'expected-toolchain').write_text('go1.26.10')
         os.environ['FAKE_REPLAY_TEMPLATE'] = str(template)
         self.addCleanup(os.environ.pop, 'FAKE_REPLAY_TEMPLATE', None)
         return repo, base, data, go

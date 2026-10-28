@@ -451,6 +451,10 @@ class BenchBot:
             raise JobError('no verified deployed brain-replay yet; run a sync on the dashboard (or drop nosync)')
         if replay_build.sha256_file(control['path']) != control.get('binary_sha256'):
             raise JobError('the deployed brain-replay on disk does not match its recorded sha256; re-sync on the dashboard')
+        try:
+            toolchain = replay_build.deployed_toolchain(control['path'], go=self.cfg.go)
+        except replay_build.BuildError as err:
+            raise JobError(str(err))
         base = control['git_sha']
         try:
             present = replay_build._git(self.cfg.repo, 'cat-file', '-t', base + '^{commit}') == 'commit'
@@ -497,9 +501,9 @@ class BenchBot:
                                      ('candidate', cand['repo'], cand['candidateCommit'])):
                 # A newly added package has no baseline tests.
                 selected = [p for p in packages if (Path(src) / 'phorvex' / p).is_dir()]
-                self.step(job, 'running Go unit tests: %s (%s)' % (arm, ', '.join(selected)))
+                self.step(job, 'running Go unit tests: %s (%s; %s)' % (arm, ', '.join(selected), toolchain))
                 tests[arm] = replay_build.test(src, commit, selected, go=self.cfg.go,
-                                               log=job.dir / ('tests-%s.jsonl' % arm))
+                                               log=job.dir / ('tests-%s.jsonl' % arm), toolchain=toolchain)
                 (job.dir / 'TESTS.json').write_text(json.dumps(tests, indent=2) + '\n')
                 if tests[arm]['status'] != 'PASS':
                     self.send_file(job.chat_id, 'tests-%s-%s.jsonl' % (arm, job.id),
@@ -507,9 +511,10 @@ class BenchBot:
                     raise JobError('%s Go tests %s; benchmark stopped. See the attached test log.'
                                    % (arm, tests[arm]['status']))
             self.step(job, 'building brain-replay from the deployed commit and from the candidate')
-            replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go, log=job.dir / 'build-base.log')
+            replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go,
+                               log=job.dir / 'build-base.log', toolchain=toolchain)
             replay_build.build(cand['repo'], cand['candidateCommit'], job.dir / 'bin' / 'candidate', go=self.cfg.go,
-                               log=job.dir / 'build-candidate.log')
+                               log=job.dir / 'build-candidate.log', toolchain=toolchain)
             base_local = code_experiment.identity(job.dir / 'bin' / 'base-local')
             cand_id = code_experiment.identity(job.dir / 'bin' / 'candidate')
         except replay_build.BuildError as err:
@@ -522,6 +527,7 @@ class BenchBot:
                    'tests': tests,
                    'hypothesis': 'Requested from Telegram by %s' % job.user,
                    'provenance': {'base_tag': tag, 'candidate_tag': cand['candidateTag'], 'changed_paths': cand['changedPaths'],
+                                  'go_toolchain': toolchain,
                                   'model': plan_record['model'], 'prompt_sha256': cand['promptSha256'], 'diff_sha256': cand['diffSha256']}}
         try:
             result, rows = code_experiment.run(self.cfg.data, job.dir / 'experiment', request, control, base_local, cand_id)
@@ -647,8 +653,14 @@ def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model):
             raise ConfigError('%.1f GB free, below BOT_MIN_FREE_GB=%.1f' % (free, cfg.min_free_gb))
         return '%.1f GB free (BOT_MIN_FREE_GB=%.1f)' % (free, cfg.min_free_gb)
     item('free disk', disk, disables='/bench')
-    item('go', lambda: subprocess.run([cfg.go, 'version'], capture_output=True, text=True, check=True).stdout.strip(),
-         disables='/bench')
+    def go():
+        version = subprocess.run([cfg.go, 'version'], capture_output=True, text=True, check=True).stdout.strip()
+        current = Path(cfg.data or '/nonexistent') / 'mathlab/bin/current.json'
+        if current.exists():
+            ident = json.loads(current.read_text())
+            version += '; replay uses ' + replay_build.deployed_toolchain(ident['path'], go=cfg.go)
+        return version
+    item('go', go, disables='/bench')
 
     def openai():
         missing = [k for k in ('OPENAI_API_KEY', 'OPENAI_MODEL') if not env.get(k)]

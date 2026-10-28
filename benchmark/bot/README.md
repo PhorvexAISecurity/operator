@@ -102,7 +102,10 @@ dashboard's `current` nor restarts the dashboard.
    The bot only reads it, by commit. After each deploy, fetch there so the new
    commit is present.
 4. **Make sure Go works.** `go version` must succeed, and the host needs egress
-   to `proxy.golang.org`; the build pins `GOTOOLCHAIN=go1.26.1`.
+   to `proxy.golang.org`. The bot reads the exact Go release from the verified
+   deployed binary with `go version -m` and pins `GOTOOLCHAIN` to it for both
+   tests and both builds. `--check` shows the installed SDK and replay toolchain;
+   the test artifact retains the selected release.
 5. **Configure.** Copy the example and fill in every value:
    ```sh
    cp benchmark/bot/deploy/bot.env.example ~/phorvex-benchmark/config/bot.env
@@ -178,7 +181,7 @@ changes decisions, end to end, from a Telegram message to the files sent back.
   cluster (ticket Parts 1–2: `run.sh` P2–P7, the fixtures, `harness281`) are
   not wired to the bot yet. That will be a separate `/lab` command once
   `run.sh` runs end to end.
-- **Current production comparison.** See `VALIDATION.md` for executed checks,
-  historical replay evidence and the current source/capture blockers. A healthy
+- **Validation evidence.** See `VALIDATION.md` for executed checks,
+  replay evidence, source access and remaining limitations. A healthy
   Telegram service or a successful archived smoke test does not establish that
   the currently deployed source and snapshots are available.

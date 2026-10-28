@@ -4,12 +4,14 @@ The source directory must already be checked out at the commit, with nothing
 modified. The binary links that commit as its linkedGitSHA, and that SHA is
 how brain-replay decides whether a snapshot was recorded by "its" revision. It
 is built for the host, because it runs on the host. The flags match the
-Dockerfile's: go1.26.1, -trimpath, -s -w, CGO off, -mod=readonly. VCS stamping
-is off, because the Docker build has no .git.
+Dockerfile's: -trimpath, -s -w, CGO off, -mod=readonly. The bot reads the Go
+release from the deployed binary's build metadata and uses it for tests and
+both builds. VCS stamping is off, because the Docker build has no .git.
 """
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,6 +39,22 @@ def sha256_file(path):
     return h.hexdigest()
 
 
+def deployed_toolchain(binary, go='go'):
+    """Read build metadata without executing the deployed binary."""
+    env = {'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'),
+           'HOME': str(Path.home()), 'GOTOOLCHAIN': 'local', 'LANG': 'C.UTF-8'}
+    try:
+        result = subprocess.run([go, 'version', '-m', str(binary)], env=env,
+                                capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as err:
+        raise BuildError('cannot read the deployed Go toolchain (%s)' % type(err).__name__)
+    first = result.stdout.splitlines()[0] if result.stdout else ''
+    match = re.search(r': (go\d+\.\d+\.\d+)\s*$', first)
+    if result.returncode or not match:
+        raise BuildError('the deployed binary has no supported Go release metadata')
+    return match.group(1)
+
+
 def go_environment(src, toolchain=TOOLCHAIN):
     """Use the host's Go caches, but give tested code no service/cloud credentials."""
     home = Path(src).parent / 'go-home'
@@ -54,7 +72,7 @@ def go_environment(src, toolchain=TOOLCHAIN):
     }
 
 
-def test(src, commit, packages, go='go', timeout=1800, log=None):
+def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLCHAIN):
     """Run uncached unit tests; return counts and preserve the complete JSON log."""
     src = Path(src)
     if _git(src, 'rev-parse', 'HEAD') != commit or _git(src, 'status', '--porcelain'):
@@ -64,7 +82,7 @@ def test(src, commit, packages, go='go', timeout=1800, log=None):
            '-ldflags=-X %s=%s' % (LDFLAG, commit), *packages]
     timed_out = False
     try:
-        result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=go_environment(src),
+        result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=go_environment(src, toolchain),
                                 text=True, capture_output=True, timeout=timeout)
         output, returncode = result.stdout + result.stderr, result.returncode
     except subprocess.TimeoutExpired as err:
@@ -86,7 +104,7 @@ def test(src, commit, packages, go='go', timeout=1800, log=None):
             counts[action] += 1
         elif not event.get('Test') and action == 'pass':
             completed.add(event.get('Package'))
-    return {'commit': commit, 'packages': packages, 'counts': counts, 'returncode': returncode,
+    return {'commit': commit, 'toolchain': toolchain, 'packages': packages, 'counts': counts, 'returncode': returncode,
             'status': 'PASS' if returncode == 0 and completed else ('TIMEOUT' if timed_out else 'FAIL')}
 
 

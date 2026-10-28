@@ -76,9 +76,13 @@ if '-summary' in args:
 FAKE_GO = r'''#!/usr/bin/env python3
 import json, os, re, sys, pathlib
 args = sys.argv[1:]
+if args[:2] == ['version', '-m']:
+    print(args[2] + ': go1.26.10'); sys.exit(0)
 if args[:1] == ['version']:
     print('go version go1.26.4 linux/amd64'); sys.exit(0)
 directory = pathlib.Path(__file__).parent
+if (directory / 'expected-toolchain').exists():
+    assert os.environ.get('GOTOOLCHAIN') == (directory / 'expected-toolchain').read_text()
 if (directory / 'fail-build').exists() and args[0] == 'build':
     print('fake go: build failed', file=sys.stderr); sys.exit(1)
 assert not any(k in os.environ for k in ('OPENAI_API_KEY', 'TELEGRAM_BOT_TOKEN', 'DASHBOARD_PASSWORD', 'AWS_SECRET_ACCESS_KEY'))

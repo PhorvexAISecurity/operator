@@ -71,8 +71,9 @@ def comparison_lines(result, rows):
 
 
 def test_lines(result):
-    return ['Go tests %s: %s (%d passed, %d failed, %d skipped)' % (
-        arm, data['status'], data['counts']['pass'], data['counts']['fail'], data['counts']['skip'])
+    return [('Go tests %s: %s (%d passed, %d failed, %d skipped)' % (
+        arm, data['status'], data['counts']['pass'], data['counts']['fail'], data['counts']['skip']))
+        + ('; %s' % data['toolchain'] if data.get('toolchain') else '')
         for arm, data in (result.get('tests') or {}).items()]
 
 

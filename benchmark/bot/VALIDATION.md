@@ -58,13 +58,26 @@ validation job `e42ad15d2ad0`, state `COMPLETE`, comparison `MATCHED_REPLAY`,
 `param-state/jobs/e42ad15d2ad0/`. This is a transport/replay check, not evidence
 that changing this parameter improves defense.
 
-## Current source blocker and resolved capture failure
+## Source access restored and resolved capture failure
+
+After the owner supplied GitHub access, source
+`0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec` was fetched successfully from
+`PhorvexSecurity/operator` into `~/phorvex-benchmark/operator` and pinned under
+`refs/benchmark/deployed/<full-sha>`. Authentication used a temporary private
+askpass file; the token was removed and never written to Git configuration.
+Earlier failed source-access checks below describe the pre-fetch state.
+
+The verified deployed binary reports **Go 1.26.10**, while the host SDK is
+1.26.4 and the original helper default was 1.26.1. The bot now reads the
+compiler release from deployed build metadata and selects it for both test
+arms and both builds. The exact 1.26.10 toolchain was fetched successfully.
+Offline tests also exercise a deployed compiler newer than the installed SDK.
 
 A real dashboard sync resolved the currently deployed binary to source
 `0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec`, from image
 `phorvex:kv-drain-reset-0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec`.
 
-None of the existing host clones contains that source commit. A dedicated
+Initially none of the existing host clones contained that source commit. A dedicated
 bot clone was created at `~/phorvex-benchmark/operator`, borrowing existing
 objects read-only. Fetching from GitHub failed because no authentication was
 available. Supply read-only access to the correct source repository or a
@@ -87,7 +100,7 @@ then downloaded **64/64** verified current-revision snapshots with zero
 rejected blobs and refreshed inspection. More snapshots remain available;
 the bounded sync is not an exhaustive production backfill.
 
-`/check` reports missing source; matching current ticks are now present.
+`/check` can now resolve the source; matching current ticks are also present.
 `/bench` refuses a missing source commit or absent matching ticks before
 asking the model or building a candidate. An archived replay
 or healthy bot transport is not evidence of current production improvement.
