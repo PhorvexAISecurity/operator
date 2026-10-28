@@ -43,10 +43,11 @@ type Config struct {
 	// to the remote origin and TLS server identity; it contains no credential material.
 	AuditSourceIdentity string
 	// AttackCatalogEnabled installs the sole reviewed launch adapter (AML.T0012). The 192
-	// metadata rows stay visible when it is false. The tenant and profile path are
-	// deployment-owned and are never accepted from an API caller. The browser-facing Console
-	// uses only the tenant to authorize the proxy hop; only attacks-service receives the profile.
+	// metadata rows stay visible when it is false. Both tenants and the profile path are
+	// deployment-owned and are never accepted from an API caller. Authorization stays in the
+	// environment tenant while the attacks service alone operates the fixed fixture tenant.
 	AttackCatalogEnabled             bool
+	AttackCatalogAuthorizationTenant string
 	AttackCatalogIdentityTenant      string
 	AttackCatalogIdentityProfilePath string
 	AttackCatalogRunTimeout          time.Duration

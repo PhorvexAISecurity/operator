@@ -27,21 +27,28 @@ class AttackCatalogChartTests(unittest.TestCase):
         for path in defaults:
             with self.subTest(path=path):
                 values = yaml.safe_load(path.read_text())["phorvex"]
-                self.assertEqual(values["console"]["attackCatalog"], {"enabled": False})
+                self.assertEqual(values["console"]["attackCatalog"], {
+                    "enabled": False,
+                    "authorizationTenant": "",
+                })
 
         staging = yaml.safe_load((ROOT / "deploy/environments/staging/phorvex.yaml").read_text())["phorvex"]
-        self.assertEqual(staging["console"]["attackCatalog"], {"enabled": True})
+        self.assertEqual(staging["console"]["attackCatalog"], {
+            "enabled": True,
+            "authorizationTenant": "phorvex-staging-demo",
+        })
         self.assertTrue(staging["identityRotate"]["enabled"])
         self.assertEqual(staging["identityRotate"]["targetNamespace"], "console-identity-shared")
         self.assertEqual(staging["identityRotate"]["serviceAccountName"], "console-id-fixture")
         grants = yaml.safe_load(staging["console"]["auth"]["grants"]["data"])
         for subject in grants["subjects"]:
-            self.assertIn("console-identity-shared", subject["tenants"])
+            self.assertEqual(subject["tenants"], ["phorvex-staging-demo"])
 
     def test_server_path_mount_and_permissions_are_fixed_in_source(self):
         deployment = (COMMON / "templates/_console.tpl").read_text()
         for exact in (
             "PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED",
+            "PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT",
             "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT",
             "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE",
             "/etc/phorvex-attack-catalog/identity-profile.json",

@@ -348,8 +348,12 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	attackCatalogProfile := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE")
 	attackCatalogTenant := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT")
+	attackCatalogAuthorizationTenant := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT")
 	if attackCatalogTenant != "" && (!strings.HasPrefix(attackCatalogTenant, identityfixture.NamespacePrefix) || len(validation.IsDNS1123Label(attackCatalogTenant)) != 0) {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT must name the fixed owned identity-fixture tenant")
+	}
+	if attackCatalogAuthorizationTenant != "" && len(validation.IsDNS1123Label(attackCatalogAuthorizationTenant)) != 0 {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT must name one exact environment tenant")
 	}
 	if attackCatalogEnabled && attackCatalogProfile != "/etc/phorvex-attack-catalog/identity-profile.json" {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE must be the fixed deployment path when enabled")
@@ -357,7 +361,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if attackCatalogEnabled && attackCatalogTenant == "" {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT is required when the launch adapter is enabled")
 	}
+	if attackCatalogEnabled && attackCatalogAuthorizationTenant == "" {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT is required when the launch adapter is enabled")
+	}
 	cfg.AttackCatalogEnabled = attackCatalogEnabled
+	cfg.AttackCatalogAuthorizationTenant = attackCatalogAuthorizationTenant
 	cfg.AttackCatalogIdentityTenant = attackCatalogTenant
 	cfg.AttackCatalogIdentityProfilePath = attackCatalogProfile
 	enabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED")

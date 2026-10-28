@@ -102,9 +102,9 @@ func TestAForwardingConsoleSendsTheAttackRoutesToTheAttacksService(t *testing.T)
 func TestConsoleScopesAndForwardsAttackCatalogueLaunch(t *testing.T) {
 	upstream := newAttacksUpstream(t)
 	cfg := Config{Root: ".", Service: ServiceConsole, AttacksURL: upstream.URL,
-		AttackCatalogIdentityTenant: "console-identity-test"}
+		AttackCatalogAuthorizationTenant: "phorvex-test", AttackCatalogIdentityTenant: "console-identity-test"}
 	allowed := newAuthFixture(t, cfg,
-		operatorGrant("alb-subject-1", []string{"console-identity-test"}, []string{defaultTargetID}))
+		operatorGrant("alb-subject-1", []string{"phorvex-test"}, []string{defaultTargetID}))
 	req := allowed.albReq(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0012"}`)
 	if w := allowed.do(req); w.Code != http.StatusAccepted {
 		t.Fatalf("catalogue proxy answered %d %s", w.Code, w.Body.String())

@@ -410,6 +410,8 @@ spec:
         - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
           value: {{ .Values.phorvex.console.state.historyRetentionDays | default 0 | quote }}
         {{- if dig "attackCatalog" "enabled" false .Values.phorvex.console }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT
+          value: {{ required "console.attackCatalog.authorizationTenant is required for console.attackCatalog" .Values.phorvex.console.attackCatalog.authorizationTenant | quote }}
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT
           value: {{ required "identityRotate.targetNamespace is required for console.attackCatalog" .Values.phorvex.identityRotate.targetNamespace | quote }}
         {{- end }}

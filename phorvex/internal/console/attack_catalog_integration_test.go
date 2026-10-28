@@ -43,7 +43,8 @@ func TestAttackCatalogueRowsExactOrderUniquenessAndAvailability(t *testing.T) {
 	if len(disabled) != attackcatalog.ExpectedSize || disabled[0].Available || disabled[0].UnavailableReason == "" {
 		t.Fatalf("disabled deployment lost visible honest readiness: %+v", disabled[0])
 	}
-	cfg := Config{Service: ServiceAttacks, AttackCatalogEnabled: true, AttackCatalogIdentityTenant: "console-identity-test",
+	cfg := Config{Service: ServiceAttacks, AttackCatalogEnabled: true, AttackCatalogAuthorizationTenant: "phorvex-test",
+		AttackCatalogIdentityTenant:      "console-identity-test",
 		AttackCatalogIdentityProfilePath: writeAttackCatalogProfile(t), AuditSource: &audittransport.Client{}}
 	items := cfg.attackCatalogueItems()
 	if len(items) != attackcatalog.ExpectedSize {
@@ -184,7 +185,8 @@ func TestAttackCatalogueReactiveTruthRequiresEveryObservedStage(t *testing.T) {
 
 func TestAttackCatalogueLaunchAuthorizationAndStrictAllowlist(t *testing.T) {
 	profile := writeAttackCatalogProfile(t)
-	base := Config{Service: ServiceAttacks, StateDir: t.TempDir(), AttackCatalogEnabled: true, AttackCatalogIdentityTenant: "console-identity-test",
+	base := Config{Service: ServiceAttacks, StateDir: t.TempDir(), AttackCatalogEnabled: true,
+		AttackCatalogAuthorizationTenant: "phorvex-test", AttackCatalogIdentityTenant: "console-identity-test",
 		AttackCatalogIdentityProfilePath: profile, AuditSource: &audittransport.Client{}, AttackCatalogRunTimeout: 5 * time.Millisecond}
 	var factoryCalls atomic.Int32
 	installFactory := func(f *authFixture) {
@@ -194,7 +196,7 @@ func TestAttackCatalogueLaunchAuthorizationAndStrictAllowlist(t *testing.T) {
 		}
 	}
 
-	investor := newAuthFixture(t, base, investorGrant(albSubject("investor"), []string{"console-identity-test"}, []string{defaultTargetID}))
+	investor := newAuthFixture(t, base, investorGrant(albSubject("investor"), []string{"phorvex-test"}, []string{defaultTargetID}))
 	installFactory(investor)
 	if got := investor.do(investor.albReqAs(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0012"}`, "investor")).Code; got != http.StatusForbidden {
 		t.Fatalf("investor status=%d, want 403", got)
@@ -206,7 +208,7 @@ func TestAttackCatalogueLaunchAuthorizationAndStrictAllowlist(t *testing.T) {
 		t.Fatalf("out-of-scope operator status=%d, want 403", got)
 	}
 
-	operator := newAuthFixture(t, base, operatorGrant(albSubject("operator"), []string{"console-identity-test"}, []string{defaultTargetID}))
+	operator := newAuthFixture(t, base, operatorGrant(albSubject("operator"), []string{"phorvex-test"}, []string{defaultTargetID}))
 	installFactory(operator)
 	for name, body := range map[string]string{
 		"unknown ID":        `{"id":"AML.T0012; arbitrary"}`,

@@ -30,19 +30,21 @@ func attackCatalogueDestination(s *Server, _ *http.Request, body scopedBody) (ru
 		return runDestination{}, errors.New("catalogue entry is visible but has no reviewed launch adapter")
 	}
 	if s.cfg.Service == ServiceConsole {
-		if s.cfg.AttacksURL == "" || s.cfg.AttackCatalogIdentityTenant == "" {
+		if s.cfg.AttacksURL == "" || s.cfg.AttackCatalogAuthorizationTenant == "" {
 			return runDestination{}, errors.New("AML.T0012 attacks-service proxy destination is unavailable")
 		}
-		return runDestination{Targets: []string{defaultTargetID}, Tenants: []string{s.cfg.AttackCatalogIdentityTenant}}, nil
+		return runDestination{Targets: []string{defaultTargetID}, Tenants: []string{s.cfg.AttackCatalogAuthorizationTenant},
+			ScopeTarget: defaultTargetID, ScopeTenant: s.cfg.AttackCatalogAuthorizationTenant}, nil
 	}
-	if !s.cfg.AttackCatalogEnabled || s.cfg.AuditSource == nil {
+	if !s.cfg.AttackCatalogEnabled || s.cfg.AuditSource == nil || s.cfg.AttackCatalogAuthorizationTenant == "" {
 		return runDestination{}, errors.New("AML.T0012 launch adapter is unavailable in this attacks-service deployment")
 	}
 	profile, err := identityfixture.LoadFile(s.cfg.AttackCatalogIdentityProfilePath)
 	if err != nil || profile.Namespace != s.cfg.AttackCatalogIdentityTenant {
 		return runDestination{}, errors.New("AML.T0012 reviewed identity-fixture profile is unavailable")
 	}
-	return runDestination{Targets: []string{defaultTargetID}, Tenants: []string{profile.Namespace}}, nil
+	return runDestination{Targets: []string{defaultTargetID}, Tenants: []string{s.cfg.AttackCatalogAuthorizationTenant},
+		ScopeTarget: defaultTargetID, ScopeTenant: s.cfg.AttackCatalogAuthorizationTenant}, nil
 }
 
 func (s *Server) launchAttackCatalogue(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +74,7 @@ func (s *Server) launchAttackCatalogue(w http.ResponseWriter, r *http.Request) {
 	principal := principalOf(r)
 	// The boundary already checked this server-owned destination. Recheck the freshly loaded
 	// profile so a deployment-side projected-volume update cannot create an authorization TOCTOU.
-	if principal == nil || !principal.AllowsTenant(profile.Namespace) || !principal.AllowsTarget(defaultTargetID) {
+	if principal == nil || !principal.AllowsTenant(s.cfg.AttackCatalogAuthorizationTenant) || !principal.AllowsTarget(defaultTargetID) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "AML.T0012 fixture destination is outside this identity's current scope"})
 		return
 	}
@@ -106,8 +108,9 @@ func (s *Server) startAttackCatalogueRun(entry attackcatalog.Entry, profile iden
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	st := &RunStatus{ID: id, Config: entry.ID, State: "running", Started: time.Now().UTC().Format(time.RFC3339Nano), Date: tsNow(),
-		ExpectedTrials: 1, Owner: owner, ScopeTarget: defaultTargetID, ScopeTenant: profile.Namespace,
-		Target: defaultTargetID, TargetLabel: "This cluster (server-fixed)", Provider: "Kubernetes",
+		ExpectedTrials: 1, Owner: owner, ScopeTarget: defaultTargetID, ScopeTenant: s.cfg.AttackCatalogAuthorizationTenant,
+		FixtureTenant: profile.Namespace,
+		Target:        defaultTargetID, TargetLabel: "This cluster (server-fixed)", Provider: "Kubernetes",
 		ExecutionKind: attackCatalogExecutionKind, ClaimClass: "security"}
 	rm.runs[id], rm.runOut[id], rm.attackCatalogCancels[id] = st, id, cancel
 	rm.active++

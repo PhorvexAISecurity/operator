@@ -136,6 +136,7 @@ phorvex:
     # server-owned launch adapter (AML.T0012) in the attacks-service deployment.
     attackCatalog:
       enabled: false
+      authorizationTenant: ""
     # The console's own Service and Ingress, for an environment that exposes it outside
     # the production stack's dashboard. The Service serves port 80.
     ingress:

@@ -14,6 +14,7 @@ func TestAttackCatalogEnvironmentRequiresFixedProfilePath(t *testing.T) {
 		t.Fatalf("disabled defaults changed: enabled=%v err=%v", cfg.AttackCatalogEnabled, err)
 	}
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED"] = "true"
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT"] = "phorvex-test"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT"] = "console-identity-test"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE"] = "/tmp/client-choice.json"
 	if err := applyCatalogueV1Environment(&cfg, lookup); err == nil {
@@ -21,6 +22,7 @@ func TestAttackCatalogEnvironmentRequiresFixedProfilePath(t *testing.T) {
 	}
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE"] = "/etc/phorvex-attack-catalog/identity-profile.json"
 	if err := applyCatalogueV1Environment(&cfg, lookup); err != nil || !cfg.AttackCatalogEnabled ||
+		cfg.AttackCatalogAuthorizationTenant != values["PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT"] ||
 		cfg.AttackCatalogIdentityTenant != values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT"] ||
 		cfg.AttackCatalogIdentityProfilePath != values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE"] {
 		t.Fatalf("fixed profile was not admitted: %+v err=%v", cfg, err)

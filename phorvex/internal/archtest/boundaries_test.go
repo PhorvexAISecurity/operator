@@ -44,7 +44,7 @@ var domains = map[string]string{
 	"gpudevice": shared, "servingcontext": shared, "ownership": shared,
 	"actuationbrake": shared, "epssmeta": shared, "pendinggate": shared, "scaleprobe": shared,
 	"crmrefund": shared, "datastore": shared, "agentdeny": shared, "endpointlease": shared, "litellmclient": shared, "outputpolicy": shared,
-	"identityfixture": shared, "persistence": shared, "servingbudget": shared,
+	"attackcatalog": shared, "identityfixture": shared, "persistence": shared, "servingbudget": shared,
 	"voiceadmissionpolicy": shared, "voicemcppolicy": shared, "voicememorypolicy": shared,
 	"voiceoutputpolicy": shared, "voicerefundpolicy": shared,
 	// feasibility is the pure SLO and disruption predicate the brain applies when it

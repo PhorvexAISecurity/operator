@@ -176,7 +176,8 @@ func (c *Config) attackCatalogueItems() []CatalogItem {
 	if firstReady {
 		var profile identityfixture.Profile
 		profile, err = identityfixture.LoadFile(c.AttackCatalogIdentityProfilePath)
-		firstReady = err == nil && c.AttackCatalogIdentityTenant != "" && profile.Namespace == c.AttackCatalogIdentityTenant
+		firstReady = err == nil && c.AttackCatalogAuthorizationTenant != "" &&
+			c.AttackCatalogIdentityTenant != "" && profile.Namespace == c.AttackCatalogIdentityTenant
 	}
 	items := make([]CatalogItem, 0, len(entries))
 	for _, entry := range entries {
