@@ -4,7 +4,7 @@ interface Guidance {
   name: string;
   benignControl?: boolean;
   expectedActuators?: string[];
-  responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "none";
+  responseGuidanceBasis?: "name-heuristic" | "explicit-effect" | "reviewed-catalogue-metadata" | "none";
   responseGuidance?: string;
 }
 
@@ -19,6 +19,7 @@ export function ScenarioResponseGuidance({ item }: { item: Guidance }) {
   const hints = displayActuatorHints(item);
   const basis = item.responseGuidanceBasis;
   const label = basis === "explicit-effect" ? "Expected effect operation" :
+    basis === "reviewed-catalogue-metadata" ? "Review-pinned expected action (not evidence)" :
     basis === "name-heuristic" ? (hints.length > 0 ? "Name-based actuator hints" : "No actuator hint mapped") :
     basis === "none" ? "No actuator response asserted" :
     hints.length > 0 ? "Legacy actuator hints (basis unverified)" : "Response mapping unestablished";

@@ -409,6 +409,23 @@ spec:
           value: {{ .Values.phorvex.console.state.historyMinFreeBytes | quote }}
         - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
           value: {{ .Values.phorvex.console.state.historyRetentionDays | default 0 | quote }}
+        {{- if dig "attackCatalog" "enabled" false .Values.phorvex.console }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT
+          value: {{ required "console.attackCatalog.authorizationTenant is required for console.attackCatalog" .Values.phorvex.console.attackCatalog.authorizationTenant | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT
+          value: {{ required "identityRotate.targetNamespace is required for console.attackCatalog" .Values.phorvex.identityRotate.targetNamespace | quote }}
+        {{- end }}
+        {{- if and $attacks (dig "attackCatalog" "enabled" false .Values.phorvex.console) }}
+        # Metadata is embedded in the image; this fixed root-owned profile enables only
+        # AML.T0012 and cannot be replaced by a request body.
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED
+          value: "true"
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE
+          value: /etc/phorvex-attack-catalog/identity-profile.json
+        {{- else }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED
+          value: "false"
+        {{- end }}
         # The opt-in Role alone is not readiness; the server also validates the
         # fixed baked config and current installed source before admission.
         - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED
@@ -819,6 +836,12 @@ spec:
           mountPath: /tmp
         - name: console-state
           mountPath: {{ .Values.phorvex.console.state.mountPath }}
+        {{- if and $attacks (dig "attackCatalog" "enabled" false .Values.phorvex.console) }}
+        - name: attack-catalog-identity-fixture
+          mountPath: /etc/phorvex-attack-catalog/identity-profile.json
+          subPath: profile.json
+          readOnly: true
+        {{- end }}
         {{- if .Values.phorvex.console.auth.grants.enabled }}
         - name: console-grants
           mountPath: {{ .Values.phorvex.console.auth.grants.mountPath }}
@@ -995,6 +1018,15 @@ spec:
         # Explicitly nondurable: all console mutation/experiment/uptime state is lost with the Pod.
         emptyDir: {}
         {{- end }}
+      {{- if and $attacks (dig "attackCatalog" "enabled" false .Values.phorvex.console) }}
+      - name: attack-catalog-identity-fixture
+        configMap:
+          name: {{ include "phorvex-common.attacksServiceAccountName" . }}-identity-fixture
+          defaultMode: 0440
+          items:
+          - key: profile.json
+            path: profile.json
+      {{- end }}
       {{- if .Values.phorvex.audit.enabled }}
       - name: audit-client
         secret:

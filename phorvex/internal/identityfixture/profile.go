@@ -35,8 +35,18 @@ type Profile struct {
 }
 
 func Load() (Profile, error) {
-	var p Profile
 	path := strings.TrimSpace(os.Getenv(ProfileEnv))
+	if path == "" {
+		return Profile{}, errors.New("Console/test identity fixture profile not installed")
+	}
+	return LoadFile(path)
+}
+
+// LoadFile reads the root-owned profile at a server-fixed deployment path. Callers must not
+// accept this path from an HTTP request.
+func LoadFile(path string) (Profile, error) {
+	var p Profile
+	path = strings.TrimSpace(path)
 	if path == "" {
 		return p, errors.New("Console/test identity fixture profile not installed")
 	}

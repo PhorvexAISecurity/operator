@@ -1,0 +1,49 @@
+{
+  "name": "T1136.003",
+  "mode": "lane",
+  "lane": "p4",
+  "actuator": "credential-revoke",
+  "event_type": "phorvex.attack.credential-theft",
+  "family": "credential",
+  "desc": "Cloud account creation: an attacker-provisioned ServiceAccount bearer token is reused against the cluster API",
+  "target": {
+    "ns": "p4-demo",
+    "prefix": "demo-api-",
+    "pod_substr": "demo-api",
+    "service_account": "cred-t1136-003",
+    "credential_secret": "cred-t1136-003-token",
+    "selector": "app.kubernetes.io/name=demo-api"
+  },
+  "arm": {
+    "leak_service_account": "cred-t1136-003",
+    "token_secret": "cred-t1136-003-token",
+    "secret_type": "kubernetes.io/service-account-token",
+    "grant": {
+      "apiGroups": [
+        ""
+      ],
+      "resources": [
+        "pods"
+      ],
+      "verbs": [
+        "get",
+        "list"
+      ]
+    }
+  },
+  "oracle": {
+    "observation_annotation": "phorvex.ai/credential-revoke-observation-v1",
+    "secret_deleted": true,
+    "stolen_token_unauthorized": true,
+    "two_sided": "target pod same UID + >=minAvailableReplicas; a fresh SA token still works"
+  },
+  "event": {
+    "description": "Cloud account creation: an attacker-provisioned ServiceAccount bearer token is reused against the cluster API",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "credential-revoke"
+  ],
+  "expected": "DEFENDED",
+  "note": "credential-revoke bucket. family 'credential' now has a REAL self-provisioning fire_lane adapter (CredentialFamily): `fire <id> --lane p4` is LIVE DEFENDED \u2014 setup ensures the credential-revoke policy enablement + manager/actuator RBAC; arm creates the per-fire leaked SA + legacy kubernetes.io/service-account-token Secret and confirms the stolen bearer token works; the frozen brain selects+actuates credential-revoke; oracle = token Secret deleted AND stolen token -> Unauthorized (bad->good) while the pod keeps its UID/Ready and availability stays >= SLO floor (two-sided: a freshly-minted token for the undeleted SA still works); self-cleans. Port of run2/credrev-p4/credrev_fire.py. Verified live on lane p4 (AML.T0055 + T1552.001, 2026-10-26)."
+}

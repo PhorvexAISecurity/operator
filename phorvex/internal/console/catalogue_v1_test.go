@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/phorvex/metricvalidity"
+	"github.com/phorvex/phorvex/internal/attackcatalog"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
 )
 
@@ -40,11 +41,11 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 		limitedV1GuardrailCalibrationID:            {"fixed-suite", "calibration"},
 		limitedV1GuardrailID:                       {"live-vllm-effect", "effect"},
 	}
-	if len(items) != len(want) {
-		t.Fatalf("items=%d, want %d exact baseline and reviewed additions", len(items), len(want))
+	if len(items) != len(want)+attackcatalog.ExpectedSize {
+		t.Fatalf("items=%d, want %d preserved rows plus %d review-pinned rows", len(items), len(want), attackcatalog.ExpectedSize)
 	}
-	seen := make(map[string]bool, len(items))
-	for _, item := range items {
+	seen := make(map[string]bool, len(want))
+	for _, item := range items[:len(want)] {
 		expected, ok := want[item.Name]
 		if !ok || seen[item.Name] || item.EntryID != item.Name || item.LaunchKind != expected.launch || item.ClaimClass != expected.claim {
 			t.Fatalf("missing, duplicate or changed catalogue row: %+v", item)
@@ -56,6 +57,16 @@ func TestCatalogRetainsLimitedV1WhenLegacyHarnessUnavailable(t *testing.T) {
 	}
 	if len(seen) != len(want) {
 		t.Fatalf("catalogue membership=%d, want %d", len(seen), len(want))
+	}
+	entries, err := attackcatalog.Entries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, item := range items[len(want):] {
+		if item.CatalogueOrder != i+1 || item.CatalogueID != entries[i].ID || item.EntryID != entries[i].ID ||
+			item.Name != entries[i].ID || item.LaunchKind != "catalogue-entry" || item.Available {
+			t.Fatalf("review-pinned row %d changed: %+v", i+1, item)
+		}
 	}
 }
 

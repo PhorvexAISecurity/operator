@@ -1,0 +1,15 @@
+{{- $v := .Values.phorvex }}
+{{- if dig "console" "attackCatalog" "enabled" false $v }}
+{{- if not (dig "identityRotate" "enabled" false $v) }}{{- fail "console.attackCatalog.enabled requires identityRotate.enabled" }}{{- end }}
+{{- $profile := required "identityRotate.profile is required for the AML.T0012 catalogue adapter" $v.identityRotate.profile }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "phorvex-common.attacksServiceAccountName" . }}-identity-fixture
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: attacks
+data:
+  profile.json: {{ $profile | toJson | quote }}
+{{- end }}

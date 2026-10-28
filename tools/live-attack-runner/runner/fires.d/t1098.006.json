@@ -1,0 +1,32 @@
+{
+  "name": "t1098.006",
+  "mode": "lane",
+  "lane": "p5",
+  "actuator": "k8s-object-revert",
+  "event_type": "phorvex.attack.config-object",
+  "family": "config-object",
+  "desc": "Additional Container Cluster Roles \u2014 operator-trusted mounted ConfigMap 'cluster-role-grants' drifted from its trusted snapshot (T1098.006)",
+  "target": {
+    "ns": "p5-demo",
+    "prefix": "agent-cfg-",
+    "configmap": "cluster-role-grants",
+    "pod_substr": "agent-cfg"
+  },
+  "arm": {
+    "poison": {
+      "agent-sa-roles": "demo-reader,cluster-admin"
+    }
+  },
+  "oracle": {
+    "snapshot_annotation": "phorvex.ai/trusted-config-snapshot"
+  },
+  "event": {
+    "description": "T1098.006 Additional Container Cluster Roles: operator-trusted cluster-role-grants ConfigMap drifted to grant the agent service account cluster-admin.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "k8s-object-revert"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p5. Declared cluster-role grants config surface. Modeled as an operator-trusted, volume-mounted ConfigMap in the agent-cfg fixture (the config surface k8s-object-revert governs). Arm = tamper cluster-role-grants.data; detector event carries observed!=trusted sha + target-uid. DEFENDED when the p5 brain selects+actuates k8s-object-revert and cluster-role-grants.data is restored to the operator trusted snapshot in place (no pod churn; neighbor trusted ConfigMaps untouched); reference staging brain frozen."
+}

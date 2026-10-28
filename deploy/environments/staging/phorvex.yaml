@@ -109,6 +109,9 @@ phorvex:
     # Exec, workload changes and policy edits stay in the demo's namespace and the
     # identity-rotate fixture's shared namespace (phorvex.identityRotate).
     attackNamespaces: [phorvex-staging-demo, console-identity-shared]
+    attackCatalog:
+      enabled: true
+      authorizationTenant: phorvex-staging-demo
     state:
       persistence:
         storageClass: gp2-csi
@@ -173,7 +176,7 @@ phorvex:
                 "targets": [
                   "default"
                 ],
-                "note": "Staging End-to-End runs against the demo workloads; token minted per run, never stored."
+                "note": "Staging End-to-End runs against the demo tenant; token minted per run, never stored."
               }
             ]
           }

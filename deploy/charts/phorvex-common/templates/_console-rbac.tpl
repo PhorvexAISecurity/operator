@@ -94,6 +94,7 @@ subjects:
 {{- if .Values.phorvex.services.attacks.endpoint }}
 {{- $attacksSA := include "phorvex-common.attacksServiceAccountName" . }}
 {{- $scoped := .Values.phorvex.console.attackNamespaces }}
+{{- $attackCatalog := dig "attackCatalog" "enabled" false .Values.phorvex.console }}
 ---
 # The attacks service fires what the console fired, so it holds the console's base
 # grants beyond reading. With console.attackNamespaces, what it and the console may exec
@@ -115,6 +116,13 @@ rules:
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
   verbs: ["get", "list"{{ if not $scoped }}, "patch"{{ end }}]
+{{- if $attackCatalog }}
+# TokenReview confirms the short-lived credential before and after the exact identity
+# rotation. It grants no credential or impersonation authority.
+- apiGroups: ["authentication.k8s.io"]
+  resources: ["tokenreviews"]
+  verbs: ["create"]
+{{- end }}
 {{- if not $scoped }}
 {{- include "phorvex.attackTargetRules" . }}
 {{- end }}
@@ -133,6 +141,62 @@ subjects:
 - kind: ServiceAccount
   name: {{ $attacksSA }}
   namespace: {{ .Release.Namespace }}
+{{- if $attackCatalog }}
+{{- if not (dig "identityRotate" "enabled" false .Values.phorvex) }}{{- fail "console.attackCatalog.enabled requires identityRotate.enabled" }}{{- end }}
+{{- $identityNamespace := required "identityRotate.targetNamespace is required for console.attackCatalog" .Values.phorvex.identityRotate.targetNamespace }}
+{{- $identityServiceAccount := required "identityRotate.serviceAccountName is required for console.attackCatalog" .Values.phorvex.identityRotate.serviceAccountName }}
+---
+# AML.T0012 reads and marks only the installed identity fixture. Create cannot be
+# resourceName-restricted by Kubernetes; the server contains no caller-controlled name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-identity-catalog
+  namespace: {{ $identityNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: [{{ $identityServiceAccount | quote }}]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["serviceaccounts/token"]
+  resourceNames: [{{ $identityServiceAccount | quote }}]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: [{{ $identityServiceAccount | quote }}]
+  verbs: ["get", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-identity-catalog
+  namespace: {{ $identityNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-attacks-identity-catalog
+subjects:
+- kind: ServiceAccount
+  name: {{ $attacksSA }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- range $scoped }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

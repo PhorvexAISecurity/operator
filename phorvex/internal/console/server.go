@@ -40,6 +40,7 @@ import (
 
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
+	"github.com/phorvex/phorvex/internal/identityfixture"
 )
 
 // Server is the console API.
@@ -74,6 +75,9 @@ type Server struct {
 	stateMu       sync.RWMutex
 	stateErr      string
 	experimentAPI experimentCluster
+	// Test seam; production constructs the in-cluster server-fixed AML.T0012 adapter.
+	identityCatalogFactory func(identityfixture.Profile) (identityCatalogCluster, error)
+	attackCatalogRecords   func(context.Context) ([]audit.Record, error)
 }
 
 func (s *Server) recordStateError(err error) {
@@ -709,6 +713,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var podBoundTokenUnsafe any
 	var guardrailStatic any
 	var guardrailAvailability any
+	var attackCatalogue any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -763,6 +768,11 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "fixed-suite result unavailable: " + err.Error()})
 	}
+	if result, err := s.runs.AttackCatalogResult(id); err == nil && result != nil {
+		attackCatalogue = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "catalogue validation result unavailable: " + err.Error()})
+	}
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished, "outcome": st.Outcome,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
@@ -774,6 +784,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"podBoundTokenUnsafe":         podBoundTokenUnsafe,
 		"guardrailStaticResult":       guardrailStatic,
 		"guardrailAvailabilityResult": guardrailAvailability,
+		"attackCatalogueResult":       attackCatalogue,
 		"note":                        "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }

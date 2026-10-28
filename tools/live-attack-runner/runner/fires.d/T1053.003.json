@@ -1,0 +1,35 @@
+{
+  "name": "T1053.003",
+  "mode": "lane",
+  "lane": "p2",
+  "actuator": "rotate",
+  "event_type": "phorvex.attack.panic",
+  "family": "pod-rotate",
+  "desc": "Cron (T1053.003) \u2014 runtime-compromised demo-api pod; rotate evicts+respawns clean",
+  "target": {
+    "ns": "p2-demo",
+    "prefix": "demo-api-",
+    "deployment": "demo-api",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "pod_substr": "demo-api"
+  },
+  "arm": {
+    "rule_type": "panic",
+    "threat_level": "critical",
+    "pick": "oldest-ready",
+    "age_gate_seconds": 100
+  },
+  "oracle": {
+    "kind": "pod-uid-rotation",
+    "min_available": 2
+  },
+  "event": {
+    "description": "T1053.003 Cron: trusted detector flagged a runtime-compromised demo-api pod (critical); evict+respawn clean (rotate).",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "rotate"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p2. Family 'pod-rotate' (no built fire_lane handler yet \u2014 supervisor adds the adapter; this JSON drops into fires.d/ and lists). Arm = inject a trusted panic SecurityEvent (as p2/p2-attacks, webhook-stamped trusted) at the OLDEST Ready owned demo-api pod (identity-age>=100s to clear the 90s anti-over-rotation window). DEFENDED when the lane brain selects+feasible+ACTUATES rotate (a Pod Eviction) and the ReplicaSet respawns a clean pod (pod UID rotates bad->good), two-sided (other demo-api pods keep their UIDs; availableReplicas>=minAvailable=2), reference brain frozen (decisionConfigSHA256=f3b74b14). Policy scoped to enabled:[rotate] (quarantine omitted: colocation-driven quarantine out-covers rotate; lane-scoped, reversible, NOT a cost/lambda/asset tune)."
+}

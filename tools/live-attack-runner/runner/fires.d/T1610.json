@@ -1,0 +1,39 @@
+{
+  "name": "T1610",
+  "mode": "lane",
+  "lane": "p4",
+  "actuator": "controller-stop",
+  "event_type": "phorvex.attack.deploy-container",
+  "family": "controller-stop",
+  "desc": "Deploy Container (T1610) \u2014 a rogue/masquerading workload is flagged on a defended demo-api replica; controller-stop (==native ActionRotate) evicts it and the owning ReplicaSet respawns a clean new-UID Pod",
+  "target": {
+    "ns": "p4-demo",
+    "prefix": "demo-api-",
+    "pod_substr": "demo-api",
+    "deployment": "demo-api",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "owner_kind": "ReplicaSet",
+    "min_available": 2
+  },
+  "arm": {
+    "mechanism": "flag-ready-pod",
+    "note": "Arm = inject a trusted SecurityEvent (type=event_type, threatLevel=critical) targeting the OLDEST Ready demo-api pod (anti-over-rotation safe; the pod carries a real coverage profile \u2014 behind a Service with steady demo-load \u2014 so the reactive rotate prices a positive gain, unlike a bare isolated pod). No image/config drift.",
+    "target_selection": "oldest Ready demo-api pod",
+    "min_available_required": 2
+  },
+  "oracle": {
+    "action": "rotate",
+    "pass": "A NEW manager decision row action==rotate selected==true feasible==true actuated==true dispatchOutcome==emitted on the TARGET pod, not in the 40s pre-fire baseline; AND the target pod-UID is evicted and replaced by a fresh-UID demo-api pod (clean ReplicaSet respawn); AND the two sibling pod-UIDs stay intact (two-sided); AND Deployment availability held (ready>=minAvailable=2 throughout, back to 3/3).",
+    "two_sided": true,
+    "baseline_subtracted": true
+  },
+  "event": {
+    "description": "Deploy Container (T1610): a trusted detector flags a demo-api replica as a rogue/masquerading workload; the frozen brain selects controller-stop and the actuator evicts the pod for a clean respawn.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "controller-stop"
+  ],
+  "expected": "DEFENDED",
+  "note": "controller-stop == native ActionRotate (Pod Eviction; owning controller respawns a clean Pod); the farm bucket label 'controller-stop' maps to the brain decision action 'rotate'. Ships in the lane BASE image (no rebuild). family 'controller-stop' has NO built handler in phvx-attack.py yet (known: image, config-object) -> `fire` reports UNSUPPORTED and register-fire rejects; this spec is dropped into fires.d/ so `list` shows it, pending a ControllerStopFamily adapter in LANE_FAMILIES (arm=flag-ready-pod, oracle=rotate-evict). FIXTURE REQUIREMENT: PhorvexPolicy demo-api-defense must enable 'rotate' and set slo.minAvailableReplicas<=2 (canonical fixture value) so the availabilityFloor law (ready-1>=minAvailable) admits the eviction on a 3-replica Deployment. All 10 controller-stop attack-ids converge on the SAME rotate primitive (no attack-id-keyed brain path); per-attack variation is honest labelling (distinct SecurityEvent type/description + a distinct target pod per live run). Verified GENUINE LIVE DEFENDED on lane p4 2026-10-26 (two-sided, baseline-subtracted, frozen brain decisionConfigSHA256 7b2e3683 rebuild-of-frozen-manifest, staging f3b74b14 untouched); evidence run2/csk-p4/evidence/<id>.json."
+}

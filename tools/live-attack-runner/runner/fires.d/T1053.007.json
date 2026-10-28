@@ -1,0 +1,43 @@
+{
+  "name": "T1053.007",
+  "mode": "lane",
+  "lane": "p7",
+  "actuator": "controller-stop+kinds",
+  "event_type": "phorvex.attack.orchestration",
+  "family": "controller-stop-kinds",
+  "desc": "Container Orchestration Job (T1053.007) — a runtime-compromised DaemonSet-owned Pod (container-orchestration scheduling primitive) is flagged; controller-stop+kinds (== native ActionRotate with the owner-eligibility gate widened to accept apps/v1 DaemonSet) evicts it and the owning DaemonSet respawns a clean new-UID Pod",
+  "target": {
+    "ns": "p7-demo",
+    "prefix": "ds-orch-",
+    "pod_substr": "ds-orch",
+    "owner_kind": "DaemonSet",
+    "min_available": 1
+  },
+  "fixture": {
+    "auto_provision": true,
+    "owner_kind": "DaemonSet",
+    "data_class": "internal",
+    "requirement": "The ControllerStopKindsFamily adapter (phvx-attack.py) AUTO-PROVISIONS this fixture in setup(): a fresh, uniquely-named demo-api clone (nginx+exporter behind a Service, steady load, PodMonitor, PhorvexPolicy enabled:[rotate]) OWNED BY A DAEMONSET, pinned to 2 least-loaded CriticalAddonsOnly IP-headroom nodes (exactly 2 Pods), minAvailableReplicas=1. It is torn down on teardown. A fresh uniquely-named workload per fire makes every fire a pristine FIRST rotate (a 2nd rotate on the same DaemonSet workload prices <=0 and no-ops, persisting via the manager audit replay). Manual equivalent: ~/phvx-farm/lane-csk-fixture.sh 7 ds-orch 2.",
+    "why_two_pods": "availabilityFloor (internal/feasibility/defaults.go) refuses a rotate unless readyReplicas-1 >= minAvailableReplicas, and minAvailableReplicas DEFAULTS to 1 (api/v1alpha1 defaults.go EffectiveMinAvailableReplicas: 0 is treated as unset). So a single-replica DaemonSet (ready-1=0 < 1) is structurally INFEASIBLE to rotate; the workload MUST have >= 2 Ready pods. Empirically confirmed on lane p7: a 1-pod DaemonSet tick showed selected:0 infeasible:1. Two pods also yield a real sibling -> genuine two-sidedness.",
+    "why_coverage_clone": "the brain only prices a POSITIVE-gain reactive rotate when the target carries a real protectable profile (Service graph + measured load + covered facts); an isolated bare pod gets no reactive decision (gain<=0 -> noop, suppressed by OnlySelected)."
+  },
+  "arm": {
+    "mechanism": "flag-ready-pod",
+    "note": "Arm = inject a TRUSTED SecurityEvent (rule.source=p7-attacks, type=phorvex.attack.orchestration, threatLevel=critical, webhook-stamped phorvex.ai/creator-identity=system:serviceaccount:p7:p7-attacks) targeting the oldest Ready DaemonSet pod of the auto-provisioned workload. No image/config drift — the ONLY difference from a demo-api rotate is the owner kind (DaemonSet). Rotate is feasible ONLY because ownership.Check (csk build) accepts the DaemonSet owner (owner-kind-unsupported without the +kinds extension)."
+  },
+  "oracle": {
+    "action": "rotate",
+    "pass": "A NEW manager decision row action==rotate selected==true feasible==true actuated==true dispatchOutcome==emitted on the TARGET DaemonSet pod, not in the pre-fire baseline (baseline_target_rows==0); AND the target pod-UID is evicted and replaced by a fresh-UID pod (clean DaemonSet respawn, oracle target_present:false then ready back); AND the sibling DaemonSet pod-UID stays intact (two-sided); AND availability holds (ready >= min_available).",
+    "two_sided": true,
+    "baseline_subtracted": true
+  },
+  "event": {
+    "description": "Container Orchestration Job (T1053.007): a trusted detector flags a DaemonSet-owned Pod as a runtime-compromised container-orchestration workload; the frozen brain selects controller-stop+kinds (rotate) and the actuator evicts the Pod for a clean DaemonSet respawn.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "controller-stop+kinds"
+  ],
+  "expected": "DEFENDED",
+  "note": "GENUINE LIVE LANE DEFENDED via `python3 phvx-attack.py fire T1053.007 --lane p7` 2026-10-26 (two-sided siblings_intact=true, baseline-subtracted, frozen brain decisionConfigSHA256=7b2e3683 [ECR csk-p1-20261025, all 4 services SHA-matched], staging-brain f3b74b14 UNTOUCHED). Decision row: pod=p7-demo/ds-orch-bb4285-j25cq action=rotate selected/feasible/actuated=true dispatchOutcome=emitted coverageValue=3.2053 stage=exploit. controller-stop+kinds == native ActionRotate (Pod Eviction; owning controller respawns a clean Pod) with ONE additive arm in ownership.Check (internal/ownership/rotate.go, csk build) accepting apps/v1 DaemonSet owners. The ControllerStopKindsFamily adapter now AUTO-PROVISIONS + tears down the required DaemonSet coverage fixture (setup()), so `fire T1053.007 --lane p7` reproduces DEFENDED self-contained; see the fixture block. All controller-stop+kinds DaemonSet attack-ids converge on the SAME rotate-on-DaemonSet primitive; per-attack variation is honest labelling. family controller-stop-kinds now HAS a fire_lane adapter (ControllerStopKindsFamily); register-fire still rejects the family name so this spec is dropped directly into fires.d/."
+}

@@ -1,0 +1,36 @@
+{
+  "name": "MS-PE-kubernetes-cronjob",
+  "mode": "lane",
+  "lane": "p7",
+  "actuator": "controller-stop+kinds",
+  "event_type": "phorvex.attack.orchestration",
+  "family": "controller-stop-kinds",
+  "desc": "Kubernetes CronJob persistence (MS-PE-kubernetes-cronjob) — a Pod owned by CronJob->Job is flagged; controller-stop+kinds (== native ActionRotate) is DELIBERATELY NOT eligible because the Job owner is Stateful (statefulIntegrity refuses a destructive rotate), so the brain contains it via quarantine instead — NOT-DEFENDED by controller-stop+kinds (safety boundary, by design)",
+  "target": {
+    "ns": "p7-demo",
+    "prefix": "cron-orch-",
+    "pod_substr": "cron-orch",
+    "owner_kind": "Job",
+    "min_available": 0
+  },
+  "fixture": {
+    "auto_provision": false,
+    "owner_kind": "Job",
+    "requirement": "NONE — by design. The ControllerStopKindsFamily adapter's preflight() short-circuits any owner_kind in {Job, CronJob} to an honest NOT-DEFENDED BEFORE standing up any fixture: controller-stop+kinds (rotate) is deliberately infeasible on a stateful Job-owned pod, so there is nothing to provision or fire. `do NOT force it`."
+  },
+  "oracle": {
+    "action": "none (controller-stop+kinds infeasible by design)",
+    "pass": "NOT-DEFENDED is CONFIRMED (by design) because a CronJob->Job-owned pod is refused a destructive rotate: ingest.isStateful flags the Job top-owner Stateful=true, feasibility/statefulIntegrity refuses rotate on a stateful pod (prefer quarantine), and ownership.Check (csk build) widened rotate owner-eligibility to apps/v1 DaemonSet ONLY (owner-kind-unsupported for Job/CronJob). The contrast proof is the DaemonSet reps T1053.007 + T1543.005: IDENTICAL coverage, same trusted event, but DaemonSet owner -> DEFENDED. quarantine is the correct system defense here (contain the malicious CronJob pod while preserving state).",
+    "two_sided": true,
+    "baseline_subtracted": true
+  },
+  "event": {
+    "description": "Kubernetes CronJob persistence (MS-PE-kubernetes-cronjob): a trusted detector flags a CronJob->Job-owned Pod. controller-stop+kinds (rotate) is deliberately infeasible on a stateful Job-owned pod; the brain prefers quarantine (contain, preserve state).",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "quarantine"
+  ],
+  "expected": "NOT-DEFENDED",
+  "note": "BY-DESIGN NOT-DEFENDED (safety boundary, not an actuator failure). `fire MS-PE-kubernetes-cronjob --lane p7` returns NOT-DEFENDED immediately via ControllerStopKindsFamily.preflight() (owner_kind in {Job,CronJob}) — no fixture is stood up and nothing is forced. Code path: ingest.isStateful (internal/ingest/kube.go) flags the Job top-owner Stateful=true; feasibility/statefulIntegrity (internal/feasibility/defaults.go) refuses a destructive rotate on a stateful pod ('R6 blindly Deletes a critical stateful pod and destroys the work; Phorvex instead QUARANTINES'); ownership.Check (internal/ownership/rotate.go, csk build) widened rotate owner-eligibility to apps/v1 DaemonSet ONLY. The farm backlog files MS-PE-kubernetes-cronjob under the controller-stop+kinds bucket, but controller-stop+kinds does NOT and should NOT defend it; the by-design defender is quarantine. Previously PROVEN LIVE (tick selected:0, pod not evicted, no quarantine NP by controller-stop+kinds) on lane p5 and the p7-phase2 harness run; the DaemonSet contrast (same coverage -> DEFENDED) is T1053.007 / T1543.005. frozen brain decisionConfigSHA256=7b2e3683 [ECR csk-p1-20261025], staging f3b74b14 untouched."
+}

@@ -145,6 +145,7 @@ func (s *Server) apiRoutes() []route {
 		attack(control("/api/runs/start", s.startRun, routeSpec{destination: suiteRunDestination})),
 		attack(control("/api/runs/scenario", s.startScenario, routeSpec{targetBody: []string{"target"}, destination: scenarioRunDestination})),
 		attack(control("/api/runs/functional", s.startFunctional, routeSpec{destination: functionalRunDestination})),
+		attack(control("/api/catalog/launch", s.launchAttackCatalogue, routeSpec{destination: attackCatalogueDestination})),
 		attack(control("/api/runs/functional/admission", s.functionalAdmission, routeSpec{methods: getOnly, destination: functionalAdmissionDestination})),
 		attack(control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true})),
 		attack(control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true})),

@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, ApiError, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence, AttackResult, FunctionalAdmission, FunctionalAdmissionReason } from "@/lib/api";
+import { api, ApiError, Lens, CatalogItem, ClusterTarget, RunStatus, RunEvidence, AttackResult, AttackCatalogueResult, FunctionalAdmission, FunctionalAdmissionReason } from "@/lib/api";
 import { Card, CardContent, Badge, Button } from "@/components/ui/primitives";
 import { Segmented, Input, Dialog, Loading, ErrorBox, Empty } from "@/components/ui/more";
 import { PageHead, SectionLabel } from "./effectiveness";
@@ -85,7 +85,8 @@ export function CatalogPanel({ lens }: { lens: Lens }) {
   React.useEffect(() => { setTarget(""); setSel(null); }, [lens]);
   const filtered = (visibleItems ?? []).filter((it) => {
     const query = q.trim().toLowerCase();
-    return (prod === "all" || it.product === prod) && (!query || it.name.toLowerCase().includes(query) || (it.techniques ?? []).join(" ").toLowerCase().includes(query));
+    const searchable = [it.name, it.description, it.family, it.expectedAction, ...(it.techniques ?? [])].filter(Boolean).join(" ").toLowerCase();
+    return (prod === "all" || it.product === prod) && (!query || searchable.includes(query));
   });
   const catalogPage = useLocalPage(filtered, 20, `${lens}\u0000${prod}\u0000${q}`);
 
@@ -93,10 +94,11 @@ export function CatalogPanel({ lens }: { lens: Lens }) {
   if (!visibleItems) return <Loading label="Enumerating the attack catalog from the harness registry…" rows={6} />;
 
   const counts = { all: visibleItems.length, k8s: visibleItems.filter((i) => i.product === "k8s").length, ai: visibleItems.filter((i) => i.product === "ai").length, structural: visibleItems.filter((i) => i.product === "structural").length, application: visibleItems.filter((i) => i.product === "application").length, platform: visibleItems.filter((i) => i.product === "platform").length };
+  const pinnedCount = visibleItems.filter((item) => item.launchKind === "catalogue-entry").length;
 
   return (
     <div className="animate-fade-up space-y-6">
-      <PageHead title="Scenario Catalog" sub={`${visibleItems.length} registered attack and benign functional scenarios, enumerated live from the harness registry. Each entry states whether it measures a security comparison or a bounded functional fixture.`} />
+      <PageHead title="Scenario Catalog" sub={`${visibleItems.length} registered scenarios served by the attacks service, including ${pinnedCount} review-pinned catalogue entries. Each entry states its readiness and evidence boundary.`} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented value={prod} onChange={setProd} tabs={[{ id: "all", label: "All", count: counts.all }, { id: "k8s", label: "K8s", count: counts.k8s }, { id: "ai", label: "AI / Inference", count: counts.ai }, { id: "application", label: "Applications", count: counts.application }, { id: "platform", label: "Platform", count: counts.platform }, { id: "structural", label: "Structural", count: counts.structural }]} />
         <div className="relative w-64">
@@ -135,21 +137,40 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
         <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", it.product === "ai" ? "text-info" : it.product === "structural" ? "text-warning" : "text-primary")} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[13px] text-foreground">{catalogDisplayName(it)}</span>
-            {isPodBoundTokenProfile(it.profile) || it.profile === guardrailAvailabilityProfile || it.profile === "guardrail-output-v2" ? <Badge variant="neutral">injected named case</Badge> : <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>}
+            <span className="font-mono text-[13px] text-foreground">{it.catalogueOrder ? `${it.catalogueOrder}. ` : ""}{catalogDisplayName(it)}</span>
+            {it.launchKind === "catalogue-entry" ? <Badge variant="neutral">review-pinned catalogue</Badge> : isPodBoundTokenProfile(it.profile) || it.profile === guardrailAvailabilityProfile || it.profile === "guardrail-output-v2" ? <Badge variant="neutral">injected named case</Badge> : <Badge variant={r6Variant(it.r6Tag) as any}>{it.r6Tag.replace("R6", "")}</Badge>}
             {it.hasRun && <Badge variant="accent">ran</Badge>}
             {it.benignControl ? <Badge variant="neutral">{it.claimClass === "calibration" ? "benign calibration" : "benign functional"}</Badge> : it.product === "ai" && it.profile !== "guardrail-confidentiality-static" && it.profile !== guardrailAvailabilityProfile && it.profile !== "guardrail-output-v2" && <Badge variant="pending">SP-0</Badge>}
-            {it.launchKind === "fixed-suite" && it.available === true ? <Badge variant="neutral">configured · admission checked on open</Badge> : it.available === false && <Badge variant="pending">unavailable</Badge>}
+            {it.launchKind === "catalogue-entry" && it.available === true ? <Badge variant="neutral">available · launch rechecks</Badge> : it.launchKind === "fixed-suite" && it.available === true ? <Badge variant="neutral">configured · admission checked on open</Badge> : it.available === false && <Badge variant="pending">unavailable</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-1">
             <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{it.category}</span>
             {(it.techniques ?? []).slice(0, 4).map((t) => <span key={t} className="rounded bg-muted/40 px-1.5 text-[10px] font-mono text-muted-foreground">{t}</span>)}
             {(it.caps ?? []).includes("CapGPU") && <span className="rounded bg-info/10 px-1.5 text-[10px] text-info">GPU</span>}
           </div>
+          {it.description && <div className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{it.description}</div>}
+          {it.expectedAction && <div className="mt-1 text-[10px] text-muted-foreground">expected action: <span className="font-mono text-foreground/80">{it.expectedAction}</span> · reactive compatible: {it.reactiveCompatible ? "yes" : "no"}</div>}
         </div>
       </CardContent>
     </Card>
   );
+}
+
+function AttackCatalogueResultPanel({ result }: { result: AttackCatalogueResult }) {
+  const stages: [string, boolean][] = [
+    ["visible", result.visible], ["available", result.available], ["launched", result.launched],
+    ["signal observed", result.signal.observed], ["decided", result.decision.observed],
+    ["actuated", result.actuator.receiptObserved], ["physically validated", result.physicalValidation.validated],
+    ["cleaned", result.cleanup.verified], ["defended", result.verdict === "DEFENDED"],
+  ];
+  return <div data-attack-catalogue-result className="mt-2 space-y-2 border-t border-border pt-2">
+    <div className="flex flex-wrap items-center gap-1.5">{stages.map(([name, passed]) => <Badge key={name} variant={passed ? "accent" : "pending"}>{name}: {passed ? "yes" : "no"}</Badge>)}</div>
+    <div>verdict: <span className="font-mono text-foreground">{result.verdict}</span> · reactiveOnly: <span className="text-foreground">{result.reactiveOnly ? "true" : "false"}</span></div>
+    <div className="text-muted-foreground">{result.reason}</div>
+    <div className="text-muted-foreground">decision: {result.decision.action || "unobserved"} · selected {result.decision.selected ? "yes" : "no"} · feasible {result.decision.feasible ? "yes" : "no"} · dispatch {result.decision.dispatchOutcome || "unobserved"}</div>
+    <div className="text-muted-foreground">ServiceAccount UID: <span className="font-mono">{result.physicalValidation.oldServiceAccountUID || "—"} → {result.physicalValidation.newServiceAccountUID || "—"}</span> · credential before/after: {result.physicalValidation.credentialAuthenticatedBefore ? "authenticated" : "not authenticated"}/{result.physicalValidation.credentialAuthenticatedAfter ? "authenticated" : "not authenticated"} · Pod retained: {result.physicalValidation.podRetained ? "yes" : "no"}</div>
+    {result.unsafeToRetry && <div className="text-warning">Cleanup is unresolved; do not retry until the retained run is reconciled.</div>}
+  </div>;
 }
 
 function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | null; target: ClusterTarget | null; lens: Lens; onClose: () => void }) {
@@ -270,6 +291,15 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     let namedLaunchConfirmed = false;
     if (selectedTarget?.context) clearLiveSelection(selectedLens, selectedTarget.context);
     try {
+      if (item!.launchKind === "catalogue-entry") {
+        if (item!.catalogueID !== "AML.T0012") throw new Error("This catalogue entry has no reviewed server-side launch adapter.");
+        const { id, context, catalogueID } = await api.launchCatalogEntry(item!.catalogueID, selectedLens);
+        if (catalogueID !== item!.catalogueID) throw new Error("Catalogue launch identity differs from the selected row.");
+        if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
+        setFixedRun({ id, context }); setFixedStatus(null); setFixedEvidence(null); setFixedReadError("");
+        setMsg(`Started ${id}. Visible, available, launched, signal-observed, decided, actuated, physically validated, cleaned, and defended remain independent result fields.`);
+        return;
+      }
       if (item!.launchKind === "fixed-suite") {
         const { id, context } = await api.startFunctional(item!.profile || item!.entryID || item!.name, selectedLens);
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
@@ -323,13 +353,13 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     }
     finally { if (request === requestGeneration.current && selectedContext === currentContext.current) setRunning(""); }
   }
-  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && namedLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
+  const runnable = lens === "operator" && item.available !== false && !(item.launchKind === "named-suite" && namedLaunchUncertain) && (item.launchKind === "fixed-suite" ? fixedSuiteAdmissionReady(admissionKey, fixedProfile, fixedAdmission) : item.launchKind === "catalogue-entry" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" || (!!target?.runnable && !!target.id && !!target.context));
   return (
     <Dialog open={!!item} onClose={() => { requestGeneration.current++; setRunning(""); setMsg(""); onClose(); }} title={catalogDisplayName(item)}>
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">
           <Badge variant="neutral">{item.category}</Badge>
-          {item.profile === "catalogue-mcp-voice-model-continuation" ? <Badge variant="neutral">model decision observation · no defense score</Badge> : isPodBoundTokenProfile(item.profile) ? <Badge variant="neutral">injected named case · mechanism conditional</Badge> : item.profile === guardrailAvailabilityProfile ? <Badge variant="neutral">injected named case · outcome conditional</Badge> : <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>}
+          {item.launchKind === "catalogue-entry" ? <Badge variant="neutral">order {item.catalogueOrder} · {item.available ? "available" : "unavailable"}</Badge> : item.profile === "catalogue-mcp-voice-model-continuation" ? <Badge variant="neutral">model decision observation · no defense score</Badge> : isPodBoundTokenProfile(item.profile) ? <Badge variant="neutral">injected named case · mechanism conditional</Badge> : item.profile === guardrailAvailabilityProfile ? <Badge variant="neutral">injected named case · outcome conditional</Badge> : <Badge variant={r6Variant(item.r6Tag) as any}>Without-PX {item.r6Tag.replace("R6", "")}</Badge>}
           <Badge variant={item.product === "ai" ? "modeled" : "accent"}>{item.product.toUpperCase()}</Badge>
           {item.benignControl && <Badge variant="neutral">{item.claimClass === "calibration" ? "classifier-only · security not evaluated" : "security outcome not applicable"}</Badge>}
         </div>
@@ -337,6 +367,11 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           <SectionLabel>ATT&amp;CK techniques</SectionLabel>
           <div className="flex flex-wrap gap-1.5">{(item.techniques ?? []).length === 0 ? <span className="text-[12px] text-muted-foreground">none tagged</span> : (item.techniques ?? []).map((t) => <span key={t} className="rounded bg-muted/40 px-2 py-0.5 text-[12px] font-mono text-foreground/80">{t}</span>)}</div>
         </div>
+        {item.launchKind === "catalogue-entry" && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">
+          <div className="text-foreground">{item.description}</div>
+          <div className="mt-1">family: <span className="font-mono text-foreground/85">{item.family}</span> · expected action: <span className="font-mono text-foreground/85">{item.expectedAction}</span> · reactive compatible: {item.reactiveCompatible ? "yes" : "no"}</div>
+          <div className="mt-1">Expected action is metadata only. The typed result credits defense only after exact event attribution, decision, actuator receipt, ServiceAccount UID and credential oracle, retained Pod, and verified cleanup.</div>
+        </div>}
         {item.benignControl
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>
           : item.profile === "catalogue-mcp-voice-model-continuation" ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">Two fixed model continuations compare an ordinary store-hours result with one synthetic substituted result. A model-selected tool is never executed; no SecurityEvent or Phorvex defense is tested. {item.meaningfulWhen}</div>
@@ -350,7 +385,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         {item.launchKind === "fixed-suite" && <FixedSuiteAdmissionNotice configured={item.available !== false} state={fixedAdmission?.key === admissionKey ? fixedAdmission : null} refreshes={admissionRefreshes} onRefresh={() => setAdmissionRefreshes((count) => Math.min(3, count + 1))} />}
         {item.launchKind === "named-suite" && namedLaunchUncertain && <div className="text-[11px] text-warning">{item.profile === "guardrail-confidentiality-static" ? "The last comparison launch response was indeterminate. Inspect Run History for the exact run before starting a new one." : "The last launch response was lost or indeterminate. Inspect Run History and reconcile any partial unsafe run before starting a new one."} This button stays disabled for this page session.</div>}
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === guardrailAvailabilityProfile ? "Run injected guardrail availability case" : item.profile === cpuTokenProfile ? "Run injected CPU Pod-bound bearer case" : item.profile === "pod-bound-api-auth-response" ? "Run injected Pod-bound bearer case" : item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : item.profile === "mongo-exposure-baseline" ? "Run Mongo Service exposure control" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : item.profile === "guardrail-output-v2" ? "Run support output response (v2)" : "Run bounded effect observation"}</Button> : <>
+          {item.launchKind === "catalogue-entry" || item.launchKind === "fixed-suite" || item.launchKind === "named-suite" || item.launchKind === "live-vllm-effect" ? <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.launchKind === "catalogue-entry" ? "Run bounded defensive validation" : item.claimClass === "calibration" ? "Run benign classifier calibration" : item.launchKind === "named-suite" ? item.profile === guardrailAvailabilityProfile ? "Run injected guardrail availability case" : item.profile === cpuTokenProfile ? "Run injected CPU Pod-bound bearer case" : item.profile === "pod-bound-api-auth-response" ? "Run injected Pod-bound bearer case" : item.profile === "guardrail-confidentiality-static" ? "Run fixed confidentiality comparison" : item.profile === "nats-client-response" ? "Run NATS client response" : item.profile === "mongo-exposure-baseline" ? "Run Mongo Service exposure control" : "Run NATS exposure control" : item.launchKind === "fixed-suite" ? "Run bounded functional check" : item.profile === "guardrail-output-v2" ? "Run support output response (v2)" : "Run bounded effect observation"}</Button> : <>
           <Button onClick={() => run(true)} disabled={!!running || !runnable}>{running === "px" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · PX/no-action arms" : "Run with Phorvex"}</Button>
           <Button variant="outline" onClick={() => run(false)} disabled={!!running || !runnable}>{running === "nopx" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} {item.benignControl ? "Run synthetic fixture · baseline arms" : "Run without (baseline)"}</Button>
           </>}
@@ -362,6 +397,8 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           <div className="font-mono text-foreground">run {fixedRun.id}</div>
           <div className="mt-1 text-muted-foreground">server profile context: <span className="font-mono text-foreground/85">{fixedRun.context}</span> · state: <span className="text-foreground">{fixedStatus?.state || "starting"}</span></div>
           {fixedStatus?.error && <div className="mt-1 text-warning">{fixedStatus.error}</div>}
+          {fixedEvidence?.attackCatalogueResult && <AttackCatalogueResultPanel result={fixedEvidence.attackCatalogueResult} />}
+          {item.launchKind === "catalogue-entry" && fixedEvidence && !fixedEvidence.attackCatalogueResult && <div className="mt-1 text-warning">Typed catalogue result is unavailable; no defense verdict is accepted.</div>}
           {fixedEvidence?.functionalResult && <div className="mt-2 space-y-1 border-t border-border pt-2">
             <div>{fixedProfile === "catalogue-mcp-voice-model-continuation" ? "model measurement" : "typed outcome"}: <span className="font-medium text-foreground">{fixedProfile === "catalogue-mcp-voice-model-continuation" ? mcpVoiceAccepted ? "completed, decision below" : "unverified" : fixedEvidence.functionalResult.outcome}</span> · cleanup: <span className="text-foreground">{fixedEvidence.functionalResult.cleanup.status}</span></div>
             <div className="text-foreground">{fixedProfile === "catalogue-mcp-voice-model-continuation" ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible; see retained bounded evidence below." : fixedEvidence.functionalResult.summary}</div>
@@ -391,7 +428,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
           {fixedEvidence?.guardrailStaticResult && <div className="mt-2 border-t border-border pt-2"><GuardrailStaticResultPanel result={fixedEvidence.guardrailStaticResult} /></div>}
           {fixedProfile === "catalogue-mcp-voice-model-continuation" && !fixedEvidence?.functionalResult && <div className="mt-2 border-t border-border pt-2"><MCPVoiceModelResult evidence={undefined} /></div>}
           {(fixedEvidence?.issues || []).map((issue) => <div key={`${issue.line}-${issue.reason}`} className="mt-1 text-warning">unverified evidence: {issue.reason}</div>)}
-          {fixedEvidence && item.profile !== "mongo-exposure-baseline" && !isPodBoundTokenProfile(item.profile) && item.profile !== guardrailAvailabilityProfile && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && !fixedEvidence.mongoExposureResult && !fixedEvidence.guardrailStaticResult && !fixedEvidence.guardrailAvailabilityResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
+          {fixedEvidence && item.launchKind !== "catalogue-entry" && item.profile !== "mongo-exposure-baseline" && !isPodBoundTokenProfile(item.profile) && item.profile !== guardrailAvailabilityProfile && !fixedEvidence.functionalResult && !fixedEvidence.configurationResult && !fixedEvidence.natsResponseResult && !fixedEvidence.mongoExposureResult && !fixedEvidence.guardrailStaticResult && !fixedEvidence.guardrailAvailabilityResult && (fixedEvidence.issues || []).length === 0 && <div className="mt-1 text-warning">terminal evidence is incomplete; no outcome is accepted</div>}
           {fixedReadError && <div className="mt-1 text-warning">result read incomplete: {fixedReadError}</div>}
         </div>}
         {effectRecordId && <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3 text-[12px]">

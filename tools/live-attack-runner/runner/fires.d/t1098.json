@@ -1,0 +1,33 @@
+{
+  "name": "t1098",
+  "mode": "lane",
+  "lane": "p5",
+  "actuator": "k8s-object-revert",
+  "event_type": "phorvex.attack.config-object",
+  "family": "config-object",
+  "desc": "Account Manipulation \u2014 operator-trusted mounted ConfigMap 'account-policy' drifted from its trusted snapshot (T1098)",
+  "target": {
+    "ns": "p5-demo",
+    "prefix": "agent-cfg-",
+    "configmap": "account-policy",
+    "pod_substr": "agent-cfg"
+  },
+  "arm": {
+    "poison": {
+      "accounts": "agent-sa:read,ticket-write;attacker-sa:*",
+      "admins": "ops-team,attacker-sa"
+    }
+  },
+  "oracle": {
+    "snapshot_annotation": "phorvex.ai/trusted-config-snapshot"
+  },
+  "event": {
+    "description": "T1098 Account Manipulation: operator-trusted account-policy ConfigMap drifted to add an attacker account and escalate its permissions.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "k8s-object-revert"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p5. Managed-accounts + admins config surface. Modeled as an operator-trusted, volume-mounted ConfigMap in the agent-cfg fixture (the config surface k8s-object-revert governs). Arm = tamper account-policy.data; detector event carries observed!=trusted sha + target-uid. DEFENDED when the p5 brain selects+actuates k8s-object-revert and account-policy.data is restored to the operator trusted snapshot in place (no pod churn; neighbor trusted ConfigMaps untouched); reference staging brain frozen."
+}

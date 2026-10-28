@@ -1,0 +1,42 @@
+{
+  "name": "T1543.005",
+  "mode": "lane",
+  "lane": "p7",
+  "actuator": "controller-stop+kinds",
+  "event_type": "phorvex.attack.orchestration",
+  "family": "controller-stop-kinds",
+  "desc": "Container Service (T1543.005) — a persistent node-level container service deployed as a DaemonSet is runtime-compromised and flagged; controller-stop+kinds (== native ActionRotate with the owner-eligibility gate widened to accept apps/v1 DaemonSet) evicts the Pod and the owning DaemonSet respawns a clean new-UID Pod",
+  "target": {
+    "ns": "p7-demo",
+    "prefix": "ds-orch2-",
+    "pod_substr": "ds-orch2",
+    "owner_kind": "DaemonSet",
+    "min_available": 1
+  },
+  "fixture": {
+    "auto_provision": true,
+    "owner_kind": "DaemonSet",
+    "data_class": "internal",
+    "requirement": "Same as T1053.007 — the ControllerStopKindsFamily adapter AUTO-PROVISIONS a fresh, uniquely-named (ds-orch2-<token>) 2-Pod DaemonSet demo-api clone pinned to 2 CriticalAddonsOnly IP-headroom nodes (minAvailableReplicas=1), fires, and tears it down. A 'container service' deployed as a DaemonSet is the faithful Kubernetes representation of T1543.005 (a persistent per-node container service), which is exactly the owner kind the +kinds extension makes rotate-eligible. Distinct base name from T1053.007 so each representative fires on its OWN pristine workload with an independent exposure-coverage budget (first-rotate prices positive; a 2nd rotate on the same workload no-ops). Manual equivalent: ~/phvx-farm/lane-csk-fixture.sh 7 ds-orch2 2.",
+    "why_two_pods": "availabilityFloor needs readyReplicas-1 >= minAvailableReplicas with minAvailable defaulting to 1, so >= 2 Ready pods are required (see T1053.007 fixture.why_two_pods)."
+  },
+  "arm": {
+    "mechanism": "flag-ready-pod",
+    "note": "Arm = inject a TRUSTED critical phorvex.attack.orchestration SecurityEvent (webhook-stamped trusted) targeting the oldest Ready ds-orch2 DaemonSet pod. No image/config drift; the ONLY difference from a demo-api rotate is the owner kind (DaemonSet)."
+  },
+  "oracle": {
+    "action": "rotate",
+    "pass": "A NEW manager decision row action==rotate selected==true feasible==true actuated==true dispatchOutcome==emitted on the TARGET ds-orch2 pod, baseline-subtracted; AND the target pod-UID is evicted and replaced by a fresh-UID pod (clean DaemonSet respawn); AND the sibling ds-orch2 pod-UID stays intact (two-sided); AND availability holds (ready >= min_available).",
+    "two_sided": true,
+    "baseline_subtracted": true
+  },
+  "event": {
+    "description": "Container Service (T1543.005): a trusted detector flags a DaemonSet-run per-node container service Pod as runtime-compromised; the frozen brain selects controller-stop+kinds (rotate) and the actuator evicts the Pod for a clean DaemonSet respawn.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "controller-stop+kinds"
+  ],
+  "expected": "DEFENDED",
+  "note": "GENUINE LIVE LANE DEFENDED via `python3 phvx-attack.py fire T1543.005 --lane p7` 2026-10-26 (two-sided, baseline-subtracted, frozen brain decisionConfigSHA256=7b2e3683 [ECR csk-p1-20261025], staging f3b74b14 untouched). Same rotate-on-DaemonSet primitive and csk image as T1053.007 (see that spec's note + fixture block for the full mechanics and the >=2-pod availability-floor requirement). T1543.005 'Container Service' maps to the DaemonSet owner kind (a persistent per-node container service), which is exactly the kind the +kinds extension makes rotate-eligible. Proven on its own pristine auto-provisioned clone ds-orch2-<token> so its first reactive rotate prices a positive gain independent of the T1053.007 workload."
+}

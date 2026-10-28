@@ -497,6 +497,11 @@ phorvex:
     # exec into and change, and where it and the console may edit policies. Empty is
     # every namespace, as the console had.
     attackNamespaces: []
+    # The review-pinned 192 rows are always visible. This separately enables the sole
+    # server-owned launch adapter (AML.T0012) in the attacks-service deployment.
+    attackCatalog:
+      enabled: false
+      authorizationTenant: ""
     # The console's own Service and Ingress, for an environment that exposes it outside
     # the production stack's dashboard. The Service serves port 80.
     ingress:

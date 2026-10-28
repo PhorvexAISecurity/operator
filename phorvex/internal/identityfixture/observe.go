@@ -27,6 +27,19 @@ type Snapshot struct {
 // active=true additionally requires the short-lived, exact positive-control
 // receipt written by Console only after the stolen bearer actually succeeded.
 func Observe(ctx context.Context, r client.Reader, cfg Profile, name, uid string, active bool) (Snapshot, error) {
+	out, err := ObserveKubernetes(ctx, r, cfg, name, uid, active)
+	if err != nil || FederationAbsent(ctx, cfg, out.Observation.ServiceAccountName) != nil {
+		return Snapshot{}, errors.New("Console/test dedicated identity fixture evidence unavailable or changed")
+	}
+	out.Observation.FederatedIdentityAbsent = true
+	return out, nil
+}
+
+// ObserveKubernetes applies the existing bounded fixture's Kubernetes-object oracle without the
+// external EKS federation query. It is used by the Console producer for preflight and physical
+// validation; the sensor still calls Observe and therefore admits no decision observation unless
+// the independent federation oracle also passes.
+func ObserveKubernetes(ctx context.Context, r client.Reader, cfg Profile, name, uid string, active bool) (Snapshot, error) {
 	var out Snapshot
 	fail := func() (Snapshot, error) {
 		return out, errors.New("Console/test dedicated identity fixture evidence unavailable or changed")
@@ -147,12 +160,9 @@ func Observe(ctx context.Context, r client.Reader, cfg Profile, name, uid string
 			return fail()
 		}
 	}
-	if FederationAbsent(ctx, cfg, run) != nil {
-		return fail()
-	}
 	out.Pod = &pod
 	out.Account = &sa
 	out.Projection = &model.PodBoundKubeAPIAuthProjection{PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), VolumeName: "api", MountedContainer: "workload", AudienceSource: "kube-apiserver-default", EvidenceSource: "admitted-pod-and-serviceaccount"}
-	out.Observation = &model.IdentityRotationObservation{Namespace: cfg.Namespace, NamespaceUID: cfg.NamespaceUID, PodName: name, PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), ServiceAccountResourceVersion: sa.ResourceVersion, PodInventoryVersion: pods.ResourceVersion, PolicyName: cfg.PolicyName, PolicyUID: cfg.PolicyUID, PolicyGeneration: cfg.PolicyGeneration, DedicatedServiceAccount: true, ExternalTokenTheftOnly: true, FederatedIdentityAbsent: true, LegacyTokenInventoryComplete: true, LegacyTokenSecrets: legacy, EvidenceSource: "validated-dedicated-sa-credential"}
+	out.Observation = &model.IdentityRotationObservation{Namespace: cfg.Namespace, NamespaceUID: cfg.NamespaceUID, PodName: name, PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), ServiceAccountResourceVersion: sa.ResourceVersion, PodInventoryVersion: pods.ResourceVersion, PolicyName: cfg.PolicyName, PolicyUID: cfg.PolicyUID, PolicyGeneration: cfg.PolicyGeneration, DedicatedServiceAccount: true, ExternalTokenTheftOnly: true, FederatedIdentityAbsent: false, LegacyTokenInventoryComplete: true, LegacyTokenSecrets: legacy, EvidenceSource: "validated-dedicated-sa-credential"}
 	return out, nil
 }

@@ -1,0 +1,40 @@
+{
+  "name": "AML.T0046",
+  "mode": "lane",
+  "lane": "p5",
+  "actuator": "throttle",
+  "event_type": "phorvex.attack.serving-cost-harvest",
+  "family": "serving-rate",
+  "desc": "Spamming AI System with Chaff Data \u2014 abusive serving request-rate flood vs the operator cost budget, cost-cap throttle defense (AML.T0046)",
+  "target": {
+    "ns": "p5-demo",
+    "deployment": "rate-target",
+    "service": "cost-target",
+    "selector": "app=cost-target",
+    "abusive_sa": "default",
+    "legit_sa": "cost-legit",
+    "pod_substr": "rate-target"
+  },
+  "arm": {
+    "mechanism": "serving-rate-budget",
+    "calibrate": "/cost-budget-admin --mode=calibrate (exec staging-phorvex-manager)",
+    "arm_cmd": "/cost-budget-admin --mode=arm",
+    "abusive_flood": "fortio load -c 50 -qps 0 -t 420s http://cost-target/ (SA default)",
+    "legit_reference": "cost-client --qps<=2*reserved --duration=360s (SA cost-legit)"
+  },
+  "oracle": {
+    "summary": "ServingRateFamily.custom_fire -> lane-throttle-fire.py result.json",
+    "pass": "result.pass==true AND manager decision row action==throttle selected&feasible&actuated&dispatchOutcome==emitted AND abusive rejected>0 & admitted<5% of attempted & admit-rate~=baseline AND legit admitted==attempted & rejected==0, baseline-subtracted",
+    "decider": "lane p5-brain/p5-phorvex @ throttle-param-80387795 (decisionConfigSHA256 f3b74b14\u2026)",
+    "fixture": "lane-throttle-fixture.sh p5 ensure"
+  },
+  "event": {
+    "description": "Spamming AI System with Chaff Data \u2014 abusive serving request-rate flood vs the operator cost budget, cost-cap throttle defense (AML.T0046)",
+    "threatLevel": "high"
+  },
+  "defended": [
+    "throttle"
+  ],
+  "expected": "DEFENDED",
+  "note": "LANE-FIREABLE (Path B, 2026-10-26): throttle's cost-defense contract was de-hardcoded on branch feat/throttle-param-lane @ 80387795 \u2014 servingbudget.Profile + ActiveProfile() source the tenant namespace / selecting policy / trusted detector identity / proxy+service+backend+target-app identifiers from the operator's PHORVEX_THROTTLE_* env instead of the costbench-opus literals (default unchanged, so costbench-opus still validates byte-for-byte). Lane p5 runs the SHA-matched throttle-param-80387795 images (all 4) with the p5-demo profile; the fixture (lane-throttle-fixture.sh) stands up the p5-demo serving-rate substrate: rate-admission proxy + rate-target backend + rate-target-backend Service + budget/status/journal CMs + serving-rate-defense policy + the trusted rate-detector SA. `fire <id> --lane p5` runs the self-contained serving-rate fire (ServingRateFamily.custom_fire): abusive flood + legit-live, brain selects+actuates THROTTLE, two-sided oracle (abusive capped to ~baseline while legit stays all-200), baseline-subtracted, self-cleaning reversible cap. All 20 serving-rate ids map to the SAME load-driven cost-cap defense (no attack-id-keyed brain path); per-attack variation is honest labelling (distinct operationID per run)."
+}

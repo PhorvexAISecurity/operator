@@ -18,7 +18,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/phorvex/phorvex/internal/attackcatalog"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
+	"github.com/phorvex/phorvex/internal/identityfixture"
 )
 
 // --- Attack Catalog (the full ~53 scenarios from the harness registry) -------------------
@@ -52,6 +54,12 @@ type CatalogItem struct {
 	Available             bool     `json:"available"`
 	UnavailableReason     string   `json:"unavailableReason,omitempty"`
 	RuntimeContext        string   `json:"runtimeContext,omitempty"`
+	CatalogueID           string   `json:"catalogueID,omitempty"`
+	CatalogueOrder        int      `json:"catalogueOrder,omitempty"`
+	Description           string   `json:"description,omitempty"`
+	Family                string   `json:"family,omitempty"`
+	ExpectedAction        string   `json:"expectedAction,omitempty"`
+	ReactiveCompatible    bool     `json:"reactiveCompatible,omitempty"`
 }
 
 // Legacy harnesses used techniques; current harnesses separate declared from exercised.
@@ -145,6 +153,65 @@ func (c *Config) sortedLimitedV1Catalogue(items []CatalogItem) []CatalogItem {
 		}
 		return items[i].Name < items[j].Name
 	})
+	return append(items, c.attackCatalogueItems()...)
+}
+
+func attackCatalogueProduct(id string) string {
+	switch {
+	case strings.HasPrefix(id, "AML"), strings.HasPrefix(id, "aml"), strings.HasPrefix(id, "ASI"), strings.HasPrefix(id, "asi"), strings.HasPrefix(id, "LLM"), strings.HasPrefix(id, "llm"), strings.HasPrefix(id, "MCP"), strings.HasPrefix(id, "mcp"):
+		return "ai"
+	case strings.HasPrefix(id, "MS-"), strings.HasPrefix(id, "ms-"):
+		return "platform"
+	default:
+		return "k8s"
+	}
+}
+
+func (c *Config) attackCatalogueItems() []CatalogItem {
+	entries, err := attackcatalog.Entries()
+	if err != nil {
+		return nil
+	}
+	firstReady := c.AttackCatalogEnabled && c.AuditSource != nil && c.Service != ServiceConsole
+	if firstReady {
+		var profile identityfixture.Profile
+		profile, err = identityfixture.LoadFile(c.AttackCatalogIdentityProfilePath)
+		firstReady = err == nil && c.AttackCatalogAuthorizationTenant != "" &&
+			c.AttackCatalogIdentityTenant != "" && profile.Namespace == c.AttackCatalogIdentityTenant
+	}
+	items := make([]CatalogItem, 0, len(entries))
+	for _, entry := range entries {
+		item := CatalogItem{
+			EntryID: entry.ID, Name: entry.ID, Product: attackCatalogueProduct(entry.ID), Category: entry.Family,
+			R6Tag: "not-applicable", Techniques: []string{entry.ID}, ExercisedTechniques: []string{}, Caps: []string{},
+			Realism: "review-pinned-defensive-validation", BenignControl: boolPtr(false), ExpectedActuators: []string{entry.ExpectedAction},
+			ResponseGuidanceBasis: "reviewed-catalogue-metadata",
+			ResponseGuidance:      "Expected defensive action only; it is never evidence of observation, decision, actuation, physical validation, cleanup, or defense.",
+			MeaningfulWhen:        "A defended result requires the entry's reviewed runtime oracle and clean postflight; event creation alone never passes.",
+			RunnableNote:          "Visible review-pinned catalogue metadata. Launch authority is a separate server-side allowlist.",
+			Prereqs:               []string{"operator role and exact tenant/target grant", "reviewed server-owned adapter", "authenticated audit source", "clean postflight"},
+			LaunchKind:            "catalogue-entry", ClaimClass: "security", EventMode: "explicit-injected-typed-event", Profile: entry.ID,
+			Available: false, CatalogueID: entry.ID, CatalogueOrder: entry.Order, Description: entry.Description,
+			Family: entry.Family, ExpectedAction: entry.ExpectedAction, ReactiveCompatible: entry.ReactiveCompatible,
+		}
+		switch {
+		case entry.ID != attackcatalog.FirstID:
+			item.UnavailableReason = "Visible metadata only: no reviewed server-side launch adapter is packaged for this entry."
+		case firstReady:
+			item.Available = true
+			item.RuntimeContext = defaultTargetID
+			item.RunnableNote = "Server-fixed AML.T0012 identity-rotation validation; authoritative fixture and policy admission are repeated at launch."
+		case !c.AttackCatalogEnabled:
+			item.UnavailableReason = "AML.T0012 launch adapter is not enabled by this deployment."
+		case c.Service == ServiceConsole:
+			item.UnavailableReason = "AML.T0012 is served by the attacks service; no attacks-service runtime is active here."
+		case c.AuditSource == nil:
+			item.UnavailableReason = "AML.T0012 requires the authenticated manager audit source."
+		default:
+			item.UnavailableReason = "AML.T0012 reviewed identity-fixture profile is unavailable or invalid."
+		}
+		items = append(items, item)
+	}
 	return items
 }
 

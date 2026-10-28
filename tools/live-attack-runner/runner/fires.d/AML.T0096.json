@@ -1,0 +1,47 @@
+{
+  "name": "AML.T0096",
+  "mode": "lane",
+  "lane": "p2",
+  "actuator": "network-isolate",
+  "event_type": "phorvex.attack.network-edge",
+  "family": "network-edge",
+  "desc": "AI Service API C2/exfil: a demo-api foothold opens an egress channel to an external service-API endpoint (AML.T0096) \u2014 the brain selects network-isolate and surgically removes the forbidden egress edge while the pod stays Ready/in-service",
+  "target": {
+    "ns": "p6-demo",
+    "prefix": "demo-api-",
+    "pod_substr": "demo-api",
+    "deployment": "demo-api",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "forbidden_edges": [
+      "c2"
+    ],
+    "forbidden_edges_meaning": [
+      "<c2-sink pod IP>/32 (forbidden external C2 / exfil / peer-agent endpoint)"
+    ]
+  },
+  "arm": {
+    "mechanism": "network-edge-observation (trusted detector SecurityEvent)",
+    "recipe": "pick a Ready demo-api foothold; confirm baseline egress to the forbidden CIDR(s) REACHED; inject a TRUSTED SecurityEvent as p6-attacks SA (rule.type=phorvex.attack.network-edge) with annotation phorvex.ai/network-edge-observation-v1 {targetPodUID, policyName/UID/Generation, forbiddenEdges=[operator-declared CIDRs]}",
+    "forbidden_edges": [
+      "c2"
+    ],
+    "harness": "run2/netiso-p6/netiso_fire.py --id AML.T0096 (reusable; self-cleaning)"
+  },
+  "oracle": {
+    "annotation_key": "phorvex.ai/network-edge-observation-v1",
+    "pass": "lane manager decision row action==network-isolate selected&&feasible&&actuated (time>T0) AND every forbidden egress edge REACHED->BLOCKED (dataplane) AND legit+DNS still REACHED AND foothold Ready/same-UID AND demo-api available>=minAvailableReplicas(2) AND the non-target peer untouched (no isolation label, same edge still REACHED); baseline-subtracted",
+    "policy": "p6-demo/demo-api-defense (enabled [rotate,quarantine,network-isolate], ceiling 1.2, minAvailableReplicas 2 == replicas)",
+    "decider_decisionConfigSHA256": "7b2e3683",
+    "dataplane": "AWS VPC CNI aws-eks-nodeagent --enable-network-policy=true honours ipBlock 0.0.0.0/0 except [forbiddenEdges]",
+    "evidence": "run2/netiso-p6/run/verdict-AML.T0096.json"
+  },
+  "event": {
+    "description": "Open C2/exfil egress channel to an external AI Service API endpoint observed on a demo-api foothold (authorized red-team; AML.T0096)",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "network-isolate"
+  ],
+  "expected": "DEFENDED",
+  "note": "network-isolate bucket. family 'network-edge' now has a REAL self-provisioning fire_lane adapter (NetworkEdgeFamily): `fire <id> --lane p2` is LIVE DEFENDED on the netiso lane (all 4 services on ECR :netiso-p3, SHA-matched from op-p3). setup provisions the standing c2-sink egress target + the demo-api-defense policy (enabled [rotate,quarantine,network-isolate], minAvailableReplicas==replicas so rotate/quarantine are SLO-infeasible) + the manager networkpolicies RBAC. The brain selects+actuates network-isolate; oracle = every forbidden egress edge flips REACHED->BLOCKED on the real AWS-VPC-CNI dataplane while legit+DNS stay REACHED, the foothold stays Ready (same UID), demo-api available>=minAvail, and the non-target peer is untouched (no isolation label, same edge still REACHED) = surgical + two-sided, baseline-subtracted; self-cleans. Port of run2/netiso-p6/netiso_fire.py. Verified live on lane p2 (AML.T0096 c2 + T1552.005 imds, 2026-10-26)."
+}
