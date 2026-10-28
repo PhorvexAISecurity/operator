@@ -1,0 +1,35 @@
+{
+  "name": "AML.T0049",
+  "mode": "lane",
+  "lane": "p1",
+  "actuator": "quarantine",
+  "event_type": "phorvex.attack.aml-t0049",
+  "family": "quarantine",
+  "desc": "Exploit Public-Facing Application (AML.T0049) \u2014 compromised demo-api pod; quarantine network-isolates it while preserving service capacity",
+  "target": {
+    "ns": "p1-demo",
+    "prefix": "demo-api-",
+    "pod_substr": "demo-api",
+    "selector": "app.kubernetes.io/name=demo-api"
+  },
+  "arm": {
+    "threat_level": "critical",
+    "mechanism": "inject a trusted SecurityEvent (as the lane pN-attacks detector SA) that carries a phorvex.ai/protected-outcomes-v1 annotation asserting a QUALIFIED protected-outcome on a ready demo-api pod: an irreversible-catastrophic unauthorized-disclosure, LossState at-risk, scoped to the live pod (policyUID + decisionAsset ns/name + decisionAssetUID == pod UID), whose single requiredKeys names the pod networkIdentity fact pod|<ns>/<pod>|networkIdentity. No workload/object drift \u2014 the compromise signal is the event. The fail-closed stamp-protected-outcomes webhook makes the trust boundary ready so the assertion qualifies."
+  },
+  "oracle": {
+    "selection": "existential-uncontainable: quarantine covers the networkIdentity requiredKey but rotate does not (rotate refused no-sound-cover), so quarantine is the only certified full-containing move -> decision result:selected order:existential>lambda, selected+feasible+actuated, dispatchOutcome emitted",
+    "isolation": "target pod relabeled off the Service selector (app.kubernetes.io/name->demo-api-quarantined-quarantined) + phorvex.ai/quarantined=<uid>, deny-all NetworkPolicy phorvex-quarantine-<hash> selecting phorvex.ai/quarantined=<uid>, target IP dropped from demo-api Endpoints",
+    "availability": "deployment availableReplicas >= policy minAvailableReplicas (2); RS respawns a clean replica",
+    "two_sided": "non-target demo-api pods keep their UIDs and remain Service endpoints",
+    "baseline_subtracted": "a NEW selected+feasible+actuated quarantine decision row for the target pod (none pre-fire)"
+  },
+  "event": {
+    "description": "Exploit Public-Facing Application (AML.T0049)",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "quarantine"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane pN. The brain selects quarantine over rotate via the EXISTENTIAL-UNCONTAINABLE path (base colocation-cover is coverEnabled:false): the event's protected-outcome requiredKey is a networkIdentity fact only quarantine covers, so rotate is refused no-sound-cover. Lane fixture (reproducible): run lane-quarantine-fixture.sh N \u2014 >=3 Ready demo-api pods pinned to CriticalAddonsOnly headroom nodes (availabilityFloor needs ready-1>=minAvailable=2; farm untainted nodes are aws-cni IP-starved), networkpolicies+pods/update RBAC for the lane manager+actuator SAs, and a cleared durable phorvex-shared-capacity ledger (a crashed prior quarantine can leave a stale reservation that makes the manager refuse quarantine resource-capacity). phvx-attack.py QuarantineFamily.arm() re-ensures the RBAC+ledger and asserts the outcome, so `fire <id> --lane pN` reproduces it. Red-team teardown deletes the quarantined pod + deny-all netpol + capacity ledgers. family 'quarantine' adapter is built in phvx-attack.py."
+}

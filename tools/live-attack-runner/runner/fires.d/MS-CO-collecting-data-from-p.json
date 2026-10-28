@@ -1,0 +1,36 @@
+{
+  "name": "MS-CO-collecting-data-from-p",
+  "mode": "lane",
+  "lane": "p6",
+  "actuator": "identity-rotate",
+  "event_type": "phorvex.attack.pod-bound-api-auth",
+  "family": "identity-sa-rotate",
+  "desc": "Collecting data from pod \u2014 credential/identity reuse (MS-CO-collecting-data-from-p); identity-rotate rotates the pod ServiceAccount identity (LANE-FIREABLE on an isolated lane; see note)",
+  "target": {
+    "ns": "console-identity-<lane>",
+    "prefix": "console-id-fixture-",
+    "deployment": "console-id-fixture",
+    "pod_substr": "console-id-fixture"
+  },
+  "arm": {
+    "mechanism": "stolen-pod-bound-ServiceAccount-token (console identity fixture)",
+    "recipe": "rollout-restart deployment/console-id-fixture in console-identity-shared to a single fresh Ready pod (restartCount 0), then fire the REAL stolen-token attack via the reviewed console harness (self-cleans its artifacts)",
+    "harness": "/home/milad/projects/mostafa/phorvex/phvx-actuator-identity-rotate-20261018/build/run/fire-live/remote-live.sh  (operator workstation; NOT on this farm)"
+  },
+  "oracle": {
+    "summary_json": "<gateway>/tmp/phvx-fire-live-20261018/post/attack-final-summary.json",
+    "pass": "outcome==DEFENDED AND actuated==true AND decisionEvidence.action==identity-rotate AND decisionEvidence.selected==true AND decisionEvidence.actuated==true (strict positive gain; the stolen-token SA is rotated and old credential invalidated), baseline-subtracted, staging frozen",
+    "decider_brain": "phorvex:kv-drain-reset-0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec",
+    "console_actuator": "phorvex-console:actuator-integration-66f9fb1415e8f804b0701871b357c25400955ebe",
+    "base_image_cannot": "brain:cost-c1e9d5f0 cannot meet this oracle: identity-rotate is non-emittable + the native handler errors -> no such decision row is possible"
+  },
+  "event": {
+    "description": "Collecting data from the pod by reusing its identity/credential (attack id MS-CO-collecting-data-from-p); detected on the console identity stack, the brain selects identity-rotate and the SA identity is rotated.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "identity-rotate"
+  ],
+  "expected": "DEFENDED",
+  "note": "LANE-FIREABLE (anchor CORRECTION, verified 2026-10-26). The prior 'shared-stack-only' note analyzed ~/op-main, a RECONSTRUCTION that lacks the identity-rotate port; it does NOT match the deployed image. The stock lane brain image cost-c1e9d5f0 == HEAD of feat/cost-harvest-newstack, which is STACKED on feat/identity-rotate-newstack @ 5879529c (verified: the GitHub branch history of c1e9d5f0bf186 contains 5879529 'port identity-rotate' + 3be1880 OperationID + 5dc3a99 enable, and internal/{model,actuator}/identity_rotation.go + internal/identityfixture are present at HEAD). So the lane binary carries the FULL, un-gated identity-rotate handler + gate/generator/recon/slo + the actuator SSAR & kill-switch authority + runner OperationID. A stock lane reports the NEW native reason 'identity-rotate requires a validated dedicated-SA external-theft observation and exact policy epoch' (handler present, awaiting the observation), NOT the old declared-only exclusion. fire <id> --lane pN is now GENUINE DEFENDED via lane-identity-fixture.sh (the lane's OWN console-identity-pN substrate: owned ns + dedicated-SA fixture + policy + sensor-reader/actuator-mutator Roles + a Profile CM mounted on the sensor + an EKS Pod Identity association for pN-sensor so identityfixture.FederationAbsent can read EKS + console-identity-pN added to the lane scope + the pN-attacks-targets VAP widened to allow the fixture ns) and the IdentitySARotateFamily custom_fire (mint+prove a stolen pod-bound token, write the positive-control marker, inject the trusted phorvex.attack.pod-bound-api-auth SecurityEvent, read the lane manager's identity-rotate decision row + the two-sided oracle: SA UID flips, stolen TokenReview true->false, Pod retained). All 13 identity-rotate attack-ids map to the SAME credential-abuse -> SA-rotation defense (no attack-id-keyed brain path); per-attack variation is honest labelling."
+}

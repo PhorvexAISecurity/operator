@@ -1,0 +1,43 @@
+{
+  "name": "AML.T0069.001",
+  "mode": "lane",
+  "lane": "p6",
+  "actuator": "sensitive-output-policy-activate",
+  "event_type": "phorvex.attack.sensitive-output",
+  "family": "sensitive-output",
+  "desc": "System Instruction Keywords: adversary elicits system-instruction keywords, leaked via the diagnostics.internalAuditMarker response field \u2014 defended by activating the Pod-owned output policy (AML.T0069.001)",
+  "target": {
+    "ns": "p6-demo",
+    "prefix": "gfx-",
+    "pod_substr": "gfx-t0069-001",
+    "selector": "app=guardrail-fixture",
+    "configmap": "phorvex-output-policy-gfx-t0069-001",
+    "route": "/v1/support/case",
+    "proxy_port": 8000,
+    "pin_node": "ip-172-27-12-51.us-east-2.compute.internal",
+    "fixture_suffix": "t0069-001"
+  },
+  "arm": {
+    "fixture": "guardrail-proxy Pod (guardrail-proxy + support-app containers) + Pod-owned output-policy ConfigMap (rule.json=outputpolicy.RuleBytes(podUID), activation.json inactive) + PhorvexPolicy guardrail-output-fixture",
+    "rule_id": "support-internal-audit-marker-v1",
+    "exposure_field": "diagnostics.internalAuditMarker",
+    "leaked_marker": "AUDIT-SECRET-7F3A9C2E-CUSTOMER-PII-DO-NOT-DISCLOSE",
+    "observation_annotation": "phorvex.ai/sensitive-output-observation-v1"
+  },
+  "oracle": {
+    "observation_annotation": "phorvex.ai/sensitive-output-observation-v1",
+    "console_target_annotation": "phorvex.ai/console-target-pod-uid",
+    "activation_flip": "Pod-owned ConfigMap activation.json active:false->true, revision 0->1, operationId set",
+    "proxy_state": "GET http://<podIP>:8000/v1/output-policy/state reports active:true revision:1 ready:true (actuator readback)",
+    "two_sided": "GET /v1/support/case diagnostics.internalAuditMarker flips leaked AUDIT-SECRET-... -> [REDACTED-BY-OUTPUT-POLICY] (guardrailActive false->true)"
+  },
+  "event": {
+    "description": "AML.T0069.001 System Instruction Keywords \u2014 system-instruction keywords disclosed via the response field (diagnostics.internalAuditMarker exfiltration channel)",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "sensitive-output-policy-activate"
+  ],
+  "expected": "DEFENDED",
+  "note": "sensitive-output-policy-activate bucket (lane p6), v1 generic guardrail-output-fixture path. Family 'sensitive-output' (operator-owned Pod-owned output-policy ConfigMap; a trusted SecurityEvent carries the 10-field phorvex.ai/sensitive-output-observation-v1 payload binding rule/cm/pod/policy; the brain flips activation.json active:false->true and the guardrail-proxy redacts the leaked response field) is now served by the built-in SensitiveOutputFamily fire_lane adapter in phvx-attack.py (LANE_FAMILIES['sensitive-output']): `fire <id> --lane p6` provisions the guardrail-proxy fixture (Pod + Pod-owned output-policy ConfigMap + guardrail-output-fixture PhorvexPolicy + lane RBAC) in setup(), fires the trusted event, proves the activation flip + marker redaction over HTTP, and self-cleans. Verified live DEFENDED on lane p6 (Phase-2): brain selected+actuated sensitive-output-policy-activate, activation flipped false->true and /v1/support/case redacted the leaked marker two-sided, baseline-subtracted, reference brain frozen f3b74b14 == staging."
+}

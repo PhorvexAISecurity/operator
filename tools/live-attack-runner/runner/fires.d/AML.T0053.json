@@ -1,0 +1,41 @@
+{
+  "name": "AML.T0053",
+  "mode": "lane",
+  "lane": "p6",
+  "actuator": "agent-action-deny",
+  "event_type": "phorvex.attack.agent-action",
+  "family": "agent-action",
+  "desc": "AI Agent Tool Invocation: caller-t0053 invoked tool action invoke-tool on agent-sim (AML.T0053)",
+  "target": {
+    "ns": "p6-demo",
+    "prefix": "agent-sim-",
+    "pod_substr": "agent-sim",
+    "selector": "app=agent-sim",
+    "service": "agent-sim",
+    "guard_configmap": "agent-deny-guard",
+    "agent_name": "agent-sim"
+  },
+  "arm": {
+    "caller_id": "caller-t0053",
+    "action_id": "invoke-tool",
+    "abused_pair": "caller-t0053::invoke-tool"
+  },
+  "oracle": {
+    "observation_annotation": "phorvex.ai/agent-action-observation-v1",
+    "objective": "ai2-agent-action-abuse",
+    "guard_key": "denied.json",
+    "readback_path": "/phorvex-guard/state",
+    "app_flips": "caller-t0053::invoke-tool 200 allow -> 403 Forbidden (deny) on every serving Pod",
+    "guard_state": "denied_agent_actions lists exactly [\"caller-t0053::invoke-tool\"]",
+    "two_sided": "benign caller-z::read-report and surgical caller-t0053::read-report stay 200 allow; deny is the exact pair, not the caller"
+  },
+  "event": {
+    "description": "AI Agent Tool Invocation: caller-t0053 invoked tool action invoke-tool on agent-sim (AML.T0053)",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "agent-action-deny"
+  ],
+  "expected": "DEFENDED",
+  "note": "agent-action-deny bucket (lane p5). ADAPTER BUILT: family 'agent-action' is now served by the AgentActionFamily fire_lane adapter in phvx-attack.py (LANE_FAMILIES['agent-action']). `fire <id> --lane p6` provisions the agent-sim Deployment(2) + agent-deny-guard ConfigMap + policy [agent-action-deny,rotate] + grants the lane manager/actuator configmaps get,update in the demo ns (capability-gate SSAR), fires phorvex.attack.agent-action with the agent-action-observation-v1 payload, and proves the app flips the abused pair 200->403 on EVERY serving Pod (guard-state=[caller::action]) while benign+surgical stay 200 (two-sided), then self-cleans. REQUIREMENT: agent-action-deny is NOT compiled into the frozen lane base (cost-c1e9d5f0); the adapter's preflight returns UNSUPPORTED-on-lane unless the lane's 4 services run an agentdeny image. Set it with `kubectl set image deploy/{p6-phorvex,p6-brain,p6-actuator,p6-sensor} *=.../{manager,brain,actuator,sensor}:p4-agentdeny-v1` (Recreate=IP-safe; DecisionConfigSHA 7b2e3683 consistent across all 4), then reset to cost-c1e9d5f0 after. Verified LIVE DEFENDED on lane p6 2026-10-26 (AML.T0053: agent-action-deny selected&feasible&actuated, coverageValue 3.26, both pods 200->403)."
+}

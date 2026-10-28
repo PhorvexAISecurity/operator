@@ -1,0 +1,32 @@
+{
+  "name": "registry-rollback",
+  "mode": "lane",
+  "lane": "p2",
+  "actuator": "registry-rollback",
+  "event_type": "phorvex.attack.image",
+  "family": "image",
+  "desc": "AI supply-chain image compromise \u2014 running container image digest drifted off the operator-trusted pin (AML.T0010)",
+  "target": {
+    "ns": "p2-demo",
+    "prefix": "demo-api-",
+    "deployment": "demo-api",
+    "container": "web",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "pod_substr": "demo-api"
+  },
+  "arm": {
+    "poison_image": "public.ecr.aws/nginx/nginx-unprivileged:1.26-alpine"
+  },
+  "oracle": {
+    "pin_annotation": "phorvex.ai/trusted-image-ref"
+  },
+  "event": {
+    "description": "Supply-chain image compromise: demo-api image digest drifted from the operator pin (AML.T0010).",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "registry-rollback"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p2. Arm = drift demo-api's web image off its pin; detector event carries running!=trusted digest + target-uid. DEFENDED when the lane brain selects+actuates registry-rollback and the running web digest returns to the operator-trusted pin (a rotate re-pulls the same poison; quarantine leaves it running). Two-sided (imgtest-bystander untouched); reference staging brain frozen."
+}

@@ -1,0 +1,33 @@
+{
+  "name": "aml.t0018.000",
+  "mode": "lane",
+  "lane": "p3",
+  "actuator": "registry-rollback",
+  "event_type": "phorvex.attack.image",
+  "family": "image",
+  "desc": "Poison AI Model [AML.T0018.000] \u2014 supply-chain image compromise: demo-api web image drifted off the operator-trusted pin; registry-rollback resets the running image to the pin",
+  "target": {
+    "ns": "p3-demo",
+    "prefix": "demo-api-",
+    "deployment": "demo-api",
+    "container": "web",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "pod_substr": "demo-api"
+  },
+  "arm": {
+    "poison_image": "public.ecr.aws/nginx/nginx-unprivileged:mainline-alpine"
+  },
+  "oracle": {
+    "pin_annotation": "phorvex.ai/trusted-image-ref"
+  },
+  "event": {
+    "description": "[AML.T0018.000] Poison AI Model: demo-api container image digest drifted from the operator pin to an unauthorized image (nginx-unprivileged:mainline-alpine).",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "registry-rollback"
+  ],
+  "expected": "DEFENDED",
+  "attack_id": "AML.T0018.000",
+  "note": "Backlog attack AML.T0018.000 (Poison AI Model); registry key sanitized to 'aml.t0018.000' because the tool derives the k8s SecurityEvent name redteam-<name>-<hex> which must be RFC1123. Lane p3. Arm = drift demo-api web off pin to public.ecr.aws/nginx/nginx-unprivileged:mainline-alpine (digest sha256:03df07e5\u2026 != pin 65e3e85d\u2026). DEFENDED = lane brain selects+actuates registry-rollback and the running web digest returns to the operator pin (rotate re-pulls the same drifted image; quarantine leaves it running). Baseline-subtracted, two-sided; staging brain frozen."
+}

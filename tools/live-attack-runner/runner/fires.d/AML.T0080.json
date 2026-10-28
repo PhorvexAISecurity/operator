@@ -1,0 +1,37 @@
+{
+  "name": "AML.T0080",
+  "mode": "lane",
+  "lane": "p6",
+  "actuator": "kv-reset",
+  "event_type": "phorvex.attack.kv",
+  "family": "serving-kv",
+  "desc": "AI Agent Context Poisoning \u2014 a wipe-surviving prompt-inject implant persisted in a vLLM serving pod's prefix/KV cache; kv-reset flushes it while the pod stays ALIVE (AML.T0080)",
+  "target": {
+    "ns": "p6-demo",
+    "prefix": "kv-serving-",
+    "pod_substr": "kv-serving",
+    "deployment": "kv-serving",
+    "service": "kv-serving",
+    "selector": "app.kubernetes.io/name=kv-serving",
+    "serving_port": 8000,
+    "implant_key": "prompt_inject_implant"
+  },
+  "arm": {
+    "implant_marker": "t0080-agent-context",
+    "seed_endpoint": "POST /seed {key:prompt_inject_implant, val:<persistent poisoned agent-context>, marker:t0080-agent-context}",
+    "note": "via the kv-probe pod, seed the implant into BOTH kv-serving pods; the fired pod is the target, the other is the two-sided bystander"
+  },
+  "oracle": {
+    "kv_probe_path": "GET /kv",
+    "good": "target implant_present flips true->false with reset_count>=1 AND the pod stays ALIVE (uid+restartCount unchanged, Ready) AND the kv-serving Deployment stays 2/2 AND the bystander pod keeps its implant+identity (two-sided), baseline-subtracted"
+  },
+  "event": {
+    "description": "AI agent context poisoning: a persistent prompt-inject implant poisoned the serving pod's prefix/KV context, surviving ordinary turns (AML.T0080).",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "kv-reset"
+  ],
+  "expected": "DEFENDED",
+  "note": "Lane p2 (fixture ns p2-demo), actuator kv-reset = vLLM/GPU SERVING prefix/KV-cache flush (ActionKVReset -> real HTTP POST /reset_prefix_cache to the pod's declared serving endpoint, requires {success:true}; pod stays ALIVE, stamps phorvex.ai/kv-reset-epoch). Namespace-parametric (binds on Pod.ServingEndpointReady + HasGPU). Lane prep: p2-actuator --serving-security-mode=legacy-plaintext (synthetic fixture has no mTLS binding; serving-only flag) + GPU-declaring kv-serving fixture (nvidia.com/gpu=1) + policy kv-serving-defense enabling [rotate,kv-reset] (NOT quarantine: network-isolating a live model server defeats serving). Fire = trusted p2-attacks SecurityEvent phorvex.attack.kv targeting one pod. DEFENDED verified LIVE 2026-10-26: decision kv-reset selected&feasible&actuated (stage=prompt-inject-persist, strict gain 11.06>0), target implant flushed while pod stayed alive, Deployment 2/2, bystander untouched, baseline-subtracted; staging frozen (cost-c1e9d5f0). ADAPTER BUILT: family 'serving-kv' is now served by the ServingKVFamily fire_lane adapter in phvx-attack.py (LANE_FAMILIES['serving-kv']). `fire <id> --lane p6` flips the lane actuator to --serving-security-mode=legacy-plaintext (reversible flag; Recreate strategy = IP-safe; brain image/SHA unchanged), provisions a GPU-declaring kv-serving Deployment(2) + kv-probe (hostNetwork, pinned) + policy [rotate,kv-reset], seeds both pods, fires phorvex.attack.kv at the target, and proves the implant flush (reset_count+1, pod alive) two-sided, then self-cleans. Verified LIVE DEFENDED on lane p6 2026-10-26 (MCP10:2025: kv-reset selected&feasible&actuated, coverageValue 8.258)."
+}

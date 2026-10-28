@@ -1,0 +1,52 @@
+{
+  "name": "T1612",
+  "mode": "lane",
+  "lane": "p3",
+  "actuator": "node-cordon-drain-replace",
+  "event_type": "phorvex.attack.host-escape",
+  "family": "node-recycle",
+  "desc": "Build Image on Host — trusted container/host-escape on a node (T1612); the brain selects node-cordon-drain-replace and recycles the compromised node (malicious image build on host)",
+  "target": {
+    "ns": "p3-demo",
+    "prefix": "demo-api-",
+    "pod_substr": "demo-api",
+    "deployment": "demo-api",
+    "selector": "app.kubernetes.io/name=demo-api",
+    "node_compromised": "p3-node-a",
+    "node_healthy": "p3-node-b"
+  },
+  "arm": {
+    "mechanism": "host-escape-observation (kwok node-group)",
+    "recipe": "ensure kwok nodes p3-node-a(compromised)/p3-node-b(healthy) Ready + demo-api 3x kwok-pinned with >=1 ready pod on p3-node-a; inject a TRUSTED SecurityEvent as p3-attacks SA (rule.type=phorvex.attack.host-escape) carrying annotation phorvex.ai/node-escape-observation-v1",
+    "escape_evidence": "adversary built a malicious image directly on the host containerd (T1612): untracked image build on node",
+    "harness": "python3 phvx-attack.py fire T1612 --lane p3  (node-recycle adapter; self-cleaning; recreates node-a as the node-group replacement stand-in)",
+    "fixture_script": "lane-ncdr-fixture.sh 3  (one-time substrate)"
+  },
+  "oracle": {
+    "annotation_key": "phorvex.ai/node-escape-observation-v1",
+    "safety_gate": "node RE-DERIVED from the live pod's spec.nodeName; event naming a different node is REFUSED (ingest/node_escape.go) -> not a cluster-DoS primitive",
+    "pass": "lane manager decision row action==node-cordon-drain-replace selected&&feasible&&actuated (time>T0) AND p3-node-a GONE (deleted) AND target pod evicted->clean replacement AND p3-node-b + its pods UIDs UNCHANGED (two-sided) AND demo ready>=minAvailableReplicas(2); baseline-subtracted, staging frozen",
+    "policy": "p3-demo/node-defense (enabled [node-cordon-drain-replace,rotate,quarantine], ceiling 1.2, minAvailableReplicas 2)",
+    "decider_decisionConfigSHA256": "7b2e3683",
+    "evidence": "run/p3-ncdr/verdict-T1612.json",
+    "policy_name": "node-defense",
+    "min_available": 2,
+    "decider_build": "ncdr-p4 (op-p4 @4d36a15); actuator configSHA256 c94e4d9f; additive manifest 41d69d74"
+  },
+  "event": {
+    "description": "Build Image on Host on node p3-node-a (T1612); the host/node is compromised (adversary built a malicious image directly on the host containerd (T1612): untracked image build on node). A trusted host-escape detector observes it, the brain selects node-cordon-drain-replace, and the compromised node is cordoned, drained and recycled.",
+    "threatLevel": "critical"
+  },
+  "defended": [
+    "node-cordon-drain-replace"
+  ],
+  "expected": "DEFENDED",
+  "note": "GENUINE LIVE LANE DEFENDED. node-cordon-drain-replace IS in the lane base image (ECR tag :ncdr-p4, built from op-p4 @4d36a15 on baseline cost-c1e9d5f0; all 4 services SHA-matched; parameter-manifest canonical hash 41d69d74 == clean main => additive-only, decision LOGIC frozen). The `node-recycle` family now has a FIRST-CLASS adapter in phvx-attack.py (LANE_FAMILIES['node-recycle'] = NodeRecycleFamily), so `python3 phvx-attack.py fire <id> --lane p3` reproduces the whole cycle end-to-end: it RE-ESTABLISHES the per-fire preconditions (both kwok nodes Ready, demo-api 3x kwok-pinned with a ready pod on node-a), injects a TRUSTED SecurityEvent as pN-attacks (rule.type=phorvex.attack.host-escape, annotation phorvex.ai/node-escape-observation-v1 {targetPodUID==pod.uid, nodeName==pod.spec.nodeName, escapeEvidence, policyName/UID/Generation}), reads the lane manager decision (node-cordon-drain-replace selected&&feasible&&actuated&&dispatchOutcome=emitted on the exact target, baseline-subtracted), runs the two-sided oracle (node-a GONE + target evicted->clean replacement + node-b and its pods UIDs UNCHANGED + demo ready>=minAvailableReplicas), then self-cleans (delete event; recreate node-a as the node-group replacement stand-in; uncordon node-b). The one-time substrate is stood up reproducibly by  lane-ncdr-fixture.sh <N>  (kwok controller keyed to phorvex.ai/kwok-lane=pN + 2 kwok nodes + demo-api 3x kwok-pinned + node-defense policy + cluster-scoped node/pod/eviction RBAC for the manager+actuator SAs). All 12 node-recycle attack-ids are host/node-compromise techniques (escape / machine-compromise / persistence / log-tamper / privileged) that map to the SAME host-escape detection -> node recycle; per-attack variation is honest labelling of the escape evidence (no attack-id-keyed brain path). Fidelity: lane-scoped kwok node substrate (Node objects / scheduler / Eviction API / Node delete 100% REAL; kubelet simulated) -- DISCLOSED. First proven live on p3 2026-10-26 (AML.T0105 + T1611); node names are lane-derived by the adapter so --lane selects the lane.",
+  "fixture": {
+    "script": "lane-ncdr-fixture.sh <N>",
+    "substrate": "lane-scoped kwok node-group (pN-node-a compromised stand-in / pN-node-b healthy) + demo-api 3x kwok-pinned (nodeSelector phorvex.ai/lane=pN + kwok toleration) + PDB + node-defense PhorvexPolicy + cluster-scoped node/pod/eviction RBAC",
+    "image": "operator stack on ECR :ncdr-p4 (op-p4 @4d36a15); node-cordon-drain-replace native handler",
+    "fidelity": "kwok: Node/scheduler/Eviction-API/Node-delete REAL, kubelet simulated (DISCLOSED)",
+    "note": "adapter re-establishes per-fire preconditions + recreates node-a on teardown; kwok nodes use no aws-cni pod IPs"
+  }
+}
