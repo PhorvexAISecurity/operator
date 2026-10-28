@@ -37,6 +37,16 @@ so serving the guide needs no browser or PDF generator on the host. Update both
 files together after editing the guide. The HTML's Print / PDF button provides
 the print layout, including expanded FAQ answers.
 
+The complete playbooks cover file uploads, `/validate` captions, `/templates`,
+batch summaries and activity cards in both languages:
+
+- English: [HTML](guide-en.html), [PDF](guide-en.pdf).
+- Persian: [HTML](guide-fa.html), [PDF](guide-fa.pdf).
+
+The bot's `/guide` command delivers the English pair. The Persian edition is a
+separate reading aid; keep command names, document keys and numeric digits in
+the examples as written.
+
 ## Uploading experiment files
 
 Upload a document directly into the chat. An authorized account can use either
