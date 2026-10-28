@@ -11,6 +11,7 @@ import math
 
 HEADLINE = ('M-P21', 'M-P26', 'M-P19', 'M-P22', 'M-P25', 'M-P28', 'M-P02')
 CSV_FIELDS = ('experiment_id', 'arm_id', 'effective_value', 'effective_value_label', 'metric_id', 'metric_name', 'unit',
+              'comparison',
               'value', 'ci_low', 'ci_high', 'ci_method', 'numerator', 'denominator', 'n', 'paired_n', 'data_status',
               'comparison_status', 'population', 'reason')
 TELEGRAM_LIMIT = 4000
@@ -19,7 +20,8 @@ TELEGRAM_LIMIT = 4000
 def headline(rows):
     """Arm-level headline rows, ordered by metric then by arm order of appearance."""
     arms = list(dict.fromkeys(r['arm_id'] for r in rows))
-    picked = [r for r in rows if r.get('metric_id') in HEADLINE and r.get('dimension') is None]
+    picked = [r for r in rows if r.get('metric_id') in HEADLINE and r.get('dimension') is None
+              and r.get('comparison', 'ARM_LEVEL') == 'ARM_LEVEL']
     return sorted(picked, key=lambda r: (HEADLINE.index(r['metric_id']), arms.index(r['arm_id'])))
 
 
@@ -82,7 +84,10 @@ def summary(meta, result, rows):
     if result.get('toolchain_fidelity'):
         lines.append('toolchain fidelity (deployed commit built here): %s' % result['toolchain_fidelity'])
     lines.extend(test_lines(result))
-    lines.append('ticks: %s control-eligible; matched per arm %s' % (pop.get('control_eligible', '?'), pop.get('matched_by_arm', {})))
+    eligible = str(pop.get('control_eligible', '?'))
+    if result.get('cohort_size') is not None:
+        eligible += '/%s' % result['cohort_size']
+    lines.append('ticks: %s control-eligible; matched per arm %s' % (eligible, pop.get('matched_by_arm', {})))
     for key in ('policy', 'base', 'candidate', 'parameter', 'changed'):
         if meta.get(key):
             lines.append('%s: %s' % (key, meta[key]))
@@ -114,6 +119,7 @@ def page(meta, result, rows, limitations=()):
     facts = ''.join('<tr><th>%s</th><td>%s</td></tr>' % (e(k), e(str(v))) for k, v in (
         ('state', result.get('state') or meta.get('state')), ('comparison', result.get('comparison_status')),
         ('toolchain fidelity', result.get('toolchain_fidelity')),
+        ('selected ticks', result.get('cohort_size')),
         ('control-eligible ticks', (result.get('population') or {}).get('control_eligible')),
         ('matched per arm', (result.get('population') or {}).get('matched_by_arm')),
         *((k, meta.get(k)) for k in ('policy', 'parameter', 'base', 'candidate', 'changed', 'request', 'job'))) if v not in (None, ''))

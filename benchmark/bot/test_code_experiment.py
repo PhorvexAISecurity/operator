@@ -76,6 +76,11 @@ class CodeExperimentTest(unittest.TestCase):
         for name in ('metrics.json', 'result.json', 'experiment_manifest.json', 'report.md', 'sweep_results.csv',
                      'Phorvex_Math_Lab_Results.xlsx', 'evidence.zip', 'replay.jsonl'):
             self.assertTrue((exp / name).exists(), name)
+        import zipfile
+        with zipfile.ZipFile(exp / 'evidence.zip') as evidence:
+            names = [name for name in evidence.namelist() if name.endswith('result.json')]
+            self.assertTrue(names)
+            self.assertEqual(json.loads(evidence.read(names[0]))['state'], result['state'])
         replay = [json.loads(l) for l in (exp / 'replay.jsonl').read_text().splitlines()]
         self.assertTrue(all(l['cross_version'] for l in replay if l['arm_id'] == 'candidate'))
         self.assertFalse(any(l['cross_version'] for l in replay if l['arm_id'] != 'candidate'))

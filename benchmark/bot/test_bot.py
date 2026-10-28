@@ -220,6 +220,20 @@ class ReportTest(unittest.TestCase):
         self.assertIn('incomplete', report.comparison_lines(result, rows)[0])
         self.assertNotIn('delta -1', report.comparison_lines(result, rows)[0])
 
+    def test_paired_differences_never_replace_arm_values(self):
+        rows = [{'arm_id': arm, 'metric_id': 'M-P26', 'metric_name': 'Moves', 'unit': 'moves per tick',
+                 'comparison': comparison, 'value': value}
+                for arm, comparison, value in (('control', 'ARM_LEVEL', 2), ('candidate', 'ARM_LEVEL', 1),
+                                               ('candidate', 'PAIRED_DIFF_VS_CONTROL', -1))]
+        meta = {'kind': 'Code experiment', 'title': 'comparison'}
+        text = report.summary(meta, {}, rows)
+        self.assertEqual(text.count('candidate'), 1)
+        self.assertIn('candidate    1', text)
+        self.assertNotIn('candidate    -1', text)
+        page = report.page(meta, {}, rows)
+        self.assertNotIn('<td>-1</td>', page)
+        self.assertIn(b'PAIRED_DIFF_VS_CONTROL', report.table(rows))
+
 
 class FakeDashboard:
     def __init__(self, preflight_status='PASS'):

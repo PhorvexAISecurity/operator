@@ -103,6 +103,12 @@ def run(data_dir, root, request, control, base_local, candidate, timeout=3600):
         fidelity = 'EXACT'
     else:
         fidelity = 'DIVERGED'
+    if not population['control_eligible']:
+        state = 'INVALID'
+    elif matched.get('candidate') == population['control_eligible'] == len(cohort):
+        state = 'COMPLETE'
+    else:
+        state = 'PARTIAL'
     manifest = {
         'schema_version': 'phorvex-bench.code-experiment-manifest.v1', 'experiment_id': request['experiment_id'],
         'title': request.get('title'), 'mode': 'CODE_REPLAY', 'hypothesis': request.get('hypothesis'),
@@ -119,6 +125,7 @@ def run(data_dir, root, request, control, base_local, candidate, timeout=3600):
                 fidelity, 'decides exactly like' if fidelity == 'EXACT' else 'does NOT decide exactly like')],
         'tests': request.get('tests'), 'started_at': request.get('created_at'), 'finished_at': utc()}
     result = {'schema_version': 'phorvex-bench.code-experiment-result.v1', 'experiment_id': request['experiment_id'],
+              'state': state, 'cohort_size': len(cohort),
               'comparison_status': 'OBSERVATIONAL', 'toolchain_fidelity': fidelity, 'population': population,
               'tests': request.get('tests'),
               'arm_values': ctx['arm_values'], 'replay_summaries': {a: read_json(root / ('replay-summary-%s.json' % a)) for a in ARMS},
@@ -129,14 +136,6 @@ def run(data_dir, root, request, control, base_local, candidate, timeout=3600):
     write_json(root / 'result.json', result)
     _status(root, 'export', 'writing evidence')
     exports.write_all(root, manifest, rows, plots, result)
-    if not population['control_eligible']:
-        state = 'INVALID'
-    elif matched.get('candidate') == population['control_eligible'] == len(cohort):
-        state = 'COMPLETE'
-    else:
-        state = 'PARTIAL'
-    result['state'] = state
-    write_json(root / 'result.json', result)
     _status(root, 'done', 'finished', state=state)
     return result, rows
 
