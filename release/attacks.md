@@ -1,5 +1,9 @@
 # attacks changelog
 
+## 0.7.0 (2026-10-28)
+
+- feat(console): add reactive defense switch (3294439c)
+
 ## 0.6.0 (2026-10-27)
 
 - fix(charts): complete agent-action-deny + controller-stop chart wiring; re-vendor (7d0c2226)
