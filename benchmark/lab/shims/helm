@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Lab-only helm (ticket Part 2 DR-37, TP-3). Like the kubectl shim: refuses
+# (exit 97) unless the lab kubeconfig really points at the lab's API server, and
+# refuses HELM_KUBE* variables, a different --kubeconfig or --kube-context, API
+# server or credential overrides, plugins, and `helm dependency` (the chart's
+# phorvex-common is vendored; no dependency build). An accepted call is logged
+# and runs the real helm with the lab kubeconfig and context made explicit.
+set -uo pipefail
+# shellcheck source=shim-lib.sh
+source "$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")/shim-lib.sh"
+bench_init helm "$@"
+
+VERBS=' upgrade install uninstall status get list ls history rollback template version show lint test '
+BENCH_VERB=''
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  a=${args[i]} flag='' value=''
+  case $a in
+    --kubeconfig|--kube-context) flag=$a; value=${args[i + 1]:-}; ((i++)) ;;
+    --kubeconfig=*|--kube-context=*) flag=${a%%=*}; value=${a#*=} ;;
+    --kube-apiserver*|--kube-token*|--kube-as-user*|--kube-as-group*|--kube-ca-file*|--kube-insecure-skip-tls-verify*|\
+      --kube-tls-server-name*)
+      bench_refuse "${a%%=*} would point helm at another server or identity" ;;
+    -n|--namespace|-f|--values|--set|--set-string|--set-file|--set-json|--version|-o|--output|--timeout|--post-renderer)
+      ((i++)) ;;
+    -*) ;;
+    *) [[ -n $BENCH_VERB ]] || BENCH_VERB=$a ;;
+  esac
+  [[ $flag != --kubeconfig || $value == "${LAB_KUBECONFIG:-}" ]] || bench_refuse "--kubeconfig $value is not the lab kubeconfig"
+  [[ $flag != --kube-context || $value == "${LAB_CONTEXT:-}" ]] || bench_refuse "--kube-context $value is not the lab context"
+done
+[[ -n $BENCH_VERB ]] || bench_refuse "no helm subcommand"
+[[ $VERBS == *" $BENCH_VERB "* ]] || bench_refuse "helm $BENCH_VERB is not an allowed subcommand (plugins and dependency are refused)"
+bench_lab_target
+bench_cmdlog shim "$(bench_access helm)" lab helm "$@"
+exec "$REAL" "$@" --kubeconfig "$LAB_KUBECONFIG" --kube-context "$LAB_CONTEXT"

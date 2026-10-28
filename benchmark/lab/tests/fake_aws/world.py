@@ -1,7 +1,10 @@
 """A small stateful AWS account for the offline teardown tests.
 
 The account lives in the JSON file $STUB_WORLD: {"account": ..., "items": [...]}.
-Each item has a kind (cluster, nodegroup, stack, elb, vpc, eni, sg, instance,
+Account-level settings sit beside the items: eks_versions ({"1.36":
+"STANDARD_SUPPORT"}), gpu_quota (vCPUs), instance_types ({"g4dn.xlarge": 4}),
+budgets (names), active_cost_tags (keys) and collide_labs (every
+phorvex-281-lab-* name "exists"). Each item has a kind (cluster, nodegroup, stack, elb, vpc, eni, sg, instance,
 volume, nat, eip, oidc, loggroup, ecr, other), identifiers (id, name, arn),
 tags, and optionally a state, a vpc, security groups, the stack that owns it
 ("owner"), and the instance it is attached to ("attached_to").
@@ -26,14 +29,14 @@ class World:
     def __init__(self, path=None):
         self.path = path or os.environ["STUB_WORLD"]
         with open(self.path) as f:
-            data = json.load(f)
-        self.account = data["account"]
-        self.items = data["items"]
+            self.data = json.load(f)
+        self.account = self.data["account"]
+        self.items = self.data["items"]
 
     def save(self):
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
-            json.dump({"account": self.account, "items": self.items}, f, indent=1)
+            json.dump(self.data, f, indent=1)
         os.replace(tmp, self.path)
 
     def gone(self, it):

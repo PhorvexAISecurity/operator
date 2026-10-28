@@ -1,0 +1,22 @@
+# Exact tool versions for benchmark/run.sh (ticket Part 2 P1.1, DR-29).
+# One "tool version" per line. run.sh refuses (exit 10) if a tool is missing,
+# reports another version, or is still UNSET here.
+#
+# Pinning these is DEVOPS owner step 1. The values below are only those the
+# ticket itself states; the rest must be filled in from the jump host:
+#   kubectl  kubectl version --client -o json   (.clientVersion.gitVersion; 1.35-1.37 for EKS 1.36)
+#   helm     helm version --template '{{.Version}}'
+#   aws      aws --version                       (aws-cli/X.Y.Z)
+#   git      git --version
+#   python3  python3 --version
+#   jq       jq --version                        (jq-X.Y.Z)
+# A leading "v" is ignored when comparing.
+kubectl UNSET
+helm    UNSET
+aws     UNSET
+eksctl  0.214.0
+crane   0.20.2
+go      1.26.4
+git     UNSET
+python3 UNSET
+jq      UNSET

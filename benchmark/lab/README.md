@@ -5,8 +5,119 @@ brain against New brain (shadow-only), deleted by tag afterwards. The ticket is
 `A-TICKET-benchmark-self-service.md`. Delivery order (DR-48): Part 3 (this
 directory's `build-image.sh`), then Part 2 `run.sh`, then Part 1 fixtures.
 
-Status: Part 3 is done. In Part 2, `teardown-by-tag.sh` is done; `run.sh`, the
-shims, the cluster template and the stub fixture come next.
+Status: Part 3 is done. In Part 2, `teardown-by-tag.sh`, `run.sh` P0–P1 with
+`--plan`, and the shims are done. P2–P7 (the image, cluster, platform,
+fixtures, scenarios and reports) come next.
+
+## Part 2: `run.sh` P0–P1, `--plan`, and the lab shims
+
+```sh
+benchmark/run.sh --run-dir /tmp/bench-001 --aws-account 753556437180 --region us-east-2 \
+  --new-tag <tag> --new-commit <sha> --scenarios A,B,D --m23 stopped --plan
+```
+
+`run.sh` runs P0 and P1 for real, then prints what P2–P9 would do (TP-1).
+P1 is read-only. P2–P7 are not built yet, so this build accepts only
+`--plan`; without it, `run.sh` exits 10 rather than pretend to run.
+
+- **P0** captures the real tool paths and the real kubeconfig before isolating
+  anything. It validates the arguments. `--run-dir` must be a new absolute path
+  that is not `/`, not `$HOME`, and neither inside the repository nor
+  containing it; it is created with mode 700. P0 then generates a 6-hex run id,
+  installs a separate trap for each of EXIT, INT, TERM and HUP, and writes
+  `run.json`, `TEARDOWN-COMMAND.txt` and `CREATED.json`.
+- **P1** checks:
+  - the tools against `tools.lock`;
+  - the AWS account and region;
+  - that the repository is clean, including ignored files. It then records
+    `REPO-BEFORE.txt`, takes a read-only snapshot, and installs the shims from
+    that snapshot;
+  - the real kubeconfig's sha256;
+  - dev's endpoint, which becomes `LAB_FORBIDDEN_SERVERS`, and the Old image,
+    read through `dev_read`;
+  - the M-23 gate;
+  - that no cluster, ECR repository or stack is named for the run;
+  - that EKS 1.36 is in standard support;
+  - that at least 4 free G/VT vCPUs remain;
+  - the cost cap and the `phorvex-benchmark-lab` budget. An inactive
+    cost-allocation tag only warns.
+- **Exit handler.** P8 (`teardown-by-tag.sh`) runs only if `P2-STARTED`
+  exists. P9 checks `COMMANDS.log`, the kubeconfig sha256 and
+  `REPO-BEFORE` = `REPO-AFTER`. It then cleans the run directory, but only after
+  re-checking that the directory passes the `--run-dir` rules and that its
+  `run.json` carries this run's id. Exit precedence follows §12:
+  70 > 80 > 97 > phase > 90 > 0. A signal before P2 exits with the phase's
+  code.
+- **Shims** (`shims/kubectl`, `helm`, `aws`, with `shim-lib.sh`). Every call
+  is logged to `COMMANDS.log` with its access (read, write, dev-read or
+  refused) and its target (lab or dev). Secret values are redacted, in refusal
+  reasons too. The shims exit 97 for:
+  - kubectl or helm with no lab server, or with a kubeconfig whose server is
+    not the lab's or is forbidden;
+  - `--server`, `--token`, `--cluster`, `--user` or certificate overrides;
+  - a different `--kubeconfig` or `--context`;
+  - `HELM_KUBE*` variables, or a `KUBECONFIG` list;
+  - `kubectl config` writes, and plugins;
+  - `helm dependency`;
+  - `aws eks update-kubeconfig`, or `--endpoint-url`;
+  - a `--region` or `--profile` that is not the lab's;
+  - any aws write that names dev.
+
+  Accepted calls run the real tool with the lab kubeconfig and context made
+  explicit.
+
+`tools.lock` holds only the versions the ticket states: eksctl 0.214.0, crane
+0.20.2, and go 1.26.4 on the jump host (T-3). Every other tool is `UNSET`, and
+P1 refuses until DEVOPS pins it (owner step 1). `m23-fixed.sha256` lists the
+fixed watcher versions for `--m23 fixed`; it is empty.
+
+### Deviations from the ticket
+
+1. **Only `--plan` runs** until P2–P7 exist.
+2. **The lab environment.** It gets `env -i` semantics, but is built by
+   unsetting and exporting in a subshell rather than with `env -i K=V ...`,
+   because that form would put AWS credentials on a process command line
+   (DR-23). P1 also checks it: the variable names, never the values, go to
+   `LAB-ENV.txt`, and any name outside the allowlist is refused.
+3. **Tools.** A missing or mismatched tool is refused rather than installed
+   into `$RUN_DIR/bin`. The validated tools that have no shim are linked into
+   `$RUN_DIR/bin`, so the lab PATH (`shims:bin:/usr/bin:/bin`) finds them.
+4. **Dev is required.** Failing to describe dev is a refusal, not
+   informational, because its endpoint becomes `LAB_FORBIDDEN_SERVERS`. The
+   dev image and image IDs remain informational.
+5. **Choices made without `B`/`C`.**
+   - The "E-R-22 commands" are taken to be `rev-parse HEAD`,
+     `status --ignored`, `stash list` and `worktree list`.
+   - The M-23 detection is a process match on `m23_watch|reader-l3`, and
+     "fixed" means the watcher script's sha256 is listed in `m23-fixed.sha256`.
+   - The collision check also covers `eksctl-<lab>-*` stacks.
+   - `AWS_REGION` or `AWS_DEFAULT_REGION` set to another region is refused.
+   - Redirecting the AWS SSO cache (R4-17) is not done; this account uses
+     static credentials.
+6. **The cost check** (`max-hours × $1.60 > $25`) is kept, but it cannot
+   trigger while `--max-hours` is capped at 15 ($24).
+7. **Cleanup without a create.** When nothing was created, P9 cleans the run
+   directory as it would after a teardown PASS.
+
+### Tests
+
+`tests/test_run.py` runs `run.sh` from a throwaway repository, never the
+working one, against `fake_aws` and `fake_bin` (git, jq and python3 are real).
+It covers:
+- TP-1, `--plan`;
+- TP-2, the argument refusals and the preflight refusals;
+- the M-23 gate with a stub watcher;
+- lab-environment isolation;
+- the P9 guard with a mismatched run id (R4-3);
+- SIGTERM during P1 (R7-8c);
+- I-1, I-2 and the 80 > 97 precedence.
+
+`tests/test_shims.py` covers TP-3. Ten injected safety bugs in `run.sh` and the
+shims are each caught.
+
+Run the tests with `PYTHONDONTWRITEBYTECODE=1`, or from a different clone. P1
+refuses a repository that holds ignored files, and a test run in the working
+repository leaves `__pycache__` behind (DEV-2).
 
 ## Part 2: `teardown-by-tag.sh`, delete one run by tag
 
@@ -72,7 +183,7 @@ Waits can be shortened for tests with `TEARDOWN_WAIT_STACKS`,
 ### Tests
 
 `tests/test_teardown.py` runs the script against a stateful fake account in
-`tests/teardown_stubs`. The fake models what teardown has to survive:
+`tests/fake_aws`. The fake models what teardown has to survive:
 - `DELETE_FAILED` stacks while ENIs, security groups or nodegroup imports remain;
 - CNI ENIs that leak when a node terminates;
 - describable terminated or deleted resources;

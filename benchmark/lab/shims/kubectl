@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Lab-only kubectl (ticket Part 2 DR-37, TP-3). run.sh copies it into
+# RUN_DIR/shims, first on the lab PATH, so every kubectl call -- including bare
+# kubectl in nested repo scripts -- lands here. It refuses (exit 97) unless the
+# lab kubeconfig really points at the lab's API server, and it refuses any
+# argument that could point kubectl elsewhere: --server, --token, a different
+# --kubeconfig or --context, cluster or credential overrides, kubeconfig
+# mutations such as `config use-context`, and plugins. An accepted call is
+# logged to COMMANDS.log and runs the real kubectl with the lab kubeconfig and
+# context made explicit.
+set -uo pipefail
+# shellcheck source=shim-lib.sh
+source "$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")/shim-lib.sh"
+bench_init kubectl "$@"
+
+VERBS=' annotate api-resources api-versions apply auth cluster-info config cordon cp create delete describe diff drain
+  events exec explain expose get label logs patch port-forward replace rollout run scale set taint top uncordon version wait '
+CONFIG_READS=' view current-context get-contexts get-clusters get-users '
+BENCH_VERB='' BENCH_SUBVERB=''
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  a=${args[i]} flag='' value=''
+  case $a in
+    --kubeconfig|--context) flag=$a; value=${args[i + 1]:-}; ((i++)) ;;
+    --kubeconfig=*|--context=*) flag=${a%%=*}; value=${a#*=} ;;
+    --server|--server=*|-s|-s=*|--token|--token=*|--cluster|--cluster=*|--user|--user=*|--username|--username=*|\
+      --password|--password=*|--certificate-authority*|--client-certificate*|--client-key*|--tls-server-name*|\
+      --insecure-skip-tls-verify*|--cache-dir*)
+      bench_refuse "${a%%=*} would point kubectl at another server or identity" ;;
+    -n|--namespace|-o|--output|-l|--selector|-f|--filename|-c|--container|--as|--as-group|--as-uid|--request-timeout|\
+      --field-selector|-L|--label-columns|-p|--patch|--type|--template|-v|--v|--log-file|--for|--timeout|-i|-t)
+      [[ $a == -i || $a == -t ]] || ((i++)) ;;
+    -*) ;;
+    *)
+      if [[ -z $BENCH_VERB ]]; then BENCH_VERB=$a
+      elif [[ -z $BENCH_SUBVERB ]]; then BENCH_SUBVERB=$a; fi ;;
+  esac
+  [[ $flag != --kubeconfig || $value == "${LAB_KUBECONFIG:-}" ]] || bench_refuse "--kubeconfig $value is not the lab kubeconfig"
+  [[ $flag != --context || $value == "${LAB_CONTEXT:-}" ]] || bench_refuse "--context $value is not the lab context"
+done
+[[ -n $BENCH_VERB ]] || bench_refuse "no kubectl subcommand"
+[[ $VERBS == *" $BENCH_VERB "* ]] || bench_refuse "kubectl $BENCH_VERB is not an allowed subcommand (plugins are refused)"
+if [[ $BENCH_VERB == config && $CONFIG_READS != *" ${BENCH_SUBVERB:-none} "* ]]; then
+  bench_refuse "kubectl config ${BENCH_SUBVERB:-} would change a kubeconfig"
+fi
+bench_lab_target
+bench_cmdlog shim "$(bench_access kubectl)" lab kubectl "$@"
+exec "$REAL" --kubeconfig "$LAB_KUBECONFIG" --context "$LAB_CONTEXT" "$@"

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Offline stand-in for helm: its version for tools.lock; otherwise logs and succeeds.
+printf 'helm\t%s\n' "$(IFS=$'\t'; echo "$*")" >>"$STUB_LOG"
+if [[ $1 == version ]]; then printf 'v3.19.0'; exit 0; fi
+echo 'fake helm ran'

@@ -1,0 +1,6 @@
+# The M-23 L3 watcher versions DEVOPS has fixed to pin their own context
+# (ticket Part 2 C-4, DR-26). One sha256 of the watcher script per line.
+#
+# `run.sh --m23 fixed` refuses (exit 10) while any running watcher's script
+# hash is not listed here. `--m23 stopped` (recommended) refuses while any
+# watcher runs at all. Empty: no fixed version has been recorded.

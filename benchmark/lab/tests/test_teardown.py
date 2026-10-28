@@ -1,6 +1,6 @@
 """Tests for benchmark/lab/teardown-by-tag.sh (ticket Part 2 P8, TP-5).
 
-The script runs against a stateful fake account (tests/teardown_stubs): a full
+The script runs against a stateful fake account (tests/fake_aws): a full
 lab for the run under test, a second concurrent lab, the dev cluster, prod
 resources and a look-alike lab whose name merely extends the run's. Every test
 checks the one safety rule: nothing that is not the run's is ever touched, and
@@ -16,7 +16,7 @@ from pathlib import Path
 
 LAB_DIR = Path(__file__).resolve().parents[1]
 SCRIPT = LAB_DIR / 'teardown-by-tag.sh'
-STUBS = Path(__file__).resolve().parent / 'teardown_stubs'
+STUBS = Path(__file__).resolve().parent / 'fake_aws'
 ACCT = '753556437180'
 RUN, OTHER = 'abc123', 'def456'
 MUTATING = {'delete-stack', 'delete-load-balancer', 'delete-network-interface', 'delete-security-group',

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Offline stand-in for go: its version, for tools.lock.
+[[ $1 == version ]] && { echo 'go version go1.26.4 linux/amd64'; exit 0; }
+echo "fake go: unexpected call: $*" >&2
+exit 99

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Lab aws (ticket Part 2 DR-37). Every aws call in the lab environment is logged
+# to COMMANDS.log (argv only, never output, so get-login-password and tokens
+# stay out of it). Refused (exit 97): `eks update-kubeconfig`, which would write
+# a kubeconfig; --endpoint-url; a --region or --profile other than the lab's;
+# and any write that names the dev cluster or a forbidden API server. Dev stays
+# read-only (C-1). The real aws is called by its recorded absolute path, never
+# copied (T-9).
+set -uo pipefail
+# shellcheck source=shim-lib.sh
+source "$(dirname -- "$(realpath -- "${BASH_SOURCE[0]}")")/shim-lib.sh"
+bench_init aws "$@"
+
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  a=${args[i]}
+  case $a in
+    --endpoint-url|--endpoint-url=*) bench_refuse "--endpoint-url would send aws somewhere else" ;;
+    --region) [[ ${args[i + 1]:-} == "${AWS_REGION:-}" ]] || bench_refuse "--region ${args[i + 1]:-} is not the lab region ${AWS_REGION:-}" ;;
+    --region=*) [[ ${a#*=} == "${AWS_REGION:-}" ]] || bench_refuse "${a} is not the lab region ${AWS_REGION:-}" ;;
+    --profile) [[ ${args[i + 1]:-} == "${AWS_PROFILE:-}" ]] || bench_refuse "--profile ${args[i + 1]:-} is not the run's profile" ;;
+    --profile=*) [[ ${a#*=} == "${AWS_PROFILE:-}" ]] || bench_refuse "${a} is not the run's profile" ;;
+  esac
+done
+op=$(bench_aws_op "$@")
+[[ $op != "eks update-kubeconfig" ]] || bench_refuse "aws eks update-kubeconfig would write a kubeconfig"
+access=$(bench_access aws "$@")
+target=$(bench_target "$@")
+[[ $target != dev || $access == read ]] || bench_refuse "a write that names dev ($op); dev is read-only"
+bench_cmdlog shim "$access" "$target" aws "$@"
+exec "$REAL" "$@"

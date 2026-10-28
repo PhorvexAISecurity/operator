@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Offline stand-in for kubectl. It reads real kubeconfig files, written as
+JSON (which kubectl accepts too), so the shims' target checks run against what
+a kubeconfig really says. Every call is logged to $STUB_LOG.
+
+  version --client -o json         -> v1.36.0
+  config current-context           -> the file's current-context, or exit 1
+  config view -o json              -> the file
+  config view --minify -o jsonpath={.clusters[0].cluster.server}
+                                   -> the server of --context, or of the current context
+  get deployment ... -o jsonpath=  -> the dev Old image
+  get pods ... -o json             -> one phorvex-phorvex pod with an imageID
+  anything else                    -> "fake kubectl ran", exit 0
+"""
+import json
+import os
+import sys
+
+sys.dont_write_bytecode = True
+
+
+def main(argv):
+    with open(os.environ["STUB_LOG"], "a") as f:
+        f.write("\t".join(["kubectl", *argv]) + "\n")
+    kubeconfig, context, rest, i = os.environ.get("KUBECONFIG"), None, [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--kubeconfig", "--context", "--request-timeout"):
+            if a == "--kubeconfig":
+                kubeconfig = argv[i + 1]
+            elif a == "--context":
+                context = argv[i + 1]
+            i += 2
+            continue
+        if a.startswith("--request-timeout="):
+            i += 1
+            continue
+        rest.append(a)
+        i += 1
+    if rest[:1] == ["version"]:
+        print(json.dumps({"clientVersion": {"gitVersion": "v1.36.0"}}))
+        return 0
+    if rest[:1] == ["config"]:
+        with open(kubeconfig) as f:
+            cfg = json.load(f)
+        if rest[1:2] == ["current-context"]:
+            if not cfg.get("current-context"):
+                print("error: current-context is not set", file=sys.stderr)
+                return 1
+            print(cfg["current-context"])
+            return 0
+        if "--minify" in rest:
+            name = context or cfg.get("current-context")
+            ctx = next(c for c in cfg["contexts"] if c["name"] == name)
+            cluster = next(c for c in cfg["clusters"] if c["name"] == ctx["context"]["cluster"])
+            print(cluster["cluster"]["server"], end="")
+            return 0
+        print(json.dumps(cfg))
+        return 0
+    if rest[:2] == ["get", "deployment"]:
+        print("753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager:0.12.0", end="")
+        return 0
+    if rest[:2] == ["get", "pods"]:
+        print(json.dumps({"items": [{"metadata": {"name": "phorvex-phorvex-7d9f"},
+                                     "status": {"containerStatuses": [{"imageID": "phorvex/manager@sha256:" + "d" * 64}]}}]}))
+        return 0
+    print("fake kubectl ran")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

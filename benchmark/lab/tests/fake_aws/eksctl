@@ -20,6 +20,9 @@ from world import World, log_call  # noqa: E402
 
 def main(argv):
     log_call("eksctl", argv)
+    if argv == ["version"]:
+        print("0.214.0")
+        return 0
     kubeconfig = os.environ.get("KUBECONFIG", "")
     log_call("eksctl-kubeconfig", [kubeconfig])
     if argv[:2] != ["delete", "cluster"] or "--name" not in argv:

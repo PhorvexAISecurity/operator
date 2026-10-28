@@ -88,6 +88,9 @@ def describable(w, kind):
 
 def main(argv):
     log_call("aws", argv)
+    if argv == ["--version"]:
+        print("aws-cli/2.31.0 Python/3.13.7 Linux/6.8.0 exe/x86_64.ubuntu.24")
+        return
     service, op, positional, opts = parse(argv)
     if f"{service}:{op}" in os.environ.get("STUB_FAIL", "").split(","):
         error("InternalFailure", "injected failure")
@@ -142,10 +145,19 @@ def handle(w, service, op, positional, opts):
 
     # EKS
     if key == "eks describe-cluster":
-        c = w.find("cluster", name=one(opts, "name"))
+        name = one(opts, "name")
+        c = w.find("cluster", name=name)
+        if c is None and w.data.get("collide_labs") and name.startswith("phorvex-281-lab-"):
+            c = {"name": name, "arn": f"arn:aws:eks:us-east-2:{w.account}:cluster/{name}"}
         if c is None:
-            error("ResourceNotFoundException", f"No cluster found for name: {one(opts, 'name')}.")
-        return {"cluster": {"name": c["name"], "arn": c["arn"], "status": "ACTIVE", "tags": c.get("tags") or {}}}
+            error("ResourceNotFoundException", f"No cluster found for name: {name}.")
+        return {"cluster": {"name": c["name"], "arn": c["arn"], "status": "ACTIVE", "tags": c.get("tags") or {},
+                            "endpoint": c.get("endpoint", f"https://{c['name']}.eks.example"),
+                            "version": c.get("version", "1.31")}}
+    if key == "eks describe-cluster-versions":
+        versions = w.data.get("eks_versions", {})
+        return {"clusterVersions": [{"clusterVersion": v, "versionStatus": versions[v]}
+                                    for v in opts.get("cluster-versions", []) if v in versions]}
     if key == "eks describe-nodegroup":
         n = w.find("nodegroup", cluster=one(opts, "cluster-name"), name=one(opts, "nodegroup-name"))
         if n is None:
@@ -228,8 +240,10 @@ def handle(w, service, op, positional, opts):
         found = [i for i in describable(w, "instance") if (i["id"] in ids if ids else matches(i, filters(opts)))]
         if ids and not found:
             error("InvalidInstanceID.NotFound", f"The instance IDs '{','.join(ids)}' do not exist")
-        return {"Reservations": [{"Instances": [{"InstanceId": i["id"], "State": {"Name": i["state"]},
-                                                 "Tags": tag_list(i)} for i in found]}] if found else []}
+        return {"Reservations": [{"Instances": [
+            {"InstanceId": i["id"], "State": {"Name": i["state"]}, "Tags": tag_list(i),
+             "InstanceType": i.get("type", "t3.large"), **({"InstanceLifecycle": i["lifecycle"]} if i.get("lifecycle") else {})}
+            for i in found]}] if found else []}
     if key == "ec2 describe-volumes":
         return {"Volumes": [{"VolumeId": v["id"], "State": v["state"], "Tags": tag_list(v)}
                             for v in w.live("volume") if matches(v, filters(opts))]}
@@ -253,6 +267,23 @@ def handle(w, service, op, positional, opts):
     if key == "ec2 describe-tags":
         return {"Tags": [{"ResourceId": it["id"], "Key": t["Key"], "Value": t["Value"]}
                          for it in w.live() if it.get("id") and matches(it, filters(opts)) for t in tag_list(it)]}
+
+    # Account settings read by run.sh P1
+    if key == "service-quotas get-service-quota":
+        assert one(opts, "quota-code") == "L-DB2E81BA", opts
+        return {"Quota": {"QuotaCode": "L-DB2E81BA", "Value": float(w.data.get("gpu_quota", 0))}}
+    if key == "ec2 describe-instance-types":
+        sizes = w.data.get("instance_types", {})
+        return {"InstanceTypes": [{"InstanceType": t, "VCpuInfo": {"DefaultVCpus": sizes[t]}}
+                                  for t in opts.get("instance-types", []) if t in sizes]}
+    if key == "budgets describe-budget":
+        name = one(opts, "budget-name")
+        if name not in w.data.get("budgets", []):
+            error("NotFoundException", f"Unable to get budget: {name} - the budget doesn't exist.")
+        return {"Budget": {"BudgetName": name}}
+    if key == "ce list-cost-allocation-tags":
+        active = w.data.get("active_cost_tags", [])
+        return {"CostAllocationTags": [{"TagKey": k, "Status": "Active"} for k in opts.get("tag-keys", []) if k in active]}
 
     # IAM, CloudWatch Logs, ECR
     if key == "iam list-open-id-connect-providers":
@@ -280,6 +311,8 @@ def handle(w, service, op, positional, opts):
     if key == "ecr describe-repositories":
         name = one(opts, "repository-names")
         r = w.find("ecr", name=name)
+        if r is None and w.data.get("collide_labs") and name.startswith("phorvex-281-temp-"):
+            r = {"name": name, "arn": f"arn:aws:ecr:us-east-2:{w.account}:repository/{name}"}
         if r is None:
             error("RepositoryNotFoundException", f"The repository with name '{name}' does not exist")
         return {"repositories": [{"repositoryName": r["name"], "repositoryArn": r["arn"]}]}
