@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Offline stand-in for crane. Logs every call to $STUB_LOG. Registry reads and
+# the push need the credential that `auth login` writes into $DOCKER_CONFIG. The
+# base is an index whose linux/amd64 image has two layers; a push adds one.
+set -euo pipefail
+(IFS=$'\t'; printf 'crane\t%s\n' "$*") >>"$STUB_LOG"
+d() { printf 'sha256:%s' "$(printf "%064d" 0 | tr 0 "$1")"; }
+authed() { [[ -f ${DOCKER_CONFIG:-/nonexistent}/config.json ]] || { echo 'crane stub: UNAUTHORIZED' >&2; exit 1; }; }
+case $1 in
+  auth)
+    password=$(cat)
+    printf 'login-password\t%s\nlogin-config\t%s\n' "$password" "${DOCKER_CONFIG:-}" >>"$STUB_LOG"
+    echo '{"auths":{"stub":{}}}' >"$DOCKER_CONFIG/config.json" ;;
+  mutate)
+    authed
+    layer='' target=''
+    while (($#)); do
+      case $1 in --append) layer=$2; shift 2 ;; -t) target=$2; shift 2 ;; *) shift ;; esac
+    done
+    tar -tvf "$layer" --numeric-owner | awk '{printf "layer-entry\t%s %s %s\n", $1, $2, $6}' >>"$STUB_LOG"
+    if [[ ${STUB_PUSH:-ok} == fail ]]; then echo 'crane stub: push failed' >&2; exit 1; fi
+    touch "$STUB_STATE/pushed"
+    echo "${target%:*}@${STUB_DIGEST:?}" ;;
+  digest) authed; [[ -e $STUB_STATE/pushed ]] && echo "$STUB_DIGEST" ;;
+  config)
+    authed
+    printf '{"config":{"User":"%s","Entrypoint":["/manager"],"WorkingDir":"/"}}\n' "${STUB_USER:-65532:65532}" ;;
+  manifest)
+    case $2 in
+      *distroless*@"$(d 2)") printf '{"layers":[{"digest":"%s"},{"digest":"%s"}]}\n' "$(d 4)" "$(d 5)" ;;
+      *distroless*) printf '{"manifests":[{"digest":"%s","platform":{"os":"linux","architecture":"arm64"}},{"digest":"%s","platform":{"os":"linux","architecture":"amd64"}}]}\n' "$(d 3)" "$(d 2)" ;;
+      *)
+        authed
+        if [[ ${STUB_LAYERS:-ok} == bad ]]; then
+          printf '{"layers":[{"digest":"%s"},{"digest":"%s"}]}\n' "$(d 9)" "$(d 6)"
+        else
+          printf '{"layers":[{"digest":"%s"},{"digest":"%s"},{"digest":"%s"}]}\n' "$(d 4)" "$(d 5)" "$(d 6)"
+        fi ;;
+    esac ;;
+  *) echo "crane stub: unexpected call: $*" >&2; exit 99 ;;
+esac

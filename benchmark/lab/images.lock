@@ -1,0 +1,40 @@
+{
+  "schema": "phorvex-bench/images-lock/v1",
+  "platform": "linux/amd64",
+  "goToolchain": "go1.26.1",
+  "base": {
+    "image": "gcr.io/distroless/static-debian12:nonroot",
+    "digest": "sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab",
+    "source": "build/integrations/epss-ecr-auth-runtime/Dockerfile:9"
+  },
+  "operatorDockerfiles": {
+    "658cccfa3b3ae19c09194e4628b22899ce3d80ce8eb455212fdb77265e6e460d": {
+      "source": "deploy/docker/operator.Dockerfile at 59b8cc74 (the ticket's HEAD), unchanged from manager-v0.5.0 through manager-v0.11.1",
+      "setOne": [
+        {"package": "./cmd", "name": "manager"},
+        {"package": "./cmd/brain-replay", "name": "brain-replay"}
+      ],
+      "setTwo": [
+        {"package": "./cmd/recovery", "name": "phorvex-recovery"},
+        {"package": "./cmd/mig-allocation-helper", "name": "phorvex-mig-allocation-helper"},
+        {"package": "./cmd/loss-observer", "name": "loss-observer"},
+        {"package": "./cmd/current-inventory-observer", "name": "current-inventory-observer"}
+      ]
+    },
+    "b5f2276a1d4b313ff2778e1949120e5d32cf2f13e3161183737b3f80bb41126f": {
+      "source": "deploy/docker/operator.Dockerfile from c1e9d5f0 (manager-v0.12.0); set two gains persistence-observer and cost-budget-admin",
+      "setOne": [
+        {"package": "./cmd", "name": "manager"},
+        {"package": "./cmd/brain-replay", "name": "brain-replay"}
+      ],
+      "setTwo": [
+        {"package": "./cmd/recovery", "name": "phorvex-recovery"},
+        {"package": "./cmd/mig-allocation-helper", "name": "phorvex-mig-allocation-helper"},
+        {"package": "./cmd/loss-observer", "name": "loss-observer"},
+        {"package": "./cmd/current-inventory-observer", "name": "current-inventory-observer"},
+        {"package": "./cmd/persistence-observer", "name": "persistence-observer"},
+        {"package": "./cmd/cost-budget-admin", "name": "cost-budget-admin"}
+      ]
+    }
+  }
+}

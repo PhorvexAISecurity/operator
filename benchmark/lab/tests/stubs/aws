@@ -1,24 +1,31 @@
 #!/usr/bin/env bash
-# Offline stand-in for the AWS CLI. Logs every call to $STUB_LOG and answers
-# from STUB_* variables; any call it does not know fails loudly.
+# Offline stand-in for the AWS CLI. Logs every call to $STUB_LOG; the one ECR
+# repository lives in $STUB_STATE/ecr-repo, which holds its phorvex.ai/lab-run
+# tag. Any call it does not know fails loudly.
 set -euo pipefail
 (IFS=$'\t'; printf 'aws\t%s\n' "$*") >>"$STUB_LOG"
+repo=$STUB_STATE/ecr-repo
 case "$1 $2" in
   'sts get-caller-identity') echo "${STUB_ACCOUNT:?}" ;;
+  'ecr create-repository')
+    if [[ ${STUB_CREATE:-ok} == denied ]]; then
+      echo 'An error occurred (AccessDeniedException) when calling the CreateRepository operation' >&2; exit 254
+    fi
+    if [[ -e $repo ]]; then
+      echo 'An error occurred (RepositoryAlreadyExistsException) when calling the CreateRepository operation' >&2; exit 254
+    fi
+    for a in "$@"; do
+      if [[ $a == Key=phorvex.ai/lab-run,Value=* ]]; then printf '%s\n' "${a#*Value=}" >"$repo"; fi
+    done
+    echo '{}' ;;
   'ecr describe-repositories')
-    case ${STUB_REPO_STATE:-absent} in
-      absent) echo 'An error occurred (RepositoryNotFoundException) when calling the DescribeRepositories operation' >&2; exit 254 ;;
-      denied) echo 'An error occurred (AccessDeniedException) when calling the DescribeRepositories operation' >&2; exit 254 ;;
-      ours|foreign) echo 'arn:aws:ecr:us-east-2:000000000000:repository/stub' ;;
-    esac ;;
-  'ecr list-tags-for-resource')
-    if [[ $STUB_REPO_STATE == ours ]]; then
-      printf '{"tags":[{"Key":"phorvex-bench-run","Value":"%s"}]}\n' "${STUB_RUN_ID:?}"
-    else
-      echo '{"tags":[{"Key":"phorvex-bench-run","Value":"someone-else"}]}'
+    if [[ -e $repo ]]; then echo 'arn:aws:ecr:us-east-2:000000000000:repository/stub'; else
+      echo 'An error occurred (RepositoryNotFoundException) when calling the DescribeRepositories operation' >&2; exit 254
     fi ;;
-  'ecr create-repository'|'ecr put-lifecycle-policy') echo '{}' ;;
+  'ecr list-tags-for-resource') printf '{"tags":[{"Key":"phorvex.ai/lab-run","Value":"%s"}]}\n' "$(cat "$repo")" ;;
+  'ecr delete-repository')
+    if [[ ${STUB_DELETE:-ok} != noop ]]; then rm -f -- "$repo"; fi
+    echo '{}' ;;
   'ecr get-login-password') echo 'stub-registry-password' ;;
-  'ecr describe-images') echo "${STUB_DIGEST:?}" ;;
   *) echo "aws stub: unexpected call: $*" >&2; exit 99 ;;
 esac

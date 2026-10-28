@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Offline stand-in for the go command. Logs every call and its build
+# environment to $STUB_LOG. A "binary" is a text file naming its package, plus
+# the linkedGitSHA value when -ldflags sets it.
+set -euo pipefail
+(IFS=$'\t'; printf 'go\t%s\n' "$*") >>"$STUB_LOG"
+printf 'go-env\t%s\n' "pwd=$PWD GOTOOLCHAIN=${GOTOOLCHAIN:-} GOFLAGS=${GOFLAGS:-} CGO_ENABLED=${CGO_ENABLED:-} GOOS=${GOOS:-} GOARCH=${GOARCH:-} GOCACHE=${GOCACHE:-}" >>"$STUB_LOG"
+case $1 in
+  env) echo "${STUB_GOVERSION:-${GOTOOLCHAIN:-go1.26.4}}" ;;
+  run)
+    if [[ ${STUB_PENDING:-ok} != ok ]]; then echo 'pendingcheck: unfinished work outside the inventory' >&2; exit 1; fi ;;
+  build)
+    if [[ ${STUB_BUILD:-ok} == fail ]]; then echo 'go stub: build failed' >&2; exit 1; fi
+    shift
+    out='' stamp='' packages=()
+    while (($#)); do
+      case $1 in
+        -o) out=$2; shift 2 ;;
+        -ldflags=*) if [[ $1 == *linkedGitSHA=* ]]; then stamp=${1##*linkedGitSHA=}; fi; shift ;;
+        -*) shift ;;
+        *) packages+=("$1"); shift ;;
+      esac
+    done
+    if [[ ${STUB_STAMP:-ok} == drop ]]; then stamp=''; fi
+    for p in "${packages[@]}"; do
+      {
+        printf 'stub binary %s\n' "$p"
+        if [[ -n $stamp ]]; then printf 'linkedGitSHA=%s\n' "$stamp"; fi
+        if [[ ${STUB_REPRO:-yes} == no && -n ${GOCACHE:-} ]]; then printf 'nondeterministic\n'; fi
+      } >"$out/${p##*/}"
+      chmod 0700 "$out/${p##*/}"
+    done ;;
+  *) echo "go stub: unexpected call: $*" >&2; exit 99 ;;
+esac
