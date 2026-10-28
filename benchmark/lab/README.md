@@ -5,6 +5,105 @@ brain against New brain (shadow-only), deleted by tag afterwards. The ticket is
 `A-TICKET-benchmark-self-service.md`. Delivery order (DR-48): Part 3 (this
 directory's `build-image.sh`), then Part 2 `run.sh`, then Part 1 fixtures.
 
+Status: Part 3 is done. In Part 2, `teardown-by-tag.sh` is done; `run.sh`, the
+shims, the cluster template and the stub fixture come next.
+
+## Part 2: `teardown-by-tag.sh`, delete one run by tag
+
+```sh
+benchmark/lab/teardown-by-tag.sh --run-id 1a2b3c --account 753556437180 \
+  [--region us-east-2] [--proof D/TEARDOWN-PROOF.txt] [--plan]
+```
+
+This is the command `run.sh` writes to `TEARDOWN-COMMAND.txt`. It is stateless
+and idempotent: it reads no local state, so anyone with AWS credentials can run
+it again from any machine. If `run.sh` or the host died, first stop any orphan
+`eksctl ... phorvex-281-lab-<id>` process.
+
+**Safety rule:** `<id>` is 6 hex digits, `LAB=phorvex-281-lab-<id>` and
+`REPO=phorvex-281-temp-<id>`. A resource is deleted only if the selector that
+found it contains `LAB` or `<id>` exactly. That selector is one of:
+- a derived name;
+- the tag key `kubernetes.io/cluster/LAB`;
+- the tag `alpha.eksctl.io/cluster-name=LAB`, `cluster.k8s.amazonaws.com/name=LAB`
+  or `phorvex.ai/lab-run=<id>`.
+
+The cluster, its stacks and the ECR repository must also be tagged
+`phorvex.ai/lab-run=<id>`. Reads may filter the whole region, but no delete does.
+The credentials must belong to `--account`, otherwise the script exits 2.
+`--plan` deletes nothing: it prints each planned delete and every resource of
+the run that is still present, and exits 0.
+
+**Steps** (ticket P8): 2 wait for eksctl stacks in progress (≤ 30 min); 3
+`eksctl delete cluster` with a throwaway kubeconfig; 4 ELBs; 5 available ENIs;
+6 unused security groups; 7 the remaining stacks, nodegroups first, cluster
+last; 8 OIDC provider, log group and available volumes; 9 the ECR repository;
+10 the read-only proofs.
+
+Steps 2–9 are best effort: a failure is logged and the next step runs. Only
+the proofs decide. If none fails, the script prints `PASS` (also the last line
+of the proof file) and exits 0. Otherwise it prints `LEFTOVER ...` lines and
+exits 70. A check that cannot run counts as a leftover, so a throttled or denied
+call never yields a false PASS. There are no internal retries: run the command
+again.
+
+Waits can be shortened for tests with `TEARDOWN_WAIT_STACKS`,
+`TEARDOWN_WAIT_ELB`, `TEARDOWN_WAIT_SG`, `TEARDOWN_POLL` and
+`TEARDOWN_EKSCTL_TIMEOUT` (seconds).
+
+### Deviations from the ticket
+
+1. **Step 7 runs steps 5 and 6 again before the cluster stack.** The ticket
+   says that if the API is unreachable in step 3, the later sweeps and step 7
+   still remove the stacks. In a single run that is not quite true. A CNI ENI
+   leaked by a node stays `in-use` while the node runs, so steps 5–6 find
+   nothing. Step 7 then terminates the node, the ENI becomes `available`, and it
+   blocks the VPC: the cluster stack ends `DELETE_FAILED`, and a second run was
+   needed. Sweeping again at the point where the nodes are gone fixes the order
+   without adding a retry loop. Without it, `test_api_unreachable_still_converges`
+   fails.
+2. **Size.** The ticket estimates about 120 lines. The script is about 350,
+   because each of the 9 steps and each of the 14 step-10 proofs is its own
+   function. Most of that code is the proofs.
+3. **`--dev-cluster`** (default `phorvex-dev-eks`) names the cluster whose
+   presence proof 10 requires. It is a flag so the script also works in another
+   account; the default is the ticket's.
+
+### Tests
+
+`tests/test_teardown.py` runs the script against a stateful fake account in
+`tests/teardown_stubs`. The fake models what teardown has to survive:
+- `DELETE_FAILED` stacks while ENIs, security groups or nodegroup imports remain;
+- CNI ENIs that leak when a node terminates;
+- describable terminated or deleted resources;
+- stale tagging-API hits;
+- an eksctl that fully, partly or never succeeds.
+
+The fake account holds the run, a second lab running at the same time, dev,
+prod, and a look-alike lab (`...-lab-abc1234`). Every test asserts two things:
+anything that is not the run's is byte-for-byte unchanged, and every delete
+names a resource of the run.
+
+Covered: TP-S1 (`--plan`, malformed id, derived names without the run tag) and
+TP-S4 (concurrent labs, re-run). Also covered:
+- partial, clean and failed eksctl;
+- no eksctl on PATH;
+- best-effort failure followed by a re-run;
+- an in-progress stack;
+- a missing dev cluster;
+- stale and unknown tagged resources;
+- a node still shutting down.
+
+Six injected safety bugs are each caught:
+- the cluster, stack or ECR tag check removed;
+- the stack prefix losing its trailing dash;
+- an unreadable check passing silently;
+- the step-7 re-sweep removed.
+
+The suite takes about 2.5 minutes, mostly Python start-up for each stubbed call.
+TP-S2 (tag propagation), TP-S3 (SIGKILL during create) and TP-S5 (a real
+LoadBalancer Service) need real AWS.
+
 ## Part 3: `build-image.sh`, the brain under test as a pinned image
 
 ```sh

@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""Offline stand-in for `eksctl delete cluster`, backed by world.py.
+
+$STUB_EKSCTL picks what the real command manages to do:
+  clean    the LoadBalancer Services go (controllers remove ELBs and their
+           groups), nodes drain cleanly, every stack deletes; exit 0.
+  partial  (default) the ELBs go, but a leaked CNI ENI and the controller's
+           security group stay in the VPC, so the cluster stack ends
+           DELETE_FAILED; exit 1, as eksctl does.
+  fail     the cluster API is unreachable; nothing changes; exit 1.
+The KUBECONFIG it was given is logged, so tests can check it is a throwaway.
+"""
+import os
+import sys
+
+sys.dont_write_bytecode = True  # never leave __pycache__ in the repo
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from world import World, log_call  # noqa: E402
+
+
+def main(argv):
+    log_call("eksctl", argv)
+    kubeconfig = os.environ.get("KUBECONFIG", "")
+    log_call("eksctl-kubeconfig", [kubeconfig])
+    if argv[:2] != ["delete", "cluster"] or "--name" not in argv:
+        sys.stderr.write(f"eksctl stub: unexpected call: {argv}\n")
+        return 99
+    name = argv[argv.index("--name") + 1]
+    mode = os.environ.get("STUB_EKSCTL", "partial")
+    if mode == "fail":
+        print("Error: unable to reach the Kubernetes API of cluster " + name)
+        return 1
+    w = World()
+    if w.find("cluster", name=name) is None:
+        print(f"Error: cluster {name} not found")
+        return 1
+    k8s_key = f"kubernetes.io/cluster/{name}"
+    for lb in [it for it in w.live("elb") if k8s_key in (it.get("tags") or {})]:
+        w.remove(lb)
+    if mode == "clean":
+        for eni in w.live("eni"):
+            if (eni.get("tags") or {}).get("cluster.k8s.amazonaws.com/name") == name:
+                eni["leaks"] = False
+    stacks = [s for s in w.live("stack") if s.get("cluster") == name]
+    for s in sorted(stacks, key=lambda s: s["name"] == f"eksctl-{name}-cluster"):
+        if s["name"] != f"eksctl-{name}-cluster":
+            w.delete_stack(s["name"])
+    if mode == "clean":
+        for sg in w.live("sg"):
+            if k8s_key in (sg.get("tags") or {}) and not sg.get("owner"):
+                w.remove(sg)
+    for o in w.live("oidc"):
+        if (o.get("tags") or {}).get("alpha.eksctl.io/cluster-name") == name:
+            w.remove(o)
+    w.delete_stack(f"eksctl-{name}-cluster")
+    w.save()
+    stack = next(s for s in w.items if s["kind"] == "stack" and s["name"] == f"eksctl-{name}-cluster")
+    if stack["state"] != "DELETE_COMPLETE":
+        print(f"Error: failed to delete cluster stack eksctl-{name}-cluster ({stack['state']})")
+        return 1
+    print(f"all cluster resources were deleted for {name}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

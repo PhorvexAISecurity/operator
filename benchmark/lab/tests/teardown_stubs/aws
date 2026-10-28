@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""Offline stand-in for the AWS CLI, backed by world.py.
+
+Implements exactly the calls teardown-by-tag.sh makes, with the real output
+shapes and error codes. Every call is logged to $STUB_LOG. A call listed in
+$STUB_FAIL ("service:op,...") fails as AWS would on an internal error; an
+unknown call fails loudly. $STUB_CALLER_ACCOUNT overrides the identity, and
+STUB_TAGGING_STALE=1 makes the tagging API return deleted resources too.
+"""
+import json
+import os
+import sys
+
+sys.dont_write_bytecode = True  # never leave __pycache__ in the repo
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from world import World, log_call, tag_list  # noqa: E402
+
+ELB_TYPE = "elasticloadbalancing:loadbalancer"
+
+
+def error(code, message="", rc=254):
+    sys.stderr.write(f"\nAn error occurred ({code}) when calling the operation: {message}\n")
+    sys.exit(rc)
+
+
+def parse(argv):
+    rest, i = [], 0
+    while i < len(argv):
+        if argv[i] in ("--region", "--output"):
+            i += 2
+            continue
+        rest.append(argv[i])
+        i += 1
+    service, op, tail = rest[0], rest[1], rest[2:]
+    positional, opts, key = [], {}, None
+    for tok in tail:
+        if tok.startswith("--"):
+            key = tok[2:]
+            opts.setdefault(key, [])
+        elif key is None:
+            positional.append(tok)
+        else:
+            opts[key].append(tok)
+    return service, op, positional, opts
+
+
+def one(opts, key):
+    values = opts.get(key) or [None]
+    return values[0]
+
+
+def filters(opts):
+    parsed = []
+    for f in opts.get("filters", []) + opts.get("filter", []):
+        if not f.startswith("Name="):
+            raise SystemExit(f"aws stub: malformed filter {f}")
+        name, _, values = f[5:].partition(",Values=")
+        parsed.append((name, values.split(",")))
+    return parsed
+
+
+def matches(it, parsed):
+    tags = it.get("tags") or {}
+    for name, values in parsed:
+        if name.startswith("tag:"):
+            ok = tags.get(name[4:]) in values
+        elif name == "tag-key":
+            ok = any(v in tags for v in values)
+        elif name == "vpc-id":
+            ok = it.get("vpc") in values
+        elif name in ("status", "instance-state-name", "state"):
+            ok = it.get("state") in values
+        elif name == "group-id":
+            ok = bool(set(it.get("groups") or []) & set(values))
+        elif name == "resource-id":
+            ok = it.get("id") in values
+        else:
+            raise SystemExit(f"aws stub: unsupported filter {name}")
+        if not ok:
+            return False
+    return True
+
+
+def describable(w, kind):
+    # Terminated instances and deleted NAT gateways stay describable.
+    return [it for it in w.items if it["kind"] == kind and not it.get("deleted")]
+
+
+def main(argv):
+    log_call("aws", argv)
+    service, op, positional, opts = parse(argv)
+    if f"{service}:{op}" in os.environ.get("STUB_FAIL", "").split(","):
+        error("InternalFailure", "injected failure")
+    w = World()
+    out = handle(w, service, op, positional, opts)
+    w.save()
+    if out is not None:
+        print(json.dumps(out))
+
+
+def handle(w, service, op, positional, opts):
+    key = f"{service} {op}"
+    if key == "sts get-caller-identity":
+        account = os.environ.get("STUB_CALLER_ACCOUNT") or w.account
+        return {"Account": account, "Arn": f"arn:aws:iam::{account}:user/stub", "UserId": "STUB"}
+
+    # CloudFormation
+    if key == "cloudformation list-stacks":
+        for s in w.live("stack"):
+            if "settle_after" in s:
+                s["settle_after"] -= 1
+                if s["settle_after"] <= 0:
+                    s["state"] = s["state"].replace("_IN_PROGRESS", "_COMPLETE")
+                    del s["settle_after"]
+        return {"StackSummaries": [{"StackName": s["name"], "StackId": s["arn"], "StackStatus": s["state"]}
+                                   for s in w.items if s["kind"] == "stack"]}
+    if key == "cloudformation describe-stacks":
+        ref = one(opts, "stack-name")
+        if ref.startswith("arn:"):
+            stack = next((s for s in w.items if s["kind"] == "stack" and s["arn"] == ref), None)
+        else:
+            stack = w.find("stack", name=ref)
+        if stack is None:
+            error("ValidationError", f"Stack with id {ref} does not exist")
+        return {"Stacks": [{"StackName": stack["name"], "StackId": stack["arn"],
+                            "StackStatus": stack["state"], "Tags": tag_list(stack)}]}
+    if key == "cloudformation delete-stack":
+        w.delete_stack(one(opts, "stack-name"))
+        return None
+    if key == "cloudformation wait":
+        assert positional == ["stack-delete-complete"], positional
+        name = one(opts, "stack-name")
+        stack = w.find("stack", name=name)
+        if stack is None:
+            return None
+        if stack["state"] == "DELETE_FAILED":
+            sys.stderr.write("\nWaiter StackDeleteComplete failed: Waiter encountered a terminal failure state: "
+                             'For expression "Stacks[].StackStatus" we matched expected path: "DELETE_FAILED"\n')
+            sys.exit(255)
+        stack["state"] = "DELETE_COMPLETE"
+        return None
+
+    # EKS
+    if key == "eks describe-cluster":
+        c = w.find("cluster", name=one(opts, "name"))
+        if c is None:
+            error("ResourceNotFoundException", f"No cluster found for name: {one(opts, 'name')}.")
+        return {"cluster": {"name": c["name"], "arn": c["arn"], "status": "ACTIVE", "tags": c.get("tags") or {}}}
+    if key == "eks describe-nodegroup":
+        n = w.find("nodegroup", cluster=one(opts, "cluster-name"), name=one(opts, "nodegroup-name"))
+        if n is None:
+            error("ResourceNotFoundException", "No node group found")
+        return {"nodegroup": {"nodegroupName": n["name"], "status": "ACTIVE"}}
+
+    # Resource Groups Tagging API
+    if key == "resourcegroupstaggingapi get-resources":
+        wanted = []
+        for f in opts.get("tag-filters", []):
+            k, _, values = f[len("Key="):].partition(",Values=")
+            wanted.append((k, values.split(",") if values else None))
+        types = opts.get("resource-type-filters", [])
+        stale = os.environ.get("STUB_TAGGING_STALE") == "1"
+        hits = []
+        for it in w.items:
+            if it["kind"] == "oidc" or not it.get("arn") or not it.get("tags"):
+                continue
+            if w.gone(it) and not stale:
+                continue
+            if types and (ELB_TYPE if it["kind"] == "elb" else None) not in types:
+                continue
+            tags = it["tags"]
+            if all(k in tags and (vals is None or tags[k] in vals) for k, vals in wanted):
+                hits.append({"ResourceARN": it["arn"], "Tags": tag_list(it)})
+        return {"ResourceTagMappingList": hits}
+
+    # Load balancers
+    if key == "elbv2 describe-load-balancers":
+        arn = one(opts, "load-balancer-arns")
+        if w.find("elb", arn=arn) is None:
+            error("LoadBalancerNotFound", f"Load balancers '[{arn}]' not found")
+        return {"LoadBalancers": [{"LoadBalancerArn": arn}]}
+    if key == "elbv2 delete-load-balancer":
+        lb = w.find("elb", arn=one(opts, "load-balancer-arn"))
+        if lb:
+            w.remove(lb)
+        return None
+    if key == "elb describe-load-balancers":
+        name = one(opts, "load-balancer-names")
+        if w.find("elb", name=name) is None:
+            error("LoadBalancerNotFound", f"There is no ACTIVE Load Balancer named '{name}'")
+        return {"LoadBalancerDescriptions": [{"LoadBalancerName": name}]}
+    if key == "elb delete-load-balancer":
+        lb = w.find("elb", name=one(opts, "load-balancer-name"))
+        if lb:
+            w.remove(lb)
+        return None
+
+    # EC2
+    if key == "ec2 describe-vpcs":
+        return {"Vpcs": [{"VpcId": v["id"], "Tags": tag_list(v)} for v in w.live("vpc") if matches(v, filters(opts))]}
+    if key == "ec2 describe-network-interfaces":
+        return {"NetworkInterfaces": [
+            {"NetworkInterfaceId": e["id"], "Status": e["state"], "VpcId": e.get("vpc"),
+             "Groups": [{"GroupId": g} for g in e.get("groups") or []], "TagSet": tag_list(e)}
+            for e in w.live("eni") if matches(e, filters(opts))]}
+    if key == "ec2 delete-network-interface":
+        eni = w.find("eni", id=one(opts, "network-interface-id"))
+        if eni is None:
+            error("InvalidNetworkInterfaceID.NotFound", "The networkInterface ID does not exist")
+        if eni["state"] != "available":
+            error("InvalidNetworkInterface.InUse", "The network interface is currently in use")
+        w.remove(eni)
+        return None
+    if key == "ec2 describe-security-groups":
+        return {"SecurityGroups": [{"GroupId": g["id"], "VpcId": g.get("vpc"), "Tags": tag_list(g)}
+                                   for g in w.live("sg") if matches(g, filters(opts))]}
+    if key == "ec2 delete-security-group":
+        gid = one(opts, "group-id")
+        sg = w.find("sg", id=gid)
+        if sg is None:
+            error("InvalidGroup.NotFound", f"The security group '{gid}' does not exist")
+        if any(gid in (e.get("groups") or []) for e in w.live("eni")):
+            error("DependencyViolation", f"resource {gid} has a dependent object")
+        w.remove(sg)
+        return None
+    if key == "ec2 describe-instances":
+        ids = opts.get("instance-ids")
+        found = [i for i in describable(w, "instance") if (i["id"] in ids if ids else matches(i, filters(opts)))]
+        if ids and not found:
+            error("InvalidInstanceID.NotFound", f"The instance IDs '{','.join(ids)}' do not exist")
+        return {"Reservations": [{"Instances": [{"InstanceId": i["id"], "State": {"Name": i["state"]},
+                                                 "Tags": tag_list(i)} for i in found]}] if found else []}
+    if key == "ec2 describe-volumes":
+        return {"Volumes": [{"VolumeId": v["id"], "State": v["state"], "Tags": tag_list(v)}
+                            for v in w.live("volume") if matches(v, filters(opts))]}
+    if key == "ec2 delete-volume":
+        vol = w.find("volume", id=one(opts, "volume-id"))
+        if vol is None:
+            error("InvalidVolume.NotFound", "The volume does not exist")
+        if vol["state"] != "available":
+            error("VolumeInUse", "The volume is attached")
+        w.remove(vol)
+        return None
+    if key == "ec2 describe-nat-gateways":
+        ids = opts.get("nat-gateway-ids")
+        found = [n for n in describable(w, "nat") if (n["id"] in ids if ids else matches(n, filters(opts)))]
+        if ids and not found:
+            error("NatGatewayNotFound", "The NAT gateway does not exist")
+        return {"NatGateways": [{"NatGatewayId": n["id"], "State": n["state"], "Tags": tag_list(n)} for n in found]}
+    if key == "ec2 describe-addresses":
+        return {"Addresses": [{"AllocationId": a["id"], "Tags": tag_list(a)}
+                              for a in w.live("eip") if matches(a, filters(opts))]}
+    if key == "ec2 describe-tags":
+        return {"Tags": [{"ResourceId": it["id"], "Key": t["Key"], "Value": t["Value"]}
+                         for it in w.live() if it.get("id") and matches(it, filters(opts)) for t in tag_list(it)]}
+
+    # IAM, CloudWatch Logs, ECR
+    if key == "iam list-open-id-connect-providers":
+        return {"OpenIDConnectProviderList": [{"Arn": o["arn"]} for o in w.live("oidc")]}
+    if key == "iam list-open-id-connect-provider-tags":
+        o = w.find("oidc", arn=one(opts, "open-id-connect-provider-arn"))
+        if o is None:
+            error("NoSuchEntity", "OpenIDConnect provider not found")
+        return {"Tags": tag_list(o)}
+    if key == "iam delete-open-id-connect-provider":
+        o = w.find("oidc", arn=one(opts, "open-id-connect-provider-arn"))
+        if o is None:
+            error("NoSuchEntity", "OpenIDConnect provider not found")
+        w.remove(o)
+        return None
+    if key == "logs describe-log-groups":
+        prefix = one(opts, "log-group-name-prefix")
+        return {"logGroups": [{"logGroupName": g["name"]} for g in w.live("loggroup") if g["name"].startswith(prefix)]}
+    if key == "logs delete-log-group":
+        g = w.find("loggroup", name=one(opts, "log-group-name"))
+        if g is None:
+            error("ResourceNotFoundException", "The specified log group does not exist.")
+        w.remove(g)
+        return None
+    if key == "ecr describe-repositories":
+        name = one(opts, "repository-names")
+        r = w.find("ecr", name=name)
+        if r is None:
+            error("RepositoryNotFoundException", f"The repository with name '{name}' does not exist")
+        return {"repositories": [{"repositoryName": r["name"], "repositoryArn": r["arn"]}]}
+    if key == "ecr list-tags-for-resource":
+        r = w.find("ecr", arn=one(opts, "resource-arn"))
+        if r is None:
+            error("RepositoryNotFoundException", "The repository does not exist")
+        return {"tags": tag_list(r)}
+    if key == "ecr delete-repository":
+        r = w.find("ecr", name=one(opts, "repository-name"))
+        if r is None:
+            error("RepositoryNotFoundException", "The repository does not exist")
+        w.remove(r)
+        return {"repository": {"repositoryName": r["name"]}}
+
+    sys.stderr.write(f"aws stub: unexpected call: {service} {op} {positional} {opts}\n")
+    sys.exit(99)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
