@@ -1,5 +1,10 @@
 # actuator changelog
 
+## 0.8.0 (2026-10-28)
+
+- fix(console): preserve staging tenant isolation (bb35615b)
+- feat(console): integrate pinned attack catalogue (c8bbcb7d)
+
 ## 0.7.0 (2026-10-27)
 
 - fix(charts): complete agent-action-deny + controller-stop chart wiring; re-vendor (7d0c2226)
