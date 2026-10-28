@@ -44,7 +44,12 @@ exports are in `experiment-verified/`, `report-verified.html` and
 `metrics-verified.csv`; arm levels and paired differences are kept distinct,
 and the evidence ZIP retains the final result state.
 It does not overwrite the dashboard's current binary identity or its corpus.
-Telegram delivery to the owner remains unverified until owner pairing.
+Owner pairing was subsequently verified on the host. On 2026-10-28 at
+17:29 UTC, Telegram accepted a message explaining the prior parameter
+validation and its HTML/CSV attachments (message ids 16 and 17). This was
+delivery of the recorded result, not a new experiment. The private receipt
+is `~/phorvex-benchmark/bot-validation-20261028/telegram-delivery.json`.
+This verifies API acceptance, not whether the owner opened the files.
 
 A real parameter experiment on the **current** `0058a3edd2eb` binary also
 completed through the dashboard: `/param P-FEA-006 1.2 ticks=16 nosync`, bot
@@ -64,6 +69,9 @@ bot clone was created at `~/phorvex-benchmark/operator`, borrowing existing
 objects read-only. Fetching from GitHub failed because no authentication was
 available. Supply read-only access to the correct source repository or a
 clone containing that exact commit, then fetch it into the bot repository.
+After owner pairing, a second search covering all six host repositories and
+linked worktrees still found no such commit; no standard Git credential
+helper, GitHub CLI credentials or SSH identity was configured for `hami`.
 
 Sync job `11a22d48-abdd-42bf-9a6d-e1a22c5f3a05` failed with
 `HTTPFailure: Console HTTP 404` while downloading a batch. Follow-up reads
