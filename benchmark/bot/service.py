@@ -10,6 +10,7 @@
       the deployed commit and from the candidate (replay_build.py); and both
       are replayed against the deployed brain on recorded ticks
       (code_experiment.py).
+  /guide: the English HTML and PDF playbook in the requesting chat
   /status, /runs, /cancel, /help
 
 Both return a summary, report.html and metrics.csv in the chat; /bench also
@@ -61,6 +62,7 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
   An LLM changes the brain's Go code; the candidate is compared with the deployed brain.
 /param <P-XXX-000> <value> [value...] [policy=ns/name] [ticks=N] [nosync]
   Replays the deployed brain with each parameter value (Math Lab).
+/guide    download the English step-by-step guide as HTML and PDF
 /status   the running job and the queue
 /runs     the last results
 /check    check Telegram, dashboard, source, recorded ticks, disk and model access
@@ -68,6 +70,33 @@ HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is
 /cancel   stop the running job after its current step
 
 Defaults: policy=%(policy)s, ticks=%(ticks)d."""
+COMMANDS = [
+    {'command': 'guide', 'description': 'Download the English guide (HTML and PDF)'},
+    {'command': 'bench', 'description': 'Test a brain code or formula change'},
+    {'command': 'param', 'description': 'Compare brain parameter values'},
+    {'command': 'status', 'description': 'Show the running job and queue'},
+    {'command': 'runs', 'description': 'Show the five most recent runs'},
+    {'command': 'check', 'description': 'Check benchmark dependencies and access'},
+    {'command': 'cancel', 'description': 'Cancel the running job after its current step'},
+    {'command': 'invite', 'description': 'Owner: create a one-use member invitation'},
+    {'command': 'help', 'description': 'Show commands and usage'},
+]
+BOT_NAME = 'Phorvex Brain Benchmark'
+BOT_DESCRIPTION = ('Benchmark brain changes before release. Compare parameters, code and formulas '
+                   'against the deployed brain using recorded production ticks. '
+                   'Use /guide to download the English HTML and PDF playbook. '
+                   'Authorized members only. Replay results do not deploy changes or measure live defense outcomes.')
+BOT_SHORT_DESCRIPTION = 'Brain replay benchmarks: code, formulas and parameters. Use /guide for the English HTML and PDF playbook.'
+
+
+def configure_interface(telegram):
+    """Keep the default and existing English/Persian locale surfaces in English."""
+    for language in ('', 'en', 'fa'):
+        telegram.call('setMyCommands', {'commands': COMMANDS, 'language_code': language})
+        telegram.call('setMyName', {'name': BOT_NAME, 'language_code': language})
+        telegram.call('setMyDescription', {'description': BOT_DESCRIPTION, 'language_code': language})
+        telegram.call('setMyShortDescription', {'short_description': BOT_SHORT_DESCRIPTION, 'language_code': language})
+    telegram.call('setChatMenuButton', {'menu_button': {'type': 'commands'}})
 
 
 def utc():
@@ -186,6 +215,7 @@ class BenchBot:
         self.cfg, self.tg, self.dashboard = cfg, telegram, dashboard
         self.openai_transport, self.sleep = openai_transport, sleep
         self.queue, self.current, self.lock = [], None, threading.Lock()
+        self.guide_chats = set()
         self.wake, self.stopping = threading.Event(), threading.Event()
         private_dir(cfg.state)
         private_dir(cfg.state / 'jobs')
@@ -221,6 +251,8 @@ class BenchBot:
         who = '%s (@%s)' % (user.get('id'), user.get('username', ''))
         if command in ('/start', '/help'):
             self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
+        elif command == '/guide':
+            return self.start_guide(chat_id)
         elif command == '/status':
             self.say(chat_id, self.status())
         elif command == '/runs':
@@ -262,6 +294,48 @@ class BenchBot:
             self.wake.set()
         else:
             self.say(chat_id, 'Unknown command. /help lists them.')
+
+    def start_guide(self, chat_id):
+        """Upload independently of the benchmark queue and the polling thread."""
+        with self.lock:
+            pending = chat_id in self.guide_chats
+            if not pending:
+                self.guide_chats.add(chat_id)
+        if pending:
+            self.say(chat_id, 'Your guide download is already in progress. Please wait for the attachments.')
+            return None
+        worker = threading.Thread(target=self.deliver_guide, args=(chat_id,), name='bench-guide', daemon=True)
+        try:
+            worker.start()
+        except Exception:
+            with self.lock:
+                self.guide_chats.discard(chat_id)
+            raise
+        return worker
+
+    def deliver_guide(self, chat_id):
+        try:
+            # Read both before uploading, so an incomplete release cannot send half a guide.
+            try:
+                files = [(extension, (HERE / ('guide-en.' + extension)).read_bytes())
+                         for extension in ('html', 'pdf')]
+            except OSError as err:
+                log('guide files unavailable: %s' % type(err).__name__)
+                self.say(chat_id, 'The English guide is unavailable in this release. Please ask the operator to restore its HTML and PDF files.')
+                return
+            self.say(chat_id, 'English Brain Benchmark Playbook: HTML for offline reading and the command builder; PDF for reading and printing.')
+            for extension, data in files:
+                try:
+                    receipt = self.tg.send_document(chat_id, 'phorvex-brain-benchmark-guide-en.' + extension, data,
+                                                  'English Brain Benchmark Playbook (' + extension.upper() + ')')
+                    log('guide %s delivered to chat %s (message %s)' % (extension, chat_id,
+                                                                    (receipt or {}).get('message_id', '?')))
+                except TelegramError as err:
+                    log('guide %s upload failed: %s' % (extension, err))
+                    self.say(chat_id, 'Could not send the %s guide. Please try /guide again.' % extension.upper())
+        finally:
+            with self.lock:
+                self.guide_chats.discard(chat_id)
 
     def pair_owner(self, msg, text):
         """Consume an operator-created, expiring /start link while no owner is set."""
@@ -652,6 +726,11 @@ class BenchBot:
         return offset
 
     def serve(self):
+        try:
+            configure_interface(self.tg)
+            log('English command menu and profile configured')
+        except TelegramError as err:
+            log('could not update the Telegram interface: %s; retry on next restart' % err)
         offset = self.skip_backlog()
         threading.Thread(target=self.worker, name='bench-worker', daemon=True).start()
         backoff = 1

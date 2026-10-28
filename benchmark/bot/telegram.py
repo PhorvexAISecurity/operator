@@ -6,6 +6,7 @@ token is part of every request URL, so URLs are never logged or put in an
 exception.
 """
 import json
+import mimetypes
 import re
 import urllib.error
 import urllib.request
@@ -77,8 +78,9 @@ def _multipart(params, files):
         out += ('--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n%s\r\n' % (boundary, k, v)).encode()
     for k, (name, data) in files.items():
         safe = re.sub(r'[^A-Za-z0-9._-]', '_', name)
+        mime_type = mimetypes.guess_type(safe)[0] or 'application/octet-stream'
         out += ('--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\n'
-                'Content-Type: application/octet-stream\r\n\r\n' % (boundary, k, safe)).encode()
+                'Content-Type: %s\r\n\r\n' % (boundary, k, safe, mime_type)).encode()
         out += data + b'\r\n'
     out += ('--%s--\r\n' % boundary).encode()
     return bytes(out), 'multipart/form-data; boundary=' + boundary

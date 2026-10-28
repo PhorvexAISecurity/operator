@@ -17,8 +17,22 @@ those need the live lab (`benchmark/run.sh`, still being built).
 |---|---|
 | `/bench [policy=ns/name] [ticks=N] [nosync] <change in words>` | The steps below. |
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
+| `/guide` | Sends the English step-by-step playbook to the requesting chat as HTML and PDF attachments. |
 | `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
 | `/invite` | Owner only, in private chat: a one-use member invitation valid for 24 hours. |
+
+The bot's responses, command descriptions, name and profile text are in English.
+Startup sets the default, English and Persian locale profiles to the same
+English text so a previous Persian override cannot hide the new menu.
+
+`/guide` is available to authorized owners and members. Uploads run separately
+from the benchmark queue, with duplicate requests in the same chat suppressed
+while a download is in progress. Upload failures are reported in English and
+can be retried. Releases include [guide-en.html](guide-en.html) and
+[guide-en.pdf](guide-en.pdf); the PDF is rendered from that HTML before release,
+so serving the guide needs no browser or PDF generator on the host. Update both
+files together after editing the guide. The HTML's Print / PDF button provides
+the print layout, including expanded FAQ answers.
 
 `/bench` runs these steps:
 1. An LLM writes the change against the **deployed** commit (`planner.py`).

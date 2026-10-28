@@ -15,6 +15,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -84,6 +85,9 @@ class TelegramClientTest(unittest.TestCase):
         raw = fake.documents()[0]
         self.assertIn(b'filename="report__1_.html"', raw)
         self.assertIn(b'<html>body</html>', raw)
+        self.assertIn(b'Content-Type: text/html', raw)
+        tg.send_document(5, 'guide.pdf', b'%PDF-1.7\n%%EOF')
+        self.assertIn(b'Content-Type: application/pdf', fake.documents()[1])
 
 
 class FakeDashboardServer(http.server.BaseHTTPRequestHandler):
@@ -442,6 +446,98 @@ class BotTest(unittest.TestCase):
             bot.handle(message(OWNER, '/param P-FEA-006 1.%d' % i))
         self.assertEqual(len(bot.queue), service.MAX_QUEUE)
         self.assertIn('queue is full', self.fake.texts()[-1])
+
+    def test_guide_delivers_both_release_files_without_queuing_a_benchmark(self):
+        bot = self.bot()
+        worker = bot.handle(message(OWNER, '/guide@phbenchbot'))
+        worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+        docs = self.fake.documents()
+        self.assertEqual(len(docs), 2)
+        for extension, raw in zip(('html', 'pdf'), docs):
+            self.assertIn(('filename="phorvex-brain-benchmark-guide-en.%s"' % extension).encode(), raw)
+            self.assertIn((HERE / ('guide-en.' + extension)).read_bytes(), raw)
+            self.assertIn(('English Brain Benchmark Playbook (%s)' % extension.upper()).encode(), raw)
+        self.assertIn(b'<html lang="en" dir="ltr">', docs[0])
+        self.assertIn(b'%PDF-', docs[1])
+        self.assertEqual(bot.queue, [])
+        self.assertIsNone(bot.current)
+        self.assertEqual(bot.guide_chats, set())
+        self.assertIn('/guide', service.HELP)
+        self.assert_no_secret_shown()
+
+    def test_guide_is_available_to_members_but_not_strangers(self):
+        bot = self.bot()
+        bot.handle(message(STRANGER, '/guide'))
+        self.assertEqual(self.fake.calls, [])
+        bot.cfg.allowed.add(STRANGER)
+        worker = bot.handle(message(STRANGER, '/guide'))
+        worker.join(timeout=5)
+        self.assertEqual(len(self.fake.documents()), 2)
+        self.assertTrue(all(('name="chat_id"\r\n\r\n%s' % STRANGER).encode() in raw
+                            for raw in self.fake.documents()))
+
+    def test_missing_guide_files_do_not_send_a_partial_guide(self):
+        bot = self.bot()
+        (self.tmp / 'guide-en.html').write_text('<html lang="en">guide</html>')
+        with mock.patch.object(service, 'HERE', self.tmp):
+            worker = bot.handle(message(OWNER, '/guide'))
+            worker.join(timeout=5)
+        self.assertEqual(self.fake.documents(), [])
+        self.assertIn('unavailable in this release', self.fake.texts()[-1])
+        self.assertEqual(bot.guide_chats, set())
+
+    def test_guide_upload_failure_is_reported_and_retry_works(self):
+        bot = self.bot()
+        original = bot.tg.send_document
+        bot.tg.send_document = mock.Mock(side_effect=TelegramError('sendDocument: temporary failure'))
+        worker = bot.handle(message(OWNER, '/guide'))
+        worker.join(timeout=5)
+        self.assertTrue(any('Could not send the HTML guide' in t for t in self.fake.texts()))
+        self.assertTrue(any('Could not send the PDF guide' in t for t in self.fake.texts()))
+        self.assertEqual(bot.guide_chats, set())
+        bot.tg.send_document = original
+        worker = bot.handle(message(OWNER, '/guide'))
+        worker.join(timeout=5)
+        self.assertEqual(len(self.fake.documents()), 2)
+
+    def test_duplicate_guide_requests_do_not_block_other_commands(self):
+        bot = self.bot()
+        entered, release = threading.Event(), threading.Event()
+        original = bot.tg.send_document
+        def slow_upload(*args):
+            entered.set()
+            if not release.wait(timeout=5):
+                raise TelegramError('test upload timed out')
+            return original(*args)
+        bot.tg.send_document = slow_upload
+        worker = bot.handle(message(OWNER, '/guide'))
+        try:
+            self.assertTrue(entered.wait(timeout=2))
+            self.assertIsNone(bot.handle(message(OWNER, '/guide')))
+            self.assertIn('already in progress', self.fake.texts()[-1])
+            bot.handle(message(OWNER, '/status'))
+            self.assertEqual(self.fake.texts()[-1], 'Running: nothing\nQueue: empty')
+        finally:
+            release.set()
+            worker.join(timeout=5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(self.fake.documents()), 2)
+
+    def test_english_menu_and_profile_override_default_english_and_persian_locales(self):
+        tg = Telegram(TOKEN, self.fake)
+        service.configure_interface(tg)
+        for language in ('', 'en', 'fa'):
+            commands = [p for method, p in self.fake.calls if method == 'setMyCommands' and p['language_code'] == language]
+            self.assertEqual(len(commands), 1)
+            self.assertIn('guide', [row['command'] for row in commands[0]['commands']])
+            for method, key, expected in (('setMyName', 'name', service.BOT_NAME),
+                                          ('setMyDescription', 'description', service.BOT_DESCRIPTION),
+                                          ('setMyShortDescription', 'short_description', service.BOT_SHORT_DESCRIPTION)):
+                values = [p[key] for m, p in self.fake.calls if m == method and p['language_code'] == language]
+                self.assertEqual(values, [expected])
+        self.assertEqual(self.fake.calls[-1], ('setChatMenuButton', {'menu_button': {'type': 'commands'}}))
+        self.assertNotRegex(json.dumps(self.fake.calls, ensure_ascii=False), r'[\u0600-\u06ff]')
 
     def test_param_runs_through_the_dashboard_and_returns_files(self):
         dash = FakeDashboard()
