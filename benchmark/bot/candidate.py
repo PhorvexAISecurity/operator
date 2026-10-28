@@ -21,7 +21,7 @@ harness.
 
 Usage:
   candidate.py --src-repo REPO --run-dir D --run-id ID \
-    --base-tag TAG --base-commit SHA --diff DIFF_FILE [--prompt-file P] \
+    [--base-tag TAG] --base-commit SHA --diff DIFF_FILE [--prompt-file P] \
     [--planner NAME] [--model NAME] [--allow-delete] [--out D/CANDIDATE.json]
 
 Exit codes: 2 bad arguments; 3 base ref problem; 4 the diff does not apply;
@@ -132,9 +132,11 @@ def make_candidate(args):
     if clone.exists() or clone.is_symlink():
         raise CandidateError(2, f"{clone} already exists")
 
-    # Read-only on the working repo: clone copies, it does not write back.
+    # Read-only on the working repo. --shared borrows its objects instead of
+    # copying them (disk is tight on the jump host); the candidate's own commit
+    # and tag are written into the clone, never back into the working repo.
     subprocess.run(
-        ["git", "-C", str(work_repo), "clone", "--quiet", "--no-hardlinks", "--", str(work_repo), str(clone)],
+        ["git", "-C", str(work_repo), "clone", "--quiet", "--shared", "--", str(work_repo), str(clone)],
         check=True, capture_output=True, env={**os.environ, **GIT_ENV},
     )
     try:
@@ -148,10 +150,14 @@ def make_candidate(args):
 
 def _build_candidate(args, git, clone, diff_text):
 
-    # The base must resolve to exactly --base-commit through the given tag.
-    tagged = git("rev-parse", "--verify", "--quiet", f"refs/tags/{args.base_tag}^{{commit}}", check=False)
-    if tagged.returncode != 0 or tagged.stdout.strip() != args.base_commit:
-        raise CandidateError(3, f"tag {args.base_tag} does not resolve to --base-commit {args.base_commit}")
+    # With a tag, the base must resolve to exactly --base-commit through it.
+    # Without one (a deployed commit need not be tagged), the commit must exist.
+    if args.base_tag:
+        tagged = git("rev-parse", "--verify", "--quiet", f"refs/tags/{args.base_tag}^{{commit}}", check=False)
+        if tagged.returncode != 0 or tagged.stdout.strip() != args.base_commit:
+            raise CandidateError(3, f"tag {args.base_tag} does not resolve to --base-commit {args.base_commit}")
+    elif git("cat-file", "-e", f"{args.base_commit}^{{commit}}", check=False).returncode != 0:
+        raise CandidateError(3, f"--base-commit {args.base_commit} is not in the source repository")
 
     branch = f"bench-candidate/{args.run_id}"
     git("checkout", "--quiet", "--detach", args.base_commit)
@@ -160,7 +166,7 @@ def _build_candidate(args, git, clone, diff_text):
     # Validate the diff applies before changing anything, then stage it.
     check = git("apply", "--check", "--whitespace=nowarn", str(args.diff), check=False)
     if check.returncode != 0:
-        raise CandidateError(4, f"the proposed diff does not apply to {args.base_tag}: {check.stderr.strip()}")
+        raise CandidateError(4, f"the proposed diff does not apply to {args.base_tag or args.base_commit[:12]}: {check.stderr.strip()}")
     git("apply", "--index", "--whitespace=nowarn", str(args.diff))
 
     changed = []
@@ -239,7 +245,7 @@ def parse_args(argv):
     p.add_argument("--src-repo", required=True)
     p.add_argument("--run-dir", required=True)
     p.add_argument("--run-id", required=True)
-    p.add_argument("--base-tag", required=True)
+    p.add_argument("--base-tag")
     p.add_argument("--base-commit", required=True)
     p.add_argument("--diff", required=True)
     p.add_argument("--prompt-file")

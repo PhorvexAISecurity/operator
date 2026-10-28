@@ -205,6 +205,17 @@ class CandidateTest(unittest.TestCase):
         self.assertEqual(code, 3, err)
         self.assertIn("does not resolve to --base-commit", err)
 
+    def test_untagged_base_commit(self):
+        # A deployed commit need not be tagged: without --base-tag the commit must exist.
+        diff_file = self.tmp / "d.diff"
+        diff_file.write_text(diff_replacing(self.decision, "const Threshold = 1", "const Threshold = 9"))
+        base = ["--src-repo", str(self.repo), "--run-dir", str(self.run_dir), "--diff", str(diff_file)]
+        self.assertEqual(candidate.main(base + ["--run-id", "dddddd", "--base-commit", self.base,
+                                                "--out", str(self.run_dir / "C.json")]), 0)
+        self.assertIsNone(json.loads((self.run_dir / "C.json").read_text())["baseTag"])
+        __import__("shutil").rmtree(self.run_dir / "candidate-src")
+        self.assertEqual(candidate.main(base + ["--run-id", "eeeeee", "--base-commit", "f" * 40]), 3)
+
     def test_run_dir_must_be_outside_the_working_repo(self):
         inside = self.repo / "run"
         inside.mkdir()

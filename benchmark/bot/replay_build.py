@@ -65,11 +65,12 @@ def tags_at(repo, commit):
 
 
 def checkout(repo, commit, dest):
-    """A clean, detached clone of `repo` at `commit`; `repo` is only read."""
+    """A clean, detached clone of `repo` at `commit`. `repo` is only read: --shared
+    borrows its objects rather than copying them, which matters on a full disk."""
     dest = Path(dest)
     if dest.exists():
         raise BuildError('%s already exists' % dest)
-    result = subprocess.run(['git', 'clone', '--quiet', '--no-hardlinks', '--', str(repo), str(dest)],
+    result = subprocess.run(['git', 'clone', '--quiet', '--shared', '--', str(repo), str(dest)],
                             text=True, capture_output=True, env={**os.environ, **GIT_ENV})
     if result.returncode:
         raise BuildError('cannot clone %s: %s' % (repo, result.stderr.strip()))

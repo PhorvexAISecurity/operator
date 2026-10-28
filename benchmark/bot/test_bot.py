@@ -416,6 +416,26 @@ class BotTest(unittest.TestCase):
         bot.run_next()
         self.assertIn('does not match its recorded sha256', self.fake.texts()[-1])
 
+    def test_bench_with_an_untagged_deployed_commit(self):
+        repo, base, data, go = self.bench_setup()
+        testkit.git(repo, 'tag', '-d', 'manager-v0.12.0')
+        bot = self.bot(None, self.openai_returning(testkit.threshold_diff(3, 5)),
+                       BOT_REPO=str(repo), MATHLAB_DATA_DIR=str(data), BOT_GO=str(go))
+        bot.handle(message(OWNER, '/bench nosync raise the rotate threshold for vllm from 3 to 5'))
+        bot.run_next()
+        summary = next(t for t in self.fake.texts() if t.startswith('Code experiment'))
+        self.assertIn('base: %s' % base[:12], summary)
+        self.assertIn('candidate    33.3%', summary)
+
+    def test_bench_refuses_when_the_disk_is_short(self):
+        repo, base, data, go = self.bench_setup()
+        bot = self.bot(None, self.openai_returning(), BOT_REPO=str(repo), MATHLAB_DATA_DIR=str(data), BOT_GO=str(go),
+                       BOT_MIN_FREE_GB='1000000')
+        bot.handle(message(OWNER, '/bench nosync raise the rotate threshold please'))
+        bot.run_next()
+        self.assertRegex(self.fake.texts()[-1], r'only [\d.]+ GB is free on the host and /bench needs 1000000.0 GB')
+        self.assertFalse(any(p.name == 'candidate-src' for p in (self.tmp / 'state/jobs').rglob('candidate-src')))
+
     def test_check_reports_every_dependency_without_secrets(self):
         repo, base, data, go = self.bench_setup()
         env = {**self.env, 'BOT_REPO': str(repo), 'MATHLAB_DATA_DIR': str(data), 'BOT_GO': str(go),
@@ -426,9 +446,10 @@ class BotTest(unittest.TestCase):
         self.assertEqual(service.check(cfg, env, Telegram(TOKEN, self.fake), lines.append), 0)
         text = '\n'.join(lines)
         for name in ('telegram token', 'allowlist', 'state directory', 'dashboard', 'deployed brain-replay',
-                     'operator repository', 'go', 'openai'):
+                     'operator repository', 'free disk', 'go', 'openai'):
             self.assertRegex(text, r'(?m)^PASS +%s ' % name)
         self.assertIn('6 recorded ticks for vllm/vllm-defense', text)
+        self.assertIn('holds the deployed commit %s (manager-v0.12.0)' % base[:12], text)
         for secret in (TOKEN.split(':')[1], OPENAI_KEY, DASH_PASSWORD):
             self.assertNotIn(secret, text)
 
@@ -490,6 +511,7 @@ class DeployFilesTest(unittest.TestCase):
         self.assertIn('systemd-run --user', text)
         self.assertNotRegex(text, r'(?m)^\s*(source|\.) ')
         self.assertNotIn('ln -sfn', text, 'the bot install must not move current')
+        self.assertIn('sed "s#/home/hami/phorvex-benchmark/current/benchmark/bot#$BOT_DIR#g"', text)
 
 
 if __name__ == '__main__':

@@ -55,7 +55,12 @@ the candidate diff.
   `phorvex/tools/` or `_test.go`. No deletes, merges or pushes. The diff
   applies to a clone, never to `BOT_REPO`.
 - **The deployed binary is checked** against its recorded sha256 before it
-  is trusted.
+  is trusted. That binary's `git_sha` is the base's provenance, so the base
+  commit needs no tag.
+- **Disk guard:** `/bench` refuses to start while free disk is below
+  `BOT_MIN_FREE_GB` (default 4). It needs two checkouts and a Go build, and it
+  must never fill the host. Clones use `--shared`, so objects are borrowed
+  from `BOT_REPO` rather than copied.
 - **Isolated replay.** `brain-replay` runs with no credentials (Math Lab's
   `run_isolated`), and it has no network or Kubernetes client.
 - **Secrets stay out of output.** The Telegram token, the dashboard password
@@ -66,7 +71,9 @@ the candidate diff.
 
 ## Launching it on the jump host
 
-Run these as `hami`, after the dashboard is installed (`benchmark/deploy`).
+Run these as `hami`, after the dashboard is installed (`benchmark/deploy`). The
+bot can live in its own release directory, so installing it neither moves the
+dashboard's `current` nor restarts the dashboard.
 
 1. **Rotate the leaked secrets first.** The bot token, the SSH password, the
    GitHub token and the OpenAI key were all shared in plain text in chat:
@@ -74,18 +81,13 @@ Run these as `hami`, after the dashboard is installed (`benchmark/deploy`).
    - make a new OpenAI key;
    - change the SSH password;
    - revoke the GitHub token.
-2. **Deploy a release that contains `benchmark/bot`**, the same way as the
-   dashboard:
-   ```sh
-   bash benchmark/deploy/install.sh <release dir>
-   ```
-3. **Make a clean operator clone** for `/bench`. The bot only reads it:
-   ```sh
-   git clone <operator repo URL> ~/phorvex-benchmark/operator
-   git -C ~/phorvex-benchmark/operator fetch --tags
-   ```
-   Fetch tags again after each release. `/bench` needs a tag that points at
-   the deployed brain's commit.
+2. **Unpack a release that contains `benchmark/bot`** into
+   `~/phorvex-benchmark/releases/<name>`. That is all; do not run the
+   dashboard's `install.sh`.
+3. **Set `BOT_REPO` for `/bench`.** It must be an operator clone that holds the
+   deployed brain's commit, the `git_sha` in `data/mathlab/bin/current.json`.
+   The bot only reads it, by commit. After each deploy, fetch there so the new
+   commit is present.
 4. **Make sure Go works.** `go version` must succeed, and the host needs egress
    to `proxy.golang.org`; the build pins `GOTOOLCHAIN=go1.26.1`.
 5. **Configure.** Copy the example and fill in every value:
@@ -98,12 +100,13 @@ Run these as `hami`, after the dashboard is installed (`benchmark/deploy`).
    message from Telegram user id N" line in the log.
 6. **Install and start:**
    ```sh
-   bash ~/phorvex-benchmark/current/benchmark/bot/deploy/install.sh
+   bash ~/phorvex-benchmark/releases/<name>/benchmark/bot/deploy/install.sh ~/phorvex-benchmark/releases/<name>
    ```
    This runs `service.py --check` under systemd, with the service's own
    environment. The check prints PASS, WARN or FAIL for the token, the
    allowlist, the state directory, the dashboard login, the deployed brain and
-   its recorded ticks, the operator clone, go and OpenAI. It prints no secrets.
+   its recorded ticks, whether the operator clone holds the deployed commit,
+   free disk, go and OpenAI. It prints no secrets.
    The script then enables and starts `phorvex-benchmark-bot`, which survives
    logout and reboot through lingering.
 7. **In Telegram,** send `/help`, then for example:

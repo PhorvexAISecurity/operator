@@ -104,6 +104,10 @@ class Config:
         self.policy = env.get('BOT_DEFAULT_POLICY', 'vllm/vllm-defense')
         self.ticks = int(env.get('BOT_MAX_TICKS', '500'))
         self.go = env.get('BOT_GO', 'go')
+        try:
+            self.min_free_gb = float(env.get('BOT_MIN_FREE_GB', '4'))
+        except ValueError:
+            raise ConfigError('BOT_MIN_FREE_GB must be a number of gigabytes')
         self.dashboard_url = env.get('DASHBOARD_URL') or None
         self.dashboard_password = env.get('DASHBOARD_PASSWORD', '')
         self.dashboard_origin = env.get('DASHBOARD_ORIGIN') or None
@@ -270,6 +274,9 @@ class BenchBot:
                 self.current = None
         return True
 
+    def free_gb(self):
+        return shutil.disk_usage(self.cfg.state).free / 2 ** 30
+
     def need_dashboard(self):
         if self.dashboard is None:
             raise JobError('the dashboard is not configured (DASHBOARD_URL, DASHBOARD_PASSWORD)')
@@ -358,7 +365,12 @@ class BenchBot:
         if len(prompt) < 10:
             raise JobError('describe the brain change in words, for example: /bench raise the rotate threshold for vllm')
         if not self.cfg.repo or not self.cfg.data:
-            raise JobError('the bot needs BOT_REPO (a clean operator clone) and MATHLAB_DATA_DIR for /bench')
+            raise JobError('the bot needs BOT_REPO (an operator clone) and MATHLAB_DATA_DIR for /bench')
+        # Two checkouts and a Go build: never let a job fill the host's disk.
+        free = self.free_gb()
+        if free < self.cfg.min_free_gb:
+            raise JobError('only %.1f GB is free on the host and /bench needs %.1f GB (BOT_MIN_FREE_GB); '
+                           'free some space first' % (free, self.cfg.min_free_gb))
         if opts['sync']:
             self.sync(job, opts['policy'])
         ns, name = opts['policy'].split('/')
@@ -371,12 +383,13 @@ class BenchBot:
         if replay_build.sha256_file(control['path']) != control.get('binary_sha256'):
             raise JobError('the deployed brain-replay on disk does not match its recorded sha256; re-sync on the dashboard')
         base = control['git_sha']
+        if replay_build._git(self.cfg.repo, 'cat-file', '-t', base + '^{commit}') != 'commit':
+            raise JobError('BOT_REPO does not contain the deployed commit %s; fetch it there' % base[:12])
         tags = replay_build.tags_at(self.cfg.repo, base)
-        tag = tags[0] if tags else None
-        if not tag:
-            raise JobError('no tag in BOT_REPO points at the deployed commit %s; fetch tags there' % base[:12])
+        tag = tags[0] if tags else None  # the deployed binary's sha256 and git_sha are the base's provenance
+        base_name = '%s (%s)' % (tag, base[:12]) if tag else base[:12]
 
-        self.step(job, 'asking the LLM for a change against %s (%s)' % (tag, base[:12]))
+        self.step(job, 'asking the LLM for a change against %s' % base_name)
         (job.dir / 'prompt.txt').write_text(prompt + '\n')
         try:
             plan_record, _ = planner.plan(planner.parse_args([
@@ -388,8 +401,8 @@ class BenchBot:
         self.step(job, 'landing the change on a throwaway branch')
         try:
             cand = candidate.make_candidate(candidate.parse_args([
-                '--src-repo', self.cfg.repo, '--run-dir', str(job.dir), '--run-id', job.id, '--base-tag', tag,
-                '--base-commit', base, '--diff', str(job.dir / 'brain.diff'), '--prompt-file', str(job.dir / 'prompt.txt'),
+                '--src-repo', self.cfg.repo, '--run-dir', str(job.dir), '--run-id', job.id,
+                *(['--base-tag', tag] if tag else []), '--base-commit', base, '--diff', str(job.dir / 'brain.diff'), '--prompt-file', str(job.dir / 'prompt.txt'),
                 '--summary', prompt[:60], '--planner', 'openai', '--model', plan_record['model'],
                 '--out', str(job.dir / 'CANDIDATE.json')]))
         except candidate.CandidateError as err:
@@ -418,7 +431,7 @@ class BenchBot:
         except code_experiment.CodeExperimentError as err:
             raise JobError(str(err))
         meta = {'kind': 'Code experiment (LLM candidate vs deployed brain)', 'title': prompt[:200], 'policy': opts['policy'],
-                'base': '%s %s' % (tag, base[:12]), 'candidate': '%s %s' % (cand['candidateTag'], cand['candidateCommit'][:12]),
+                'base': base_name, 'candidate': '%s %s' % (cand['candidateTag'], cand['candidateCommit'][:12]),
                 'changed': ', '.join(c['path'] for c in cand['changedPaths']), 'request': prompt, 'job': job.id}
         manifest = json.loads((job.dir / 'experiment' / 'experiment_manifest.json').read_text())
         return self.deliver(job, meta, result, rows, [('candidate-%s.diff' % job.id, (job.dir / 'brain.diff').read_bytes())],
@@ -514,10 +527,20 @@ def check(cfg, env, telegram=None, out=print):
     def repo():
         if not cfg.repo:
             raise ConfigError('BOT_REPO is not set')
-        if replay_build._git(cfg.repo, 'status', '--porcelain'):
-            raise ConfigError('%s has uncommitted changes' % cfg.repo)
-        return '%s at %s' % (cfg.repo, replay_build._git(cfg.repo, 'rev-parse', '--short', 'HEAD'))
+        deployed = json.loads((Path(cfg.data or '/nonexistent') / 'mathlab' / 'bin' / 'current.json').read_text())['git_sha']
+        if replay_build._git(cfg.repo, 'cat-file', '-t', deployed + '^{commit}') != 'commit':
+            raise ConfigError('%s does not contain the deployed commit %s' % (cfg.repo, deployed[:12]))
+        tags = replay_build.tags_at(cfg.repo, deployed)
+        return '%s holds the deployed commit %s%s' % (cfg.repo, deployed[:12], ' (%s)' % tags[0] if tags else ', untagged')
     item('operator repository', repo, disables='/bench')
+
+    def disk():
+        private_dir(cfg.state)
+        free = shutil.disk_usage(cfg.state).free / 2 ** 30
+        if free < cfg.min_free_gb:
+            raise ConfigError('%.1f GB free, below BOT_MIN_FREE_GB=%.1f' % (free, cfg.min_free_gb))
+        return '%.1f GB free (BOT_MIN_FREE_GB=%.1f)' % (free, cfg.min_free_gb)
+    item('free disk', disk, disables='/bench')
     item('go', lambda: subprocess.run([cfg.go, 'version'], capture_output=True, text=True, check=True).stdout.strip(),
          disables='/bench')
 
