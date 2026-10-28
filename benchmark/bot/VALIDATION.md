@@ -21,11 +21,11 @@ symlink. No workload, cluster configuration or AWS infrastructure was changed.
   `b11de0aa084a754851cd54c4ec0ddc3638058dd6`: 396 pass events, 2 skips, no failures
   in `./internal/decision` and `./cmd/brain-replay`, uncached with Go 1.26.1.
   This is historical source, not the current cluster revision.
-- 65 offline bot tests passed. They cover candidate decision changes, failure before replay,
+- 66 offline bot tests passed. They cover candidate decision changes, failure before replay,
   credential-free test subprocesses, Responses, revision filtering, parameter
   time windows, private expiring owner pairing, and metric-delta restrictions.
-  All 22 Math Lab tests passed, covering the shared replay/analysis/export
-  contracts and expired-blob sync behavior.
+  All 24 Math Lab tests passed, covering the shared replay/analysis/export
+  contracts, expired-blob sync behavior and bounded header-only indexing.
 
 Host validation artifacts are private under
 `~/phorvex-benchmark/bot-validation-20261028/`. The separate historical smoke
@@ -72,6 +72,53 @@ The verified deployed binary reports **Go 1.26.10**, while the host SDK is
 compiler release from deployed build metadata and selects it for both test
 arms and both builds. The exact 1.26.10 toolchain was fetched successfully.
 Offline tests also exercise a deployed compiler newer than the installed SDK.
+
+## Current-source verification
+
+The first current-source job, `0fa8ea377742`, stopped at baseline tests:
+397 pass events, 2 skips and one `TestExactRuntimeMatrix` failure when its
+subprocess exceeded the unchanged 500 ms budget during cold compilation and
+concurrent sync. The failed job, raw log and Telegram receipt are retained;
+Telegram accepted that failure log as message 24.
+
+On this 1.8 GiB host, test packages now run serially; no tests were excluded
+and no deadlines were relaxed. Snapshot indexing reads the declared header
+only, rather than reading payload bytes from every corpus file. The worker
+change is deployed in composite release `20261028-header-reader-54417066`;
+the Telegram service runs bot release `bot-54417066`.
+
+Retry `0deacfd4c571` ran uncached tests on source `0058a3edd2eb` and its
+comment-only candidate `396a3f2b7b69ec1815d71d2323b36ecacdbcf538`, both using
+Go 1.26.10. **Each arm passed 398 test events with 2 skips and zero failures**
+in the decision/replay packages. The full result and delivery receipt are
+retained in `~/phorvex-benchmark/bot/jobs/0deacfd4c571/`.
+
+The current-source pipeline completed at **2026-10-28 18:22:59 UTC**:
+
+- Result `COMPLETE`, comparison `OBSERVATIONAL`, toolchain fidelity `EXACT`.
+- All **64/64** frozen ticks were control-eligible and matched in all three
+  arms, with no exclusions.
+- The locally rebuilt baseline is **byte-identical** to the deployed binary
+  (same sha256), in addition to reproducing its decisions.
+- The comment-only candidate changed **0/64** decisions. This is an expected
+  pipeline positive control and makes no optimization or defense claim.
+- Telegram accepted the HTML report, CSV, candidate diff and tests JSON as
+  messages **59, 60, 61 and 62**. The API receipts are retained in the job's
+  `delivery.json`; they establish delivery acceptance, not whether files were opened.
+- The evidence ZIP contains final state `COMPLETE`, consistent with `result.json`.
+
+The source-access blocker is resolved and `/bench` is enabled. This verification
+was initiated by the operator on the server using the same bot pipeline and
+the authorized owner's real Telegram transport; it was not an incoming user
+command. The normal Telegram command queue remains served by the running bot.
+
+Dashboard sync `3b521a06-d84c-4ea3-bbf4-a9a24db9fc13` completed successfully:
+5000 indexed entries were processed, 4907 verified snapshots downloaded and
+93 missing blobs explicitly rejected. Together with the earlier bounded sync,
+the host holds 4971 finalized snapshots from the current source. The full
+corpus holds 14916 snapshots; older revisions are excluded before sampling.
+More entries remain available, so this is a bounded batch, not an exhaustive
+backfill.
 
 A real dashboard sync resolved the currently deployed binary to source
 `0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec`, from image
