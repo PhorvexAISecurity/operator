@@ -93,8 +93,15 @@ def sync(data_dir, namespace, policy, console, since=None, limit=5000, progress=
         if not DIGEST.match(digest):
             return digest, None, 'invalid digest'
         path = '/api/math-lab/snapshot?' + urllib.parse.urlencode({'namespace': namespace, 'digest': digest})
-        with console.open(path, timeout=60) as response:
-            raw = response.read(MAX_SNAPSHOT_BYTES + 1)
+        try:
+            with console.open(path, timeout=60) as response:
+                raw = response.read(MAX_SNAPSHOT_BYTES + 1)
+        except Exception as error:
+            # The bounded producer may evict an indexed tick while we download
+            # the batch. Keep that gap visible without losing other valid ticks.
+            if getattr(error, 'status', None) == 404:
+                return digest, None, 'snapshot no longer available (HTTP 404)'
+            raise
         if len(raw) > MAX_SNAPSHOT_BYTES or hashlib.sha256(raw).hexdigest() != digest:
             return digest, None, 'content-address check failed'
         try:
@@ -111,6 +118,7 @@ def sync(data_dir, namespace, policy, console, since=None, limit=5000, progress=
             record['already_held'] += 1
         else:
             pending.append(entry)
+    pending.reverse()  # Prefer the newest ticks before the producer can evict them.
     done = 0
     # A few concurrent reads keep the relay busy without exceeding the operator listener's
     # four-reader bound (the console's own audit cursor also uses it).

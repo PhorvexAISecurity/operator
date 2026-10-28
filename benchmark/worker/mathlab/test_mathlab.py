@@ -270,6 +270,37 @@ class StreamingAndSyncTest(unittest.TestCase):
             self.assertEqual((record['already_held'], record['downloaded']), (1, 0))
 
 
+class SnapshotRetentionTest(unittest.TestCase):
+    def test_missing_blob_is_recorded_while_valid_ticks_are_downloaded(self):
+        import io
+        import hashlib
+        from mathlab import snapshots
+        from urllib.parse import urlsplit, parse_qs
+        header = json.dumps({'schema': 'math-lab.snapshot.v1', 'capturedAt': '2026-10-28T00:00:00Z',
+                             'namespace': 'vllm', 'policyName': 'vllm-defense'}).encode()
+        raw = b'PXMLSNP1' + struct.pack('>I', len(header)) + header
+        digest = hashlib.sha256(raw).hexdigest()
+        class Failure(Exception):
+            def __init__(self, status): self.status = status
+        class FakeConsole:
+            status = 404
+            def request(self, path): return {'entries': [{'digest': DIGEST_A}, {'digest': digest}]}
+            def open(self, path, timeout):
+                if parse_qs(urlsplit(path).query)['digest'][0] == DIGEST_A:
+                    raise Failure(self.status)
+                return io.BytesIO(raw)
+        console = FakeConsole()
+        with tempfile.TemporaryDirectory() as tmp:
+            record = snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
+            self.assertEqual(record['downloaded'], 1)
+            self.assertEqual(record['rejected'], [{'digest': DIGEST_A, 'reason': 'snapshot no longer available (HTTP 404)'}])
+            self.assertEqual((Path(tmp) / 'mathlab/snapshots/vllm/vllm-defense' / (digest + '.pxms')).read_bytes(), raw)
+        for status in (401, 403, 500):
+            console.status = status
+            with tempfile.TemporaryDirectory() as tmp, self.assertRaises(Failure):
+                snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
+
+
 class CohortSpacingTest(unittest.TestCase):
     def test_even_spacing_spans_the_window(self):
         with tempfile.TemporaryDirectory() as tmp:

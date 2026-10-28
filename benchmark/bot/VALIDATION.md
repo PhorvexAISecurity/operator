@@ -29,8 +29,11 @@ Host validation artifacts are private under
 uses an isolated data directory, actual archived snapshots and the archived
 binary from source `3051797426ce51265bf2757561bffded3bb69268`. Its candidate
 adds a comment only; it is a pipeline check and makes no improvement claim.
-The full job outcome, tests and report are retained under
-`smoke-state/jobs/a16f1ca06712/`; consult its result files for the outcome.
+The first job, `smoke-state/jobs/a16f1ca06712/`, stopped correctly at baseline
+tests: 395 pass events, 2 skips, one `TestExactRuntimeMatrix` failure because a
+subprocess exceeded its 500 ms budget while other compilation was active.
+No benchmark was accepted from that run. A separate retry is retained as
+`smoke-state/jobs/cf3d20439055/`; consult its result files for the outcome.
 It does not overwrite the dashboard's current binary identity or its corpus.
 Telegram delivery to the owner remains unverified until owner pairing.
 
@@ -46,11 +49,13 @@ A real dashboard sync resolved the currently deployed binary to source
    available. Supply read-only access to the correct source repository or a
    clone containing that exact commit, then fetch it into the bot repository.
 2. Sync job `11a22d48-abdd-42bf-9a6d-e1a22c5f3a05` failed with
-   `HTTPFailure: Console HTTP 404` at the snapshot index. The deployed console
-   image is `phorvex-console:actuator-integration-66f9fb1415e8f804b0701871b357c25400955ebe`.
-   The existing corpus contains older source revisions; it is not a valid
-   control corpus for `0058a3edd2eb`. Restore the reviewed read-only snapshot
-   relay/capture path for this deployment and sync matching finalized ticks.
+   `HTTPFailure: Console HTTP 404` while downloading a batch. Follow-up reads
+   established that the index works and three `0058a3edd2eb` blobs return
+   HTTP 200 with matching content hashes. The deployed console image is
+   `phorvex-console:actuator-integration-66f9fb1415e8f804b0701871b357c25400955ebe`.
+   The sync worker now records a missing blob as an explicit rejected tick and
+   continues downloading valid blobs, newest first; authentication/server
+   errors still fail. Sync current data before attempting a comparison.
 
 `/check` reports missing source or matching ticks. `/bench` refuses those
 conditions before asking the model or building a candidate. An archived replay
