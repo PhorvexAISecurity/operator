@@ -422,6 +422,13 @@ spec:
           value: "true"
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE
           value: /etc/phorvex-attack-catalog/identity-profile.json
+        {{- if dig "attackCatalog" "prometheusEvidence" "enabled" false .Values.phorvex.console }}
+        {{- if not .Values.phorvex.prometheusUrl }}{{ fail "console.attackCatalog.prometheusEvidence.enabled requires phorvex.prometheusUrl" }}{{ end }}
+        - name: PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED
+          value: "true"
+        - name: PHORVEX_CONSOLE_RUN_PROMETHEUS_ENVIRONMENT
+          value: {{ required "metrics.podMonitor.environment is required for catalogue Prometheus evidence" .Values.phorvex.metrics.podMonitor.environment | quote }}
+        {{- end }}
         {{- else }}
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED
           value: "false"

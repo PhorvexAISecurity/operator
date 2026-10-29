@@ -137,6 +137,8 @@ phorvex:
     attackCatalog:
       enabled: false
       authorizationTenant: ""
+      prometheusEvidence:
+        enabled: false
     # The console's own Service and Ingress, for an environment that exposes it outside
     # the production stack's dashboard. The Service serves port 80.
     ingress:

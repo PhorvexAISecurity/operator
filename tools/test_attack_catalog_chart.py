@@ -30,12 +30,14 @@ class AttackCatalogChartTests(unittest.TestCase):
                 self.assertEqual(values["console"]["attackCatalog"], {
                     "enabled": False,
                     "authorizationTenant": "",
+                    "prometheusEvidence": {"enabled": False},
                 })
 
         staging = yaml.safe_load((ROOT / "deploy/environments/staging/phorvex.yaml").read_text())["phorvex"]
         self.assertEqual(staging["console"]["attackCatalog"], {
             "enabled": True,
             "authorizationTenant": "phorvex-staging-demo",
+            "prometheusEvidence": {"enabled": True},
         })
         self.assertTrue(staging["identityRotate"]["enabled"])
         self.assertEqual(staging["identityRotate"]["targetNamespace"], "console-identity-shared")
@@ -51,6 +53,8 @@ class AttackCatalogChartTests(unittest.TestCase):
             "PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT",
             "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT",
             "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE",
+            "PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED",
+            "PHORVEX_CONSOLE_RUN_PROMETHEUS_ENVIRONMENT",
             "/etc/phorvex-attack-catalog/identity-profile.json",
             "attack-catalog-identity-fixture",
         ):

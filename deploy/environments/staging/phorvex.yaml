@@ -112,6 +112,8 @@ phorvex:
     attackCatalog:
       enabled: true
       authorizationTenant: phorvex-staging-demo
+      prometheusEvidence:
+        enabled: true
     state:
       persistence:
         storageClass: gp2-csi

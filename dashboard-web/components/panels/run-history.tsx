@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { api, ApiError, Lens, RunStatus, ArmResult, RunEvidence } from "@/lib/api";
+import { api, ApiError, Lens, RunStatus, ArmResult, RunEvidence, PrometheusRunEvidence } from "@/lib/api";
 import { useSelectedTarget } from "@/lib/provider-store";
 import { Card, CardContent, Badge } from "@/components/ui/primitives";
 import { Input } from "@/components/ui/more";
@@ -24,6 +24,31 @@ import { AttackCatalogueResultPanel } from "@/components/panels/catalog";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
+
+function PrometheusEvidence({ evidence }: { evidence: PrometheusRunEvidence }) {
+  const label = (labels: Record<string, string>) => Object.entries(labels).map(([key, value]) => `${key}=${value}`).join(", ") || "total";
+  const rows = evidence.metrics.flatMap((metric) => (metric.deltas || []).length > 0
+    ? (metric.deltas || []).map((delta) => ({ metric, delta }))
+    : [{ metric, delta: { labels: {}, baselinePresent: false, finalPresent: false, baseline: 0, final: 0, delta: 0, counterReset: false } }]);
+  return <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
+    <div className="flex flex-wrap items-center gap-2">
+      <Badge variant={evidence.status === "COMPLETE" ? "neutral" : evidence.status === "PARTIAL" ? "danger" : "pending"}>Prometheus {evidence.status.toLowerCase().replace("_", " ")}</Badge>
+      <Badge variant={(evidence.observedDecisionModes || []).length > 0 ? "neutral" : "pending"}>mode {(evidence.observedDecisionModes || []).join(" + ") || "not observed"}</Badge>
+      <span className="text-foreground">{evidence.environment} · {evidence.tenant} · action {evidence.expectedAction}</span>
+    </div>
+    <div className="mt-1 text-muted-foreground">Exact baseline/final counters and raw {evidence.rangeStep} range samples are retained with this run{evidence.capturedAt ? ` · captured ${evidence.capturedAt}` : ""}.</div>
+    {rows.length > 0 && <div className="mt-2 overflow-x-auto"><table className="w-full text-[11px]">
+      <thead><tr className="text-left text-muted-foreground"><th className="px-2 py-1">Metric</th><th className="px-2 py-1">Series</th><th className="px-2 py-1">Baseline</th><th className="px-2 py-1">Final</th><th className="px-2 py-1">Delta</th><th className="px-2 py-1">Samples</th></tr></thead>
+      <tbody>{rows.map(({ metric, delta }, index) => <tr key={`${metric.key}-${label(delta.labels)}-${index}`} className="border-t border-border/30">
+        <td className="px-2 py-1.5 font-mono">{metric.key}</td><td className="px-2 py-1.5 font-mono text-muted-foreground">{label(delta.labels)}</td>
+        <td className="px-2 py-1.5 tabular">{delta.baselinePresent ? delta.baseline : "absent"}</td><td className="px-2 py-1.5 tabular">{delta.finalPresent ? delta.final : "absent"}</td>
+        <td className="px-2 py-1.5 tabular text-foreground">{delta.finalPresent ? `+${delta.delta}${delta.counterReset ? " (reset)" : ""}` : metric.errors?.length ? "unavailable" : "0 observed"}</td>
+        <td className="px-2 py-1.5 tabular text-muted-foreground">{(metric.range || []).reduce((count, series) => count + series.samples.length, 0)}</td>
+      </tr>)}</tbody>
+    </table></div>}
+    {(evidence.errors || []).map((error) => <div key={error} className="mt-1 text-warning">unverified: {error}</div>)}
+  </div>;
+}
 
 // which provider a run targeted (EKS / vCluster / …) — color-coded so it reads at a glance.
 function ProviderTag({ provider, label }: { provider?: string; label?: string }) {
@@ -86,6 +111,7 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
       </div>
 
       {ev.attackCatalogueResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]"><AttackCatalogueResultPanel result={ev.attackCatalogueResult} /></div>}
+      {ev.prometheusEvidence && <PrometheusEvidence evidence={ev.prometheusEvidence} />}
 
       {ev.functionalResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
         <div className="flex flex-wrap items-center gap-2">{mcpVoiceModel ? <Badge variant="neutral">{mcpVoiceAccepted ? "Measurement completed" : "Measurement unverified"}</Badge> : <Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge>}<span className="text-foreground">{mcpVoiceModel ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible." : ev.functionalResult.summary}</span></div>
