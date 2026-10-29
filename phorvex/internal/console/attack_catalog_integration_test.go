@@ -147,6 +147,22 @@ func TestAttackCatalogueReactiveTruthRequiresEveryObservedStage(t *testing.T) {
 		}
 	})
 
+	t.Run("later event-bound noop cannot erase an exact actuation receipt", func(t *testing.T) {
+		cluster, record := completeFakeIdentityCluster()
+		noop := record
+		noop.Selected, noop.Feasible, noop.Actuated = false, false, false
+		noop.Action, noop.Handler, noop.DispatchOutcome, noop.ObjectsTouched = "noop", "", "not-attempted", nil
+		trace := *record.DecisionTrace
+		trace.DecisionID, trace.SelectedAction, trace.DispatchOutcome = "later-noop", "noop", "not-attempted"
+		noop.DecisionTrace = &trace
+		s := NewServer(Config{StateDir: t.TempDir(), AttackCatalogRunTimeout: 50 * time.Millisecond, AttackCatalogPollInterval: time.Millisecond})
+		s.attackCatalogRecords = func(context.Context) ([]audit.Record, error) { return []audit.Record{record, noop}, nil }
+		result := s.runAttackCatalogueIdentity(context.Background(), "cat-test", entry, cluster)
+		if result.Verdict != "DEFENDED" || !result.Actuator.ReceiptObserved || result.Decision.ID != record.DecisionTrace.DecisionID {
+			t.Fatalf("later noop erased the exact actuation receipt: %+v", result)
+		}
+	})
+
 	t.Run("expected metadata and event creation alone never defend", func(t *testing.T) {
 		cluster, record := completeFakeIdentityCluster()
 		record.Events = nil
