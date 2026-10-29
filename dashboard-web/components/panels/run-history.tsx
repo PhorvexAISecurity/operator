@@ -33,7 +33,9 @@ function PrometheusEvidence({ evidence }: { evidence: PrometheusRunEvidence }) {
   return <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
     <div className="flex flex-wrap items-center gap-2">
       <Badge variant={evidence.status === "COMPLETE" ? "neutral" : evidence.status === "PARTIAL" ? "danger" : "pending"}>Prometheus {evidence.status.toLowerCase().replace("_", " ")}</Badge>
-      <Badge variant={(evidence.observedDecisionModes || []).length > 0 ? "neutral" : "pending"}>mode {(evidence.observedDecisionModes || []).join(" + ") || "not observed"}</Badge>
+      <Badge variant={evidence.executionMode ? "neutral" : "pending"}>execution {evidence.executionMode || "legacy-unrecorded"}</Badge>
+      <Badge variant={evidence.triggerMode ? "neutral" : "pending"}>trigger {evidence.triggerMode || "legacy-unrecorded"}</Badge>
+      <Badge variant={(evidence.observedDecisionModes || []).length > 0 ? "neutral" : "pending"}>observed decision mode {(evidence.observedDecisionModes || []).join(" + ") || "not observed"}</Badge>
       <span className="text-foreground">{evidence.environment} · {evidence.tenant} · action {evidence.expectedAction}</span>
     </div>
     <div className="mt-1 text-muted-foreground">Exact baseline/final counters and raw {evidence.rangeStep} range samples are retained with this run{evidence.capturedAt ? ` · captured ${evidence.capturedAt}` : ""}.</div>

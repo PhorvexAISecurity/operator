@@ -19,6 +19,7 @@ test("catalogue rows filter and render review metadata", () => {
 test("catalogue launch sends only the allowlisted ID", () => {
   assert.match(api, /post<\{ id: string; context: string; catalogueID: string \}>\("\/api\/catalog\/launch", \{ id \}, lens\)/);
   assert.doesNotMatch(api, /launchCatalogEntry:[^\n]*(command|path|manifest|shell)/i);
+  assert.doesNotMatch(panel, /catalogueID\s*!==\s*["']AML\.T0012["']/);
 });
 
 test("typed result keeps every truth stage separate", () => {
@@ -26,6 +27,8 @@ test("typed result keeps every truth stage separate", () => {
     assert.ok(panel.includes(`\"${label}\"`), `missing stage ${label}`);
   }
   assert.match(panel, /result\.verdict === "DEFENDED"/);
+  assert.match(panel, /result\.executionMode/);
+  assert.match(panel, /result\.triggerMode/);
 });
 
 test("persisted catalogue evidence remains reviewable from run history", () => {

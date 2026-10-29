@@ -525,8 +525,22 @@ func runVisibleTo(p *Principal, own runOwnership) bool {
 	if podBoundNamedCase(own.Config) && (own.Tenant != podBoundNamespace(own.Config) || !p.AllowsTarget(hostTargetID)) {
 		return false
 	}
-	if !p.AllowsTarget(own.Target) {
+	if len(own.Targets) > 0 {
+		for _, target := range own.Targets {
+			if !p.AllowsTarget(target) {
+				return false
+			}
+		}
+	} else if !p.AllowsTarget(own.Target) {
 		return false
+	}
+	if len(own.Tenants) > 0 {
+		for _, tenant := range own.Tenants {
+			if !p.AllowsTenant(tenant) {
+				return false
+			}
+		}
+		return true
 	}
 	if own.Tenant == "" {
 		return p.TenantWildcard()

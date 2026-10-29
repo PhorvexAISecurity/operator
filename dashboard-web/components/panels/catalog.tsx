@@ -165,10 +165,12 @@ export function AttackCatalogueResultPanel({ result }: { result: AttackCatalogue
   ];
   return <div data-attack-catalogue-result className="mt-2 space-y-2 border-t border-border pt-2">
     <div className="flex flex-wrap items-center gap-1.5">{stages.map(([name, passed]) => <Badge key={name} variant={passed ? "accent" : "pending"}>{name}: {passed ? "yes" : "no"}</Badge>)}</div>
-    <div>verdict: <span className="font-mono text-foreground">{result.verdict}</span> · reactiveOnly: <span className="text-foreground">{result.reactiveOnly ? "true" : "false"}</span></div>
+    <div>verdict: <span className="font-mono text-foreground">{result.verdict}</span> · execution: <span className="text-foreground">{result.executionMode || "legacy-unrecorded"}</span> · trigger: <span className="text-foreground">{result.triggerMode || (result.reactiveOnly ? "reactive (legacy)" : "legacy-unrecorded")}</span></div>
     <div className="text-muted-foreground">{result.reason}</div>
     <div className="text-muted-foreground">decision: {result.decision.action || "unobserved"} · selected {result.decision.selected ? "yes" : "no"} · feasible {result.decision.feasible ? "yes" : "no"} · dispatch {result.decision.dispatchOutcome || "unobserved"}</div>
-    <div className="text-muted-foreground">ServiceAccount UID: <span className="font-mono">{result.physicalValidation.oldServiceAccountUID || "—"} → {result.physicalValidation.newServiceAccountUID || "—"}</span> · credential before/after: {result.physicalValidation.credentialAuthenticatedBefore ? "authenticated" : "not authenticated"}/{result.physicalValidation.credentialAuthenticatedAfter ? "authenticated" : "not authenticated"} · Pod retained: {result.physicalValidation.podRetained ? "yes" : "no"}</div>
+    {result.catalogueID === "AML.T0012"
+      ? <div className="text-muted-foreground">ServiceAccount UID: <span className="font-mono">{result.physicalValidation.oldServiceAccountUID || "—"} → {result.physicalValidation.newServiceAccountUID || "—"}</span> · credential before/after: {result.physicalValidation.credentialAuthenticatedBefore ? "authenticated" : "not authenticated"}/{result.physicalValidation.credentialAuthenticatedAfter ? "authenticated" : "not authenticated"} · Pod retained: {result.physicalValidation.podRetained ? "yes" : "no"}</div>
+      : <div className="text-muted-foreground">physical oracle: <span className="font-mono">{result.physicalValidation.oracle || "adapter-specific"}</span> · {result.physicalValidation.validated ? "validated" : "unverified"}</div>}
     {result.unsafeToRetry && <div className="text-warning">Cleanup is unresolved; do not retry until the retained run is reconciled.</div>}
   </div>;
 }
@@ -292,7 +294,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
     if (selectedTarget?.context) clearLiveSelection(selectedLens, selectedTarget.context);
     try {
       if (item!.launchKind === "catalogue-entry") {
-        if (item!.catalogueID !== "AML.T0012") throw new Error("This catalogue entry has no reviewed server-side launch adapter.");
+        if (!item!.catalogueID) throw new Error("This catalogue row has no exact server-side identity.");
         const { id, context, catalogueID } = await api.launchCatalogEntry(item!.catalogueID, selectedLens);
         if (catalogueID !== item!.catalogueID) throw new Error("Catalogue launch identity differs from the selected row.");
         if (request !== requestGeneration.current || selectedContext !== currentContext.current) return;
@@ -370,7 +372,7 @@ function ScenarioDialog({ item, target, lens, onClose }: { item: CatalogItem | n
         {item.launchKind === "catalogue-entry" && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">
           <div className="text-foreground">{item.description}</div>
           <div className="mt-1">family: <span className="font-mono text-foreground/85">{item.family}</span> · expected action: <span className="font-mono text-foreground/85">{item.expectedAction}</span> · reactive compatible: {item.reactiveCompatible ? "yes" : "no"}</div>
-          <div className="mt-1">Expected action is metadata only. The typed result credits defense only after exact event attribution, decision, actuator receipt, ServiceAccount UID and credential oracle, retained Pod, and verified cleanup.</div>
+          <div className="mt-1">Expected action is metadata only. The typed result credits defense only after exact signal attribution, a selected feasible decision, an accepted actuator receipt, the registered family oracle, and verified cleanup.</div>
         </div>}
         {item.benignControl
           ? <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px] text-muted-foreground">{item.claimClass === "calibration" ? "Two fixed benign inputs are sent to the reviewed non-forwarding classifier endpoint/source contract. Loaded process behavior and guarded serving remain unverified; this is not a security efficacy result." : item.launchKind === "fixed-suite" ? "Bounded functional control. It reports only the case-specific service, fixture, or console boundary named below, plus cleanup and explicit limits; it does not establish attack or defense efficacy." : item.launchKind === "live-vllm-effect" ? "Bounded installed effect observation. A fresh exact-target state transition is separate from behavioral mitigation, which this entry does not measure." : "Benign synthetic harness control. It does not establish an attack, defense efficacy, ROI, or behavior of the installed service."} {item.meaningfulWhen}</div>

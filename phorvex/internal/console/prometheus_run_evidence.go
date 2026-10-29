@@ -68,12 +68,14 @@ type PrometheusMetricEvidence struct {
 // catalogue run. The raw samples and exact PromQL remain available after
 // Prometheus retention expires; summaries are derived only from those samples.
 type PrometheusRunEvidence struct {
-	Schema         string `json:"schema"`
-	RunID          string `json:"runID"`
-	CatalogueID    string `json:"catalogueID"`
-	Tenant         string `json:"tenant"`
-	Environment    string `json:"environment"`
-	ExpectedAction string `json:"expectedAction"`
+	Schema         string                     `json:"schema"`
+	RunID          string                     `json:"runID"`
+	CatalogueID    string                     `json:"catalogueID"`
+	Tenant         string                     `json:"tenant"`
+	Environment    string                     `json:"environment"`
+	ExpectedAction string                     `json:"expectedAction"`
+	ExecutionMode  AttackCatalogExecutionMode `json:"executionMode"`
+	TriggerMode    AttackCatalogTriggerMode   `json:"triggerMode"`
 	// ObservedDecisionModes is derived from positive selected-action counter
 	// deltas, never from the requested console switch. Empty means no selected
 	// reactive/proactive decision was observed in this run's evidence window.
@@ -156,7 +158,7 @@ func (c PrometheusRunEvidenceConfig) validate() error {
 // service starts. It is exported only for the shared console/attacks launcher.
 func (c PrometheusRunEvidenceConfig) Validate() error { return c.validate() }
 
-func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogueID, tenant, action string, started time.Time) (*PrometheusRunEvidence, error) {
+func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogueID, tenant, action string, executionMode AttackCatalogExecutionMode, triggerMode AttackCatalogTriggerMode, started time.Time) (*PrometheusRunEvidence, error) {
 	cfg := s.cfg.RunPrometheusEvidence.normalized()
 	if !cfg.Enabled {
 		return nil, nil
@@ -166,7 +168,7 @@ func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogu
 	}
 	evidence := &PrometheusRunEvidence{
 		Schema: prometheusRunEvidenceSchema, RunID: runID, CatalogueID: catalogueID,
-		Tenant: tenant, Environment: cfg.Environment, ExpectedAction: action,
+		Tenant: tenant, Environment: cfg.Environment, ExpectedAction: action, ExecutionMode: executionMode, TriggerMode: triggerMode,
 		ObservedDecisionModes: []string{}, Status: "BASELINE_CAPTURED", StartedAt: started.UTC(), BaselineAt: time.Now().UTC(),
 		RangeStep: cfg.RangeStep.String(), Metrics: []PrometheusMetricEvidence{},
 	}
@@ -326,6 +328,8 @@ func (rm *RunManager) PrometheusRunEvidence(id string) (*PrometheusRunEvidence, 
 	}
 	if evidence.Schema != prometheusRunEvidenceSchema || evidence.RunID != id || evidence.CatalogueID != st.Config ||
 		evidence.Tenant == "" || evidence.Environment == "" || evidence.ExpectedAction == "" || evidence.StartedAt.IsZero() ||
+		(evidence.ExecutionMode == "") != (evidence.TriggerMode == "") ||
+		(evidence.ExecutionMode != "" && !validAttackCatalogModes(evidence.ExecutionMode, evidence.TriggerMode)) ||
 		(evidence.Status != "BASELINE_CAPTURED" && evidence.Status != "COMPLETE" && evidence.Status != "PARTIAL") {
 		return nil, errors.New("Prometheus run evidence identity or envelope is invalid")
 	}
