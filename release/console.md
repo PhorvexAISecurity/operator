@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.13.2 (2026-10-29)
+
+- fix(console): show catalogue verdicts in run history (a83c9fb4)
+
 ## 0.13.1 (2026-10-29)
 
 - fix(console): retain exact attack actuation evidence (fca1c08c)
