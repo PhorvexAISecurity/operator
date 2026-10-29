@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -8,7 +9,8 @@ import (
 func defendedAttackCatalogResult() AttackCatalogResult {
 	now := time.Now().UTC()
 	return AttackCatalogResult{Schema: attackCatalogResultSchema, CatalogueID: "AML.T0012", RunID: "cat-1",
-		Visible: true, Available: true, Launched: true, ExpectedAction: "identity-rotate", StartedAt: now, FinishedAt: now,
+		Visible: true, Available: true, Launched: true, ReactiveOnly: true, ExecutionMode: AttackCatalogExecutionActive,
+		TriggerMode: AttackCatalogTriggerReactive, ExpectedAction: "identity-rotate", StartedAt: now, FinishedAt: now,
 		Signal:             AttackCatalogSignalResult{Created: true, Observed: true, Name: "event", UID: "event-uid", Creator: "creator", TargetUID: "pod-uid"},
 		Decision:           AttackCatalogDecisionResult{Observed: true, ID: "decision", Selected: true, Feasible: true, Action: "identity-rotate", DispatchOutcome: "emitted"},
 		Actuator:           AttackCatalogActuatorResult{ReceiptObserved: true, Handler: "identity-rotate", ObjectsTouched: []string{"ServiceAccount/ns/sa"}},
@@ -27,11 +29,13 @@ func TestAttackCatalogDefendedRequiresEveryIndependentOracle(t *testing.T) {
 		"event creation only":            func(r *AttackCatalogResult) { r.Signal.Observed = false },
 		"decision absent":                func(r *AttackCatalogResult) { r.Decision.Observed = false },
 		"decision unselected":            func(r *AttackCatalogResult) { r.Decision.Selected = false },
+		"decision infeasible":            func(r *AttackCatalogResult) { r.Decision.Feasible = false },
 		"actuator receipt absent":        func(r *AttackCatalogResult) { r.Actuator.ReceiptObserved = false },
 		"credential still authenticates": func(r *AttackCatalogResult) { r.PhysicalValidation.CredentialAuthenticatedAfter = true },
 		"ServiceAccount did not rotate":  func(r *AttackCatalogResult) { r.PhysicalValidation.NewServiceAccountUID = "old" },
 		"Pod not retained":               func(r *AttackCatalogResult) { r.PhysicalValidation.PodRetained = false },
 		"cleanup unverified":             func(r *AttackCatalogResult) { r.Cleanup.Verified = false },
+		"dry-run execution":              func(r *AttackCatalogResult) { r.ExecutionMode = AttackCatalogExecutionDryRun },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -41,5 +45,27 @@ func TestAttackCatalogDefendedRequiresEveryIndependentOracle(t *testing.T) {
 				t.Fatal("incomplete result retained DEFENDED")
 			}
 		})
+	}
+}
+
+func TestAttackCatalogLegacyAMLResultRemainsReadable(t *testing.T) {
+	legacy := defendedAttackCatalogResult()
+	legacy.ExecutionMode, legacy.TriggerMode = "", ""
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained AttackCatalogResult
+	if err = json.Unmarshal(raw, &retained); err != nil {
+		t.Fatal(err)
+	}
+	if err = retained.Validate(); err != nil {
+		t.Fatalf("retained AML.T0012 v1 result rejected: %v", err)
+	}
+	if !retained.Visible || retained.CatalogueID != legacy.CatalogueID || retained.RunID != legacy.RunID {
+		t.Fatalf("retained legacy result was hidden or rebound: %+v", retained)
+	}
+	if retained.EvidenceSchema != "" || retained.releaseEvidenceRequirements() == nil {
+		t.Fatal("legacy incomplete evidence was upgraded into the strict release contract")
 	}
 }

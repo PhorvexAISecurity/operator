@@ -150,6 +150,7 @@
       "code-exec-guard",
       "native-rotation-owner",
       "panicking-law",
+      "stateful-rotation-admission",
       "node-cordon-drain-replace-observation-required",
       "network-isolate-observation-required",
       "credential-revoke-observation-required"
@@ -194,6 +195,9 @@
       ],
       "panicking-law": [
         "feasibility law "
+      ],
+      "stateful-rotation-admission": [
+        "stateful-rotation-admission:"
       ],
       "node-cordon-drain-replace-observation-required": [
         "node-cordon-drain-replace-observation-required:"

@@ -107,11 +107,26 @@ phorvex:
     # exec into and change, and where it and the console may edit policies. Empty is
     # every namespace, as the console had.
     attackNamespaces: []
-    # The review-pinned 192 rows are always visible. This separately enables the sole
-    # server-owned launch adapter (AML.T0012) in the attacks-service deployment.
+    # The review-pinned 192 rows are always visible. This separately enables the
+    # reviewed exact-ID adapters in the attacks-service deployment; agentAction is
+    # an additional immutable-fixture opt-in.
     attackCatalog:
       enabled: false
       authorizationTenant: ""
+      familyFixtures:
+        enabled: false
+        profile: ""
+        cleanupPolicy: Delete
+        images:
+          workload: ""
+          phorvex: ""
+          guardrail: ""
+          python: "docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d"
+          kwok: "registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0"
+      agentAction:
+        enabled: false
+        namespace: p6-demo
+        image: ""
       prometheusEvidence:
         enabled: false
     # The console's own Service and Ingress, for an environment that exposes it outside

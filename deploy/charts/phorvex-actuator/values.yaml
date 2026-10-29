@@ -96,10 +96,12 @@ phorvex:
     enabled: false
     targetNamespace: ""
     configMapName: ""
+    configMapNames: []
   crmRefundRevoke:
     enabled: false
   agentActionDeny:
     enabled: false
+    namespaces: []
   statefulRotation:
     enabled: false
   voiceMemory:

@@ -5,9 +5,8 @@ set -euo pipefail
 # phorvex/charts/phorvex — so a subchart edit that is never re-packaged is
 # invisible until it silently fails to deploy.
 #
-# This compares EXTRACTED CONTENTS, not the .tgz bytes: `helm package` stamps
-# gzip metadata at build time, so the archive is not byte-reproducible and a
-# byte comparison would fail on every single run.
+# The packager normalizes tar ownership, order and mtimes and uses `gzip -n`, so
+# archives are byte-reproducible as well as content-equivalent.
 V=$(grep -E '^version:' phorvex/charts/phorvex/Chart.yaml | awk '{print $2}')
 TGZ="deploy/helm/phorvex-stack/charts/phorvex-$V.tgz"
 if [ ! -f "$TGZ" ]; then
@@ -68,3 +67,5 @@ if stale:
     sys.exit("vendored chart metadata is stale — helm dependency update")
 print("  Chart.yaml, Chart.lock and dependencies match")
 PY
+
+"$(dirname "$0")/package-vendored-charts.sh" --check

@@ -20,7 +20,6 @@ import (
 
 	"github.com/phorvex/phorvex/internal/attackcatalog"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
-	"github.com/phorvex/phorvex/internal/identityfixture"
 )
 
 // --- Attack Catalog (the full ~53 scenarios from the harness registry) -------------------
@@ -172,13 +171,7 @@ func (c *Config) attackCatalogueItems() []CatalogItem {
 	if err != nil {
 		return nil
 	}
-	firstReady := c.AttackCatalogEnabled && c.AuditSource != nil && c.Service != ServiceConsole
-	if firstReady {
-		var profile identityfixture.Profile
-		profile, err = identityfixture.LoadFile(c.AttackCatalogIdentityProfilePath)
-		firstReady = err == nil && c.AttackCatalogAuthorizationTenant != "" &&
-			c.AttackCatalogIdentityTenant != "" && profile.Namespace == c.AttackCatalogIdentityTenant
-	}
+	registry := newAttackCatalogAdapterRegistry(nil, *c)
 	items := make([]CatalogItem, 0, len(entries))
 	for _, entry := range entries {
 		item := CatalogItem{
@@ -194,23 +187,30 @@ func (c *Config) attackCatalogueItems() []CatalogItem {
 			Available: false, CatalogueID: entry.ID, CatalogueOrder: entry.Order, Description: entry.Description,
 			Family: entry.Family, ExpectedAction: entry.ExpectedAction, ReactiveCompatible: entry.ReactiveCompatible,
 		}
-		switch {
-		case entry.ID != attackcatalog.FirstID:
-			item.UnavailableReason = "Visible metadata only: no reviewed server-side launch adapter is packaged for this entry."
-		case firstReady:
-			item.Available = true
-			item.RuntimeContext = defaultTargetID
-			item.RunnableNote = "Server-fixed AML.T0012 identity-rotation validation; authoritative fixture and policy admission are repeated at launch."
-		case !c.AttackCatalogEnabled:
-			item.UnavailableReason = "AML.T0012 launch adapter is not enabled by this deployment."
-		case c.Service == ServiceConsole:
-			item.UnavailableReason = "AML.T0012 is served by the attacks service; no attacks-service runtime is active here."
-		case c.AuditSource == nil:
-			item.UnavailableReason = "AML.T0012 requires the authenticated manager audit source."
-		default:
-			item.UnavailableReason = "AML.T0012 reviewed identity-fixture profile is unavailable or invalid."
-		}
 		items = append(items, item)
+	}
+	return applyAttackCatalogAvailability(items, registry)
+}
+
+func applyAttackCatalogAvailability(items []CatalogItem, registry *AttackCatalogAdapterRegistry) []CatalogItem {
+	for i := range items {
+		if items[i].LaunchKind != "catalogue-entry" || items[i].CatalogueID == "" {
+			continue
+		}
+		items[i].Available = false
+		items[i].RuntimeContext = ""
+		adapter, ok := registry.Lookup(items[i].CatalogueID)
+		if !ok {
+			items[i].UnavailableReason = "Visible metadata only: no reviewed server-side launch adapter is packaged for this entry."
+			continue
+		}
+		availability := adapter.Availability()
+		items[i].Available = availability.Available
+		items[i].UnavailableReason = availability.UnavailableReason
+		items[i].RuntimeContext = availability.RuntimeContext
+		if availability.RunnableNote != "" {
+			items[i].RunnableNote = availability.RunnableNote
+		}
 	}
 	return items
 }

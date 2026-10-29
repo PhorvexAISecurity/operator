@@ -51,6 +51,13 @@ cluster:
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies"], verbs: ["get", "list", "watch"]}
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies/status"], verbs: ["get", "update", "patch"], writers: [dispatcher]}
 - {apiGroups: ["phorvex.ai"], resources: ["phorvexpolicies/finalizers"], verbs: ["update"], writers: [dispatcher]}
+{{- $fixtureEnabled := dig "console" "attackCatalog" "familyFixtures" "enabled" false $v }}
+{{- $fixtureFamily := dig "console" "attackCatalog" "familyFixtures" "profile" "" $v }}
+{{- if and $fixtureEnabled (eq $fixtureFamily "node-recycle") }}
+# The reviewed KWOK profile owns exactly two disposable Nodes. Read/list remains
+# in the base catalog; native recycle can mutate/delete only these names.
+- {apiGroups: [""], resources: ["nodes"], resourceNames: ["p3-node-a", "p3-node-b"], verbs: ["get", "update", "patch", "delete"], writers: [actuator]}
+{{- end }}
 roles:
 # Protected operation receipts and the capacity ledgers live with the operator.
 - name: operation-journal
@@ -77,14 +84,54 @@ roles:
   - {apiGroups: [""], resources: ["services"], verbs: ["get", "list", "update"], writers: [actuator]}
   - {apiGroups: ["discovery.k8s.io"], resources: ["endpointslices"], verbs: ["list"]}
 {{- end }}
+{{- if $fixtureEnabled }}
+{{- if has $fixtureFamily (list "controller-stop" "image") }}
+- name: catalogue-owner-mutation
+  namespace: {{ if eq $fixtureFamily "controller-stop" }}p4-demo{{ else }}p3-demo{{ end }}
+  rules:
+  - {apiGroups: ["apps"], resources: ["deployments"], resourceNames: ["demo-api"], verbs: ["get", "update", "patch"], writers: [actuator]}
+{{- if eq $fixtureFamily "image" }}
+- name: catalogue-owner-mutation-p2
+  namespace: p2-demo
+  rules:
+  - {apiGroups: ["apps"], resources: ["deployments"], resourceNames: ["demo-api"], verbs: ["get", "update", "patch"], writers: [actuator]}
+{{- end }}
+{{- else if eq $fixtureFamily "credential" }}
+- name: catalogue-credential-revoke
+  namespace: p4-demo
+  rules:
+  - {apiGroups: [""], resources: ["serviceaccounts", "secrets"], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
+  - {apiGroups: ["rbac.authorization.k8s.io"], resources: ["roles", "rolebindings"], verbs: ["get", "delete"], writers: [actuator]}
+{{- else if eq $fixtureFamily "datastore" }}
+- name: catalogue-datastore-restore
+  namespace: p2-demo
+  rules:
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["datastore-content"], verbs: ["get", "update"], writers: [actuator]}
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["datastore-trusted-snapshot"], verbs: ["get"], readers: [actuator]}
+{{- else if eq $fixtureFamily "serving-rate" }}
+- name: catalogue-serving-rate
+  namespace: p5-demo
+  rules:
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["phorvex-serving-rate-budget", "phorvex-serving-rate-status"], verbs: ["get", "update"], writers: [actuator]}
+- name: catalogue-serving-rate-journal
+  namespace: p5
+  rules:
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["phorvex-throttle-journal"], verbs: ["get", "update"], writers: [actuator]}
+{{- end }}
+{{- end }}
 {{- if $v.outputPolicy.enabled }}
 {{- $namespace := required "outputPolicy.targetNamespace is required" $v.outputPolicy.targetNamespace }}
-{{- $name := required "outputPolicy.configMapName is required" $v.outputPolicy.configMapName }}
-{{- if not (regexMatch "^phorvex-output-policy-[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail "outputPolicy.configMapName must name the exact fixture policy" }}{{- end }}
+{{- $names := dig "outputPolicy" "configMapNames" (list) $v }}
+{{- with dig "outputPolicy" "configMapName" "" $v }}{{- $names = append $names . }}{{- end }}
+{{- $names = uniq $names }}
+{{- if not $names }}{{- fail "outputPolicy.configMapName or configMapNames must name exact fixture policies" }}{{- end }}
+{{- range $name := $names }}
+{{- if not (regexMatch "^phorvex-output-policy-[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail "outputPolicy configMapNames must name exact fixture policies" }}{{- end }}
+{{- end }}
 - name: output-policy-activation
   namespace: {{ $namespace | quote }}
   rules:
-  - {apiGroups: [""], resources: ["configmaps"], resourceNames: [{{ $name | quote }}], verbs: ["get", "update"], writers: [actuator]}
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: {{ toJson $names }}, verbs: ["get", "update"], writers: [actuator]}
 {{- end }}
 {{- if $v.litellmClientRevoke.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "litellmClientRevoke requires native or hybrid actuator" }}{{- end }}
@@ -102,12 +149,15 @@ roles:
 {{- end }}
 {{- if $v.agentActionDeny.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "agentActionDeny requires native or hybrid actuator" }}{{- end }}
-{{- range $namespace := $v.actuatorNamespaces }}
+{{- $namespaces := dig "agentActionDeny" "namespaces" (list) $v }}
+{{- if not $namespaces }}{{- fail "agentActionDeny.namespaces must explicitly scope the fixed guard" }}{{- end }}
+{{- range $namespace := uniq $namespaces }}
+{{- if not (has $namespace $v.actuatorNamespaces) }}{{- fail "agentActionDeny.namespaces must be a subset of actuatorNamespaces" }}{{- end }}
 {{- /* Namespace-parametric analog of crm-refund-revoke: granted only on the fixed guard name per enabled namespace. */}}
 - name: agent-action-deny
   namespace: {{ $namespace | quote }}
   rules:
-  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [actuator]}
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [dispatcher, actuator]}
 {{- end }}
 {{- end }}
 {{- if dig "statefulRotation" "enabled" false $v }}

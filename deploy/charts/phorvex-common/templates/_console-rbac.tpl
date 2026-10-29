@@ -95,6 +95,7 @@ subjects:
 {{- $attacksSA := include "phorvex-common.attacksServiceAccountName" . }}
 {{- $scoped := .Values.phorvex.console.attackNamespaces }}
 {{- $attackCatalog := dig "attackCatalog" "enabled" false .Values.phorvex.console }}
+{{- $agentActionCatalog := dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}
 ---
 # The attacks service fires what the console fired, so it holds the console's base
 # grants beyond reading. With console.attackNamespaces, what it and the console may exec
@@ -121,6 +122,13 @@ rules:
 # rotation. It grants no credential or impersonation authority.
 - apiGroups: ["authentication.k8s.io"]
   resources: ["tokenreviews"]
+  verbs: ["create"]
+{{- end }}
+{{- if $attackCatalog }}
+# Reviews grant no authority; exact adapters use them only to prove the fixed
+# attacks, manager, sensor, and actuator identities have the installed grants.
+- apiGroups: ["authorization.k8s.io"]
+  resources: ["selfsubjectaccessreviews", "subjectaccessreviews"]
   verbs: ["create"]
 {{- end }}
 {{- if not $scoped }}
@@ -198,6 +206,7 @@ subjects:
   namespace: {{ .Release.Namespace }}
 {{- end }}
 {{- range $scoped }}
+{{- if not (and $agentActionCatalog (eq . "p6-demo")) }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -230,6 +239,7 @@ subjects:
 - kind: ServiceAccount
   name: {{ $attacksSA }}
   namespace: {{ $.Release.Namespace }}
+{{- end }}
 ---
 # The console's policy edits (/api/policy/edit, the optimizer knobs), in this namespace only.
 apiVersion: rbac.authorization.k8s.io/v1

@@ -65,7 +65,8 @@ export interface RunStatus {
   id: string; config: string; state: "queued" | "running" | "done" | "partial" | "error" | "stopped"; started: string;
   date?: string; finished?: string; namespace?: string; target?: string; provider?: string; targetLabel?: string;
   trials: number; expectedTrials?: number; arms?: ArmResult[]; error?: string; nativeActuator: boolean; compare3?: boolean;
-  executionKind?: string; claimClass?: string; outcome?: TrialOutcome; cleanupStatus?: string; unsafeToRetry?: boolean;
+  executionKind?: string; executionMode?: "active" | "dryRun"; triggerMode?: "reactive" | "proactive+reactive";
+  claimClass?: string; outcome?: TrialOutcome; cleanupStatus?: string; unsafeToRetry?: boolean;
 }
 export interface PageMeta {
   limit: number;
@@ -932,14 +933,15 @@ export interface PodBoundTokenResult {
 }
 export interface AttackCatalogueResult {
   schema: "phorvex.attack-catalogue-result.v1"; catalogueID: string; runID: string;
-  visible: boolean; available: boolean; launched: boolean; reactiveOnly: boolean; expectedAction: string;
+  visible: boolean; available: boolean; launched: boolean; reactiveOnly: boolean;
+  executionMode?: "active" | "dryRun"; triggerMode?: "reactive" | "proactive+reactive"; expectedAction: string;
   startedAt: string; finishedAt: string; verdict: "DEFENDED" | "NOT_DEFENDED" | "INCONCLUSIVE" | "ERROR";
   reason: string; unsafeToRetry: boolean;
   signal: { created: boolean; observed: boolean; name?: string; uid?: string; creator?: string; targetUID?: string };
   decision: { observed: boolean; id?: string; selected: boolean; feasible: boolean; action?: string; dispatchOutcome?: string };
   actuator: { receiptObserved: boolean; handler?: string; objectsTouched?: string[] };
-  physicalValidation: { validated: boolean; oldServiceAccountUID?: string; newServiceAccountUID?: string; credentialAuthenticatedBefore: boolean; credentialAuthenticatedAfter: boolean; podRetained: boolean; podUID?: string };
-  cleanup: { attempted: boolean; eventDeleted: boolean; markerDeleted: boolean; verified: boolean; reason?: string };
+  physicalValidation: { validated: boolean; oracle?: string; evidence?: unknown; oldServiceAccountUID?: string; newServiceAccountUID?: string; credentialAuthenticatedBefore: boolean; credentialAuthenticatedAfter: boolean; podRetained: boolean; podUID?: string };
+  cleanup: { attempted: boolean; eventDeleted: boolean; markerDeleted: boolean; verified: boolean; reason?: string; evidence?: unknown };
 }
 export interface PrometheusRunSample { time: number; value: number }
 export interface PrometheusRunSeries { labels: Record<string, string>; samples: PrometheusRunSample[] }
@@ -947,7 +949,8 @@ export interface PrometheusRunDelta { labels: Record<string, string>; baselinePr
 export interface PrometheusRunMetric { key: string; query: string; baseline: PrometheusRunSeries[]; final?: PrometheusRunSeries[]; range?: PrometheusRunSeries[]; deltas?: PrometheusRunDelta[]; errors?: string[] }
 export interface PrometheusRunEvidence {
   schema: "phorvex.prometheus-run-evidence.v1"; runID: string; catalogueID: string; tenant: string; environment: string;
-  expectedAction: string; observedDecisionModes: string[]; status: "BASELINE_CAPTURED" | "COMPLETE" | "PARTIAL"; startedAt: string; baselineAt: string;
+  expectedAction: string; executionMode?: "active" | "dryRun"; triggerMode?: "reactive" | "proactive+reactive";
+  observedDecisionModes: string[]; status: "BASELINE_CAPTURED" | "COMPLETE" | "PARTIAL"; startedAt: string; baselineAt: string;
   finishedAt?: string; capturedAt?: string; rangeStep: string; metrics: PrometheusRunMetric[]; errors?: string[];
 }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; attackCatalogueResult?: AttackCatalogueResult; prometheusEvidence?: PrometheusRunEvidence; note: string }

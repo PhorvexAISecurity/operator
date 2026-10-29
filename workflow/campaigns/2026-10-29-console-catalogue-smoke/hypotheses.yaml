@@ -1,0 +1,93 @@
+schema_version: 1
+hypotheses:
+- id: H-agent-action
+  claim: AML.T0053 completes the strict active/reactive Console contract for agent-action.
+  falsifier: Any missing exact binding, evidence stage, accepted receipt, physical oracle, postflight inventory, cleanup proof, or strict-verifier PASS.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0053.
+  minimum_observations: 1
+  positive_control: Fresh agent-sim raw/legitimate operation before the run-bound denial.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-controller-stop
+  claim: AML.T0074 completes the strict active/reactive Console contract for controller-stop.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0074.
+  minimum_observations: 1
+  positive_control: Ready controller and legitimate workload before the fresh stop signal.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-credential
+  claim: AML.T0035 completes the strict active/reactive Console contract for credential.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0035.
+  minimum_observations: 1
+  positive_control: Owned fresh credential succeeds before run-bound revocation.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-datastore
+  claim: AML.T0070 completes the strict active/reactive Console contract for datastore.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0070.
+  minimum_observations: 1
+  positive_control: Trusted snapshot and clean read before run-owned poison.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-identity-sa-rotate
+  claim: AML.T0012 completes the strict active/reactive Console contract for identity-sa-rotate.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0012.
+  minimum_observations: 1
+  positive_control: Fresh token marker bound to the original exact ServiceAccount identity.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-image
+  claim: aml.t0010 completes the strict active/reactive Console contract for image.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID aml.t0010.
+  minimum_observations: 1
+  positive_control: Reviewed trusted image digest and healthy workload before mutation.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-network-edge
+  claim: AML.T0096 completes the strict active/reactive Console contract for network-edge.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0096.
+  minimum_observations: 1
+  positive_control: Legitimate path and forbidden c2-sink path both measured before isolation.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-node-recycle
+  claim: AML.T0105 completes the strict active/reactive Console contract for node-recycle.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0105.
+  minimum_observations: 1
+  positive_control: Reviewed KWOK node-a and retained node-b identities before recycle.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-pod-rotate
+  claim: MS-DE-clear-container-logs completes the strict active/reactive Console contract for pod-rotate.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID MS-DE-clear-container-logs.
+  minimum_observations: 1
+  positive_control: Ready exact Pod and legitimate workload before the fresh rotate signal.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-quarantine
+  claim: AML.T0025 completes the strict active/reactive Console contract for quarantine.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0025.
+  minimum_observations: 1
+  positive_control: Legitimate traffic and capacity ledger measured before quarantine.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-sensitive-output
+  claim: AML.T0069 completes the strict active/reactive Console contract for sensitive-output.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0069.
+  minimum_observations: 1
+  positive_control: Raw marker disclosure and legitimate public response before policy activation.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-serving-kv
+  claim: AML.T0080 completes the strict active/reactive Console contract for serving-kv.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0080.
+  minimum_observations: 1
+  positive_control: Run-owned implant observed on both retained serving Pods before reset.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.
+- id: H-serving-rate
+  claim: AML.T0024 completes the strict active/reactive Console contract for serving-rate.
+  falsifier: Any required strict evidence or cleanup gate is absent or mismatched.
+  sample_unit: One fresh authenticated Console run for exact ID AML.T0024.
+  minimum_observations: 1
+  positive_control: Baseline admission and rate measurements before the fresh load signal.
+  acceptance_threshold: 1 of 1 strict PASS with verified cleanup.

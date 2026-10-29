@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -87,14 +88,21 @@ type RunStatus struct {
 	// tenant's run readable by another, so run-id authorization compares this too. Empty means
 	// the namespace could not be determined; that fails closed short of a cross-tenant grant.
 	ScopeTenant string `json:"scopeTenant,omitempty"`
+	// Catalogue adapters may own more than one fixed destination. The plural
+	// fields retain the complete authorization set; singular fields remain for
+	// backward-compatible clients and existing run kinds.
+	ScopeTargets []string `json:"scopeTargets,omitempty"`
+	ScopeTenants []string `json:"scopeTenants,omitempty"`
 	// The named NATS suite also mutates the fixed installer-owned fixture tenant.
 	// Current grants must still cover both destinations for every run read/stop.
-	FixtureTenant string `json:"fixtureTenant,omitempty"`
-	ExecutionKind string `json:"executionKind,omitempty"`
-	ClaimClass    string `json:"claimClass,omitempty"`
-	Outcome       string `json:"outcome,omitempty"`
-	CleanupStatus string `json:"cleanupStatus,omitempty"`
-	UnsafeToRetry bool   `json:"unsafeToRetry,omitempty"`
+	FixtureTenant string                     `json:"fixtureTenant,omitempty"`
+	ExecutionKind string                     `json:"executionKind,omitempty"`
+	ExecutionMode AttackCatalogExecutionMode `json:"executionMode,omitempty"`
+	TriggerMode   AttackCatalogTriggerMode   `json:"triggerMode,omitempty"`
+	ClaimClass    string                     `json:"claimClass,omitempty"`
+	Outcome       string                     `json:"outcome,omitempty"`
+	CleanupStatus string                     `json:"cleanupStatus,omitempty"`
+	UnsafeToRetry bool                       `json:"unsafeToRetry,omitempty"`
 	// Computed from a separate immutable Voice cleanup receipt for public history;
 	// the retained terminal status and its failed/unsafe fields are never rewritten.
 	CleanupResolvedSeparately bool   `json:"cleanupResolvedSeparately,omitempty"`
@@ -139,6 +147,7 @@ type RunManager struct {
 	podBoundTokenPrincipals      map[string]Principal
 	guardrailAvailabilityCancels map[string]context.CancelFunc
 	attackCatalogCancels         map[string]context.CancelFunc
+	attackCatalogAdapters        *AttackCatalogAdapterRegistry
 	// Installed only by Server; a run-private file can trigger this named callback,
 	// but never supplies Kubernetes or audit authority.
 	natsResponse          func(context.Context, string, string) error
@@ -1092,8 +1101,19 @@ type runOwnership struct {
 	Owner         string
 	Target        string
 	Tenant        string
+	Targets       []string
+	Tenants       []string
 	Config        string
 	FixtureTenant string
+}
+
+func runOwnershipOf(st *RunStatus) runOwnership {
+	if st == nil {
+		return runOwnership{}
+	}
+	return runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant,
+		Targets: slices.Clone(st.ScopeTargets), Tenants: slices.Clone(st.ScopeTenants),
+		Config: st.Config, FixtureTenant: st.FixtureTenant}
 }
 
 // Ownership reports the destination and creator recorded for a run id. The auth boundary uses it
@@ -1106,7 +1126,7 @@ func (rm *RunManager) Ownership(id string) (runOwnership, bool) {
 	if !found {
 		return runOwnership{}, false
 	}
-	return runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}, true
+	return runOwnershipOf(st), true
 }
 
 // Status returns a snapshot of a run (with the latest parsed metrics).

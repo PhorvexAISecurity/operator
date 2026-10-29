@@ -7,11 +7,24 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestPrometheusTimePreservesSubMillisecondCaptureBoundary(t *testing.T) {
+	captured := time.Unix(1761766259, 435498645).UTC()
+	formatted, err := strconv.ParseFloat(formatPrometheusTime(captured), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := float64(captured.UnixNano()) / float64(time.Second)
+	if formatted != want {
+		t.Fatalf("formatted query time %.9f moved capture boundary %.9f", formatted, want)
+	}
+}
 
 func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) {
 	var mu sync.Mutex
@@ -62,14 +75,15 @@ func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) 
 	}}
 	server := &Server{cfg: cfg}
 	started := time.Now().UTC().Add(-time.Minute)
-	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-7", "AML.T0012", "console-identity-test", "identity-rotate", started)
+	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-7", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, started)
 	if err != nil {
 		t.Fatalf("baseline capture: %v", err)
 	}
 	if err = server.completePrometheusRunEvidence(context.Background(), evidence, time.Now().UTC()); err != nil {
 		t.Fatalf("terminal capture: %v", err)
 	}
-	if evidence.Status != "COMPLETE" || len(evidence.Metrics) != 8 || len(evidence.Errors) != 0 {
+	if evidence.Status != "COMPLETE" || evidence.ExecutionMode != AttackCatalogExecutionActive ||
+		evidence.TriggerMode != AttackCatalogTriggerReactive || len(evidence.Metrics) != 8 || len(evidence.Errors) != 0 {
 		t.Fatalf("terminal evidence=%+v", evidence)
 	}
 	if len(evidence.ObservedDecisionModes) != 1 || evidence.ObservedDecisionModes[0] != "reactive" {
@@ -110,7 +124,7 @@ func TestPrometheusRunEvidenceBaselineFailurePersistsPartialAndStopsPreflight(t 
 		Enabled: true, URL: prometheus.URL, Environment: "staging", RequestTimeout: time.Second,
 	}}
 	server := &Server{cfg: cfg}
-	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-8", "AML.T0012", "console-identity-test", "identity-rotate", time.Now().UTC())
+	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-8", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
 	if err == nil || evidence == nil || evidence.Status != "PARTIAL" || len(evidence.Errors) != 8 {
 		t.Fatalf("failed baseline was not retained honestly: evidence=%+v err=%v", evidence, err)
 	}
@@ -141,7 +155,7 @@ func TestPrometheusRunEvidenceRequiresFreshDecisionTelemetry(t *testing.T) {
 	cfg := Config{StateDir: t.TempDir(), RunPrometheusEvidence: PrometheusRunEvidenceConfig{
 		Enabled: true, URL: prometheus.URL, Environment: "staging", RequestTimeout: time.Second,
 	}}
-	evidence, err := (&Server{cfg: cfg}).beginPrometheusRunEvidence(context.Background(), "cat-9", "AML.T0012", "console-identity-test", "identity-rotate", time.Now().UTC())
+	evidence, err := (&Server{cfg: cfg}).beginPrometheusRunEvidence(context.Background(), "cat-9", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
 	if err == nil || evidence == nil || evidence.Status != "PARTIAL" ||
 		!strings.Contains(strings.Join(evidence.Errors, " "), "older than 90s") {
 		t.Fatalf("stale telemetry did not stop preflight: evidence=%+v err=%v", evidence, err)

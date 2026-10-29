@@ -78,6 +78,7 @@ type Server struct {
 	// Test seam; production constructs the in-cluster server-fixed AML.T0012 adapter.
 	identityCatalogFactory func(identityfixture.Profile) (identityCatalogCluster, error)
 	attackCatalogRecords   func(context.Context) ([]audit.Record, error)
+	attackCatalogAdapters  *AttackCatalogAdapterRegistry
 }
 
 func (s *Server) recordStateError(err error) {
@@ -106,6 +107,8 @@ func NewServer(cfg Config) *Server {
 		cfg.AuditPath = cfg.auditFile()
 	}
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
+	s.attackCatalogAdapters = newAttackCatalogAdapterRegistry(s, cfg)
+	s.runs.attackCatalogAdapters = s.attackCatalogAdapters
 	if cfg.Service == ServiceConsole {
 		s.attacks = newAttacksProxy(cfg.AttacksURL)
 	}
@@ -175,7 +178,7 @@ npm run build</pre><p>then restart this binary. (Or pass <code>--web &lt;path-to
 }
 
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) {
-	items := s.cfg.Catalog()
+	items := applyAttackCatalogAvailability(s.cfg.Catalog(), s.attackCatalogAdapters)
 	for i := range items {
 		if !podBoundNamedCase(items[i].Profile) || !items[i].Available {
 			continue
@@ -664,7 +667,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 		}
 		matching := make([]RunStatus, 0, len(all))
 		for _, st := range all {
-			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}) {
+			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnershipOf(&st)) {
 				continue
 			}
 			if contextFilter != "" && st.Target != contextFilter && !(st.Target == "" && providerFilter != "" && st.Provider == providerFilter) {
@@ -689,7 +692,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 	all := s.runs.List()
 	out := make([]RunStatus, 0, len(all))
 	for _, st := range all {
-		if runVisibleTo(p, runOwnership{Owner: st.Owner, Target: st.ScopeTarget, Tenant: st.ScopeTenant, Config: st.Config, FixtureTenant: st.FixtureTenant}) {
+		if runVisibleTo(p, runOwnershipOf(&st)) {
 			out = append(out, st)
 		}
 	}
@@ -715,6 +718,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var guardrailAvailability any
 	var attackCatalogue any
 	var prometheusEvidence any
+	var postflightClean any
+	var postflight any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -771,6 +776,10 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 	if result, err := s.runs.AttackCatalogResult(id); err == nil && result != nil {
 		attackCatalogue = result
+		if result.Postflight != nil {
+			postflightClean = result.Postflight.Clean
+			postflight = result.Postflight
+		}
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "catalogue validation result unavailable: " + err.Error()})
 	}
@@ -792,6 +801,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"guardrailAvailabilityResult": guardrailAvailability,
 		"attackCatalogueResult":       attackCatalogue,
 		"prometheusEvidence":          prometheusEvidence,
+		"postflight_clean":            postflightClean,
+		"postflight":                  postflight,
 		"note":                        "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }

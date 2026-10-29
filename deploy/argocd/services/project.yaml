@@ -20,6 +20,32 @@ spec:
   # per-tenant RBAC Roles the actuator and sensor render to defend console-id-fixture.
   - server: https://kubernetes.default.svc
     namespace: console-identity-shared
+  # Exact catalogue fixture profiles are mutually exclusive, but the reviewed
+  # destination allow-list includes every fixed lane and workload namespace.
+  - server: https://kubernetes.default.svc
+    namespace: p1
+  - server: https://kubernetes.default.svc
+    namespace: p1-demo
+  - server: https://kubernetes.default.svc
+    namespace: p2
+  - server: https://kubernetes.default.svc
+    namespace: p2-demo
+  - server: https://kubernetes.default.svc
+    namespace: p3
+  - server: https://kubernetes.default.svc
+    namespace: p3-demo
+  - server: https://kubernetes.default.svc
+    namespace: p4
+  - server: https://kubernetes.default.svc
+    namespace: p4-demo
+  - server: https://kubernetes.default.svc
+    namespace: p5
+  - server: https://kubernetes.default.svc
+    namespace: p5-demo
+  - server: https://kubernetes.default.svc
+    namespace: p6
+  - server: https://kubernetes.default.svc
+    namespace: p6-demo
   # tools/test_argocd_services.py requires this list to equal the cluster-scoped
   # kinds every environment renders, plus the namespace CreateNamespace creates.
   clusterResourceWhitelist:
@@ -29,6 +55,9 @@ spec:
     kind: ClusterRole
   - group: rbac.authorization.k8s.io
     kind: ClusterRoleBinding
+  # node-recycle's two bounded KWOK fixture Nodes.
+  - group: ''
+    kind: Node
   # The attacks service's target guard, which matches only its own requests.
   - group: admissionregistration.k8s.io
     kind: ValidatingAdmissionPolicy
