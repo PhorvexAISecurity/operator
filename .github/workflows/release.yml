@@ -69,6 +69,10 @@ jobs:
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - name: Rebuild each fixture twice and compare complete OCI identities
+        run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
+      - name: Validate the exact clean release source
+        run: echo "REVIEWED_GIT_SHA=$(tools/verify-git-build-identity.sh "$GITHUB_SHA")" >> "$GITHUB_ENV"
       - name: Require the release role
         env:
           ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
@@ -91,7 +95,8 @@ jobs:
           while IFS=$'\t' read -r component version dockerfile repository build_args; do
             image="$REGISTRY/$repository:$version"
             # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V and --target words
-            docker build --file "$dockerfile" $build_args --tag "$image" . < /dev/null
+            docker build --file "$dockerfile" $build_args --build-arg "GIT_SHA=$REVIEWED_GIT_SHA" --build-arg "RELEASE_VERSION=$version" --tag "$image" . < /dev/null
+            python3 tools/verify_service_image_identity.py --image "$image" --service "$component" --git-sha "$REVIEWED_GIT_SHA" --version "$version"
             docker push "$image" < /dev/null
             digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"
             docker image rm "$image"

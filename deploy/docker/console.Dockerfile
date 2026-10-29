@@ -1,13 +1,16 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # Phorvex Console (dashboard) image — a single binary that serves both the Next.js
 # static SPA and the read-only /api over the Phorvex report/metrics/audit snapshots.
 #
 # Build context = REPO ROOT (same multi-module reason as the operator: the phorvex
 # module's go.mod replaces Phoenix with ../build/phoenix-extended, and the report
 # snapshots under build/test-harness/out-* are baked in as the dashboard's data).
-#     docker build -f deploy/docker/console.Dockerfile -t <img> .
+#     docker build -f deploy/docker/console.Dockerfile \
+#       --build-arg GIT_SHA=<clean-reviewed-head> --build-arg RELEASE_VERSION=dev \
+#       --build-arg CONSOLE_VERSION=dev -t <img> .
 
 # ---- Stage 1: build the Next.js static export (output: "export" -> dashboard-web/out) ----
-FROM node:20-bookworm-slim AS web
+FROM docker.io/library/node:20-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS web
 WORKDIR /web
 COPY dashboard-web/package.json dashboard-web/package-lock.json ./
 RUN --mount=type=cache,id=phvx-console-npm,target=/root/.npm,sharing=locked npm ci
@@ -15,12 +18,20 @@ COPY dashboard-web/ ./
 RUN npm run build      # emits ./out (static SPA)
 
 # ---- Stage 2: build the Go console backend ----
-FROM golang:1.26 AS gobuild
+FROM docker.io/library/golang:1.26@sha256:670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c AS gobuild
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_JOBS=2
+ARG GIT_SHA
+ARG RELEASE_VERSION=dev
+ARG CONSOLE_VERSION=dev
 ENV GOMAXPROCS=${BUILD_JOBS} GOFLAGS=-p=${BUILD_JOBS}
 WORKDIR /workspace
+RUN [ "${#GIT_SHA}" -eq 40 ] && case "${GIT_SHA}" in *[!0-9a-f]*) false;; *) true;; esac || \
+      { echo "GIT_SHA must be the exact 40-character lowercase Git SHA" >&2; exit 1; } && \
+    case "${RELEASE_VERSION}" in ''|*[!0-9A-Za-z.+-]*) echo "RELEASE_VERSION is missing or malformed" >&2; exit 1;; esac && \
+    [ "${CONSOLE_VERSION}" = "${RELEASE_VERSION}" ] || \
+      { echo "CONSOLE_VERSION and RELEASE_VERSION must match" >&2; exit 1; }
 COPY build/phoenix-extended/ build/phoenix-extended/
 # The console reads the harness metrics stream, so the phorvex module replaces
 # github.com/phorvex/metricvalidity with ../build/metricvalidity — the shared,
@@ -43,16 +54,15 @@ RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sh
 # live Deployment, but the console can only report what was compiled into it. Left unset it
 # defaults to "dev", which made the deployed console report "dev" against operator "0.4.6"
 # and tripped the End-to-End version-match check (P02) on every single run.
-ARG CONSOLE_VERSION=dev
 RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
-      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION} -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA} -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=${RELEASE_VERSION}" \
       -o /console ./cmd/console
 # The attacks service (cmd/attacks) shares the console's configuration and reports the
 # version it was built as the same way.
 RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
-      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION}" \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=${CONSOLE_VERSION} -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA} -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=${RELEASE_VERSION}" \
       -o /attacks ./cmd/attacks
 
 # The console's live-scan/ablation subsystems SHELL OUT to the phorvex operator binary at
@@ -62,7 +72,9 @@ RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sh
 # to generic-k8s). Build it from the SAME phorvex module — in-cluster it scans via the pod
 # ServiceAccount, exactly like the running operator.
 RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-${TARGETARCH},target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /phorvex ./cmd
+    go build -trimpath \
+      -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA} -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=${RELEASE_VERSION}" \
+      -o /phorvex ./cmd
 
 # ---- Stage 2c: the harness binary ----
 # GET /api/catalog enumerates the full scenario catalogue by SHELLING OUT to this binary
@@ -72,7 +84,7 @@ RUN --mount=type=cache,id=phvx-console-gomod-${TARGETARCH},target=/go/pkg/mod,sh
 # with `replace github.com/r6security/phoenix => ../phoenix-extended` AND
 # `replace github.com/phorvex/metricvalidity => ../metricvalidity`, so all three directories must
 # sit side by side for those relative replaces to resolve.
-FROM golang:1.26 AS harnessbuild
+FROM docker.io/library/golang:1.26@sha256:670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c AS harnessbuild
 ARG TARGETOS
 ARG TARGETARCH
 ARG BUILD_JOBS=2
@@ -96,7 +108,7 @@ RUN --mount=type=cache,id=phvx-harness-gomod-${TARGETARCH},target=/go/pkg/mod,sh
 #
 # Pinned, and the checksum is verified: this binary is handed cluster-admin-shaped
 # credentials at runtime, so a silently substituted download is not an acceptable risk.
-FROM golang:1.26 AS kubectl
+FROM docker.io/library/golang:1.26@sha256:670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c AS kubectl
 ARG TARGETARCH
 ARG KUBECTL_VERSION=v1.31.4
 RUN set -eux; \
@@ -109,7 +121,7 @@ RUN set -eux; \
 # ---- Stage 3: assemble the data snapshot (kept separate so it's easy to swap) ----
 # The console resolves data relative to -root: <root>/build/test-harness/out-* for the
 # benchmark metrics, and <root>/phorvex/bin/console-audit.jsonl for the owner audit view.
-FROM busybox:1.36 AS data
+FROM docker.io/library/busybox:1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 AS data
 WORKDIR /data
 COPY build/test-harness/ /data/build/test-harness/
 # console-audit.jsonl is a GENERATED local-development trail, excluded by .gitignore, so no
@@ -132,7 +144,9 @@ RUN mkdir -p /data/phorvex/bin && \
 # What the harness runs and the live arms need (the harness and its data, the NATS
 # observer, the phorvex binary and kubectl), run as cmd/attacks, without the UI
 # (docs/services/attacks.md).
-FROM gcr.io/distroless/static:nonroot AS attacks
+FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 AS attacks
+ARG GIT_SHA
+ARG RELEASE_VERSION=dev
 WORKDIR /app
 COPY --from=gobuild /attacks /app/attacks
 COPY --from=data /data /data
@@ -140,13 +154,17 @@ COPY --from=harnessbuild /harness /data/build/test-harness/bin/harness.exe
 COPY --from=harnessbuild /nats-owned-observer /app/nats-owned-observer
 COPY --from=gobuild /phorvex /data/phorvex/bin/phorvex.exe
 COPY --from=kubectl /kubectl /usr/local/bin/kubectl
+LABEL org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="${RELEASE_VERSION}"
 USER 65532:65532
 EXPOSE 8090
 ENTRYPOINT ["/app/attacks"]
 CMD ["-root=/data", "-addr=:8090"]
 
 # ---- Final image: the console ----
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
+ARG GIT_SHA
+ARG RELEASE_VERSION=dev
 WORKDIR /app
 COPY --from=gobuild /console /app/console
 COPY --from=web /web/out /app/web
@@ -162,6 +180,8 @@ COPY --from=harnessbuild /nats-owned-observer /app/nats-owned-observer
 COPY --from=gobuild /phorvex /data/phorvex/bin/phorvex.exe
 # Both are static and CGO-free, so distroless/static stays the right base.
 COPY --from=kubectl /kubectl /usr/local/bin/kubectl
+LABEL org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.version="${RELEASE_VERSION}"
 USER 65532:65532
 EXPOSE 8090
 ENTRYPOINT ["/app/console"]

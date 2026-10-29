@@ -17,25 +17,26 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/phorvex/phorvex/internal/buildinfo"
 )
 
 // BuildStamp identifies the SOURCE BUILD of this console binary. Injected at build time via
-//   -ldflags "-X github.com/phorvex/phorvex/internal/console.BuildStamp=<stamp>"
+//
+//	-ldflags "-X github.com/phorvex/phorvex/internal/console.BuildStamp=<stamp>"
+//
 // "dev" when unset.
 //
-// It is deliberately NOT what the "console" field reports. The release job retags an image ECR
-// already holds rather than rebuilding it (ci.yml "Tag the built images with the version"), so
-// the binary is compiled before the semver it will ship under even exists — it can only ever
-// carry the main-branch tag. Reporting that made /api/version answer {"console":"latest",
-// "operator":"0.4.19"} and kept the End-to-End version-match check (P02) permanently yellow.
+// It is deliberately NOT what the "console" field reports: that field remains the live
+// Deployment's image tag, while consoleBuild is the independently compiled release version.
+// A mismatch is retained as useful rollout evidence instead of being hidden.
 var BuildStamp = "dev"
 
 func (s *Server) version(w http.ResponseWriter, r *http.Request) {
 	// "console" and "operator" are both read from the live Deployment so the two are the same
 	// KIND of fact and can honestly be compared. consoleBuild keeps the compile-time stamp
-	// visible — a mismatch against "console" means the running image was retagged, which is
-	// normal here, and is worth being able to see rather than hiding.
-	out := map[string]string{"console": BuildStamp, "consoleBuild": BuildStamp}
+	// visible — a mismatch against "console" is rollout evidence worth exposing.
+	out := buildVersionFields()
 	conts := deployedContainers()
 	// The operator keeps the legacy single-container fallback: it was read as Containers[0]
 	// long before the console became a sidecar. The console does NOT get that fallback — in a
@@ -50,6 +51,13 @@ func (s *Server) version(w http.ResponseWriter, r *http.Request) {
 		out["operatorImage"] = full // full ref (for the tooltip)
 	}
 	writeJSON(w, 200, out)
+}
+
+func buildVersionFields() map[string]string {
+	return map[string]string{
+		"console": BuildStamp, "consoleBuild": BuildStamp,
+		"gitSHA": buildinfo.Embedded().GitSHA,
+	}
 }
 
 // deployedContainers returns the container list of the IN-CLUSTER phorvex-phorvex Deployment —

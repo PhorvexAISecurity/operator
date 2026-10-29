@@ -69,6 +69,11 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('docker build --file "deploy/docker/$IMAGE.Dockerfile"', runs['images'])
         self.assertIn('docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE"', runs['images'])
         self.assertIn('docker build --file deploy/docker/console.Dockerfile --target attacks', runs['images'])
+        self.assertIn('tools/verify-git-build-identity.sh "$GITHUB_SHA"', runs['images'])
+        self.assertIn('--build-arg "GIT_SHA=$reviewed_sha"', runs['images'])
+        self.assertIn('tools/verify_service_image_identity.py', runs['images'])
+        self.assertIn('tools/verify_fixture_reproducibility.py --source-date-epoch 0',
+                      runs['fixture-images'])
         for forbidden in ('docker push', 'docker login', '--push'):
             self.assertNotIn(forbidden, runs['images'])
 
@@ -139,10 +144,11 @@ class PRValidationTests(unittest.TestCase):
         job = DOC['jobs']['pr-validation']
         self.assertEqual(job['name'], 'PR validation')
         self.assertEqual(job['if'], 'always()')
-        self.assertEqual(set(job['needs']), {'charts', 'go-unit', 'go-envtest', 'frontend', 'lint', 'images'})
+        self.assertEqual(set(job['needs']),
+                         {'charts', 'go-unit', 'go-envtest', 'frontend', 'lint', 'fixture-images', 'images'})
         script = job['steps'][0]['run']
         good = dict(CHARTS='success', GO_UNIT='success', GO_ENVTEST='success', FRONTEND='success',
-                    LINT='success', IMAGES='success')
+                    LINT='success', FIXTURE_IMAGES='success', IMAGES='success')
         def check(env):
             return subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', script],
                                   env=dict(os.environ, **env), timeout=5).returncode
@@ -202,6 +208,11 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('-o /service ./cmd/${SERVICE}', dockerfile)
         self.assertIn('FROM gcr.io/distroless/static:nonroot', dockerfile)
         self.assertIn('USER 65532:65532', dockerfile)
+        for path in (ROOT / 'deploy/docker').glob('*.Dockerfile'):
+            with self.subTest(path=path.name):
+                from_lines = [line for line in path.read_text().splitlines() if line.startswith('FROM ')]
+                self.assertTrue(from_lines)
+                self.assertTrue(all('@sha256:' in line for line in from_lines))
 
 
 
@@ -254,6 +265,17 @@ class ReleaseWorkflowTests(unittest.TestCase):
         assume = next(i for i, n in enumerate(names) if n.startswith('aws-actions/configure-aws-credentials@'))
         self.assertLess(check, assume)
         self.assertIn('PHORVEX_RELEASE_ROLE_ARN', steps[check]['run'])
+
+    def test_publication_waits_for_reproducibility_and_embedded_identity(self):
+        steps = RELEASE['jobs']['publish']['steps']
+        runs = '\n'.join(step.get('run', '') for step in steps)
+        names = [step.get('name', '') for step in steps]
+        self.assertIn('Rebuild each fixture twice and compare complete OCI identities', names)
+        self.assertIn('tools/verify-git-build-identity.sh "$GITHUB_SHA"', runs)
+        self.assertIn('--build-arg "GIT_SHA=$REVIEWED_GIT_SHA"', runs)
+        self.assertIn('tools/verify_service_image_identity.py', runs)
+        self.assertLess(runs.index('tools/verify_service_image_identity.py'),
+                        runs.index('docker push "$image"'))
 
     def test_staging_is_pinned_by_digest_and_releases_are_tagged(self):
         run = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['publish']['steps'])

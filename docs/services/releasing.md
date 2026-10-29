@@ -58,7 +58,13 @@ summary.
 2. **Merging it publishes.** The `pending` job finds the versions in
    `release/versions.json` that have no tag yet (`servicerelease pending`). For
    each one, the `publish` job:
+   - proves both fixture images reproduce the same complete OCI identity across
+     two clean no-cache builds;
+   - refuses a missing, malformed, mismatched or dirty source revision, then
+     passes that one reviewed SHA to every service build;
    - builds the image from the merge commit;
+   - runs the built service binary's `-version` endpoint and checks its exact
+     release version and Git SHA against the image's OCI labels;
    - pushes it to ECR as `phorvex/<service>:<version>`;
    - tags the commit `<service>-v<version>`;
    - pins staging to the pushed digest (`servicerelease deploy`), in

@@ -3,14 +3,9 @@
 # dashboard-web/ + the build/test-harness/out-* report snapshots). Keep the context
 # lean by dropping everything that no image build reads.
 
-# Keep only the revision pointer needed to link an exact Git SHA into the
-# operator decision trace. The object database and all other Git metadata stay
-# excluded from the Docker context.
-.git/*
-!.git/HEAD
-!.git/refs/
-!.git/refs/heads/
-!.git/refs/heads/**
+# Git metadata is host-specific and never enters an image build. CI validates
+# the clean exact checkout before passing its reviewed SHA as a build argument.
+.git
 .gitignore
 **/node_modules
 **/.next

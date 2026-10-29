@@ -52,7 +52,9 @@ go -C phorvex run ./cmd/sensor --listen=:9090 --prometheus-url=http://prometheus
 The `phorvex-sensor` image is built from `deploy/docker/service.Dockerfile`:
 
 ```sh
-docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=sensor -t phorvex-sensor .
+sha=$(tools/verify-git-build-identity.sh "$(git rev-parse HEAD)")
+docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=sensor \
+  --build-arg "GIT_SHA=$sha" --build-arg RELEASE_VERSION=dev -t phorvex-sensor .
 ```
 
 It holds the one binary as `/service` on distroless nonroot. PR validation builds
