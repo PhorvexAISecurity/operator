@@ -7,11 +7,24 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestPrometheusTimePreservesSubMillisecondCaptureBoundary(t *testing.T) {
+	captured := time.Unix(1761766259, 435498645).UTC()
+	formatted, err := strconv.ParseFloat(formatPrometheusTime(captured), 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := float64(captured.UnixNano()) / float64(time.Second)
+	if formatted != want {
+		t.Fatalf("formatted query time %.9f moved capture boundary %.9f", formatted, want)
+	}
+}
 
 func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) {
 	var mu sync.Mutex

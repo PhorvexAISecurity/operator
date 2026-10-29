@@ -590,5 +590,7 @@ func labelKey(labels map[string]string) string {
 }
 
 func formatPrometheusTime(t time.Time) string {
-	return strconv.FormatFloat(float64(t.UnixNano())/float64(time.Second), 'f', 3, 64)
+	// Preserve the capture boundary: millisecond rounding can move a fast range
+	// endpoint behind the instant sample that the strict coverage gate binds.
+	return strconv.FormatFloat(float64(t.UnixNano())/float64(time.Second), 'f', 9, 64)
 }
