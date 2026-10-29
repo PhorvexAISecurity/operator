@@ -1,0 +1,194 @@
+{
+  "schema": "phorvex.console-evidence-audit.bundle.v1",
+  "campaign_id": "fixture-campaign",
+  "exported_at": "2026-10-29T12:10:00Z",
+  "expected_runs": [
+    {
+      "catalogue_id": "T1610",
+      "run_id": "run-001"
+    }
+  ],
+  "records": [
+    {
+      "schema": "phorvex.console-evidence-audit.record.v1",
+      "catalogue_id": "T1610",
+      "run_id": "run-001",
+      "family": "pod-rotate",
+      "expected_action": "rotate",
+      "postflight_clean": true,
+      "run": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "started_at": "2026-10-29T12:00:00Z",
+        "finished_at": "2026-10-29T12:05:00Z"
+      },
+      "trigger": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "runtime-config",
+        "mode": "reactive"
+      },
+      "policy": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "runtime-config",
+        "mode": "active"
+      },
+      "signal": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "runtime-observation",
+        "observed": true,
+        "event_uid": "event-001",
+        "target_uid": "pod-old",
+        "created_at": "2026-10-29T12:01:00Z",
+        "observed_at": "2026-10-29T12:01:02Z"
+      },
+      "decision": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "runtime-observation",
+        "event_uid": "event-001",
+        "target_uid": "pod-old",
+        "decision_id": "decision-001",
+        "observed_at": "2026-10-29T12:01:03Z",
+        "selected": true,
+        "feasible": true,
+        "action": "rotate",
+        "dispatch_outcome": "emitted"
+      },
+      "actuator": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "accepted-receipt",
+        "decision_id": "decision-001",
+        "receipt_id": "receipt-001",
+        "status": "accepted",
+        "accepted_at": "2026-10-29T12:01:04Z",
+        "action": "rotate"
+      },
+      "oracle": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "physical-observation",
+        "family": "pod-rotate",
+        "kind": "pod-uid-replaced-availability",
+        "passed": true,
+        "observed_at": "2026-10-29T12:01:20Z",
+        "observations": [
+          {
+            "name": "target_pod_uid_changed",
+            "before": "pod-old",
+            "after": "pod-new",
+            "passed": true,
+            "observed_at": "2026-10-29T12:01:15Z"
+          },
+          {
+            "name": "sibling_pod_uid_unchanged",
+            "before": "pod-peer",
+            "after": "pod-peer",
+            "passed": true,
+            "observed_at": "2026-10-29T12:01:16Z"
+          },
+          {
+            "name": "availability_preserved",
+            "before": true,
+            "after": true,
+            "passed": true,
+            "observed_at": "2026-10-29T12:01:17Z"
+          }
+        ]
+      },
+      "prometheus": {
+        "schema": "phorvex.console-evidence-audit.prometheus.v1",
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "status": "COMPLETE",
+        "metrics": [
+          {
+            "key": "accepted_receipts",
+            "query": "sum(phorvex_actuator_receipts_total{run_id=\"run-001\"})",
+            "query_sha256": "f4a638771a7e65409001a919dcbf29f6891def8eb18bfbbeca247989657fe1ea",
+            "baseline": {
+              "captured_at": "2026-10-29T12:00:05Z",
+              "sha256": "b4fac54c5155d405474d56e5d08c63bd23f072e90b8d705cdb87eeb0ae94bb7e",
+              "payload": {
+                "status": "success",
+                "data": {
+                  "resultType": "vector",
+                  "result": [
+                    {
+                      "metric": {
+                        "run_id": "run-001"
+                      },
+                      "value": [
+                        1793275205.0,
+                        "0"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "final": {
+              "captured_at": "2026-10-29T12:02:00Z",
+              "sha256": "284d67cf0f85ecf7deeb3c70375d362c25894e5c548a69716fe70493af158244",
+              "payload": {
+                "status": "success",
+                "data": {
+                  "resultType": "vector",
+                  "result": [
+                    {
+                      "metric": {
+                        "run_id": "run-001"
+                      },
+                      "value": [
+                        1793275320.0,
+                        "1"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "raw": {
+              "captured_at": "2026-10-29T12:02:01Z",
+              "sha256": "3c1bedb9944ec6d2e79bbc2c2934d87a5cba30a05ace60db0ef9bc56607a5df8",
+              "payload": {
+                "status": "success",
+                "data": {
+                  "resultType": "matrix",
+                  "result": [
+                    {
+                      "metric": {
+                        "run_id": "run-001"
+                      },
+                      "values": [
+                        [
+                          1793275205.0,
+                          "0"
+                        ],
+                        [
+                          1793275320.0,
+                          "1"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "postflight": {
+        "catalogue_id": "T1610",
+        "run_id": "run-001",
+        "evidence_kind": "runtime-health",
+        "clean": true,
+        "checked_at": "2026-10-29T12:04:00Z",
+        "inventory_sha256": "2699533d4514b4ceb1efdccddcbdcbb3b0770c7f6f43fda9d35173ebdf34bcca"
+      }
+    }
+  ]
+}
