@@ -218,7 +218,35 @@ const (
 	// annotation at dispatch, never from the event, so a detector assertion cannot steer what the
 	// workload is rolled TO. Forward-only: undoing it would reintroduce the poisoned image.
 	ActionRegistryRollback Action = "registry-rollback"
+
+	// The stateful rotation family replaces a StatefulSet-owned Pod only under its owner's
+	// declared stateful rotation contract (see internal/statefulrotation). Plain rotate stays
+	// infeasible on every stateful Pod; each class below is a distinct, separately admitted
+	// mechanism, so the optimizer chooses among them by cover, cost and live preconditions.
+	//
+	// ActionStatefulReplicaRebuild (class A, replicated): with quorum headroom on a non-leader
+	// member, delete the member's volume claims and evict it, so the StatefulSet recreates the
+	// member on fresh volumes that re-seed from its peers. It is the only member move that also
+	// invalidates the member's persisted volume state.
+	ActionStatefulReplicaRebuild Action = "stateful-replica-rebuild"
+	// ActionStatefulSnapshotRotate (class B, single-writer): take a ready CSI VolumeSnapshot of
+	// every claim as a rollback point, then evict the Pod; the replacement reattaches the same
+	// claims. Process state is invalidated; persisted volume state is retained.
+	ActionStatefulSnapshotRotate Action = "stateful-snapshot-rotate"
+	// ActionStatefulCheckpointHandoff (class C, volume-less): ask the application to commit a
+	// checkpoint to its declared durable store, evict the Pod, then confirm the replacement
+	// restored the same checkpoint digest. The process and its in-memory implant are replaced;
+	// the application session state is carried across by design.
+	ActionStatefulCheckpointHandoff Action = "stateful-checkpoint-handoff"
 )
+
+// StatefulRotationActions is the stateful rotation family in canonical order.
+var StatefulRotationActions = []Action{ActionStatefulReplicaRebuild, ActionStatefulSnapshotRotate, ActionStatefulCheckpointHandoff}
+
+// IsStatefulRotation reports whether a belongs to the stateful rotation family.
+func IsStatefulRotation(a Action) bool {
+	return a == ActionStatefulReplicaRebuild || a == ActionStatefulSnapshotRotate || a == ActionStatefulCheckpointHandoff
+}
 
 // GuardrailBypassNoCoverReason is shared by the production capability gate and
 // the action-set fallback so their diagnostics agree when no action-specific
@@ -273,6 +301,9 @@ var MutatingActions = []Action{
 	ActionCredentialRevoke,
 	ActionAgentActionDeny,
 	ActionRegistryRollback,
+	// Appended LAST (Live36) so the strict-`>` tie-break order of every pre-existing action
+	// is unchanged. All three are opt-in per policy and require an owner-declared contract.
+	ActionStatefulReplicaRebuild, ActionStatefulSnapshotRotate, ActionStatefulCheckpointHandoff,
 }
 
 // ActionEnabled reports whether the policy permits action a. A nil EnabledActions map
@@ -607,6 +638,9 @@ type Pod struct {
 	GuardrailEpoch            string // phorvex.ai/guardrail-epoch   -> VarGuardrailEpoch
 	GuardrailEpochObservation OwnedValue
 	Stateful                  bool // owned by a StatefulSet or mounts a PVC / Job
+	// StatefulRotation is the snapshot-time StatefulSet + claim witness behind the stateful
+	// rotation family. nil = the owner declares no contract (the family stays infeasible).
+	StatefulRotation *StatefulRotationObservation
 
 	// --- P-PHYSICS (UCW) additive, zero-valued carriers populated by the platform
 	// scanner. Neutral under the existing engine when absent. ---

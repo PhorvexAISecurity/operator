@@ -93,6 +93,17 @@ class ActionVocabularyCompatibilityTest(unittest.TestCase):
         self.assertIn("want 22", "; ".join(validator.v3_action_status(
             live23 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE22})))
 
+    def test_live33_remains_historical_and_live36_appends_stateful_family(self):
+        live33 = self.trace(validator.LIVE33_ACTIONS, validator.ACTION_VOCABULARY_LIVE33)
+        self.assertEqual(validator.v3_action_status(live33), [])
+        live36 = self.trace(validator.MUTATING_ACTIONS, validator.ACTION_VOCABULARY_LIVE36)
+        self.assertEqual(validator.v3_action_status(live36), [])
+        self.assertEqual(validator.check_ordering(live36).status, validator.PASS)
+        self.assertEqual(validator.MUTATING_ACTIONS[-3:], [
+            "stateful-replica-rebuild", "stateful-snapshot-rotate", "stateful-checkpoint-handoff"])
+        self.assertIn("want 33", "; ".join(validator.v3_action_status(
+            live36 | {"actionVocabularyVersion": validator.ACTION_VOCABULARY_LIVE33})))
+
     def test_new_marked_fifteen_and_unknown_marker_are_refused(self):
         incomplete = self.trace(validator.LEGACY_MUTATING_ACTIONS, validator.ACTION_VOCABULARY_OUTPUT16)
         self.assertIn("want 16", "; ".join(validator.v3_action_status(incomplete)))

@@ -33,7 +33,14 @@ func RemovesReadyReplica(a model.Action) bool {
 	case model.ActionRotate, model.ActionQuarantine:
 		return true
 	}
-	return false
+	// Every stateful rotation class evicts the Ready target until its replacement recovers.
+	return model.IsStatefulRotation(a)
+}
+
+// evictsTarget reports whether the move removes the target through the Eviction API, whose
+// PodDisruptionBudget admission cannot evaluate a Pod selected by more than one budget.
+func evictsTarget(a model.Action) bool {
+	return a == model.ActionRotate || model.IsStatefulRotation(a)
 }
 
 // availabilityFloor enforces readyReplicas-1 >= MinAvailableReplicas for a move that
@@ -58,7 +65,7 @@ func (availabilityFloor) Check(view *model.WorkloadView, move model.Move, pol mo
 	// Kubernetes Eviction does not support a Pod selected by more than one PDB.
 	// Refuse rotate before dispatch even if each stale snapshot appears to have
 	// headroom; the API remains the final authority for the single-PDB case.
-	if move.Action == model.ActionRotate && view.Physics.PDBMatchCount > 1 {
+	if evictsTarget(move.Action) && view.Physics.PDBMatchCount > 1 {
 		return Verdict{Feasible: false, Reason: fmt.Sprintf("pdb: overlapping budgets unsupported: matches=%d", view.Physics.PDBMatchCount)}
 	}
 	if view.Physics.PDBMatched && view.Physics.PDBDisruptionsAllowed < 1 {
@@ -129,6 +136,9 @@ func ExposureVarFor(a model.Action) string {
 		model.ActionNodeCordonDrainReplace,
 		model.ActionAgentActionDeny,
 		model.ActionRegistryRollback,
+		// Each stateful rotation class replaces the target Pod (new UID), so it reads the same
+		// pod-identity clock as rotate and inherits the same same-Pod cooldown.
+		model.ActionStatefulReplicaRebuild, model.ActionStatefulSnapshotRotate, model.ActionStatefulCheckpointHandoff,
 		model.ActionDebugger, model.ActionCustomInject, model.ActionSensitiveOutputPolicyActivate, model.ActionVoiceMemoryNoteRevoke, model.ActionVoiceRefundPairDeny, model.ActionVoiceOutputPolicyActivate, model.ActionVoiceSessionAdmissionEnforce, model.ActionVoiceMCPToolPin, model.ActionLiteLLMClientRevoke, model.ActionEndpointLeaseRevoke, model.ActionCRMRefundRevoke, model.ActionThrottle:
 		// Output policy activation is Pod-local but has no Pod epoch annotation:
 		// the protected ConfigMap revision is its durable operation clock.

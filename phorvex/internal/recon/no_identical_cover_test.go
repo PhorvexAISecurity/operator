@@ -21,6 +21,10 @@ import (
 var knownIdenticalPairs = map[string]string{
 	pairKey(model.ActionKVMigrateInvalidate, model.ActionKVReset): "remote KV migration is not built; both actions currently invalidate only local session state",
 	pairKey(model.ActionRotate, model.ActionWarmSwap):             "both successful actions retire the exact old process and invalidate its identity, memory and session facts",
+	// The two are never both feasible: stateful-integrity refuses rotate on every stateful Pod,
+	// and snapshot-rotate requires a stateful contract. Their difference is safety (a ready
+	// rollback snapshot), not invalidation, so the shared cover is the honest description.
+	pairKey(model.ActionRotate, model.ActionStatefulSnapshotRotate): "both evict the exact old process; snapshot-rotate reattaches the same claims, so it invalidates exactly rotate's process facts",
 }
 
 type coverArchetype struct {
@@ -105,6 +109,9 @@ func coverArchetypes() []coverArchetype {
 			Neighbors: []NeighborRef{{Key: "ns/neighbor", Value: 1}}}})
 	out = append(out, coverArchetype{name: "voice-mcp-observed", view: boundVoiceMCPView(),
 		fctx: FactContext{AssetValue: 10, PHold: 1, StageUrgency: 1, LateralUrgency: 1}})
+	out = append(out,
+		coverArchetype{name: "stateful-replicated", view: statefulReplicatedView(), fctx: statefulFctx()},
+		coverArchetype{name: "stateful-checkpointed", view: statefulCheckpointView(), fctx: statefulFctx()})
 	cfgPod := model.Pod{Namespace: "ns", Name: "config-drift", Node: "node-a"}
 	detectorConfigObject(&cfgPod)
 	out = append(out, coverArchetype{name: "config-object-observed", view: &model.WorkloadView{Pod: cfgPod, Physics: model.NeutralPhysics()},

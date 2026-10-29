@@ -37,6 +37,9 @@ func ProductionParameters() map[string]float64 {
 		"cost.flow.connection-count-normalizer":    connectionCountNormalizer,
 		"cost.flow.quarantine-base":                quarantineBase,
 		"cost.flow.quarantine-connection-span":     quarantineConnectionSpan,
+		"cost.flow.stateful-recovery-base":         statefulRecoveryBase,
+		"cost.flow.stateful-recovery-span":         statefulRecoverySpan,
+		"cost.flow.stateful-reference-seconds":     statefulRecoveryReferenceSeconds,
 	}
 	for phase, enc := range phaseFlowEncoding {
 		values["cost.phase."+string(phase)+".rls-prior"] = enc.priorWeight
@@ -65,5 +68,8 @@ func ProductionNormActionPriors() map[string]float64 {
 		"cost.norm.action.custom-inject":                NormCostMetadataMutation,
 		"cost.norm.action.request-drain":                NormCostMetadataMutation,
 		"cost.norm.action.throttle":                     NormCostServingConfiguration,
+		"cost.norm.action.stateful-replica-rebuild":     NormCostWorkloadReplacement,
+		"cost.norm.action.stateful-snapshot-rotate":     NormCostWorkloadReplacement,
+		"cost.norm.action.stateful-checkpoint-handoff":  NormCostWorkloadReplacement,
 	}
 }

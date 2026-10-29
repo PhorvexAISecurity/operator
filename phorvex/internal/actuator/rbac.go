@@ -22,6 +22,10 @@
  * endpointslices                : request-drain and scalar warm actions observe exact routes only (list)
  * configmaps                    : fixed Pod-bound output policy source activation (get/update)
  *
+ * The opt-in stateful rotation family is granted only by the chart's statefulRotation Role
+ * (PersistentVolumeClaim get/delete, VolumeSnapshot get/create, cluster VolumeSnapshotClass
+ * get), like the other feature-specific grants; it is not part of the routine marker union.
+ *
  * Identity-rotate deliberately receives no ServiceAccount/Secret permission: projected tokens
  * cannot be revoked by a pod-scoped action. EndpointSlice mutation remains denied.
  */

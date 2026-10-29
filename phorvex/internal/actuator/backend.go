@@ -353,6 +353,9 @@ func Repertoire(b Backend) []RepertoireEntry {
 				if a == model.ActionThrottle {
 					e.Prerequisite = "reviewed singleton authoritative proxy, measured per-caller baseline and legitimate reservation, fresh trusted cost-load event, exact policy epoch and protected journal"
 				}
+				if model.IsStatefulRotation(a) {
+					e.Prerequisite = "owner-declared stateful rotation contract on a fully Ready StatefulSet with no rollout in progress, quorum headroom and the class's own volume preconditions, re-admitted live at dispatch"
+				}
 				if a == model.ActionModelShardReplace {
 					e.Prerequisite = ReasonParallelGroupUnavailable + " for every target declaring phorvex.ai/parallel-group"
 					e.UnverifiedEffect = "registered handler supports only controller-owned scalar replacement; full TP/PP group replacement remains unavailable"
@@ -382,6 +385,8 @@ func Repertoire(b Backend) []RepertoireEntry {
 					e.UnverifiedEffect = "support does not establish the owner was scaled to zero or the children removed; the runtime receipt confirms only a bounded no-recreation absence window, never permanent erasure"
 				} else if a == model.ActionThrottle {
 					e.UnverifiedEffect = "support does not establish public HTTP200 continuity, backend CPU recovery or HPA scale-down; require the live companion probe"
+				} else if model.IsStatefulRotation(a) {
+					e.UnverifiedEffect = "support does not prove the replacement recovers; dispatch proves PDB admission by dry run before preparing, and only a bounded observation reports the Ready replacement and its class continuity (fresh claims, same claims or restored checkpoint)"
 				} else {
 					e.UnverifiedEffect = "handler is registered; per-target fixtures, emission and effect are verified elsewhere"
 				}

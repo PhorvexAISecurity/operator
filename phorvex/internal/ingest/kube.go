@@ -28,6 +28,7 @@ import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/ownership"
 	"github.com/phorvex/phorvex/internal/servingcontext"
+	"github.com/phorvex/phorvex/internal/statefulrotation"
 )
 
 func ownedMetadataValue(values map[string]string, key string) model.OwnedValue {
@@ -193,6 +194,7 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		}
 		if relevant == nil || relevant(&podList.Items[i]) {
 			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
+			p.StatefulRotation = statefulrotation.Observe(ctx, ownerReader, &podList.Items[i])
 		} else {
 			p.RotationOwnership.Reason = "outside-rotation-targets"
 		}

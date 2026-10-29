@@ -460,7 +460,7 @@ type ActionsSpec struct {
 // refused for new native/hybrid dispatch. Bounded rotate is native, quarantine
 // maps to Phoenix Quarantine, and advanced/AI moves are opt-in. A nil/empty Enabled set defaults
 // to rotate+quarantine.
-// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;registry-rollback;disable
+// +kubebuilder:validation:Enum=rotate;quarantine;noop;debugger;custom-inject;identity-rotate;route-rotate;warm-swap;mig-rebind;kv-reset;endpoint-rotate;endpoint-lease-revoke;model-shard-replace;adapter-rotate;request-drain;guardrail-rotate;kv-migrate-invalidate;sensitive-output-policy-activate;voice-memory-note-revoke;voice-refund-pair-deny;voice-output-policy-activate;voice-mcp-tool-pin;litellm-client-revoke;voice-session-admission-enforce;crm-refund-revoke;throttle;controller-stop;k8s-object-revert;datastore-restore;node-cordon-drain-replace;network-isolate;credential-revoke;agent-action-deny;registry-rollback;stateful-replica-rebuild;stateful-snapshot-rotate;stateful-checkpoint-handoff;disable
 type ActionType string
 
 const (
@@ -524,7 +524,14 @@ const (
 	// ActionRegistryRollback resets a drifted running container image back to the owner-declared
 	// trusted pin by patching the owning controller's pod-template image (AI supply-chain compromise).
 	ActionRegistryRollback ActionType = "registry-rollback"
-	ActionDisable          ActionType = "disable"
+	// The stateful rotation family replaces a StatefulSet member only under its owner's
+	// declared contract: rebuild a replicated member on fresh claims from its peers,
+	// restart a single writer behind a ready CSI snapshot, or hand volume-less state over
+	// through an application checkpoint.
+	ActionStatefulReplicaRebuild    ActionType = "stateful-replica-rebuild"
+	ActionStatefulSnapshotRotate    ActionType = "stateful-snapshot-rotate"
+	ActionStatefulCheckpointHandoff ActionType = "stateful-checkpoint-handoff"
+	ActionDisable                   ActionType = "disable"
 
 )
 

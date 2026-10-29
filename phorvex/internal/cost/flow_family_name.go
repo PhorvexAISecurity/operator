@@ -20,6 +20,8 @@ func ActionFlowFamily(action model.Action) string {
 		return "serving-state"
 	case flowLightweight:
 		return "lightweight"
+	case flowStatefulRecovery:
+		return "stateful-recovery"
 	default:
 		return "unknown"
 	}

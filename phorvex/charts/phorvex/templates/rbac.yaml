@@ -47,6 +47,13 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "namespaces", "nodes", "services", "configmaps"]
   verbs: ["get", "list", "watch"]
+{{- if .Values.phorvex.statefulRotation.enabled }}
+- apiGroups: ["snapshot.storage.k8s.io"]
+  # Stateful rotation: GET-by-name of the VolumeSnapshotClass a StatefulSet's contract declares,
+  # so snapshot-rotate is offered only where its rollback point can actually be taken.
+  resources: ["volumesnapshotclasses"]
+  verbs: ["get"]
+{{- end }}
 - apiGroups: [""]
   # Direct APIReader inventory of current ServiceAccount UID/creation identity
   # for the optional Pod-bound Kubernetes API-token projection. No informer is
@@ -255,6 +262,45 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.phorvex.statefulRotation.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "statefulRotation requires native or hybrid actuator" }}{{- end }}
+{{- range $namespace := .Values.phorvex.actuatorNamespaces }}
+---
+# Stateful rotation: replica-rebuild releases one member's claims (UID-preconditioned delete;
+# pvc-protection keeps them attached until the member's Eviction); snapshot-rotate takes the
+# pre-rotation VolumeSnapshots. Claims and snapshots are read for admission and confirmation.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-stateful-rotation
+  namespace: {{ $namespace | quote }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "delete"]
+- apiGroups: ["snapshot.storage.k8s.io"]
+  resources: ["volumesnapshots"]
+  verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-stateful-rotation
+  namespace: {{ $namespace | quote }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-stateful-rotation
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- if .Values.phorvex.crmRefundRevoke.enabled }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "crmRefundRevoke requires native or hybrid actuator" }}{{- end }}

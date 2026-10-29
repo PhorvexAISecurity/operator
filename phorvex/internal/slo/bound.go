@@ -158,6 +158,12 @@ var classifications = map[model.Action]Bound{
 		"stolen service-account-token Secret deletion and apiserver lookup-invalidation have no calibrated safe-return deadline"),
 	model.ActionRegistryRollback: unknown(model.ActionRegistryRollback, -1,
 		"owning-controller image reset to the trusted pin and clean-Pod rollout have no calibrated safe-return deadline"),
+	model.ActionStatefulReplicaRebuild: unknown(model.ActionStatefulReplicaRebuild, 1,
+		"one member is evicted behind quorum headroom, but its peer resync on fresh claims has only an owner-declared, not an enforced, completion deadline"),
+	model.ActionStatefulSnapshotRotate: unknown(model.ActionStatefulSnapshotRotate, 1,
+		"one member is evicted behind a ready snapshot, but reattach and recovery have only an owner-declared deadline and snapshot restore is an operator procedure"),
+	model.ActionStatefulCheckpointHandoff: unknown(model.ActionStatefulCheckpointHandoff, 1,
+		"one member is evicted after an application checkpoint, but restore confirmation is bounded observation, not an enforced safe-return deadline"),
 }
 
 func init() {

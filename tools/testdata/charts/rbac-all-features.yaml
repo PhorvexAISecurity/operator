@@ -11,6 +11,7 @@ phorvex:
   outputPolicy: {enabled: true, targetNamespace: litellm, configMapName: phorvex-output-policy-fixture}
   litellmClientRevoke: {enabled: true, statusSecret: phorvex-litellm-status}
   crmRefundRevoke: {enabled: true}
+  statefulRotation: {enabled: true}
   endpointLease: {enabled: true, approvedSourceSHA256: "0000000000000000000000000000000000000000000000000000000000000000", approvedProxyImage: "registry.example/lease-proxy@sha256:0000000000000000000000000000000000000000000000000000000000000000", approvedEngineImage: "registry.example/vllm@sha256:0000000000000000000000000000000000000000000000000000000000000000"}
   voiceMemory: {enabled: true}
   voiceOutput: {enabled: true}

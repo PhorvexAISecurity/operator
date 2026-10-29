@@ -97,6 +97,8 @@ phorvex:
     enabled: false
   agentActionDeny:
     enabled: false
+  statefulRotation:
+    enabled: false
   voiceMemory:
     enabled: false
   voiceOutput:

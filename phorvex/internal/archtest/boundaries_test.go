@@ -49,7 +49,7 @@ var domains = map[string]string{
 	"voiceoutputpolicy": shared, "voicerefundpolicy": shared,
 	// feasibility is the pure SLO and disruption predicate the brain applies when it
 	// selects and the dispatcher re-applies at the emit boundary.
-	"feasibility": shared,
+	"feasibility": shared, "statefulrotation": shared,
 
 	"ingest": sensor, "graph": sensor, "platform": sensor,
 	"epssfeed": sensor, "sensorsvc": sensor,

@@ -93,6 +93,12 @@ type EnactCtx struct {
 	AdapterObservationInterval time.Duration
 	RouteObservationTimeout    time.Duration
 	RouteObservationInterval   time.Duration
+	// Stateful rotation bounds default to production constants; tests emulating the
+	// StatefulSet and snapshot controllers may shorten them without changing behavior.
+	StatefulConfirmTimeout      time.Duration
+	StatefulConfirmInterval     time.Duration
+	StatefulSnapshotTimeout     time.Duration
+	StatefulCheckpointTransport http.RoundTripper // fixed Pod-IP checkpoint seam; nil uses network transport
 }
 
 // HandlerResult is the native effect record.
