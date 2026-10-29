@@ -68,20 +68,24 @@ type PrometheusMetricEvidence struct {
 // catalogue run. The raw samples and exact PromQL remain available after
 // Prometheus retention expires; summaries are derived only from those samples.
 type PrometheusRunEvidence struct {
-	Schema         string                     `json:"schema"`
-	RunID          string                     `json:"runID"`
-	CatalogueID    string                     `json:"catalogueID"`
-	Tenant         string                     `json:"tenant"`
-	Environment    string                     `json:"environment"`
-	ExpectedAction string                     `json:"expectedAction"`
-	Status         string                     `json:"status"` // BASELINE_CAPTURED | COMPLETE | PARTIAL
-	StartedAt      time.Time                  `json:"startedAt"`
-	BaselineAt     time.Time                  `json:"baselineAt"`
-	FinishedAt     *time.Time                 `json:"finishedAt,omitempty"`
-	CapturedAt     *time.Time                 `json:"capturedAt,omitempty"`
-	RangeStep      string                     `json:"rangeStep"`
-	Metrics        []PrometheusMetricEvidence `json:"metrics"`
-	Errors         []string                   `json:"errors,omitempty"`
+	Schema         string `json:"schema"`
+	RunID          string `json:"runID"`
+	CatalogueID    string `json:"catalogueID"`
+	Tenant         string `json:"tenant"`
+	Environment    string `json:"environment"`
+	ExpectedAction string `json:"expectedAction"`
+	// ObservedDecisionModes is derived from positive selected-action counter
+	// deltas, never from the requested console switch. Empty means no selected
+	// reactive/proactive decision was observed in this run's evidence window.
+	ObservedDecisionModes []string                   `json:"observedDecisionModes"`
+	Status                string                     `json:"status"` // BASELINE_CAPTURED | COMPLETE | PARTIAL
+	StartedAt             time.Time                  `json:"startedAt"`
+	BaselineAt            time.Time                  `json:"baselineAt"`
+	FinishedAt            *time.Time                 `json:"finishedAt,omitempty"`
+	CapturedAt            *time.Time                 `json:"capturedAt,omitempty"`
+	RangeStep             string                     `json:"rangeStep"`
+	Metrics               []PrometheusMetricEvidence `json:"metrics"`
+	Errors                []string                   `json:"errors,omitempty"`
 }
 
 type prometheusAPIResponse struct {
@@ -163,7 +167,7 @@ func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogu
 	evidence := &PrometheusRunEvidence{
 		Schema: prometheusRunEvidenceSchema, RunID: runID, CatalogueID: catalogueID,
 		Tenant: tenant, Environment: cfg.Environment, ExpectedAction: action,
-		Status: "BASELINE_CAPTURED", StartedAt: started.UTC(), BaselineAt: time.Now().UTC(),
+		ObservedDecisionModes: []string{}, Status: "BASELINE_CAPTURED", StartedAt: started.UTC(), BaselineAt: time.Now().UTC(),
 		RangeStep: cfg.RangeStep.String(), Metrics: []PrometheusMetricEvidence{},
 	}
 	for _, query := range prometheusRunQueries(tenant, cfg.Environment, action) {
@@ -246,6 +250,7 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 			metric.Range = rangeSeries
 		}
 	}
+	evidence.ObservedDecisionModes = observedPrometheusDecisionModes(evidence.Metrics)
 	evidence.Status = "COMPLETE"
 	if len(evidence.Errors) > 0 {
 		evidence.Status = "PARTIAL"
@@ -257,6 +262,27 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 		return fmt.Errorf("Prometheus terminal capture incomplete: %s", strings.Join(evidence.Errors, "; "))
 	}
 	return nil
+}
+
+func observedPrometheusDecisionModes(metrics []PrometheusMetricEvidence) []string {
+	seen := map[string]bool{}
+	for _, metric := range metrics {
+		if metric.Key != "selected-action" {
+			continue
+		}
+		for _, delta := range metric.Deltas {
+			mode := strings.TrimSpace(delta.Labels["mode"])
+			if mode != "" && delta.FinalPresent && delta.Delta > 0 {
+				seen[mode] = true
+			}
+		}
+	}
+	modes := make([]string, 0, len(seen))
+	for mode := range seen {
+		modes = append(modes, mode)
+	}
+	sort.Strings(modes)
+	return modes
 }
 
 func (s *Server) persistPrometheusRunEvidence(evidence *PrometheusRunEvidence) error {

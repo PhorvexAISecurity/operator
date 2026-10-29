@@ -947,7 +947,7 @@ export interface PrometheusRunDelta { labels: Record<string, string>; baselinePr
 export interface PrometheusRunMetric { key: string; query: string; baseline: PrometheusRunSeries[]; final?: PrometheusRunSeries[]; range?: PrometheusRunSeries[]; deltas?: PrometheusRunDelta[]; errors?: string[] }
 export interface PrometheusRunEvidence {
   schema: "phorvex.prometheus-run-evidence.v1"; runID: string; catalogueID: string; tenant: string; environment: string;
-  expectedAction: string; status: "BASELINE_CAPTURED" | "COMPLETE" | "PARTIAL"; startedAt: string; baselineAt: string;
+  expectedAction: string; observedDecisionModes: string[]; status: "BASELINE_CAPTURED" | "COMPLETE" | "PARTIAL"; startedAt: string; baselineAt: string;
   finishedAt?: string; capturedAt?: string; rangeStep: string; metrics: PrometheusRunMetric[]; errors?: string[];
 }
 export interface RunEvidence { id: string; scenario: string; date: string; finished: string; namespace: string; state: string; arms: RunEvidenceArm[]; trials: RunEvidenceTrial[]; issues: RunEvidenceIssue[]; functionalResult?: FunctionalResult; configurationResult?: NATSConfigurationResult; natsResponseResult?: NATSResponseResult; mongoExposureResult?: MongoExposureResult; guardrailStaticResult?: GuardrailStaticResult; guardrailAvailabilityResult?: GuardrailAvailabilityResult; podBoundTokenResult?: PodBoundTokenResult; attackCatalogueResult?: AttackCatalogueResult; prometheusEvidence?: PrometheusRunEvidence; note: string }

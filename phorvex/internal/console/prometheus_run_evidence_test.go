@@ -39,14 +39,18 @@ func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) 
 		call := instantCalls[query]
 		mu.Unlock()
 		value := "10"
+		labels := map[string]string{}
 		if strings.Contains(query, "< bool 90") {
 			value = "1"
 		} else if call > 1 {
 			value = "11"
 		}
+		if strings.Contains(query, `selected="true"`) {
+			labels["mode"] = "reactive"
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{
 			"resultType": "vector", "result": []any{map[string]any{
-				"metric": map[string]string{}, "value": []any{1700000000.0, value},
+				"metric": labels, "value": []any{1700000000.0, value},
 			}},
 		}})
 	}))
@@ -67,6 +71,9 @@ func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) 
 	}
 	if evidence.Status != "COMPLETE" || len(evidence.Metrics) != 8 || len(evidence.Errors) != 0 {
 		t.Fatalf("terminal evidence=%+v", evidence)
+	}
+	if len(evidence.ObservedDecisionModes) != 1 || evidence.ObservedDecisionModes[0] != "reactive" {
+		t.Fatalf("actual decision mode was not retained: %+v", evidence.ObservedDecisionModes)
 	}
 	for _, metric := range evidence.Metrics {
 		wantDelta := float64(1)
@@ -152,5 +159,20 @@ func TestPrometheusDeltasTreatBornAndResetCountersHonestly(t *testing.T) {
 	)
 	if len(reset) != 1 || !reset[0].CounterReset || reset[0].Delta != 2 {
 		t.Fatalf("reset counter delta=%+v", reset)
+	}
+}
+
+func TestObservedPrometheusDecisionModesUsesOnlyPositiveSelectedDeltas(t *testing.T) {
+	metrics := []PrometheusMetricEvidence{
+		{Key: "selected-action", Deltas: []PrometheusDelta{
+			{Labels: map[string]string{"mode": "reactive"}, FinalPresent: true, Delta: 1},
+			{Labels: map[string]string{"mode": "proactive"}, FinalPresent: true, Delta: 2},
+			{Labels: map[string]string{"mode": "ignored-zero"}, FinalPresent: true, Delta: 0},
+		}},
+		{Key: "noop", Deltas: []PrometheusDelta{{Labels: map[string]string{"mode": "ignored-noop"}, FinalPresent: true, Delta: 9}}},
+	}
+	modes := observedPrometheusDecisionModes(metrics)
+	if len(modes) != 2 || modes[0] != "proactive" || modes[1] != "reactive" {
+		t.Fatalf("observed modes=%v", modes)
 	}
 }
