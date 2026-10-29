@@ -1,5 +1,9 @@
 # console changelog
 
+## 0.13.1 (2026-10-29)
+
+- fix(console): retain exact attack actuation evidence (fca1c08c)
+
 ## 0.13.0 (2026-10-28)
 
 - fix(console): preserve staging tenant isolation (bb35615b)
