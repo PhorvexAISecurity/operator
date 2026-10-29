@@ -1,5 +1,10 @@
 # attacks changelog
 
+## 0.9.0 (2026-10-29)
+
+- feat(console): retain observed catalogue decision mode (6229ddac)
+- feat(console): retain Prometheus evidence per catalogue run (73f99da7)
+
 ## 0.8.1 (2026-10-29)
 
 - fix(console): retain exact attack actuation evidence (fca1c08c)

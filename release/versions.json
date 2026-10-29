@@ -1,3 +1,8 @@
 {
-  "console": "0.13.2"
+  "actuator": "0.9.0",
+  "attacks": "0.9.0",
+  "brain": "0.8.0",
+  "console": "0.14.0",
+  "manager": "0.14.0",
+  "sensor": "0.9.0"
 }

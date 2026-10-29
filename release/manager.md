@@ -1,5 +1,9 @@
 # manager changelog
 
+## 0.14.0 (2026-10-29)
+
+- feat(console): retain Prometheus evidence per catalogue run (73f99da7)
+
 ## 0.13.0 (2026-10-28)
 
 - fix(console): preserve staging tenant isolation (bb35615b)

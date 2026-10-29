@@ -1,5 +1,10 @@
 # console changelog
 
+## 0.14.0 (2026-10-29)
+
+- feat(console): retain observed catalogue decision mode (6229ddac)
+- feat(console): retain Prometheus evidence per catalogue run (73f99da7)
+
 ## 0.13.2 (2026-10-29)
 
 - fix(console): show catalogue verdicts in run history (a83c9fb4)
