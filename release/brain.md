@@ -1,5 +1,11 @@
 # brain changelog
 
+## 0.9.0 (2026-10-29)
+
+- fix(packaging): close catalogue staging release gates (56c5e6d4)
+- feat(actuator): contract-bounded stateful rotation family (70d1bfb9)
+- feat(console): enable immutable agent-action catalogue cases (146578d4)
+
 ## 0.8.0 (2026-10-29)
 
 - feat(console): retain Prometheus evidence per catalogue run (73f99da7)
