@@ -372,7 +372,7 @@ func (a *k8sAttackCatalogAdapter) Execute(ctx context.Context, run AttackCatalog
 	}
 	observation.Launched = true
 	observation.Signal = AttackCatalogSignalResult{Created: true, Name: signal.Name, UID: signal.UID,
-		Creator: signal.Creator, TargetUID: p.fixture.Target.UID}
+		Creator: signal.Creator, TargetUID: p.fixture.Target.UID, CreatedAt: attackCatalogTime(signal.CreatedAt)}
 	interval := a.cfg.AttackCatalogPollInterval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -520,7 +520,8 @@ func k8sCatalogueDecision(rec audit.Record, p *k8sCataloguePreparation) (bool, A
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	decision := AttackCatalogDecisionResult{Observed: true, ID: rec.DecisionTrace.DecisionID, Selected: rec.Selected,
-		Feasible: rec.Feasible, Action: profile.ExpectedAction, DispatchOutcome: rec.DecisionTrace.DispatchOutcome}
+		Feasible: rec.Feasible, Action: profile.ExpectedAction, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
+		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
 	podObject := "Pod/" + f.Namespace + "/" + f.Target.Name
 	receipt := rec.Selected && rec.Feasible && rec.Actuated && rec.DispatchOutcome == model.DispatchEmitted &&
@@ -537,6 +538,9 @@ func k8sCatalogueDecision(rec audit.Record, p *k8sCataloguePreparation) (bool, A
 		receipt = receipt && slices.Contains(rec.ObjectsTouched, npObject) && len(rec.ObjectsTouched) == 2
 	}
 	actuator.ReceiptObserved = receipt
+	if actuator.ReceiptObserved {
+		actuator.AcceptedAt = attackCatalogTime(rec.Time)
+	}
 	return true, decision, actuator
 }
 

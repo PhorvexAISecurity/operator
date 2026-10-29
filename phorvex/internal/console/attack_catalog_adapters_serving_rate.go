@@ -335,7 +335,8 @@ func bindServingRateReceipt(ctx context.Context, profile servingCatalogueProfile
 		return errors.New("serving-rate rollback detector event target or source changed")
 	}
 	p.signal = servingCatalogueSignal{Created: true, Observed: true, Name: observed.EventName,
-		UID: observed.EventUID, Creator: observed.CreatorIdentity, TargetUID: observed.TargetPodUID}
+		UID: observed.EventUID, Creator: observed.CreatorIdentity, TargetUID: observed.TargetPodUID,
+		CreatedAt: event.GetCreationTimestamp().Time, ObservedAt: time.Now().UTC()}
 	return nil
 }
 

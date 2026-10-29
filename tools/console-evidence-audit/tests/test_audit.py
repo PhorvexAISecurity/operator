@@ -26,6 +26,107 @@ def native_runtime_record() -> dict:
     return json.loads((ROOT / "fixtures" / "persisted-runtime-incomplete.json").read_text())
 
 
+def native_strict_runtime_record() -> dict:
+    source = valid_record()
+
+    def identity(stage: dict) -> dict:
+        return {"catalogueID": stage["catalogue_id"], "runID": stage["run_id"]}
+
+    metrics = []
+    for metric in source["prometheus"]["metrics"]:
+        native = {
+            "key": metric["key"],
+            "query": metric["query"],
+            "querySHA256": metric["query_sha256"],
+            "baseline": [],
+            "final": [],
+            "range": [],
+        }
+        for native_key, source_key in (
+            ("baselineCapture", "baseline"),
+            ("finalCapture", "final"),
+            ("rawCapture", "raw"),
+        ):
+            capture = metric[source_key]
+            body = json.dumps(capture["payload"], separators=(",", ":"), sort_keys=True)
+            native[native_key] = {
+                "capturedAt": capture["captured_at"],
+                "path": "/api/v1/query_range" if source_key == "raw" else "/api/v1/query",
+                "parameters": {"query": metric["query"]},
+                "sha256": capture["sha256"],
+                "rawBodySHA256": audit.hashlib.sha256(body.encode()).hexdigest(),
+                "responseBody": body,
+                "payload": capture["payload"],
+            }
+        metrics.append(native)
+
+    signal, decision, actuator, oracle = (
+        source["signal"], source["decision"], source["actuator"], source["oracle"]
+    )
+    return {
+        "schema": audit.RUN_RECORD_SCHEMA,
+        "evidenceSchema": "phorvex.attack-catalogue-evidence.v1",
+        "runID": source["run_id"],
+        "catalogueID": source["catalogue_id"],
+        "family": source["family"],
+        "executionMode": source["policy"]["mode"],
+        "triggerMode": source["trigger"]["mode"],
+        "result": {
+            "schema": audit.RESULT_SCHEMA,
+            "evidenceSchema": "phorvex.attack-catalogue-evidence.v1",
+            "catalogueID": source["catalogue_id"],
+            "runID": source["run_id"],
+            "family": source["family"],
+            "visible": True,
+            "available": True,
+            "launched": True,
+            "reactiveOnly": True,
+            "executionMode": source["policy"]["mode"],
+            "triggerMode": source["trigger"]["mode"],
+            "expectedAction": source["expected_action"],
+            "startedAt": source["run"]["started_at"],
+            "finishedAt": source["run"]["finished_at"],
+            "signal": {
+                **identity(signal), "created": True, "observed": True,
+                "uid": signal["event_uid"], "targetUID": signal["target_uid"],
+                "createdAt": signal["created_at"], "observedAt": signal["observed_at"],
+            },
+            "decision": {
+                **identity(decision), "observed": True, "id": decision["decision_id"],
+                "eventUID": decision["event_uid"], "targetUID": decision["target_uid"],
+                "observedAt": decision["observed_at"], "selected": True, "feasible": True,
+                "action": decision["action"], "dispatchOutcome": decision["dispatch_outcome"],
+            },
+            "actuator": {
+                **identity(actuator), "receiptObserved": True,
+                "decisionID": actuator["decision_id"], "receiptID": actuator["receipt_id"],
+                "status": actuator["status"], "acceptedAt": actuator["accepted_at"],
+                "handler": actuator["action"],
+            },
+            "physicalValidation": {
+                **identity(oracle), "family": source["family"], "kind": oracle["kind"],
+                "validated": True, "observedAt": oracle["observed_at"],
+                "observations": oracle["observations"],
+            },
+            "cleanup": {
+                "catalogueID": source["catalogue_id"], "runID": source["run_id"],
+                "attempted": True, "eventDeleted": True, "markerDeleted": True,
+                "verified": True, "completedAt": source["postflight"]["checked_at"],
+            },
+            "verdict": "DEFENDED", "reason": "strict native evidence passed", "unsafeToRetry": False,
+        },
+        "prometheusEvidence": {
+            "schema": audit.NATIVE_PROMETHEUS_SCHEMA,
+            "runID": source["run_id"], "catalogueID": source["catalogue_id"],
+            "tenant": "p2-demo", "environment": "staging", "expectedAction": source["expected_action"],
+            "executionMode": source["policy"]["mode"], "triggerMode": source["trigger"]["mode"],
+            "status": "COMPLETE", "metrics": metrics,
+        },
+        "postflight_clean": True,
+        "postflight": source["postflight"],
+    }
+
+
 def check(verdict: dict, name: str) -> dict:
     return next(entry for entry in verdict["checks"] if entry["name"] == name)
 
@@ -248,6 +349,38 @@ class StrictEvidenceTests(unittest.TestCase):
 
         self.assertEqual(check(verdict, "identity")["status"], "INVALID")
         self.assertIn("executionMode", check(verdict, "identity")["reason"])
+
+    def test_native_strict_runtime_record_passes_without_predicate_waiver(self) -> None:
+        records, _, _ = audit.extract_document(native_strict_runtime_record(), 0)
+
+        verdict = self.verdict(records[0])
+
+        self.assertEqual(verdict["verdict"], "PASS")
+        self.assertTrue(all(entry["status"] == "PASS" for entry in verdict["checks"]))
+
+    def test_native_strict_runtime_negative_variants_fail_closed(self) -> None:
+        variants = {
+            "missing-receipt": lambda record: record["result"]["actuator"].pop("receiptID"),
+            "stale-signal": lambda record: record["result"]["signal"].update(
+                {"observedAt": "2026-10-29T12:09:00Z"}
+            ),
+            "cross-catalogue": lambda record: record["result"]["signal"].update(
+                {"catalogueID": "T9999"}
+            ),
+            "cross-run": lambda record: record["result"]["decision"].update(
+                {"runID": "another-run"}
+            ),
+            "cleanup-negative": lambda record: (
+                record.update({"postflight_clean": False}),
+                record["postflight"].update({"clean": False}),
+            ),
+        }
+        for name, mutate in variants.items():
+            with self.subTest(name=name):
+                document = native_strict_runtime_record()
+                mutate(document)
+                records, _, _ = audit.extract_document(document, 0)
+                self.assertNotEqual(self.verdict(records[0])["verdict"], "PASS")
 
 
 class ReportTests(unittest.TestCase):

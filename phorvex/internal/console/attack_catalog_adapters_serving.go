@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/attackcatalog"
 )
@@ -172,12 +173,14 @@ type servingCatalogueRuntime interface {
 type servingCatalogueSignal struct {
 	Created, Observed             bool
 	Name, UID, Creator, TargetUID string
+	CreatedAt, ObservedAt         time.Time
 }
 
 type servingCatalogueDecision struct {
 	Observed, Selected, Feasible, Actuated bool
 	ID, Action, DispatchOutcome, Handler   string
 	ObjectsTouched                         []string
+	ObservedAt                             time.Time
 }
 
 type servingRatePhysical struct {
@@ -190,6 +193,7 @@ type servingRatePhysical struct {
 
 type sensitiveOutputPhysical struct {
 	ConfigMapUID, PolicyUID, OperationID, MarkerSHA256                  string
+	BenignSHA256Before, BenignSHA256After                               string
 	PolicyGeneration, Revision                                          int64
 	BaselineLeaked, ConfigMapActive, ProxyActive, Redacted, PodRetained bool
 }
@@ -392,12 +396,16 @@ func (a *servingCatalogueAdapter) Execute(ctx context.Context, run AttackCatalog
 		Signal: AttackCatalogSignalResult{Created: runtimeObservation.Signal.Created,
 			Observed: runtimeObservation.Signal.Observed, Name: runtimeObservation.Signal.Name,
 			UID: runtimeObservation.Signal.UID, Creator: runtimeObservation.Signal.Creator,
-			TargetUID: runtimeObservation.Signal.TargetUID},
+			TargetUID:  runtimeObservation.Signal.TargetUID,
+			CreatedAt:  attackCatalogTime(runtimeObservation.Signal.CreatedAt),
+			ObservedAt: attackCatalogTime(runtimeObservation.Signal.ObservedAt)},
 		Decision: AttackCatalogDecisionResult{Observed: runtimeObservation.Decision.Observed,
 			ID: runtimeObservation.Decision.ID, Selected: runtimeObservation.Decision.Selected,
 			Feasible: runtimeObservation.Decision.Feasible, Action: runtimeObservation.Decision.Action,
-			DispatchOutcome: runtimeObservation.Decision.DispatchOutcome},
+			DispatchOutcome: runtimeObservation.Decision.DispatchOutcome,
+			ObservedAt:      attackCatalogTime(runtimeObservation.Decision.ObservedAt)},
 		Actuator: AttackCatalogActuatorResult{ReceiptObserved: runtimeObservation.Decision.Actuated,
+			AcceptedAt:     attackCatalogTime(runtimeObservation.Decision.ObservedAt),
 			Handler:        runtimeObservation.Decision.Handler,
 			ObjectsTouched: slices.Clone(runtimeObservation.Decision.ObjectsTouched)},
 		Reason: runtimeObservation.Reason,
@@ -483,17 +491,19 @@ type servingRateOracleEvidence struct {
 
 type sensitiveOutputOracleEvidence struct {
 	servingOracleBinding
-	ConfigMapUID     string `json:"configMapUID"`
-	PolicyUID        string `json:"policyUID"`
-	OperationID      string `json:"operationID"`
-	MarkerSHA256     string `json:"markerSHA256"`
-	PolicyGeneration int64  `json:"policyGeneration"`
-	Revision         int64  `json:"revision"`
-	BaselineLeaked   bool   `json:"baselineLeaked"`
-	ConfigMapActive  bool   `json:"configMapActive"`
-	ProxyActive      bool   `json:"proxyActive"`
-	Redacted         bool   `json:"redacted"`
-	PodRetained      bool   `json:"podRetained"`
+	ConfigMapUID       string `json:"configMapUID"`
+	PolicyUID          string `json:"policyUID"`
+	OperationID        string `json:"operationID"`
+	MarkerSHA256       string `json:"markerSHA256"`
+	BenignSHA256Before string `json:"benignSHA256Before"`
+	BenignSHA256After  string `json:"benignSHA256After"`
+	PolicyGeneration   int64  `json:"policyGeneration"`
+	Revision           int64  `json:"revision"`
+	BaselineLeaked     bool   `json:"baselineLeaked"`
+	ConfigMapActive    bool   `json:"configMapActive"`
+	ProxyActive        bool   `json:"proxyActive"`
+	Redacted           bool   `json:"redacted"`
+	PodRetained        bool   `json:"podRetained"`
 }
 
 type servingKVOracleEvidence struct {
@@ -545,6 +555,7 @@ func (a *servingCatalogueAdapter) physical(run AttackCatalogRunContext, o servin
 		e := sensitiveOutputOracleEvidence{servingOracleBinding: binding,
 			ConfigMapUID: o.Sensitive.ConfigMapUID, PolicyUID: o.Sensitive.PolicyUID,
 			OperationID: o.Sensitive.OperationID, MarkerSHA256: o.Sensitive.MarkerSHA256,
+			BenignSHA256Before: o.Sensitive.BenignSHA256Before, BenignSHA256After: o.Sensitive.BenignSHA256After,
 			PolicyGeneration: o.Sensitive.PolicyGeneration, Revision: o.Sensitive.Revision,
 			BaselineLeaked: o.Sensitive.BaselineLeaked, ConfigMapActive: o.Sensitive.ConfigMapActive,
 			ProxyActive: o.Sensitive.ProxyActive, Redacted: o.Sensitive.Redacted,
@@ -598,12 +609,16 @@ func validateServingRateOracle(e servingRateOracleEvidence) error {
 
 func validateSensitiveOutputOracle(e sensitiveOutputOracleEvidence) error {
 	if e.ConfigMapUID == "" || e.PolicyUID == "" || e.OperationID == "" || e.PolicyGeneration <= 0 ||
-		e.Revision < 1 || len(e.MarkerSHA256) != 64 || !e.BaselineLeaked || !e.ConfigMapActive ||
+		e.Revision < 1 || len(e.MarkerSHA256) != 64 || len(e.BenignSHA256Before) != 64 ||
+		e.BenignSHA256Before != e.BenignSHA256After || !e.BaselineLeaked || !e.ConfigMapActive ||
 		!e.ProxyActive || !e.Redacted || !e.PodRetained {
 		return errors.New("sensitive-output activation, redaction, retained-Pod, and digest-only oracle required")
 	}
 	if _, err := hex.DecodeString(e.MarkerSHA256); err != nil {
 		return errors.New("sensitive-output marker digest is invalid")
+	}
+	if _, err := hex.DecodeString(e.BenignSHA256Before); err != nil {
+		return errors.New("sensitive-output benign response digest is invalid")
 	}
 	return nil
 }

@@ -115,9 +115,11 @@ func positiveServingOutcome(run AttackCatalogRunContext, profile servingCatalogu
 			LegitimateAttempted: 30, LegitimateAdmitted: 30, CapApplied: true, ProxyIdentityUnchanged: true}
 	case sensitiveOutputFamily:
 		digest := sha256.Sum256([]byte("test-only-private-marker-that-must-never-be-serialized"))
+		benignDigest := sha256.Sum256([]byte("test-only-benign-response"))
 		o.Sensitive = &sensitiveOutputPhysical{ConfigMapUID: "33333333-3333-4333-8333-333333333333",
 			PolicyUID: "44444444-4444-4444-8444-444444444444", OperationID: "op-output",
 			MarkerSHA256: hex.EncodeToString(digest[:]), PolicyGeneration: 1, Revision: 1,
+			BenignSHA256Before: hex.EncodeToString(benignDigest[:]), BenignSHA256After: hex.EncodeToString(benignDigest[:]),
 			BaselineLeaked: true, ConfigMapActive: true, ProxyActive: true, Redacted: true, PodRetained: true}
 	case servingKVFamily:
 		o.KV = &servingKVPhysical{BystanderUID: "55555555-5555-4555-8555-555555555555",

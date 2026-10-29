@@ -10,6 +10,8 @@ import (
 
 const attackCatalogResultSchema = "phorvex.attack-catalogue-result.v1"
 
+const attackCatalogEvidenceSchema = "phorvex.attack-catalogue-evidence.v1"
+
 type AttackCatalogExecutionMode string
 
 const (
@@ -30,35 +32,67 @@ func validAttackCatalogModes(execution AttackCatalogExecutionMode, trigger Attac
 }
 
 type AttackCatalogSignalResult struct {
-	Created   bool   `json:"created"`
-	Observed  bool   `json:"observed"`
-	Name      string `json:"name,omitempty"`
-	UID       string `json:"uid,omitempty"`
-	Creator   string `json:"creator,omitempty"`
-	TargetUID string `json:"targetUID,omitempty"`
+	CatalogueID string     `json:"catalogueID,omitempty"`
+	RunID       string     `json:"runID,omitempty"`
+	Family      string     `json:"family,omitempty"`
+	Created     bool       `json:"created"`
+	Observed    bool       `json:"observed"`
+	Name        string     `json:"name,omitempty"`
+	UID         string     `json:"uid,omitempty"`
+	Creator     string     `json:"creator,omitempty"`
+	TargetUID   string     `json:"targetUID,omitempty"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	ObservedAt  *time.Time `json:"observedAt,omitempty"`
 }
 
 type AttackCatalogDecisionResult struct {
-	Observed        bool   `json:"observed"`
-	ID              string `json:"id,omitempty"`
-	Selected        bool   `json:"selected"`
-	Feasible        bool   `json:"feasible"`
-	Action          string `json:"action,omitempty"`
-	DispatchOutcome string `json:"dispatchOutcome,omitempty"`
+	CatalogueID     string     `json:"catalogueID,omitempty"`
+	RunID           string     `json:"runID,omitempty"`
+	Family          string     `json:"family,omitempty"`
+	Observed        bool       `json:"observed"`
+	ID              string     `json:"id,omitempty"`
+	EventUID        string     `json:"eventUID,omitempty"`
+	TargetUID       string     `json:"targetUID,omitempty"`
+	ObservedAt      *time.Time `json:"observedAt,omitempty"`
+	Selected        bool       `json:"selected"`
+	Feasible        bool       `json:"feasible"`
+	Action          string     `json:"action,omitempty"`
+	DispatchOutcome string     `json:"dispatchOutcome,omitempty"`
 }
 
 type AttackCatalogActuatorResult struct {
+	CatalogueID string `json:"catalogueID,omitempty"`
+	RunID       string `json:"runID,omitempty"`
+	Family      string `json:"family,omitempty"`
 	// ReceiptObserved means the adapter bound an accepted actuator receipt to
 	// this exact run. An expected action name is never a receipt.
-	ReceiptObserved bool     `json:"receiptObserved"`
-	Handler         string   `json:"handler,omitempty"`
-	ObjectsTouched  []string `json:"objectsTouched,omitempty"`
+	ReceiptObserved bool       `json:"receiptObserved"`
+	DecisionID      string     `json:"decisionID,omitempty"`
+	ReceiptID       string     `json:"receiptID,omitempty"`
+	Status          string     `json:"status,omitempty"`
+	AcceptedAt      *time.Time `json:"acceptedAt,omitempty"`
+	Handler         string     `json:"handler,omitempty"`
+	ObjectsTouched  []string   `json:"objectsTouched,omitempty"`
+}
+
+type AttackCatalogOracleObservation struct {
+	Name       string     `json:"name"`
+	Before     any        `json:"before"`
+	After      any        `json:"after"`
+	Passed     bool       `json:"passed"`
+	ObservedAt *time.Time `json:"observed_at"`
 }
 
 type AttackCatalogPhysicalResult struct {
-	Validated bool            `json:"validated"`
-	Oracle    string          `json:"oracle,omitempty"`
-	Evidence  json.RawMessage `json:"evidence,omitempty"`
+	CatalogueID  string                           `json:"catalogueID,omitempty"`
+	RunID        string                           `json:"runID,omitempty"`
+	Family       string                           `json:"family,omitempty"`
+	Kind         string                           `json:"kind,omitempty"`
+	Validated    bool                             `json:"validated"`
+	ObservedAt   *time.Time                       `json:"observedAt,omitempty"`
+	Observations []AttackCatalogOracleObservation `json:"observations,omitempty"`
+	Oracle       string                           `json:"oracle,omitempty"`
+	Evidence     json.RawMessage                  `json:"evidence,omitempty"`
 	// AML.T0012's original typed oracle fields remain stable for existing API
 	// clients. Other reviewed adapters use Oracle+Evidence and validate that
 	// adapter-owned payload before the shared lifecycle can issue DEFENDED.
@@ -71,10 +105,14 @@ type AttackCatalogPhysicalResult struct {
 }
 
 type AttackCatalogCleanupResult struct {
+	CatalogueID   string          `json:"catalogueID,omitempty"`
+	RunID         string          `json:"runID,omitempty"`
+	Family        string          `json:"family,omitempty"`
 	Attempted     bool            `json:"attempted"`
 	EventDeleted  bool            `json:"eventDeleted"`
 	MarkerDeleted bool            `json:"markerDeleted"`
 	Verified      bool            `json:"verified"`
+	CompletedAt   *time.Time      `json:"completedAt,omitempty"`
 	Reason        string          `json:"reason,omitempty"`
 	Evidence      json.RawMessage `json:"evidence,omitempty"`
 }
@@ -84,26 +122,29 @@ type AttackCatalogCleanupResult struct {
 // the policy effect mode; TriggerMode is the policy trigger posture. They are
 // deliberately separate concepts.
 type AttackCatalogResult struct {
-	Schema             string                      `json:"schema"`
-	CatalogueID        string                      `json:"catalogueID"`
-	RunID              string                      `json:"runID"`
-	Visible            bool                        `json:"visible"`
-	Available          bool                        `json:"available"`
-	Launched           bool                        `json:"launched"`
-	ReactiveOnly       bool                        `json:"reactiveOnly"`
-	ExecutionMode      AttackCatalogExecutionMode  `json:"executionMode,omitempty"`
-	TriggerMode        AttackCatalogTriggerMode    `json:"triggerMode,omitempty"`
-	ExpectedAction     string                      `json:"expectedAction"`
-	StartedAt          time.Time                   `json:"startedAt"`
-	FinishedAt         time.Time                   `json:"finishedAt"`
-	Signal             AttackCatalogSignalResult   `json:"signal"`
-	Decision           AttackCatalogDecisionResult `json:"decision"`
-	Actuator           AttackCatalogActuatorResult `json:"actuator"`
-	PhysicalValidation AttackCatalogPhysicalResult `json:"physicalValidation"`
-	Cleanup            AttackCatalogCleanupResult  `json:"cleanup"`
-	Verdict            string                      `json:"verdict"`
-	Reason             string                      `json:"reason"`
-	UnsafeToRetry      bool                        `json:"unsafeToRetry"`
+	Schema             string                         `json:"schema"`
+	EvidenceSchema     string                         `json:"evidenceSchema,omitempty"`
+	CatalogueID        string                         `json:"catalogueID"`
+	RunID              string                         `json:"runID"`
+	Family             string                         `json:"family,omitempty"`
+	Visible            bool                           `json:"visible"`
+	Available          bool                           `json:"available"`
+	Launched           bool                           `json:"launched"`
+	ReactiveOnly       bool                           `json:"reactiveOnly"`
+	ExecutionMode      AttackCatalogExecutionMode     `json:"executionMode,omitempty"`
+	TriggerMode        AttackCatalogTriggerMode       `json:"triggerMode,omitempty"`
+	ExpectedAction     string                         `json:"expectedAction"`
+	StartedAt          time.Time                      `json:"startedAt"`
+	FinishedAt         time.Time                      `json:"finishedAt"`
+	Signal             AttackCatalogSignalResult      `json:"signal"`
+	Decision           AttackCatalogDecisionResult    `json:"decision"`
+	Actuator           AttackCatalogActuatorResult    `json:"actuator"`
+	PhysicalValidation AttackCatalogPhysicalResult    `json:"physicalValidation"`
+	Cleanup            AttackCatalogCleanupResult     `json:"cleanup"`
+	Postflight         *AttackCatalogPostflightResult `json:"postflight,omitempty"`
+	Verdict            string                         `json:"verdict"`
+	Reason             string                         `json:"reason"`
+	UnsafeToRetry      bool                           `json:"unsafeToRetry"`
 }
 
 func (r AttackCatalogResult) genericDefendedRequirements() error {
@@ -131,6 +172,63 @@ func (r AttackCatalogResult) genericDefendedRequirements() error {
 	}
 	if !r.Cleanup.Attempted || !r.Cleanup.Verified || r.UnsafeToRetry {
 		return errors.New("verified exact postflight required")
+	}
+	if r.EvidenceSchema != "" {
+		if err := r.releaseEvidenceRequirements(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r AttackCatalogResult) releaseEvidenceRequirements() error {
+	if r.EvidenceSchema != attackCatalogEvidenceSchema || r.Family == "" ||
+		r.Signal.CatalogueID != r.CatalogueID || r.Signal.RunID != r.RunID ||
+		r.Decision.CatalogueID != r.CatalogueID || r.Decision.RunID != r.RunID ||
+		r.Actuator.CatalogueID != r.CatalogueID || r.Actuator.RunID != r.RunID ||
+		r.PhysicalValidation.CatalogueID != r.CatalogueID || r.PhysicalValidation.RunID != r.RunID ||
+		r.Signal.Family != r.Family || r.Decision.Family != r.Family || r.Actuator.Family != r.Family ||
+		r.PhysicalValidation.Family != r.Family || r.Cleanup.CatalogueID != r.CatalogueID || r.Cleanup.RunID != r.RunID ||
+		r.Cleanup.Family != r.Family {
+		return errors.New("immutable run, catalogue and family stage bindings required")
+	}
+	if r.Signal.CreatedAt == nil || r.Signal.ObservedAt == nil || r.Decision.ObservedAt == nil ||
+		r.Actuator.AcceptedAt == nil || r.PhysicalValidation.ObservedAt == nil || r.Cleanup.CompletedAt == nil ||
+		r.Signal.CreatedAt.Before(r.StartedAt) ||
+		r.Signal.ObservedAt.Before(*r.Signal.CreatedAt) || r.Decision.ObservedAt.Before(*r.Signal.ObservedAt) ||
+		r.Actuator.AcceptedAt.Before(*r.Decision.ObservedAt) || r.PhysicalValidation.ObservedAt.Before(*r.Actuator.AcceptedAt) ||
+		r.Cleanup.CompletedAt.Before(*r.PhysicalValidation.ObservedAt) {
+		return errors.New("trusted monotonic stage timestamps required")
+	}
+	if r.Decision.EventUID != r.Signal.UID || r.Decision.TargetUID != r.Signal.TargetUID ||
+		r.Actuator.DecisionID != r.Decision.ID || r.Actuator.ReceiptID != acceptedAttackCatalogReceiptID(r) ||
+		r.Actuator.Status != "accepted" {
+		return errors.New("exact signal, decision and accepted-receipt bindings required")
+	}
+	if r.PhysicalValidation.Kind == "" || len(r.PhysicalValidation.Observations) == 0 {
+		return errors.New("structured family physical observations required")
+	}
+	for _, observation := range r.PhysicalValidation.Observations {
+		if observation.Name == "" || !observation.Passed || observation.ObservedAt == nil ||
+			observation.ObservedAt.After(*r.PhysicalValidation.ObservedAt) {
+			return errors.New("complete typed physical observation entries required")
+		}
+	}
+	if r.Postflight == nil || !r.Postflight.Clean || r.Postflight.CatalogueID != r.CatalogueID ||
+		r.Postflight.RunID != r.RunID || r.Postflight.Family != r.Family || r.Postflight.EvidenceKind != "runtime-health" ||
+		r.Postflight.InventorySHA256 == "" || r.Postflight.CheckedAt.Before(*r.Cleanup.CompletedAt) ||
+		r.FinishedAt.Before(r.Postflight.CheckedAt) {
+		return errors.New("separate clean postflight inventory and health proof required")
+	}
+	digest, err := canonicalJSONSHA256(r.Postflight.Inventory)
+	if err != nil || digest != r.Postflight.InventorySHA256 {
+		return errors.New("postflight inventory hash does not match its typed payload")
+	}
+	var inventory attackCatalogPostflightInventory
+	if json.Unmarshal(r.Postflight.Inventory, &inventory) != nil || inventory.Schema != attackCatalogPostflightSchema ||
+		inventory.CatalogueID != r.CatalogueID || inventory.RunID != r.RunID || inventory.Family != r.Family ||
+		!inventory.EventDeleted || !inventory.MarkerDeleted || !inventory.Verified {
+		return errors.New("postflight typed inventory is incomplete or rebound")
 	}
 	return nil
 }

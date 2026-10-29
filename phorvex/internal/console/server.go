@@ -718,6 +718,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var guardrailAvailability any
 	var attackCatalogue any
 	var prometheusEvidence any
+	var postflightClean any
+	var postflight any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -774,6 +776,10 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	}
 	if result, err := s.runs.AttackCatalogResult(id); err == nil && result != nil {
 		attackCatalogue = result
+		if result.Postflight != nil {
+			postflightClean = result.Postflight.Clean
+			postflight = result.Postflight
+		}
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "catalogue validation result unavailable: " + err.Error()})
 	}
@@ -795,6 +801,8 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"guardrailAvailabilityResult": guardrailAvailability,
 		"attackCatalogueResult":       attackCatalogue,
 		"prometheusEvidence":          prometheusEvidence,
+		"postflight_clean":            postflightClean,
+		"postflight":                  postflight,
 		"note":                        "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }

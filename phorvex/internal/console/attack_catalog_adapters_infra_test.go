@@ -531,15 +531,17 @@ func infraTestPhysical(profile infraCatalogueProfile) AttackCatalogPhysicalResul
 		})}
 	case infraFamilyDatastore:
 		return AttackCatalogPhysicalResult{Validated: true, Oracle: infraDatastoreOracle, Evidence: marshalInfraEvidence(infraDatastoreEvidence{
-			TrustedSHA: trustedSHA, FinalSHA: trustedSHA, PoisonAbsent: true, BenignServed: true, AllPodsServed: true, TargetSameUID: true,
+			TrustedSHA: trustedSHA, PoisonedSHA: strings.Repeat("b", 64), FinalSHA: trustedSHA,
+			PoisonAbsent: true, BenignServed: true, AllPodsServed: true, TargetSameUID: true,
 		})}
 	case infraFamilyImage:
 		return AttackCatalogPhysicalResult{Validated: true, Oracle: infraImageOracle, Evidence: marshalInfraEvidence(infraImageEvidence{
-			TrustedDigest: trustedDigest, DeploymentImage: "example.invalid/demo@" + trustedDigest,
+			TrustedDigest: trustedDigest, PoisonImage: "example.invalid/poison:latest", DeploymentImage: "example.invalid/demo@" + trustedDigest,
 			RunningDigests: []string{trustedDigest, trustedDigest}, ReadyPods: 2, PoisonImageAbsent: true,
 		})}
 	case infraFamilyNodeRecycle:
 		return AttackCatalogPhysicalResult{Validated: true, Oracle: infraNodeOracle, Evidence: marshalInfraEvidence(infraNodeEvidence{
+			TargetPodUID: "pod-old", ReplacementPodUID: "pod-new", HealthyNodeUID: "node-peer",
 			CompromisedNodeGone: true, TargetPodGone: true, ReplacementReady: true, HealthyNodeSameUID: true,
 			HealthyPodsSameUID: true, Available: 2, MinimumAvailable: 2,
 		})}
@@ -566,15 +568,17 @@ func infraTestNegativePhysical(profile infraCatalogueProfile) AttackCatalogPhysi
 		})
 	case infraFamilyDatastore:
 		physical.Evidence = marshalInfraEvidence(infraDatastoreEvidence{
-			TrustedSHA: trustedSHA, FinalSHA: strings.Repeat("b", 64), PoisonAbsent: true, BenignServed: true, AllPodsServed: true, TargetSameUID: true,
+			TrustedSHA: trustedSHA, PoisonedSHA: strings.Repeat("b", 64), FinalSHA: strings.Repeat("c", 64),
+			PoisonAbsent: true, BenignServed: true, AllPodsServed: true, TargetSameUID: true,
 		})
 	case infraFamilyImage:
 		physical.Evidence = marshalInfraEvidence(infraImageEvidence{
-			TrustedDigest: trustedDigest, DeploymentImage: "example.invalid/demo@" + trustedDigest,
+			TrustedDigest: trustedDigest, PoisonImage: "example.invalid/poison:latest", DeploymentImage: "example.invalid/demo@" + trustedDigest,
 			RunningDigests: []string{"sha256:" + strings.Repeat("b", 64)}, ReadyPods: 1, PoisonImageAbsent: true,
 		})
 	case infraFamilyNodeRecycle:
 		physical.Evidence = marshalInfraEvidence(infraNodeEvidence{
+			TargetPodUID: "pod-old", ReplacementPodUID: "pod-new", HealthyNodeUID: "node-peer",
 			CompromisedNodeGone: false, TargetPodGone: true, ReplacementReady: true, HealthyNodeSameUID: true,
 			HealthyPodsSameUID: true, Available: 2, MinimumAvailable: 2,
 		})

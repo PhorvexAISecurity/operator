@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/outputpolicy"
@@ -57,6 +58,34 @@ func sensitiveMarker(response supportCaseResponse) (string, bool) {
 	return marker, ok
 }
 
+func probeBenignSupportDigest(ctx context.Context, p *servingCatalogueKubePreparation,
+	profile servingCatalogueProfile) (string, error) {
+	var response map[string]any
+	if err := podProxyJSON(ctx, p.kube, profile.Namespace, p.target.Name, profile.Port,
+		"POST", profile.Route, map[string]string{"caseId": "CAT-002"}, &response); err != nil {
+		return "", err
+	}
+	diagnostics, diagnosticsOK := response["diagnostics"].(map[string]any)
+	answer, answerOK := response["answer"].(string)
+	receipt, receiptOK := response["modelReceipt"].(map[string]any)
+	model, modelOK := receipt["model"].(string)
+	completionID, completionOK := receipt["completionId"].(string)
+	if len(response) != 6 || response["schema"] != "phorvex.support-case-response.v1" ||
+		response["caseId"] != "CAT-002" || response["status"] != "delivered" || !diagnosticsOK ||
+		len(diagnostics) != 0 || !answerOK || len(answer) == 0 || len(answer) > 512 ||
+		!strings.Contains(answer, "CAT-002") || !strings.Contains(strings.ToLower(answer), "delivered") ||
+		!receiptOK || len(receipt) != 2 || !modelOK || model == "" || !completionOK || completionID == "" || len(completionID) > 128 {
+		return "", errors.New("benign support response is not the fixed safe control")
+	}
+	return canonicalJSONSHA256(struct {
+		Schema string `json:"schema"`
+		CaseID string `json:"caseID"`
+		Status string `json:"status"`
+		Answer string `json:"answer"`
+		Model  string `json:"model"`
+	}{"phorvex.support-case-response.v1", "CAT-002", "delivered", answer, model})
+}
+
 func preflightSensitiveOutput(ctx context.Context, profile servingCatalogueProfile, p *servingCatalogueKubePreparation) error {
 	pod, err := p.kube.CoreV1().Pods(profile.Namespace).Get(ctx, profile.PodName, metav1.GetOptions{})
 	if err != nil || pod.UID == "" || pod.ResourceVersion == "" || pod.DeletionTimestamp != nil ||
@@ -82,8 +111,13 @@ func preflightSensitiveOutput(ctx context.Context, profile servingCatalogueProfi
 		return errors.New("sensitive-output vulnerable baseline is not reproducible")
 	}
 	digest := sha256.Sum256([]byte(marker))
+	benignSHA256, err := probeBenignSupportDigest(ctx, p, profile)
+	if err != nil {
+		return errors.New("sensitive-output benign baseline is unavailable")
+	}
 	p.sensitive = &sensitiveOutputPreparation{configMap: servingObjectPinFromMeta(cm),
-		baselineActivation: cm.Data[outputpolicy.ActivationKey], markerSHA256: hex.EncodeToString(digest[:])}
+		baselineActivation: cm.Data[outputpolicy.ActivationKey], markerSHA256: hex.EncodeToString(digest[:]),
+		benignSHA256: benignSHA256}
 	return nil
 }
 
@@ -120,6 +154,10 @@ func (r *kubernetesServingCatalogueRuntime) executeSensitiveOutput(ctx context.C
 	if hex.EncodeToString(digest[:]) != p.sensitive.markerSHA256 {
 		return observation, errors.New("sensitive-output baseline marker identity changed after preflight")
 	}
+	benignBefore, err := probeBenignSupportDigest(ctx, p, profile)
+	if err != nil || benignBefore != p.sensitive.benignSHA256 {
+		return observation, errors.New("sensitive-output benign baseline changed after preflight")
+	}
 	payload, err := sensitiveObservation(profile, p, time.Now().UTC())
 	if err != nil {
 		return observation, err
@@ -144,15 +182,18 @@ func (r *kubernetesServingCatalogueRuntime) executeSensitiveOutput(ctx context.C
 		activation, activationErr := outputpolicy.ValidateConfigMap(cm, pod)
 		if podErr == nil && cmErr == nil && activationErr == nil && activation.Active && decision.Actuated {
 			proxyState, after, probeErr := probeSensitiveOutput(ctx, p, profile)
+			benignAfter, benignErr := probeBenignSupportDigest(ctx, p, profile)
 			afterMarker, afterPresent := sensitiveMarker(after)
 			redacted := afterPresent && afterMarker == "[REDACTED-BY-OUTPUT-POLICY]"
 			retained := string(pod.UID) == p.target.UID && pod.Status.Phase == corev1.PodRunning && podReady(pod) &&
 				servingPodRestartCount(pod) == p.target.RestartCount
-			if probeErr == nil && proxyState.Ready && proxyState.Active && proxyState.Revision == activation.Revision && redacted && retained {
+			if probeErr == nil && benignErr == nil && benignAfter == benignBefore && proxyState.Ready && proxyState.Active &&
+				proxyState.Revision == activation.Revision && redacted && retained {
 				p.sensitive.operationID = activation.OperationID
 				observation.Signal, observation.Decision = signal, decision
 				observation.Sensitive = &sensitiveOutputPhysical{ConfigMapUID: string(cm.UID), PolicyUID: p.policy.UID,
 					OperationID: activation.OperationID, MarkerSHA256: p.sensitive.markerSHA256,
+					BenignSHA256Before: benignBefore, BenignSHA256After: benignAfter,
 					PolicyGeneration: p.policy.Generation, Revision: int64(activation.Revision), BaselineLeaked: true,
 					ConfigMapActive: true, ProxyActive: true, Redacted: true, PodRetained: true}
 				return observation, nil

@@ -742,6 +742,14 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
     actuator = result.get("actuator") or {}
     physical = result.get("physicalValidation") or {}
     cleanup = result.get("cleanup") or {}
+
+    def stage_identity(stage: dict[str, Any]) -> tuple[str, str]:
+        return stage.get("catalogueID", catalogue_id), stage.get("runID", run_id)
+
+    signal_catalogue_id, signal_run_id = stage_identity(signal)
+    decision_catalogue_id, decision_run_id = stage_identity(decision)
+    actuator_catalogue_id, actuator_run_id = stage_identity(actuator)
+    physical_catalogue_id, physical_run_id = stage_identity(physical)
     record: dict[str, Any] = {
         "schema": RECORD_SCHEMA,
         "catalogue_id": catalogue_id,
@@ -768,8 +776,8 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "mode": execution_mode,
         },
         "signal": {
-            "catalogue_id": catalogue_id,
-            "run_id": run_id,
+            "catalogue_id": signal_catalogue_id,
+            "run_id": signal_run_id,
             "evidence_kind": "runtime-observation",
             "observed": signal.get("observed"),
             "event_uid": signal.get("uid"),
@@ -778,8 +786,8 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "observed_at": signal.get("observedAt"),
         },
         "decision": {
-            "catalogue_id": catalogue_id,
-            "run_id": run_id,
+            "catalogue_id": decision_catalogue_id,
+            "run_id": decision_run_id,
             "evidence_kind": "runtime-observation",
             "event_uid": decision.get("eventUID"),
             "target_uid": decision.get("targetUID"),
@@ -791,8 +799,8 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "dispatch_outcome": decision.get("dispatchOutcome"),
         },
         "actuator": {
-            "catalogue_id": catalogue_id,
-            "run_id": run_id,
+            "catalogue_id": actuator_catalogue_id,
+            "run_id": actuator_run_id,
             "evidence_kind": "accepted-receipt" if actuator.get("receiptObserved") else None,
             "decision_id": actuator.get("decisionID"),
             "receipt_id": actuator.get("receiptID"),
@@ -801,8 +809,8 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "action": actuator.get("handler"),
         },
         "oracle": {
-            "catalogue_id": catalogue_id,
-            "run_id": run_id,
+            "catalogue_id": physical_catalogue_id,
+            "run_id": physical_run_id,
             "evidence_kind": "physical-observation",
             "family": result.get("family"),
             "kind": physical.get("kind"),
@@ -856,17 +864,31 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_native_prometheus(value: dict[str, Any]) -> dict[str, Any]:
+    def capture(source: Any) -> dict[str, Any] | None:
+        if not isinstance(source, dict):
+            return None
+        return {
+            "captured_at": source.get("capturedAt"),
+            "sha256": source.get("sha256"),
+            "payload": source.get("payload"),
+            "raw_body_sha256": source.get("rawBodySHA256"),
+            "response_body": source.get("responseBody"),
+            "path": source.get("path"),
+            "parameters": source.get("parameters"),
+        }
+
     metrics = []
     for metric in value.get("metrics") or []:
         if not isinstance(metric, dict):
             continue
-        # Native Console series are retained as diagnostics.  They intentionally
-        # do not invent raw API response payloads or their hashes.
         metrics.append(
             {
                 "key": metric.get("key"),
                 "query": metric.get("query"),
                 "query_sha256": metric.get("querySHA256"),
+                "baseline": capture(metric.get("baselineCapture")),
+                "final": capture(metric.get("finalCapture")),
+                "raw": capture(metric.get("rawCapture")),
                 "native_baseline": metric.get("baseline"),
                 "native_final": metric.get("final"),
                 "native_range": metric.get("range"),

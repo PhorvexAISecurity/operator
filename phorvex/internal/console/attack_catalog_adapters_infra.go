@@ -609,7 +609,7 @@ func (a *infraAttackCatalogAdapter) Execute(ctx context.Context, run AttackCatal
 	observation.MutationStarted = true
 	observation.Launched = true
 	observation.Signal = AttackCatalogSignalResult{Created: true, Name: signal.Name, UID: signal.UID,
-		Creator: signal.Creator, TargetUID: arm.TargetUID}
+		Creator: signal.Creator, TargetUID: arm.TargetUID, CreatedAt: attackCatalogTime(signal.CreatedAt)}
 	interval := a.cfg.AttackCatalogPollInterval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -732,11 +732,15 @@ func infraCatalogueDecision(rec audit.Record, profile infraCatalogueProfile, fix
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	decision := AttackCatalogDecisionResult{Observed: true, ID: rec.DecisionTrace.DecisionID, Selected: rec.Selected,
-		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome}
+		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
+		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
 	actuator.ReceiptObserved = rec.Action == profile.ExpectedAction && rec.Selected && rec.Feasible && rec.Actuated &&
 		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == profile.ExpectedAction &&
 		containsAllStrings(rec.ObjectsTouched, fixture.ReceiptObjects)
+	if actuator.ReceiptObserved {
+		actuator.AcceptedAt = attackCatalogTime(rec.Time)
+	}
 	return true, decision, actuator
 }
 
@@ -766,6 +770,7 @@ type infraNetworkEvidence struct {
 
 type infraDatastoreEvidence struct {
 	TrustedSHA    string `json:"trustedSHA"`
+	PoisonedSHA   string `json:"poisonedSHA"`
 	FinalSHA      string `json:"finalSHA"`
 	PoisonAbsent  bool   `json:"poisonAbsent"`
 	BenignServed  bool   `json:"benignServed"`
@@ -775,6 +780,7 @@ type infraDatastoreEvidence struct {
 
 type infraImageEvidence struct {
 	TrustedDigest     string   `json:"trustedDigest"`
+	PoisonImage       string   `json:"poisonImage"`
 	DeploymentImage   string   `json:"deploymentImage"`
 	RunningDigests    []string `json:"runningDigests"`
 	ReadyPods         int      `json:"readyPods"`
@@ -782,13 +788,16 @@ type infraImageEvidence struct {
 }
 
 type infraNodeEvidence struct {
-	CompromisedNodeGone bool `json:"compromisedNodeGone"`
-	TargetPodGone       bool `json:"targetPodGone"`
-	ReplacementReady    bool `json:"replacementReady"`
-	HealthyNodeSameUID  bool `json:"healthyNodeSameUID"`
-	HealthyPodsSameUID  bool `json:"healthyPodsSameUID"`
-	Available           int  `json:"available"`
-	MinimumAvailable    int  `json:"minimumAvailable"`
+	TargetPodUID        string `json:"targetPodUID"`
+	ReplacementPodUID   string `json:"replacementPodUID"`
+	HealthyNodeUID      string `json:"healthyNodeUID"`
+	CompromisedNodeGone bool   `json:"compromisedNodeGone"`
+	TargetPodGone       bool   `json:"targetPodGone"`
+	ReplacementReady    bool   `json:"replacementReady"`
+	HealthyNodeSameUID  bool   `json:"healthyNodeSameUID"`
+	HealthyPodsSameUID  bool   `json:"healthyPodsSameUID"`
+	Available           int    `json:"available"`
+	MinimumAvailable    int    `json:"minimumAvailable"`
 }
 
 func validateInfraPhysicalEvidence(profile infraCatalogueProfile, physical AttackCatalogPhysicalResult) error {
@@ -812,7 +821,8 @@ func validateInfraPhysicalEvidence(profile infraCatalogueProfile, physical Attac
 			return errors.New("datastore physical oracle identity changed")
 		}
 		var e infraDatastoreEvidence
-		if json.Unmarshal(physical.Evidence, &e) != nil || !datastore.ValidSHA(e.TrustedSHA) || e.FinalSHA != e.TrustedSHA ||
+		if json.Unmarshal(physical.Evidence, &e) != nil || !datastore.ValidSHA(e.TrustedSHA) || !datastore.ValidSHA(e.PoisonedSHA) ||
+			e.PoisonedSHA == e.TrustedSHA || e.FinalSHA != e.TrustedSHA ||
 			!e.PoisonAbsent || !e.BenignServed || !e.AllPodsServed || !e.TargetSameUID {
 			return errors.New("datastore trusted-content serving oracle is incomplete")
 		}
@@ -821,7 +831,7 @@ func validateInfraPhysicalEvidence(profile infraCatalogueProfile, physical Attac
 			return errors.New("image physical oracle identity changed")
 		}
 		var e infraImageEvidence
-		if json.Unmarshal(physical.Evidence, &e) != nil || imageDigest(e.TrustedDigest) != e.TrustedDigest ||
+		if json.Unmarshal(physical.Evidence, &e) != nil || imageDigest(e.TrustedDigest) != e.TrustedDigest || e.PoisonImage == "" ||
 			imageDigest(e.DeploymentImage) != e.TrustedDigest ||
 			e.ReadyPods < 1 || len(e.RunningDigests) != e.ReadyPods || !e.PoisonImageAbsent {
 			return errors.New("image running digest oracle is incomplete")
@@ -836,7 +846,8 @@ func validateInfraPhysicalEvidence(profile infraCatalogueProfile, physical Attac
 			return errors.New("node-recycle physical oracle identity changed")
 		}
 		var e infraNodeEvidence
-		if json.Unmarshal(physical.Evidence, &e) != nil || !e.CompromisedNodeGone || !e.TargetPodGone ||
+		if json.Unmarshal(physical.Evidence, &e) != nil || e.TargetPodUID == "" || e.ReplacementPodUID == "" ||
+			e.TargetPodUID == e.ReplacementPodUID || e.HealthyNodeUID == "" || !e.CompromisedNodeGone || !e.TargetPodGone ||
 			!e.ReplacementReady || !e.HealthyNodeSameUID || !e.HealthyPodsSameUID ||
 			e.Available < e.MinimumAvailable || e.MinimumAvailable < 2 {
 			return errors.New("node-recycle two-sided node and workload oracle is incomplete")

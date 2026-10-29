@@ -62,7 +62,7 @@ func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) 
 	}}
 	server := &Server{cfg: cfg}
 	started := time.Now().UTC().Add(-time.Minute)
-	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-7", "AML.T0012", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, started)
+	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-7", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, started)
 	if err != nil {
 		t.Fatalf("baseline capture: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestPrometheusRunEvidenceBaselineFailurePersistsPartialAndStopsPreflight(t 
 		Enabled: true, URL: prometheus.URL, Environment: "staging", RequestTimeout: time.Second,
 	}}
 	server := &Server{cfg: cfg}
-	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-8", "AML.T0012", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
+	evidence, err := server.beginPrometheusRunEvidence(context.Background(), "cat-8", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
 	if err == nil || evidence == nil || evidence.Status != "PARTIAL" || len(evidence.Errors) != 8 {
 		t.Fatalf("failed baseline was not retained honestly: evidence=%+v err=%v", evidence, err)
 	}
@@ -142,7 +142,7 @@ func TestPrometheusRunEvidenceRequiresFreshDecisionTelemetry(t *testing.T) {
 	cfg := Config{StateDir: t.TempDir(), RunPrometheusEvidence: PrometheusRunEvidenceConfig{
 		Enabled: true, URL: prometheus.URL, Environment: "staging", RequestTimeout: time.Second,
 	}}
-	evidence, err := (&Server{cfg: cfg}).beginPrometheusRunEvidence(context.Background(), "cat-9", "AML.T0012", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
+	evidence, err := (&Server{cfg: cfg}).beginPrometheusRunEvidence(context.Background(), "cat-9", "AML.T0012", "identity-sa-rotate", "console-identity-test", "identity-rotate", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, time.Now().UTC())
 	if err == nil || evidence == nil || evidence.Status != "PARTIAL" ||
 		!strings.Contains(strings.Join(evidence.Errors, " "), "older than 90s") {
 		t.Fatalf("stale telemetry did not stop preflight: evidence=%+v err=%v", evidence, err)

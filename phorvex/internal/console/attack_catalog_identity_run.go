@@ -142,7 +142,7 @@ func (a *identityAttackCatalogAdapter) Execute(ctx context.Context, run AttackCa
 	p.signal = signal
 	observation.Launched = true
 	observation.Signal = AttackCatalogSignalResult{Created: true, Name: signal.Name, UID: signal.UID,
-		Creator: signal.Creator, TargetUID: p.fixture.PodUID}
+		Creator: signal.Creator, TargetUID: p.fixture.PodUID, CreatedAt: attackCatalogTime(signal.CreatedAt)}
 	interval := a.cfg.AttackCatalogPollInterval
 	if interval <= 0 {
 		interval = 5 * time.Second
@@ -263,11 +263,15 @@ func identityCatalogueDecision(rec audit.Record, f identityCatalogFixture, signa
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	decision := AttackCatalogDecisionResult{Observed: true, ID: rec.DecisionTrace.DecisionID, Selected: rec.Selected,
-		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome}
+		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
+		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
 	actuator.ReceiptObserved = rec.Action == string(model.ActionIdentityRotate) && rec.Selected && rec.Feasible && rec.Actuated &&
 		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == string(model.ActionIdentityRotate) &&
 		slices.Contains(rec.ObjectsTouched, identityServiceAccountObject(f))
+	if actuator.ReceiptObserved {
+		actuator.AcceptedAt = attackCatalogTime(rec.Time)
+	}
 	return true, decision, actuator
 }
 

@@ -293,7 +293,8 @@ func (s *Server) executeAttackCatalogueRun(parent context.Context, id string, en
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 	run := AttackCatalogRunContext{RunID: id, CatalogueID: entry.ID, ExpectedAction: entry.ExpectedAction, ReactiveCompatible: entry.ReactiveCompatible}
-	result := AttackCatalogResult{Schema: attackCatalogResultSchema, CatalogueID: entry.ID, RunID: id,
+	result := AttackCatalogResult{Schema: attackCatalogResultSchema, EvidenceSchema: attackCatalogEvidenceSchema,
+		CatalogueID: entry.ID, RunID: id, Family: entry.Family,
 		Visible: true, ExpectedAction: entry.ExpectedAction, StartedAt: startedAt}
 	prepared, preflightErr := adapter.Preflight(ctx, run)
 	if prepared != nil {
@@ -319,7 +320,7 @@ func (s *Server) executeAttackCatalogueRun(parent context.Context, id string, en
 		s.finalizeAttackCatalogueRun(id, adapter, result, nil, nil)
 		return
 	}
-	prometheusEvidence, prometheusErr := s.beginPrometheusRunEvidence(ctx, id, entry.ID, prepared.EvidenceTenant(), entry.ExpectedAction, result.ExecutionMode, result.TriggerMode, startedAt)
+	prometheusEvidence, prometheusErr := s.beginPrometheusRunEvidence(ctx, id, entry.ID, entry.Family, prepared.EvidenceTenant(), entry.ExpectedAction, result.ExecutionMode, result.TriggerMode, startedAt)
 	if prometheusErr != nil {
 		result.Cleanup = noMutationAttackCatalogCleanup("Prometheus evidence preflight failed before mutation")
 		result.FinishedAt, result.Verdict = time.Now().UTC(), "ERROR"
@@ -333,6 +334,16 @@ func (s *Server) executeAttackCatalogueRun(parent context.Context, id string, en
 		captureCtx, captureCancel := context.WithTimeout(context.Background(), captureTimeout)
 		prometheusErr = s.completePrometheusRunEvidence(captureCtx, prometheusEvidence, result.FinishedAt)
 		captureCancel()
+	}
+	result.FinishedAt = time.Now().UTC()
+	if result.EvidenceSchema == attackCatalogEvidenceSchema && result.Verdict == "DEFENDED" {
+		if gateErr := validatePrometheusReleaseEvidence(prometheusEvidence, result); gateErr != nil {
+			result.Verdict = "INCONCLUSIVE"
+			result.Reason = "strict release evidence is incomplete: " + gateErr.Error()
+			if prometheusErr == nil {
+				prometheusErr = gateErr
+			}
+		}
 	}
 	s.finalizeAttackCatalogueRun(id, adapter, result, prometheusEvidence, prometheusErr)
 }
@@ -380,6 +391,9 @@ func (s *Server) executePreparedAttackCatalogueRun(ctx context.Context, run Atta
 	result.Decision = observation.Decision
 	result.Actuator = observation.Actuator
 	result.PhysicalValidation = observation.PhysicalValidation
+	if result.PhysicalValidation.Validated && result.PhysicalValidation.ObservedAt == nil {
+		result.PhysicalValidation.ObservedAt = attackCatalogTime(time.Now().UTC())
+	}
 	cleanupTimeout := attackCatalogCleanupTimeout
 	if bounded, ok := adapter.(interface{ CleanupTimeout() time.Duration }); ok {
 		if candidate := bounded.CleanupTimeout(); candidate >= attackCatalogCleanupTimeout && candidate <= 2*time.Minute {
@@ -389,6 +403,18 @@ func (s *Server) executePreparedAttackCatalogueRun(ctx context.Context, run Atta
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	result.Cleanup = adapter.Cleanup(cleanupCtx, run, prepared)
 	cleanupCancel()
+	result.Cleanup.CompletedAt = attackCatalogTime(time.Now().UTC())
+	var postflight AttackCatalogPostflightResult
+	var postflightErr error
+	if result.EvidenceSchema == attackCatalogEvidenceSchema {
+		postflightCtx, postflightCancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		postflightInventory := adapter.Cleanup(postflightCtx, run, prepared)
+		postflightCancel()
+		postflight, postflightErr = newAttackCatalogPostflight(result, postflightInventory, time.Now().UTC())
+		if postflightErr == nil {
+			result.Postflight = &postflight
+		}
+	}
 	reason := observation.Reason
 	if executionErr != nil {
 		reason = executionErr.Error()
@@ -398,6 +424,17 @@ func (s *Server) executePreparedAttackCatalogueRun(ctx context.Context, run Atta
 	}
 	if observation.DefensiveChainComplete && !result.Cleanup.Verified {
 		reason = "defensive signal, decision, actuator receipt and family-specific physical oracle passed, but exact cleanup did not pass"
+	}
+	if result.EvidenceSchema == attackCatalogEvidenceSchema {
+		if postflightErr != nil {
+			reason = "postflight inventory evidence could not be persisted: " + postflightErr.Error()
+		} else if !postflight.Clean {
+			reason = "separate postflight inventory and runtime health check did not pass"
+		}
+		if err := bindAttackCatalogEvidence(&result, result.Family); err != nil {
+			reason = "release evidence contract is incomplete: " + err.Error()
+			result.Postflight = nil
+		}
 	}
 	result.finishVerdict(adapter, reason)
 	return result
@@ -454,13 +491,17 @@ func (s *Server) finalizeAttackCatalogueRun(id string, adapter AttackCatalogAdap
 // Console result, complete raw Prometheus evidence, and explicit runtime modes.
 // The legacy per-artifact files remain for backward-compatible API readers.
 type AttackCatalogRunRecord struct {
-	Schema             string                     `json:"schema"`
-	RunID              string                     `json:"runID"`
-	CatalogueID        string                     `json:"catalogueID"`
-	ExecutionMode      AttackCatalogExecutionMode `json:"executionMode"`
-	TriggerMode        AttackCatalogTriggerMode   `json:"triggerMode"`
-	Result             AttackCatalogResult        `json:"result"`
-	PrometheusEvidence *PrometheusRunEvidence     `json:"prometheusEvidence,omitempty"`
+	Schema             string                         `json:"schema"`
+	EvidenceSchema     string                         `json:"evidenceSchema,omitempty"`
+	RunID              string                         `json:"runID"`
+	CatalogueID        string                         `json:"catalogueID"`
+	Family             string                         `json:"family,omitempty"`
+	ExecutionMode      AttackCatalogExecutionMode     `json:"executionMode"`
+	TriggerMode        AttackCatalogTriggerMode       `json:"triggerMode"`
+	Result             AttackCatalogResult            `json:"result"`
+	PrometheusEvidence *PrometheusRunEvidence         `json:"prometheusEvidence,omitempty"`
+	PostflightClean    *bool                          `json:"postflight_clean,omitempty"`
+	Postflight         *AttackCatalogPostflightResult `json:"postflight,omitempty"`
 }
 
 func (s *Server) persistAttackCatalogRunArtifacts(adapter AttackCatalogAdapter, result AttackCatalogResult, prometheusEvidence *PrometheusRunEvidence) error {
@@ -471,9 +512,21 @@ func (s *Server) persistAttackCatalogRunArtifacts(adapter AttackCatalogAdapter, 
 		if err := result.defendedRequirements(adapter); err != nil {
 			return fmt.Errorf("adapter verdict validation: %w", err)
 		}
+		if result.EvidenceSchema == attackCatalogEvidenceSchema {
+			if err := validatePrometheusReleaseEvidence(prometheusEvidence, result); err != nil {
+				return fmt.Errorf("strict Prometheus release evidence: %w", err)
+			}
+		}
 	}
-	record := AttackCatalogRunRecord{Schema: attackCatalogRunRecordSchema, RunID: result.RunID, CatalogueID: result.CatalogueID,
-		ExecutionMode: result.ExecutionMode, TriggerMode: result.TriggerMode, Result: result, PrometheusEvidence: prometheusEvidence}
+	var postflightClean *bool
+	if result.Postflight != nil {
+		clean := result.Postflight.Clean
+		postflightClean = &clean
+	}
+	record := AttackCatalogRunRecord{Schema: attackCatalogRunRecordSchema, EvidenceSchema: result.EvidenceSchema,
+		RunID: result.RunID, CatalogueID: result.CatalogueID, Family: result.Family,
+		ExecutionMode: result.ExecutionMode, TriggerMode: result.TriggerMode, Result: result,
+		PrometheusEvidence: prometheusEvidence, PostflightClean: postflightClean, Postflight: result.Postflight}
 	resultRaw, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return err
@@ -549,6 +602,7 @@ func (rm *RunManager) AttackCatalogRunRecord(id string) (*AttackCatalogRunRecord
 		return nil, errors.New("catalogue run record is malformed")
 	}
 	if record.Schema != attackCatalogRunRecordSchema || record.RunID != id || record.CatalogueID != st.Config ||
+		(record.EvidenceSchema != "" && (record.EvidenceSchema != attackCatalogEvidenceSchema || record.Family != record.Result.Family)) ||
 		record.ExecutionMode != record.Result.ExecutionMode || record.TriggerMode != record.Result.TriggerMode ||
 		!validAttackCatalogModes(record.ExecutionMode, record.TriggerMode) {
 		return nil, errors.New("catalogue run record identity or runtime modes are invalid")
@@ -566,8 +620,21 @@ func (rm *RunManager) AttackCatalogRunRecord(id string) (*AttackCatalogRunRecord
 		}
 	}
 	if record.PrometheusEvidence != nil && (record.PrometheusEvidence.RunID != id || record.PrometheusEvidence.CatalogueID != record.CatalogueID ||
+		record.PrometheusEvidence.Family != record.Family ||
 		record.PrometheusEvidence.ExecutionMode != record.ExecutionMode || record.PrometheusEvidence.TriggerMode != record.TriggerMode) {
 		return nil, errors.New("catalogue run Prometheus evidence identity or runtime modes differ")
+	}
+	if record.EvidenceSchema == attackCatalogEvidenceSchema && record.Result.Verdict == "DEFENDED" {
+		if record.PostflightClean == nil || !*record.PostflightClean || record.Postflight == nil ||
+			record.Result.Postflight == nil || record.Postflight.CatalogueID != record.CatalogueID ||
+			record.Postflight.RunID != record.RunID || record.Postflight.Family != record.Family ||
+			record.Postflight.InventorySHA256 != record.Result.Postflight.InventorySHA256 ||
+			!record.Postflight.CheckedAt.Equal(record.Result.Postflight.CheckedAt) {
+			return nil, errors.New("catalogue run postflight evidence differs from its terminal result")
+		}
+		if err = validatePrometheusReleaseEvidence(record.PrometheusEvidence, record.Result); err != nil {
+			return nil, err
+		}
 	}
 	return &record, nil
 }

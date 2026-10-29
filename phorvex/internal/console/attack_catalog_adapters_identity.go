@@ -384,7 +384,7 @@ func (a *identityFamilyCatalogueAdapter) Execute(ctx context.Context, run Attack
 	}
 	observation.Launched = true
 	observation.Signal = AttackCatalogSignalResult{Created: true, Name: signal.Name, UID: signal.UID,
-		Creator: signal.Creator, TargetUID: prepared.prepared.TargetUID}
+		Creator: signal.Creator, TargetUID: prepared.prepared.TargetUID, CreatedAt: attackCatalogTime(signal.CreatedAt)}
 
 	interval := a.pollInterval
 	if interval <= 0 {
@@ -484,7 +484,8 @@ func identityFamilyCatalogueDecision(profile identityCatalogueProfile, rec audit
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	decision := AttackCatalogDecisionResult{Observed: true, ID: rec.DecisionTrace.DecisionID, Selected: rec.Selected,
-		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome}
+		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
+		ObservedAt: attackCatalogTime(rec.Time)}
 	receipt := AttackCatalogActuatorResult{}
 	receiptObjectMatched := slices.Contains(rec.ObjectsTouched, prepared.ReceiptObject)
 	if profile.Family == identityCatalogueAgent {
@@ -498,6 +499,7 @@ func identityFamilyCatalogueDecision(profile identityCatalogueProfile, rec audit
 		// audit strings into catalogue evidence.
 		receipt.Handler = profile.ExpectedAction
 		receipt.ObjectsTouched = []string{prepared.ReceiptObject}
+		receipt.AcceptedAt = attackCatalogTime(rec.Time)
 	}
 	return true, decision, receipt
 }

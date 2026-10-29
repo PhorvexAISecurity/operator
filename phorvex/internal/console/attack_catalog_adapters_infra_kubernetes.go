@@ -618,7 +618,7 @@ func (k *kubernetesInfraCatalogueRuntime) physicalDatastore(ctx context.Context,
 		return AttackCatalogPhysicalResult{}, errors.New("datastore preparation state changed")
 	}
 	live, err := datastore.ValidateLive(ctx, k.reader, profile.Namespace, arm.TargetUID)
-	e := infraDatastoreEvidence{TrustedSHA: state.TrustedSHA}
+	e := infraDatastoreEvidence{TrustedSHA: state.TrustedSHA, PoisonedSHA: state.PoisonedSHA}
 	if err == nil {
 		e.FinalSHA = live.CurrentSHA
 		storeCM, getErr := k.kube.CoreV1().ConfigMaps(profile.Namespace).Get(ctx, datastore.StoreConfigMapName, metav1.GetOptions{})
@@ -779,7 +779,7 @@ func (k *kubernetesInfraCatalogueRuntime) physicalImage(ctx context.Context, pro
 	if !ok || state == nil {
 		return AttackCatalogPhysicalResult{}, errors.New("image preparation state changed")
 	}
-	e := infraImageEvidence{TrustedDigest: state.PinDigest, PoisonImageAbsent: true}
+	e := infraImageEvidence{TrustedDigest: state.PinDigest, PoisonImage: profile.PoisonImage, PoisonImageAbsent: true}
 	deployment, err := k.kube.AppsV1().Deployments(profile.Namespace).Get(ctx, profile.Deployment, metav1.GetOptions{})
 	if err == nil && string(deployment.UID) == state.DeploymentUID && deployment.Annotations[infraTrustedImageRefAnnotation] == state.Pin {
 		e.DeploymentImage, _ = deploymentContainerImage(deployment, profile.Container)
@@ -926,7 +926,8 @@ func (k *kubernetesInfraCatalogueRuntime) physicalNode(ctx context.Context, prof
 	if !ok || state == nil {
 		return AttackCatalogPhysicalResult{}, errors.New("node-recycle preparation state changed")
 	}
-	e := infraNodeEvidence{MinimumAvailable: state.MinimumAvailable, HealthyPodsSameUID: true}
+	e := infraNodeEvidence{TargetPodUID: arm.TargetUID, HealthyNodeUID: state.HealthyNodeUID,
+		MinimumAvailable: state.MinimumAvailable, HealthyPodsSameUID: true}
 	_, err := k.kube.CoreV1().Nodes().Get(ctx, fixture.TargetNode, metav1.GetOptions{})
 	e.CompromisedNodeGone = apierrors.IsNotFound(err)
 	_, err = k.kube.CoreV1().Pods(profile.Namespace).Get(ctx, arm.TargetName, metav1.GetOptions{})
@@ -941,6 +942,9 @@ func (k *kubernetesInfraCatalogueRuntime) physicalNode(ctx context.Context, prof
 			pod := &pods[i]
 			if !state.BaselinePodUIDs[string(pod.UID)] {
 				e.ReplacementReady = true
+				if e.ReplacementPodUID == "" {
+					e.ReplacementPodUID = string(pod.UID)
+				}
 			}
 		}
 		current := map[string]string{}

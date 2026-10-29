@@ -83,6 +83,7 @@ type sensitiveOutputPreparation struct {
 	baselineActivation string
 	restoredActivation string
 	markerSHA256       string
+	benignSHA256       string
 	operationID        string
 }
 
@@ -294,7 +295,8 @@ func createServingSignal(ctx context.Context, p *servingCatalogueKubePreparation
 	creator := created.GetAnnotations()["phorvex.ai/creator-identity"]
 	targets, _, _ := unstructured.NestedStringSlice(created.Object, "spec", "targets")
 	eventType, _, _ := unstructured.NestedString(created.Object, "spec", "rule", "type")
-	signal := servingCatalogueSignal{Created: true, Name: name, UID: string(created.GetUID()), Creator: creator, TargetUID: p.target.UID}
+	signal := servingCatalogueSignal{Created: true, Name: name, UID: string(created.GetUID()), Creator: creator,
+		TargetUID: p.target.UID, CreatedAt: created.GetCreationTimestamp().Time}
 	p.signal = signal
 	if created.GetName() != name || signal.UID == "" || creator != eventtrust.Injector() ||
 		created.GetCreationTimestamp().Time.IsZero() || created.GetCreationTimestamp().Time.Before(p.startedAt) ||
@@ -351,6 +353,13 @@ func (r *kubernetesServingCatalogueRuntime) matchingDecision(ctx context.Context
 	for _, row := range rows {
 		matchedSignal, decision, ok := matchServingDecision(row, profile, p, signal)
 		if ok {
+			if profile.Family == servingRateFamily {
+				event, getErr := p.dynamic.Resource(securityEventGVR).Get(ctx, matchedSignal.Name, metav1.GetOptions{})
+				if getErr != nil || string(event.GetUID()) != matchedSignal.UID || event.GetCreationTimestamp().Time.IsZero() {
+					continue
+				}
+				matchedSignal.CreatedAt = event.GetCreationTimestamp().Time
+			}
 			return matchedSignal, decision, true
 		}
 	}
@@ -382,6 +391,10 @@ func matchServingDecision(row audit.Record, profile servingCatalogueProfile, p *
 			continue
 		}
 		signal.Name, signal.UID, signal.Creator, signal.TargetUID = event.Name, event.EventUID, event.CreatorIdentity, event.TargetPodUID
+		if signal.CreatedAt.IsZero() {
+			signal.CreatedAt = row.Time.Add(-time.Duration(event.AgeSec * float64(time.Second)))
+		}
+		signal.ObservedAt = row.Time
 		signal.Created, signal.Observed = true, true
 		matches++
 	}
@@ -391,7 +404,7 @@ func matchServingDecision(row audit.Record, profile servingCatalogueProfile, p *
 	decision := servingCatalogueDecision{Observed: true, ID: trace.DecisionID, Selected: row.Selected,
 		Feasible: row.Feasible, Actuated: row.Actuated, Action: row.Action,
 		DispatchOutcome: trace.DispatchOutcome, Handler: row.Handler,
-		ObjectsTouched: append([]string(nil), row.ObjectsTouched...)}
+		ObjectsTouched: append([]string(nil), row.ObjectsTouched...), ObservedAt: row.Time}
 	if decision.DispatchOutcome == "" {
 		decision.DispatchOutcome = row.DispatchOutcome
 	}

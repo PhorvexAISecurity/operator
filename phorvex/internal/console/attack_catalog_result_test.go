@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -50,7 +51,21 @@ func TestAttackCatalogDefendedRequiresEveryIndependentOracle(t *testing.T) {
 func TestAttackCatalogLegacyAMLResultRemainsReadable(t *testing.T) {
 	legacy := defendedAttackCatalogResult()
 	legacy.ExecutionMode, legacy.TriggerMode = "", ""
-	if err := legacy.Validate(); err != nil {
+	raw, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var retained AttackCatalogResult
+	if err = json.Unmarshal(raw, &retained); err != nil {
+		t.Fatal(err)
+	}
+	if err = retained.Validate(); err != nil {
 		t.Fatalf("retained AML.T0012 v1 result rejected: %v", err)
+	}
+	if !retained.Visible || retained.CatalogueID != legacy.CatalogueID || retained.RunID != legacy.RunID {
+		t.Fatalf("retained legacy result was hidden or rebound: %+v", retained)
+	}
+	if retained.EvidenceSchema != "" || retained.releaseEvidenceRequirements() == nil {
+		t.Fatal("legacy incomplete evidence was upgraded into the strict release contract")
 	}
 }

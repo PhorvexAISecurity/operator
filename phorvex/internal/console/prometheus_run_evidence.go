@@ -2,6 +2,8 @@ package console
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,13 +57,27 @@ type PrometheusDelta struct {
 }
 
 type PrometheusMetricEvidence struct {
-	Key      string             `json:"key"`
-	Query    string             `json:"query"`
-	Baseline []PrometheusSeries `json:"baseline"`
-	Final    []PrometheusSeries `json:"final,omitempty"`
-	Range    []PrometheusSeries `json:"range,omitempty"`
-	Deltas   []PrometheusDelta  `json:"deltas,omitempty"`
-	Errors   []string           `json:"errors,omitempty"`
+	Key             string                     `json:"key"`
+	Query           string                     `json:"query"`
+	QuerySHA256     string                     `json:"querySHA256"`
+	Baseline        []PrometheusSeries         `json:"baseline"`
+	Final           []PrometheusSeries         `json:"final,omitempty"`
+	Range           []PrometheusSeries         `json:"range,omitempty"`
+	BaselineCapture *PrometheusResponseCapture `json:"baselineCapture,omitempty"`
+	FinalCapture    *PrometheusResponseCapture `json:"finalCapture,omitempty"`
+	RawCapture      *PrometheusResponseCapture `json:"rawCapture,omitempty"`
+	Deltas          []PrometheusDelta          `json:"deltas,omitempty"`
+	Errors          []string                   `json:"errors,omitempty"`
+}
+
+type PrometheusResponseCapture struct {
+	CapturedAt    time.Time         `json:"capturedAt"`
+	Path          string            `json:"path"`
+	Parameters    map[string]string `json:"parameters"`
+	SHA256        string            `json:"sha256"`
+	RawBodySHA256 string            `json:"rawBodySHA256"`
+	ResponseBody  string            `json:"responseBody"`
+	Payload       json.RawMessage   `json:"payload"`
 }
 
 // PrometheusRunEvidence is the durable, replayable telemetry slice for one
@@ -71,6 +87,7 @@ type PrometheusRunEvidence struct {
 	Schema         string                     `json:"schema"`
 	RunID          string                     `json:"runID"`
 	CatalogueID    string                     `json:"catalogueID"`
+	Family         string                     `json:"family,omitempty"`
 	Tenant         string                     `json:"tenant"`
 	Environment    string                     `json:"environment"`
 	ExpectedAction string                     `json:"expectedAction"`
@@ -158,7 +175,7 @@ func (c PrometheusRunEvidenceConfig) validate() error {
 // service starts. It is exported only for the shared console/attacks launcher.
 func (c PrometheusRunEvidenceConfig) Validate() error { return c.validate() }
 
-func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogueID, tenant, action string, executionMode AttackCatalogExecutionMode, triggerMode AttackCatalogTriggerMode, started time.Time) (*PrometheusRunEvidence, error) {
+func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogueID, family, tenant, action string, executionMode AttackCatalogExecutionMode, triggerMode AttackCatalogTriggerMode, started time.Time) (*PrometheusRunEvidence, error) {
 	cfg := s.cfg.RunPrometheusEvidence.normalized()
 	if !cfg.Enabled {
 		return nil, nil
@@ -168,15 +185,18 @@ func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogu
 	}
 	evidence := &PrometheusRunEvidence{
 		Schema: prometheusRunEvidenceSchema, RunID: runID, CatalogueID: catalogueID,
-		Tenant: tenant, Environment: cfg.Environment, ExpectedAction: action, ExecutionMode: executionMode, TriggerMode: triggerMode,
+		Family: family, Tenant: tenant, Environment: cfg.Environment, ExpectedAction: action, ExecutionMode: executionMode, TriggerMode: triggerMode,
 		ObservedDecisionModes: []string{}, Status: "BASELINE_CAPTURED", StartedAt: started.UTC(), BaselineAt: time.Now().UTC(),
 		RangeStep: cfg.RangeStep.String(), Metrics: []PrometheusMetricEvidence{},
 	}
 	for _, query := range prometheusRunQueries(tenant, cfg.Environment, action) {
-		metric := PrometheusMetricEvidence{Key: query.key, Query: query.query, Baseline: []PrometheusSeries{}}
-		series, err := prometheusQuery(ctx, cfg, "/api/v1/query", url.Values{
+		querySum := sha256.Sum256([]byte(query.query))
+		metric := PrometheusMetricEvidence{Key: query.key, Query: query.query,
+			QuerySHA256: hex.EncodeToString(querySum[:]), Baseline: []PrometheusSeries{}}
+		series, capture, err := prometheusQuery(ctx, cfg, "/api/v1/query", url.Values{
 			"query": {query.query}, "time": {formatPrometheusTime(evidence.BaselineAt)},
-		}, "vector")
+		}, "vector", evidence.BaselineAt)
+		metric.BaselineCapture = capture
 		if err != nil {
 			metric.Errors = append(metric.Errors, "baseline: "+err.Error())
 			evidence.Errors = append(evidence.Errors, query.key+": baseline: "+err.Error())
@@ -223,13 +243,15 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 	evidence.FinishedAt = &finishedAt
 	evidence.CapturedAt = &capturedAt
 	evidence.Errors = nil
-	start := evidence.StartedAt.Add(-cfg.RangeStep)
+	start := evidence.BaselineAt.Add(-cfg.RangeStep)
 	for i := range evidence.Metrics {
 		metric := &evidence.Metrics[i]
 		metric.Errors = nil
-		final, err := prometheusQuery(ctx, cfg, "/api/v1/query", url.Values{
-			"query": {metric.Query}, "time": {formatPrometheusTime(capturedAt)},
-		}, "vector")
+		finalAt := time.Now().UTC()
+		final, finalCapture, err := prometheusQuery(ctx, cfg, "/api/v1/query", url.Values{
+			"query": {metric.Query}, "time": {formatPrometheusTime(finalAt)},
+		}, "vector", finalAt)
+		metric.FinalCapture = finalCapture
 		if err != nil {
 			metric.Errors = append(metric.Errors, "final: "+err.Error())
 			evidence.Errors = append(evidence.Errors, metric.Key+": final: "+err.Error())
@@ -241,10 +263,14 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 				evidence.Errors = append(evidence.Errors, metric.Key+": final: staging decision telemetry is absent or older than 90s")
 			}
 		}
-		rangeSeries, rangeErr := prometheusQuery(ctx, cfg, "/api/v1/query_range", url.Values{
+		steps := math.Ceil(finalAt.Sub(evidence.BaselineAt).Seconds() / cfg.RangeStep.Seconds())
+		start = finalAt.Add(-time.Duration(steps) * cfg.RangeStep)
+		rawAt := time.Now().UTC()
+		rangeSeries, rawCapture, rangeErr := prometheusQuery(ctx, cfg, "/api/v1/query_range", url.Values{
 			"query": {metric.Query}, "start": {formatPrometheusTime(start)},
-			"end": {formatPrometheusTime(capturedAt)}, "step": {strconv.FormatFloat(cfg.RangeStep.Seconds(), 'f', -1, 64)},
-		}, "matrix")
+			"end": {formatPrometheusTime(rawAt)}, "step": {strconv.FormatFloat(cfg.RangeStep.Seconds(), 'f', -1, 64)},
+		}, "matrix", rawAt)
+		metric.RawCapture = rawCapture
 		if rangeErr != nil {
 			metric.Errors = append(metric.Errors, "range: "+rangeErr.Error())
 			evidence.Errors = append(evidence.Errors, metric.Key+": range: "+rangeErr.Error())
@@ -336,38 +362,117 @@ func (rm *RunManager) PrometheusRunEvidence(id string) (*PrometheusRunEvidence, 
 	return &evidence, nil
 }
 
-func prometheusQuery(parent context.Context, cfg PrometheusRunEvidenceConfig, path string, values url.Values, wantType string) ([]PrometheusSeries, error) {
+func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result AttackCatalogResult) error {
+	if evidence == nil {
+		return errors.New("complete raw Prometheus evidence is not enabled")
+	}
+	if evidence.Schema != prometheusRunEvidenceSchema || evidence.RunID != result.RunID ||
+		evidence.CatalogueID != result.CatalogueID || evidence.Family != result.Family || evidence.ExpectedAction != result.ExpectedAction ||
+		evidence.ExecutionMode != result.ExecutionMode || evidence.TriggerMode != result.TriggerMode {
+		return errors.New("Prometheus evidence identity, action, or runtime modes differ from the run")
+	}
+	if evidence.Status != "COMPLETE" || len(evidence.Errors) != 0 || len(evidence.Metrics) == 0 {
+		return errors.New("Prometheus evidence is incomplete")
+	}
+	for _, metric := range evidence.Metrics {
+		querySum := sha256.Sum256([]byte(metric.Query))
+		if metric.Key == "" || metric.Query == "" || metric.QuerySHA256 != hex.EncodeToString(querySum[:]) || len(metric.Errors) != 0 {
+			return fmt.Errorf("Prometheus metric %q query contract is incomplete", metric.Key)
+		}
+		captures := []*PrometheusResponseCapture{metric.BaselineCapture, metric.FinalCapture, metric.RawCapture}
+		for _, capture := range captures {
+			if err := validatePrometheusResponseCapture(capture, result.StartedAt, result.FinishedAt); err != nil {
+				return fmt.Errorf("Prometheus metric %q: %w", metric.Key, err)
+			}
+		}
+		if !metric.BaselineCapture.CapturedAt.Before(metric.FinalCapture.CapturedAt) ||
+			metric.RawCapture.CapturedAt.Before(metric.FinalCapture.CapturedAt) {
+			return fmt.Errorf("Prometheus metric %q capture timestamps are not monotonic", metric.Key)
+		}
+		if len(metric.Range) == 0 {
+			return fmt.Errorf("Prometheus metric %q has no raw range series", metric.Key)
+		}
+		var first, last float64
+		found := false
+		for _, series := range metric.Range {
+			for _, sample := range series.Samples {
+				if !found || sample.Time < first {
+					first = sample.Time
+				}
+				if !found || sample.Time > last {
+					last = sample.Time
+				}
+				found = true
+			}
+		}
+		if !found || first > float64(metric.BaselineCapture.CapturedAt.UnixNano())/1e9 ||
+			last < float64(metric.FinalCapture.CapturedAt.UnixNano())/1e9 {
+			return fmt.Errorf("Prometheus metric %q raw range does not cover baseline and final", metric.Key)
+		}
+	}
+	return nil
+}
+
+func validatePrometheusResponseCapture(capture *PrometheusResponseCapture, startedAt, finishedAt time.Time) error {
+	if capture == nil || capture.CapturedAt.Before(startedAt) || capture.CapturedAt.After(finishedAt) ||
+		capture.Path == "" || len(capture.Parameters) == 0 || len(capture.Payload) == 0 || capture.ResponseBody == "" {
+		return errors.New("raw response capture envelope is incomplete")
+	}
+	payloadSHA, err := canonicalJSONSHA256(capture.Payload)
+	if err != nil || payloadSHA != capture.SHA256 {
+		return errors.New("raw response payload hash does not match")
+	}
+	rawSHA := sha256.Sum256([]byte(capture.ResponseBody))
+	if capture.RawBodySHA256 != hex.EncodeToString(rawSHA[:]) {
+		return errors.New("raw response body hash does not match")
+	}
+	return nil
+}
+
+func prometheusQuery(parent context.Context, cfg PrometheusRunEvidenceConfig, path string, values url.Values, wantType string, capturedAt time.Time) ([]PrometheusSeries, *PrometheusResponseCapture, error) {
 	ctx, cancel := context.WithTimeout(parent, cfg.RequestTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cfg.URL+path+"?"+values.Encode(), nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 	limited := io.LimitReader(resp.Body, prometheusResponseLimit+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(raw) > prometheusResponseLimit {
-		return nil, fmt.Errorf("Prometheus response exceeds %d bytes", prometheusResponseLimit)
+		return nil, nil, fmt.Errorf("Prometheus response exceeds %d bytes", prometheusResponseLimit)
+	}
+	rawSum := sha256.Sum256(raw)
+	payloadDigest, digestErr := canonicalJSONSHA256(json.RawMessage(raw))
+	parameters := make(map[string]string, len(values))
+	for key := range values {
+		parameters[key] = values.Get(key)
+	}
+	capture := &PrometheusResponseCapture{CapturedAt: capturedAt.UTC(), Path: path, Parameters: parameters,
+		RawBodySHA256: hex.EncodeToString(rawSum[:]), ResponseBody: string(raw)}
+	if digestErr == nil {
+		capture.SHA256 = payloadDigest
+		capture.Payload = append(json.RawMessage(nil), raw...)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Prometheus HTTP %d", resp.StatusCode)
+		return nil, capture, fmt.Errorf("Prometheus HTTP %d", resp.StatusCode)
 	}
 	var envelope prometheusAPIResponse
 	if err = json.Unmarshal(raw, &envelope); err != nil {
-		return nil, errors.New("Prometheus response is not valid JSON")
+		return nil, capture, errors.New("Prometheus response is not valid JSON")
 	}
 	if envelope.Status != "success" {
-		return nil, fmt.Errorf("Prometheus %s: %s", envelope.ErrorType, envelope.Error)
+		return nil, capture, fmt.Errorf("Prometheus %s: %s", envelope.ErrorType, envelope.Error)
 	}
 	if envelope.Data.ResultType != wantType {
-		return nil, fmt.Errorf("Prometheus result type %q, want %q", envelope.Data.ResultType, wantType)
+		return nil, capture, fmt.Errorf("Prometheus result type %q, want %q", envelope.Data.ResultType, wantType)
 	}
 	result := make([]PrometheusSeries, 0, len(envelope.Data.Result))
 	for _, item := range envelope.Data.Result {
@@ -375,14 +480,14 @@ func prometheusQuery(parent context.Context, cfg PrometheusRunEvidenceConfig, pa
 		if wantType == "vector" {
 			sample, err := decodePrometheusSample(item.Value)
 			if err != nil {
-				return nil, err
+				return nil, capture, err
 			}
 			series.Samples = append(series.Samples, sample)
 		} else {
 			for _, pair := range item.Values {
 				sample, err := decodePrometheusSample(pair)
 				if err != nil {
-					return nil, err
+					return nil, capture, err
 				}
 				series.Samples = append(series.Samples, sample)
 			}
@@ -390,7 +495,7 @@ func prometheusQuery(parent context.Context, cfg PrometheusRunEvidenceConfig, pa
 		result = append(result, series)
 	}
 	sort.Slice(result, func(i, j int) bool { return labelKey(result[i].Labels) < labelKey(result[j].Labels) })
-	return result, nil
+	return result, capture, nil
 }
 
 func decodePrometheusSample(pair []json.RawMessage) (PrometheusSample, error) {

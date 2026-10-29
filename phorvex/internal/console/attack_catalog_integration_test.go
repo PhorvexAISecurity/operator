@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -372,11 +374,14 @@ func (a *testCatalogAdapter) Execute(_ context.Context, run AttackCatalogRunCont
 	if run.CatalogueID != a.id {
 		return AttackCatalogObservation{}, errors.New("test adapter received a substituted ID")
 	}
+	observedAt := time.Now().UTC().Add(-time.Millisecond)
+	createdAt := observedAt.Add(-time.Millisecond)
 	return AttackCatalogObservation{MutationStarted: true, Launched: true, DefensiveChainComplete: true,
-		Signal: AttackCatalogSignalResult{Created: true, Observed: true, Name: "test-signal", UID: "test-signal-uid", Creator: "test-creator", TargetUID: "test-target-uid"},
+		Signal: AttackCatalogSignalResult{Created: true, Observed: true, Name: "test-signal", UID: "test-signal-uid", Creator: "test-creator", TargetUID: "test-target-uid",
+			CreatedAt: attackCatalogTime(createdAt), ObservedAt: attackCatalogTime(observedAt)},
 		Decision: AttackCatalogDecisionResult{Observed: true, ID: "test-decision", Selected: true, Feasible: true,
-			Action: run.ExpectedAction, DispatchOutcome: model.DispatchEmitted},
-		Actuator:           AttackCatalogActuatorResult{ReceiptObserved: true, Handler: "test-handler"},
+			Action: run.ExpectedAction, DispatchOutcome: model.DispatchEmitted, ObservedAt: attackCatalogTime(observedAt)},
+		Actuator:           AttackCatalogActuatorResult{ReceiptObserved: true, Handler: run.ExpectedAction},
 		PhysicalValidation: AttackCatalogPhysicalResult{Validated: true, Oracle: "test-oracle", Evidence: json.RawMessage(`{"accepted":true}`)},
 	}, nil
 }
@@ -453,8 +458,15 @@ func TestRegisteredAttackCatalogueAdapterRoutesOneExactIDOnly(t *testing.T) {
 		}
 	}
 	status := waitCatalogRunTerminal(t, fixture.srv, id)
-	if status.State != "done" || adapter.preflightCalls.Load() != 1 || adapter.executeCalls.Load() != 1 || adapter.cleanupCalls.Load() != 1 {
+	result, err := fixture.srv.runs.AttackCatalogResult(id)
+	if err != nil || status.State != "partial" || result == nil || result.Verdict != "INCONCLUSIVE" ||
+		!strings.Contains(result.Reason, "raw Prometheus evidence is not enabled") ||
+		adapter.preflightCalls.Load() != 1 || adapter.executeCalls.Load() != 1 || adapter.cleanupCalls.Load() != 2 {
 		t.Fatalf("exact adapter run status=%+v calls=%d/%d/%d", status, adapter.preflightCalls.Load(), adapter.executeCalls.Load(), adapter.cleanupCalls.Load())
+	}
+	incompleteRecord, recordErr := fixture.srv.runs.AttackCatalogRunRecord(id)
+	if recordErr != nil || incompleteRecord == nil || incompleteRecord.Result.Verdict != "INCONCLUSIVE" {
+		t.Fatalf("incomplete strict evidence was hidden from history: record=%+v err=%v", incompleteRecord, recordErr)
 	}
 	other := "AML.T0025"
 	if _, ok = attackcatalog.Lookup(other); !ok {
@@ -521,8 +533,14 @@ func testRunPrometheusServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/v1/query_range" {
+			start, startErr := strconv.ParseFloat(r.URL.Query().Get("start"), 64)
+			end, endErr := strconv.ParseFloat(r.URL.Query().Get("end"), 64)
+			if startErr != nil || endErr != nil || end < start {
+				http.Error(w, "invalid range", http.StatusBadRequest)
+				return
+			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{
-				"resultType": "matrix", "result": []any{map[string]any{"metric": map[string]string{}, "values": [][]any{{1700000000.0, "1"}}}},
+				"resultType": "matrix", "result": []any{map[string]any{"metric": map[string]string{}, "values": [][]any{{start, "1"}, {end, "1"}}}},
 			}})
 			return
 		}
@@ -530,8 +548,13 @@ func testRunPrometheusServer(t *testing.T) *httptest.Server {
 			http.NotFound(w, r)
 			return
 		}
+		timestamp, err := strconv.ParseFloat(r.URL.Query().Get("time"), 64)
+		if err != nil {
+			http.Error(w, "invalid time", http.StatusBadRequest)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{
-			"resultType": "vector", "result": []any{map[string]any{"metric": map[string]string{}, "value": []any{1700000000.0, "1"}}},
+			"resultType": "vector", "result": []any{map[string]any{"metric": map[string]string{}, "value": []any{timestamp, "1"}}},
 		}})
 	}))
 }
@@ -555,6 +578,39 @@ func TestAttackCatalogueLifecyclePersistsResultPrometheusAndTriggerModeTogether(
 		record.PrometheusEvidence.Status != "COMPLETE" || record.PrometheusEvidence.ExecutionMode != record.ExecutionMode ||
 		record.PrometheusEvidence.TriggerMode != record.TriggerMode {
 		t.Fatalf("run/result/Prometheus modes were not retained together: status=%+v record=%+v", status, record)
+	}
+	evidenceResponse := fixture.do(fixture.albReqAs(t, http.MethodGet, "/api/runs/evidence?id="+id, "", "catalog-adapter-operator"))
+	if evidenceResponse.Code != http.StatusOK {
+		t.Fatalf("evidence API status=%d body=%s", evidenceResponse.Code, evidenceResponse.Body.String())
+	}
+	var evidenceAPI struct {
+		PostflightClean *bool                          `json:"postflight_clean"`
+		Postflight      *AttackCatalogPostflightResult `json:"postflight"`
+	}
+	if err = json.Unmarshal(evidenceResponse.Body.Bytes(), &evidenceAPI); err != nil || evidenceAPI.PostflightClean == nil ||
+		!*evidenceAPI.PostflightClean || evidenceAPI.Postflight == nil || evidenceAPI.Postflight.RunID != id {
+		t.Fatalf("evidence API lost separate postflight: body=%s err=%v", evidenceResponse.Body.String(), err)
+	}
+	recordPath := filepath.Join(cfg.runOutputPath(id), attackCatalogRunRecordFile)
+	verifier, err := filepath.Abs("../../../tools/console-evidence-audit/audit.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	auditOutput := filepath.Join(t.TempDir(), "audit")
+	command := exec.Command("python3", verifier, recordPath, "--output", auditOutput, "--expected-count", "1",
+		"--as-of", record.Result.FinishedAt.Add(time.Minute).Format(time.RFC3339Nano))
+	if output, commandErr := command.CombinedOutput(); commandErr != nil {
+		t.Fatalf("native runtime record failed the independent strict verifier: %v\n%s", commandErr, output)
+	}
+	var summary struct {
+		CampaignVerdict string `json:"campaign_verdict"`
+	}
+	rawSummary, err := os.ReadFile(filepath.Join(auditOutput, "summary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(rawSummary, &summary); err != nil || summary.CampaignVerdict != "PASS" {
+		t.Fatalf("strict verifier summary=%s err=%v", rawSummary, err)
 	}
 }
 
