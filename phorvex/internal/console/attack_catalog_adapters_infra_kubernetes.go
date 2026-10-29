@@ -20,7 +20,6 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/datastore"
-	"github.com/phorvex/phorvex/internal/ingest"
 	"github.com/phorvex/phorvex/internal/model"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,6 +43,8 @@ import (
 
 const (
 	infraTrustedImageRefAnnotation = "phorvex.ai/trusted-image-ref"
+	infraRunningImageAnnotation    = "phorvex.ai/running-image-digest"
+	infraTrustedImageAnnotation    = "phorvex.ai/trusted-image-digest"
 	infraTargetPodUIDAnnotation    = "phorvex.ai/target-pod-uid"
 	infraNetworkObservation        = "phorvex.ai/network-edge-observation-v1"
 	infraNodeObservation           = "phorvex.ai/node-escape-observation-v1"
@@ -1071,8 +1072,8 @@ func (k *kubernetesInfraCatalogueRuntime) CreateSignal(ctx context.Context, prof
 		if running == "" || running == state.PinDigest {
 			return infraCatalogueSignal{}, errors.New("image drift evidence disappeared before signal")
 		}
-		annotations[ingest.RunningImageDigestAnnotation] = running
-		annotations[ingest.TrustedImageDigestAnnotation] = state.PinDigest
+		annotations[infraRunningImageAnnotation] = running
+		annotations[infraTrustedImageAnnotation] = state.PinDigest
 	case infraFamilyNodeRecycle:
 		raw, _ := json.Marshal(map[string]any{"targetPodUID": arm.TargetUID, "nodeName": fixture.TargetNode,
 			"escapeEvidence": profile.EscapeEvidence, "policyName": fixture.PolicyName,

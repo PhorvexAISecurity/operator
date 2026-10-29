@@ -1,0 +1,60 @@
+schema_version: 2
+campaign_id: 2026-10-29-console-catalogue-smoke
+profile: workflow-v2
+question: Does the reviewed merged 192-ID Console catalogue safely produce one strict,
+  independently verifiable active/reactive PASS in each of its 13 families on Phorvex
+  staging/dev?
+state: APPROVED
+owner: Milad Rashidikhah
+approval_ref: workflow/campaigns/2026-10-29-console-catalogue-smoke/AUTHORIZATION.md
+created_at: '2026-10-29T17:03:43+00:00'
+updated_at: '2026-10-29T19:13:29+00:00'
+scope:
+  environment: staging/dev
+  source_release: v0.4.88
+  included_fixes: []
+  duration_ceiling: 12h active window; one sequential representative per family plus
+    only in-scope defect reruns
+  cost_ceiling: existing staging capacity and normal release infrastructure only;
+    no new account-level capacity
+  permission: attack
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.119
+  digest: sha256:97ec2447ba6ae2aba9e9391ebf21dfbc3b5d262ccdfb519b3746dfb77398f48d
+  embedded_git_sha: 65806a61f472835f3c5c4492ab88e059f74157b9
+safety:
+  stop_conditions:
+  - Stop immediately on unsafe or uncontained behavior, cross-namespace ownership
+    ambiguity, failed cleanup, source/image drift, or evidence-binding loss.
+  phase_approval_ref: workflow/campaigns/2026-10-29-console-catalogue-smoke/AUTHORIZATION.md
+  unresolved: []
+  cleanup: pending
+positive_control: pending
+rounds:
+- id: round-1
+  state: PLANNED
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: codex-integration
+  independent_reviewer: hamihoriyat
+  coordinator: codex-integration
+next_action:
+  owner: campaign-lead
+  action: Await reviewed merge and deployed immutable source/image pins, then capture
+    staging baseline.
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-10-29T19:13:29+00:00'
+  by: codex-integration
+  artifact: CAMPAIGN.md
+  approval_ref: workflow/campaigns/2026-10-29-console-catalogue-smoke/AUTHORIZATION.md
+  phase_approval_ref: workflow/campaigns/2026-10-29-console-catalogue-smoke/AUTHORIZATION.md
+  note: Milad explicitly authorized reviewed staging deployment and the bounded 13-family
+    active/reactive smoke; hypotheses, falsifiers, positive controls, stop conditions,
+    and cleanup boundary are preregistered.
+  forced: false
