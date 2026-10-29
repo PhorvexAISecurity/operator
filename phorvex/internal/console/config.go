@@ -52,6 +52,11 @@ type Config struct {
 	AttackCatalogIdentityProfilePath string
 	AttackCatalogRunTimeout          time.Duration
 	AttackCatalogPollInterval        time.Duration
+	// RunPrometheusEvidence retains baseline-subtracted Prometheus samples beside
+	// every catalogue run. It is an explicit deployment opt-in: a configured
+	// Prometheus URL used by other console views does not silently make telemetry
+	// part of the catalogue acceptance contract.
+	RunPrometheusEvidence PrometheusRunEvidenceConfig
 	// MongoExposureEnabled is set only by the opt-in chart installation that
 	// grants the fixed document-store fixture permissions.
 	MongoExposureEnabled bool

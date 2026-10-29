@@ -714,6 +714,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	var guardrailStatic any
 	var guardrailAvailability any
 	var attackCatalogue any
+	var prometheusEvidence any
 	if result, err := s.runs.NATSConfigurationResult(id); err == nil && result != nil {
 		configuration = result
 	} else if err != nil {
@@ -773,6 +774,11 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "catalogue validation result unavailable: " + err.Error()})
 	}
+	if result, err := s.runs.PrometheusRunEvidence(id); err == nil && result != nil {
+		prometheusEvidence = result
+	} else if err != nil {
+		issues = append(issues, RunEvidenceIssue{Outcome: outcomeUnverified, Reason: "Prometheus run evidence unavailable: " + err.Error()})
+	}
 	writeJSON(w, 200, map[string]any{
 		"id": st.ID, "scenario": st.Config, "date": st.Date, "finished": st.Finished, "outcome": st.Outcome,
 		"namespace": st.Namespace, "state": st.State, "arms": arms, "trials": trials, "issues": issues,
@@ -785,6 +791,7 @@ func (s *Server) runEvidence(w http.ResponseWriter, r *http.Request) {
 		"guardrailStaticResult":       guardrailStatic,
 		"guardrailAvailabilityResult": guardrailAvailability,
 		"attackCatalogueResult":       attackCatalogue,
+		"prometheusEvidence":          prometheusEvidence,
 		"note":                        "Typed terminal evidence for this run. Only validated scored attack rows enter security aggregates; benign controls, invalid tests, skipped and unverified rows remain visible with their own outcome and reason.",
 	})
 }

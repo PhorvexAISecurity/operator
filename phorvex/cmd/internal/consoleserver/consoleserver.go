@@ -368,6 +368,24 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.AttackCatalogAuthorizationTenant = attackCatalogAuthorizationTenant
 	cfg.AttackCatalogIdentityTenant = attackCatalogTenant
 	cfg.AttackCatalogIdentityProfilePath = attackCatalogProfile
+	runPrometheusEvidenceEnabled, err := readBool("PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED")
+	if err != nil {
+		return err
+	}
+	runPrometheusURL := read("PHORVEX_PROM_URL")
+	runPrometheusEnvironment := read("PHORVEX_CONSOLE_RUN_PROMETHEUS_ENVIRONMENT")
+	if runPrometheusEvidenceEnabled && !attackCatalogEnabled {
+		return errors.New("PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED requires the attack catalogue launch adapter")
+	}
+	if runPrometheusEvidenceEnabled && (runPrometheusURL == "" || runPrometheusEnvironment == "") {
+		return errors.New("run Prometheus evidence requires PHORVEX_PROM_URL and PHORVEX_CONSOLE_RUN_PROMETHEUS_ENVIRONMENT")
+	}
+	cfg.RunPrometheusEvidence = console.PrometheusRunEvidenceConfig{
+		Enabled: runPrometheusEvidenceEnabled, URL: runPrometheusURL, Environment: runPrometheusEnvironment,
+	}
+	if err := cfg.RunPrometheusEvidence.Validate(); err != nil {
+		return err
+	}
 	enabled, err := readBool("PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED")
 	if err != nil {
 		return err

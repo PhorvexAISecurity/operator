@@ -136,15 +136,33 @@ func (s *Server) executeAttackCatalogueRun(parent context.Context, id string, en
 	}
 	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
-	cluster, err := s.attackCatalogCluster(profile)
+	startedAt := time.Now().UTC()
+	prometheusEvidence, prometheusErr := s.beginPrometheusRunEvidence(ctx, id, entry.ID, profile.Namespace, entry.ExpectedAction, startedAt)
+	var cluster identityCatalogCluster
+	var err error
+	if prometheusErr == nil {
+		cluster, err = s.attackCatalogCluster(profile)
+	}
 	var result AttackCatalogResult
-	if err != nil {
+	if prometheusErr != nil {
+		now := time.Now().UTC()
+		result = AttackCatalogResult{Schema: attackCatalogResultSchema, CatalogueID: entry.ID, RunID: id, Visible: true,
+			ExpectedAction: entry.ExpectedAction, StartedAt: startedAt, FinishedAt: now, Verdict: "ERROR",
+			Reason:  "Prometheus evidence preflight failed before mutation: " + prometheusErr.Error(),
+			Cleanup: AttackCatalogCleanupResult{EventDeleted: true, MarkerDeleted: true, Verified: true, Reason: "no cluster mutation started"}}
+	} else if err != nil {
 		now := time.Now().UTC()
 		result = AttackCatalogResult{Schema: attackCatalogResultSchema, CatalogueID: entry.ID, RunID: id, Visible: true,
 			ExpectedAction: entry.ExpectedAction, StartedAt: now, FinishedAt: now, Verdict: "ERROR", Reason: err.Error(),
 			Cleanup: AttackCatalogCleanupResult{EventDeleted: true, MarkerDeleted: true, Verified: true, Reason: "no cluster mutation started"}}
 	} else {
 		result = s.runAttackCatalogueIdentity(ctx, id, entry, cluster)
+	}
+	if prometheusErr == nil {
+		captureTimeout := s.cfg.RunPrometheusEvidence.normalized().SettleDelay + 2*time.Minute
+		captureCtx, captureCancel := context.WithTimeout(context.Background(), captureTimeout)
+		prometheusErr = s.completePrometheusRunEvidence(captureCtx, prometheusEvidence, result.FinishedAt)
+		captureCancel()
 	}
 	raw, marshalErr := json.MarshalIndent(result, "", "  ")
 	if marshalErr == nil {
@@ -179,10 +197,12 @@ func (s *Server) executeAttackCatalogueRun(parent context.Context, id string, en
 		st.State, st.Error = "partial", "catalogue postflight is unverified; reconcile before retry"
 	case stopping:
 		st.State, st.Error = "stopped", "stopped by operator after verified cleanup"
-	case result.Verdict == "DEFENDED":
-		st.State = "done"
 	case result.Verdict == "ERROR":
 		st.State, st.Error = "error", result.Reason
+	case prometheusErr != nil:
+		st.State, st.Error = "partial", "Prometheus run evidence is incomplete: "+prometheusErr.Error()
+	case result.Verdict == "DEFENDED":
+		st.State = "done"
 	default:
 		st.State, st.Error = "error", result.Reason
 	}
