@@ -245,10 +245,11 @@ func (s *Server) readAttackCatalogAudit(ctx context.Context) ([]audit.Record, er
 }
 
 func identityCatalogueDecision(rec audit.Record, f identityCatalogFixture, signal identityCatalogSignal) (bool, AttackCatalogDecisionResult, AttackCatalogActuatorResult) {
-	if rec.Kind != "phorvex.decision" || rec.Time.Before(signal.CreatedAt) || rec.Namespace != f.Namespace || rec.Pod != f.PodName ||
+	if rec.Kind != "phorvex.decision" || !validAttackCatalogReceiptTime(rec.Time, signal.CreatedAt) || rec.Namespace != f.Namespace || rec.Pod != f.PodName ||
 		rec.DecisionTrace == nil || rec.DecisionTrace.PolicyNamespace != f.Namespace || rec.DecisionTrace.PolicyName != f.PolicyName ||
 		rec.DecisionTrace.PolicyUID != f.PolicyUID || rec.DecisionTrace.AssetUID != f.PodUID || rec.DecisionTrace.DecisionID == "" ||
-		rec.DecisionTrace.SelectedAction != rec.Action || (rec.DispatchOutcome != "" && rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome) {
+		rec.DecisionTrace.SelectedAction != rec.Action || rec.DecisionTrace.DryRun != rec.DryRun ||
+		rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome {
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	matches := 0
@@ -266,8 +267,8 @@ func identityCatalogueDecision(rec audit.Record, f identityCatalogFixture, signa
 		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
 		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
-	actuator.ReceiptObserved = rec.Action == string(model.ActionIdentityRotate) && rec.Selected && rec.Feasible && rec.Actuated &&
-		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == string(model.ActionIdentityRotate) &&
+	actuator.ReceiptObserved = acceptedAttackCatalogAuditReceipt(rec, signal.CreatedAt,
+		string(model.ActionIdentityRotate), string(model.ActionIdentityRotate)) &&
 		slices.Contains(rec.ObjectsTouched, identityServiceAccountObject(f))
 	if actuator.ReceiptObserved {
 		actuator.AcceptedAt = attackCatalogTime(rec.Time)

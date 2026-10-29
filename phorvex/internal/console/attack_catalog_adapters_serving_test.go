@@ -101,14 +101,16 @@ func servingReceiptObjects(profile servingCatalogueProfile) []string {
 func positiveServingOutcome(run AttackCatalogRunContext, profile servingCatalogueProfile) servingCatalogueRuntimeObservation {
 	signalUID := "11111111-1111-4111-8111-111111111111"
 	targetUID := "22222222-2222-4222-8222-222222222222"
+	now := time.Now().UTC()
 	o := servingCatalogueRuntimeObservation{
 		MutationStarted: true,
 		Launched:        true,
 		Signal: servingCatalogueSignal{Created: true, Observed: true, Name: "signal-" + run.RunID,
-			UID: signalUID, Creator: "system:serviceaccount:test:detector", TargetUID: targetUID},
+			UID: signalUID, Creator: "system:serviceaccount:test:detector", TargetUID: targetUID,
+			CreatedAt: now.Add(-2 * time.Millisecond), ObservedAt: now.Add(-time.Millisecond)},
 		Decision: servingCatalogueDecision{Observed: true, Selected: true, Feasible: true, Actuated: true,
 			ID: "decision-" + run.RunID, Action: profile.ExpectedAction, DispatchOutcome: "emitted",
-			Handler: profile.ExpectedAction, ObjectsTouched: servingReceiptObjects(profile)},
+			Handler: profile.ExpectedAction, ObjectsTouched: servingReceiptObjects(profile), ObservedAt: now},
 		Reason: "positive family oracle",
 	}
 	switch profile.Family {

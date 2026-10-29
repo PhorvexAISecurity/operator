@@ -404,6 +404,10 @@ func (a *k8sAttackCatalogAdapter) Execute(ctx context.Context, run AttackCatalog
 			observation.DefensiveChainComplete = true
 			return observation, nil
 		}
+		if p.fixture.ExecutionMode == AttackCatalogExecutionDryRun && observation.Signal.Observed {
+			observation.Reason = "dry-run decision was observed without an accepted actuator receipt"
+			return observation, nil
+		}
 		select {
 		case <-ctx.Done():
 			switch {
@@ -498,13 +502,13 @@ func (a *k8sAttackCatalogAdapter) DefendedReason() string {
 
 func k8sCatalogueDecision(rec audit.Record, p *k8sCataloguePreparation) (bool, AttackCatalogDecisionResult, AttackCatalogActuatorResult) {
 	f, signal, profile := p.fixture, p.signal, p.profile
-	if rec.Kind != "phorvex.decision" || rec.Time.Before(signal.CreatedAt) || rec.Namespace != f.Namespace || rec.Pod != f.Target.Name ||
+	if rec.Kind != "phorvex.decision" || !validAttackCatalogReceiptTime(rec.Time, signal.CreatedAt) || rec.Namespace != f.Namespace || rec.Pod != f.Target.Name ||
 		rec.DecisionTrace == nil || rec.DecisionTrace.DecisionID == "" || rec.DecisionTrace.PolicyNamespace != f.Namespace ||
 		rec.DecisionTrace.PolicyName != f.PolicyName || rec.DecisionTrace.PolicyUID != f.PolicyUID ||
 		rec.DecisionTrace.AssetNamespace != f.Namespace || rec.DecisionTrace.AssetName != f.Target.Name ||
 		rec.DecisionTrace.AssetUID != f.Target.UID || rec.DecisionTrace.SelectedAction != rec.Action ||
 		rec.Action != profile.NativeAction || rec.DryRun != (f.ExecutionMode == AttackCatalogExecutionDryRun) ||
-		rec.DecisionTrace.DryRun != rec.DryRun || (rec.DispatchOutcome != "" && rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome) {
+		rec.DecisionTrace.DryRun != rec.DryRun || rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome {
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	matches := 0
@@ -524,8 +528,8 @@ func k8sCatalogueDecision(rec audit.Record, p *k8sCataloguePreparation) (bool, A
 		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
 	podObject := "Pod/" + f.Namespace + "/" + f.Target.Name
-	receipt := rec.Selected && rec.Feasible && rec.Actuated && rec.DispatchOutcome == model.DispatchEmitted &&
-		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == profile.NativeAction && slices.Contains(rec.ObjectsTouched, podObject)
+	receipt := acceptedAttackCatalogAuditReceipt(rec, signal.CreatedAt, profile.NativeAction, profile.NativeAction) &&
+		slices.Contains(rec.ObjectsTouched, podObject)
 	if profile.NativeAction == string(model.ActionRotate) {
 		grace := rec.GracefulTermination
 		receipt = receipt && grace != nil && grace.PolicyNamespace == f.Namespace && grace.PolicyName == f.PolicyName &&

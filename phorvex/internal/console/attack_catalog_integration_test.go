@@ -381,7 +381,8 @@ func (a *testCatalogAdapter) Execute(_ context.Context, run AttackCatalogRunCont
 			CreatedAt: attackCatalogTime(createdAt), ObservedAt: attackCatalogTime(observedAt)},
 		Decision: AttackCatalogDecisionResult{Observed: true, ID: "test-decision", Selected: true, Feasible: true,
 			Action: run.ExpectedAction, DispatchOutcome: model.DispatchEmitted, ObservedAt: attackCatalogTime(observedAt)},
-		Actuator:           AttackCatalogActuatorResult{ReceiptObserved: true, Handler: run.ExpectedAction},
+		Actuator: AttackCatalogActuatorResult{ReceiptObserved: true, AcceptedAt: attackCatalogTime(observedAt),
+			Handler: run.ExpectedAction},
 		PhysicalValidation: AttackCatalogPhysicalResult{Validated: true, Oracle: "test-oracle", Evidence: json.RawMessage(`{"accepted":true}`)},
 	}, nil
 }

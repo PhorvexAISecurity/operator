@@ -136,11 +136,11 @@ func bindAttackCatalogEvidence(result *AttackCatalogResult, family string) error
 		result.Signal.ObservedAt = result.Decision.ObservedAt
 	}
 	if result.Actuator.ReceiptObserved {
+		if result.Actuator.AcceptedAt == nil {
+			return errors.New("actuator accepted receipt has no trusted acceptance timestamp")
+		}
 		result.Actuator.DecisionID = result.Decision.ID
 		result.Actuator.Status = "accepted"
-		if result.Actuator.AcceptedAt == nil {
-			result.Actuator.AcceptedAt = result.Decision.ObservedAt
-		}
 		result.Actuator.ReceiptID = acceptedAttackCatalogReceiptID(*result)
 	}
 	if result.PhysicalValidation.Validated {

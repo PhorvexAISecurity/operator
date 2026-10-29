@@ -463,13 +463,13 @@ func identityCatalogueServiceAccountPrincipal(value string) bool {
 }
 
 func identityFamilyCatalogueDecision(profile identityCatalogueProfile, rec audit.Record, prepared *identityCatalogueBindingPreparation, signal identityCatalogueBindingSignal) (bool, AttackCatalogDecisionResult, AttackCatalogActuatorResult) {
-	if prepared == nil || rec.Kind != "phorvex.decision" || rec.Time.Before(signal.CreatedAt) ||
+	if prepared == nil || rec.Kind != "phorvex.decision" || !validAttackCatalogReceiptTime(rec.Time, signal.CreatedAt) ||
 		rec.Namespace != prepared.Namespace || rec.Pod != prepared.PodName || rec.DecisionTrace == nil ||
 		rec.DecisionTrace.PolicyNamespace != prepared.Namespace || rec.DecisionTrace.PolicyName != prepared.PolicyName ||
 		rec.DecisionTrace.PolicyUID != prepared.PolicyUID || rec.DecisionTrace.AssetUID != prepared.TargetUID ||
 		rec.DecisionTrace.DecisionID == "" || rec.DecisionTrace.SelectedAction != rec.Action ||
 		rec.DecisionTrace.DryRun != rec.DryRun ||
-		(rec.DispatchOutcome != "" && rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome) {
+		rec.DecisionTrace.DispatchOutcome != rec.DispatchOutcome {
 		return false, AttackCatalogDecisionResult{}, AttackCatalogActuatorResult{}
 	}
 	matches := 0
@@ -491,8 +491,7 @@ func identityFamilyCatalogueDecision(profile identityCatalogueProfile, rec audit
 	if profile.Family == identityCatalogueAgent {
 		receiptObjectMatched = slices.Equal(rec.ObjectsTouched, []string{prepared.ReceiptObject})
 	}
-	receipt.ReceiptObserved = rec.Action == profile.ExpectedAction && rec.Selected && rec.Feasible && rec.Actuated && !rec.DryRun &&
-		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == profile.ExpectedAction &&
+	receipt.ReceiptObserved = acceptedAttackCatalogAuditReceipt(rec, signal.CreatedAt, profile.ExpectedAction, profile.ExpectedAction) &&
 		receiptObjectMatched
 	if receipt.ReceiptObserved {
 		// Persist only the already-pinned receipt object; never copy arbitrary

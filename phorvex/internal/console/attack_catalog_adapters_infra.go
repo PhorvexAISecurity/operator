@@ -712,7 +712,7 @@ func (a *infraAttackCatalogAdapter) DefendedReason() string {
 }
 
 func infraCatalogueDecision(rec audit.Record, profile infraCatalogueProfile, fixture infraCatalogueFixture, arm infraCatalogueArm, signal infraCatalogueSignal) (bool, AttackCatalogDecisionResult, AttackCatalogActuatorResult) {
-	if rec.Kind != "phorvex.decision" || rec.Time.Before(signal.CreatedAt) || rec.Namespace != fixture.Namespace || rec.Pod != arm.TargetName ||
+	if rec.Kind != "phorvex.decision" || !validAttackCatalogReceiptTime(rec.Time, signal.CreatedAt) || rec.Namespace != fixture.Namespace || rec.Pod != arm.TargetName ||
 		rec.DryRun || rec.DecisionTrace == nil || rec.DecisionTrace.DryRun || rec.DecisionTrace.DecisionID == "" ||
 		rec.DecisionTrace.PolicyNamespace != fixture.Namespace || rec.DecisionTrace.PolicyName != fixture.PolicyName ||
 		rec.DecisionTrace.PolicyUID != fixture.PolicyUID || rec.DecisionTrace.AssetUID != arm.TargetUID ||
@@ -735,8 +735,7 @@ func infraCatalogueDecision(rec audit.Record, profile infraCatalogueProfile, fix
 		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome,
 		ObservedAt: attackCatalogTime(rec.Time)}
 	actuator := AttackCatalogActuatorResult{Handler: rec.Handler, ObjectsTouched: slices.Clone(rec.ObjectsTouched)}
-	actuator.ReceiptObserved = rec.Action == profile.ExpectedAction && rec.Selected && rec.Feasible && rec.Actuated &&
-		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == profile.ExpectedAction &&
+	actuator.ReceiptObserved = acceptedAttackCatalogAuditReceipt(rec, signal.CreatedAt, profile.ExpectedAction, profile.ExpectedAction) &&
 		containsAllStrings(rec.ObjectsTouched, fixture.ReceiptObjects)
 	if actuator.ReceiptObserved {
 		actuator.AcceptedAt = attackCatalogTime(rec.Time)

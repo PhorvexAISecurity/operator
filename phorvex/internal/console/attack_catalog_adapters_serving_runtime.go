@@ -370,6 +370,7 @@ func matchServingDecision(row audit.Record, profile servingCatalogueProfile, p *
 	signal servingCatalogueSignal) (servingCatalogueSignal, servingCatalogueDecision, bool) {
 	trace := row.DecisionTrace
 	if row.Kind != "phorvex.decision" || row.Time.Before(p.startedAt) || row.Time.After(time.Now().Add(2*time.Second)) || row.Namespace != profile.Namespace ||
+		(!signal.CreatedAt.IsZero() && !validAttackCatalogReceiptTime(row.Time, signal.CreatedAt)) ||
 		row.Pod != p.target.Name || trace == nil || trace.DecisionID == "" || trace.PolicyNamespace != profile.Namespace ||
 		trace.PolicyName != profile.PolicyName || trace.PolicyUID != p.policy.UID || trace.AssetUID != p.target.UID ||
 		trace.SelectedAction != row.Action || trace.DryRun != row.DryRun || row.DryRun ||

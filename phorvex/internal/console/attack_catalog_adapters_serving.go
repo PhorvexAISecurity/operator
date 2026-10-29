@@ -391,11 +391,7 @@ func (a *servingCatalogueAdapter) Execute(ctx context.Context, run AttackCatalog
 		return AttackCatalogObservation{}, err
 	}
 	runtimeObservation, runtimeErr := a.runtime.Execute(ctx, run, a.profile, p.runtimeState)
-	receiptObserved := runtimeObservation.Decision.Selected && runtimeObservation.Decision.Feasible &&
-		runtimeObservation.Decision.Actuated && runtimeObservation.Decision.Action == a.profile.ExpectedAction &&
-		runtimeObservation.Decision.DispatchOutcome == model.DispatchEmitted &&
-		runtimeObservation.Decision.Handler == a.profile.ExpectedAction &&
-		len(runtimeObservation.Decision.ObjectsTouched) > 0
+	receiptObserved := acceptedServingCatalogueReceipt(a.profile, runtimeObservation.Signal, runtimeObservation.Decision)
 	actuator := AttackCatalogActuatorResult{ReceiptObserved: receiptObserved,
 		Handler:        runtimeObservation.Decision.Handler,
 		ObjectsTouched: slices.Clone(runtimeObservation.Decision.ObjectsTouched)}
@@ -432,6 +428,16 @@ func (a *servingCatalogueAdapter) Execute(ctx context.Context, run AttackCatalog
 	}
 	observation.DefensiveChainComplete = true
 	return observation, nil
+}
+
+func acceptedServingCatalogueReceipt(profile servingCatalogueProfile, signal servingCatalogueSignal, decision servingCatalogueDecision) bool {
+	return signal.Created && signal.Observed && decision.Observed &&
+		validAttackCatalogReceiptTime(signal.ObservedAt, signal.CreatedAt) &&
+		validAttackCatalogReceiptTime(decision.ObservedAt, signal.CreatedAt) &&
+		!decision.ObservedAt.Before(signal.ObservedAt) &&
+		decision.Selected && decision.Feasible && decision.Actuated &&
+		decision.Action == profile.ExpectedAction && decision.DispatchOutcome == model.DispatchEmitted &&
+		decision.Handler == profile.ExpectedAction && servingObjectReceiptMatches(profile, decision.ObjectsTouched)
 }
 
 func (a *servingCatalogueAdapter) validateRuntimeChain(run AttackCatalogRunContext, observation AttackCatalogObservation) error {
