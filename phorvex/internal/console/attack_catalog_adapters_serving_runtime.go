@@ -372,7 +372,9 @@ func matchServingDecision(row audit.Record, profile servingCatalogueProfile, p *
 	if row.Kind != "phorvex.decision" || row.Time.Before(p.startedAt) || row.Time.After(time.Now().Add(2*time.Second)) || row.Namespace != profile.Namespace ||
 		row.Pod != p.target.Name || trace == nil || trace.DecisionID == "" || trace.PolicyNamespace != profile.Namespace ||
 		trace.PolicyName != profile.PolicyName || trace.PolicyUID != p.policy.UID || trace.AssetUID != p.target.UID ||
-		trace.SelectedAction != row.Action || row.DryRun || row.Action != profile.ExpectedAction {
+		trace.SelectedAction != row.Action || trace.DryRun != row.DryRun || row.DryRun ||
+		trace.DispatchOutcome != row.DispatchOutcome || row.DispatchOutcome != model.DispatchEmitted ||
+		row.Action != profile.ExpectedAction {
 		return signal, servingCatalogueDecision{}, false
 	}
 	matches := 0
@@ -403,11 +405,8 @@ func matchServingDecision(row audit.Record, profile servingCatalogueProfile, p *
 	}
 	decision := servingCatalogueDecision{Observed: true, ID: trace.DecisionID, Selected: row.Selected,
 		Feasible: row.Feasible, Actuated: row.Actuated, Action: row.Action,
-		DispatchOutcome: trace.DispatchOutcome, Handler: row.Handler,
+		DispatchOutcome: row.DispatchOutcome, Handler: row.Handler,
 		ObjectsTouched: append([]string(nil), row.ObjectsTouched...), ObservedAt: row.Time}
-	if decision.DispatchOutcome == "" {
-		decision.DispatchOutcome = row.DispatchOutcome
-	}
 	return signal, decision, true
 }
 

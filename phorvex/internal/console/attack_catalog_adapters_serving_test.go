@@ -13,6 +13,9 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/attackcatalog"
+	"github.com/phorvex/phorvex/internal/audit"
+	"github.com/phorvex/phorvex/internal/eventtrust"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 type fakeServingPreparation struct{ token string }
@@ -160,6 +163,147 @@ func executeServingTestResult(t *testing.T, adapter *servingCatalogueAdapter, ru
 	result.Cleanup = adapter.Cleanup(context.Background(), run, prepared)
 	result.finishVerdict(adapter, observation.Reason)
 	return result
+}
+
+func servingDecisionAuditFixture(profile servingCatalogueProfile) (audit.Record, *servingCatalogueKubePreparation, servingCatalogueSignal) {
+	now := time.Now().UTC()
+	creator := eventtrust.Injector()
+	if profile.Family == servingRateFamily {
+		creator = "system:serviceaccount:" + profile.Namespace + ":rate-detector"
+	}
+	p := &servingCatalogueKubePreparation{
+		policy:    servingPolicyPin{UID: "policy-uid", Generation: 1},
+		target:    servingPodPin{Name: "target-0", UID: "target-uid"},
+		runID:     "serving-decision-run",
+		startedAt: now.Add(-time.Second),
+	}
+	signal := servingCatalogueSignal{
+		Created:   true,
+		Name:      "serving-signal",
+		UID:       "signal-uid",
+		Creator:   creator,
+		TargetUID: p.target.UID,
+		CreatedAt: now.Add(-500 * time.Millisecond),
+	}
+	row := audit.Record{
+		Kind: "phorvex.decision", Time: now, Namespace: profile.Namespace, Pod: p.target.Name,
+		Action: profile.ExpectedAction, Selected: true, Feasible: true, Actuated: true,
+		DispatchOutcome: model.DispatchEmitted, Handler: profile.ExpectedAction,
+		ObjectsTouched: servingReceiptObjects(profile),
+		DecisionTrace: &model.DecisionTraceV2{
+			DecisionID: "serving-decision", PolicyNamespace: profile.Namespace,
+			PolicyName: profile.PolicyName, PolicyUID: p.policy.UID, AssetUID: p.target.UID,
+			SelectedAction: profile.ExpectedAction, DispatchOutcome: model.DispatchEmitted,
+		},
+		Events: []model.EventEvidence{{
+			Name: signal.Name, EventUID: signal.UID, Type: profile.EventType,
+			CreatorIdentity: creator, TargetPodUID: p.target.UID, TrustVerdict: "trusted",
+			TargetsPod: true, TimestampPresent: true, AgeSec: 0.5,
+		}},
+	}
+	return row, p, signal
+}
+
+func TestServingCatalogueDecisionRequiresConsistentActiveEmittedReceipt(t *testing.T) {
+	for _, profile := range servingCatalogueProfiles() {
+		t.Run(profile.CatalogueID+"/strict-positive", func(t *testing.T) {
+			row, prepared, signal := servingDecisionAuditFixture(profile)
+			matchedSignal, decision, ok := matchServingDecision(row, profile, prepared, signal)
+			if !ok || !matchedSignal.Observed || !decision.Actuated || decision.DispatchOutcome != model.DispatchEmitted {
+				t.Fatalf("consistent active emitted decision rejected: signal=%+v decision=%+v matched=%t", matchedSignal, decision, ok)
+			}
+		})
+	}
+
+	profile := servingTestProfile(t, "AML.T0034")
+	tests := []struct {
+		name   string
+		mutate func(*audit.Record)
+	}{
+		{
+			name: "top-level-active-trace-dry-run",
+			mutate: func(row *audit.Record) {
+				row.DryRun = false
+				row.DecisionTrace.DryRun = true
+			},
+		},
+		{
+			name: "top-level-dry-run-trace-active",
+			mutate: func(row *audit.Record) {
+				row.DryRun = true
+				row.DecisionTrace.DryRun = false
+			},
+		},
+		{
+			name: "top-level-emitted-trace-non-emitted",
+			mutate: func(row *audit.Record) {
+				row.DispatchOutcome = model.DispatchEmitted
+				row.DecisionTrace.DispatchOutcome = model.DispatchError
+			},
+		},
+		{
+			name: "top-level-non-emitted-trace-emitted",
+			mutate: func(row *audit.Record) {
+				row.DispatchOutcome = model.DispatchRefused
+				row.DecisionTrace.DispatchOutcome = model.DispatchEmitted
+			},
+		},
+		{
+			name: "missing-dispatch",
+			mutate: func(row *audit.Record) {
+				row.DispatchOutcome = ""
+				row.DecisionTrace.DispatchOutcome = ""
+			},
+		},
+		{
+			name: "accepted-receipt-contradicts-rejected-dispatch",
+			mutate: func(row *audit.Record) {
+				row.Actuated = true
+				row.DispatchOutcome = model.DispatchRefused
+				row.DecisionTrace.DispatchOutcome = model.DispatchRefused
+			},
+		},
+		{
+			name: "stale-decision",
+			mutate: func(row *audit.Record) {
+				row.Time = time.Time{}
+			},
+		},
+		{
+			name: "foreign-run-signal",
+			mutate: func(row *audit.Record) {
+				row.Events[0].Name = "other-run-signal"
+				row.Events[0].EventUID = "other-run-uid"
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			row, prepared, signal := servingDecisionAuditFixture(profile)
+			tt.mutate(&row)
+			if matchedSignal, decision, ok := matchServingDecision(row, profile, prepared, signal); ok {
+				t.Fatalf("inconsistent decision became receipt candidate: signal=%+v decision=%+v", matchedSignal, decision)
+			}
+		})
+	}
+}
+
+func TestServingCatalogueAdapterRejectsContradictoryAcceptedReceipt(t *testing.T) {
+	adapter, runtime, run := newPositiveServingAdapter(t, "AML.T0034")
+	runtime.outcome = func(run AttackCatalogRunContext, profile servingCatalogueProfile) servingCatalogueRuntimeObservation {
+		observation := positiveServingOutcome(run, profile)
+		observation.Decision.Actuated = true
+		observation.Decision.DispatchOutcome = model.DispatchRefused
+		return observation
+	}
+	prepared, err := adapter.Preflight(context.Background(), run)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation, err := adapter.Execute(context.Background(), run, prepared)
+	if err == nil || observation.Actuator.ReceiptObserved || observation.Actuator.AcceptedAt != nil || observation.DefensiveChainComplete {
+		t.Fatalf("contradictory rejected dispatch became accepted: observation=%+v err=%v", observation, err)
+	}
 }
 
 func TestServingCatalogueExactCoverage(t *testing.T) {

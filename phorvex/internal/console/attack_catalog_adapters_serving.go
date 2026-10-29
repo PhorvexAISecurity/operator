@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/attackcatalog"
+	"github.com/phorvex/phorvex/internal/model"
 )
 
 const (
@@ -390,6 +391,17 @@ func (a *servingCatalogueAdapter) Execute(ctx context.Context, run AttackCatalog
 		return AttackCatalogObservation{}, err
 	}
 	runtimeObservation, runtimeErr := a.runtime.Execute(ctx, run, a.profile, p.runtimeState)
+	receiptObserved := runtimeObservation.Decision.Selected && runtimeObservation.Decision.Feasible &&
+		runtimeObservation.Decision.Actuated && runtimeObservation.Decision.Action == a.profile.ExpectedAction &&
+		runtimeObservation.Decision.DispatchOutcome == model.DispatchEmitted &&
+		runtimeObservation.Decision.Handler == a.profile.ExpectedAction &&
+		len(runtimeObservation.Decision.ObjectsTouched) > 0
+	actuator := AttackCatalogActuatorResult{ReceiptObserved: receiptObserved,
+		Handler:        runtimeObservation.Decision.Handler,
+		ObjectsTouched: slices.Clone(runtimeObservation.Decision.ObjectsTouched)}
+	if receiptObserved {
+		actuator.AcceptedAt = attackCatalogTime(runtimeObservation.Decision.ObservedAt)
+	}
 	observation := AttackCatalogObservation{
 		MutationStarted: runtimeObservation.MutationStarted,
 		Launched:        runtimeObservation.Launched,
@@ -404,11 +416,8 @@ func (a *servingCatalogueAdapter) Execute(ctx context.Context, run AttackCatalog
 			Feasible: runtimeObservation.Decision.Feasible, Action: runtimeObservation.Decision.Action,
 			DispatchOutcome: runtimeObservation.Decision.DispatchOutcome,
 			ObservedAt:      attackCatalogTime(runtimeObservation.Decision.ObservedAt)},
-		Actuator: AttackCatalogActuatorResult{ReceiptObserved: runtimeObservation.Decision.Actuated,
-			AcceptedAt:     attackCatalogTime(runtimeObservation.Decision.ObservedAt),
-			Handler:        runtimeObservation.Decision.Handler,
-			ObjectsTouched: slices.Clone(runtimeObservation.Decision.ObjectsTouched)},
-		Reason: runtimeObservation.Reason,
+		Actuator: actuator,
+		Reason:   runtimeObservation.Reason,
 	}
 	physical, physicalErr := a.physical(run, runtimeObservation)
 	observation.PhysicalValidation = physical
