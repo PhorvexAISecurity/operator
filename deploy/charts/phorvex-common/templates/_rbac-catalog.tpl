@@ -28,6 +28,10 @@ cluster:
 - {apiGroups: ["admissionregistration.k8s.io"], resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"], resourceNames: [{{ . | quote }}], verbs: ["get"], readers: [sensor, dispatcher]}
 {{- end }}
 - {apiGroups: [""], resources: ["pods", "namespaces", "nodes", "services", "configmaps"], verbs: ["get", "list", "watch"]}
+{{- if dig "statefulRotation" "enabled" false $v }}
+# Stateful rotation: GET-by-name of a contract's VolumeSnapshotClass (admission of snapshot-rotate).
+- {apiGroups: ["snapshot.storage.k8s.io"], resources: ["volumesnapshotclasses"], verbs: ["get"], readers: [sensor, actuator]}
+{{- end }}
 - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["list"]}
 - {apiGroups: ["discovery.k8s.io"], resources: ["endpointslices"], verbs: ["get", "list", "watch"]}
 - {apiGroups: [""], resources: ["events"], verbs: ["create", "patch"], writers: [dispatcher]}
@@ -104,6 +108,18 @@ roles:
   namespace: {{ $namespace | quote }}
   rules:
   - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [actuator]}
+{{- end }}
+{{- end }}
+{{- if dig "statefulRotation" "enabled" false $v }}
+{{- if not $nativeOrHybrid }}{{- fail "statefulRotation requires native or hybrid actuator" }}{{- end }}
+{{- range $namespace := $v.actuatorNamespaces }}
+{{- /* replica-rebuild releases one member's claims; snapshot-rotate takes its pre-rotation snapshots. */}}
+- name: stateful-rotation
+  namespace: {{ $namespace | quote }}
+  labelled: true
+  rules:
+  - {apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "delete"], writers: [actuator], readers: [sensor, actuator]}
+  - {apiGroups: ["snapshot.storage.k8s.io"], resources: ["volumesnapshots"], verbs: ["get", "create"], writers: [actuator], readers: [actuator]}
 {{- end }}
 {{- end }}
 {{- if $v.endpointLease.enabled }}

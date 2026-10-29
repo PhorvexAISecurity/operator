@@ -21,6 +21,9 @@ const (
 	// per-replica magnitude is carried by normCostP1 (NormCostWorkloadReplacement * N),
 	// not re-scaled here, so the flow is a flat base like quarantine.
 	flowControllerStop
+	// flowStatefulRecovery prices a stateful rotation class by the availability it removes
+	// for the time its declared recovery takes (see statefulRecoveryFlow).
+	flowStatefulRecovery
 )
 
 // RespawnFlowRegime identifies the input/action support behind one learned
@@ -75,6 +78,15 @@ const (
 	measuredKVResetCachedTTFTMilliseconds    = 325.196398422122
 	measuredKVResetPostResetTTFTMilliseconds = 1811.8705251254141
 	measuredKVResetTTFTPenaltyFraction       = (measuredKVResetPostResetTTFTMilliseconds - measuredKVResetCachedTTFTMilliseconds) / measuredKVResetPostResetTTFTMilliseconds
+
+	// [ESTIMATE-UNVALIDATED] Stateful recovery prior: base + span * unavailableFraction *
+	// sat(declaredSeconds / reference). The unavailable fraction is the share of Ready members
+	// the class takes out (1 for a single writer); the seconds are the owner-declared bound of
+	// the phase the member is out for (resync for replica-rebuild, recovery otherwise). Both
+	// inputs are declarations, not measurements; an undeclared resync bound is the maximum.
+	statefulRecoveryBase             = 0.10
+	statefulRecoverySpan             = 1.00
+	statefulRecoveryReferenceSeconds = 1800.0
 )
 
 // flowFamilyForAction is the single exhaustive routing table. New mutating
@@ -127,6 +139,8 @@ func flowFamilyForAction(action model.Action) flowFamily {
 		return flowLightweight
 	case model.ActionControllerStop:
 		return flowControllerStop
+	case model.ActionStatefulReplicaRebuild, model.ActionStatefulSnapshotRotate, model.ActionStatefulCheckpointHandoff:
+		return flowStatefulRecovery
 	default:
 		return flowUnknown
 	}
@@ -161,9 +175,32 @@ func (c *P1Cost) actionFlow(view *model.WorkloadView, action model.Action) float
 		return estimatedLightweightFlow
 	case flowControllerStop:
 		return quarantineBase
+	case flowStatefulRecovery:
+		return statefulRecoveryFlow(view, action)
 	default:
 		return unknownActionFlowMax
 	}
+}
+
+// statefulRecoveryFlow trades availability against time for the stateful rotation family.
+// replica-rebuild takes one of N Ready members out for its resync (peers keep serving);
+// snapshot-rotate and checkpoint-handoff take the member out for its recovery, which for a
+// single writer is the whole service. Without an observation the class is inadmissible, and
+// the conservative maximum keeps it from ever pricing as cheap.
+func statefulRecoveryFlow(view *model.WorkloadView, action model.Action) float64 {
+	if view == nil || view.Pod.StatefulRotation == nil {
+		return unknownActionFlowMax
+	}
+	o := view.Pod.StatefulRotation
+	unavailable := 1.0
+	if o.ReadyReplicas > 1 {
+		unavailable = 1 / float64(o.ReadyReplicas)
+	}
+	seconds := o.Contract.RecoverySeconds
+	if action == model.ActionStatefulReplicaRebuild {
+		seconds = o.Contract.ResyncSeconds
+	}
+	return statefulRecoveryBase + statefulRecoverySpan*unavailable*sat(float64(seconds)/statefulRecoveryReferenceSeconds)
 }
 
 // respawnFlow preserves the six-dimensional RLS prediction as the learned mean,

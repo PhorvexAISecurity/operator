@@ -24,6 +24,13 @@ phorvex:
   # Enable BEFORE any policy enables the action, or startup preflight refuses to start.
   agentActionDeny:
     enabled: false
+  # Stateful rotation family (stateful-replica-rebuild / -snapshot-rotate / -checkpoint-handoff).
+  # Grants, per actuatorNamespaces entry, PersistentVolumeClaim get/delete and VolumeSnapshot
+  # get/create, plus cluster-wide VolumeSnapshotClass get. A StatefulSet must still declare its
+  # own contract (phorvex.ai/stateful-* annotations) and a policy must enable the action.
+  # Enable BEFORE any policy enables a stateful action, or startup preflight refuses to start.
+  statefulRotation:
+    enabled: false
   litellmOutput:
     enabled: false
   # Base tick interval for the decision loop (per-tenant cadence honored on top).

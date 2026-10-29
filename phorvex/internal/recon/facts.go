@@ -94,6 +94,13 @@ const (
 	// token an external attacker already holds. Distinct from FactEndpointLeaseReuse (an app
 	// caller-lease at the serving proxy): this is a Kubernetes ServiceAccount token credential.
 	FactCredentialReuse = "credentialReuse"
+	// FactPersistentVolumeState is the state a stateful member persisted on its volume claims
+	// (data files, WAL, local configuration an implant may have rewritten). It is minted only
+	// for a Pod that mounts claims and whose owner declares peer-resync replica rebuild. A
+	// rotate, a snapshot rotate or a checkpoint handoff reattaches or restores that state, so
+	// ONLY stateful-replica-rebuild covers it: the member returns on fresh volumes re-seeded
+	// from its peers.
+	FactPersistentVolumeState = "persistentVolumeState"
 	// FactGPUColocation = workload-level shared-GPU/MIG co-residency exposure. Although its
 	// measurement is node-derived, each pod key represents one victim workload's exposure rather
 	// than a count of affected physical devices. AUDIT-ONLY today: neither mig-rebind nor warm-swap

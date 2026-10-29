@@ -70,114 +70,164 @@ func (rotateHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (Handl
 		}
 		return HandlerResult{NoEffect: disposition, Note: "Rotation not performed: " + reason}, nil
 	}
-	if ec.Reader == nil {
-		return refuse("authoritative-reader-unavailable")
-	}
-	if ec.Client == nil {
-		return refuse("mutation-client-unavailable")
-	}
-	if req.TargetUID == "" {
-		return refuse("target-uid-unavailable")
-	}
-	if req.PolicyName == "" || req.PolicyUID == "" {
-		return refuse("selecting-policy-identity-unavailable")
-	}
-	if req.MaxGracePeriodSeconds < 1 || req.MaxGracePeriodSeconds > 300 {
-		return refuse("selecting-policy-grace-cap-invalid")
-	}
-	pod := &corev1.Pod{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, pod); err != nil {
-		if apierrors.IsNotFound(err) {
-			return refuse("target-already-gone")
-		}
-		return refuse("target-unavailable")
-	}
-	if string(pod.UID) != req.TargetUID {
-		return refuse("target-uid-mismatch")
+	pod, refusal := readEvictionTarget(ctx, ec, req)
+	if refusal != "" {
+		return refuse(refusal)
 	}
 	verdict := ownership.Check(ctx, ec.Reader, pod)
 	if !verdict.Eligible {
 		return refuse(verdict.Reason)
 	}
-	uid, rv := pod.UID, pod.ResourceVersion
-	if rv == "" {
-		return refuse("target-version-unavailable")
+	grant, refusal := bindPolicyEviction(ctx, ec, req, pod, v1alpha1.ActionRotate)
+	if refusal != "" {
+		return refuse(refusal)
 	}
-	workloadGrace, workloadGraceExplicit := defaultWorkloadGracePeriodSeconds, false
-	if pod.Spec.TerminationGracePeriodSeconds != nil {
-		workloadGrace, workloadGraceExplicit = *pod.Spec.TerminationGracePeriodSeconds, true
-	}
-	if workloadGrace < 0 {
-		return refuse("target-grace-period-invalid")
-	}
-
-	// This is deliberately the final authoritative read before the Eviction. The
-	// Pod's UID/resourceVersion preconditions close its mutation race; Kubernetes
-	// offers no cross-object precondition, so the exact policy epoch is read and
-	// bound as close to the request as the API permits.
-	policy := &v1alpha1.PhorvexPolicy{}
-	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.PolicyName}, policy); err != nil {
-		return refuse("selecting-policy-unavailable")
-	}
-	if string(policy.UID) != req.PolicyUID || policy.UID == "" {
-		return refuse("selecting-policy-uid-mismatch")
-	}
-	if policy.Generation != req.PolicyGeneration {
-		return refuse("selecting-policy-generation-mismatch")
-	}
-	if policy.DeletionTimestamp != nil || policy.Spec.IsDryRun() || !policy.Spec.ActionEnabled(v1alpha1.ActionRotate) {
-		return refuse("selecting-policy-not-authorized")
-	}
-	selector, err := metav1.LabelSelectorAsSelector(&policy.Spec.Selector)
-	if err != nil || selector.Empty() || !selector.Matches(labels.Set(pod.Labels)) {
-		return refuse("selecting-policy-selector-mismatch")
-	}
-	policyCap, err := policy.Spec.EffectiveMaxGracePeriodSeconds()
-	if err != nil {
-		return refuse("selecting-policy-grace-cap-invalid")
-	}
-	if policyCap != req.MaxGracePeriodSeconds {
-		return refuse("selecting-policy-grace-cap-mismatch")
-	}
-	effectiveGrace := workloadGrace
-	if policyCap < effectiveGrace {
-		effectiveGrace = policyCap
-	}
-	eviction := &policyv1.Eviction{
-		ObjectMeta: metav1.ObjectMeta{Namespace: req.Namespace, Name: req.Pod},
-		DeleteOptions: &metav1.DeleteOptions{
-			GracePeriodSeconds: &effectiveGrace,
-			Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &rv},
-		},
-	}
-	if err := ec.Client.SubResource("eviction").Create(ctx, pod, eviction); err != nil {
-		if apierrors.IsTooManyRequests(err) {
-			return refuse("pdb-eviction-admission-refused")
+	if refusal, err := evictBounded(ctx, ec, req, grant, false); refusal != "" || err != nil {
+		if err != nil {
+			return HandlerResult{}, fmt.Errorf("rotate eviction %s/%s: %w", req.Namespace, req.Pod, err)
 		}
-		if apierrors.IsForbidden(err) {
-			return refuse("eviction-permission-denied")
-		}
-		if apierrors.IsConflict(err) {
-			return refuse("target-changed-before-eviction")
-		}
-		if apierrors.IsNotFound(err) {
-			return refuse("target-or-eviction-subresource-unavailable")
-		}
-		return HandlerResult{}, fmt.Errorf("rotate eviction %s/%s: %w", req.Namespace, req.Pod, err)
-	}
-	receipt := &model.GracefulTerminationReceipt{
-		PolicyNamespace: req.Namespace, PolicyName: policy.Name, PolicyUID: string(policy.UID),
-		PolicyGeneration: policy.Generation, PolicyGraceCapSeconds: policyCap,
-		WorkloadGraceSeconds: workloadGrace, WorkloadGraceExplicit: workloadGraceExplicit,
-		EffectiveGracePeriodSeconds: effectiveGrace, PodUID: string(uid), PodResourceVersion: rv,
-		TerminationStatus: "unconfirmed",
+		return refuse(refusal)
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "forward-only",
 		ObjectsTouched:      []string{objRef("Pod", req.Namespace, req.Pod)},
-		GracefulTermination: receipt,
-		Note:                fmt.Sprintf("Pod Eviction admission accepted with policy grace cap %ds and effective grace %ds; old-process termination and replacement unconfirmed", policyCap, effectiveGrace),
+		GracefulTermination: grant.receipt(req.Namespace),
+		Note:                fmt.Sprintf("Pod Eviction admission accepted with policy grace cap %ds and effective grace %ds; old-process termination and replacement unconfirmed", grant.policyCap, grant.effectiveGrace),
 	}, nil
+}
+
+// readEvictionTarget performs the request and identity checks every policy-bounded eviction
+// shares: complete clients and identities, a valid grace cap, and the exact live target.
+func readEvictionTarget(ctx context.Context, ec EnactCtx, req Request) (*corev1.Pod, string) {
+	if ec.Reader == nil {
+		return nil, "authoritative-reader-unavailable"
+	}
+	if ec.Client == nil {
+		return nil, "mutation-client-unavailable"
+	}
+	if req.TargetUID == "" {
+		return nil, "target-uid-unavailable"
+	}
+	if req.PolicyName == "" || req.PolicyUID == "" {
+		return nil, "selecting-policy-identity-unavailable"
+	}
+	if req.MaxGracePeriodSeconds < 1 || req.MaxGracePeriodSeconds > 300 {
+		return nil, "selecting-policy-grace-cap-invalid"
+	}
+	pod := &corev1.Pod{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.Pod}, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, "target-already-gone"
+		}
+		return nil, "target-unavailable"
+	}
+	if string(pod.UID) != req.TargetUID {
+		return nil, "target-uid-mismatch"
+	}
+	return pod, ""
+}
+
+// evictionGrant is the exact policy epoch and grace an eviction is bound to.
+type evictionGrant struct {
+	pod                   *corev1.Pod
+	policy                *v1alpha1.PhorvexPolicy
+	policyCap             int64
+	workloadGrace         int64
+	workloadGraceExplicit bool
+	effectiveGrace        int64
+}
+
+func (g evictionGrant) receipt(namespace string) *model.GracefulTerminationReceipt {
+	return &model.GracefulTerminationReceipt{
+		PolicyNamespace: namespace, PolicyName: g.policy.Name, PolicyUID: string(g.policy.UID),
+		PolicyGeneration: g.policy.Generation, PolicyGraceCapSeconds: g.policyCap,
+		WorkloadGraceSeconds: g.workloadGrace, WorkloadGraceExplicit: g.workloadGraceExplicit,
+		EffectiveGracePeriodSeconds: g.effectiveGrace, PodUID: string(g.pod.UID), PodResourceVersion: g.pod.ResourceVersion,
+		TerminationStatus: "unconfirmed",
+	}
+}
+
+// bindPolicyEviction resolves the workload grace and binds the eviction to the exact
+// selecting policy epoch that enables action. It is deliberately the final authoritative
+// read before the Eviction: the Pod's UID/resourceVersion preconditions close its mutation
+// race; Kubernetes offers no cross-object precondition, so the exact policy epoch is read
+// and bound as close to the request as the API permits.
+func bindPolicyEviction(ctx context.Context, ec EnactCtx, req Request, pod *corev1.Pod, action v1alpha1.ActionType) (evictionGrant, string) {
+	g := evictionGrant{pod: pod, workloadGrace: defaultWorkloadGracePeriodSeconds}
+	if pod.ResourceVersion == "" {
+		return g, "target-version-unavailable"
+	}
+	if pod.Spec.TerminationGracePeriodSeconds != nil {
+		g.workloadGrace, g.workloadGraceExplicit = *pod.Spec.TerminationGracePeriodSeconds, true
+	}
+	if g.workloadGrace < 0 {
+		return g, "target-grace-period-invalid"
+	}
+	policy := &v1alpha1.PhorvexPolicy{}
+	if err := ec.Reader.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: req.PolicyName}, policy); err != nil {
+		return g, "selecting-policy-unavailable"
+	}
+	if string(policy.UID) != req.PolicyUID || policy.UID == "" {
+		return g, "selecting-policy-uid-mismatch"
+	}
+	if policy.Generation != req.PolicyGeneration {
+		return g, "selecting-policy-generation-mismatch"
+	}
+	if policy.DeletionTimestamp != nil || policy.Spec.IsDryRun() || !policy.Spec.ActionEnabled(action) {
+		return g, "selecting-policy-not-authorized"
+	}
+	selector, err := metav1.LabelSelectorAsSelector(&policy.Spec.Selector)
+	if err != nil || selector.Empty() || !selector.Matches(labels.Set(pod.Labels)) {
+		return g, "selecting-policy-selector-mismatch"
+	}
+	policyCap, err := policy.Spec.EffectiveMaxGracePeriodSeconds()
+	if err != nil {
+		return g, "selecting-policy-grace-cap-invalid"
+	}
+	if policyCap != req.MaxGracePeriodSeconds {
+		return g, "selecting-policy-grace-cap-mismatch"
+	}
+	g.policy, g.policyCap, g.effectiveGrace = policy, policyCap, g.workloadGrace
+	if policyCap < g.effectiveGrace {
+		g.effectiveGrace = policyCap
+	}
+	return g, ""
+}
+
+// evictBounded submits the bounded Eviction under the grant's UID/resourceVersion
+// preconditions. dryRun asks the API server to run the full admission (including the
+// PodDisruptionBudget) without deleting, so a caller can prove admission before an
+// irreversible preparatory step. A recognized refusal is returned as a reason; any other
+// failure is an error whose effect is unknown.
+func evictBounded(ctx context.Context, ec EnactCtx, req Request, g evictionGrant, dryRun bool) (string, error) {
+	uid, rv := g.pod.UID, g.pod.ResourceVersion
+	grace := g.effectiveGrace
+	eviction := &policyv1.Eviction{
+		ObjectMeta: metav1.ObjectMeta{Namespace: req.Namespace, Name: req.Pod},
+		DeleteOptions: &metav1.DeleteOptions{
+			GracePeriodSeconds: &grace,
+			Preconditions:      &metav1.Preconditions{UID: &uid, ResourceVersion: &rv},
+		},
+	}
+	var opts []client.SubResourceCreateOption
+	if dryRun {
+		eviction.DeleteOptions.DryRun = []string{metav1.DryRunAll}
+		opts = append(opts, client.DryRunAll)
+	}
+	if err := ec.Client.SubResource("eviction").Create(ctx, g.pod, eviction, opts...); err != nil {
+		switch {
+		case apierrors.IsTooManyRequests(err):
+			return "pdb-eviction-admission-refused", nil
+		case apierrors.IsForbidden(err):
+			return "eviction-permission-denied", nil
+		case apierrors.IsConflict(err):
+			return "target-changed-before-eviction", nil
+		case apierrors.IsNotFound(err):
+			return "target-or-eviction-subresource-unavailable", nil
+		}
+		return "", err
+	}
+	return "", nil
 }
 
 // Quarantine is implemented in quarantine.go and quarantine_plan.go.

@@ -149,6 +149,11 @@ var feasibilityTable = map[model.Action]feasibilityExpectation{
 	model.ActionNodeCordonDrainReplace: {plain: "node-cordon-drain-replace-observation-required:"},
 	model.ActionNetworkIsolate:         {plain: "network-isolate-observation-required:"},
 	model.ActionCredentialRevoke:       {plain: "credential-revoke-observation-required:"},
+	// The stateful rotation family is admitted only under an owner-declared contract observed
+	// on a healthy StatefulSet; a bare pod carries no observation.
+	model.ActionStatefulReplicaRebuild:    {plain: "stateful-rotation-admission:"},
+	model.ActionStatefulSnapshotRotate:    {plain: "stateful-rotation-admission:"},
+	model.ActionStatefulCheckpointHandoff: {plain: "stateful-rotation-admission:"},
 }
 
 // plainView is the otherwise-unconstrained plain workload described on feasibilityExpectation.
@@ -222,6 +227,21 @@ func aiView() *model.WorkloadView {
 // for the Voice output action. Other actions retain the shared AI fixture.
 func aiViewForAction(action model.Action) *model.WorkloadView {
 	v := aiView()
+	if model.IsStatefulRotation(action) {
+		// A Ready member of a healthy 3-replica StatefulSet with quorum headroom whose owner
+		// declares every class; replica-rebuild and snapshot-rotate need its template claim,
+		// checkpoint-handoff needs the volume-less variant.
+		v.Pod.Ready = true
+		v.Pod.StatefulRotation = &model.StatefulRotationObservation{
+			Contract: model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi",
+				CheckpointPort: 8080, CheckpointPath: "/checkpoint", RestorePath: "/restore", RecoverySeconds: 60, ResyncSeconds: 600},
+			OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, Complete: true,
+		}
+		if action != model.ActionStatefulCheckpointHandoff {
+			v.Pod.StatefulRotation.Claims = []model.StatefulClaim{{Name: "data-p", UID: "claim-uid", Bound: true, FromTemplate: true}}
+		}
+		return v
+	}
 	if action == model.ActionVoiceSessionAdmissionEnforce {
 		bound := boundVoiceAdmissionView()
 		v.Pod = bound.Pod
@@ -444,6 +464,8 @@ func TestFeasibilityActionSpecificLaws(t *testing.T) {
 			return "network-isolate-observation-required:"
 		case model.ActionCredentialRevoke:
 			return "credential-revoke-observation-required:"
+		case model.ActionStatefulReplicaRebuild, model.ActionStatefulSnapshotRotate, model.ActionStatefulCheckpointHandoff:
+			return "stateful-rotation-admission:"
 		}
 		return ""
 	}
