@@ -259,11 +259,9 @@ class ConsoleClient:
         return self.request("GET", "/api/catalog")
 
     def launch(self, catalogue_id: str) -> HTTPResponse:
-        return self.request(
-            "POST",
-            "/api/catalog/launch",
-            {"id": catalogue_id, "triggerMode": TRIGGER_MODE, "executionMode": EXECUTION_MODE},
-        )
+        # Modes are server-owned preflight results, not caller-selected launch
+        # fields. The strict terminal checks below bind them independently.
+        return self.request("POST", "/api/catalog/launch", {"id": catalogue_id})
 
     def status(self, run_id: str) -> HTTPResponse:
         return self.request("GET", f"/api/runs/status?id={quote(run_id, safe='')}")
@@ -562,6 +560,10 @@ def evaluate_strict_pass(
         reasons.append("terminal status does not bind the exact run and catalogue IDs")
     if status.get("state") != "done" or status.get("executionKind") != "catalogue-validation":
         reasons.append("run is not a done catalogue-validation terminal")
+    if status.get("triggerMode") != TRIGGER_MODE:
+        reasons.append("terminal status does not bind reactive trigger mode")
+    if status.get("executionMode") != EXECUTION_MODE:
+        reasons.append("terminal status does not bind active execution mode")
     if status.get("outcome") != "DEFENDED":
         reasons.append("Console terminal outcome is not DEFENDED")
     if status.get("unsafeToRetry") is True or status.get("cleanupStatus") != "verified":
@@ -937,8 +939,6 @@ class Driver:
             isinstance(run_id, str)
             and bool(run_id)
             and body.get("catalogueID") == catalogue_id
-            and body.get("triggerMode") == TRIGGER_MODE
-            and body.get("executionMode") == EXECUTION_MODE
         )
         self.ledger.record(
             "launch_response",
@@ -955,7 +955,7 @@ class Driver:
                 catalogue_id,
                 attempt_id,
                 "FAIL",
-                "launch response did not bind the exact ID, reactive trigger mode, and active execution mode",
+                "launch response did not bind the exact catalogue and run IDs",
                 False,
             )
         return self._poll(catalogue_id, self.ledger.attempts(catalogue_id)[-1])

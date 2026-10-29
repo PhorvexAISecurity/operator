@@ -125,10 +125,30 @@ func (r *AttackCatalogAdapterRegistry) Lookup(id string) (AttackCatalogAdapter, 
 
 func newAttackCatalogAdapterRegistry(s *Server, cfg Config) *AttackCatalogAdapterRegistry {
 	registry := NewAttackCatalogAdapterRegistry()
-	// Family integrations add only their reviewed concrete adapters here. A
-	// metadata row never creates an adapter or availability by itself.
-	if err := registry.Register(&identityAttackCatalogAdapter{server: s, cfg: cfg}); err != nil {
+	// AML.T0012 keeps its original adapter. Every other registration comes from
+	// one reviewed exact-ID family factory; metadata rows never synthesize an
+	// adapter or inherit launch authority from a family label.
+	register := func(adapters ...AttackCatalogAdapter) {
+		for _, adapter := range adapters {
+			if err := registry.Register(adapter); err != nil {
+				panic(err)
+			}
+		}
+	}
+	register(&identityAttackCatalogAdapter{server: s, cfg: cfg})
+
+	k8s, err := newK8sCatalogueAdapters(s, cfg)
+	if err != nil {
 		panic(err)
+	}
+	register(k8s...)
+	register(newInfraCatalogueAdapters(s, cfg)...)
+	register(newServingCatalogueAdapters(s)...)
+	for _, factory := range newIdentityCatalogueAdapters() {
+		register(factory.bind(s, cfg))
+	}
+	if len(registry.adapters) != attackcatalog.ExpectedSize {
+		panic(fmt.Errorf("catalogue adapter registry has %d exact IDs, want %d", len(registry.adapters), attackcatalog.ExpectedSize))
 	}
 	return registry
 }

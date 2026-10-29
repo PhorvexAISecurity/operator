@@ -790,7 +790,10 @@ func TestIdentityCatalogueStrictResultRecordAndRuntimeModes(t *testing.T) {
 
 			stateDir := t.TempDir()
 			server := NewServer(Config{Service: ServiceAttacks, StateDir: stateDir})
-			if err := server.attackCatalogAdapters.Register(adapter); err != nil {
+			registry := NewAttackCatalogAdapterRegistry()
+			server.attackCatalogAdapters = registry
+			server.runs.attackCatalogAdapters = registry
+			if err := registry.Register(adapter); err != nil {
 				t.Fatal(err)
 			}
 			out := server.cfg.runOutputPath(run.RunID)

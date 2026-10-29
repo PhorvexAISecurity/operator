@@ -175,8 +175,6 @@ class Scenario:
         return 200, {
             "id": f"run-{len(self.launches)}",
             "catalogueID": body["id"],
-            "triggerMode": body.get("triggerMode"),
-            "executionMode": body.get("executionMode"),
         }
 
     def run_status(self, run_id: str) -> tuple[int, dict]:
@@ -371,8 +369,6 @@ class DriverTest(unittest.TestCase):
             return 200, {
                 "id": "run-wrong",
                 "catalogueID": IDS[1],
-                "triggerMode": body["triggerMode"],
-                "executionMode": body["executionMode"],
             }
 
         scenario.launch_hook = mismatch
@@ -391,8 +387,6 @@ class DriverTest(unittest.TestCase):
             return 200, {
                 "id": run_id,
                 "catalogueID": body["id"],
-                "triggerMode": body["triggerMode"],
-                "executionMode": body["executionMode"],
             }
 
         def run_status(run_id: str, _count: int) -> tuple[int, dict]:
@@ -452,8 +446,6 @@ class DriverTest(unittest.TestCase):
             response={"status": 200, "body": {
                 "id": "run-resumed",
                 "catalogueID": IDS[0],
-                "triggerMode": "reactive",
-                "executionMode": "active",
             }},
         )
         with FakeConsole(scenario) as server:
@@ -502,16 +494,29 @@ class DriverTest(unittest.TestCase):
         self.assertEqual(raw_verdict, "DEFENDED")
         self.assertFalse(result["bindings"]["physicalOracle"])
 
+    def test_terminal_status_requires_separate_server_owned_modes(self) -> None:
+        scenario = Scenario()
+
+        def collapsed_status(run_id: str, _count: int) -> tuple[int, dict]:
+            value = status(run_id, IDS[0])
+            value["executionMode"] = value["triggerMode"]
+            return 200, value
+
+        scenario.status_hook = collapsed_status
+        output = self.root / "collapsed-modes"
+        with FakeConsole(scenario) as server:
+            self.assertEqual(self.invoke(server, output), 2)
+        self.assertEqual(scenario.launches, [{"id": IDS[0]}])
+        result = self.summary(output)["results"][0]
+        self.assertEqual(result["localVerdict"], "FAIL")
+        self.assertIn("active execution mode", result["reason"])
+
     def test_successful_strict_record_and_reports(self) -> None:
         scenario = Scenario()
         output = self.root / "success"
         with FakeConsole(scenario) as server:
             self.assertEqual(self.invoke(server, output), 0)
-        self.assertEqual(scenario.launches, [{
-            "executionMode": "active",
-            "id": IDS[0],
-            "triggerMode": "reactive",
-        }])
+        self.assertEqual(scenario.launches, [{"id": IDS[0]}])
         summary = self.summary(output)
         self.assertTrue(summary["allPassed"])
         result = summary["results"][0]

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -41,17 +42,26 @@ func TestAttackCatalogueRowsExactOrderUniquenessAndAvailability(t *testing.T) {
 		t.Fatal(err)
 	}
 	disabled := (&Config{}).attackCatalogueItems()
-	if len(disabled) != attackcatalog.ExpectedSize || disabled[0].Available || disabled[0].UnavailableReason == "" {
-		t.Fatalf("disabled deployment lost visible honest readiness: %+v", disabled[0])
+	if len(disabled) != attackcatalog.ExpectedSize {
+		t.Fatalf("disabled items=%d, want %d", len(disabled), attackcatalog.ExpectedSize)
+	}
+	for _, item := range disabled {
+		if item.Available || item.UnavailableReason == "" {
+			t.Fatalf("disabled deployment lost visible honest readiness: %+v", item)
+		}
 	}
 	cfg := Config{Service: ServiceAttacks, AttackCatalogEnabled: true, AttackCatalogAuthorizationTenant: "phorvex-test",
 		AttackCatalogIdentityTenant:      "console-identity-test",
 		AttackCatalogIdentityProfilePath: writeAttackCatalogProfile(t), AuditSource: &audittransport.Client{}}
-	items := cfg.attackCatalogueItems()
+	server := &Server{cfg: cfg}
+	registry := newAttackCatalogAdapterRegistry(server, cfg)
+	items := applyAttackCatalogAvailability(cfg.attackCatalogueItems(), registry)
 	if len(items) != attackcatalog.ExpectedSize {
 		t.Fatalf("items=%d, want %d", len(items), attackcatalog.ExpectedSize)
 	}
 	seen := make(map[string]bool, len(items))
+	families := map[string]bool{}
+	available, unavailable := 0, 0
 	for i, item := range items {
 		entry := entries[i]
 		if item.CatalogueOrder != i+1 || item.CatalogueID != entry.ID || item.EntryID != entry.ID ||
@@ -60,17 +70,38 @@ func TestAttackCatalogueRowsExactOrderUniquenessAndAvailability(t *testing.T) {
 			t.Fatalf("row %d changed or duplicated: %+v", i+1, item)
 		}
 		seen[item.CatalogueID] = true
-		if i == 0 {
-			if !item.Available || item.UnavailableReason != "" {
-				t.Fatalf("reviewed first entry is not ready: %+v", item)
-			}
-		} else if item.Available || item.UnavailableReason == "" {
-			t.Fatalf("metadata-only entry %d has dishonest readiness: %+v", i+1, item)
+		families[item.Family] = true
+		adapter, ok := registry.Lookup(item.CatalogueID)
+		if !ok || adapter.CatalogueID() != item.CatalogueID {
+			t.Fatalf("exact registry lookup failed for %q", item.CatalogueID)
 		}
+		if item.Available {
+			available++
+			if item.UnavailableReason != "" || item.Family == string(identityCatalogueAgent) {
+				t.Fatalf("available row has inconsistent readiness: %+v", item)
+			}
+		} else {
+			unavailable++
+			if item.Family != string(identityCatalogueAgent) || item.UnavailableReason != agentActionCatalogueUnavailableReason {
+				t.Fatalf("unexpected unavailable row: %+v", item)
+			}
+		}
+	}
+	if len(seen) != 192 || len(families) != 13 || available != 186 || unavailable != 6 {
+		t.Fatalf("coverage IDs=%d families=%d available=%d unavailable=%d", len(seen), len(families), available, unavailable)
+	}
+	aml, ok := registry.Lookup(attackcatalog.FirstID)
+	if !ok {
+		t.Fatal("AML.T0012 is absent from the integrated registry")
+	}
+	if _, original := aml.(*identityAttackCatalogAdapter); !original {
+		t.Fatalf("AML.T0012 adapter type=%T, want retained original adapter", aml)
 	}
 	mismatch := cfg
 	mismatch.AttackCatalogIdentityTenant = "console-identity-other"
-	if row := mismatch.attackCatalogueItems()[0]; row.Available || row.UnavailableReason == "" {
+	mismatchServer := &Server{cfg: mismatch}
+	mismatchItems := applyAttackCatalogAvailability(mismatch.attackCatalogueItems(), newAttackCatalogAdapterRegistry(mismatchServer, mismatch))
+	if row := mismatchItems[0]; row.Available || row.UnavailableReason == "" {
 		t.Fatalf("profile/tenant mismatch was advertised as ready: %+v", row)
 	}
 }
@@ -229,16 +260,19 @@ func TestAttackCatalogueLaunchAuthorizationAndStrictAllowlist(t *testing.T) {
 	operator := newAuthFixture(t, base, operatorGrant(albSubject("operator"), []string{"phorvex-test"}, []string{defaultTargetID}))
 	installFactory(operator)
 	for name, body := range map[string]string{
-		"unknown ID":        `{"id":"AML.T0012; arbitrary"}`,
-		"unavailable entry": `{"id":"AML.T0024"}`,
-		"client command":    `{"id":"AML.T0012","command":"kubectl get secrets"}`,
-		"client path":       `{"id":"AML.T0012","profile":"/tmp/choice.json"}`,
+		"unknown ID":     `{"id":"AML.T0012; arbitrary"}`,
+		"client command": `{"id":"AML.T0012","command":"kubectl get secrets"}`,
+		"client path":    `{"id":"AML.T0012","profile":"/tmp/choice.json"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := operator.do(operator.albReqAs(t, http.MethodPost, "/api/catalog/launch", body, "operator")).Code; got != http.StatusBadRequest {
 				t.Fatalf("status=%d, want 400", got)
 			}
 		})
+	}
+	unavailable := operator.do(operator.albReqAs(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0053"}`, "operator"))
+	if unavailable.Code != http.StatusBadRequest || !strings.Contains(unavailable.Body.String(), agentActionCatalogueUnavailableReason) {
+		t.Fatalf("unavailable launch status=%d body=%s", unavailable.Code, unavailable.Body.String())
 	}
 	if got := factoryCalls.Load(); got != 0 {
 		t.Fatalf("rejected requests reached launch factory %d times", got)
@@ -358,7 +392,10 @@ func waitCatalogRunTerminal(t *testing.T, server *Server, id string) *RunStatus 
 func launchTestCatalogAdapter(t *testing.T, cfg Config, adapter *testCatalogAdapter) (*authFixture, string) {
 	t.Helper()
 	fixture := newAuthFixture(t, cfg, operatorGrant(albSubject("catalog-adapter-operator"), []string{adapter.tenant}, []string{defaultTargetID}))
-	if err := fixture.srv.attackCatalogAdapters.Register(adapter); err != nil {
+	registry := NewAttackCatalogAdapterRegistry()
+	fixture.srv.attackCatalogAdapters = registry
+	fixture.srv.runs.attackCatalogAdapters = registry
+	if err := registry.Register(adapter); err != nil {
 		t.Fatal(err)
 	}
 	w := fixture.do(fixture.albReqAs(t, http.MethodPost, "/api/catalog/launch", `{"id":"`+adapter.id+`"}`, "catalog-adapter-operator"))
@@ -388,7 +425,7 @@ func TestRegisteredAttackCatalogueAdapterRoutesOneExactIDOnly(t *testing.T) {
 			t.Fatalf("registered exact adapter remained unavailable: %+v", item)
 		}
 		if item.CatalogueID == "AML.T0025" && item.Available {
-			t.Fatalf("metadata-only ID became available: %+v", item)
+			t.Fatalf("unregistered exact ID became available: %+v", item)
 		}
 	}
 	status := waitCatalogRunTerminal(t, fixture.srv, id)
@@ -401,7 +438,7 @@ func TestRegisteredAttackCatalogueAdapterRoutesOneExactIDOnly(t *testing.T) {
 	}
 	w := fixture.do(fixture.albReqAs(t, http.MethodPost, "/api/catalog/launch", `{"id":"`+other+`"}`, "catalog-adapter-operator"))
 	if w.Code != http.StatusBadRequest || adapter.preflightCalls.Load() != 1 || adapter.executeCalls.Load() != 1 {
-		t.Fatalf("metadata-only ID reached registered adapter: status=%d calls=%d/%d", w.Code, adapter.preflightCalls.Load(), adapter.executeCalls.Load())
+		t.Fatalf("unregistered exact ID reached registered adapter: status=%d calls=%d/%d", w.Code, adapter.preflightCalls.Load(), adapter.executeCalls.Load())
 	}
 }
 
@@ -416,6 +453,14 @@ func TestAttackCatalogueRegistryRejectsAliasesAndDuplicates(t *testing.T) {
 	}
 	if err := registry.Register(&testCatalogAdapter{id: "AML.T0024 ", tenant: "phorvex-test"}); err == nil {
 		t.Fatal("whitespace alias registration accepted")
+	}
+	if err := registry.Register(&testCatalogAdapter{id: "UNKNOWN-CATALOGUE-ID", tenant: "phorvex-test"}); err == nil {
+		t.Fatal("unknown catalogue ID registration accepted")
+	}
+	for _, alias := range []string{"AML.T0024 ", "aml.t0024", "AML.T0024/alias"} {
+		if _, ok := registry.Lookup(alias); ok {
+			t.Fatalf("non-exact lookup alias %q accepted", alias)
+		}
 	}
 }
 

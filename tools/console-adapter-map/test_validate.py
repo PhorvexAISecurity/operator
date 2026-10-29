@@ -25,7 +25,11 @@ class ConsoleAdapterMapValidationTest(unittest.TestCase):
         self.assertEqual(192, len(document["mappings"]))
         self.assertEqual(13, len(document["familyProfiles"]))
         self.assertEqual(192, len({item["id"] for item in document["mappings"]}))
-        self.assertEqual(1, sum(item["registrationStatus"] == "eligible" for item in document["mappings"]))
+        self.assertEqual(186, sum(item["registrationStatus"] == "eligible" for item in document["mappings"]))
+        unavailable = [item for item in document["mappings"] if item["registrationStatus"] == "unavailable"]
+        self.assertEqual(6, len(unavailable))
+        self.assertTrue(all(item["family"] == "agent-action" for item in unavailable))
+        self.assertTrue(all(item["unavailableReason"] == MODULE.AGENT_ACTION_UNAVAILABLE_REASON for item in unavailable))
 
     def test_missing_id_fails_closed(self):
         document = self.document()

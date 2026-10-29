@@ -34,7 +34,8 @@ const (
 	credentialRevokeOracle = "credential-revoke-token-rejection-v1"
 	agentActionDenyOracle  = "agent-action-deny-enforcement-v1"
 
-	identityCatalogueCleanupSchema = "phorvex.attack-catalogue-identity-cleanup.v1"
+	identityCatalogueCleanupSchema        = "phorvex.attack-catalogue-identity-cleanup.v1"
+	agentActionCatalogueUnavailableReason = "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
 )
 
 // identityCatalogueProfile is a review pin, not a caller-selected launch
@@ -68,8 +69,8 @@ var agentActionCatalogueIDs = [...]string{
 }
 
 // identityCatalogueAdapterFactory keeps central registry ownership out of this
-// family module. The later integration calls bind with the server/config it
-// already owns, then registers the returned exact-ID adapter.
+// family module. The registry binds each factory with its server/config, then
+// registers the returned exact-ID adapter.
 type identityCatalogueAdapterFactory struct {
 	profile identityCatalogueProfile
 	err     error
@@ -134,7 +135,7 @@ func (factory identityCatalogueAdapterFactory) bind(server *Server, cfg Config) 
 	case identityCatalogueCredential:
 		adapter.binding = &identityCredentialCatalogueBinding{server: server, cfg: cfg}
 	case identityCatalogueAgent:
-		adapter.blocker = "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+		adapter.blocker = agentActionCatalogueUnavailableReason
 	default:
 		adapter.blocker = "catalogue family is not supported by this runtime"
 	}
@@ -231,8 +232,11 @@ func (a *identityFamilyCatalogueAdapter) Availability() AttackCatalogAdapterAvai
 }
 
 func (a *identityFamilyCatalogueAdapter) Destination() (runDestination, error) {
-	if a == nil || a.profileErr != nil || a.binding == nil {
+	if a == nil || a.profileErr != nil {
 		return runDestination{}, errors.New("identity-family catalogue destination is unavailable")
+	}
+	if a.binding == nil {
+		return runDestination{}, errors.New(a.Availability().UnavailableReason)
 	}
 	return a.binding.Destination(a.profile)
 }

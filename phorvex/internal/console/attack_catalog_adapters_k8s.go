@@ -135,8 +135,8 @@ func validateK8sCatalogueBinding(entry attackcatalog.Entry, profile k8sCatalogue
 
 type k8sCatalogueClusterFactory func(k8sCatalogueProfile) (k8sCatalogueCluster, error)
 
-// newK8sCatalogueAdapters constructs the 70 reviewed exact-ID adapters. The
-// central registry deliberately calls this later; metadata alone never invokes it.
+// newK8sCatalogueAdapters constructs the 70 reviewed exact-ID adapters for the
+// central registry. Metadata alone never invokes it.
 func newK8sCatalogueAdapters(s *Server, cfg Config) ([]AttackCatalogAdapter, error) {
 	return newK8sCatalogueAdaptersWithFactory(s, cfg, func(profile k8sCatalogueProfile) (k8sCatalogueCluster, error) {
 		return newKubernetesK8sCatalogueCluster(cfg, profile)

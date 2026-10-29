@@ -54,6 +54,26 @@ without the raw response payload is insufficient.
 See [fixtures/strict-valid.json](fixtures/strict-valid.json) for the complete,
 executable fixture.
 
+## Persisted Console runtime inputs
+
+The verifier also consumes the runtime's durable
+`phorvex.attack-catalogue-run.v1` `catalogue-run.json` envelope directly. Its
+top-level `runID`, `catalogueID`, `triggerMode`, and `executionMode` must exactly
+match the nested `phorvex.attack-catalogue-result.v1` fields. Standalone legacy
+`catalogue-result.json` documents and `/api/runs/evidence` responses remain
+accepted for backward compatibility. Trigger mode maps only to `trigger.mode`;
+execution mode maps only to `policy.mode`.
+
+Native runtime evidence is normalized without upgrading it. The current runtime
+record does not persist the family on the result envelope, signal/decision/receipt
+timestamps, event and target bindings on the decision, a durable receipt ID, the
+audit-ready two-sided observation list, a separate postflight health inventory,
+or raw Prometheus response bodies and hashes. Those fields remain BLOCKED or
+INVALID as appropriate; `validated=true`, `receiptObserved=true`, cleanup flags,
+parsed metric samples, or a `DEFENDED` verdict do not substitute for them. See
+[`persisted-runtime-incomplete.json`](fixtures/persisted-runtime-incomplete.json)
+for the exact native shape and its fail-closed test.
+
 ## Family oracle registry
 
 The v1 registry is deliberately closed for the 192-case catalogue. A new family
@@ -62,9 +82,7 @@ requires a verifier change and tests; an unknown family cannot pass.
 | Family | Oracle kind | Required structured observations |
 | --- | --- | --- |
 | `agent-action` | `app-action-denied-two-sided` | abusive action allowed→blocked; benign action and peer unchanged |
-| `config-object` | `object-restored-two-sided` | target object changed; benign object unchanged |
 | `controller-stop` | `controller-stopped-availability` | target running→stopped; availability true |
-| `controller-stop-kinds` | `controllers-stopped-two-sided` | targets running→stopped; sibling unchanged; availability true |
 | `credential` | `credential-revoked-two-sided` | attacked credential authenticated→denied; benign credential remains authenticated |
 | `datastore` | `datastore-restored-readback` | datastore changed; legitimate read unchanged |
 | `identity-sa-rotate` | `service-account-rotated-credential-replay` | SA UID changed; old credential authenticated→denied; Pod UID unchanged |

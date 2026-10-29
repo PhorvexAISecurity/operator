@@ -177,15 +177,63 @@ FAMILY_IMPLEMENTATIONS = {
     },
 }
 
-# The current Console sources package one exact concrete launch integration.  The
-# family runner implementations above are evidence for profile behavior, but they are
-# not silently treated as in-process Console AttackCatalogAdapter implementations.
-CURRENT_CONSOLE_IMPLEMENTATIONS = {
-    "AML.T0012": [
-        {"path": "phorvex/internal/console/attack_catalog_identity_run.go", "symbol": "attackCatalogueDestination"},
-        {"path": "phorvex/internal/console/attack_catalog_identity_run.go", "symbol": "runAttackCatalogueIdentity"},
-    ],
+# These references prove the packaged Go factory and the central exact-ID registry
+# seam.  The six agent-action rows deliberately have no implementation references:
+# their reviewed metadata exists, but packaging has no immutable runtime fixture.
+REGISTRY_REF = {
+    "path": "phorvex/internal/console/attack_catalog_runtime.go",
+    "symbol": "newAttackCatalogAdapterRegistry",
 }
+CONSOLE_FAMILY_IMPLEMENTATIONS = {
+    family: [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_k8s.go", "symbol": "newK8sCatalogueAdapters"},
+        REGISTRY_REF,
+    ]
+    for family in ("quarantine", "pod-rotate", "controller-stop")
+}
+CONSOLE_FAMILY_IMPLEMENTATIONS.update({
+    family: [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_infra.go", "symbol": "newInfraCatalogueAdapters"},
+        REGISTRY_REF,
+    ]
+    for family in ("network-edge", "datastore", "image", "node-recycle")
+})
+CONSOLE_FAMILY_IMPLEMENTATIONS.update({
+    family: [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_serving.go", "symbol": "newServingCatalogueAdapters"},
+        REGISTRY_REF,
+    ]
+    for family in ("serving-rate", "sensitive-output", "serving-kv")
+})
+CONSOLE_FAMILY_IMPLEMENTATIONS.update({
+    "credential": [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity.go", "symbol": "newIdentityCatalogueAdapters"},
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity_credential.go", "symbol": "identityCredentialCatalogueBinding"},
+        REGISTRY_REF,
+    ],
+    "identity-sa-rotate": [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity.go", "symbol": "newIdentityCatalogueAdapters"},
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity_rotation.go", "symbol": "identityRotationCatalogueBinding"},
+        REGISTRY_REF,
+    ],
+})
+AML_T0012_IMPLEMENTATION = [
+    {"path": "phorvex/internal/console/attack_catalog_identity_run.go", "symbol": "identityAttackCatalogAdapter"},
+    REGISTRY_REF,
+]
+AGENT_ACTION_UNAVAILABLE_REASON = (
+    "agent-action-deny catalogue profile is not installable: packaging has no "
+    "digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, "
+    "or attacks-service fixture RBAC"
+)
+
+
+def console_implementation_refs(identifier: str, family: str) -> list[dict[str, str]]:
+    if family == "agent-action":
+        return []
+    if identifier == "AML.T0012":
+        return copy.deepcopy(AML_T0012_IMPLEMENTATION)
+    return copy.deepcopy(CONSOLE_FAMILY_IMPLEMENTATIONS.get(family, []))
 
 
 class ValidationError(ValueError):
@@ -362,7 +410,7 @@ def build_document() -> dict[str, Any]:
     for entry in entries:
         identifier = entry["id"]
         family = entry["family"]
-        implementation_refs = copy.deepcopy(CURRENT_CONSOLE_IMPLEMENTATIONS.get(identifier, []))
+        implementation_refs = console_implementation_refs(identifier, family)
         implementation_exists = bool(implementation_refs)
         mappings.append({
             "id": identifier,
@@ -379,6 +427,7 @@ def build_document() -> dict[str, Any]:
             "supportingImplementationExists": implementation_exists,
             "supportingImplementationRefs": implementation_refs,
             "registrationStatus": "eligible" if implementation_exists else "unavailable",
+            "unavailableReason": "" if implementation_exists else AGENT_ACTION_UNAVAILABLE_REASON,
         })
     return {
         "schema": SCHEMA,
@@ -535,7 +584,7 @@ def validate_document(document: dict[str, Any]) -> None:
         implementation_exists = item.get("supportingImplementationExists")
         need(type(implementation_exists) is bool and isinstance(implementation_refs, list),
              f"{identifier}: supporting implementation status is incomplete")
-        expected_refs = CURRENT_CONSOLE_IMPLEMENTATIONS.get(identifier, [])
+        expected_refs = console_implementation_refs(identifier, family)
         need(implementation_refs == expected_refs and implementation_exists == bool(expected_refs),
              f"{identifier}: current Console implementation support drift")
         for reference in implementation_refs:
@@ -544,6 +593,9 @@ def validate_document(document: dict[str, Any]) -> None:
         expected_status = "eligible" if implementation_exists else "unavailable"
         need(item.get("registrationStatus") == expected_status,
              f"{identifier}: unavailable support cannot be registration-eligible")
+        expected_reason = "" if implementation_exists else AGENT_ACTION_UNAVAILABLE_REASON
+        need(item.get("unavailableReason") == expected_reason,
+             f"{identifier}: unavailable reason is missing or imprecise")
 
 
 def encoded_document(document: dict[str, Any]) -> bytes:
@@ -569,7 +621,7 @@ def main() -> int:
     validate_document(actual)
     if args.artifact.read_bytes() != wanted:
         raise SystemExit(f"{args.artifact}: mapping artifact is stale; run with --write")
-    print("validated: 192 exact IDs, 13 exact family profiles, 1 registration-eligible, 191 unavailable")
+    print("validated: 192 exact IDs, 13 exact family profiles, 186 registration-eligible, 6 unavailable")
     return 0
 
 

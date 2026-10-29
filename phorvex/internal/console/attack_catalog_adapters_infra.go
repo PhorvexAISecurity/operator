@@ -475,10 +475,8 @@ type infraAttackCatalogAdapter struct {
 	records      func(context.Context) ([]audit.Record, error)
 }
 
-// newInfraCatalogueAdapters returns only the 53 exact reviewed profiles. It is
-// intentionally not called by the central registry in this branch; the later
-// integration commit can register each returned adapter without widening this
-// ownership slice.
+// newInfraCatalogueAdapters returns only the 53 exact reviewed profiles for the
+// central registry without widening this family's ownership slice.
 func newInfraCatalogueAdapters(s *Server, cfg Config) []AttackCatalogAdapter {
 	profiles := infraCatalogueProfiles()
 	adapters := make([]AttackCatalogAdapter, 0, len(profiles))

@@ -1,0 +1,112 @@
+{
+  "schema": "phorvex.attack-catalogue-run.v1",
+  "runID": "run-native-001",
+  "catalogueID": "T1610",
+  "executionMode": "active",
+  "triggerMode": "reactive",
+  "result": {
+    "schema": "phorvex.attack-catalogue-result.v1",
+    "catalogueID": "T1610",
+    "runID": "run-native-001",
+    "visible": true,
+    "available": true,
+    "launched": true,
+    "reactiveOnly": true,
+    "executionMode": "active",
+    "triggerMode": "reactive",
+    "expectedAction": "controller-stop",
+    "startedAt": "2026-10-29T12:00:00Z",
+    "finishedAt": "2026-10-29T12:05:00Z",
+    "signal": {
+      "created": true,
+      "observed": true,
+      "name": "catalogue-event",
+      "uid": "event-001",
+      "creator": "system:serviceaccount:p4:p4-attacks",
+      "targetUID": "pod-old"
+    },
+    "decision": {
+      "observed": true,
+      "id": "decision-001",
+      "selected": true,
+      "feasible": true,
+      "action": "controller-stop",
+      "dispatchOutcome": "emitted"
+    },
+    "actuator": {
+      "receiptObserved": true,
+      "handler": "controller-stop",
+      "objectsTouched": [
+        "Deployment/p4-demo/demo-api"
+      ]
+    },
+    "physicalValidation": {
+      "validated": true,
+      "oracle": "k8s-controller-stop-rotate-eviction.v1",
+      "evidence": {
+        "schema": "phorvex.attack-catalogue-k8s-physical.v1",
+        "catalogueID": "T1610",
+        "family": "controller-stop",
+        "targetUID": "pod-old",
+        "replacementUIDs": [
+          "pod-new"
+        ],
+        "availabilityHeld": true,
+        "siblingsIntact": true,
+        "replacementReady": true,
+        "targetGone": true
+      },
+      "credentialAuthenticatedBefore": false,
+      "credentialAuthenticatedAfter": false,
+      "podRetained": false,
+      "podUID": "pod-old"
+    },
+    "cleanup": {
+      "attempted": true,
+      "eventDeleted": true,
+      "markerDeleted": true,
+      "verified": true,
+      "evidence": {
+        "schema": "phorvex.attack-catalogue-k8s-cleanup.v1",
+        "catalogueID": "T1610",
+        "runID": "run-native-001",
+        "eventAbsent": true,
+        "familyArtifactsAbsent": true,
+        "capacityRecordsAbsent": true,
+        "readyRestored": true
+      }
+    },
+    "verdict": "DEFENDED",
+    "reason": "exact native defensive chain and cleanup passed",
+    "unsafeToRetry": false
+  },
+  "prometheusEvidence": {
+    "schema": "phorvex.prometheus-run-evidence.v1",
+    "runID": "run-native-001",
+    "catalogueID": "T1610",
+    "tenant": "p4-demo",
+    "environment": "staging",
+    "expectedAction": "controller-stop",
+    "executionMode": "active",
+    "triggerMode": "reactive",
+    "observedDecisionModes": [
+      "reactive"
+    ],
+    "status": "COMPLETE",
+    "startedAt": "2026-10-29T12:00:00Z",
+    "baselineAt": "2026-10-29T12:00:01Z",
+    "finishedAt": "2026-10-29T12:05:00Z",
+    "capturedAt": "2026-10-29T12:05:30Z",
+    "rangeStep": "15s",
+    "metrics": [
+      {
+        "key": "selected-action",
+        "query": "sum by (mode) (phorvex_decisions_total)",
+        "baseline": [],
+        "final": [],
+        "range": [],
+        "deltas": []
+      }
+    ]
+  }
+}

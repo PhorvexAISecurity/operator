@@ -22,16 +22,17 @@ rows contain membership and references, not copied implementations.
 
 `supportingImplementationExists` has a narrower meaning than the family profile's
 `referenceImplementation.exists`: it is true only when the current Console source
-contains a concrete exact-ID launch integration. A reviewed Python lane-family
-implementation is useful source evidence, but it is not silently treated as an
-in-process Console adapter.
+contains a concrete exact-ID launch integration wired through the central registry.
+A reviewed Python lane-family implementation is useful source evidence, but it is
+not silently treated as an in-process Console adapter.
 
 Consequently, this source revision has:
 
 - 192 exact mapped IDs in 13 exact families;
 - 13 reference family implementations;
-- 1 exact Console implementation (`AML.T0012`);
-- 191 rows marked `registrationStatus: unavailable`.
+- 186 exact Console implementations marked `registrationStatus: eligible`;
+- 6 `agent-action` rows marked `registrationStatus: unavailable`, each with the
+  precise missing immutable-fixture packaging reason.
 
 There is intentionally no `launchable` field. Runtime availability also depends on
 server-owned configuration and preflight; the static map cannot assert it.
@@ -48,27 +49,25 @@ execution, but active execution does not imply either trigger posture.
 
 ## Core registry seam
 
-The in-progress core registry was inspected at commit
-`a2e69b3b44c6c5ac40072310bea2c2bf43b7c3a7` on
-`farm/catalog-core-runtime`; this mapping does not modify or replace that interface.
-That revision defines `console.AttackCatalogAdapterRegistry.Register` over exact-ID
-`console.AttackCatalogAdapter` instances. The adapter owns `CatalogueID`,
+The core registry defines `console.AttackCatalogAdapterRegistry.Register` over
+exact-ID `console.AttackCatalogAdapter` instances. The adapter owns `CatalogueID`,
 `Availability`, fixed `Destination`, `Preflight`, bounded `Execute`, exact `Cleanup`,
 `ValidateDefended`, and `DefendedReason`; shared runtime code retains authorization,
 admission, persistence, evidence, cleanup gating, and verdict ownership.
 
-The small integration step is therefore:
+The integrated registration contract is:
 
 1. Look up one exact mapping row; never normalize or alias its ID.
 2. Resolve its family profile to a concrete adapter implementation.
 3. Register an exact-ID adapter only when `registrationStatus` is `eligible` and
    the concrete implementation reference still exists.
-4. Leave all other catalogue rows visible but unavailable. Metadata membership or
-   a family reference alone must never create runtime availability.
+4. Keep the six agent-action rows visible but unavailable with their immutable
+   packaging blocker. Metadata membership or a family reference alone must never
+   create runtime availability.
 
-The artifact deliberately does not guess a loader, constructor, or factory API for
-the core branch. A family implementation may be shared internally, but every object
-passed to the registry must retain the exact catalogue ID required by the registry.
+A family implementation may be shared internally, but every object passed to the
+registry retains the exact catalogue ID required by the registry. Static eligibility
+does not bypass deployment configuration or launch-time preflight.
 
 ## Validation
 
@@ -89,14 +88,8 @@ The validator pins the exact family distribution and rejects missing, duplicate,
 unknown IDs; family/source drift; incomplete stage references; missing implementation
 evidence; unsupported registration; conflated modes; and any static launchable claim.
 
-## Current blockers
+## Current blocker
 
-- The current Console source proves an exact launch integration only for
-  `AML.T0012`. The other 191 rows remain unavailable until concrete exact-ID Console
-  adapters implement the reviewed family contracts and are added through the core
-  registry seam.
-- The 10 `controller-stop` catalogue rows expect the native `controller-stop`
-  decision action, while the current lane reference `ControllerStopFamily` inherits
-  `RotateFamily` and observes `rotate`. The repository now contains a native
-  `controller-stop` model/actuator, but the old lane reference does not by itself
-  prove the Console contract for those rows.
+The six `agent-action` rows remain unavailable because packaging has no
+digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or
+attacks-service fixture RBAC. The registry rejects launch for those exact IDs.

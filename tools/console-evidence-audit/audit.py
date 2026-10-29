@@ -25,6 +25,9 @@ PROMETHEUS_SCHEMA = "phorvex.console-evidence-audit.prometheus.v1"
 VERDICT_SCHEMA = "phorvex.console-evidence-audit.verdict.v1"
 SUMMARY_SCHEMA = "phorvex.console-evidence-audit.summary.v1"
 SCREENSHOT_SCHEMA = "phorvex.console-evidence-audit.screenshot-bindings.v1"
+RUN_RECORD_SCHEMA = "phorvex.attack-catalogue-run.v1"
+RESULT_SCHEMA = "phorvex.attack-catalogue-result.v1"
+NATIVE_PROMETHEUS_SCHEMA = "phorvex.prometheus-run-evidence.v1"
 
 STATUS_ORDER = {"PASS": 0, "BLOCKED": 1, "FAIL": 2, "INVALID": 3}
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -41,22 +44,10 @@ ORACLE_SPECS: dict[str, tuple[str, dict[str, Any]]] = {
             "peer_unchanged": ("equal",),
         },
     ),
-    "config-object": (
-        "object-restored-two-sided",
-        {"target_object_changed": ("different",), "benign_object_unchanged": ("equal",)},
-    ),
     "controller-stop": (
         "controller-stopped-availability",
         {
             "target_controller_stopped": ("transition", "running", "stopped"),
-            "availability_preserved": ("after_true",),
-        },
-    ),
-    "controller-stop-kinds": (
-        "controllers-stopped-two-sided",
-        {
-            "target_controllers_stopped": ("transition", "running", "stopped"),
-            "sibling_controller_unchanged": ("equal",),
             "availability_preserved": ("after_true",),
         },
     ),
@@ -741,9 +732,11 @@ def deep_merge(target: dict[str, Any], incoming: dict[str, Any], path: str = "")
 
 
 def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
-    result = document.get("attackCatalogueResult") or {}
+    result = document.get("attackCatalogueResult") or document.get("result") or {}
     run_id = result.get("runID") or document.get("id") or ""
-    catalogue_id = result.get("catalogueID") or ""
+    catalogue_id = result.get("catalogueID") or document.get("catalogueID") or ""
+    trigger_mode = result.get("triggerMode") or document.get("triggerMode")
+    execution_mode = result.get("executionMode") or document.get("executionMode")
     signal = result.get("signal") or {}
     decision = result.get("decision") or {}
     actuator = result.get("actuator") or {}
@@ -766,13 +759,13 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "catalogue_id": catalogue_id,
             "run_id": run_id,
             "evidence_kind": "runtime-config",
-            "mode": "reactive" if result.get("reactiveOnly") is True else None,
+            "mode": trigger_mode,
         },
         "policy": {
             "catalogue_id": catalogue_id,
             "run_id": run_id,
             "evidence_kind": "runtime-config",
-            "mode": result.get("policyMode"),
+            "mode": execution_mode,
         },
         "signal": {
             "catalogue_id": catalogue_id,
@@ -805,7 +798,7 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "receipt_id": actuator.get("receiptID"),
             "status": actuator.get("status"),
             "accepted_at": actuator.get("acceptedAt"),
-            "action": actuator.get("action"),
+            "action": actuator.get("handler"),
         },
         "oracle": {
             "catalogue_id": catalogue_id,
@@ -813,18 +806,52 @@ def normalize_console_run(document: dict[str, Any]) -> dict[str, Any]:
             "evidence_kind": "physical-observation",
             "family": result.get("family"),
             "kind": physical.get("kind"),
+            "native_kind": physical.get("oracle"),
             "passed": physical.get("validated"),
             "observed_at": physical.get("observedAt"),
             "observations": physical.get("observations"),
+            "native_evidence": physical.get("evidence"),
         },
         # Console cleanup is not postflight health.  It is deliberately retained
         # only as a diagnostic extension and cannot satisfy postflight_clean.
         "console_cleanup": cleanup,
     }
+    # Preserve the distinction between an absent native field (BLOCKED) and an
+    # explicitly malformed/null field (INVALID).
+    for normalized, native, fields in (
+        (record["signal"], signal, {"created_at": "createdAt", "observed_at": "observedAt"}),
+        (record["decision"], decision, {
+            "event_uid": "eventUID", "target_uid": "targetUID", "observed_at": "observedAt",
+        }),
+        (record["actuator"], actuator, {
+            "decision_id": "decisionID", "receipt_id": "receiptID", "status": "status",
+            "accepted_at": "acceptedAt",
+        }),
+        (record["oracle"], physical, {
+            "kind": "kind", "observed_at": "observedAt", "observations": "observations",
+            "native_evidence": "evidence",
+        }),
+    ):
+        for normalized_key, native_key in fields.items():
+            if native_key not in native:
+                normalized.pop(normalized_key, None)
+    conflicts = []
+    if document.get("schema") == RUN_RECORD_SCHEMA:
+        if document.get("runID") != run_id:
+            conflicts.append("runID")
+        if document.get("catalogueID") != catalogue_id:
+            conflicts.append("catalogueID")
+        if document.get("triggerMode") != result.get("triggerMode"):
+            conflicts.append("triggerMode")
+        if document.get("executionMode") != result.get("executionMode"):
+            conflicts.append("executionMode")
+    if conflicts:
+        record["_merge_conflicts"] = [f"native run record {field}" for field in conflicts]
     if isinstance(document.get("postflight"), dict):
         record["postflight"] = document["postflight"]
-    if isinstance(document.get("prometheusEvidence"), dict):
-        record["prometheus"] = normalize_native_prometheus(document["prometheusEvidence"])
+    prometheus = document.get("prometheusEvidence")
+    if isinstance(prometheus, dict):
+        record["prometheus"] = normalize_native_prometheus(prometheus)
     return record
 
 
@@ -920,10 +947,20 @@ def extract_document(
         companion["_source_indices"] = [source_index]
         companions.append(companion)
         return records, expected, companions
-    if schema == "phorvex.prometheus-run-evidence.v1":
+    if schema == NATIVE_PROMETHEUS_SCHEMA:
         companion = normalize_native_prometheus(document)
         companion["_source_indices"] = [source_index]
         companions.append(companion)
+        return records, expected, companions
+    if schema == RUN_RECORD_SCHEMA:
+        record = normalize_console_run(document)
+        record["_source_indices"] = [source_index]
+        records.append(record)
+        return records, expected, companions
+    if schema == RESULT_SCHEMA:
+        record = normalize_console_run({"attackCatalogueResult": document})
+        record["_source_indices"] = [source_index]
+        records.append(record)
         return records, expected, companions
     if isinstance(document.get("attackCatalogueResult"), dict):
         record = normalize_console_run(document)

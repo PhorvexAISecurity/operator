@@ -6,12 +6,13 @@ requests, but it has no Kubernetes client, mutation verb, case launcher, or
 deployment path.
 
 The verifier accepts the strict contract in [CONTRACT.md](CONTRACT.md). It also
-recognizes the existing Console `RunEvidence`/`AttackCatalogueResult`, native
+recognizes the durable `phorvex.attack-catalogue-run.v1` record, standalone
+`phorvex.attack-catalogue-result.v1`, the Console evidence API wrapper, native
 `phorvex.prometheus-run-evidence.v1`, and `phvx-attack` evidence shapes. Those
-legacy adapters never infer missing correlation or promote cleanup, emitted
-dispatches, summary booleans, or screenshots into proof. Consequently, a
-legacy export remains `BLOCKED` or `INVALID` until an audit-ready producer adds
-the required fields.
+native/legacy adapters never infer missing correlation or promote cleanup,
+emitted dispatches, summary booleans, parsed metrics, or screenshots into proof.
+Consequently, a native runtime export remains `BLOCKED` or `INVALID` until an
+audit-ready producer adds the required fields.
 
 ## Run
 
@@ -81,4 +82,6 @@ python3 -m unittest discover -s tools/console-evidence-audit/tests -v
 
 The suite is hermetic and uses only the Python standard library. The strict
 positive fixture is `fixtures/strict-valid.json`; negative cases mutate it one
-proof boundary at a time.
+proof boundary at a time. `fixtures/persisted-runtime-incomplete.json` pins the
+actual durable runtime shape and proves it is consumed without being upgraded to
+PASS when audit-only evidence is absent.

@@ -22,6 +22,10 @@ def valid_record() -> dict:
     return bundle["records"][0]
 
 
+def native_runtime_record() -> dict:
+    return json.loads((ROOT / "fixtures" / "persisted-runtime-incomplete.json").read_text())
+
+
 def check(verdict: dict, name: str) -> dict:
     return next(entry for entry in verdict["checks"] if entry["name"] == name)
 
@@ -35,6 +39,17 @@ class StrictEvidenceTests(unittest.TestCase):
 
         self.assertEqual(verdict["verdict"], "PASS")
         self.assertTrue(all(entry["status"] == "PASS" for entry in verdict["checks"]))
+
+    def test_oracle_registry_is_the_exact_13_catalogue_families(self) -> None:
+        self.assertEqual(
+            set(audit.ORACLE_SPECS),
+            {
+                "agent-action", "controller-stop", "credential", "datastore",
+                "identity-sa-rotate", "image", "network-edge", "node-recycle",
+                "pod-rotate", "quarantine", "sensitive-output", "serving-kv",
+                "serving-rate",
+            },
+        )
 
     def test_duplicate_json_keys_are_rejected_before_evaluation(self) -> None:
         with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
@@ -204,6 +219,35 @@ class StrictEvidenceTests(unittest.TestCase):
 
         self.assertNotEqual(verdict["verdict"], "PASS")
         self.assertEqual(check(verdict, "postflight_clean")["status"], "BLOCKED")
+
+    def test_persisted_runtime_record_uses_actual_modes_and_stays_fail_closed(self) -> None:
+        records, expected, companions = audit.extract_document(native_runtime_record(), 0)
+        self.assertFalse(expected)
+        self.assertFalse(companions)
+        self.assertEqual(len(records), 1)
+        record = records[0]
+        self.assertEqual(record["trigger"]["mode"], "reactive")
+        self.assertEqual(record["policy"]["mode"], "active")
+        self.assertEqual(record["actuator"]["action"], "controller-stop")
+        self.assertEqual(record["oracle"]["native_kind"], "k8s-controller-stop-rotate-eviction.v1")
+
+        verdict = self.verdict(record)
+
+        self.assertNotEqual(verdict["verdict"], "PASS")
+        self.assertEqual(check(verdict, "fresh_signal")["status"], "BLOCKED")
+        self.assertEqual(check(verdict, "accepted_actuator_receipt")["status"], "BLOCKED")
+        self.assertEqual(check(verdict, "prometheus_evidence")["status"], "BLOCKED")
+        self.assertEqual(check(verdict, "postflight_clean")["status"], "BLOCKED")
+
+    def test_persisted_runtime_mode_disagreement_is_invalid(self) -> None:
+        document = native_runtime_record()
+        document["result"]["executionMode"] = "dryRun"
+        records, _, _ = audit.extract_document(document, 0)
+
+        verdict = self.verdict(records[0])
+
+        self.assertEqual(check(verdict, "identity")["status"], "INVALID")
+        self.assertIn("executionMode", check(verdict, "identity")["reason"])
 
 
 class ReportTests(unittest.TestCase):

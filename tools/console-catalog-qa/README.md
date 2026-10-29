@@ -38,7 +38,7 @@ python3 tools/console-catalog-qa/console_catalog_qa.py \
 
 `--ids-file FILE` accepts one exact ID per line; blank lines and lines beginning
 with `#` are ignored. `--dry-run` still authenticates, checks repository/API
-parity, availability, and modes, but sends no mutation requests.
+parity, availability, and reactive compatibility, but sends no mutation requests.
 
 ## Resume, retry, and cancellation
 
@@ -81,25 +81,19 @@ HTTP success, event creation, `dispatchOutcome=emitted`, or even a Console
 The Console's raw verdict is retained unchanged. The driver adds a separate
 `localVerdict` and a list of failed bindings.
 
-## Runtime integration dependency
+## Runtime API contract
 
-The driver sends the launch body below and requires those mode fields to be
-echoed by launch and persisted in both typed Console and Prometheus terminal
-evidence:
+The driver sends only the exact ID in the launch body:
 
 ```json
-{"id":"AML.T0012","triggerMode":"reactive","executionMode":"active"}
+{"id":"AML.T0012"}
 ```
 
-At the source revision where this driver was added, the core endpoint accepts
-only `{"id":"…"}`, the typed result exposes `reactiveOnly` but no independent
-`executionMode`, and only `AML.T0012` has a reviewed server-side adapter. That
-runtime will therefore fail closed rather than produce a local PASS. Core Console
-runtime work must add and durably bind the two mode fields (without weakening its
-existing per-ID availability and oracle checks) before this driver can validate
-deployed cases. Adding more available IDs likewise remains a core runtime and
-reviewed-adapter responsibility, not something this operator tool infers from
-catalogue metadata.
+Trigger and execution modes are server-owned values resolved by adapter preflight,
+so callers cannot select or override them. The launch response binds only the new
+run ID and exact catalogue ID. The driver then requires separate `triggerMode` and
+`executionMode` fields in terminal status, the typed catalogue result, and
+Prometheus evidence. Missing, conflated, or inconsistent modes fail closed.
 
 ## Tests
 
