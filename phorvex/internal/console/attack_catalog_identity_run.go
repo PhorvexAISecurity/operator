@@ -262,8 +262,14 @@ func (s *Server) runAttackCatalogueIdentity(ctx context.Context, runID string, e
 				observed, decision, actuator := identityCatalogueDecision(row, fixture, signal)
 				if observed {
 					result.Signal.Observed = true
-					result.Decision = decision
-					result.Actuator = actuator
+					// The event remains visible for several manager ticks. Once the exact
+					// actuation receipt has been observed, a later event-bound noop is only
+					// the expected post-defense steady state; it must not erase the receipt
+					// that physically changed the fixture.
+					if !result.Actuator.ReceiptObserved || actuator.ReceiptObserved {
+						result.Decision = decision
+						result.Actuator = actuator
+					}
 				}
 			}
 		}

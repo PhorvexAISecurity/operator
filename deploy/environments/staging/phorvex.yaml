@@ -54,7 +54,7 @@ phorvex:
       namespaceUID: fe759ca8-6039-4899-be8c-14e45b0b0613
       policyName: console-id-fixture
       policyUID: ac3a6044-a88f-42b0-abe0-fc5a0fbdadcc
-      policyGeneration: 1
+      policyGeneration: 2
       eksCluster: phorvex-dev-eks
       awsRegion: us-east-2
   # Admission webhooks and policies are cluster-wide: staging's would also admit
