@@ -374,8 +374,8 @@ func (a *testCatalogAdapter) Execute(_ context.Context, run AttackCatalogRunCont
 	if run.CatalogueID != a.id {
 		return AttackCatalogObservation{}, errors.New("test adapter received a substituted ID")
 	}
-	observedAt := time.Now().UTC().Add(-time.Millisecond)
-	createdAt := observedAt.Add(-time.Millisecond)
+	createdAt := time.Now().UTC()
+	observedAt := createdAt
 	return AttackCatalogObservation{MutationStarted: true, Launched: true, DefensiveChainComplete: true,
 		Signal: AttackCatalogSignalResult{Created: true, Observed: true, Name: "test-signal", UID: "test-signal-uid", Creator: "test-creator", TargetUID: "test-target-uid",
 			CreatedAt: attackCatalogTime(createdAt), ObservedAt: attackCatalogTime(observedAt)},
@@ -462,7 +462,12 @@ func TestRegisteredAttackCatalogueAdapterRoutesOneExactIDOnly(t *testing.T) {
 	if err != nil || status.State != "partial" || result == nil || result.Verdict != "INCONCLUSIVE" ||
 		!strings.Contains(result.Reason, "raw Prometheus evidence is not enabled") ||
 		adapter.preflightCalls.Load() != 1 || adapter.executeCalls.Load() != 1 || adapter.cleanupCalls.Load() != 2 {
-		t.Fatalf("exact adapter run status=%+v calls=%d/%d/%d", status, adapter.preflightCalls.Load(), adapter.executeCalls.Load(), adapter.cleanupCalls.Load())
+		var defendedErr error
+		if result != nil {
+			defendedErr = result.defendedRequirements(adapter)
+		}
+		t.Fatalf("exact adapter run status=%+v defended=%v calls=%d/%d/%d", status, defendedErr,
+			adapter.preflightCalls.Load(), adapter.executeCalls.Load(), adapter.cleanupCalls.Load())
 	}
 	incompleteRecord, recordErr := fixture.srv.runs.AttackCatalogRunRecord(id)
 	if recordErr != nil || incompleteRecord == nil || incompleteRecord.Result.Verdict != "INCONCLUSIVE" {
