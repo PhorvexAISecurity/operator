@@ -32,23 +32,21 @@ class AttackCatalogChartTests(unittest.TestCase):
         for path in defaults:
             with self.subTest(path=path):
                 values = yaml.safe_load(path.read_text())["phorvex"]
-                self.assertEqual(values["console"]["attackCatalog"], {
-                    "enabled": False,
-                    "authorizationTenant": "",
-                    "agentAction": {
-                        "enabled": False,
-                        "namespace": "p6-demo",
-                        "image": "",
-                    },
-                    "prometheusEvidence": {"enabled": False},
-                })
+                catalog = values["console"]["attackCatalog"]
+                self.assertFalse(catalog["enabled"])
+                self.assertEqual(catalog["authorizationTenant"], "")
+                self.assertFalse(catalog["familyFixtures"]["enabled"])
+                self.assertEqual(catalog["familyFixtures"]["profile"], "")
+                self.assertFalse(catalog["agentAction"]["enabled"])
+                self.assertEqual(catalog["agentAction"]["namespace"], "p6-demo")
+                self.assertFalse(catalog["prometheusEvidence"]["enabled"])
 
         staging = yaml.safe_load((ROOT / "deploy/environments/staging/phorvex.yaml").read_text())["phorvex"]
-        self.assertEqual(staging["console"]["attackCatalog"], {
-            "enabled": True,
-            "authorizationTenant": "phorvex-staging-demo",
-            "prometheusEvidence": {"enabled": True},
-        })
+        catalog = staging["console"]["attackCatalog"]
+        self.assertFalse(catalog["enabled"])
+        self.assertFalse(catalog["familyFixtures"]["enabled"])
+        self.assertFalse(catalog["agentAction"]["enabled"])
+        self.assertFalse(catalog["prometheusEvidence"]["enabled"])
         self.assertTrue(staging["identityRotate"]["enabled"])
         self.assertEqual(staging["identityRotate"]["targetNamespace"], "console-identity-shared")
         self.assertEqual(staging["identityRotate"]["serviceAccountName"], "console-id-fixture")
@@ -104,7 +102,7 @@ class AttackCatalogChartTests(unittest.TestCase):
     def _agent_values(image):
         return {
             "phorvex": {
-                "agentActionDeny": {"enabled": True},
+                "agentActionDeny": {"enabled": True, "namespaces": ["p6-demo"]},
                 "policyNamespaces": ["phorvex-staging-demo", "console-identity-shared", "p6-demo"],
                 "actuatorNamespaces": ["phorvex-staging-demo", "console-identity-shared", "p6-demo"],
                 "trustedDetectors": ["p6/p6-attacks"],
@@ -113,6 +111,11 @@ class AttackCatalogChartTests(unittest.TestCase):
                     "attackCatalog": {
                         "enabled": True,
                         "authorizationTenant": "phorvex-staging-demo",
+                        "familyFixtures": {
+                            "enabled": True,
+                            "profile": "agent-action",
+                            "cleanupPolicy": "Delete",
+                        },
                         "agentAction": {"enabled": True, "namespace": "p6-demo", "image": image},
                         "prometheusEvidence": {"enabled": False},
                     },

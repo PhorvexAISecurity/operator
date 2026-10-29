@@ -124,9 +124,9 @@ rules:
   resources: ["tokenreviews"]
   verbs: ["create"]
 {{- end }}
-{{- if $agentActionCatalog }}
-# Reviews grant no authority; they let preflight prove the fixed attacks,
-# manager, sensor, and actuator identities have the exact installed grants.
+{{- if $attackCatalog }}
+# Reviews grant no authority; exact adapters use them only to prove the fixed
+# attacks, manager, sensor, and actuator identities have the installed grants.
 - apiGroups: ["authorization.k8s.io"]
   resources: ["selfsubjectaccessreviews", "subjectaccessreviews"]
   verbs: ["create"]

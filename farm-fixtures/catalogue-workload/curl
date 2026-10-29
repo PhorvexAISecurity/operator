@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+import ssl
+import sys
+import urllib.request
+
+
+def main(argv):
+    insecure = "-k" in argv
+    urls = [arg for arg in argv if arg.startswith("http://") or arg.startswith("https://")]
+    if len(urls) != 1:
+        return 2
+    context = ssl._create_unverified_context() if insecure else ssl.create_default_context()
+    with urllib.request.urlopen(urls[0], timeout=4, context=context) as response:
+        response.read(65536)
+        return 0 if 200 <= response.status < 500 else 22
+
+
+try:
+    raise SystemExit(main(sys.argv[1:]))
+except Exception:
+    raise SystemExit(7)

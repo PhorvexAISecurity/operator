@@ -1,14 +1,14 @@
 # Immutable agent-sim fixture
 
-Build from the repository root so the Dockerfile's inputs are fixed:
+Build a network-isolated local image from the repository root so the Dockerfile,
+platform, timestamps, provenance and SBOM inputs are fixed:
 
 ```sh
-docker build -f farm-fixtures/agentsim/Dockerfile -t REGISTRY/agent-sim:build .
-docker push REGISTRY/agent-sim:build
-docker inspect --format='{{index .RepoDigests 0}}' REGISTRY/agent-sim:build
+tools/build-agentsim.sh phorvex/agentsim:release-check
 ```
 
-Supply the resulting `REGISTRY/agent-sim@sha256:...` to
+The reviewed release process may publish that local image later. Supply
+the registry's resulting `REGISTRY/agent-sim@sha256:...` manifest reference to
 `phorvex.console.attackCatalog.agentAction.image`. The chart rejects tags and
 does not render this fixture until an immutable digest is supplied. Both build
 stages are digest-pinned; the final runtime is non-root and contains only the

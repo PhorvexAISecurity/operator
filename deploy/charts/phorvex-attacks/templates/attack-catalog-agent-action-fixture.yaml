@@ -2,8 +2,19 @@
 {{- $agent := dig "console" "attackCatalog" "agentAction" (dict "enabled" false) $v -}}
 {{- if dig "enabled" false $agent -}}
 {{- if not (dig "console" "attackCatalog" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction.enabled requires console.attackCatalog.enabled" }}{{- end }}
+{{- if not (dig "console" "attackCatalog" "familyFixtures" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction.enabled requires familyFixtures.enabled" }}{{- end }}
+{{- if ne (dig "console" "attackCatalog" "familyFixtures" "profile" "" $v) "agent-action" }}{{- fail "console.attackCatalog.agentAction.enabled requires the agent-action family profile" }}{{- end }}
 {{- if not (dig "agentActionDeny" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction.enabled requires agentActionDeny.enabled" }}{{- end }}
+{{- $denyNamespaces := dig "agentActionDeny" "namespaces" (list) $v -}}
+{{- if or (ne (len $denyNamespaces) 1) (ne (first $denyNamespaces) "p6-demo") }}{{- fail "console.attackCatalog.agentAction requires agentActionDeny.namespaces=[p6-demo]" }}{{- end }}
 {{- if not (has (dig "actuator" "" $v) (list "native" "hybrid")) }}{{- fail "console.attackCatalog.agentAction.enabled requires native or hybrid actuator" }}{{- end }}
+{{- if not (dig "audit" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction requires authenticated audit access" }}{{- end }}
+{{- if not (dig "audit" "persistence" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction requires persistent audit history" }}{{- end }}
+{{- $audit := dig "console" "auditTransport" (dict) $v -}}
+{{- $_ := required "console.auditTransport.serverSecretName is required for agent-action" (dig "serverSecretName" "" $audit) -}}
+{{- $_ = required "console.auditTransport.clientSecretName is required for agent-action" (dig "clientSecretName" "" $audit) -}}
+{{- $_ = required "console.auditTransport.serverDNSName is required for agent-action" (dig "serverDNSName" "" $audit) -}}
+{{- $_ = required "console.auditTransport.clientDNSName is required for agent-action" (dig "clientDNSName" "" $audit) -}}
 {{- $namespace := required "console.attackCatalog.agentAction.namespace is required" (dig "namespace" "" $agent) -}}
 {{- if ne $namespace "p6-demo" }}{{- fail "console.attackCatalog.agentAction.namespace must be p6-demo" }}{{- end }}
 {{- if not (has $namespace (dig "policyNamespaces" (list) $v)) }}{{- fail "console.attackCatalog.agentAction requires p6-demo in policyNamespaces" }}{{- end }}
@@ -23,22 +34,14 @@
 {{- end -}}
 {{- if not $trusted }}{{- fail (printf "console.attackCatalog.agentAction requires exact attacks creator %s/%s in trustedDetectors" .Release.Namespace $attacksSA) }}{{- end }}
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: p6-demo
-  labels:
-    phorvex.ai/attack-catalog-agent-action: "true"
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/warn: restricted
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: agent-sim
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 automountServiceAccountToken: false
 ---
 apiVersion: v1
@@ -48,6 +51,8 @@ metadata:
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 data:
   denied.json: '{"denied_agent_actions":[]}'
 ---
@@ -59,6 +64,8 @@ metadata:
   labels:
     app: agent-sim
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 spec:
   replicas: 2
   selector:
@@ -120,6 +127,8 @@ metadata:
   labels:
     app: agent-sim
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 spec:
   selector:
     app: agent-sim
@@ -135,6 +144,8 @@ metadata:
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 spec:
   minAvailable: 1
   selector:
@@ -148,6 +159,8 @@ metadata:
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 spec:
   tenant: p6-demo
   mode: active
@@ -193,6 +206,8 @@ metadata:
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 rules:
 - apiGroups: [""]
   resources: ["pods"]
@@ -228,6 +243,8 @@ metadata:
   namespace: p6-demo
   labels:
     phorvex.ai/attack-catalog-agent-action: "true"
+    phorvex.ai/catalogue-fixture-profile: agent-action
+    phorvex.ai/cleanup-policy: Delete
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

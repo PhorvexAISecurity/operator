@@ -36,6 +36,16 @@ phorvex:
   # namespace, so its kill switch is off and it rotates and quarantines demo-api.
   actuator: native
   actuatorNamespaces: [phorvex-staging-demo, console-identity-shared]
+  # Exact catalogue profiles extend these three namespace lists in one reviewed
+  # values overlay. No p1-p6 lane is authorized by this base configuration.
+  agentActionDeny:
+    enabled: false
+    namespaces: []
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
+    configMapNames: []
   globalKillSwitch: false
 
   # LIGHT identity-rotate (actuator/handlers_k8s.go, identity_rotation.go): the
@@ -110,10 +120,26 @@ phorvex:
     # identity-rotate fixture's shared namespace (phorvex.identityRotate).
     attackNamespaces: [phorvex-staging-demo, console-identity-shared]
     attackCatalog:
-      enabled: true
-      authorizationTenant: phorvex-staging-demo
+      # A reviewed family overlay enables exactly one of the 13 profiles. Keeping
+      # this off makes all 192 exact adapters unavailable in base staging.
+      enabled: false
+      authorizationTenant: ""
+      familyFixtures:
+        enabled: false
+        profile: ""
+        cleanupPolicy: Delete
+        images:
+          workload: ""
+          phorvex: ""
+          guardrail: ""
+          python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
+          kwok: registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0
+      agentAction:
+        enabled: false
+        namespace: p6-demo
+        image: ""
       prometheusEvidence:
-        enabled: true
+        enabled: false
     state:
       persistence:
         storageClass: gp2-csi

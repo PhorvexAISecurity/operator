@@ -1,0 +1,864 @@
+{{- $v := .Values.phorvex -}}
+{{- $fixture := dig "console" "attackCatalog" "familyFixtures" (dict "enabled" false) $v -}}
+{{- if dig "enabled" false $fixture -}}
+{{- if not (dig "console" "attackCatalog" "enabled" false $v) }}{{- fail "familyFixtures.enabled requires console.attackCatalog.enabled" }}{{- end }}
+{{- if not (has (dig "actuator" "" $v) (list "native" "hybrid")) }}{{- fail "family fixtures require native or hybrid actuator" }}{{- end }}
+{{- $family := required "familyFixtures.profile must select exactly one reviewed family" (dig "profile" "" $fixture) -}}
+{{- $families := list "agent-action" "controller-stop" "credential" "datastore" "identity-sa-rotate" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine" "sensitive-output" "serving-kv" "serving-rate" -}}
+{{- if not (has $family $families) }}{{- fail "familyFixtures.profile is not one of the 13 reviewed families" }}{{- end }}
+{{- if ne (dig "cleanupPolicy" "" $fixture) "Delete" }}{{- fail "familyFixtures.cleanupPolicy must be Delete" }}{{- end }}
+{{- $agentEnabled := dig "console" "attackCatalog" "agentAction" "enabled" false $v -}}
+{{- if and (eq $family "agent-action") (not $agentEnabled) }}{{- fail "agent-action profile requires agentAction.enabled" }}{{- end }}
+{{- if and (ne $family "agent-action") $agentEnabled }}{{- fail "agentAction.enabled is exclusive to the agent-action profile" }}{{- end }}
+{{- $destinations := list -}}
+{{- $lanes := list -}}
+{{- $action := "" -}}
+{{- $workload := "demo-api" -}}
+{{- $policy := "demo-api-defense" -}}
+{{- if eq $family "quarantine" }}{{ $destinations = list "p1-demo" }}{{ $lanes = list "p1" }}{{ $action = "quarantine" }}
+{{- else if or (eq $family "pod-rotate") (eq $family "datastore") (eq $family "network-edge") }}{{ $destinations = list "p2-demo" }}{{ $lanes = list "p2" }}{{ if eq $family "pod-rotate" }}{{ $action = "rotate" }}{{ else if eq $family "datastore" }}{{ $action = "datastore-restore" }}{{ $workload = "rag-store" }}{{ $policy = "datastore-defense" }}{{ else }}{{ $action = "network-isolate" }}{{ end }}
+{{- else if eq $family "image" }}{{ $destinations = list "p2-demo" "p3-demo" }}{{ $lanes = list "p2" "p3" }}{{ $action = "registry-rollback" }}
+{{- else if eq $family "node-recycle" }}{{ $destinations = list "p3-demo" }}{{ $lanes = list "p3" }}{{ $action = "node-cordon-drain-replace" }}{{ $policy = "node-defense" }}
+{{- else if or (eq $family "controller-stop") (eq $family "credential") }}{{ $destinations = list "p4-demo" }}{{ $lanes = list "p4" }}{{ if eq $family "controller-stop" }}{{ $action = "controller-stop" }}{{ else }}{{ $action = "credential-revoke" }}{{ end }}
+{{- else if eq $family "serving-rate" }}{{ $destinations = list "p5-demo" }}{{ $lanes = list "p5" }}{{ $action = "throttle" }}{{ $workload = "rate-target" }}{{ $policy = "serving-rate-defense" }}
+{{- else if eq $family "identity-sa-rotate" }}{{ $destinations = list "console-identity-shared" }}{{ $lanes = list "p6" }}{{ $action = "identity-rotate" }}{{ $workload = "console-id-fixture" }}{{ $policy = "console-id-fixture" }}
+{{- else if eq $family "sensitive-output" }}{{ $destinations = list "p6-demo" }}{{ $lanes = list "p6" }}{{ $action = "sensitive-output-policy-activate" }}{{ $workload = "guardrail-output-fixture" }}{{ $policy = "guardrail-output-fixture" }}
+{{- else if eq $family "serving-kv" }}{{ $destinations = list "p6-demo" }}{{ $lanes = list "p6" }}{{ $action = "kv-reset" }}{{ $workload = "kv-serving" }}{{ $policy = "kv-serving-defense" }}
+{{- else if eq $family "agent-action" }}{{ $destinations = list "p6-demo" }}{{ $lanes = list "p6" }}{{ $action = "agent-action-deny" }}{{ $workload = "agent-sim" }}{{ $policy = "agent-defense" }}
+{{- end }}
+{{- range $namespace := $destinations -}}
+{{- if not (has $namespace (dig "policyNamespaces" (list) $v)) }}{{- fail (printf "family fixture destination %s must be in policyNamespaces" $namespace) }}{{- end }}
+{{- if not (has $namespace (dig "actuatorNamespaces" (list) $v)) }}{{- fail (printf "family fixture destination %s must be in actuatorNamespaces" $namespace) }}{{- end }}
+{{- if not (has $namespace (dig "console" "attackNamespaces" (list) $v)) }}{{- fail (printf "family fixture destination %s must be in console.attackNamespaces" $namespace) }}{{- end }}
+{{- end }}
+{{- $attacksSA := include "phorvex-common.attacksServiceAccountName" . -}}
+{{- $trusted := false -}}
+{{- range (dig "trustedDetectors" (list) $v) -}}{{- range splitList "," . -}}{{- $entry := trim . -}}{{- if or (eq $entry (printf "%s/%s" $.Release.Namespace $attacksSA)) (eq $entry (printf "%s:%s" $.Release.Namespace $attacksSA)) (eq $entry (printf "system:serviceaccount:%s:%s" $.Release.Namespace $attacksSA)) }}{{- $trusted = true -}}{{- end }}{{- end }}{{- end }}
+{{- if not $trusted }}{{- fail (printf "family fixture requires exact attacks creator %s/%s in trustedDetectors" .Release.Namespace $attacksSA) }}{{- end }}
+{{- $images := dig "images" (dict) $fixture -}}
+{{- $workloadImage := dig "workload" "" $images -}}
+{{- $phorvexImage := dig "phorvex" "" $images -}}
+{{- $pythonImage := dig "python" "" $images -}}
+{{- $kwokImage := dig "kwok" "" $images -}}
+{{- $imagePattern := "^[^[:space:]@]+@sha256:[0-9a-f]{64}$" -}}
+{{- if and (has $family (list "controller-stop" "credential" "identity-sa-rotate" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine")) (not (regexMatch $imagePattern $workloadImage)) }}{{- fail "selected family requires familyFixtures.images.workload as repository@sha256" }}{{- end }}
+{{- if and (has $family (list "datastore" "serving-kv" "serving-rate")) (not (regexMatch $imagePattern $phorvexImage)) }}{{- fail "selected family requires familyFixtures.images.phorvex as repository@sha256" }}{{- end }}
+{{- if and (has $family (list "sensitive-output" "serving-kv")) (not (regexMatch $imagePattern $pythonImage)) }}{{- fail "selected family requires immutable familyFixtures.images.python" }}{{- end }}
+{{- if and (eq $family "node-recycle") (not (regexMatch $imagePattern $kwokImage)) }}{{- fail "node-recycle requires immutable familyFixtures.images.kwok" }}{{- end }}
+{{- if eq $family "sensitive-output" -}}
+{{- $outputNames := dig "outputPolicy" "configMapNames" (list) $v -}}
+{{- if not (and (dig "outputPolicy" "enabled" false $v) (eq (dig "outputPolicy" "targetNamespace" "" $v) "p6-demo") (eq (sortAlpha $outputNames | join ",") "phorvex-output-policy-gfx-t0069,phorvex-output-policy-gfx-t0069-001,phorvex-output-policy-gfx-t0069-002")) }}{{- fail "sensitive-output requires the three exact p6-demo output policies" }}{{- end }}
+{{- end }}
+{{- if and (eq $family "serving-kv") (ne (dig "servingSecurity" "mode" "" $v) "legacy-plaintext") }}{{- fail "serving-kv fixture requires servingSecurity.mode=legacy-plaintext" }}{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-catalogue-family-profile
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+data:
+  selected-family: {{ $family | quote }}
+  expected-action: {{ $action | quote }}
+  profiles.yaml: |
+{{ .Files.Get "files/catalogue-family-profiles.yaml" | indent 4 }}
+{{- range $i, $namespace := $destinations }}
+{{- if ne $namespace "console-identity-shared" }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $namespace }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: catalogue-fixture-budget
+  namespace: {{ $namespace }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 4Gi
+    limits.cpu: "8"
+    limits.memory: 8Gi
+    pods: "40"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: catalogue-fixture-defaults
+  namespace: {{ $namespace }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+spec:
+  limits:
+  - type: Container
+    defaultRequest: {cpu: 10m, memory: 16Mi}
+    default: {cpu: 500m, memory: 256Mi}
+{{- end }}
+{{- end }}
+{{- range $lane := $lanes }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $lane }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+    pod-security.kubernetes.io/enforce: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $lane }}-attacks
+  namespace: {{ $lane }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: catalogue-fixture-budget
+  namespace: {{ $lane }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "2"
+    limits.memory: 2Gi
+    pods: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: catalogue-fixture-defaults
+  namespace: {{ $lane }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+spec:
+  limits:
+  - type: Container
+    defaultRequest: {cpu: 10m, memory: 16Mi}
+    default: {cpu: 500m, memory: 256Mi}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $.Release.Name }}-{{ $lane }}-fixture-signal
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "phorvex.fullname" $ }}-attacks-role
+subjects:
+- kind: ServiceAccount
+  name: {{ $lane }}-attacks
+  namespace: {{ $lane }}
+{{- end }}
+{{- if ne $family "agent-action" }}
+{{- range $namespace := $destinations }}
+{{- $isGeneric := has $family (list "controller-stop" "credential" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine") -}}
+{{- if $isGeneric }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-api
+  namespace: {{ $namespace }}
+  labels: &fixtureLabels
+    app.kubernetes.io/name: demo-api
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+  {{- if eq $family "image" }}
+  annotations:
+    phorvex.ai/trusted-image-ref: {{ $workloadImage | quote }}
+  {{- end }}
+spec:
+  replicas: 3
+  selector: {matchLabels: {app.kubernetes.io/name: demo-api}}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: demo-api
+        data-class: internal
+        phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+      {{- if eq $family "image" }}
+      annotations:
+        phorvex.ai/trusted-image-ref: {{ $workloadImage | quote }}
+      {{- end }}
+    spec:
+      serviceAccountName: demo-api
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      {{- if eq $family "node-recycle" }}
+      nodeSelector: {phorvex.ai/lane: p3}
+      tolerations:
+      - {key: phorvex.ai/kwok, operator: Equal, value: "true", effect: NoSchedule}
+      topologySpreadConstraints:
+      - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: demo-api}}}
+      {{- end }}
+      containers:
+      - name: web
+        image: {{ $workloadImage | quote }}
+        imagePullPolicy: IfNotPresent
+        ports: [{name: http, containerPort: 8080}]
+        readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 3}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 200m, memory: 64Mi}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: demo-api
+  namespace: {{ $namespace }}
+  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-api
+  namespace: {{ $namespace }}
+  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+spec:
+  selector: {app.kubernetes.io/name: demo-api}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: demo-api
+  namespace: {{ $namespace }}
+  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+spec:
+  minAvailable: {{ if eq $family "network-edge" }}3{{ else }}2{{ end }}
+  selector: {matchLabels: {app.kubernetes.io/name: demo-api}}
+{{- end }}
+---
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: {{ $policy }}
+  namespace: {{ $namespace }}
+  labels:
+    phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
+    phorvex.ai/cleanup-policy: Delete
+spec:
+  tenant: {{ $namespace }}
+  mode: active
+  selector:
+    matchLabels:
+      {{- if $isGeneric }}
+      app.kubernetes.io/name: demo-api
+      {{- else if eq $family "serving-kv" }}
+      app.kubernetes.io/name: kv-serving
+      {{- else if eq $family "sensitive-output" }}
+      app: guardrail-fixture
+      {{- else }}
+      app: {{ $workload }}
+      {{- end }}
+  actions:
+    {{- if eq $family "quarantine" }}
+    enabled: [rotate, quarantine]
+    {{- else if eq $family "controller-stop" }}
+    enabled: [rotate]
+    {{- else if eq $family "node-recycle" }}
+    enabled: [node-cordon-drain-replace, rotate, quarantine]
+    {{- else if eq $family "serving-kv" }}
+    enabled: [rotate, kv-reset]
+    {{- else }}
+    enabled: [{{ $action }}]
+    {{- end }}
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels: {data-class: {internal: "0.4", public: "0.1", restricted: "1.0"}}
+    weightSecrets: "0.8"
+  budget: {antiOverRotationWindow: 90s, maxGracePeriodSeconds: 30, maxMovesPerTick: 1, proactiveFloor: 15m, tickInterval: 5s}
+  objective: {costWeights: {flowDisruption: "0.6", normSparsity: "0.4"}, disruptionAversion: "1", lambda: "0"}
+  slo:
+    costCeiling: "1.2"
+    minAvailableReplicas: {{ if eq $family "network-edge" }}3{{ else if has $family (list "quarantine" "pod-rotate" "controller-stop" "node-recycle") }}2{{ else }}1{{ end }}
+  triggers: {eventAgeHorizon: 1h, eventDriven: true, reactiveOnly: true}
+{{- end }}
+{{- end }}
+{{- if eq $family "identity-sa-rotate" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: console-id-fixture
+  namespace: console-identity-shared
+  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console-id-fixture
+  namespace: console-identity-shared
+  labels: {app: console-id-fixture, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: console-id-fixture}}
+  template:
+    metadata: {labels: {app: console-id-fixture, phorvex.ai/console-identity-fixture: console-id-fixture, data-class: internal}}
+    spec:
+      serviceAccountName: console-id-fixture
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: web
+        image: {{ $workloadImage | quote }}
+        ports: [{name: http, containerPort: 8080}]
+        volumeMounts: [{name: token, mountPath: /var/run/secrets/phorvex, readOnly: true}]
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 200m, memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      volumes:
+      - name: token
+        projected:
+          sources:
+          - serviceAccountToken: {path: token, audience: phorvex-staging-console, expirationSeconds: 600}
+{{- end }}
+{{- if eq $family "datastore" }}
+{{- $snapshot := "{\"records\":[{\"id\":\"benign-control\",\"content\":\"reviewed benign catalogue fixture\"}]}" -}}
+{{- range $name := list "datastore-trusted-snapshot" "datastore-content" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  namespace: p2-demo
+  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+data:
+  store.json: {{ $snapshot | quote }}
+  {{- if eq $name "datastore-trusted-snapshot" }}
+  store.sha256: {{ sha256sum $snapshot | quote }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: rag-store, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: rag-store-read, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [configmaps], resourceNames: [datastore-content], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: rag-store-read, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: rag-store-read}
+subjects: [{kind: ServiceAccount, name: rag-store, namespace: p2-demo}]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-store
+  namespace: p2-demo
+  labels: {app: rag-store, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: rag-store}}
+  template:
+    metadata: {labels: {app: rag-store, data-class: internal}}
+    spec:
+      serviceAccountName: rag-store
+      automountServiceAccountToken: true
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: store
+        image: {{ $phorvexImage | quote }}
+        command: [/ragstore-fixture]
+        ports: [{name: http, containerPort: 8080}]
+        readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 3}
+        env: [{name: POD_NAMESPACE, value: p2-demo}, {name: STORE_CONFIGMAP, value: datastore-content}, {name: STORE_KEY, value: store.json}]
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 200m, memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: rag-store, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec: {selector: {app: rag-store}, ports: [{name: http, port: 8080, targetPort: 8080}]}
+{{- end }}
+{{- if eq $family "network-edge" }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: c2-sink
+  namespace: p2-demo
+  labels: {app: c2-sink, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+  - name: sink
+    image: {{ $workloadImage | quote }}
+    ports: [{name: http, containerPort: 8080}]
+    resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+    securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: c2-sink, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec: {selector: {app: c2-sink}, ports: [{name: http, port: 8080, targetPort: http}]}
+{{- end }}
+{{- if eq $family "node-recycle" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: kwok-controller-p3, namespace: p3-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+automountServiceAccountToken: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kwok-controller-p3, namespace: p3-demo, labels: {app: kwok-controller-p3, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: kwok-controller-p3}}
+  template:
+    metadata: {labels: {app: kwok-controller-p3}}
+    spec:
+      serviceAccountName: kwok-controller-p3
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: kwok
+        image: {{ $kwokImage | quote }}
+        args: [--manage-all-nodes=false, --manage-nodes-with-annotation-selector=kwok.x-k8s.io/node=fake]
+        resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {cpu: 200m, memory: 128Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: {{ .Release.Name }}-kwok-controller-p3, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [nodes], verbs: [get, list, watch]}
+- {apiGroups: [""], resources: [nodes, nodes/status], resourceNames: [p3-node-a, p3-node-b], verbs: [get, update, patch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: {{ .Release.Name }}-kwok-controller-p3, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ .Release.Name }}-kwok-controller-p3}
+subjects: [{kind: ServiceAccount, name: kwok-controller-p3, namespace: p3-demo}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: {{ .Release.Name }}-attacks-node-fixture, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+# Kubernetes cannot resourceName-restrict create; the server has no caller-owned node name.
+- {apiGroups: [""], resources: [nodes], verbs: [create]}
+- {apiGroups: [""], resources: [nodes], resourceNames: [p3-node-a, p3-node-b], verbs: [get, update, patch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: {{ .Release.Name }}-attacks-node-fixture, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ .Release.Name }}-attacks-node-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+{{- range $name := list "p3-node-a" "p3-node-b" }}
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: {{ $name }}
+  labels: {type: kwok, phorvex.ai/lane: p3, kubernetes.io/hostname: {{ $name }}, kubernetes.io/arch: amd64, kubernetes.io/os: linux, node-role.kubernetes.io/agent: "", phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
+  annotations: {node.alpha.kubernetes.io/ttl: "0", kwok.x-k8s.io/node: fake, phorvex.ai/kwok-lane: p3}
+spec:
+  taints: [{key: phorvex.ai/kwok, value: "true", effect: NoSchedule}]
+{{- end }}
+{{- end }}
+{{- if eq $family "credential" }}
+{{- range $name := list "p4-phorvex-manager" "p4-actuator" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: {{ $name }}, namespace: p4, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+automountServiceAccountToken: false
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: credential-manager-read, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [secrets], verbs: [get, list]}
+- {apiGroups: [""], resources: [serviceaccounts, pods], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: credential-manager-read, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: credential-manager-read}
+subjects: [{kind: ServiceAccount, name: p4-phorvex-manager, namespace: p4}, {kind: ServiceAccount, name: p4-actuator, namespace: p4}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: credential-actuator-mutate, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [secrets], verbs: [delete]}
+- {apiGroups: [""], resources: [serviceaccounts], verbs: [update]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: credential-actuator-mutate, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: credential-actuator-mutate}
+subjects: [{kind: ServiceAccount, name: p4-actuator, namespace: p4}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-credential-fixture, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [serviceaccounts, serviceaccounts/token, secrets], verbs: [create, get, list, delete]}
+- {apiGroups: [rbac.authorization.k8s.io], resources: [roles, rolebindings], verbs: [create, get, delete]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-credential-fixture, namespace: p4-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-credential-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+{{- end }}
+{{- if eq $family "datastore" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-datastore-fixture, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [configmaps], resourceNames: [datastore-content], verbs: [get, update]}
+- {apiGroups: [""], resources: [configmaps], resourceNames: [datastore-trusted-snapshot], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-datastore-fixture, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-datastore-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+{{- end }}
+{{- if eq $family "image" }}
+{{- range $namespace := $destinations }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-image-fixture, namespace: {{ $namespace }}, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [apps], resources: [deployments], resourceNames: [demo-api], verbs: [get, update]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-image-fixture, namespace: {{ $namespace }}, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-image-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ $.Release.Namespace }}}]
+{{- end }}
+{{- end }}
+{{- if eq $family "sensitive-output" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-sensitive-output-fixture, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [pods], resourceNames: [gfx-t0069, gfx-t0069-001, gfx-t0069-002], verbs: [get]}
+- {apiGroups: [""], resources: [pods/proxy], resourceNames: [gfx-t0069, gfx-t0069-001, gfx-t0069-002], verbs: [get, create]}
+- {apiGroups: [""], resources: [configmaps], resourceNames: [phorvex-output-policy-gfx-t0069, phorvex-output-policy-gfx-t0069-001, phorvex-output-policy-gfx-t0069-002], verbs: [get, update]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-sensitive-output-fixture, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-sensitive-output-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: sensitive-output-fixture-source, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data:
+  proxy.py: |
+{{ .Files.Get "files/sensitive-output/proxy.py" | indent 4 }}
+  support.py: |
+{{ .Files.Get "files/sensitive-output/support.py" | indent 4 }}
+  bootstrap.py: |
+{{ .Files.Get "files/sensitive-output/bootstrap.py" | indent 4 }}
+{{- range $name := list "gfx-t0069" "gfx-t0069-001" "gfx-t0069-002" }}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: {{ $name }}, namespace: p6-demo, labels: {app: guardrail-fixture, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  automountServiceAccountToken: false
+  securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+  containers:
+  - name: guardrail-proxy
+    image: {{ $pythonImage | quote }}
+    command: [python3, -I, /fixture/proxy.py]
+    ports: [{name: output, containerPort: 8000}]
+    readinessProbe: {httpGet: {path: /healthz, port: output}, periodSeconds: 2}
+    resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+    securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+    volumeMounts: [{name: source, mountPath: /fixture, readOnly: true}, {name: policy, mountPath: /policy, readOnly: true}, {name: tmp, mountPath: /tmp}]
+  - name: support-app
+    image: {{ $pythonImage | quote }}
+    command: [python3, -I, /fixture/support.py]
+    resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+    securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+    volumeMounts: [{name: source, mountPath: /fixture, readOnly: true}, {name: tmp, mountPath: /tmp}]
+  volumes: [{name: source, configMap: {name: sensitive-output-fixture-source}}, {name: policy, configMap: {name: phorvex-output-policy-{{ $name }}}}, {name: tmp, emptyDir: {sizeLimit: 16Mi}}]
+{{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: sensitive-output-bootstrap, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: sensitive-output-bootstrap, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [pods], resourceNames: [gfx-t0069, gfx-t0069-001, gfx-t0069-002], verbs: [get, patch]}
+- {apiGroups: [""], resources: [configmaps], resourceNames: [phorvex-output-policy-gfx-t0069, phorvex-output-policy-gfx-t0069-001, phorvex-output-policy-gfx-t0069-002], verbs: [get, update]}
+- {apiGroups: [""], resources: [configmaps], verbs: [create]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: sensitive-output-bootstrap, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: sensitive-output-bootstrap}
+subjects: [{kind: ServiceAccount, name: sensitive-output-bootstrap, namespace: p6-demo}]
+---
+apiVersion: batch/v1
+kind: Job
+metadata: {name: sensitive-output-bootstrap, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata: {labels: {app: sensitive-output-bootstrap}}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: sensitive-output-bootstrap
+      automountServiceAccountToken: true
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: bootstrap
+        image: {{ $pythonImage | quote }}
+        command: [python3, -I, /fixture/bootstrap.py]
+        env:
+        - {name: POD_NAMESPACE, value: p6-demo}
+        - {name: FIXTURE_PODS, value: "gfx-t0069,gfx-t0069-001,gfx-t0069-002"}
+        - {name: PROXY_SOURCE_SHA256, value: {{ .Files.Get "files/sensitive-output/proxy.py" | sha256sum | quote }}}
+        - {name: SUPPORT_SOURCE_SHA256, value: {{ .Files.Get "files/sensitive-output/support.py" | sha256sum | quote }}}
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        volumeMounts: [{name: source, mountPath: /fixture, readOnly: true}, {name: tmp, mountPath: /tmp}]
+      volumes: [{name: source, configMap: {name: sensitive-output-fixture-source}}, {name: tmp, emptyDir: {sizeLimit: 8Mi}}]
+{{- end }}
+{{- if eq $family "serving-kv" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-serving-kv-fixture, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [pods/proxy], verbs: [get, create]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-serving-kv-fixture, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-serving-kv-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: kv-serving-source, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data:
+  server.py: |
+{{ .Files.Get "files/serving-kv/server.py" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: kv-serving, namespace: p6-demo, labels: {app.kubernetes.io/name: kv-serving, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app.kubernetes.io/name: kv-serving}}
+  template:
+    metadata: {labels: {app.kubernetes.io/name: kv-serving, data-class: internal}, annotations: {phorvex.ai/serving-state: stateful, phorvex.ai/serving-port: "8000", phorvex.ai/model-id: catalogue-kv-fixture-v1}}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: server
+        image: {{ $pythonImage | quote }}
+        command: [python3, -I, /fixture/server.py]
+        ports: [{name: http, containerPort: 8000}]
+        env:
+        - name: POD_NAME
+          valueFrom: {fieldRef: {fieldPath: metadata.name}}
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 200m, memory: 64Mi, nvidia.com/gpu: 1}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        volumeMounts: [{name: source, mountPath: /fixture, readOnly: true}, {name: tmp, mountPath: /tmp}]
+      volumes: [{name: source, configMap: {name: kv-serving-source}}, {name: tmp, emptyDir: {sizeLimit: 16Mi}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: kv-serving, namespace: p6-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec: {selector: {app.kubernetes.io/name: kv-serving}, ports: [{name: http, port: 8000, targetPort: http}]}
+---
+# Scaled-to-zero witness used by the exact adapter to pin the reviewed legacy
+# serving mode; the real staging actuator receives the same value from this release.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: p6-actuator, namespace: p6, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  replicas: 0
+  selector: {matchLabels: {app: p6-actuator-config-witness}}
+  template:
+    metadata: {labels: {app: p6-actuator-config-witness}}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: actuator
+        image: {{ $phorvexImage | default $pythonImage | quote }}
+        args: [--serving-security-mode=legacy-plaintext]
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 100m, memory: 32Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
+{{- end }}
+{{ if eq $family "serving-rate" }}
+{{- $sourceSHA := regexFind "[0-9a-f]{64}$" $phorvexImage -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-serving-rate-fixture, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [batch], resources: [jobs], verbs: [create, get, list, delete]}
+- {apiGroups: [""], resources: [configmaps], resourceNames: [phorvex-serving-rate-budget, phorvex-serving-rate-status], verbs: [get]}
+- {apiGroups: [""], resources: [serviceaccounts], resourceNames: [rate-admission, rate-detector, rate-abusive, rate-legit], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-serving-rate-fixture, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-serving-rate-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: rate-fixture-runtime, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [configmaps], resourceNames: [phorvex-serving-rate-budget, phorvex-serving-rate-status], verbs: [get, update]}
+- {apiGroups: [""], resources: [pods, services], verbs: [get, list]}
+- {apiGroups: [apps], resources: [deployments, replicasets], verbs: [get]}
+- {apiGroups: [discovery.k8s.io], resources: [endpointslices], verbs: [get, list]}
+- {apiGroups: [phorvex.ai], resources: [phorvexpolicies], resourceNames: [serving-rate-defense], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: rate-admission-runtime, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: rate-fixture-runtime}
+subjects: [{kind: ServiceAccount, name: rate-admission, namespace: p5-demo}, {kind: ServiceAccount, name: rate-detector, namespace: p5-demo}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: {{ .Release.Name }}-rate-detector-signal, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [amtd.r6security.com], resources: [securityevents], verbs: [get, list, create]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: {{ .Release.Name }}-rate-detector-signal, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ .Release.Name }}-rate-detector-signal}
+subjects: [{kind: ServiceAccount, name: rate-detector, namespace: p5-demo}]
+{{- range $name := list "rate-target" "rate-admission" "rate-detector" "rate-abusive" "rate-legit" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: {{ $name }}, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+automountServiceAccountToken: {{ or (eq $name "rate-admission") (eq $name "rate-detector") }}
+{{- end }}
+{{- range $name := list "rate-target" "rate-admission" "rate-detector" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: {{ $name }}, namespace: p5-demo, labels: {app: {{ $name }}, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app: {{ $name }}}}
+  template:
+    metadata: {labels: {app: {{ $name }}, data-class: internal}}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: {{ or (eq $name "rate-admission") (eq $name "rate-detector") }}
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+      - name: {{ $name }}
+        image: {{ $phorvexImage | quote }}
+        command: [{{ if eq $name "rate-admission" }}/cost-admission{{ else if eq $name "rate-detector" }}/cost-load-detector{{ else }}/ragstore-fixture{{ end }}]
+        {{- if eq $name "rate-admission" }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+        - name: POD_UID
+          valueFrom: {fieldRef: {fieldPath: metadata.uid}}
+        - {name: PHORVEX_THROTTLE_BACKEND, value: http://rate-target-backend.p5-demo.svc:8080}
+        {{- else if eq $name "rate-detector" }}
+        env:
+        - {name: PHORVEX_THROTTLE_NAMESPACE, value: p5-demo}
+        - {name: PHORVEX_THROTTLE_POLICY, value: serving-rate-defense}
+        - {name: PHORVEX_THROTTLE_DETECTOR_IDENTITY, value: "system:serviceaccount:p5-demo:rate-detector"}
+        - {name: PHORVEX_THROTTLE_SOURCE, value: phorvex-rate-detector-p5}
+        - {name: PHORVEX_THROTTLE_DEPLOYMENT, value: rate-admission}
+        - {name: PHORVEX_THROTTLE_SERVICE, value: rate-target}
+        - {name: PHORVEX_THROTTLE_BACKEND, value: rate-target-backend}
+        - {name: PHORVEX_THROTTLE_TARGET_APP, value: rate-target}
+        - {name: PHORVEX_THROTTLE_SOURCE_SHA256, value: {{ $sourceSHA | quote }}}
+        - {name: PHORVEX_THROTTLE_PROXY_IMAGE, value: {{ $phorvexImage | quote }}}
+        {{- end }}
+        ports: [{name: http, containerPort: 8080}]
+        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 200m, memory: 64Mi}}
+        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: rate-target, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec: {selector: {app: rate-admission}, ports: [{name: http, port: 80, targetPort: 8080}]}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: rate-target-backend, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+spec: {selector: {app: rate-target}, ports: [{name: http, port: 8080, targetPort: 8080}]}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: phorvex-serving-rate-budget, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data:
+  state.json: {{ printf "{\"version\":1,\"revision\":0,\"sourceSHA256\":%q,\"proxyImage\":%q,\"abusiveAccount\":\"system:serviceaccount:p5-demo:rate-abusive\",\"legitimateAccount\":\"system:serviceaccount:p5-demo:rate-legit\",\"path\":\"/\",\"calibrating\":false,\"enabled\":false,\"baseline\":10,\"reserved\":10,\"burst\":10}" $sourceSHA $phorvexImage | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: phorvex-serving-rate-status, namespace: p5-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data: {state.json: "{}"}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: phorvex-throttle-journal, namespace: p5, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data: {state.json: ""}
+{{- end }}
+{{- end }}

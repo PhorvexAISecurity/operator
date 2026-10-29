@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "phorvex": {
+      "type": "object",
+      "properties": {
+        "agentActionDeny": {
+          "type": "object",
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "namespaces": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"}
+            }
+          }
+        },
+        "console": {
+          "type": "object",
+          "properties": {
+            "attackCatalog": {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "authorizationTenant": {"type": "string"},
+                "familyFixtures": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {"type": "boolean"},
+                    "profile": {
+                      "type": "string",
+                      "enum": ["", "agent-action", "controller-stop", "credential", "datastore", "identity-sa-rotate", "image", "network-edge", "node-recycle", "pod-rotate", "quarantine", "sensitive-output", "serving-kv", "serving-rate"]
+                    },
+                    "cleanupPolicy": {"type": "string", "enum": ["Delete"]},
+                    "images": {
+                      "type": "object",
+                      "properties": {
+                        "workload": {"type": "string"},
+                        "phorvex": {"type": "string"},
+                        "guardrail": {"type": "string"},
+                        "python": {"type": "string"},
+                        "kwok": {"type": "string"}
+                      }
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "if": {"properties": {"enabled": {"const": true}}},
+                      "then": {
+                        "required": ["profile", "cleanupPolicy", "images"],
+                        "properties": {"profile": {"minLength": 1}}
+                      }
+                    }
+                  ]
+                },
+                "agentAction": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {"type": "boolean"},
+                    "namespace": {"type": "string"},
+                    "image": {"type": "string"}
+                  },
+                  "allOf": [
+                    {
+                      "if": {"properties": {"enabled": {"const": true}}},
+                      "then": {
+                        "required": ["namespace", "image"],
+                        "properties": {
+                          "namespace": {"const": "p6-demo"},
+                          "image": {"pattern": "^\\S+@sha256:[0-9a-f]{64}$"}
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,8 @@
 #
 # An environment names its cluster, namespace and Helm release. Each reads
 # deploy/environments/<environment>/: phorvex.yaml (the manager chart's keys,
-# shared by every chart) and <service>.yaml.
+# shared by every chart), <service>.yaml, and the shared default-off catalogue
+# family overlay.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -67,6 +68,7 @@ spec:
           valueFiles:
           - '$values/deploy/environments/{{.environment}}/phorvex.yaml'
           - '$values/deploy/environments/{{.environment}}/{{.service}}.yaml'
+          - '$values/deploy/environments/{{.environment}}/catalogue-family.yaml'
       - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
         targetRevision: main
         ref: values

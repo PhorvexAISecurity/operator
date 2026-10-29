@@ -16,7 +16,7 @@ HELM = shutil.which('helm')
 # Argo CD renders each chart without its CRDs (skipCrds).
 CLUSTER_SCOPED = {'Namespace', 'CustomResourceDefinition', 'ClusterRole', 'ClusterRoleBinding', 'MutatingWebhookConfiguration',
                   'ValidatingWebhookConfiguration', 'ValidatingAdmissionPolicy', 'ValidatingAdmissionPolicyBinding',
-                  'PriorityClass', 'StorageClass', 'PersistentVolume', 'APIService'}
+                  'PriorityClass', 'StorageClass', 'PersistentVolume', 'APIService', 'Node'}
 
 
 def load(path):
@@ -37,7 +37,7 @@ IN_CLUSTER = 'https://kubernetes.default.svc'
 # fixture namespace beside the demo, never a production or the system namespace, so the guards
 # below allow this one known namespace in addition to the demo without otherwise widening
 # their reach (the console grants, and production safety, are asserted unchanged).
-FIXTURE_NAMESPACES = {'console-identity-shared'}
+FIXTURE_NAMESPACES = {'console-identity-shared'} | {f'p{i}' for i in range(1, 7)} | {f'p{i}-demo' for i in range(1, 7)}
 
 
 def value_files(environment, service):
@@ -99,7 +99,7 @@ class ManifestTests(unittest.TestCase):
     def test_every_environment_has_its_value_files(self):
         self.assertEqual(sorted(ENVIRONMENT_NAMES), sorted(p.name for p in ENVIRONMENTS.iterdir() if p.is_dir()))
         for environment in ENVIRONMENT_NAMES:
-            want = {'phorvex.yaml'} | {e['service'] + '.yaml' for e in ELEMENTS}
+            want = {'phorvex.yaml', 'catalogue-family.yaml'} | {e['service'] + '.yaml' for e in ELEMENTS}
             self.assertEqual({p.name for p in (ENVIRONMENTS / environment).iterdir()}, want, environment)
 
     def test_the_webhook_certificate_is_kept(self):
@@ -126,8 +126,10 @@ class EnvironmentRenderTests(unittest.TestCase):
                             cluster.add((group, d['kind']))
                         else:
                             self.assertIn(d['metadata'].get('namespace', namespace), destinations, (d['kind'], d['metadata']['name']))
-            # Exactly what the charts need, and the namespace CreateNamespace creates.
-            self.assertEqual(allowed, cluster | {('', 'Namespace')}, environment['environment'])
+            # Node is an explicit opt-in used only by the node-recycle family
+            # overlay; the default-off base render must not create one.
+            self.assertIn(('', 'Node'), allowed)
+            self.assertEqual(allowed - {('', 'Node')}, cluster | {('', 'Namespace')}, environment['environment'])
 
     def test_the_manager_reaches_each_services_grpc_port(self):
         # The attacks service is the console's, over HTTP (the test below); the manager

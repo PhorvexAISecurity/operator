@@ -1,0 +1,26 @@
+# Shared by every split service after its service-specific values. A later
+# reviewed fixture window replaces this file only with exact output from
+# tools/render_catalogue_staging_values.py. Base staging remains fail-closed.
+phorvex:
+  agentActionDeny:
+    enabled: false
+    namespaces: []
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
+    configMapNames: []
+  console:
+    attackCatalog:
+      enabled: false
+      authorizationTenant: ""
+      familyFixtures:
+        enabled: false
+        profile: ""
+        cleanupPolicy: Delete
+      agentAction:
+        enabled: false
+        namespace: p6-demo
+        image: ""
+      prometheusEvidence:
+        enabled: false

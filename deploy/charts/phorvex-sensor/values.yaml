@@ -91,12 +91,14 @@ phorvex:
     enabled: false
     targetNamespace: ""
     configMapName: ""
+    configMapNames: []
   litellmClientRevoke:
     enabled: false
   crmRefundRevoke:
     enabled: false
   agentActionDeny:
     enabled: false
+    namespaces: []
   statefulRotation:
     enabled: false
   voiceMemory:

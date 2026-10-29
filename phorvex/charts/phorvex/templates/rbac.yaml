@@ -207,8 +207,13 @@ subjects:
 {{- end }}
 {{- if .Values.phorvex.outputPolicy.enabled }}
 {{- $namespace := required "outputPolicy.targetNamespace is required" .Values.phorvex.outputPolicy.targetNamespace }}
-{{- $name := required "outputPolicy.configMapName is required" .Values.phorvex.outputPolicy.configMapName }}
-{{- if not (regexMatch "^phorvex-output-policy-[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail "outputPolicy.configMapName must name the exact fixture policy" }}{{- end }}
+{{- $names := .Values.phorvex.outputPolicy.configMapNames | default list }}
+{{- with .Values.phorvex.outputPolicy.configMapName }}{{- $names = append $names . }}{{- end }}
+{{- $names = uniq $names }}
+{{- if not $names }}{{- fail "outputPolicy.configMapName or configMapNames must name exact fixture policies" }}{{- end }}
+{{- range $name := $names }}
+{{- if not (regexMatch "^phorvex-output-policy-[a-z0-9]([-a-z0-9]*[a-z0-9])?$" $name) }}{{- fail "outputPolicy configMapNames must name exact fixture policies" }}{{- end }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -218,7 +223,7 @@ metadata:
 rules:
 - apiGroups: [""]
   resources: ["configmaps"]
-  resourceNames: [{{ $name | quote }}]
+  resourceNames: {{ toJson $names }}
   verbs: ["get", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -234,6 +239,39 @@ subjects:
 - kind: ServiceAccount
   name: {{ include "phorvex.serviceAccountName" . }}
   namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if .Values.phorvex.agentActionDeny.enabled }}
+{{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "agentActionDeny requires native or hybrid actuator" }}{{- end }}
+{{- $namespaces := .Values.phorvex.agentActionDeny.namespaces | default list }}
+{{- if not $namespaces }}{{- fail "agentActionDeny.namespaces must explicitly scope the fixed guard" }}{{- end }}
+{{- range $namespace := uniq $namespaces }}
+{{- if not (has $namespace $.Values.phorvex.actuatorNamespaces) }}{{- fail "agentActionDeny.namespaces must be a subset of actuatorNamespaces" }}{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-agent-action-deny
+  namespace: {{ $namespace | quote }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["agent-deny-guard"]
+  verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-agent-action-deny
+  namespace: {{ $namespace | quote }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-agent-action-deny
+subjects:
+- kind: ServiceAccount
+  name: {{ include "phorvex.serviceAccountName" $ }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- if .Values.phorvex.litellmClientRevoke.enabled }}
 {{- if not (has .Values.phorvex.actuator (list "native" "hybrid")) }}{{- fail "litellmClientRevoke requires native or hybrid actuator" }}{{- end }}

@@ -107,6 +107,65 @@ policy and sweeper stay scoped correctly. Preflight uses access reviews to
 verify the installed attacks-service lifecycle authority and the exact
 manager/sensor/actuator grants before creating a signal.
 
+### Staging catalogue family profiles
+
+Base staging keeps `attackCatalog`, `familyFixtures`, `agentActionDeny`, and
+`outputPolicy` off and grants none of the `p1`–`p6` or `p1-demo`–`p6-demo`
+namespaces. A reviewed test window enables exactly one family profile because
+several families intentionally use the same fixed policy name with incompatible
+action sets. The generated source of truth is
+`deploy/charts/phorvex-attacks/files/catalogue-family-profiles.yaml`; its 13
+profiles cover the 192 embedded catalogue IDs exactly once:
+
+| Profile | IDs | Fixed destination(s) |
+|---|---:|---|
+| agent-action | 6 | `p6` / `p6-demo` |
+| controller-stop | 10 | `p4` / `p4-demo` |
+| credential | 24 | `p4` / `p4-demo` |
+| datastore | 5 | `p2` / `p2-demo` |
+| identity-sa-rotate | 13 | `p6` / `console-identity-shared` |
+| image | 27 | `p2,p3` / `p2-demo,p3-demo` |
+| network-edge | 9 | `p2` / `p2-demo` |
+| node-recycle | 12 | `p3` / `p3-demo` |
+| pod-rotate | 27 | `p2` / `p2-demo` |
+| quarantine | 33 | `p1` / `p1-demo` |
+| sensitive-output | 3 | `p6` / `p6-demo` |
+| serving-kv | 3 | `p6` / `p6-demo` |
+| serving-rate | 20 | `p5` / `p5-demo` |
+
+Generate a complete values overlay rather than editing scopes by hand:
+
+```sh
+tools/render_catalogue_staging_values.py \
+  --profile quarantine \
+  --workload-image REGISTRY/catalogue-workload@sha256:<64hex> \
+  > deploy/environments/staging/catalogue-family.yaml
+```
+
+`--workload-image` is required for workload profiles, `--phorvex-image` for
+datastore/serving profiles, and `--agent-image` for agent-action. All supplied
+images must be complete immutable references. Python and KWOK have reviewed
+digest defaults, and can be replaced only with another immutable reference.
+The overlay extends all three namespace scopes together, installs the exact
+trusted lane identities, and narrows the authenticated grant tenant to the
+selected family. Agent-action additionally enables only `p6-demo`; sensitive
+output names its three exact ConfigMaps; serving-KV selects the reviewed
+legacy-plaintext test mode. The ApplicationSet loads this shared overlay after
+every service-specific values file, so one reviewed commit configures manager,
+sensor, actuator, attacks, and console consistently. The existing
+deployment-managed audit mTLS Secrets
+`staging-phorvex-audit-server` and `staging-phorvex-audit-client` are referenced
+by name. No fixture values contain credentials.
+
+Each rendered fixture object is release-owned with
+`phorvex.ai/catalogue-fixture-profile` and `phorvex.ai/cleanup-policy=Delete`.
+Every packaged lane and demo namespace has a ResourceQuota and LimitRange.
+Dynamic run objects retain their run/UID ownership checks; first let the run's
+cleanup finish, verify its
+cleanup oracle, disable the profile, and only then sync removal of the labelled
+substrate. Do not run two profiles concurrently or reuse a lane for persistent
+farm traffic.
+
 Setting `phorvex.services.attacks.endpoint` (`<release>-attacks:8090`) in the
 environment's values turns the split on in the manager chart:
 

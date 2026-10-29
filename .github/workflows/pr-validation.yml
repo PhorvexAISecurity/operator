@@ -104,6 +104,7 @@ jobs:
             build/metricvalidity/go.sum
             build/test-harness/go.sum
             build/integrations/epss-ecr-auth-runtime/go.sum
+            farm-fixtures/agentsim/go.mod
             libs/logging/go.sum
       # auditguard tests evaluate CEL from actual Helm renders, never a mocked verdict.
       - uses: azure/setup-helm@v4
@@ -142,6 +143,8 @@ jobs:
         run: go -C libs/logging test -mod=readonly -count=1 -timeout=5m ./...
       - name: EPSS ECR auth helper unit tests
         run: go -C build/integrations/epss-ecr-auth-runtime test -mod=readonly -count=1 -timeout=5m ./...
+      - name: Agent-sim fixture unit tests
+        run: go -C farm-fixtures/agentsim test -mod=readonly -count=1 -timeout=5m ./...
 
   # Every Go module is vetted, and every Go file a change touches must be
   # gofmt-clean. Untouched files are not reformatted wholesale: some are pinned by
@@ -166,6 +169,7 @@ jobs:
             build/metricvalidity/go.sum
             build/test-harness/go.sum
             build/integrations/epss-ecr-auth-runtime/go.sum
+            farm-fixtures/agentsim/go.mod
             libs/logging/go.sum
       - name: Changed Go files are gofmt-clean
         env:
@@ -174,7 +178,7 @@ jobs:
       - name: Vet every Go module
         run: |
           for module in phorvex build/metricvalidity build/test-harness build/phoenix-extended \
-            build/integrations/epss-ecr-auth-runtime libs/logging; do
+            build/integrations/epss-ecr-auth-runtime farm-fixtures/agentsim libs/logging; do
             go -C "$module" vet ./...
           done
       - name: Service contracts lint and their generated code is current

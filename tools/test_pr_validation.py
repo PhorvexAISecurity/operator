@@ -57,7 +57,8 @@ class PRValidationTests(unittest.TestCase):
         # Separate modules are executed, not merely compiled as dependencies.
         for module, minutes in (('build/metricvalidity', 5), ('build/test-harness', 15),
                                 ('build/phoenix-extended', 15), ('libs/logging', 5),
-                                ('build/integrations/epss-ecr-auth-runtime', 5)):
+                                ('build/integrations/epss-ecr-auth-runtime', 5),
+                                ('farm-fixtures/agentsim', 5)):
             self.assertIn(f'go -C {module} test -mod=readonly -count=1 -timeout={minutes}m ./...', runs['go-unit'])
         for command in ('npm ci', 'npx --no-install tsc --noEmit --incremental false', 'npm run build'):
             self.assertIn(command, runs['frontend'])
