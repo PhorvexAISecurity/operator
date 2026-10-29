@@ -3,5 +3,5 @@
 # only where the console is enabled (docs/services/attacks.md).
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks"
-  tag: "0.9.0"
-  digest: "sha256:f269abd1ac3be2d056e32b0bf9cfc89e433dc6dec1ac54230a135b4c2c7b1952"
+  tag: "0.10.0"
+  digest: "sha256:a8ab4aa3a4f2c926351bebbfe558f1057518fa689c4cd431ef197b07039465d4"
