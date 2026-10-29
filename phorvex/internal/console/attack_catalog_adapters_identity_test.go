@@ -16,6 +16,10 @@ import (
 	"github.com/phorvex/phorvex/internal/audit"
 	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/model"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const identityAdapterSensitiveSentinel = "SENSITIVE-MATERIAL-MUST-NOT-PERSIST"
@@ -68,6 +72,110 @@ func TestIdentityCatalogueAdapterExactReviewedCoverage(t *testing.T) {
 	}
 }
 
+type identityFarmSpec struct {
+	Name      string `json:"name"`
+	Mode      string `json:"mode"`
+	Family    string `json:"family"`
+	Lane      string `json:"lane"`
+	Actuator  string `json:"actuator"`
+	EventType string `json:"event_type"`
+	Expected  string `json:"expected"`
+	Target    struct {
+		Namespace        string `json:"ns"`
+		Deployment       string `json:"deployment"`
+		Selector         string `json:"selector"`
+		PodPrefix        string `json:"prefix"`
+		PodSubstring     string `json:"pod_substr"`
+		ServiceAccount   string `json:"service_account"`
+		CredentialSecret string `json:"credential_secret"`
+		AgentName        string `json:"agent_name"`
+		GuardConfigMap   string `json:"guard_configmap"`
+		Service          string `json:"service"`
+	} `json:"target"`
+	Arm struct {
+		ServiceAccount string `json:"leak_service_account"`
+		TokenSecret    string `json:"token_secret"`
+		SecretType     string `json:"secret_type"`
+		CallerID       string `json:"caller_id"`
+		ActionID       string `json:"action_id"`
+		AbusedPair     string `json:"abused_pair"`
+		Grant          struct {
+			APIGroups []string `json:"apiGroups"`
+			Resources []string `json:"resources"`
+			Verbs     []string `json:"verbs"`
+		} `json:"grant"`
+	} `json:"arm"`
+	Oracle struct {
+		ObservationAnnotation string `json:"observation_annotation"`
+		PolicyName            string `json:"policy_name"`
+		Objective             string `json:"objective"`
+		GuardKey              string `json:"guard_key"`
+		ReadbackPath          string `json:"readback_path"`
+	} `json:"oracle"`
+}
+
+func TestIdentityCatalogueExactThirtyFarmSpecsMatchServerProfiles(t *testing.T) {
+	root := filepath.Join("..", "..", "..", "tools", "live-attack-runner", "runner", "fires.d")
+	seen := map[string]bool{}
+	for _, id := range append(slices.Clone(credentialCatalogueIDs[:]), agentActionCatalogueIDs[:]...) {
+		raw, err := os.ReadFile(filepath.Join(root, id+".json"))
+		if err != nil {
+			t.Fatalf("read %s: %v", id, err)
+		}
+		var spec identityFarmSpec
+		if err = json.Unmarshal(raw, &spec); err != nil {
+			t.Fatalf("decode %s: %v", id, err)
+		}
+		if seen[id] {
+			t.Fatalf("duplicate blocked-ID spec %s", id)
+		}
+		seen[id] = true
+		if profile, ok := credentialCatalogueServerProfiles[id]; ok {
+			deployment, policyName := spec.Target.Deployment, spec.Oracle.PolicyName
+			if deployment == "" {
+				deployment = credentialCatalogueDeployment
+			}
+			if policyName == "" {
+				policyName = credentialCataloguePolicy
+			}
+			if spec.Name != id || spec.Mode != "lane" || spec.Expected != "DEFENDED" ||
+				spec.Family != "credential" || spec.Lane != "p4" ||
+				spec.Actuator != string(model.ActionCredentialRevoke) || spec.EventType != model.AttackVectorCredentialTheft ||
+				spec.Target.Namespace != profile.Namespace ||
+				deployment != profile.Deployment || policyName != profile.PolicyName ||
+				spec.Target.Selector != profile.SelectorKey+"="+profile.SelectorValue ||
+				spec.Target.PodPrefix != profile.PodPrefix || spec.Target.PodSubstring != profile.Deployment ||
+				spec.Target.ServiceAccount != profile.ServiceAccount || spec.Target.CredentialSecret != profile.TokenSecret ||
+				spec.Arm.ServiceAccount != profile.ServiceAccount || spec.Arm.TokenSecret != profile.TokenSecret ||
+				spec.Arm.SecretType != string(corev1.SecretTypeServiceAccountToken) ||
+				!slices.Equal(spec.Arm.Grant.APIGroups, []string{""}) ||
+				!slices.Equal(spec.Arm.Grant.Resources, []string{profile.GrantResource}) ||
+				!slices.Equal(spec.Arm.Grant.Verbs, profile.GrantVerbs[:]) ||
+				spec.Oracle.ObservationAnnotation != profile.ObservationKey {
+				t.Fatalf("credential spec %s differs from server profile: spec=%+v profile=%+v", id, spec, profile)
+			}
+			continue
+		}
+		profile, ok := agentCatalogueServerProfiles[id]
+		if !ok || spec.Name != id || spec.Mode != "lane" || spec.Expected != "DEFENDED" ||
+			spec.Family != "agent-action" || spec.Lane != "p6" ||
+			spec.Actuator != string(model.ActionAgentActionDeny) || spec.EventType != model.AttackVectorAgentActionAbuse ||
+			spec.Target.Namespace != profile.Namespace ||
+			spec.Target.Selector != profile.SelectorKey+"="+profile.SelectorVal || spec.Target.PodPrefix != profile.Service+"-" ||
+			spec.Target.PodSubstring != profile.Service || spec.Target.AgentName != profile.AgentName ||
+			spec.Target.GuardConfigMap != profile.GuardConfigMap || spec.Target.Service != profile.Service ||
+			spec.Arm.CallerID != profile.CallerID || spec.Arm.ActionID != profile.ActionID ||
+			spec.Arm.AbusedPair != profile.CallerID+"::"+profile.ActionID ||
+			spec.Oracle.ObservationAnnotation != profile.ObservationKey || spec.Oracle.Objective != profile.Objective ||
+			spec.Oracle.GuardKey != profile.GuardKey || spec.Oracle.ReadbackPath != profile.ReadbackPath {
+			t.Fatalf("agent spec %s differs from server profile: spec=%+v profile=%+v", id, spec, profile)
+		}
+	}
+	if len(seen) != 30 {
+		t.Fatalf("exact blocked-ID specs=%d, want 30", len(seen))
+	}
+}
+
 func TestIdentityCatalogueProductionBindingsReportHonestBlockers(t *testing.T) {
 	var rotation, credential, agent AttackCatalogAdapter
 	for _, factory := range newIdentityCatalogueAdapters() {
@@ -89,10 +197,10 @@ func TestIdentityCatalogueProductionBindingsReportHonestBlockers(t *testing.T) {
 	if rotation == nil || rotation.Availability().Available || !strings.Contains(rotation.Availability().UnavailableReason, "not enabled") {
 		t.Fatalf("identity rotation availability=%+v", rotation.Availability())
 	}
-	if credential == nil || credential.Availability().Available || !strings.Contains(credential.Availability().UnavailableReason, "no reviewed server-owned credential fixture") {
+	if credential == nil || credential.Availability().Available || !strings.Contains(credential.Availability().UnavailableReason, "not enabled") {
 		t.Fatalf("credential availability=%+v", credential.Availability())
 	}
-	if agent == nil || agent.Availability().Available || !strings.Contains(agent.Availability().UnavailableReason, "no reviewed server-owned agent-sim fixture") {
+	if agent == nil || agent.Availability().Available || !strings.Contains(agent.Availability().UnavailableReason, "no digest-pinned server-owned agent-sim image") {
 		t.Fatalf("agent availability=%+v", agent.Availability())
 	}
 	if _, err := credential.Destination(); err == nil {
@@ -175,6 +283,128 @@ func TestIdentityRotationCatalogueBindingUsesExactExistingProfileAndDestination(
 	}
 }
 
+type identityCredentialAdapterTestCluster struct {
+	prepared  atomic.Int32
+	mutations atomic.Int32
+	cleanups  atomic.Int32
+	profile   identityCredentialServerProfile
+}
+
+func (c *identityCredentialAdapterTestCluster) Prepare(_ context.Context, profile identityCredentialServerProfile) (identityCredentialCatalogueFixture, error) {
+	c.prepared.Add(1)
+	c.profile = profile
+	return identityCredentialCatalogueFixture{Profile: profile, PodName: "demo-api-fixed", PodUID: "pod-uid",
+		DeploymentUID: "deployment-uid", PolicyUID: "policy-uid", PolicyGeneration: 9,
+		MinimumAvailableReplicas: 2, ReactiveOnly: true}, nil
+}
+
+func (c *identityCredentialAdapterTestCluster) Launch(_ context.Context, profile identityCatalogueProfile, fixture identityCredentialCatalogueFixture, runID string, state *identityCredentialCatalogueRunState) (identityCatalogueBindingSignal, bool, error) {
+	if profile.ID != fixture.Profile.CatalogueID || runID == "" || state == nil {
+		return identityCatalogueBindingSignal{}, false, errors.New("profile mismatch")
+	}
+	c.mutations.Add(4)
+	state.serviceAccountUID, state.roleUID, state.roleBindingUID, state.secretUID = "sa-uid", "role-uid", "binding-uid", "secret-uid"
+	state.credential = identityAdapterSensitiveSentinel
+	signal := identityCatalogueBindingSignal{Name: "credential-signal", UID: "signal-uid",
+		Creator: "system:serviceaccount:p4:injector", CreatedAt: time.Now().UTC()}
+	state.signal = signal
+	return signal, true, nil
+}
+
+func (c *identityCredentialAdapterTestCluster) Physical(_ context.Context, fixture identityCredentialCatalogueFixture, state *identityCredentialCatalogueRunState) (identityCataloguePhysicalObservation, error) {
+	if state == nil || state.credential == "" || fixture.Profile != c.profile {
+		return identityCataloguePhysicalObservation{}, errors.New("state mismatch")
+	}
+	return identityCataloguePhysicalObservation{ServiceAccountUID: state.serviceAccountUID, PodUID: fixture.PodUID,
+		CredentialAuthenticatedBefore: true, CredentialObjectAbsent: true, FreshCredentialAuthenticated: true,
+		AvailabilityFloorRetained: true, PodRetained: true}, nil
+}
+
+func (c *identityCredentialAdapterTestCluster) Cleanup(_ context.Context, fixture identityCredentialCatalogueFixture, state *identityCredentialCatalogueRunState) (identityCatalogueCleanupObservation, error) {
+	if state == nil || fixture.Profile != c.profile {
+		return identityCatalogueCleanupObservation{Attempted: true}, errors.New("state mismatch")
+	}
+	c.cleanups.Add(1)
+	c.mutations.Store(0)
+	state.credential = ""
+	return identityCatalogueCleanupObservation{Attempted: true, EventAbsent: true, FixtureRestored: true}, nil
+}
+
+func TestIdentityCredentialCatalogueBindingUsesExactServerProfileWithoutPreflightMutation(t *testing.T) {
+	profile := identityTestProfile(t, identityCatalogueCredential)
+	cluster := &identityCredentialAdapterTestCluster{}
+	cfg := Config{Service: ServiceAttacks, AttackCatalogEnabled: true, AttackCatalogAuthorizationTenant: "phorvex-test",
+		AuditSource: &audittransport.Client{}}
+	binding := &identityCredentialCatalogueBinding{cfg: cfg, fixedCluster: cluster}
+	availability := binding.Availability(profile)
+	if !availability.Available || availability.FixtureTenant != credentialCatalogueNamespace || availability.RuntimeContext != defaultTargetID {
+		t.Fatalf("availability=%+v", availability)
+	}
+	destination, err := binding.Destination(profile)
+	if err != nil || destination.ScopeTarget != defaultTargetID || destination.ScopeTenant != "phorvex-test" ||
+		!slices.Equal(destination.Targets, []string{defaultTargetID}) || !slices.Equal(destination.Tenants, []string{"phorvex-test"}) {
+		t.Fatalf("destination=%+v err=%v", destination, err)
+	}
+	prepared, err := binding.Preflight(context.Background(), profile)
+	serverProfile := credentialCatalogueServerProfiles[profile.ID]
+	if err != nil || cluster.prepared.Load() != 1 || cluster.mutations.Load() != 0 || cluster.profile != serverProfile ||
+		prepared.Namespace != serverProfile.Namespace || prepared.ReceiptObject != "Secret/"+serverProfile.Namespace+"/"+serverProfile.TokenSecret {
+		t.Fatalf("preflight=%+v err=%v profile=%+v prepared=%d mutations=%d", prepared, err, cluster.profile, cluster.prepared.Load(), cluster.mutations.Load())
+	}
+	run := AttackCatalogRunContext{RunID: "cat-credential", CatalogueID: profile.ID,
+		ExpectedAction: profile.ExpectedAction, ReactiveCompatible: true}
+	signal, mutated, err := binding.Launch(context.Background(), profile, run, prepared)
+	if err != nil || !mutated || signal.UID == "" || cluster.mutations.Load() != 4 {
+		t.Fatalf("signal=%+v mutated=%v err=%v mutations=%d", signal, mutated, err, cluster.mutations.Load())
+	}
+	physical, err := binding.Physical(context.Background(), profile, prepared)
+	if err != nil || !encodeIdentityCataloguePhysical(profile, physical).Validated {
+		t.Fatalf("physical=%+v err=%v", physical, err)
+	}
+	wrongSignal := signal
+	wrongSignal.UID = "other-signal-uid"
+	if cleaned, cleanupErr := binding.Cleanup(context.Background(), profile, prepared, wrongSignal); cleanupErr == nil ||
+		!cleaned.Attempted || cluster.cleanups.Load() != 0 || cluster.mutations.Load() != 4 {
+		t.Fatalf("substituted cleanup signal was accepted: cleaned=%+v err=%v", cleaned, cleanupErr)
+	}
+	for i := 0; i < 2; i++ {
+		cleaned, cleanupErr := binding.Cleanup(context.Background(), profile, prepared, signal)
+		if cleanupErr != nil || !cleaned.Attempted || !cleaned.EventAbsent || !cleaned.FixtureRestored || cluster.mutations.Load() != 0 {
+			t.Fatalf("cleanup %d=%+v err=%v mutations=%d", i, cleaned, cleanupErr, cluster.mutations.Load())
+		}
+	}
+	if cluster.cleanups.Load() != 2 {
+		t.Fatalf("cleanup calls=%d", cluster.cleanups.Load())
+	}
+}
+
+func TestIdentityCredentialCleanupRefusesCrossRunNameReuseAndAcceptsRetry(t *testing.T) {
+	current := types.UID("foreign-run-uid")
+	deleted := false
+	get := func() (types.UID, error) {
+		if current == "" {
+			return "", apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "credential-token")
+		}
+		return current, nil
+	}
+	del := func(types.UID) error {
+		deleted = true
+		current = ""
+		return nil
+	}
+	if exactCredentialDelete(context.Background(), "owned-run-uid", get, del) || deleted {
+		t.Fatal("cleanup deleted a same-name object owned by another run")
+	}
+	current = "owned-run-uid"
+	if !exactCredentialDelete(context.Background(), "owned-run-uid", get, del) || !deleted || current != "" {
+		t.Fatal("cleanup did not delete its exact UID-owned object")
+	}
+	deleted = false
+	if !exactCredentialDelete(context.Background(), "owned-run-uid", get, del) || deleted {
+		t.Fatal("cleanup retry did not accept already-absent exact object")
+	}
+}
+
 func TestIdentityCatalogueProfilesFailClosedOnSubstitution(t *testing.T) {
 	profile := identityTestProfile(t, identityCatalogueCredential)
 	for name, mutate := range map[string]func(*identityCatalogueProfile){
@@ -233,6 +463,8 @@ func newIdentityTestBinding(profile identityCatalogueProfile) *identityTestBindi
 		physical.ServiceAccountUID = "sa-uid"
 		physical.CredentialAuthenticatedBefore = true
 		physical.CredentialObjectAbsent = true
+		physical.FreshCredentialAuthenticated = true
+		physical.AvailabilityFloorRetained = true
 	case identityCatalogueAgent:
 		physical.GuardUID, physical.ServiceUID = "guard-uid", "service-uid"
 		physical.DeniedAfter, physical.BenignAllowedAfter, physical.ServingSetRetained = true, true, true
@@ -433,6 +665,26 @@ func TestIdentityCatalogueFamilyOraclesPositiveAndNegative(t *testing.T) {
 				if validateIdentityFamilyPhysical(profile, positive) == nil {
 					t.Fatal("oracle evidence with an unknown field was accepted")
 				}
+			}
+		})
+	}
+}
+
+func TestIdentityCredentialOracleRequiresBothPositiveControls(t *testing.T) {
+	profile := identityTestProfile(t, identityCatalogueCredential)
+	baseline := newIdentityTestBinding(profile).physical
+	for name, mutate := range map[string]func(*identityCataloguePhysicalObservation){
+		"fresh-token":        func(o *identityCataloguePhysicalObservation) { o.FreshCredentialAuthenticated = false },
+		"availability-floor": func(o *identityCataloguePhysicalObservation) { o.AvailabilityFloorRetained = false },
+		"same-pod":           func(o *identityCataloguePhysicalObservation) { o.PodRetained = false },
+		"stolen-token":       func(o *identityCataloguePhysicalObservation) { o.CredentialAuthenticatedAfter = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			observed := baseline
+			mutate(&observed)
+			result := encodeIdentityCataloguePhysical(profile, observed)
+			if result.Validated || validateIdentityFamilyPhysical(profile, result) == nil {
+				t.Fatalf("credential oracle accepted missing %s control: %+v", name, result)
 			}
 		})
 	}

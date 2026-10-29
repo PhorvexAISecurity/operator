@@ -110,6 +110,16 @@ func validateIdentityCatalogueProfile(profile identityCatalogueProfile) error {
 		entry.Lane != profile.Lane || entry.Mode != "lane" || entry.Expected != "DEFENDED" || !entry.ReactiveCompatible {
 		return fmt.Errorf("catalogue profile %q differs from embedded review pins", profile.ID)
 	}
+	switch profile.Family {
+	case identityCatalogueCredential:
+		if err := validateCredentialCatalogueServerProfile(profile.ID); err != nil {
+			return err
+		}
+	case identityCatalogueAgent:
+		if err := validateAgentCatalogueServerProfile(profile.ID); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -122,9 +132,9 @@ func (factory identityCatalogueAdapterFactory) bind(server *Server, cfg Config) 
 	case identityCatalogueRotation:
 		adapter.binding = &identityRotationCatalogueBinding{server: server, cfg: cfg}
 	case identityCatalogueCredential:
-		adapter.blocker = "credential-revoke catalogue profile is not installed: this runtime has no reviewed server-owned credential fixture or destination"
+		adapter.binding = &identityCredentialCatalogueBinding{server: server, cfg: cfg}
 	case identityCatalogueAgent:
-		adapter.blocker = "agent-action-deny catalogue profile is not installed: this runtime has no reviewed server-owned agent-sim fixture or destination"
+		adapter.blocker = "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
 	default:
 		adapter.blocker = "catalogue family is not supported by this runtime"
 	}
@@ -163,6 +173,8 @@ type identityCataloguePhysicalObservation struct {
 	CredentialAuthenticatedBefore bool
 	CredentialAuthenticatedAfter  bool
 	CredentialObjectAbsent        bool
+	FreshCredentialAuthenticated  bool
+	AvailabilityFloorRetained     bool
 	PodRetained                   bool
 	DeniedBefore                  bool
 	DeniedAfter                   bool
@@ -467,9 +479,11 @@ func encodeIdentityCataloguePhysical(profile identityCatalogueProfile, observed 
 		evidence := credentialRevokeEvidence{Schema: credentialRevokeOracle, PodUID: observed.PodUID,
 			ServiceAccountUID: observed.ServiceAccountUID, AuthenticatedBefore: observed.CredentialAuthenticatedBefore,
 			AuthenticatedAfter: observed.CredentialAuthenticatedAfter, CredentialObjectAbsent: observed.CredentialObjectAbsent,
-			PodRetained: observed.PodRetained}
+			FreshCredentialAuthenticated: observed.FreshCredentialAuthenticated,
+			AvailabilityFloorRetained:    observed.AvailabilityFloorRetained, PodRetained: observed.PodRetained}
 		evidence.Validated = evidence.PodUID != "" && evidence.ServiceAccountUID != "" && evidence.AuthenticatedBefore &&
-			!evidence.AuthenticatedAfter && evidence.CredentialObjectAbsent && evidence.PodRetained
+			!evidence.AuthenticatedAfter && evidence.CredentialObjectAbsent && evidence.FreshCredentialAuthenticated &&
+			evidence.AvailabilityFloorRetained && evidence.PodRetained
 		raw, _ := json.Marshal(evidence)
 		return AttackCatalogPhysicalResult{Validated: evidence.Validated, Oracle: credentialRevokeOracle, Evidence: raw,
 			CredentialAuthenticatedBefore: evidence.AuthenticatedBefore,
@@ -490,14 +504,16 @@ func encodeIdentityCataloguePhysical(profile identityCatalogueProfile, observed 
 }
 
 type credentialRevokeEvidence struct {
-	Schema                 string `json:"schema"`
-	Validated              bool   `json:"validated"`
-	PodUID                 string `json:"podUID"`
-	ServiceAccountUID      string `json:"serviceAccountUID"`
-	AuthenticatedBefore    bool   `json:"authenticatedBefore"`
-	AuthenticatedAfter     bool   `json:"authenticatedAfter"`
-	CredentialObjectAbsent bool   `json:"credentialObjectAbsent"`
-	PodRetained            bool   `json:"podRetained"`
+	Schema                       string `json:"schema"`
+	Validated                    bool   `json:"validated"`
+	PodUID                       string `json:"podUID"`
+	ServiceAccountUID            string `json:"serviceAccountUID"`
+	AuthenticatedBefore          bool   `json:"authenticatedBefore"`
+	AuthenticatedAfter           bool   `json:"authenticatedAfter"`
+	CredentialObjectAbsent       bool   `json:"credentialObjectAbsent"`
+	FreshCredentialAuthenticated bool   `json:"freshCredentialAuthenticated"`
+	AvailabilityFloorRetained    bool   `json:"availabilityFloorRetained"`
+	PodRetained                  bool   `json:"podRetained"`
 }
 
 type agentActionDenyEvidence struct {
@@ -574,7 +590,8 @@ func validateIdentityFamilyPhysical(profile identityCatalogueProfile, result Att
 		var evidence credentialRevokeEvidence
 		if result.Oracle != credentialRevokeOracle || decodeIdentityEvidence(result.Evidence, &evidence) != nil ||
 			evidence.Schema != credentialRevokeOracle || !evidence.Validated || evidence.PodUID == "" || evidence.ServiceAccountUID == "" ||
-			!evidence.AuthenticatedBefore || evidence.AuthenticatedAfter || !evidence.CredentialObjectAbsent || !evidence.PodRetained ||
+			!evidence.AuthenticatedBefore || evidence.AuthenticatedAfter || !evidence.CredentialObjectAbsent ||
+			!evidence.FreshCredentialAuthenticated || !evidence.AvailabilityFloorRetained || !evidence.PodRetained ||
 			result.PodUID != evidence.PodUID || !result.CredentialAuthenticatedBefore || result.CredentialAuthenticatedAfter || !result.PodRetained {
 			return errors.New("credential revocation, token rejection and retained Pod oracle required")
 		}
