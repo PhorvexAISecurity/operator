@@ -1,5 +1,23 @@
 # console changelog
 
+## 0.15.0 (2026-10-29)
+
+- fix(console): enforce catalogue receipt invariants (471a820f)
+- fix(console): enforce serving receipt consistency (ffdbf524)
+- fix(console): preserve Prometheus range boundaries (6f2cf596)
+- fix(console): preserve catalogue architecture boundary (8ac14407)
+- fix(packaging): close catalogue staging release gates (56c5e6d4)
+- feat(console): persist strict native release evidence (39d4fd68)
+- feat(actuator): contract-bounded stateful rotation family (70d1bfb9)
+- feat(console): enable immutable agent-action catalogue cases (146578d4)
+- Integrate Console catalogue campaign (bffdfb97)
+- Add credential-family catalogue adapters (007084f7)
+- Add identity-family catalogue adapters (f5610683)
+- Add serving catalogue console adapters (efb43107)
+- feat(console): add infrastructure catalogue adapters (aedbf3fa)
+- feat(console): add Kubernetes catalogue family adapters (b9adf9b4)
+- Generalize attack catalogue console runtime (a2e69b3b)
+
 ## 0.14.0 (2026-10-29)
 
 - feat(console): retain observed catalogue decision mode (6229ddac)
