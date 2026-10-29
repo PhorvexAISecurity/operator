@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const panel = readFileSync(join(root, "components/panels/catalog.tsx"), "utf8");
+const history = readFileSync(join(root, "components/panels/run-history.tsx"), "utf8");
 const api = readFileSync(join(root, "lib/api.ts"), "utf8");
 
 test("catalogue rows filter and render review metadata", () => {
@@ -25,4 +26,10 @@ test("typed result keeps every truth stage separate", () => {
     assert.ok(panel.includes(`\"${label}\"`), `missing stage ${label}`);
   }
   assert.match(panel, /result\.verdict === "DEFENDED"/);
+});
+
+test("persisted catalogue evidence remains reviewable from run history", () => {
+  assert.match(panel, /export function AttackCatalogueResultPanel/);
+  assert.match(history, /ev\.attackCatalogueResult/);
+  assert.match(history, /<AttackCatalogueResultPanel result=\{ev\.attackCatalogueResult\}/);
 });
