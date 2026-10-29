@@ -124,6 +124,13 @@ var actionVerbs = map[model.Action][]authz.Verb{
 	// Gated on the MUTATION (apps/deployments patch); the owner-chain reads (deployments/replicasets
 	// get, pods get/list) are the broadly-granted scanner reads excluded by the P-BOUNDED-AUTHZ note.
 	model.ActionRegistryRollback: {{Group: "apps", Resource: "deployments", Verb: "patch"}},
+	// The stateful rotation family is gated on its mutations: the bounded Eviction every class
+	// ends with, plus replica-rebuild's claim release and snapshot-rotate's snapshot creation
+	// (whose readiness readback is action-specific confirmation authority, like request-drain's
+	// EndpointSlice list). StatefulSet/claim reads are the broadly granted scanner reads.
+	model.ActionStatefulReplicaRebuild:    {{Resource: "pods", Subresource: "eviction", Verb: "create"}, {Resource: "persistentvolumeclaims", Verb: "delete"}},
+	model.ActionStatefulSnapshotRotate:    {{Resource: "pods", Subresource: "eviction", Verb: "create"}, {Group: "snapshot.storage.k8s.io", Resource: "volumesnapshots", Verb: "create"}, {Group: "snapshot.storage.k8s.io", Resource: "volumesnapshots", Verb: "get"}},
+	model.ActionStatefulCheckpointHandoff: {{Resource: "pods", Subresource: "eviction", Verb: "create"}},
 }
 
 // phoenixRuleVerbs are the RBAC verbs a PHOENIX-ROUTED action needs. On that path the

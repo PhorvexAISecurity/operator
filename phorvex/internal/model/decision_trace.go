@@ -73,6 +73,9 @@ const (
 	DecisionActionVocabularyLive32 = "v18-live32"
 	// Live33 appends registry-rollback (image-drift reset to the trusted pin); all earlier versions stay frozen.
 	DecisionActionVocabularyLive33 = "v19-live33"
+	// Live36 appends the stateful rotation family (replica-rebuild, snapshot-rotate,
+	// checkpoint-handoff); all earlier versions stay frozen.
+	DecisionActionVocabularyLive36 = "v20-live36"
 	// TraceNotAvailable is the explicit, honest value for a string input the running
 	// build cannot expose. Numeric inputs use OptionalFloat/OptionalInt instead.
 	TraceNotAvailable = "notAvailable"
@@ -155,6 +158,9 @@ func DecisionTraceActions(version string) ([]Action, error) {
 	case DecisionActionVocabularyLive33:
 		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive32)
 		return append(prior, ActionRegistryRollback), nil
+	case DecisionActionVocabularyLive36:
+		prior, _ := DecisionTraceActions(DecisionActionVocabularyLive33)
+		return append(prior, ActionStatefulReplicaRebuild, ActionStatefulSnapshotRotate, ActionStatefulCheckpointHandoff), nil
 	default:
 		return nil, fmt.Errorf("unknown actionVocabularyVersion %q", version)
 	}

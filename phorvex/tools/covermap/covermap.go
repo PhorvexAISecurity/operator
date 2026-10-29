@@ -96,6 +96,9 @@ type PodSpec struct {
 	ParallelGroup             string                               `json:"parallelGroup,omitempty"`
 	Role                      string                               `json:"role,omitempty"`
 	Bound                     *BoundSpec                           `json:"bound,omitempty"`
+	// StatefulRotation is the owner-declared stateful rotation contract + StatefulSet/claim
+	// witness, copied verbatim onto model.Pod; nil = no contract (the family has no cover).
+	StatefulRotation *model.StatefulRotationObservation `json:"statefulRotation,omitempty"`
 }
 
 // BoundSpec carries the ingestion-bound, admission-stamped observations of the
@@ -416,6 +419,17 @@ func Fixtures() []Fixture {
 			Pod: unboundOutputPod, Ctx: unit, Events: []EventSpec{{Type: model.AttackVectorSensitiveOutput, TargetsPod: true, Trust: "trusted"}}},
 		{Name: "stateful", Why: "Stateful CPU pod without a serving endpoint: the session fact reaches full weight but neither endpoint-dependent eraser earns cover.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
+		{Name: "stateful-replicated", Why: "Replicated StatefulSet member declaring peer-resync rebuild and a snapshot class: replica-rebuild alone covers persistentVolumeState; snapshot-rotate covers exactly rotate's process facts; checkpoint-handoff has no cover on a volume-backed member.",
+			Pod: PodSpec{Namespace: ns, Name: "stateful-replicated", Node: "node-a", Stateful: true, StatefulRotation: &model.StatefulRotationObservation{
+				Contract: model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi-snapclass", RecoverySeconds: 120, ResyncSeconds: 600},
+				OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, Complete: true,
+				Claims: []model.StatefulClaim{{Name: "data-stateful-replicated", UID: "claim-uid", Bound: true, FromTemplate: true}}}},
+			Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
+		{Name: "stateful-checkpointed", Why: "Volume-less StatefulSet member declaring an application checkpoint: checkpoint-handoff covers identity and memory but not the session state it carries across.",
+			Pod: PodSpec{Namespace: ns, Name: "stateful-checkpointed", Node: "node-a", Stateful: true, StatefulRotation: &model.StatefulRotationObservation{
+				Contract:  model.StatefulRotationContract{CheckpointPort: 8080, CheckpointPath: "/checkpoint", RestorePath: "/restore", RecoverySeconds: 60, ResyncSeconds: 3600},
+				OwnerName: "worker", OwnerUID: "worker-uid", Replicas: 1, ReadyReplicas: 1, Complete: true}},
+			Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "neighbors", Why: "Two blast-graph neighbours: one lateralEdge fact per neighbour, quarantine-only cover, weight scales with neighbour value.",
 			Pod: PodSpec{Namespace: ns, Name: "neighbors", Node: "node-a"},
 			Ctx: func() CtxSpec {
@@ -482,6 +496,7 @@ func buildView(f Fixture) (*model.WorkloadView, recon.FactContext) {
 		RouteService: f.Pod.RouteService, Stateful: f.Pod.Stateful,
 		ServingEndpointReady: f.Pod.ServingEndpointReady,
 		WarmPoolConfigured:   f.Pod.WarmPoolConfigured, WarmPoolOwnerUID: f.Pod.WarmPoolOwnerUID,
+		StatefulRotation: f.Pod.StatefulRotation,
 	}
 	if f.Pod.SwapGroup != "" || f.Pod.ModelShard != "" || f.Pod.ParallelGroup != "" || f.Pod.Role != "" {
 		pod.Labels = map[string]string{
@@ -1094,6 +1109,10 @@ func podSummary(f Fixture) string {
 	}
 	if f.Pod.Stateful {
 		parts = append(parts, "Stateful")
+	}
+	if sr := f.Pod.StatefulRotation; sr != nil {
+		parts = append(parts, fmt.Sprintf("StatefulContract(quorum=%d peerResync=%t snapshotClass=%q checkpoint=%t claims=%d)",
+			sr.Contract.Quorum, sr.Contract.PeerResync, sr.Contract.SnapshotClass, sr.Contract.CheckpointPort > 0, len(sr.Claims)))
 	}
 	if f.Pod.ServingEndpointReady {
 		parts = append(parts, "ServingEndpointReady")

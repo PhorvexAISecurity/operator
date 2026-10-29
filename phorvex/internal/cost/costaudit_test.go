@@ -114,6 +114,11 @@ func TestPart1_AllMutatingActionsHaveProvisionalStructuralCost(t *testing.T) {
 		model.ActionNodeCordonDrainReplace: 1.25,
 		// registry-rollback resets the owning controller image (one logical workload replacement).
 		model.ActionRegistryRollback: 1.00,
+		// Each stateful rotation class replaces exactly one member (one logical workload replacement);
+		// how long and how much of the set it removes is C_flow.
+		model.ActionStatefulReplicaRebuild:    1.00,
+		model.ActionStatefulSnapshotRotate:    1.00,
+		model.ActionStatefulCheckpointHandoff: 1.00,
 	}
 	for _, action := range model.MutatingActions {
 		got := normCostP1(view, model.Move{Action: action})

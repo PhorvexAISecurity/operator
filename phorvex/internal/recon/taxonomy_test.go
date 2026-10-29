@@ -217,6 +217,9 @@ func TestNoDeadFactKinds(t *testing.T) {
 		boundVoiceAdmissionView(),
 		endpointLeaseView(),
 		boundServingRateView(),
+		// Stateful rotation family: a replicated member with peer-resync rebuild mints the
+		// persisted-volume-state fact only replica-rebuild covers.
+		statefulReplicatedView(),
 		// Combined in-place actuators: one representative bound-observation view per new fact so the
 		// ucw recon profile emits each (TestNoDeadFactKinds proves none reads as dead capability).
 		{Pod: model.Pod{Namespace: "ns", Name: "config-drift", UID: "config-uid",

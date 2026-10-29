@@ -7,6 +7,7 @@ package recon
 import (
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/registry"
+	"github.com/phorvex/phorvex/internal/statefulrotation"
 )
 
 // ReconProfile is the swappable per-tenant perturbable-variable + recon-fact model.
@@ -76,8 +77,10 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	// observed-security-outcome claim. The producer has to establish an admitted
 	// mounted default-API-audience projection for this exact live Pod UID and
 	// current ServiceAccount; old-UID retirement is the eventual effect boundary.
+	credentialKey := ""
 	if view.Pod.HasPodBoundKubeAPIAuth() {
 		credential := addRotate(FactPodBoundKubeAPIAuthPotential, base*urg)
+		credentialKey = credential.Key()
 		// LIGHT identity-rotate deletes+recreates the dedicated ServiceAccount (new UID),
 		// invalidating the externally stolen pod-bound credential while RETAINING the Pod.
 		// It covers EXACTLY that credential fact — never pod identity, memory or session,
@@ -123,6 +126,32 @@ func (standardRecon) AssetFacts(view *model.WorkloadView, fctx FactContext) Asse
 	}
 	if view.Pod.ServingEndpointReady {
 		cover[model.ActionKVReset] = append(cover[model.ActionKVReset], sessFact.Key())
+	}
+	// Stateful rotation family: each class evicts the exact old process, so each invalidates
+	// its identity and in-memory implant (and its pod-bound API credential, retired with the
+	// old UID). They differ in what state crosses into the replacement:
+	//   - snapshot-rotate reattaches the same claims: in-process session state is gone, the
+	//     persisted volume state is retained (cover identical to rotate).
+	//   - checkpoint-handoff restores the application's checkpoint: the session state is
+	//     carried across by design, so it is NOT covered.
+	//   - replica-rebuild recreates the member on fresh claims re-seeded from peers: it also
+	//     covers the persisted volume state, which no other action invalidates.
+	if sr := view.Pod.StatefulRotation; sr != nil {
+		process := []string{pid.Key(), memFact.Key()}
+		if credentialKey != "" {
+			process = append(process, credentialKey)
+		}
+		if statefulrotation.Covers(sr, model.ActionStatefulSnapshotRotate) {
+			cover[model.ActionStatefulSnapshotRotate] = append(append([]string(nil), process...), sessFact.Key())
+		}
+		if statefulrotation.Covers(sr, model.ActionStatefulCheckpointHandoff) {
+			cover[model.ActionStatefulCheckpointHandoff] = append([]string(nil), process...)
+		}
+		if statefulrotation.Covers(sr, model.ActionStatefulReplicaRebuild) {
+			volume := Fact{Scope: ScopePod, Asset: asset, Kind: FactPersistentVolumeState, Weight: base * urg}
+			facts = append(facts, volume)
+			cover[model.ActionStatefulReplicaRebuild] = append(append([]string(nil), process...), sessFact.Key(), volume.Key())
+		}
 	}
 
 	// Network facts — invalidated by QUARANTINE (deny-all + detach).

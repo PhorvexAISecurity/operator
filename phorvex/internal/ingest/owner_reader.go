@@ -4,11 +4,15 @@ import (
 	"context"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// ownerReadKey includes the declared GVK so unstructured reads of different kinds
+// with the same name never alias one another.
 type ownerReadKey struct {
 	kind reflect.Type
+	gvk  schema.GroupVersionKind
 	key  client.ObjectKey
 }
 type ownerRead struct {
@@ -30,7 +34,7 @@ func newSnapshotOwnerReader(r client.Reader) client.Reader {
 	return &snapshotOwnerReader{Reader: r, reads: make(map[ownerReadKey]ownerRead)}
 }
 func (r *snapshotOwnerReader) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
-	k := ownerReadKey{reflect.TypeOf(obj), key}
+	k := ownerReadKey{reflect.TypeOf(obj), obj.GetObjectKind().GroupVersionKind(), key}
 	v, ok := r.reads[k]
 	if !ok {
 		err := r.Reader.Get(ctx, key, obj, opts...)

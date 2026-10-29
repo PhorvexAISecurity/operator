@@ -1,0 +1,84 @@
+# Live end-to-end fixture for the stateful rotation family (docs/stateful-rotation.md).
+# Everything lives in one disposable namespace; the harness identity below is the only
+# principal that may evict or rebuild these members.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phorvex-stateful-e2e
+---
+# Enables ONLY the stateful family: an operator build that predates it has no enabled action
+# it understands here and therefore never acts on this namespace.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: stateful-e2e
+  namespace: phorvex-stateful-e2e
+spec:
+  tenant: phorvex-stateful-e2e
+  mode: active
+  selector:
+    matchLabels:
+      phorvex.ai/e2e: stateful
+  actions:
+    enabled: [stateful-replica-rebuild, stateful-snapshot-rotate, stateful-checkpoint-handoff]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class: {restricted: "1.0", internal: "0.4"}
+    weightSecrets: "0.8"
+  objective:
+    lambda: "0.4"
+    costWeights:
+      normSparsity: "0.4"
+      flowDisruption: "0.6"
+  triggers:
+    eventDriven: true
+    reactiveOnly: false
+  budget:
+    maxMovesPerTick: 1
+    maxGracePeriodSeconds: 30
+    antiOverRotationWindow: 60s
+    proactiveFloor: 15m
+  slo:
+    minAvailableReplicas: 1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stateful-rotation-e2e
+  namespace: phorvex-stateful-e2e
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: stateful-rotation-e2e
+  namespace: phorvex-stateful-e2e
+rules:
+- {apiGroups: [""], resources: [pods], verbs: [get, list]}
+- {apiGroups: [""], resources: [pods/eviction], verbs: [create]}
+- {apiGroups: [""], resources: [persistentvolumeclaims], verbs: [get, delete]}
+- {apiGroups: [apps], resources: [statefulsets], verbs: [get]}
+- {apiGroups: [phorvex.ai], resources: [phorvexpolicies], verbs: [get]}
+- {apiGroups: [snapshot.storage.k8s.io], resources: [volumesnapshots], verbs: [get, create]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: stateful-rotation-e2e
+  namespace: phorvex-stateful-e2e
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: stateful-rotation-e2e}
+subjects: [{kind: ServiceAccount, name: stateful-rotation-e2e, namespace: phorvex-stateful-e2e}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phorvex-stateful-rotation-e2e
+rules:
+- {apiGroups: [snapshot.storage.k8s.io], resources: [volumesnapshotclasses], verbs: [get]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phorvex-stateful-rotation-e2e
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: phorvex-stateful-rotation-e2e}
+subjects: [{kind: ServiceAccount, name: stateful-rotation-e2e, namespace: phorvex-stateful-e2e}]

@@ -1373,7 +1373,7 @@ func (e *CoverageEngine) buildDecisionTrace(
 	}
 	trace := &model.DecisionTraceV2{
 		SchemaVersion:             traceSchemaForEconomics(economics),
-		ActionVocabularyVersion:   model.DecisionActionVocabularyLive33,
+		ActionVocabularyVersion:   model.DecisionActionVocabularyLive36,
 		DecisionID:                decisionTraceID("decision", tickID, traceStringOrUnavailable(v.Pod.UID), assetKey),
 		TickID:                    tickID,
 		Timestamp:                 now.UTC().Format(time.RFC3339Nano),
@@ -1976,6 +1976,9 @@ func counterfactualNote(a model.Action, selected bool, v *model.WorkloadView) st
 	}
 	if v.Pod.Stateful && a == model.ActionQuarantine {
 		return "R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex selected quarantine to contain while preserving state."
+	}
+	if model.IsStatefulRotation(a) {
+		return fmt.Sprintf("R6's blind timer would DELETE this stateful pod on schedule (destroying its data); Phorvex selected %s, a contract-bounded replacement admitted only with quorum headroom and a recovery path for the member's state.", a)
 	}
 	switch a {
 	case model.ActionRotate:

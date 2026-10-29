@@ -132,6 +132,9 @@ spec:
                       - credential-revoke
                       - agent-action-deny
                       - registry-rollback
+                      - stateful-replica-rebuild
+                      - stateful-snapshot-rotate
+                      - stateful-checkpoint-handoff
                       - disable
                       type: string
                     minItems: 1

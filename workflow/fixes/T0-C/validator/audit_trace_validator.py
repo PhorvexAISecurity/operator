@@ -87,7 +87,8 @@ LIVE29_ACTIONS = LIVE28_ACTIONS + ["node-cordon-drain-replace"]
 LIVE30_ACTIONS = LIVE29_ACTIONS + ["network-isolate"]
 LIVE31_ACTIONS = LIVE30_ACTIONS + ["credential-revoke"]
 LIVE32_ACTIONS = LIVE31_ACTIONS + ["agent-action-deny"]
-MUTATING_ACTIONS = LIVE32_ACTIONS + ["registry-rollback"]
+LIVE33_ACTIONS = LIVE32_ACTIONS + ["registry-rollback"]
+MUTATING_ACTIONS = LIVE33_ACTIONS + ["stateful-replica-rebuild", "stateful-snapshot-rotate", "stateful-checkpoint-handoff"]
 ACTION_VOCABULARY_OUTPUT16 = "v2-output16"
 ACTION_VOCABULARY_VOICE17 = "v3-voice17"
 ACTION_VOCABULARY_LITELLM17 = "v3-litellm17"
@@ -107,6 +108,7 @@ ACTION_VOCABULARY_LIVE30 = "v16-live30"
 ACTION_VOCABULARY_LIVE31 = "v17-live31"
 ACTION_VOCABULARY_LIVE32 = "v18-live32"
 ACTION_VOCABULARY_LIVE33 = "v19-live33"
+ACTION_VOCABULARY_LIVE36 = "v20-live36"
 ACTION_RANK = {a: i for i, a in enumerate(MUTATING_ACTIONS)}
 
 
@@ -155,6 +157,8 @@ def trace_action_vocabulary(tr: dict) -> tuple[list[str] | None, str | None]:
     if version == ACTION_VOCABULARY_LIVE32:
         return LIVE32_ACTIONS, None
     if version == ACTION_VOCABULARY_LIVE33:
+        return LIVE33_ACTIONS, None
+    if version == ACTION_VOCABULARY_LIVE36:
         return MUTATING_ACTIONS, None
     return None, f"decisionTrace.actionVocabularyVersion={version!r} is unknown"
 
