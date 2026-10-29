@@ -1774,10 +1774,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "AML.T0055",
@@ -2197,10 +2210,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "AML.T0096",
@@ -2296,10 +2322,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "AML.T0103",
@@ -2573,10 +2612,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "ASI03:2026",
@@ -2750,10 +2802,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "LLM08:2025",
@@ -2849,10 +2914,23 @@
       "physicalOracleRef": "console-family-profile:agent-action:v1#physical-oracle",
       "cleanupRef": "console-family-profile:agent-action:v1#cleanup",
       "runtimeModeContractRef": "contract:console-runtime-modes:v1",
-      "supportingImplementationExists": false,
-      "supportingImplementationRefs": [],
-      "registrationStatus": "unavailable",
-      "unavailableReason": "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+      "supportingImplementationExists": true,
+      "supportingImplementationRefs": [
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity.go",
+          "symbol": "newIdentityCatalogueAdapters"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go",
+          "symbol": "identityAgentCatalogueBinding"
+        },
+        {
+          "path": "phorvex/internal/console/attack_catalog_runtime.go",
+          "symbol": "newAttackCatalogAdapterRegistry"
+        }
+      ],
+      "registrationStatus": "eligible",
+      "unavailableReason": ""
     },
     {
       "id": "MCP05:2025",

@@ -349,6 +349,14 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	attackCatalogProfile := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE")
 	attackCatalogTenant := read("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT")
 	attackCatalogAuthorizationTenant := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT")
+	agentActionEnabled, err := readBool("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED")
+	if err != nil {
+		return err
+	}
+	agentActionImage := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE")
+	agentManagerPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL")
+	agentSensorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL")
+	agentActuatorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL")
 	if attackCatalogTenant != "" && (!strings.HasPrefix(attackCatalogTenant, identityfixture.NamespacePrefix) || len(validation.IsDNS1123Label(attackCatalogTenant)) != 0) {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT must name the fixed owned identity-fixture tenant")
 	}
@@ -364,10 +372,32 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	if attackCatalogEnabled && attackCatalogAuthorizationTenant == "" {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT is required when the launch adapter is enabled")
 	}
+	if agentActionEnabled && !attackCatalogEnabled {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED requires the attack catalogue launch adapter")
+	}
+	if agentActionEnabled && !console.ValidAttackCatalogAgentActionImage(agentActionImage) {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE must be one repository@sha256 reference")
+	}
+	for name, principal := range map[string]string{
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL":  agentManagerPrincipal,
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL":   agentSensorPrincipal,
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL": agentActuatorPrincipal,
+	} {
+		parts := strings.Split(principal, ":")
+		if agentActionEnabled && (len(parts) != 4 || parts[0] != "system" || parts[1] != "serviceaccount" ||
+			len(validation.IsDNS1123Label(parts[2])) != 0 || len(validation.IsDNS1123Subdomain(parts[3])) != 0) {
+			return fmt.Errorf("%s must be one exact in-cluster ServiceAccount principal", name)
+		}
+	}
 	cfg.AttackCatalogEnabled = attackCatalogEnabled
 	cfg.AttackCatalogAuthorizationTenant = attackCatalogAuthorizationTenant
 	cfg.AttackCatalogIdentityTenant = attackCatalogTenant
 	cfg.AttackCatalogIdentityProfilePath = attackCatalogProfile
+	cfg.AttackCatalogAgentActionEnabled = agentActionEnabled
+	cfg.AttackCatalogAgentActionImage = agentActionImage
+	cfg.AttackCatalogAgentManagerPrincipal = agentManagerPrincipal
+	cfg.AttackCatalogAgentSensorPrincipal = agentSensorPrincipal
+	cfg.AttackCatalogAgentActuatorPrincipal = agentActuatorPrincipal
 	runPrometheusEvidenceEnabled, err := readBool("PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED")
 	if err != nil {
 		return err

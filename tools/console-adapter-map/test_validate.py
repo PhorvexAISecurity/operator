@@ -25,11 +25,9 @@ class ConsoleAdapterMapValidationTest(unittest.TestCase):
         self.assertEqual(192, len(document["mappings"]))
         self.assertEqual(13, len(document["familyProfiles"]))
         self.assertEqual(192, len({item["id"] for item in document["mappings"]}))
-        self.assertEqual(186, sum(item["registrationStatus"] == "eligible" for item in document["mappings"]))
+        self.assertEqual(192, sum(item["registrationStatus"] == "eligible" for item in document["mappings"]))
         unavailable = [item for item in document["mappings"] if item["registrationStatus"] == "unavailable"]
-        self.assertEqual(6, len(unavailable))
-        self.assertTrue(all(item["family"] == "agent-action" for item in unavailable))
-        self.assertTrue(all(item["unavailableReason"] == MODULE.AGENT_ACTION_UNAVAILABLE_REASON for item in unavailable))
+        self.assertEqual([], unavailable)
 
     def test_missing_id_fails_closed(self):
         document = self.document()
@@ -51,11 +49,10 @@ class ConsoleAdapterMapValidationTest(unittest.TestCase):
         document["mappings"][0]["family"] = "serving-rate"
         self.assert_invalid(document, "family drift")
 
-    def test_unavailable_support_cannot_be_registration_eligible(self):
+    def test_missing_support_cannot_be_registration_eligible(self):
         document = self.document()
-        unavailable = next(item for item in document["mappings"] if not item["supportingImplementationExists"])
-        unavailable["registrationStatus"] = "eligible"
-        self.assert_invalid(document, "unavailable support cannot be registration-eligible")
+        document["mappings"][0]["supportingImplementationExists"] = False
+        self.assert_invalid(document, "current Console implementation support drift")
 
     def test_missing_support_reference_fails_closed(self):
         document = self.document()

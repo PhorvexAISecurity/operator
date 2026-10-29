@@ -84,6 +84,29 @@ docker build -f deploy/docker/console.Dockerfile --target attacks -t phorvex-att
   and `tools/test_service_charts.py` keeps them equal.
 - **Network.** A NetworkPolicy admits only the console's pods.
 
+### Immutable agent-action catalogue fixture
+
+The six `agent-action-deny` catalogue adapters are separately default-off. To
+package them, build `farm-fixtures/agentsim/Dockerfile`, publish it, and set
+`phorvex.console.attackCatalog.agentAction.image` to the resulting complete
+`repository@sha256:...` reference. Tags are rejected. Enabling the fixture also
+requires:
+
+- `agentActionDeny.enabled: true` with a native or hybrid actuator;
+- `p6-demo` in `policyNamespaces`, `actuatorNamespaces`, and
+  `console.attackNamespaces`;
+- `<namespace>/<release>-attacks` in `trustedDetectors`;
+- the attacks, manager, sensor, and actuator releases to use the same values.
+
+The attacks chart then owns the fixed `p6-demo` namespace, two-replica
+`agent-sim` Deployment, tokenless ServiceAccount, Service, guard ConfigMap,
+PDB, active reactive-only policy, and an exact read/guard-restore Role. The
+general attacks-target Role is deliberately omitted for `p6-demo`; the
+namespace remains in `attackNamespaces` so the SecurityEvent target admission
+policy and sweeper stay scoped correctly. Preflight uses access reviews to
+verify the installed attacks-service lifecycle authority and the exact
+manager/sensor/actuator grants before creating a signal.
+
 Setting `phorvex.services.attacks.endpoint` (`<release>-attacks:8090`) in the
 environment's values turns the split on in the manager chart:
 

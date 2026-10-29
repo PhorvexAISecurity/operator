@@ -1,0 +1,239 @@
+{{- $v := .Values.phorvex -}}
+{{- $agent := dig "console" "attackCatalog" "agentAction" (dict "enabled" false) $v -}}
+{{- if dig "enabled" false $agent -}}
+{{- if not (dig "console" "attackCatalog" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction.enabled requires console.attackCatalog.enabled" }}{{- end }}
+{{- if not (dig "agentActionDeny" "enabled" false $v) }}{{- fail "console.attackCatalog.agentAction.enabled requires agentActionDeny.enabled" }}{{- end }}
+{{- if not (has (dig "actuator" "" $v) (list "native" "hybrid")) }}{{- fail "console.attackCatalog.agentAction.enabled requires native or hybrid actuator" }}{{- end }}
+{{- $namespace := required "console.attackCatalog.agentAction.namespace is required" (dig "namespace" "" $agent) -}}
+{{- if ne $namespace "p6-demo" }}{{- fail "console.attackCatalog.agentAction.namespace must be p6-demo" }}{{- end }}
+{{- if not (has $namespace (dig "policyNamespaces" (list) $v)) }}{{- fail "console.attackCatalog.agentAction requires p6-demo in policyNamespaces" }}{{- end }}
+{{- if not (has $namespace (dig "actuatorNamespaces" (list) $v)) }}{{- fail "console.attackCatalog.agentAction requires p6-demo in actuatorNamespaces" }}{{- end }}
+{{- $attackNamespaces := dig "console" "attackNamespaces" (list) $v -}}
+{{- if not $attackNamespaces }}{{- fail "console.attackCatalog.agentAction requires namespace-scoped console.attackNamespaces" }}{{- end }}
+{{- if not (has $namespace $attackNamespaces) }}{{- fail "console.attackCatalog.agentAction requires p6-demo in console.attackNamespaces" }}{{- end }}
+{{- $image := required "console.attackCatalog.agentAction.image requires repository@sha256" (dig "image" "" $agent) -}}
+{{- if not (regexMatch "^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)+@sha256:[0-9a-f]{64}$" $image) }}{{- fail "console.attackCatalog.agentAction.image must be one repository@sha256 reference without a tag" }}{{- end }}
+{{- $attacksSA := include "phorvex-common.attacksServiceAccountName" . -}}
+{{- $trusted := false -}}
+{{- range (dig "trustedDetectors" (list) $v) -}}
+{{- range splitList "," . -}}
+{{- $entry := trim . -}}
+{{- if or (eq $entry (printf "%s/%s" $.Release.Namespace $attacksSA)) (eq $entry (printf "%s:%s" $.Release.Namespace $attacksSA)) (eq $entry (printf "system:serviceaccount:%s:%s" $.Release.Namespace $attacksSA)) }}{{- $trusted = true -}}{{- end }}
+{{- end -}}
+{{- end -}}
+{{- if not $trusted }}{{- fail (printf "console.attackCatalog.agentAction requires exact attacks creator %s/%s in trustedDetectors" .Release.Namespace $attacksSA) }}{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-sim
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-deny-guard
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+data:
+  denied.json: '{"denied_agent_actions":[]}'
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-sim
+  namespace: p6-demo
+  labels:
+    app: agent-sim
+    phorvex.ai/attack-catalog-agent-action: "true"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-sim
+  template:
+    metadata:
+      labels:
+        app: agent-sim
+        phorvex.ai/attack-catalog-agent-action: "true"
+    spec:
+      serviceAccountName: agent-sim
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: agent-sim
+        image: {{ $image | quote }}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 3
+          timeoutSeconds: 2
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 32Mi
+        volumeMounts:
+        - name: guard
+          mountPath: /etc/phorvex-agent-guard
+          readOnly: true
+      volumes:
+      - name: guard
+        configMap:
+          name: agent-deny-guard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-sim
+  namespace: p6-demo
+  labels:
+    app: agent-sim
+    phorvex.ai/attack-catalog-agent-action: "true"
+spec:
+  selector:
+    app: agent-sim
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-sim
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent-sim
+---
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: agent-defense
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+spec:
+  tenant: p6-demo
+  mode: active
+  selector:
+    matchLabels:
+      app: agent-sim
+  actions:
+    enabled: [agent-action-deny, rotate]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 90s
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 15m
+    tickInterval: 5s
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    disruptionAversion: "1"
+    lambda: "0"
+  slo:
+    costCeiling: "1.2"
+    minAvailableReplicas: 1
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: true
+---
+# The attacks service may only inspect the fixed fixture, create/delete its
+# cluster-scoped signal through its base role, and restore this one guard.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $attacksSA }}-agent-action-catalog
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["services"]
+  resourceNames: ["agent-sim"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  resourceNames: ["agent-sim"]
+  verbs: ["get"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["agent-deny-guard"]
+  verbs: ["get", "update"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  resourceNames: ["agent-sim"]
+  verbs: ["get"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["list"]
+- apiGroups: ["phorvex.ai"]
+  resources: ["phorvexpolicies"]
+  resourceNames: ["agent-defense"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $attacksSA }}-agent-action-catalog
+  namespace: p6-demo
+  labels:
+    phorvex.ai/attack-catalog-agent-action: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $attacksSA }}-agent-action-catalog
+subjects:
+- kind: ServiceAccount
+  name: {{ $attacksSA }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}

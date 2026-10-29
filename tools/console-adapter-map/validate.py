@@ -178,8 +178,7 @@ FAMILY_IMPLEMENTATIONS = {
 }
 
 # These references prove the packaged Go factory and the central exact-ID registry
-# seam.  The six agent-action rows deliberately have no implementation references:
-# their reviewed metadata exists, but packaging has no immutable runtime fixture.
+# seam. Runtime availability remains a separate deployment/preflight decision.
 REGISTRY_REF = {
     "path": "phorvex/internal/console/attack_catalog_runtime.go",
     "symbol": "newAttackCatalogAdapterRegistry",
@@ -206,6 +205,11 @@ CONSOLE_FAMILY_IMPLEMENTATIONS.update({
     for family in ("serving-rate", "sensitive-output", "serving-kv")
 })
 CONSOLE_FAMILY_IMPLEMENTATIONS.update({
+    "agent-action": [
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity.go", "symbol": "newIdentityCatalogueAdapters"},
+        {"path": "phorvex/internal/console/attack_catalog_adapters_identity_agent.go", "symbol": "identityAgentCatalogueBinding"},
+        REGISTRY_REF,
+    ],
     "credential": [
         {"path": "phorvex/internal/console/attack_catalog_adapters_identity.go", "symbol": "newIdentityCatalogueAdapters"},
         {"path": "phorvex/internal/console/attack_catalog_adapters_identity_credential.go", "symbol": "identityCredentialCatalogueBinding"},
@@ -221,16 +225,9 @@ AML_T0012_IMPLEMENTATION = [
     {"path": "phorvex/internal/console/attack_catalog_identity_run.go", "symbol": "identityAttackCatalogAdapter"},
     REGISTRY_REF,
 ]
-AGENT_ACTION_UNAVAILABLE_REASON = (
-    "agent-action-deny catalogue profile is not installable: packaging has no "
-    "digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, "
-    "or attacks-service fixture RBAC"
-)
 
 
 def console_implementation_refs(identifier: str, family: str) -> list[dict[str, str]]:
-    if family == "agent-action":
-        return []
     if identifier == "AML.T0012":
         return copy.deepcopy(AML_T0012_IMPLEMENTATION)
     return copy.deepcopy(CONSOLE_FAMILY_IMPLEMENTATIONS.get(family, []))
@@ -621,7 +618,7 @@ def main() -> int:
     validate_document(actual)
     if args.artifact.read_bytes() != wanted:
         raise SystemExit(f"{args.artifact}: mapping artifact is stale; run with --write")
-    print("validated: 192 exact IDs, 13 exact family profiles, 186 registration-eligible, 6 unavailable")
+    print("validated: 192 exact IDs, 13 exact family profiles, 192 registration-eligible")
     return 0
 
 

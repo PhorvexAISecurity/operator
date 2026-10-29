@@ -34,8 +34,7 @@ const (
 	credentialRevokeOracle = "credential-revoke-token-rejection-v1"
 	agentActionDenyOracle  = "agent-action-deny-enforcement-v1"
 
-	identityCatalogueCleanupSchema        = "phorvex.attack-catalogue-identity-cleanup.v1"
-	agentActionCatalogueUnavailableReason = "agent-action-deny catalogue profile is not installable: packaging has no digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or attacks-service fixture RBAC"
+	identityCatalogueCleanupSchema = "phorvex.attack-catalogue-identity-cleanup.v1"
 )
 
 // identityCatalogueProfile is a review pin, not a caller-selected launch
@@ -100,6 +99,21 @@ func newIdentityCatalogueAdapters() []identityCatalogueAdapterFactory {
 	return result
 }
 
+func bindIdentityCatalogueAdapters(server *Server, cfg Config, factories []identityCatalogueAdapterFactory) ([]AttackCatalogAdapter, error) {
+	adapters := make([]AttackCatalogAdapter, 0, len(factories))
+	for _, factory := range factories {
+		if factory.err != nil {
+			return nil, fmt.Errorf("construct identity catalogue adapter %q: %w", factory.profile.ID, factory.err)
+		}
+		adapter := factory.bind(server, cfg)
+		if adapter == nil {
+			return nil, fmt.Errorf("construct identity catalogue adapter %q: nil adapter", factory.profile.ID)
+		}
+		adapters = append(adapters, adapter)
+	}
+	return adapters, nil
+}
+
 func validateIdentityCatalogueProfile(profile identityCatalogueProfile) error {
 	if profile.ID == "" || profile.ID == attackcatalog.FirstID || strings.TrimSpace(profile.ID) != profile.ID ||
 		profile.ExpectedAction == "" || profile.EventType == "" || profile.Lane == "" {
@@ -135,7 +149,7 @@ func (factory identityCatalogueAdapterFactory) bind(server *Server, cfg Config) 
 	case identityCatalogueCredential:
 		adapter.binding = &identityCredentialCatalogueBinding{server: server, cfg: cfg}
 	case identityCatalogueAgent:
-		adapter.blocker = agentActionCatalogueUnavailableReason
+		adapter.binding = &identityAgentCatalogueBinding{server: server, cfg: cfg}
 	default:
 		adapter.blocker = "catalogue family is not supported by this runtime"
 	}
@@ -180,6 +194,7 @@ type identityCataloguePhysicalObservation struct {
 	DeniedBefore                  bool
 	DeniedAfter                   bool
 	BenignAllowedAfter            bool
+	SurgicalAllowedAfter          bool
 	ServingSetRetained            bool
 }
 
@@ -199,6 +214,14 @@ type identityCatalogueFamilyBinding interface {
 	Launch(context.Context, identityCatalogueProfile, AttackCatalogRunContext, *identityCatalogueBindingPreparation) (identityCatalogueBindingSignal, bool, error)
 	Physical(context.Context, identityCatalogueProfile, *identityCatalogueBindingPreparation) (identityCataloguePhysicalObservation, error)
 	Cleanup(context.Context, identityCatalogueProfile, *identityCatalogueBindingPreparation, identityCatalogueBindingSignal) (identityCatalogueCleanupObservation, error)
+}
+
+// identityCatalogueAcceptedReceiptBinder lets a physical actuator ledger bind
+// itself to the exact accepted brain decision. It is deliberately invoked only
+// after the generic audit verifier has joined the fresh signal, policy epoch,
+// target UID, expected action, handler, and receipt object.
+type identityCatalogueAcceptedReceiptBinder interface {
+	BindAcceptedReceipt(identityCatalogueProfile, *identityCatalogueBindingPreparation, identityCatalogueBindingSignal, string) error
 }
 
 type identityFamilyCatalogueAdapter struct {
@@ -379,6 +402,13 @@ func (a *identityFamilyCatalogueAdapter) Execute(ctx context.Context, run Attack
 				observed, decision, receipt := identityFamilyCatalogueDecision(a.profile, row, prepared.prepared, signal)
 				if observed {
 					observation.Signal.Observed = true
+					if receipt.ReceiptObserved {
+						if binder, ok := a.binding.(identityCatalogueAcceptedReceiptBinder); ok {
+							if bindErr := binder.BindAcceptedReceipt(a.profile, prepared.prepared, signal, decision.ID); bindErr != nil {
+								receipt = AttackCatalogActuatorResult{}
+							}
+						}
+					}
 					if !observation.Actuator.ReceiptObserved || receipt.ReceiptObserved {
 						observation.Decision, observation.Actuator = decision, receipt
 					}
@@ -456,9 +486,13 @@ func identityFamilyCatalogueDecision(profile identityCatalogueProfile, rec audit
 	decision := AttackCatalogDecisionResult{Observed: true, ID: rec.DecisionTrace.DecisionID, Selected: rec.Selected,
 		Feasible: rec.Feasible, Action: rec.Action, DispatchOutcome: rec.DecisionTrace.DispatchOutcome}
 	receipt := AttackCatalogActuatorResult{}
+	receiptObjectMatched := slices.Contains(rec.ObjectsTouched, prepared.ReceiptObject)
+	if profile.Family == identityCatalogueAgent {
+		receiptObjectMatched = slices.Equal(rec.ObjectsTouched, []string{prepared.ReceiptObject})
+	}
 	receipt.ReceiptObserved = rec.Action == profile.ExpectedAction && rec.Selected && rec.Feasible && rec.Actuated && !rec.DryRun &&
 		rec.DecisionTrace.DispatchOutcome == model.DispatchEmitted && rec.Handler == profile.ExpectedAction &&
-		slices.Contains(rec.ObjectsTouched, prepared.ReceiptObject)
+		receiptObjectMatched
 	if receipt.ReceiptObserved {
 		// Persist only the already-pinned receipt object; never copy arbitrary
 		// audit strings into catalogue evidence.
@@ -496,9 +530,11 @@ func encodeIdentityCataloguePhysical(profile identityCatalogueProfile, observed 
 		evidence := agentActionDenyEvidence{Schema: agentActionDenyOracle, PodUID: observed.PodUID,
 			GuardUID: observed.GuardUID, ServiceUID: observed.ServiceUID, DeniedBefore: observed.DeniedBefore,
 			DeniedAfter: observed.DeniedAfter, BenignAllowedAfter: observed.BenignAllowedAfter,
-			ServingSetRetained: observed.ServingSetRetained}
+			SurgicalAllowedAfter: observed.SurgicalAllowedAfter,
+			ServingSetRetained:   observed.ServingSetRetained}
 		evidence.Validated = evidence.PodUID != "" && evidence.GuardUID != "" && evidence.ServiceUID != "" &&
-			!evidence.DeniedBefore && evidence.DeniedAfter && evidence.BenignAllowedAfter && evidence.ServingSetRetained
+			!evidence.DeniedBefore && evidence.DeniedAfter && evidence.BenignAllowedAfter &&
+			evidence.SurgicalAllowedAfter && evidence.ServingSetRetained
 		raw, _ := json.Marshal(evidence)
 		return AttackCatalogPhysicalResult{Validated: evidence.Validated, Oracle: agentActionDenyOracle, Evidence: raw,
 			PodRetained: evidence.ServingSetRetained, PodUID: evidence.PodUID}
@@ -521,15 +557,16 @@ type credentialRevokeEvidence struct {
 }
 
 type agentActionDenyEvidence struct {
-	Schema             string `json:"schema"`
-	Validated          bool   `json:"validated"`
-	PodUID             string `json:"podUID"`
-	GuardUID           string `json:"guardUID"`
-	ServiceUID         string `json:"serviceUID"`
-	DeniedBefore       bool   `json:"deniedBefore"`
-	DeniedAfter        bool   `json:"deniedAfter"`
-	BenignAllowedAfter bool   `json:"benignAllowedAfter"`
-	ServingSetRetained bool   `json:"servingSetRetained"`
+	Schema               string `json:"schema"`
+	Validated            bool   `json:"validated"`
+	PodUID               string `json:"podUID"`
+	GuardUID             string `json:"guardUID"`
+	ServiceUID           string `json:"serviceUID"`
+	DeniedBefore         bool   `json:"deniedBefore"`
+	DeniedAfter          bool   `json:"deniedAfter"`
+	BenignAllowedAfter   bool   `json:"benignAllowedAfter"`
+	SurgicalAllowedAfter bool   `json:"surgicalAllowedAfter"`
+	ServingSetRetained   bool   `json:"servingSetRetained"`
 }
 
 type identityCatalogueCleanupEvidence struct {
@@ -603,7 +640,8 @@ func validateIdentityFamilyPhysical(profile identityCatalogueProfile, result Att
 		var evidence agentActionDenyEvidence
 		if result.Oracle != agentActionDenyOracle || decodeIdentityEvidence(result.Evidence, &evidence) != nil ||
 			evidence.Schema != agentActionDenyOracle || !evidence.Validated || evidence.PodUID == "" || evidence.GuardUID == "" || evidence.ServiceUID == "" ||
-			evidence.DeniedBefore || !evidence.DeniedAfter || !evidence.BenignAllowedAfter || !evidence.ServingSetRetained ||
+			evidence.DeniedBefore || !evidence.DeniedAfter || !evidence.BenignAllowedAfter ||
+			!evidence.SurgicalAllowedAfter || !evidence.ServingSetRetained ||
 			result.PodUID != evidence.PodUID || !result.PodRetained {
 			return errors.New("agent deny-guard enforcement, benign control and retained serving set oracle required")
 		}
@@ -632,6 +670,15 @@ func identityCatalogueStringSHA256(value string) string {
 
 func (a *identityFamilyCatalogueAdapter) DefendedReason() string {
 	return "fresh exact signal, decision, actuator receipt, family physical oracle and retry-safe cleanup passed"
+}
+
+func (a *identityFamilyCatalogueAdapter) CleanupTimeout() time.Duration {
+	if a != nil && a.profile.Family == identityCatalogueAgent {
+		// Projected ConfigMap refresh is asynchronous. Keep cleanup bounded while
+		// allowing the app-facing empty guard to reach every serving Pod.
+		return 2 * time.Minute
+	}
+	return attackCatalogCleanupTimeout
 }
 
 func safeIdentityCatalogueStageError(family identityCatalogueFamily, stage string, err error) error {

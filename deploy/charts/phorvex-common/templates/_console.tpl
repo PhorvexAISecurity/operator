@@ -416,12 +416,29 @@ spec:
           value: {{ required "identityRotate.targetNamespace is required for console.attackCatalog" .Values.phorvex.identityRotate.targetNamespace | quote }}
         {{- end }}
         {{- if and $attacks (dig "attackCatalog" "enabled" false .Values.phorvex.console) }}
-        # Metadata is embedded in the image; this fixed root-owned profile enables only
-        # AML.T0012 and cannot be replaced by a request body.
+        # Metadata is embedded in the image; fixed deployment-owned profiles and
+        # immutable fixture settings cannot be replaced by a request body.
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED
           value: "true"
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE
           value: /etc/phorvex-attack-catalog/identity-profile.json
+        {{- if dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}
+        {{- $agentImage := required "console.attackCatalog.agentAction.image is required" .Values.phorvex.console.attackCatalog.agentAction.image }}
+        {{- $managerSA := dig "serviceAccountName" "" .Values.phorvex | default (printf "%s-phorvex-manager" .Release.Name) }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED
+          value: "true"
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE
+          value: {{ $agentImage | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL
+          value: {{ printf "system:serviceaccount:%s:%s" .Release.Namespace $managerSA | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL
+          value: {{ printf "system:serviceaccount:%s:%s-sensor" .Release.Namespace .Release.Name | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL
+          value: {{ printf "system:serviceaccount:%s:%s-actuator" .Release.Namespace .Release.Name | quote }}
+        {{- else }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED
+          value: "false"
+        {{- end }}
         {{- if dig "attackCatalog" "prometheusEvidence" "enabled" false .Values.phorvex.console }}
         {{- if not .Values.phorvex.prometheusUrl }}{{ fail "console.attackCatalog.prometheusEvidence.enabled requires phorvex.prometheusUrl" }}{{ end }}
         - name: PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED

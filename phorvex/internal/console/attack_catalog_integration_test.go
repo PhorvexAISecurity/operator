@@ -53,43 +53,52 @@ func TestAttackCatalogueRowsExactOrderUniquenessAndAvailability(t *testing.T) {
 	cfg := Config{Service: ServiceAttacks, AttackCatalogEnabled: true, AttackCatalogAuthorizationTenant: "phorvex-test",
 		AttackCatalogIdentityTenant:      "console-identity-test",
 		AttackCatalogIdentityProfilePath: writeAttackCatalogProfile(t), AuditSource: &audittransport.Client{}}
-	server := &Server{cfg: cfg}
-	registry := newAttackCatalogAdapterRegistry(server, cfg)
-	items := applyAttackCatalogAvailability(cfg.attackCatalogueItems(), registry)
-	if len(items) != attackcatalog.ExpectedSize {
-		t.Fatalf("items=%d, want %d", len(items), attackcatalog.ExpectedSize)
-	}
-	seen := make(map[string]bool, len(items))
-	families := map[string]bool{}
-	available, unavailable := 0, 0
-	for i, item := range items {
-		entry := entries[i]
-		if item.CatalogueOrder != i+1 || item.CatalogueID != entry.ID || item.EntryID != entry.ID ||
-			item.Description != entry.Description || item.Family != entry.Family || item.ExpectedAction != entry.ExpectedAction ||
-			item.ReactiveCompatible != entry.ReactiveCompatible || seen[item.CatalogueID] {
-			t.Fatalf("row %d changed or duplicated: %+v", i+1, item)
+	check := func(name string, current Config, wantAvailable, wantUnavailable int, unavailableReason func(CatalogItem) bool) *AttackCatalogAdapterRegistry {
+		t.Helper()
+		server := &Server{cfg: current}
+		registry := newAttackCatalogAdapterRegistry(server, current)
+		items := applyAttackCatalogAvailability(current.attackCatalogueItems(), registry)
+		if len(items) != attackcatalog.ExpectedSize {
+			t.Fatalf("%s items=%d, want %d", name, len(items), attackcatalog.ExpectedSize)
 		}
-		seen[item.CatalogueID] = true
-		families[item.Family] = true
-		adapter, ok := registry.Lookup(item.CatalogueID)
-		if !ok || adapter.CatalogueID() != item.CatalogueID {
-			t.Fatalf("exact registry lookup failed for %q", item.CatalogueID)
-		}
-		if item.Available {
-			available++
-			if item.UnavailableReason != "" || item.Family == string(identityCatalogueAgent) {
-				t.Fatalf("available row has inconsistent readiness: %+v", item)
+		seen := make(map[string]bool, len(items))
+		families := map[string]bool{}
+		available, unavailable := 0, 0
+		for i, item := range items {
+			entry := entries[i]
+			if item.CatalogueOrder != i+1 || item.CatalogueID != entry.ID || item.EntryID != entry.ID ||
+				item.Description != entry.Description || item.Family != entry.Family || item.ExpectedAction != entry.ExpectedAction ||
+				item.ReactiveCompatible != entry.ReactiveCompatible || seen[item.CatalogueID] {
+				t.Fatalf("%s row %d changed or duplicated: %+v", name, i+1, item)
 			}
-		} else {
-			unavailable++
-			if item.Family != string(identityCatalogueAgent) || item.UnavailableReason != agentActionCatalogueUnavailableReason {
-				t.Fatalf("unexpected unavailable row: %+v", item)
+			seen[item.CatalogueID] = true
+			families[item.Family] = true
+			adapter, ok := registry.Lookup(item.CatalogueID)
+			if !ok || adapter.CatalogueID() != item.CatalogueID {
+				t.Fatalf("%s exact registry lookup failed for %q", name, item.CatalogueID)
+			}
+			if item.Available {
+				available++
+				if item.UnavailableReason != "" {
+					t.Fatalf("%s available row has inconsistent readiness: %+v", name, item)
+				}
+			} else {
+				unavailable++
+				if unavailableReason == nil || !unavailableReason(item) {
+					t.Fatalf("%s unexpected unavailable row: %+v", name, item)
+				}
 			}
 		}
+		if len(seen) != 192 || len(families) != 13 || available != wantAvailable || unavailable != wantUnavailable {
+			t.Fatalf("%s coverage IDs=%d families=%d available=%d unavailable=%d", name, len(seen), len(families), available, unavailable)
+		}
+		return registry
 	}
-	if len(seen) != 192 || len(families) != 13 || available != 186 || unavailable != 6 {
-		t.Fatalf("coverage IDs=%d families=%d available=%d unavailable=%d", len(seen), len(families), available, unavailable)
-	}
+
+	registry := check("fixture disabled", cfg, 186, 6, func(item CatalogItem) bool {
+		return item.Family == string(identityCatalogueAgent) &&
+			item.UnavailableReason == item.CatalogueID+" immutable agent-action fixture is not enabled by this deployment."
+	})
 	aml, ok := registry.Lookup(attackcatalog.FirstID)
 	if !ok {
 		t.Fatal("AML.T0012 is absent from the integrated registry")
@@ -97,6 +106,21 @@ func TestAttackCatalogueRowsExactOrderUniquenessAndAvailability(t *testing.T) {
 	if _, original := aml.(*identityAttackCatalogAdapter); !original {
 		t.Fatalf("AML.T0012 adapter type=%T, want retained original adapter", aml)
 	}
+	invalidImage := cfg
+	invalidImage.AttackCatalogAgentActionEnabled = true
+	check("image unconfigured", invalidImage, 186, 6, func(item CatalogItem) bool {
+		return item.Family == string(identityCatalogueAgent) &&
+			item.UnavailableReason == item.CatalogueID+" requires a complete repository@sha256:<64hex> agent-sim image pin."
+	})
+	configured := cfg
+	agent := agentCatalogueTestConfig()
+	configured.AttackCatalogAgentActionEnabled = agent.AttackCatalogAgentActionEnabled
+	configured.AttackCatalogAgentActionImage = agent.AttackCatalogAgentActionImage
+	configured.AttackCatalogAgentManagerPrincipal = agent.AttackCatalogAgentManagerPrincipal
+	configured.AttackCatalogAgentSensorPrincipal = agent.AttackCatalogAgentSensorPrincipal
+	configured.AttackCatalogAgentActuatorPrincipal = agent.AttackCatalogAgentActuatorPrincipal
+	check("fully configured", configured, 192, 0, nil)
+
 	mismatch := cfg
 	mismatch.AttackCatalogIdentityTenant = "console-identity-other"
 	mismatchServer := &Server{cfg: mismatch}
@@ -271,7 +295,7 @@ func TestAttackCatalogueLaunchAuthorizationAndStrictAllowlist(t *testing.T) {
 		})
 	}
 	unavailable := operator.do(operator.albReqAs(t, http.MethodPost, "/api/catalog/launch", `{"id":"AML.T0053"}`, "operator"))
-	if unavailable.Code != http.StatusBadRequest || !strings.Contains(unavailable.Body.String(), agentActionCatalogueUnavailableReason) {
+	if unavailable.Code != http.StatusBadRequest || !strings.Contains(unavailable.Body.String(), "AML.T0053 immutable agent-action fixture is not enabled by this deployment.") {
 		t.Fatalf("unavailable launch status=%d body=%s", unavailable.Code, unavailable.Body.String())
 	}
 	if got := factoryCalls.Load(); got != 0 {

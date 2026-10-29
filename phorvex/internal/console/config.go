@@ -44,16 +44,25 @@ type Config struct {
 	AuditSourceIdentity string
 	// AttackCatalogEnabled admits the packaged exact-ID adapters after their
 	// deployment-owned prerequisites pass. All 192 metadata rows and adapters stay
-	// visible when it is false, but launch remains unavailable. Both tenants and the
-	// profile path are deployment-owned and are never accepted from an API caller.
-	// Authorization stays in the environment tenant while the attacks service alone
-	// operates the fixed fixture tenants.
+	// visible when it is false, but launch remains unavailable. Tenants, profiles,
+	// images, and service identities are deployment-owned and are never accepted
+	// from an API caller. Authorization stays in the environment tenant while the
+	// attacks service alone operates the fixed fixture tenants.
 	AttackCatalogEnabled             bool
 	AttackCatalogAuthorizationTenant string
 	AttackCatalogIdentityTenant      string
 	AttackCatalogIdentityProfilePath string
-	AttackCatalogRunTimeout          time.Duration
-	AttackCatalogPollInterval        time.Duration
+	// Agent-action catalogue execution is a separate opt-in over the immutable p6-demo
+	// fixture. The image is the complete repository@sha256 reference rendered into the
+	// fixture, and the principals are exact in-cluster ServiceAccount usernames checked
+	// with SubjectAccessReview before any SecurityEvent is created.
+	AttackCatalogAgentActionEnabled     bool
+	AttackCatalogAgentActionImage       string
+	AttackCatalogAgentManagerPrincipal  string
+	AttackCatalogAgentSensorPrincipal   string
+	AttackCatalogAgentActuatorPrincipal string
+	AttackCatalogRunTimeout             time.Duration
+	AttackCatalogPollInterval           time.Duration
 	// RunPrometheusEvidence retains baseline-subtracted Prometheus samples beside
 	// every catalogue run. It is an explicit deployment opt-in: a configured
 	// Prometheus URL used by other console views does not silently make telemetry

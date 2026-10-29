@@ -72,6 +72,15 @@ func TestIdentityCatalogueAdapterExactReviewedCoverage(t *testing.T) {
 	}
 }
 
+func TestIdentityCatalogueConstructorErrorFailsClosed(t *testing.T) {
+	factories := newIdentityCatalogueAdapters()
+	factories[0].err = errors.New("review pin mismatch")
+	adapters, err := bindIdentityCatalogueAdapters(nil, Config{}, factories)
+	if err == nil || adapters != nil || !strings.Contains(err.Error(), "construct identity catalogue adapter") {
+		t.Fatalf("adapters=%v err=%v", adapters, err)
+	}
+}
+
 type identityFarmSpec struct {
 	Name      string `json:"name"`
 	Mode      string `json:"mode"`
@@ -200,7 +209,7 @@ func TestIdentityCatalogueProductionBindingsReportHonestBlockers(t *testing.T) {
 	if credential == nil || credential.Availability().Available || !strings.Contains(credential.Availability().UnavailableReason, "not enabled") {
 		t.Fatalf("credential availability=%+v", credential.Availability())
 	}
-	if agent == nil || agent.Availability().Available || !strings.Contains(agent.Availability().UnavailableReason, "no digest-pinned server-owned agent-sim image") {
+	if agent == nil || agent.Availability().Available || !strings.Contains(agent.Availability().UnavailableReason, "not enabled") {
 		t.Fatalf("agent availability=%+v", agent.Availability())
 	}
 	if _, err := credential.Destination(); err == nil {
@@ -467,7 +476,7 @@ func newIdentityTestBinding(profile identityCatalogueProfile) *identityTestBindi
 		physical.AvailabilityFloorRetained = true
 	case identityCatalogueAgent:
 		physical.GuardUID, physical.ServiceUID = "guard-uid", "service-uid"
-		physical.DeniedAfter, physical.BenignAllowedAfter, physical.ServingSetRetained = true, true, true
+		physical.DeniedAfter, physical.BenignAllowedAfter, physical.SurgicalAllowedAfter, physical.ServingSetRetained = true, true, true, true
 	}
 	return &identityTestBinding{profile: profile, prepared: prepared, physical: physical,
 		signal: identityCatalogueBindingSignal{Name: "signal-name", UID: "signal-uid", Creator: "system:serviceaccount:fixture-ns:injector",
@@ -628,6 +637,13 @@ func TestIdentityCatalogueStaleAndCrossRunDecisionRejection(t *testing.T) {
 			if observed, _, receipt := identityFamilyCatalogueDecision(profile, wrongReceipt, binding.prepared, binding.signal); !observed || receipt.ReceiptObserved {
 				t.Fatal("wrong physical receipt object was accepted")
 			}
+			if family == identityCatalogueAgent {
+				extraReceipt := good
+				extraReceipt.ObjectsTouched = append(slices.Clone(good.ObjectsTouched), "fixture-ns/other")
+				if observed, _, receipt := identityFamilyCatalogueDecision(profile, extraReceipt, binding.prepared, binding.signal); !observed || receipt.ReceiptObserved {
+					t.Fatal("agent receipt with an additional touched object was accepted")
+				}
+			}
 		})
 	}
 }
@@ -690,6 +706,27 @@ func TestIdentityCredentialOracleRequiresBothPositiveControls(t *testing.T) {
 	}
 }
 
+func TestIdentityAgentOracleRequiresBothAllowControls(t *testing.T) {
+	profile := identityTestProfile(t, identityCatalogueAgent)
+	baseline := newIdentityTestBinding(profile).physical
+	for name, mutate := range map[string]func(*identityCataloguePhysicalObservation){
+		"abused-deny":    func(o *identityCataloguePhysicalObservation) { o.DeniedAfter = false },
+		"benign-pair":    func(o *identityCataloguePhysicalObservation) { o.BenignAllowedAfter = false },
+		"surgical-pair":  func(o *identityCataloguePhysicalObservation) { o.SurgicalAllowedAfter = false },
+		"serving-set":    func(o *identityCataloguePhysicalObservation) { o.ServingSetRetained = false },
+		"clean-baseline": func(o *identityCataloguePhysicalObservation) { o.DeniedBefore = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			observed := baseline
+			mutate(&observed)
+			result := encodeIdentityCataloguePhysical(profile, observed)
+			if result.Validated || validateIdentityFamilyPhysical(profile, result) == nil {
+				t.Fatalf("agent oracle accepted missing %s control: %+v", name, result)
+			}
+		})
+	}
+}
+
 func TestIdentityCatalogueCleanupRetryAndCancellation(t *testing.T) {
 	adapter, binding, run := identityTestAdapter(t, identityCatalogueAgent)
 	prepared, err := adapter.Preflight(context.Background(), run)
@@ -719,38 +756,42 @@ func TestIdentityCatalogueCleanupRetryAndCancellation(t *testing.T) {
 }
 
 func TestIdentityCatalogueErrorsAndEvidenceNeverPersistCredentialMaterial(t *testing.T) {
-	adapter, binding, run := identityTestAdapter(t, identityCatalogueCredential)
-	binding.preflightErr = errors.New(identityAdapterSensitiveSentinel)
-	if _, err := adapter.Preflight(context.Background(), run); err == nil || strings.Contains(err.Error(), identityAdapterSensitiveSentinel) {
-		t.Fatalf("preflight error was not safely reduced: %v", err)
-	}
-	binding.preflightErr = nil
-	prepared, err := adapter.Preflight(context.Background(), run)
-	if err != nil {
-		t.Fatal(err)
-	}
-	binding.launchErr = errors.New(identityAdapterSensitiveSentinel)
-	if _, err = adapter.Execute(context.Background(), run, prepared); err == nil || strings.Contains(err.Error(), identityAdapterSensitiveSentinel) {
-		t.Fatalf("launch error was not safely reduced: %v", err)
-	}
-	binding.launchErr = nil
-	observation, err := adapter.Execute(context.Background(), run, prepared)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cleanup := adapter.Cleanup(context.Background(), run, prepared)
-	raw, err := json.Marshal(struct {
-		Observation AttackCatalogObservation   `json:"observation"`
-		Cleanup     AttackCatalogCleanupResult `json:"cleanup"`
-	}{observation, cleanup})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(raw), identityAdapterSensitiveSentinel) {
-		t.Fatalf("credential material escaped into evidence: %s", raw)
-	}
-	if strings.Contains(strings.Join(observation.Actuator.ObjectsTouched, " "), identityAdapterSensitiveSentinel) {
-		t.Fatal("credential material escaped through receipt objects")
+	for _, family := range []identityCatalogueFamily{identityCatalogueCredential, identityCatalogueRotation, identityCatalogueAgent} {
+		t.Run(string(family), func(t *testing.T) {
+			adapter, binding, run := identityTestAdapter(t, family)
+			binding.preflightErr = errors.New(identityAdapterSensitiveSentinel)
+			if _, err := adapter.Preflight(context.Background(), run); err == nil || strings.Contains(err.Error(), identityAdapterSensitiveSentinel) {
+				t.Fatalf("preflight error was not safely reduced: %v", err)
+			}
+			binding.preflightErr = nil
+			prepared, err := adapter.Preflight(context.Background(), run)
+			if err != nil {
+				t.Fatal(err)
+			}
+			binding.launchErr = errors.New(identityAdapterSensitiveSentinel)
+			if _, err = adapter.Execute(context.Background(), run, prepared); err == nil || strings.Contains(err.Error(), identityAdapterSensitiveSentinel) {
+				t.Fatalf("launch error was not safely reduced: %v", err)
+			}
+			binding.launchErr = nil
+			observation, err := adapter.Execute(context.Background(), run, prepared)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleanup := adapter.Cleanup(context.Background(), run, prepared)
+			raw, err := json.Marshal(struct {
+				Observation AttackCatalogObservation   `json:"observation"`
+				Cleanup     AttackCatalogCleanupResult `json:"cleanup"`
+			}{observation, cleanup})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), identityAdapterSensitiveSentinel) {
+				t.Fatalf("private material escaped into evidence: %s", raw)
+			}
+			if strings.Contains(strings.Join(observation.Actuator.ObjectsTouched, " "), identityAdapterSensitiveSentinel) {
+				t.Fatal("private material escaped through receipt objects")
+			}
+		})
 	}
 }
 

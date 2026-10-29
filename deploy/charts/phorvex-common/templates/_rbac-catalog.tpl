@@ -103,7 +103,7 @@ roles:
 - name: agent-action-deny
   namespace: {{ $namespace | quote }}
   rules:
-  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [actuator]}
+  - {apiGroups: [""], resources: ["configmaps"], resourceNames: ["agent-deny-guard"], verbs: ["get", "update"], writers: [dispatcher, actuator]}
 {{- end }}
 {{- end }}
 {{- if $v.endpointLease.enabled }}

@@ -116,8 +116,8 @@ func agentProfile(id, caller, action string) identityAgentServerProfile {
 		Objective: agentdeny.Objective, GuardKey: agentdeny.GuardKey, ReadbackPath: agentdeny.ReadbackPath}
 }
 
-// These six definitions pin the reviewed semantics even though packaging does
-// not yet provide an immutable fixture that can safely make them runnable.
+// These six definitions pin the reviewed semantics. Packaging supplies one
+// immutable fixture; only the caller/action pair varies by exact catalogue ID.
 var agentCatalogueServerProfiles = map[string]identityAgentServerProfile{
 	"AML.T0053":  agentProfile("AML.T0053", "caller-t0053", "invoke-tool"),
 	"AML.T0086":  agentProfile("AML.T0086", "caller-t0086", "exfil-data"),

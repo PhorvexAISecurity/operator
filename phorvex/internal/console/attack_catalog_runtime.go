@@ -144,9 +144,11 @@ func newAttackCatalogAdapterRegistry(s *Server, cfg Config) *AttackCatalogAdapte
 	register(k8s...)
 	register(newInfraCatalogueAdapters(s, cfg)...)
 	register(newServingCatalogueAdapters(s)...)
-	for _, factory := range newIdentityCatalogueAdapters() {
-		register(factory.bind(s, cfg))
+	identity, err := bindIdentityCatalogueAdapters(s, cfg, newIdentityCatalogueAdapters())
+	if err != nil {
+		panic(err)
 	}
+	register(identity...)
 	if len(registry.adapters) != attackcatalog.ExpectedSize {
 		panic(fmt.Errorf("catalogue adapter registry has %d exact IDs, want %d", len(registry.adapters), attackcatalog.ExpectedSize))
 	}
@@ -378,7 +380,13 @@ func (s *Server) executePreparedAttackCatalogueRun(ctx context.Context, run Atta
 	result.Decision = observation.Decision
 	result.Actuator = observation.Actuator
 	result.PhysicalValidation = observation.PhysicalValidation
-	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), attackCatalogCleanupTimeout)
+	cleanupTimeout := attackCatalogCleanupTimeout
+	if bounded, ok := adapter.(interface{ CleanupTimeout() time.Duration }); ok {
+		if candidate := bounded.CleanupTimeout(); candidate >= attackCatalogCleanupTimeout && candidate <= 2*time.Minute {
+			cleanupTimeout = candidate
+		}
+	}
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), cleanupTimeout)
 	result.Cleanup = adapter.Cleanup(cleanupCtx, run, prepared)
 	cleanupCancel()
 	reason := observation.Reason

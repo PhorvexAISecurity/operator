@@ -55,3 +55,37 @@ func TestAttackCatalogPrometheusEvidenceRequiresPinnedDeploymentSource(t *testin
 		t.Fatalf("Prometheus evidence configuration not retained: %+v", cfg.RunPrometheusEvidence)
 	}
 }
+
+func TestAttackCatalogAgentActionRequiresImmutableImageAndExactPrincipals(t *testing.T) {
+	values := map[string]string{
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED":                  "true",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT":     "phorvex-test",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT":          "console-identity-test",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE":         "/etc/phorvex-attack-catalog/identity-profile.json",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED":     "true",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE":       "registry.example.test/phorvex/agent-sim:latest",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL":  "system:serviceaccount:p6:p6-phorvex-manager",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL":   "system:serviceaccount:p6:p6-sensor",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL": "system:serviceaccount:p6:p6-actuator",
+	}
+	lookup := func(key string) (string, bool) { value, ok := values[key]; return value, ok }
+	var cfg console.Config
+	if err := applyCatalogueV1Environment(&cfg, lookup); err == nil {
+		t.Fatal("mutable agent fixture tag was accepted")
+	}
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE"] = "registry.example.test/phorvex/agent-sim@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL"] = "p6/p6-sensor"
+	if err := applyCatalogueV1Environment(&cfg, lookup); err == nil {
+		t.Fatal("non-principal sensor identity was accepted")
+	}
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL"] = "system:serviceaccount:p6:p6-sensor"
+	if err := applyCatalogueV1Environment(&cfg, lookup); err != nil {
+		t.Fatalf("fixed immutable agent configuration refused: %v", err)
+	}
+	if !cfg.AttackCatalogAgentActionEnabled || cfg.AttackCatalogAgentActionImage != values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE"] ||
+		cfg.AttackCatalogAgentManagerPrincipal != values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL"] ||
+		cfg.AttackCatalogAgentSensorPrincipal != values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL"] ||
+		cfg.AttackCatalogAgentActuatorPrincipal != values["PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL"] {
+		t.Fatalf("agent catalogue configuration not retained: %+v", cfg)
+	}
+}

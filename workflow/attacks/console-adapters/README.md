@@ -30,9 +30,11 @@ Consequently, this source revision has:
 
 - 192 exact mapped IDs in 13 exact families;
 - 13 reference family implementations;
-- 186 exact Console implementations marked `registrationStatus: eligible`;
-- 6 `agent-action` rows marked `registrationStatus: unavailable`, each with the
-  precise missing immutable-fixture packaging reason.
+- 192 exact Console implementations marked `registrationStatus: eligible`.
+
+The six `agent-action` implementations remain operationally unavailable unless
+the attacks deployment enables the fixed fixture with a complete
+`repository@sha256:<64hex>` image pin and exact ServiceAccount principals.
 
 There is intentionally no `launchable` field. Runtime availability also depends on
 server-owned configuration and preflight; the static map cannot assert it.
@@ -61,9 +63,9 @@ The integrated registration contract is:
 2. Resolve its family profile to a concrete adapter implementation.
 3. Register an exact-ID adapter only when `registrationStatus` is `eligible` and
    the concrete implementation reference still exists.
-4. Keep the six agent-action rows visible but unavailable with their immutable
-   packaging blocker. Metadata membership or a family reference alone must never
-   create runtime availability.
+4. Keep every row visible when deployment prerequisites are absent, and report
+   the exact runtime blocker. Metadata membership or a family reference alone
+   must never create runtime availability.
 
 A family implementation may be shared internally, but every object passed to the
 registry retains the exact catalogue ID required by the registry. Static eligibility
@@ -88,8 +90,9 @@ The validator pins the exact family distribution and rejects missing, duplicate,
 unknown IDs; family/source drift; incomplete stage references; missing implementation
 evidence; unsupported registration; conflated modes; and any static launchable claim.
 
-## Current blocker
+## Operational prerequisite
 
-The six `agent-action` rows remain unavailable because packaging has no
-digest-pinned server-owned agent-sim image, immutable fixed fixture manifest, or
-attacks-service fixture RBAC. The registry rejects launch for those exact IDs.
+The six `agent-action` rows require the default-off immutable agent-sim fixture,
+its narrow attacks-service Role, the exact manager/sensor/actuator principals,
+and a published digest-pinned fixture image. Without those settings, the
+adapters stay registered and visible but reject launch with a precise reason.
