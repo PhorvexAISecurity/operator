@@ -20,6 +20,7 @@ import { PodBoundTokenResultPanel } from "@/components/panels/pod-bound-token-re
 import { LiteLLMRoutingResult } from "@/components/panels/litellm-routing-result";
 import { GuardrailAvailabilityResultPanel } from "@/components/panels/guardrail-availability-result";
 import { MCPVoiceModelResult, parseMCPVoiceModelEvidence } from "@/components/panels/mcp-voice-model-result";
+import { AttackCatalogueResultPanel } from "@/components/panels/catalog";
 
 const arm = (arms: ArmResult[] | undefined, def: string) => (arms || []).find((a) => a.defender === def);
 const pct = (x?: number) => (x === undefined ? "—" : `${Math.round(x * 100)}%`);
@@ -83,6 +84,8 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
       <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
         <FileText className="h-3.5 w-3.5" /> Evidence · {ev.scenario} · ns={ev.namespace || "—"} · started {ev.date}{ev.finished ? ` · finished ${ev.finished}` : ""}
       </div>
+
+      {ev.attackCatalogueResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]"><AttackCatalogueResultPanel result={ev.attackCatalogueResult} /></div>}
 
       {ev.functionalResult && <div className="rounded-md border border-border bg-muted/20 p-3 text-[12px]">
         <div className="flex flex-wrap items-center gap-2">{mcpVoiceModel ? <Badge variant="neutral">{mcpVoiceAccepted ? "Measurement completed" : "Measurement unverified"}</Badge> : <Badge variant={trialOutcomeDisplay(ev.functionalResult.outcome).variant}>{trialOutcomeDisplay(ev.functionalResult.outcome).label}</Badge>}<span className="text-foreground">{mcpVoiceModel ? mcpVoiceAccepted ? "Two source-pinned model continuations were measured; see the decision below." : "Model-decision measurement is incomplete or incompatible." : ev.functionalResult.summary}</span></div>

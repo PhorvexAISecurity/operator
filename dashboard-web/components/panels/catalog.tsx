@@ -156,7 +156,7 @@ function ScenarioRow({ it, onOpen }: { it: CatalogItem; onOpen: () => void }) {
   );
 }
 
-function AttackCatalogueResultPanel({ result }: { result: AttackCatalogueResult }) {
+export function AttackCatalogueResultPanel({ result }: { result: AttackCatalogueResult }) {
   const stages: [string, boolean][] = [
     ["visible", result.visible], ["available", result.available], ["launched", result.launched],
     ["signal observed", result.signal.observed], ["decided", result.decision.observed],
