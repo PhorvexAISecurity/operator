@@ -2,6 +2,6 @@
 # The release writes the published attacks image here, under `image`. The chart renders
 # only where the console is enabled (docs/services/attacks.md).
 image:
-  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks"
-  tag: "0.10.0"
-  digest: "sha256:a8ab4aa3a4f2c926351bebbfe558f1057518fa689c4cd431ef197b07039465d4"
+  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/attacks"
+  tag: "staging-0.11.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
+  digest: "sha256:51f7505d646542cb8e710de62a19c3a9a0f58c937c6666493a0ff550393e40d9"

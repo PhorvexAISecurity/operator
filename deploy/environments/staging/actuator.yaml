@@ -1,6 +1,6 @@
 # The actuator chart's own staging values (deploy/charts/phorvex-actuator), merged after phorvex.yaml.
 # The release (phase 5c) writes the published actuator image here, under `image`.
 image:
-  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/actuator"
-  tag: "0.10.0"
-  digest: "sha256:acc9b3494abe44ee2ba196d10f7a480cb23bca97c93e1c483bcd2aa8bd184a41"
+  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/actuator"
+  tag: "staging-0.11.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
+  digest: "sha256:3b5c79255fdb49c64b231cf413cce0681329616f231b5d9c4fe98d428227426c"
