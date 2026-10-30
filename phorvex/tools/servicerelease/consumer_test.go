@@ -187,6 +187,33 @@ func TestConsumerProbeRejectsEveryUnboundAuthoritativeWorkloadAndContainerClass(
 	}
 }
 
+func TestWorkloadImagesRejectsImageVolumes(t *testing.T) {
+	imageVolume := "volumes:\n- name: rogue\n  image:\n    reference: alternate.invalid/phorvex/brain:shared\n"
+	for _, test := range []struct {
+		name, manifest string
+	}{
+		{
+			name: "pod with container",
+			manifest: "apiVersion: v1\nkind: Pod\nmetadata:\n  name: image-volume\nspec:\n  " +
+				strings.ReplaceAll(imageVolume, "\n", "\n  ") +
+				"containers:\n  - name: brain\n    image: alternate.invalid/phorvex/brain:shared\n",
+		},
+		{
+			name: "nested volume-only template",
+			manifest: "apiVersion: example.invalid/v1\nkind: BrainFleet\nmetadata:\n  name: image-volume-only\nspec:\n  podTemplate:\n    spec:\n      " +
+				strings.ReplaceAll(imageVolume, "\n", "\n      "),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, _, err := workloadImages([]byte(test.manifest))
+			if err == nil || !strings.Contains(err.Error(), "image volume") ||
+				!strings.Contains(err.Error(), "unsupported by the release consumer contract") {
+				t.Fatalf("image-volume consumer error = %v", err)
+			}
+		})
+	}
+}
+
 func TestConsumerProbeRejectsConsumersAddedOrRemovedBetweenRenderPhases(t *testing.T) {
 	primary := fixtureDeployment("old.invalid/phorvex/brain:0.1.0@sha256:" + strings.Repeat("0", 64))
 	extra := "---\n" + extraConsumerManifest("Deployment", "dynamic", "containers", "brain")

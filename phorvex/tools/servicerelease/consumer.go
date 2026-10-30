@@ -673,11 +673,28 @@ type podSpecLocation struct {
 	pod  map[string]any
 }
 
+func containsImageVolume(value any) bool {
+	entries, ok := anySlice(value)
+	if !ok {
+		return false
+	}
+	for _, rawVolume := range entries {
+		volume, ok := stringMap(rawVolume)
+		if !ok {
+			continue
+		}
+		if _, exists := volume["image"]; exists {
+			return true
+		}
+	}
+	return false
+}
+
 func podSpecLocations(value any, path string) []podSpecLocation {
 	var found []podSpecLocation
 	switch current := value.(type) {
 	case map[string]any:
-		isPodSpec := false
+		isPodSpec := containsImageVolume(current["volumes"])
 		for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
 			if _, exists := current[section]; exists {
 				isPodSpec = true
@@ -687,7 +704,7 @@ func podSpecLocations(value any, path string) []podSpecLocation {
 			found = append(found, podSpecLocation{path: path, pod: current})
 		}
 		for key, child := range current {
-			if isPodSpec && (key == "containers" || key == "initContainers" || key == "ephemeralContainers") {
+			if isPodSpec && (key == "containers" || key == "initContainers" || key == "ephemeralContainers" || key == "volumes") {
 				continue
 			}
 			found = append(found, podSpecLocations(child, path+"/"+key)...)
@@ -737,6 +754,34 @@ func workloadImages(rendered []byte) (map[string]string, map[string]ImageConsume
 			return nil, nil, fmt.Errorf("rendered pod template has no complete apiVersion/kind/name identity")
 		}
 		for _, location := range locations {
+			if rawVolumes, exists := location.pod["volumes"]; exists {
+				volumes, ok := anySlice(rawVolumes)
+				if !ok {
+					return nil, nil, fmt.Errorf("rendered %s/%s volumes must be a list", kind, name)
+				}
+				for i, rawVolume := range volumes {
+					volume, ok := stringMap(rawVolume)
+					if !ok {
+						continue
+					}
+					rawImage, exists := volume["image"]
+					if !exists {
+						continue
+					}
+					imageSource, ok := stringMap(rawImage)
+					reference := ""
+					if ok {
+						reference, _ = imageSource["reference"].(string)
+					}
+					if reference == "" {
+						reference = "malformed reference"
+					}
+					return nil, nil, fmt.Errorf(
+						"rendered %s/%s image volume at %s/volumes/%d/image/reference is unsupported by the release consumer contract: %q",
+						kind, name, location.path, i, reference,
+					)
+				}
+			}
 			for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
 				rawEntries, exists := location.pod[section]
 				if !exists {

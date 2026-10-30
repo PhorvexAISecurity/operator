@@ -223,6 +223,25 @@ class StagingTargetTests(unittest.TestCase):
         ):
             RELEASE.verify_deployment(complete, None, service_contracts(complete["source"]), shared)
 
+    def test_subset_shared_release_renders_selected_shared_consumers(self):
+        value = prepared_batch()
+        complete = RELEASE.complete(value, publication_results(value))
+        shared = shared_batch(complete, ["manager"])
+        selected = {"manager": (shared["components"][0], shared["releases"]["manager"])}
+
+        with (
+            mock.patch.object(RELEASE, "validate_batch"),
+            mock.patch.object(RELEASE, "expected_target", return_value={}),
+            mock.patch.object(RELEASE, "verify_argocd"),
+            mock.patch.object(RELEASE, "superseding_shared_services", return_value=selected),
+            mock.patch.object(
+                RELEASE, "verify_rendered_service", side_effect=ValueError("selected shared image volume")
+            ) as rendered,
+            self.assertRaisesRegex(ValueError, "selected shared image volume"),
+        ):
+            RELEASE.verify_deployment(complete, None, service_contracts(complete["source"]), shared)
+        rendered.assert_called_once_with(shared["components"][0], shared["releases"]["manager"])
+
     def test_fixture_pin_replaces_only_the_exact_existing_scalar(self):
         raw = "phorvex:\n  console:\n    attackCatalog:\n      agentAction:\n        enabled: false\n        image: \"\"\n"
         with tempfile.TemporaryDirectory() as directory:

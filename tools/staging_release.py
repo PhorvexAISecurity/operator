@@ -867,6 +867,8 @@ def verify_deployment(
     )
     for item in batch["components"][: len(SERVICE_NAMES)]:
         if item["component"] in shared_services:
+            shared_item, shared_release = shared_services[item["component"]]
+            verify_rendered_service(shared_item, shared_release)
             continue
         release = batch["releases"][item["component"]]
         values = image_values(item)
