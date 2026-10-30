@@ -140,7 +140,8 @@ func statefulPod(namespace, name string, uid types.UID, ip string, claims []stri
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name, UID: uid, ResourceVersion: "7",
 			Labels:          map[string]string{"app": "db", "role": "replica"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "db", UID: "db-uid", Controller: &yes}}},
-		Status: corev1.PodStatus{PodIP: ip, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}},
+		Status: corev1.PodStatus{PodIP: ip, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue,
+			LastTransitionTime: metav1.NewTime(time.Now().Add(-time.Hour))}}},
 	}
 	for _, claim := range claims {
 		p.Spec.Volumes = append(p.Spec.Volumes, corev1.Volume{Name: claim,
@@ -173,6 +174,8 @@ type statefulFixtureOptions struct {
 	leader       bool
 	readyMembers int32
 	notEnabled   bool
+	// settling adds a sibling member that became Ready seconds ago.
+	settling bool
 }
 
 func statefulFixture(t *testing.T, o statefulFixtureOptions) (*statefulCluster, *corev1.Pod, Request) {
@@ -189,7 +192,7 @@ func statefulFixture(t *testing.T, o statefulFixtureOptions) (*statefulCluster, 
 			statefulrotation.AnnotationCheckpointPort: "8080", statefulrotation.AnnotationCheckpointPath: "/checkpoint",
 			statefulrotation.AnnotationRestorePath: "/restore", statefulrotation.AnnotationRecoverySeconds: "60",
 		}},
-		Spec: appsv1.StatefulSetSpec{Replicas: &replicas,
+		Spec: appsv1.StatefulSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "db"}},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{ObjectMeta: metav1.ObjectMeta{Name: "data"}}}},
 		Status: appsv1.StatefulSetStatus{ObservedGeneration: 2, ReadyReplicas: ready, CurrentRevision: "r1", UpdateRevision: "r1"},
 	}
@@ -222,6 +225,11 @@ func statefulFixture(t *testing.T, o statefulFixtureOptions) (*statefulCluster, 
 		}
 	}
 	objects := []client.Object{sts, pod, class, policy}
+	if o.settling {
+		sibling := statefulPod("ns", "db-0", "db-0-uid", "10.0.0.4", nil)
+		sibling.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-5 * time.Second))
+		objects = append(objects, sibling)
+	}
 	for _, claim := range claims {
 		objects = append(objects, statefulClaim("ns", claim, "claim-uid"))
 	}
@@ -287,6 +295,7 @@ func TestStatefulRotationRefusalsLeaveTheMemberUntouched(t *testing.T) {
 		"pdb refuses":           {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild}, pdb: true, reason: "pdb-eviction-admission-refused"},
 		"leader":                {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild, leader: true}, reason: "declared leader"},
 		"no quorum headroom":    {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild, readyMembers: 2}, reason: "degraded"},
+		"owner settling":        {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild, settling: true}, reason: "owner settling"},
 		"action not enabled":    {opts: statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate, notEnabled: true}, reason: "selecting-policy-not-authorized"},
 		"volume-backed handoff": {opts: statefulFixtureOptions{action: model.ActionStatefulCheckpointHandoff}, reason: "volume-backed classes apply"},
 	} {

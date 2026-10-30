@@ -15,7 +15,7 @@ func statefulSelectionView(replicas, ready int, contract model.StatefulRotationC
 	v.Neighbors = nil
 	v.Pod.DesiredReplicas, v.Pod.ReadyReplicas = replicas, ready
 	o := &model.StatefulRotationObservation{Contract: contract, OwnerName: "db", OwnerUID: "db-uid",
-		Replicas: replicas, ReadyReplicas: ready, SnapshotClassReady: contract.SnapshotClass != "", Complete: true}
+		Replicas: replicas, ReadyReplicas: ready, SnapshotClassReady: contract.SnapshotClass != "", SinceMemberReady: time.Hour, Complete: true}
 	if claims {
 		o.Claims = []model.StatefulClaim{{Name: "data-db-1", UID: "claim-uid", Bound: true, FromTemplate: true}}
 	}
