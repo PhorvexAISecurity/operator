@@ -571,6 +571,27 @@ def json_pointer(value: Any, pointer: str) -> Any:
     return current
 
 
+def pointer_token(value: str) -> str:
+    return value.replace("~", "~0").replace("/", "~1")
+
+
+def pod_spec_locations(value: Any, path: str = "") -> list[tuple[str, dict[str, Any]]]:
+    found = []
+    if isinstance(value, dict):
+        sections = ("containers", "initContainers", "ephemeralContainers")
+        is_pod_spec = any(section in value for section in sections)
+        if is_pod_spec:
+            found.append((path, value))
+        for key, child in value.items():
+            if is_pod_spec and key in sections:
+                continue
+            found.extend(pod_spec_locations(child, f"{path}/{pointer_token(str(key))}"))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(pod_spec_locations(child, f"{path}/{index}"))
+    return found
+
+
 def verify_service_documents(item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]]) -> None:
     expected_image = f"{release['repository']}:{item['image']['tag']}@{release['digest']}"
     consumers = item["deploy"]["consumers"]
@@ -579,34 +600,53 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
     expected_consumers = {
         (
             consumer["apiVersion"], consumer["kind"], consumer["namespace"], consumer["name"],
-            consumer["section"], consumer["container"],
+            consumer["fieldPath"], consumer["container"],
         )
         for consumer in consumers
     }
+    if len(expected_consumers) != len(consumers):
+        raise ValueError(f"service {item['component']} rendered consumer contract is duplicated")
     rendered_consumers = set()
     for document in documents:
         metadata = document.get("metadata", {})
-        spec = document.get("spec", {})
-        pod_specs = []
-        if document.get("kind") == "Pod" and isinstance(spec, dict):
-            pod_specs.append(spec)
-        template_spec = spec.get("template", {}).get("spec", {}) if isinstance(spec, dict) else {}
-        if isinstance(template_spec, dict) and template_spec:
-            pod_specs.append(template_spec)
-        cron_spec = (
-            spec.get("jobTemplate", {}).get("spec", {}).get("template", {}).get("spec", {})
-            if isinstance(spec, dict) else {}
-        )
-        if isinstance(cron_spec, dict) and cron_spec:
-            pod_specs.append(cron_spec)
-        for pod in pod_specs:
+        locations = pod_spec_locations(document)
+        if locations and (
+            not isinstance(document.get("apiVersion"), str)
+            or not isinstance(document.get("kind"), str)
+            or not isinstance(metadata, dict)
+            or not isinstance(metadata.get("name"), str)
+        ):
+            raise ValueError("rendered pod template has no complete apiVersion/kind/name identity")
+        for path, pod in locations:
             for section in ("containers", "initContainers", "ephemeralContainers"):
-                for container in pod.get(section, []) or []:
-                    if isinstance(container, dict) and isinstance(container.get("image"), str):
-                        rendered_consumers.add((
-                            document.get("apiVersion"), document.get("kind"), metadata.get("namespace"),
-                            metadata.get("name"), section, container.get("name"),
-                        ))
+                if section not in pod:
+                    continue
+                entries = pod[section]
+                if not isinstance(entries, list) or not entries:
+                    raise ValueError(f"rendered {document['kind']}/{metadata['name']} {section} must be a non-empty list")
+                names = set()
+                for index, container in enumerate(entries):
+                    if (
+                        not isinstance(container, dict)
+                        or not isinstance(container.get("name"), str)
+                        or not container["name"]
+                        or not isinstance(container.get("image"), str)
+                        or not container["image"]
+                    ):
+                        raise ValueError(f"rendered {document['kind']}/{metadata['name']} {section} has no name/image")
+                    if container["name"] in names:
+                        raise ValueError(
+                            f"rendered {document['kind']}/{metadata['name']} has duplicate {section} "
+                            f"container {container['name']!r}"
+                        )
+                    names.add(container["name"])
+                    rendered = (
+                        document["apiVersion"], document["kind"], metadata.get("namespace") or "default",
+                        metadata["name"], f"{path}/{section}/{index}/image", container["name"],
+                    )
+                    if rendered in rendered_consumers:
+                        raise ValueError(f"service {item['component']} rendered workload consumer is duplicated or ambiguous")
+                    rendered_consumers.add(rendered)
     if rendered_consumers != expected_consumers:
         raise ValueError(
             f"service {item['component']} has unexpected rendered image consumers: "

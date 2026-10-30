@@ -206,12 +206,35 @@ class StagingTargetTests(unittest.TestCase):
                 "metadata": {"name": "unexpected-daemon", "namespace": "phorvex-system"},
                 "spec": {"template": {"spec": pod}},
             },
+            {
+                "apiVersion": "jobset.x-k8s.io/v1alpha2", "kind": "JobSet",
+                "metadata": {"name": "unexpected-jobset", "namespace": "phorvex-system"},
+                "spec": {"replicatedJobs": [{"name": "worker", "template": {"spec": {
+                    "template": {"spec": pod},
+                }}}]},
+            },
         ]
         for extra in extras:
             with self.subTest(kind=extra["kind"]), self.assertRaisesRegex(
                 ValueError, "unexpected rendered image consumers"
             ):
                 RELEASE.verify_service_documents(item, published, [deployment, extra])
+
+        custom = copy.deepcopy(extras[-1])
+        custom_pod = custom["spec"]["replicatedJobs"][0]["template"]["spec"]["template"]["spec"]
+        custom_pod["containers"][0]["image"] = expected
+        custom_item = copy.deepcopy(item)
+        custom_consumer = copy.deepcopy(consumer)
+        custom_consumer.update({
+            "apiVersion": custom["apiVersion"],
+            "kind": custom["kind"],
+            "namespace": custom["metadata"]["namespace"],
+            "name": custom["metadata"]["name"],
+            "fieldPath": "/spec/replicatedJobs/0/template/spec/template/spec/containers/0/image",
+            "container": "gpu",
+        })
+        custom_item["deploy"]["consumers"].append(custom_consumer)
+        RELEASE.verify_service_documents(custom_item, published, [deployment, custom])
 
     def test_exact_pin_values_reject_other_changes_in_an_allowed_staging_file(self):
         prepared = prepared_batch()
