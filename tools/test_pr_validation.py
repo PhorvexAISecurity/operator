@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import re
 import subprocess
+import tempfile
 import unittest
 
 import yaml
@@ -232,6 +233,41 @@ RELEASE_ACTIONS = {
 class ReleaseWorkflowTests(unittest.TestCase):
     """The one workflow that writes and reaches AWS (docs/services/releasing.md), held to its shape."""
 
+    def git(self, root, *args, check=True):
+        return subprocess.run(
+            ['git', '-C', str(root), *args], check=check, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+
+    def release_main_repository(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        self.git(root, 'init', '-q', '-b', 'main')
+        self.git(root, 'config', 'user.name', 'Release Test')
+        self.git(root, 'config', 'user.email', 'release@example.invalid')
+        (root / 'trigger').write_text('trigger\n')
+        self.git(root, 'add', 'trigger')
+        self.git(root, 'commit', '-qm', 'trigger')
+        trigger = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        (root / 'release').mkdir()
+        (root / 'release/batch.json').write_text('{"schema":2}\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'publish batch')
+        publication = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        return root, trigger, publication
+
+    def run_main_binding(self, root, *, pending, publish='', result='skipped'):
+        step = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                    if s.get('name') == 'Bind latest main to the upstream publication')
+        output = root / 'github-output'
+        completed = subprocess.run(
+            ['bash', '-c', step['run']], cwd=root, text=True, capture_output=True,
+            env=dict(os.environ, GITHUB_OUTPUT=str(output), PENDING_MAIN_SHA=pending,
+                     PUBLISH_MAIN_SHA=publish, PUBLISH_RESULT=result),
+        )
+        return completed, output.read_text() if output.exists() else ''
+
     def test_it_runs_only_for_main(self):
         self.assertEqual(set(RELEASE['on']), {'push', 'workflow_dispatch'})
         self.assertEqual(RELEASE['on']['push'], {'branches': ['main']})
@@ -269,6 +305,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(jobs['release-pr']['permissions'], {'contents': 'write', 'pull-requests': 'write', 'actions': 'write'})
         pending_checkout = next(s for s in jobs['pending']['steps'] if s.get('uses', '').startswith('actions/checkout@'))
         self.assertEqual(pending_checkout['with']['ref'], 'main')
+        release_pr_checkout = next(s for s in jobs['release-pr']['steps'] if s.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(release_pr_checkout['with']['ref'], 'main')
+        self.assertEqual(release_pr_checkout['with']['persist-credentials'], 'false')
 
     def test_every_privileged_action_is_reviewed_and_commit_pinned(self):
         references = re.findall(r'^\s*- uses: ([^\s#]+)(?:\s+#\s*([^\s]+))?$', RELEASE_RAW, re.M)
@@ -321,6 +360,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('A remote advance fails this exact push', pending)
         self.assertNotIn('remote-batch.json', pending)
         self.assertIn('echo "source=$source" >> "$GITHUB_OUTPUT"', pending)
+        self.assertIn('echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"', pending)
         self.assertIn("git show \"$source:phorvex/tools/servicerelease/batch.go\"", pending)
         self.assertIn('"$tool" import-terminal-batch --environment "$ENVIRONMENT"', pending)
         self.assertIn('cannot\n  # produce pending work', pending)
@@ -328,6 +368,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
                         pending.index('"$tool" batch-source'))
         self.assertEqual(jobs['publish']['env']['BATCH_SOURCE_SHA'], '${{ needs.pending.outputs.source }}')
         self.assertIn('[ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]', publish)
+        self.assertEqual(jobs['pending']['outputs']['main'], '${{ steps.pending.outputs.main }}')
+        self.assertEqual(jobs['publish']['outputs']['main'], '${{ steps.record.outputs.main }}')
+        self.assertIn('echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"', publish)
         for run in (pending, publish):
             self.assertIn('bootstrap-servicerelease" bootstrap-source', run)
             self.assertIn('git switch --detach', run)
@@ -449,9 +492,105 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn('git rebase', RELEASE_RAW)
         self.assertNotRegex(RELEASE_RAW, r'GIT_CONFIG_VALUE_0="AUTHORIZATION:[^\n]+"\s+git fetch')
         release_pr_step = next(s for s in RELEASE['jobs']['release-pr']['steps']
-                               if s.get('name') == 'Bring the release PR up to date')
+                               if s.get('name') == 'Publish the prepared release PR state')
         self.assertNotIn('GITHUB_TOKEN', release_pr_step.get('env', {}))
         self.assertEqual(release_pr_step['run'].count('GITHUB_TOKEN="$git_push_token"'), 3)
+
+        for name in ('Bind latest main to the upstream publication',
+                     'Prepare the release PR from bound main'):
+            step = next(s for s in RELEASE['jobs']['release-pr']['steps'] if s.get('name') == name)
+            self.assertNotIn('GIT_PUSH_TOKEN', step.get('env', {}), name)
+            self.assertNotIn('github.token', str(step), name)
+
+    def test_release_pr_uses_published_main_when_trigger_sha_lacks_batch(self):
+        root, trigger, publication = self.release_main_repository()
+        missing = self.git(root, 'cat-file', '-e', f'{trigger}:release/batch.json', check=False)
+        self.assertNotEqual(missing.returncode, 0)
+
+        completed, output = self.run_main_binding(root, pending=publication)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(output, f'sha={publication}\n')
+
+        checkout = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                        if s.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], 'main')
+        prepare = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                       if s.get('name') == 'Prepare the release PR from bound main')['run']
+        self.assertIn('git switch --force-create release/next "$AUTHORITATIVE_MAIN_SHA"', prepare)
+        self.assertLess(prepare.index('[ "$(git rev-parse HEAD)" = "$AUTHORITATIVE_MAIN_SHA" ]'),
+                        prepare.index('bootstrap-servicerelease" bootstrap-source'))
+        self.assertLess(prepare.index('bootstrap-servicerelease" bootstrap-source'),
+                        prepare.index('"$batch_tool" pending --json'))
+
+    def test_release_pr_accepts_unrelated_main_advance_after_publication(self):
+        root, _, publication = self.release_main_repository()
+        (root / 'unrelated').write_text('later main work\n')
+        self.git(root, 'add', 'unrelated')
+        self.git(root, 'commit', '-qm', 'unrelated main advance')
+        latest = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+
+        completed, output = self.run_main_binding(
+            root, pending=publication, publish=publication, result='success')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(output, f'sha={latest}\n')
+        self.assertNotEqual(latest, publication)
+
+    def test_release_pr_fails_closed_when_publication_is_missing_or_not_ancestor(self):
+        root, trigger, publication = self.release_main_repository()
+        completed, output = self.run_main_binding(
+            root, pending=publication, publish='', result='success')
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('upstream publication SHA is missing or malformed', completed.stdout)
+        self.assertEqual(output, '')
+
+        completed, output = self.run_main_binding(
+            root, pending=publication, publish='f' * 40, result='success')
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('commit ' + 'f' * 40 + ' is unavailable', completed.stdout)
+        self.assertEqual(output, '')
+
+        completed, output = self.run_main_binding(
+            root, pending=publication, publish=trigger, result='success')
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn(f'commit {trigger} lacks release/batch.json', completed.stdout)
+        self.assertEqual(output, '')
+
+        self.git(root, 'switch', '-q', '-c', 'unpublished', trigger)
+        (root / 'release').mkdir()
+        (root / 'release/batch.json').write_text('{"schema":2,"side":true}\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'unpublished release state')
+        unpublished = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        self.git(root, 'switch', '-q', 'main')
+
+        completed, output = self.run_main_binding(
+            root, pending=publication, publish=unpublished, result='success')
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('is not an ancestor of main', completed.stdout)
+        self.assertEqual(output, '')
+
+        (root / 'release/batch.json').unlink()
+        self.git(root, 'add', '-u', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'remove published release state')
+        latest = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        completed, output = self.run_main_binding(root, pending=publication)
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn(f'latest main {latest} lacks release/batch.json', completed.stdout)
+        self.assertEqual(output, '')
+
+    def test_release_workflow_does_not_assume_token_push_recursion(self):
+        self.assertIn('GITHUB_TOKEN pushes do not trigger one.', RELEASE_RAW)
+        self.assertNotIn('queued/fresh workflow', RELEASE_RAW)
+        binding = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                       if s.get('name') == 'Bind latest main to the upstream publication')
+        self.assertEqual(binding['env'], {
+            'PENDING_MAIN_SHA': '${{ needs.pending.outputs.main }}',
+            'PUBLISH_MAIN_SHA': '${{ needs.publish.outputs.main }}',
+            'PUBLISH_RESULT': '${{ needs.publish.result }}',
+        })
+        self.assertIn('git merge-base --is-ancestor "$expected" "$main_sha"', binding['run'])
+        self.assertIn('"$expected:release/batch.json"', binding['run'])
+        self.assertNotIn('$GITHUB_SHA', binding['run'])
 
     def test_the_release_pr_gets_its_checks(self):
         # GitHub starts no pull_request run for a PR the workflow's token opened or

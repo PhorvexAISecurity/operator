@@ -38,6 +38,7 @@ jobs:
     outputs:
       releases: ${{ steps.pending.outputs.releases }}
       source: ${{ steps.pending.outputs.source }}
+      main: ${{ steps.pending.outputs.main }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -121,15 +122,16 @@ jobs:
             git worktree add --detach "$committed" HEAD
             (cd "$committed" && "$tool" verify-committed > /dev/null)
             git worktree remove --force "$committed"
-            # A remote advance fails this exact push. The queued/fresh workflow
-            # run checks out that head without retaining this write credential,
-            # reconstructs and re-verifies the batch, then injects a new push.
+            # A remote advance fails this exact push. A later explicit retry or
+            # user-triggered run checks out that head, then reconstructs and
+            # re-verifies the batch without retaining this write credential.
             git_push --atomic origin HEAD:main
           fi
           source="$("$tool" batch-source)"
           "$tool" pending --json | tee "$RUNNER_TEMP/pending.json"
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "releases=$(jq 'length' "$RUNNER_TEMP/pending.json")" >> "$GITHUB_OUTPUT"
+          echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: pending
@@ -139,6 +141,8 @@ jobs:
     environment: release
     env:
       BATCH_SOURCE_SHA: ${{ needs.pending.outputs.source }}
+    outputs:
+      main: ${{ steps.record.outputs.main }}
     permissions:
       contents: write
       id-token: write
@@ -262,6 +266,7 @@ jobs:
             printf '%s\t%s\t%s\t%s\t%s\n' "$component" "$version" "$registry/$repository" "$digest" "$git_tag" >> "$RUNNER_TEMP/released"
           done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Record the releases
+        id: record
         if: always()
         env:
           GIT_PUSH_TOKEN: ${{ github.token }}
@@ -331,10 +336,12 @@ jobs:
           verify_committed_head
           # Last practical publication boundary: repository immutability and
           # every exact version-tag digest are re-read after committed-HEAD proof.
-          # A remote advance fails this run; the next clean checkout reconstructs
-          # the record (including interrupted ECR pushes) and repeats every proof.
+          # A remote advance fails this run; a later explicit or user-triggered
+          # clean run reconstructs the record (including interrupted ECR pushes)
+          # and repeats every proof. GITHUB_TOKEN pushes do not trigger one.
           python3 tools/verify_release_ecr.py verify --batch release/batch.json > /dev/null
           git_push --atomic origin HEAD:main "${refs[@]}"
+          echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   release-pr:
     needs: [pending, publish]
@@ -349,6 +356,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: main
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
@@ -359,8 +367,89 @@ jobs:
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.4
-      - name: Bring the release PR up to date
+      - name: Bind latest main to the upstream publication
+        id: main
         env:
+          PENDING_MAIN_SHA: ${{ needs.pending.outputs.main }}
+          PUBLISH_MAIN_SHA: ${{ needs.publish.outputs.main }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+        run: |
+          set -euo pipefail
+          retryable_error() {
+            echo "::error::release-pr cannot bind latest main to upstream publication: $*; retry after main contains the published release commit"
+            exit 75
+          }
+          case "$PUBLISH_RESULT" in
+            success)
+              expected="$PUBLISH_MAIN_SHA"
+              ;;
+            skipped)
+              expected="$PENDING_MAIN_SHA"
+              ;;
+            *)
+              retryable_error "publish result is $PUBLISH_RESULT"
+              ;;
+          esac
+          [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || retryable_error "upstream publication SHA is missing or malformed"
+          git cat-file -e "$expected^{commit}" 2>/dev/null || retryable_error "upstream publication commit $expected is unavailable"
+          main_sha="$(git rev-parse --verify 'HEAD^{commit}')"
+          git merge-base --is-ancestor "$expected" "$main_sha" || retryable_error "upstream publication commit $expected is not an ancestor of main $main_sha"
+          git cat-file -e "$expected:release/batch.json" 2>/dev/null || retryable_error "upstream publication commit $expected lacks release/batch.json"
+          git cat-file -e "$main_sha:release/batch.json" 2>/dev/null || retryable_error "latest main $main_sha lacks release/batch.json"
+          [ -z "$(git status --porcelain --untracked-files=all)" ] || retryable_error "latest main checkout is dirty"
+          echo "sha=$main_sha" >> "$GITHUB_OUTPUT"
+      - name: Prepare the release PR from bound main
+        id: prepare
+        env:
+          AUTHORITATIVE_MAIN_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$AUTHORITATIVE_MAIN_SHA" ]
+          git switch --force-create release/next "$AUTHORITATIVE_MAIN_SHA"
+          # Bound main can locate the pointer, but only the source-built helper
+          # may decide whether a nonterminal batch still has component work.
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
+          record_head="$(git rev-parse HEAD)"
+          batch_tool="$RUNNER_TEMP/bootstrap-servicerelease"
+          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            git switch --detach "$source"
+            tools/verify-git-build-identity.sh "$source" > /dev/null
+            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+            git switch --force-create release/next "$record_head"
+            batch_tool="$RUNNER_TEMP/pinned-servicerelease"
+          fi
+          # A newer merge of the release PR is still to publish; its own run brings
+          # the PR up to date afterwards. Preparing now would release it again.
+          if [ "$("$batch_tool" pending --json | jq 'length')" -ne 0 ]; then
+            echo "A merged release is still to publish; its run brings the release PR up to date." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "action=wait" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The prior batch is terminal, so the bound-main helper may plan the
+          # next release. A built binary preserves prepare's distinct exit 3.
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
+          status=0
+          "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
+          if [ "$status" -eq 3 ]; then
+            echo "action=close" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "$status" -eq 0 ]
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- release/versions.json release/*.md
+          [ -z "$(git diff --name-only)" ]
+          [ -z "$(git ls-files --others --exclude-standard)" ]
+          [ -z "$(git diff --cached --name-only --diff-filter=D)" ]
+          git diff --cached --check
+          git commit -F "$RUNNER_TEMP/title"
+          echo "action=update" >> "$GITHUB_OUTPUT"
+      - name: Publish the prepared release PR state
+        if: steps.prepare.outputs.action != 'wait'
+        env:
+          ACTION: ${{ steps.prepare.outputs.action }}
           GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -394,47 +483,19 @@ jobs:
             assert_clean_git_auth
             return "$status"
           }
-          # Checkout already selected current main with full history and tags.
-          git switch --force-create release/next HEAD
-          # Current main can locate the pointer, but only the source-built helper
-          # may decide whether a nonterminal batch still has component work.
-          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
-          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
-          record_head="$(git rev-parse HEAD)"
-          batch_tool="$RUNNER_TEMP/bootstrap-servicerelease"
-          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
-            git switch --detach "$source"
-            tools/verify-git-build-identity.sh "$source" > /dev/null
-            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
-            git switch --force-create release/next "$record_head"
-            batch_tool="$RUNNER_TEMP/pinned-servicerelease"
-          fi
-          # A newer merge of the release PR is still to publish; its own run brings
-          # the PR up to date afterwards. Preparing now would release it again.
-          if [ "$("$batch_tool" pending --json | jq 'length')" -ne 0 ]; then
-            echo "A merged release is still to publish; its run brings the release PR up to date." | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # The prior batch is terminal, so the current-main helper may plan the
-          # next release. A built binary preserves prepare's distinct exit 3.
-          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
           tool="$RUNNER_TEMP/servicerelease"
-          status=0
-          "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
-          if [ "$status" -eq 3 ]; then
-            GITHUB_TOKEN="$git_push_token" "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          [ "$status" -eq 0 ]
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- release/versions.json release/*.md
-          [ -z "$(git diff --name-only)" ]
-          [ -z "$(git ls-files --others --exclude-standard)" ]
-          [ -z "$(git diff --cached --name-only --diff-filter=D)" ]
-          git diff --cached --check
-          git commit -F "$RUNNER_TEMP/title"
-          git_push --atomic --force origin release/next
-          GITHUB_TOKEN="$git_push_token" "$tool" pull-request --head release/next --base main \
-            --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
-          GITHUB_TOKEN="$git_push_token" "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+          case "$ACTION" in
+            close)
+              GITHUB_TOKEN="$git_push_token" "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+            update)
+              git_push --atomic --force origin release/next
+              GITHUB_TOKEN="$git_push_token" "$tool" pull-request --head release/next --base main \
+                --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
+              GITHUB_TOKEN="$git_push_token" "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+              ;;
+            *)
+              echo "::error::unexpected prepared release PR action: $ACTION"
+              exit 1
+              ;;
+          esac
