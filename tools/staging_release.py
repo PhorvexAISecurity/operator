@@ -301,6 +301,8 @@ def validate_batch(
         raise ValueError("staging batch does not contain the exact eight-component set")
     if [item.get("component") for item in batch["components"]] != COMPONENTS:
         raise ValueError("staging batch component contracts are missing, extra or reordered")
+    if any(item.get("kind") != "service" for item in batch["components"][: len(SERVICE_NAMES)]):
+        raise ValueError("staging service component kind changed")
     services = validate_service_contracts(batch["components"][: len(SERVICE_NAMES)], source, target)
     if canonical_services is not None:
         expected_services = copy.deepcopy(validate_service_contracts(canonical_services, source, target))

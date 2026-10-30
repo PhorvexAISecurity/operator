@@ -149,6 +149,26 @@ class StagingECRTests(unittest.TestCase):
                 runner((1, "", "Error response from daemon: No such object: missing"), identity_ok=False),
             )
 
+    def test_service_kind_cannot_bypass_embedded_identity_verification(self):
+        prepared = batch()
+        value = RELEASE.complete(prepared, FIXTURE.publication_results(prepared))
+        digests = {}
+        for contract in value["components"]:
+            name = contract["component"]
+            digest = value["releases"][name]["digest"]
+            digests[contract["image"]["repository"]] = {
+                tag: digest for tag in contract["image"]["tags"]
+            }
+            if name in RELEASE.SERVICE_NAMES:
+                contract["kind"] = "fixture"
+                contract["identity"] = {"oci": {"manifest": digest}}
+
+        fake = FakeECR(digests=digests)
+        with self.assertRaisesRegex(RuntimeError, "component manager kind is not canonical service"):
+            ECR.verify_complete(value, fake)
+        self.assertFalse(any(command[0] == "docker" for command in fake.commands))
+        self.assertFalse(any("verify_service_image_identity.py" in " ".join(command) for command in fake.commands))
+
     def test_aggregate_preflight_covers_exact_eight_empty_repositories(self):
         value = batch()
         state = ECR.preflight(value, FakeECR())

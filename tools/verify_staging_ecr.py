@@ -43,10 +43,24 @@ def batch(path: Path, complete: bool | None = None) -> dict[str, Any]:
     return release.validate_batch(release.read_json(path), require_complete=complete)
 
 
+def verify_component_kind(contract: dict[str, Any]) -> str:
+    name = contract.get("component")
+    if name in release.SERVICE_NAMES:
+        expected = "service"
+    elif name in release.FIXTURE_NAMES:
+        expected = "fixture"
+    else:
+        raise RuntimeError(f"component {name!r} has no canonical staging kind")
+    if contract.get("kind") != expected:
+        raise RuntimeError(f"component {name} kind is not canonical {expected}")
+    return expected
+
+
 def component(batch_value: dict[str, Any], name: str) -> dict[str, Any]:
     matches = [item for item in batch_value["components"] if item["component"] == name]
     if len(matches) != 1:
         raise RuntimeError(f"component {name!r} is not an exact batch component")
+    verify_component_kind(matches[0])
     return matches[0]
 
 
@@ -185,7 +199,7 @@ def tag_digests(contract: dict[str, Any], runner: Runner = subprocess.run) -> di
 def verify_remote_identity(contract: dict[str, Any], digest: str, runner: Runner = subprocess.run) -> None:
     image = contract["image"]
     repository = f"{image['registry']}/{image['repository']}"
-    if contract["kind"] == "fixture":
+    if verify_component_kind(contract) == "fixture":
         if digest != contract["identity"]["oci"]["manifest"]:
             raise RuntimeError(f"fixture {contract['component']} ECR manifest digest differs from the reviewed OCI identity")
         return

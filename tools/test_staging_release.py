@@ -149,6 +149,11 @@ class StagingTargetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not canonical staging-only"):
             RELEASE.validate_batch(value)
 
+        value = prepared_batch()
+        value["components"][0]["kind"] = "fixture"
+        with self.assertRaisesRegex(ValueError, "service component kind"):
+            RELEASE.validate_batch(value)
+
     def test_complete_requires_exact_ordered_eight_component_results(self):
         value = prepared_batch()
         results = publication_results(value)
