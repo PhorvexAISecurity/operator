@@ -290,6 +290,12 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('verify_staging_ecr.py verify-component', runs)
         self.assertIn('verify_staging_ecr.py ensure-tags', runs)
         self.assertIn('verify_staging_ecr.py verify --batch "$RUNNER_TEMP/staging-complete.json"', runs)
+        cleanup = next(
+            step['run'] for step in STAGING_RELEASE['jobs']['publish']['steps']
+            if step.get('name') == 'Remove the fixture builder'
+        )
+        self.assertIn('docker buildx rm "$FIXTURE_BUILDER"', cleanup)
+        self.assertNotIn('docker buildx inspect', cleanup)
 
     def test_publication_only_opens_an_allowlisted_staging_pin_pr(self):
         runs = '\n'.join(step.get('run', '') for step in STAGING_RELEASE['jobs']['publish']['steps'])

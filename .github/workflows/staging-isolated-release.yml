@@ -272,6 +272,6 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          if [ -n "${FIXTURE_BUILDER:-}" ] && docker buildx inspect "$FIXTURE_BUILDER" > /dev/null 2>&1; then
+          if [ -n "${FIXTURE_BUILDER:-}" ]; then
             docker buildx rm "$FIXTURE_BUILDER"
           fi

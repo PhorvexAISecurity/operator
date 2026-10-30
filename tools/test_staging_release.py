@@ -236,6 +236,58 @@ class StagingTargetTests(unittest.TestCase):
         custom_item["deploy"]["consumers"].append(custom_consumer)
         RELEASE.verify_service_documents(custom_item, published, [deployment, custom])
 
+    def test_fixture_render_rejects_every_uncontracted_image_consumer(self):
+        prepared = prepared_batch()
+        complete = RELEASE.complete(prepared, publication_results(prepared))
+        fixture = next(item for item in complete["components"] if item["component"] == "catalogue-workload")
+        fixture_consumer = next(
+            consumer for consumer in fixture["deploy"]["consumers"]
+            if consumer["profile"] == "quarantine"
+        )
+        attacks = next(item for item in complete["components"] if item["component"] == "attacks")
+        self.assertEqual(len(attacks["deploy"]["consumers"]), 1)
+        attacks_consumer = attacks["deploy"]["consumers"][0]
+        fixture_image = (
+            f"{complete['releases']['catalogue-workload']['repository']}@"
+            f"{complete['releases']['catalogue-workload']['digest']}"
+        )
+        attacks_image = (
+            f"{complete['releases']['attacks']['repository']}:{attacks['image']['tag']}@"
+            f"{complete['releases']['attacks']['digest']}"
+        )
+
+        def deployment(consumer, image):
+            self.assertEqual(consumer["fieldPath"], "/spec/template/spec/containers/0/image")
+            return {
+                "apiVersion": consumer["apiVersion"], "kind": consumer["kind"],
+                "metadata": {"name": consumer["name"], "namespace": consumer["namespace"]},
+                "spec": {"template": {"spec": {"containers": [{
+                    "name": consumer["container"], "image": image,
+                }]}}},
+            }
+
+        documents = [
+            deployment(fixture_consumer, fixture_image),
+            deployment(attacks_consumer, attacks_image),
+        ]
+        RELEASE.verify_fixture_documents(complete, "catalogue-workload", "quarantine", documents)
+        documents.append({
+            "apiVersion": "v1", "kind": "Pod",
+            "metadata": {"name": "uncontracted", "namespace": "phorvex-staging"},
+            "spec": {"containers": [{
+                "name": "rogue",
+                "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain:shared",
+            }]},
+        })
+        with self.assertRaisesRegex(ValueError, "unexpected rendered image consumers"):
+            RELEASE.verify_fixture_documents(complete, "catalogue-workload", "quarantine", documents)
+
+        profiles = {consumer["profile"] for consumer in fixture["deploy"]["consumers"]}
+        self.assertEqual(profiles, {
+            "controller-stop", "credential", "identity-sa-rotate", "image",
+            "network-edge", "node-recycle", "pod-rotate", "quarantine",
+        })
+
     def test_exact_pin_values_reject_other_changes_in_an_allowed_staging_file(self):
         prepared = prepared_batch()
         complete = RELEASE.complete(prepared, publication_results(prepared))

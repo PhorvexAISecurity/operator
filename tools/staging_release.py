@@ -36,6 +36,25 @@ SERVICE_COMMANDS = {
     "console": "/app/console",
     "attacks": "/app/attacks",
 }
+
+
+def fixture_consumer(
+    component: str, profile: str, namespace: str, name: str, container: str,
+    *, api_version: str = "apps/v1", kind: str = "Deployment",
+    field_path: str = "/spec/template/spec/containers/0/image",
+) -> dict[str, str]:
+    return {
+        "profile": profile,
+        "apiVersion": api_version,
+        "kind": kind,
+        "namespace": namespace,
+        "name": name,
+        "fieldPath": field_path,
+        "container": container,
+        "component": component,
+    }
+
+
 FIXTURE_SPECS = {
     "agent-sim": {
         "version": "fixture-v1",
@@ -43,7 +62,9 @@ FIXTURE_SPECS = {
         "deploy": {
             "valuesFile": "deploy/environments/staging/catalogue-family.yaml",
             "path": ["phorvex", "console", "attackCatalog", "agentAction", "image"],
-            "consumers": ["Deployment/p6-demo/agent-sim#containers/agent-sim"],
+            "consumers": [
+                fixture_consumer("agent-sim", "agent-action", "p6-demo", "agent-sim", "agent-sim"),
+            ],
         },
     },
     "catalogue-workload": {
@@ -52,9 +73,30 @@ FIXTURE_SPECS = {
         "deploy": {
             "valuesFile": "deploy/environments/staging/phorvex.yaml",
             "path": ["phorvex", "console", "attackCatalog", "familyFixtures", "images", "workload"],
-            "consumers": ["catalogue-family-profile/*#workload-image"],
+            "consumers": [
+                fixture_consumer("catalogue-workload", "controller-stop", "p4-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "credential", "p4-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "identity-sa-rotate", "console-identity-shared", "console-id-fixture", "web"),
+                fixture_consumer("catalogue-workload", "image", "p2-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "image", "p3-demo", "demo-api", "web"),
+                fixture_consumer(
+                    "catalogue-workload", "network-edge", "p2-demo", "c2-sink", "sink",
+                    api_version="v1", kind="Pod", field_path="/spec/containers/0/image",
+                ),
+                fixture_consumer("catalogue-workload", "network-edge", "p2-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "node-recycle", "p3-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "pod-rotate", "p2-demo", "demo-api", "web"),
+                fixture_consumer("catalogue-workload", "quarantine", "p1-demo", "demo-api", "web"),
+            ],
         },
     },
+}
+
+STATIC_PROFILE_CONSUMERS = {
+    "node-recycle": [{
+        **fixture_consumer("static", "node-recycle", "p3-demo", "kwok-controller-p3", "kwok"),
+        "image": "registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0",
+    }],
 }
 
 
@@ -592,21 +634,17 @@ def pod_spec_locations(value: Any, path: str = "") -> list[tuple[str, dict[str, 
     return found
 
 
-def verify_service_documents(item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]]) -> None:
-    expected_image = f"{release['repository']}:{item['image']['tag']}@{release['digest']}"
-    consumers = item["deploy"]["consumers"]
-    if not consumers:
-        raise ValueError(f"service {item['component']} has no rendered consumer contract")
-    expected_consumers = {
-        (
-            consumer["apiVersion"], consumer["kind"], consumer["namespace"], consumer["name"],
-            consumer["fieldPath"], consumer["container"],
-        )
-        for consumer in consumers
-    }
-    if len(expected_consumers) != len(consumers):
-        raise ValueError(f"service {item['component']} rendered consumer contract is duplicated")
-    rendered_consumers = set()
+def consumer_key(consumer: dict[str, Any]) -> tuple[str, str, str, str, str, str]:
+    return (
+        consumer["apiVersion"], consumer["kind"], consumer["namespace"], consumer["name"],
+        consumer["fieldPath"], consumer["container"],
+    )
+
+
+def rendered_image_consumers(
+    documents: list[dict[str, Any]], label: str,
+) -> dict[tuple[str, str, str, str, str, str], str]:
+    rendered = {}
     for document in documents:
         metadata = document.get("metadata", {})
         locations = pod_spec_locations(document)
@@ -640,34 +678,78 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
                             f"container {container['name']!r}"
                         )
                     names.add(container["name"])
-                    rendered = (
+                    key = (
                         document["apiVersion"], document["kind"], metadata.get("namespace") or "default",
                         metadata["name"], f"{path}/{section}/{index}/image", container["name"],
                     )
-                    if rendered in rendered_consumers:
-                        raise ValueError(f"service {item['component']} rendered workload consumer is duplicated or ambiguous")
-                    rendered_consumers.add(rendered)
-    if rendered_consumers != expected_consumers:
+                    if key in rendered:
+                        raise ValueError(f"{label} rendered workload consumer is duplicated or ambiguous")
+                    rendered[key] = container["image"]
+    return rendered
+
+
+def verify_service_documents(item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]]) -> None:
+    expected_image = f"{release['repository']}:{item['image']['tag']}@{release['digest']}"
+    consumers = item["deploy"]["consumers"]
+    if not consumers:
+        raise ValueError(f"service {item['component']} has no rendered consumer contract")
+    expected_consumers = {consumer_key(consumer) for consumer in consumers}
+    if len(expected_consumers) != len(consumers):
+        raise ValueError(f"service {item['component']} rendered consumer contract is duplicated")
+    rendered = rendered_image_consumers(documents, f"service {item['component']}")
+    if set(rendered) != expected_consumers:
         raise ValueError(
             f"service {item['component']} has unexpected rendered image consumers: "
-            f"{sorted(rendered_consumers - expected_consumers)}"
+            f"{sorted(set(rendered) - expected_consumers)}"
         )
     for consumer in consumers:
-        matches = [
-            document for document in documents
-            if document.get("apiVersion") == consumer["apiVersion"]
-            and document.get("kind") == consumer["kind"]
-            and document.get("metadata", {}).get("name") == consumer["name"]
-            and document.get("metadata", {}).get("namespace") == consumer["namespace"]
-        ]
-        if len(matches) != 1:
-            raise ValueError(f"service {item['component']} rendered consumer identity is not unique")
         if consumer.get("component") != item["component"] or consumer.get("expectedRepository") != release["repository"]:
             raise ValueError(f"service {item['component']} rendered consumer repository contract changed")
-        actual = json_pointer(matches[0], consumer["fieldPath"])
+        actual = rendered[consumer_key(consumer)]
         if actual != expected_image:
             raise ValueError(
                 f"service {item['component']} rendered consumer selects {actual!r}, want {expected_image!r}"
+            )
+
+
+def verify_fixture_documents(
+    batch: dict[str, Any], name: str, profile: str, documents: list[dict[str, Any]],
+) -> None:
+    item = next(component for component in batch["components"] if component["component"] == name)
+    fixture_image = f"{batch['releases'][name]['repository']}@{batch['releases'][name]['digest']}"
+    expected = {
+        consumer_key(consumer): fixture_image
+        for consumer in item["deploy"]["consumers"]
+        if consumer["profile"] == profile
+    }
+    if not expected:
+        raise ValueError(f"fixture {name} has no rendered consumer contract for profile {profile}")
+    attacks = next(component for component in batch["components"] if component["component"] == "attacks")
+    attacks_release = batch["releases"]["attacks"]
+    attacks_image = (
+        f"{attacks_release['repository']}:{attacks['image']['tag']}@{attacks_release['digest']}"
+    )
+    for consumer in attacks["deploy"]["consumers"]:
+        key = consumer_key(consumer)
+        if key in expected:
+            raise ValueError(f"fixture {name} profile {profile} consumer contract is ambiguous")
+        expected[key] = attacks_image
+    for consumer in STATIC_PROFILE_CONSUMERS.get(profile, []):
+        key = consumer_key(consumer)
+        if key in expected:
+            raise ValueError(f"fixture {name} profile {profile} static consumer contract is ambiguous")
+        expected[key] = consumer["image"]
+    rendered = rendered_image_consumers(documents, f"fixture {name} profile {profile}")
+    if set(rendered) != set(expected):
+        raise ValueError(
+            f"fixture {name} profile {profile} has unexpected rendered image consumers: "
+            f"{sorted(set(rendered) - set(expected))}"
+        )
+    for key, wanted in expected.items():
+        if rendered[key] != wanted:
+            raise ValueError(
+                f"fixture {name} profile {profile} rendered consumer {key} "
+                f"selects {rendered[key]!r}, want {wanted!r}"
             )
 
 
@@ -706,14 +788,14 @@ def verify_deployment(batch: dict[str, Any], base: str | None, canonical_service
         if nested(values, item["deploy"]["path"]) != expected:
             raise ValueError(f"fixture {name} committed staging pin differs from its release contract")
         fixture_refs[name] = expected
-    agent_docs = render_fixture("agent-action", fixture_refs["catalogue-workload"], fixture_refs["agent-sim"])
-    agent_images = [container["image"] for item in agent_docs if item.get("kind") == "Deployment" and item.get("metadata", {}).get("name") == "agent-sim" for container in item["spec"]["template"]["spec"]["containers"] if container["name"] == "agent-sim"]
-    if agent_images != [fixture_refs["agent-sim"]]:
-        raise ValueError("rendered agent-sim consumer is not the exact staging fixture digest")
-    workload_docs = render_fixture("quarantine", fixture_refs["catalogue-workload"], fixture_refs["agent-sim"])
-    workload_images = {container["image"] for item in workload_docs for spec in ([item.get("spec", {}).get("template", {}).get("spec", {})] if item.get("kind") in {"Deployment", "Job"} else []) for container in spec.get("containers", [])}
-    if fixture_refs["catalogue-workload"] not in workload_images:
-        raise ValueError("rendered catalogue workload consumer is not the exact staging fixture digest")
+    for name in FIXTURE_NAMES:
+        item = next(component for component in batch["components"] if component["component"] == name)
+        profiles = list(dict.fromkeys(consumer["profile"] for consumer in item["deploy"]["consumers"]))
+        for profile in profiles:
+            documents = render_fixture(
+                profile, fixture_refs["catalogue-workload"], fixture_refs["agent-sim"]
+            )
+            verify_fixture_documents(batch, name, profile, documents)
     if base:
         changed = set(filter(None, git_output(["diff", "--name-only", base, "--"]).splitlines()))
         allowed = {"release/staging-batch.json"}
