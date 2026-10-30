@@ -1,7 +1,7 @@
 {
  "uid": "phorvex-services-__ENVIRONMENT__",
  "title": "Phorvex services \u2014 __ENVIRONMENT__",
- "description": "The split Phorvex services of one environment (ADR-0001): scrape health, gRPC calls between the services, ticks, decisions, actuations and resources. Rendered by the manager chart (phorvex.metrics.dashboard).",
+ "description": "The split Phorvex services of one environment (ADR-0001): scrape health, gRPC calls between the services, ticks, decisions, actuations, stateful rotation and resources. Rendered by the manager chart (phorvex.metrics.dashboard).",
  "tags": [
   "phorvex",
   "__ENVIRONMENT__"
@@ -669,11 +669,312 @@
   },
   {
    "type": "row",
-   "title": "Resources",
+   "title": "Stateful rotation",
    "collapsed": false,
    "gridPos": {
     "x": 0,
     "y": 48,
+    "w": 24,
+    "h": 1
+   },
+   "panels": [],
+   "id": 20
+  },
+  {
+   "type": "stat",
+   "title": "Stateful rotations (24h) by outcome",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 49,
+    "w": 8,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (outcome) (increase(phorvex_stateful_rotations_total{environment=\"__ENVIRONMENT__\"}[24h]))",
+     "legendFormat": "{{outcome}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "value",
+    "graphMode": "area",
+    "textMode": "auto"
+   },
+   "id": 21
+  },
+  {
+   "type": "timeseries",
+   "title": "Stateful rotations per hour by class and outcome",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 49,
+    "w": 16,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (action, outcome) (increase(phorvex_stateful_rotations_total{environment=\"__ENVIRONMENT__\"}[1h]))",
+     "legendFormat": "{{action}} {{outcome}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "id": 22
+  },
+  {
+   "type": "timeseries",
+   "title": "Recovery to a confirmed member (p50, p95)",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 57,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "histogram_quantile(0.5, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\"__ENVIRONMENT__\"}[1h])))",
+     "legendFormat": "{{action}} p50"
+    },
+    {
+     "refId": "B",
+     "expr": "histogram_quantile(0.95, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\"__ENVIRONMENT__\"}[1h])))",
+     "legendFormat": "{{action}} p95"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "id": 23
+  },
+  {
+   "type": "timeseries",
+   "title": "Stateful decisions per hour by class",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 57,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (action, selected) (increase(phorvex_decisions_total{environment=\"__ENVIRONMENT__\",action=~\"stateful-.*\"}[1h]))",
+     "legendFormat": "{{action}} selected={{selected}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "id": 24
+  },
+  {
+   "type": "timeseries",
+   "title": "Stateful candidates excluded per hour",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 65,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (action, reason) (increase(phorvex_candidates_excluded_total{environment=\"__ENVIRONMENT__\",action=~\"stateful-.*\"}[1h]))",
+     "legendFormat": "{{action}} {{reason}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "id": 25
+  },
+  {
+   "type": "timeseries",
+   "title": "Stateful actuation failures per hour",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "${datasource}"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 65,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "expr": "sum by (action, reason) (increase(phorvex_actuation_failures_total{environment=\"__ENVIRONMENT__\",action=~\"stateful-.*\"}[1h]))",
+     "legendFormat": "{{action}} {{reason}}"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "reqps",
+     "custom": {
+      "drawStyle": "line",
+      "lineWidth": 1,
+      "fillOpacity": 10,
+      "showPoints": "never",
+      "stacking": {
+       "mode": "none"
+      }
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "legend": {
+     "displayMode": "table",
+     "placement": "right",
+     "calcs": [
+      "lastNotNull"
+     ]
+    },
+    "tooltip": {
+     "mode": "multi"
+    }
+   },
+   "id": 26
+  },
+  {
+   "type": "row",
+   "title": "Resources",
+   "collapsed": false,
+   "gridPos": {
+    "x": 0,
+    "y": 73,
     "w": 24,
     "h": 1
    },
@@ -689,7 +990,7 @@
    },
    "gridPos": {
     "x": 0,
-    "y": 49,
+    "y": 74,
     "w": 12,
     "h": 8
    },
@@ -738,7 +1039,7 @@
    },
    "gridPos": {
     "x": 12,
-    "y": 49,
+    "y": 74,
     "w": 12,
     "h": 8
    },

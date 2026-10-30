@@ -1,0 +1,495 @@
+# The NATS demo's Grafana dashboard, for the Grafana sidecar, which loads ConfigMaps
+# labelled grafana_dashboard=1 from every namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-demo-dashboard
+  labels:
+    app.kubernetes.io/name: nats-demo
+    app.kubernetes.io/part-of: phorvex-demo
+    grafana_dashboard: "1"
+data:
+  phorvex-stateful-nats-demo.json: |
+    {
+     "uid": "phorvex-stateful-nats-demo",
+     "title": "Phorvex stateful rotation \u2014 NATS demo",
+     "description": "deploy/demo/nats-demo.yaml defended by nats-demo-defense: the DEMO stream on every member, member and volume identity, and the stateful rotations the brain selected (docs/stateful-rotation.md).",
+     "schemaVersion": 39,
+     "editable": true,
+     "refresh": "30s",
+     "time": {
+      "from": "now-6h",
+      "to": "now"
+     },
+     "tags": [
+      "phorvex",
+      "stateful"
+     ],
+     "templating": {
+      "list": [
+       {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus",
+        "current": {},
+        "hide": 0
+       }
+      ]
+     },
+     "panels": [
+      {
+       "type": "row",
+       "title": "Data continuity",
+       "collapsed": false,
+       "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+       },
+       "panels": [],
+       "id": 1
+      },
+      {
+       "type": "timeseries",
+       "title": "DEMO stream messages per member",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "max by (server_name) (jetstream_stream_total_messages{namespace=\"phorvex-staging-demo\",stream_name=\"DEMO\"})",
+         "legendFormat": "{{server_name}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 2,
+       "description": "Each member's own copy of the DEMO stream (three replicas, seeded with 1000 messages). A rotation that lost data would drop a line below the others."
+      },
+      {
+       "type": "timeseries",
+       "title": "DEMO last sequence per member",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "max by (server_name) (jetstream_stream_last_seq{namespace=\"phorvex-staging-demo\",stream_name=\"DEMO\"})",
+         "legendFormat": "{{server_name}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 3
+      },
+      {
+       "type": "stat",
+       "title": "Ready members",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "kube_statefulset_status_replicas_ready{namespace=\"phorvex-staging-demo\",statefulset=\"nats-demo\"}",
+         "legendFormat": "ready"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+       },
+       "id": 4
+      },
+      {
+       "type": "stat",
+       "title": "Members with all routes",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 6,
+        "y": 9,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "count(gnatsd_varz_routes{namespace=\"phorvex-staging-demo\"} > 0)",
+         "legendFormat": "members"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "textMode": "auto"
+       },
+       "id": 5
+      },
+      {
+       "type": "timeseries",
+       "title": "Member Pod and volume identity",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "count by (persistentvolumeclaim, volumename) (kube_persistentvolumeclaim_info{namespace=\"phorvex-staging-demo\",persistentvolumeclaim=~\"data-nats-demo-.*\"})",
+         "legendFormat": "{{persistentvolumeclaim}} \u2192 {{volumename}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          },
+          "lineInterpolation": "stepAfter"
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 6,
+       "description": "A replica rebuild gives the member a new volume (a new series here); a snapshot rotation keeps it."
+      },
+      {
+       "type": "row",
+       "title": "Stateful rotations",
+       "collapsed": false,
+       "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 1
+       },
+       "panels": [],
+       "id": 7
+      },
+      {
+       "type": "timeseries",
+       "title": "Rotations per hour by class and outcome",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (action, outcome) (increase(phorvex_stateful_rotations_total{environment=\"staging\",namespace=\"phorvex-staging-demo\"}[1h]))",
+         "legendFormat": "{{action}} {{outcome}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 8
+      },
+      {
+       "type": "timeseries",
+       "title": "Recovery to a confirmed member (p50, p95)",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "histogram_quantile(0.5, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\"staging\"}[1h])))",
+         "legendFormat": "{{action}} p50"
+        },
+        {
+         "refId": "B",
+         "expr": "histogram_quantile(0.95, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\"staging\"}[1h])))",
+         "legendFormat": "{{action}} p95"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "s",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 9
+      },
+      {
+       "type": "timeseries",
+       "title": "Brain decisions per hour (stateful classes)",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (action, selected) (increase(phorvex_decisions_total{environment=\"staging\",tenant=\"phorvex-staging-demo\",action=~\"stateful-.*\"}[1h]))",
+         "legendFormat": "{{action}} selected={{selected}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 10
+      },
+      {
+       "type": "timeseries",
+       "title": "Member restarts and recreations",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum by (pod) (changes(kube_pod_created{namespace=\"phorvex-staging-demo\",pod=~\"nats-demo-[0-9]+\"}[1h]))",
+         "legendFormat": "{{pod}} recreated"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "unit": "reqps",
+         "custom": {
+          "drawStyle": "line",
+          "lineWidth": 1,
+          "fillOpacity": 10,
+          "showPoints": "never",
+          "stacking": {
+           "mode": "none"
+          }
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "legend": {
+         "displayMode": "table",
+         "placement": "right",
+         "calcs": [
+          "lastNotNull"
+         ]
+        },
+        "tooltip": {
+         "mode": "multi"
+        }
+       },
+       "id": 11
+      }
+     ]
+    }

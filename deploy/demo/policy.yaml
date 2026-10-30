@@ -1,4 +1,5 @@
-# Staging's services defend demo-api, and only demo-api: the selector names its Pods.
+# Staging's services defend demo-api with this policy, and the nats-demo StatefulSet with
+# nats-demo-defense below; each selector names only its own Pods.
 # Event-driven and reactive only, they act on trusted SecurityEvents, such as the attacks
 # service's workload signal, with the native backend's rotate.
 #
@@ -46,3 +47,49 @@ spec:
     eventAgeHorizon: 1h
     eventDriven: true
     reactiveOnly: true
+---
+# nats-demo (nats-demo.yaml) through the stateful rotation family only: the brain chooses
+# replica-rebuild, snapshot-rotate or checkpoint-handoff from the StatefulSet's declared
+# contract and its live state, and never rotates or quarantines a member outright
+# (docs/stateful-rotation.md). It reacts to trusted SecurityEvents and, as a moving-target
+# defense, also rotates a member that has been exposed past the proactive floor.
+apiVersion: phorvex.ai/v1alpha1
+kind: PhorvexPolicy
+metadata:
+  name: nats-demo-defense
+  labels:
+    app.kubernetes.io/part-of: phorvex-demo
+spec:
+  tenant: phorvex-staging-demo
+  mode: active
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats-demo
+  actions:
+    enabled: [stateful-replica-rebuild, stateful-snapshot-rotate, stateful-checkpoint-handoff]
+  assetValue:
+    blastRadiusFromGraph: true
+    fromLabels:
+      data-class:
+        internal: "0.4"
+        public: "0.1"
+        restricted: "1.0"
+    weightSecrets: "0.8"
+  budget:
+    antiOverRotationWindow: 10m
+    maxGracePeriodSeconds: 30
+    maxMovesPerTick: 1
+    proactiveFloor: 1h
+    tickInterval: 10s
+  objective:
+    costWeights:
+      flowDisruption: "0.6"
+      normSparsity: "0.4"
+    lambda: "0.4"
+  slo:
+    costCeiling: "1.2"
+    minAvailableReplicas: 2
+  triggers:
+    eventAgeHorizon: 1h
+    eventDriven: true
+    reactiveOnly: false

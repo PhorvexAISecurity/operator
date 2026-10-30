@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	v1alpha1 "github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/statefulrotation"
 )
@@ -73,17 +74,25 @@ type statefulRotationHandler struct{ class statefulClass }
 
 func (h statefulRotationHandler) Name() string { return string(h.class.action()) }
 
+// Enact runs one dispatch and records exactly one outcome for it
+// (phorvex_stateful_rotations_total), plus the recovery time of a confirmed one.
 func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, error) {
 	if ec.DryRun {
 		return HandlerResult{}, errDryRunGuard
 	}
+	result, outcome, recovery, err := h.enact(ctx, ec, req)
+	metrics.RecordStatefulRotation(req.Namespace, string(h.class.action()), outcome, recovery)
+	return result, err
+}
+
+func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, error) {
 	action := h.class.action()
-	refuse := func(reason string) (HandlerResult, error) {
+	refuse := func(reason string) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, error) {
 		disposition := NoEffectRefused
 		if reason == "target-already-gone" {
 			disposition = NoEffectSatisfied
 		}
-		return HandlerResult{NoEffect: disposition, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, nil
+		return HandlerResult{NoEffect: disposition, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, metrics.StatefulRotationRefused, 0, nil
 	}
 	pod, refusal := readEvictionTarget(ctx, ec, req)
 	if refusal != "" {
@@ -99,7 +108,7 @@ func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Req
 	}
 	if refusal, err := evictBounded(ctx, ec, req, grant, true); refusal != "" || err != nil {
 		if err != nil {
-			return HandlerResult{}, fmt.Errorf("%s eviction dry run %s/%s: %w", action, req.Namespace, req.Pod, err)
+			return HandlerResult{}, metrics.StatefulRotationError, 0, fmt.Errorf("%s eviction dry run %s/%s: %w", action, req.Namespace, req.Pod, err)
 		}
 		return refuse(refusal)
 	}
@@ -112,7 +121,12 @@ func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Req
 		return op.stopped(action, stepReason("eviction", refusal), err)
 	}
 	op.touch("Pod", req.Pod)
-	confirmation := awaitStatefulReplacement(ctx, ec, op, h.class)
+	evicted := time.Now()
+	confirmation, confirmed := awaitStatefulReplacement(ctx, ec, op, h.class)
+	outcome, recovery := metrics.StatefulRotationUnconfirmed, time.Duration(0)
+	if confirmed {
+		outcome, recovery = metrics.StatefulRotationConfirmed, time.Since(evicted)
+	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "forward-only",
 		ObjectsTouched:      op.touched,
@@ -120,7 +134,7 @@ func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Req
 		GracefulTermination: grant.receipt(req.Namespace),
 		Note: fmt.Sprintf("%s: Pod Eviction accepted with policy grace cap %ds and effective grace %ds; %s; %s",
 			action, grant.policyCap, grant.effectiveGrace, strings.Join(op.notes, "; "), confirmation),
-	}, nil
+	}, outcome, recovery, nil
 }
 
 // stopped reports a stop after admission. Before any preparatory mutation it is a clean
@@ -128,16 +142,16 @@ func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Req
 // touched objects and rollback reference are retained for the audit. A recognized refusal
 // leaves the target Pod in place; an error leaves the stopped step's own effect unknown and
 // is returned alongside the partial result, never folded into it.
-func (op *statefulOperation) stopped(action model.Action, reason string, err error) (HandlerResult, error) {
+func (op *statefulOperation) stopped(action model.Action, reason string, err error) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, error) {
 	if !op.prepared {
 		if err != nil {
-			return HandlerResult{}, fmt.Errorf("%s %s/%s %s: %w", action, op.req.Namespace, op.req.Pod, reason, err)
+			return HandlerResult{}, metrics.StatefulRotationError, 0, fmt.Errorf("%s %s/%s %s: %w", action, op.req.Namespace, op.req.Pod, reason, err)
 		}
-		return HandlerResult{NoEffect: NoEffectRefused, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, nil
+		return HandlerResult{NoEffect: NoEffectRefused, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, metrics.StatefulRotationRefused, 0, nil
 	}
-	outcome := "target Pod retained: " + reason
+	state := "target Pod retained: " + reason
 	if err != nil {
-		outcome = "outcome of " + reason + " unknown: " + err.Error()
+		state = "outcome of " + reason + " unknown: " + err.Error()
 		err = fmt.Errorf("%s %s/%s %s: %w", action, op.req.Namespace, op.req.Pod, reason, err)
 	}
 	return HandlerResult{
@@ -145,8 +159,8 @@ func (op *statefulOperation) stopped(action model.Action, reason string, err err
 		ObjectsTouched: op.touched,
 		RollbackRef:    op.rollbackRef,
 		Note: fmt.Sprintf("Stateful rotation (%s) stopped after its preparatory step; %s; %s",
-			action, outcome, strings.Join(op.notes, "; ")),
-	}, err
+			action, state, strings.Join(op.notes, "; ")),
+	}, metrics.StatefulRotationPartial, 0, err
 }
 
 func stepReason(step, refusal string) string {
@@ -159,7 +173,7 @@ func stepReason(step, refusal string) string {
 // awaitStatefulReplacement observes, within a bounded window, the StatefulSet's replacement
 // for the evicted ordinal (same name, new UID) become Ready, then the class's continuity
 // property. It never mutates; an expired window is reported as unconfirmed.
-func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOperation, class statefulClass) string {
+func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOperation, class statefulClass) (string, bool) {
 	timeout, interval := statefulConfirmTimeout, statefulConfirmInterval
 	if ec.StatefulConfirmTimeout > 0 {
 		timeout = ec.StatefulConfirmTimeout
@@ -178,16 +192,16 @@ func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOper
 		if err == nil && replacement.UID != op.pod.UID && replacement.DeletionTimestamp.IsZero() && statefulrotation.PodReady(replacement) {
 			detail, ok := class.confirm(ctx, ec, op, replacement)
 			if ok {
-				return fmt.Sprintf("replacement %s Ready and confirmed: %s", replacement.UID, detail)
+				return fmt.Sprintf("replacement %s Ready and confirmed: %s", replacement.UID, detail), true
 			}
 			last = fmt.Sprintf("replacement %s Ready but continuity unconfirmed: %s", replacement.UID, detail)
 		}
 		if !time.Now().Before(deadline) {
-			return fmt.Sprintf("%s within %s", last, timeout)
+			return fmt.Sprintf("%s within %s", last, timeout), false
 		}
 		select {
 		case <-ctx.Done():
-			return "replacement unconfirmed: observation cancelled"
+			return "replacement unconfirmed: observation cancelled", false
 		case <-time.After(interval):
 		}
 	}

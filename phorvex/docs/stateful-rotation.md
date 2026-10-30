@@ -151,6 +151,28 @@ the writer:
    `dataSource: {kind: VolumeSnapshot, apiGroup: snapshot.storage.k8s.io, name: <snapshot>}`.
 3. Scale back. The StatefulSet reattaches the restored claim.
 
+## Monitoring
+
+The actuator records exactly one outcome for every dispatch:
+
+| Metric | Labels | Meaning |
+|---|---|---|
+| `phorvex_stateful_rotations_total` | `namespace`, `action`, `outcome` | `confirmed` (replacement Ready and class continuity observed), `unconfirmed` (evicted; not observed within the bound), `partial` (stopped after a preparatory mutation, member kept), `refused` (no effect), `error` (effect unknown) |
+| `phorvex_stateful_rotation_recovery_seconds` | `action` | seconds from the accepted Eviction to a confirmed member |
+
+The brain's choices appear in the existing `phorvex_decisions_total`,
+`phorvex_candidates_excluded_total` and `phorvex_actuation_failures_total` series
+under the stateful `action` values. Each environment's "Phorvex services" dashboard
+has a **Stateful rotation** section for all of them.
+
+Staging runs the sample in `deploy/demo/`. `nats-demo.yaml` is a 3-member NATS
+JetStream cluster declaring classes A and B, with an exporter sidecar and a seeded R3
+`DEMO` stream. `nats-demo-defense` (in `policy.yaml`) enables only the stateful family;
+it is event-driven and also proactive (floor 1h). The **"Phorvex stateful rotation —
+NATS demo"** dashboard (`nats-demo-dashboard.yaml`) shows each member's copy of `DEMO`,
+the members' volume identity (a rebuild adds a new volume, a snapshot rotation keeps
+it), and the rotations, decisions and recovery times.
+
 ## Live verification
 
 `internal/decision/stateful_live_test.go` (build tag `live`) runs the production chain on

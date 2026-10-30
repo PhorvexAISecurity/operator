@@ -29,7 +29,12 @@ themselves. These keys are set once per environment, in
   "Phorvex services — <environment>" dashboard, as a `grafana_dashboard=1`
   ConfigMap in the release's namespace; the Grafana sidecar loads them from every
   namespace. It covers scrape health, service calls, ticks, decisions,
-  actuations, SecurityEvents and resources.
+  actuations, SecurityEvents, stateful rotation and resources.
+- **Stateful rotation.** The actuator exports
+  `phorvex_stateful_rotations_total{namespace,action,outcome}` (outcome
+  `confirmed|unconfirmed|partial|refused|error`) and
+  `phorvex_stateful_rotation_recovery_seconds{action}` for confirmed members
+  (docs/stateful-rotation.md).
 - **Alerts.** `phorvex.metrics.rules.enabled` adds four alerts: a service down,
   failing calls, incomplete ticks and restarts. They are severity `info`, so the
   Alertmanager here routes them to no receiver; Prometheus and Grafana show them.

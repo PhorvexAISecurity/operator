@@ -180,6 +180,15 @@ var (
 		Name: "phorvex_candidates_excluded_total",
 		Help: "Candidate (asset,action) pairs excluded by the T1-E capability gate BEFORE scoring, by reason (not-installable|no-cover|capability-unsupported|no-rbac).",
 	}, []string{"tenant", "action", "reason"})
+	statefulRotations = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "phorvex_stateful_rotations_total",
+		Help: "Native stateful rotation dispatches by namespace, class action and closed outcome: confirmed (replacement Ready and class continuity observed), unconfirmed (evicted; replacement or continuity not observed within the bound), partial (stopped after a preparatory mutation, member retained), refused (no effect), error (effect unknown).",
+	}, []string{"namespace", "action", "outcome"})
+	statefulRecovery = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "phorvex_stateful_rotation_recovery_seconds",
+		Help:    "Seconds from the accepted Eviction to a confirmed replacement member (Ready and class continuity observed), by class action.",
+		Buckets: []float64{5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300},
+	}, []string{"action"})
 	candidatesRBACUnknownTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "phorvex_candidates_rbac_unknown_total",
 		Help: "Candidates whose SSAR errored so RBAC could not be confirmed — NOT excluded (fail-open, P-NO-FREEZE); flags a degraded apiserver, not a policy problem.",
@@ -246,7 +255,7 @@ func init() {
 		costNaNUnactionable, requestDrainAborted, tickDuration, managerTickDuration,
 		rlsObservations, rlsPending, rlsPrimed, rlsUpdates,
 		scrapeFailuresTotal, sloGateSkippedTotal, securityEventsTotal, securityEventsFirstSeen,
-		candidatesExcludedTotal, candidatesRBACUnknownTotal, actuationCircuitCollector{},
+		candidatesExcludedTotal, candidatesRBACUnknownTotal, statefulRotations, statefulRecovery, actuationCircuitCollector{},
 	)
 }
 
@@ -672,6 +681,32 @@ func RecordActuationSuppression(tenant, action string, reason ActuationSuppressi
 		reason = SuppressOther
 	}
 	actuationSuppressions.WithLabelValues(tenant, action, string(reason)).Inc()
+}
+
+// StatefulRotationOutcome is the closed outcome vocabulary of one native stateful
+// rotation dispatch; anything else is recorded as error.
+type StatefulRotationOutcome string
+
+const (
+	StatefulRotationConfirmed   StatefulRotationOutcome = "confirmed"
+	StatefulRotationUnconfirmed StatefulRotationOutcome = "unconfirmed"
+	StatefulRotationPartial     StatefulRotationOutcome = "partial"
+	StatefulRotationRefused     StatefulRotationOutcome = "refused"
+	StatefulRotationError       StatefulRotationOutcome = "error"
+)
+
+// RecordStatefulRotation counts one stateful rotation dispatch. A confirmed dispatch also
+// records its recovery time from the accepted Eviction.
+func RecordStatefulRotation(namespace, action string, outcome StatefulRotationOutcome, recovery time.Duration) {
+	switch outcome {
+	case StatefulRotationConfirmed, StatefulRotationUnconfirmed, StatefulRotationPartial, StatefulRotationRefused, StatefulRotationError:
+	default:
+		outcome = StatefulRotationError
+	}
+	statefulRotations.WithLabelValues(namespace, action, string(outcome)).Inc()
+	if outcome == StatefulRotationConfirmed && recovery > 0 {
+		statefulRecovery.WithLabelValues(action).Observe(recovery.Seconds())
+	}
 }
 
 func RecordActuationConfirmation(backend, outcome string) {
