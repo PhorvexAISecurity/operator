@@ -133,7 +133,7 @@ phorvex:
         profile: ""
         cleanupPolicy: Delete
         images:
-          workload: ""
+          workload: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
           phorvex: ""
           guardrail: ""
           python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d

@@ -2,7 +2,7 @@
 # The release (phase 5c) writes the published manager image here, under `phorvex.image`.
 phorvex:
   image:
-    repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager"
-    tag: "0.15.0"
-    releaseDigest: "sha256:31b04eeaeea8cd188ddeda7fd366b156f93d7c2b44d10b4355160c507279d53a"
-    releaseSourceSHA: "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6"
+    repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
+    tag: "staging-0.16.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
+    releaseDigest: "sha256:3a18e0b814e0d4f7076e0a83901918cebcd1041c840b78249f3aa2bb44699183"
+    releaseSourceSHA: "2f1c92bc487024ac0a159c70305a4d97a16a3592"

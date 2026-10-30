@@ -1,6 +1,6 @@
 # The brain chart's own staging values (deploy/charts/phorvex-brain), merged after phorvex.yaml.
 # The release (phase 5c) writes the published brain image here, under `image`.
 image:
-  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain"
-  tag: "0.9.0"
-  digest: "sha256:2b903963a86007afe0da8d018bbe4c8e746171fcd3e44d6c520fbe4bf5a62621"
+  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
+  tag: "staging-0.10.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
+  digest: "sha256:ef17a636890fa6587de6d36ced35e1c41aff70f7b9f0b601f3f582d3facd5c16"

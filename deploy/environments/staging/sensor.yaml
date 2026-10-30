@@ -1,6 +1,6 @@
 # The sensor chart's own staging values (deploy/charts/phorvex-sensor), merged after phorvex.yaml.
 # The release (phase 5c) writes the published sensor image here, under `image`.
 image:
-  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor"
-  tag: "0.10.0"
-  digest: "sha256:8dceb7f7dceb5cc99c1c9ceb1317fcb8e01dd82a9c3aad091aa958c2d204362d"
+  repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor"
+  tag: "staging-0.11.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
+  digest: "sha256:19cf07b1815701fa72f1109a704854fcd0db8523a8e56e6dee6c14e0c98bfb8d"

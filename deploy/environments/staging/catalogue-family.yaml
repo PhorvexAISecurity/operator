@@ -21,6 +21,6 @@ phorvex:
       agentAction:
         enabled: false
         namespace: p6-demo
-        image: ""
+        image: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:6ec1514a419a67ba7ade3dd499496b61db0c2475a1add4d2935cc8a2919fcb78"
       prometheusEvidence:
         enabled: false
