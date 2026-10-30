@@ -1,5 +1,6 @@
 """Guard the actual all-base candidate-source workflow and its fail-closed gate."""
 from pathlib import Path
+import json
 import os
 import re
 import subprocess
@@ -246,25 +247,119 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.git(root, 'init', '-q', '-b', 'main')
         self.git(root, 'config', 'user.name', 'Release Test')
         self.git(root, 'config', 'user.email', 'release@example.invalid')
+
+        # The shell binding is exercised against real detached Git worktrees,
+        # while a tiny fixture compiler keeps these orchestration tests focused.
+        # The production transition semantics are covered by the Go helper's
+        # source-pinned endpoint/transition suite.
+        (root / 'release').mkdir()
+        (root / 'release/versions.json').write_text('{"manager":"1.0.0"}\n')
+        (root / 'phorvex/tools/servicerelease').mkdir(parents=True)
+        (root / 'phorvex/tools/servicerelease/batch.go').write_text('const batchSchema = 2\n')
+        (root / 'tools').mkdir()
+        identity = root / 'tools/verify-git-build-identity.sh'
+        identity.write_text('#!/bin/sh\nset -eu\n[ "$(git rev-parse HEAD)" = "$1" ]\n')
+        identity.chmod(0o755)
+        helper = root / 'tools/fake-servicerelease.py'
+        helper.write_text('''#!/usr/bin/env python3
+import json
+from pathlib import Path
+import sys
+
+def die(message):
+    print('servicerelease:', message, file=sys.stderr)
+    raise SystemExit(1)
+
+def load(root):
+    try:
+        value = json.loads((Path(root) / 'release/batch.json').read_text())
+    except Exception as exc:
+        die(str(exc))
+    required = {'schema', 'status', 'environment', 'source', 'expectedComponents',
+                'versions', 'components', 'releases'}
+    if set(value) != required or value['schema'] != 2 or value['environment'] != 'staging':
+        die('batch object is semantically invalid')
+    if value['status'] != ('complete' if len(value['releases']) == len(value['expectedComponents'])
+                           else 'partial' if value['releases'] else 'prepared'):
+        die('batch status is semantically invalid')
+    return value
+
+if sys.argv[1] == 'bootstrap-source':
+    try:
+        pointer = json.loads(Path('release/batch.json').read_text())
+        source = pointer['source']
+        schema = pointer['schema']
+    except Exception as exc:
+        die(str(exc))
+    if schema != 2:
+        die('invalid schema pointer')
+    if len(source) != 40 or any(c not in '0123456789abcdef' for c in source):
+        die('invalid source pointer')
+    print(source)
+elif sys.argv[1] == 'validate-transition':
+    args = dict(zip(sys.argv[2::2], sys.argv[3::2]))
+    previous = load(args['--from-root'])
+    latest = load(args['--to-root'])
+    for key in ('schema', 'environment', 'source', 'expectedComponents', 'versions', 'components'):
+        if previous[key] != latest[key]:
+            die('immutable batch contract changed')
+    for name, record in previous['releases'].items():
+        if latest['releases'].get(name) != record:
+            die('release record was deleted or replaced')
+    print(previous['status'], latest['status'], len(previous['releases']), len(latest['releases']))
+else:
+    die('unexpected command')
+''')
+        helper.chmod(0o755)
+        fake_bin = root / '.fake-bin'
+        fake_bin.mkdir()
+        fake_go = fake_bin / 'go'
+        fake_go.write_text('''#!/usr/bin/env python3
+from pathlib import Path
+import shutil
+import sys
+
+args = sys.argv[1:]
+module = Path(args[args.index('-C') + 1])
+output = Path(args[args.index('-o') + 1])
+shutil.copy2(module.parent / 'tools/fake-servicerelease.py', output)
+output.chmod(0o755)
+''')
+        fake_go.chmod(0o755)
         (root / 'trigger').write_text('trigger\n')
-        self.git(root, 'add', 'trigger')
+        self.git(root, 'add', '-A')
         self.git(root, 'commit', '-qm', 'trigger')
         trigger = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
-        (root / 'release').mkdir()
-        (root / 'release/batch.json').write_text('{"schema":2}\n')
+        batch = {
+            'schema': 2,
+            'status': 'prepared',
+            'environment': 'staging',
+            'source': trigger,
+            'expectedComponents': ['manager'],
+            'versions': {'manager': '1.0.0'},
+            'components': [{'component': 'manager', 'source': trigger}],
+            'releases': {},
+        }
+        (root / 'release/batch.json').write_text(json.dumps(batch, sort_keys=True) + '\n')
         self.git(root, 'add', 'release/batch.json')
         self.git(root, 'commit', '-qm', 'publish batch')
         publication = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
-        return root, trigger, publication
+        return root, trigger, publication, fake_bin
 
     def run_main_binding(self, root, *, pending, publish='', result='skipped'):
         step = next(s for s in RELEASE['jobs']['release-pr']['steps']
                     if s.get('name') == 'Bind latest main to the upstream publication')
         output = root / 'github-output'
+        fake_bin = root / '.fake-bin'
+        runner = tempfile.TemporaryDirectory(prefix='release-binding-')
+        self.addCleanup(runner.cleanup)
+        runner_temp = Path(runner.name)
         completed = subprocess.run(
             ['bash', '-c', step['run']], cwd=root, text=True, capture_output=True,
             env=dict(os.environ, GITHUB_OUTPUT=str(output), PENDING_MAIN_SHA=pending,
-                     PUBLISH_MAIN_SHA=publish, PUBLISH_RESULT=result),
+                     PUBLISH_MAIN_SHA=publish, PUBLISH_RESULT=result,
+                     RUNNER_TEMP=str(runner_temp),
+                     PATH=str(fake_bin) + os.pathsep + os.environ['PATH']),
         )
         return completed, output.read_text() if output.exists() else ''
 
@@ -503,7 +598,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
             self.assertNotIn('github.token', str(step), name)
 
     def test_release_pr_uses_published_main_when_trigger_sha_lacks_batch(self):
-        root, trigger, publication = self.release_main_repository()
+        root, trigger, publication, _ = self.release_main_repository()
         missing = self.git(root, 'cat-file', '-e', f'{trigger}:release/batch.json', check=False)
         self.assertNotEqual(missing.returncode, 0)
 
@@ -523,7 +618,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                         prepare.index('"$batch_tool" pending --json'))
 
     def test_release_pr_accepts_unrelated_main_advance_after_publication(self):
-        root, _, publication = self.release_main_repository()
+        root, _, publication, _ = self.release_main_repository()
         (root / 'unrelated').write_text('later main work\n')
         self.git(root, 'add', 'unrelated')
         self.git(root, 'commit', '-qm', 'unrelated main advance')
@@ -535,8 +630,87 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(output, f'sha={latest}\n')
         self.assertNotEqual(latest, publication)
 
+    def test_release_pr_rejects_malformed_expected_even_when_descendant_repairs_it(self):
+        root, _, _, _ = self.release_main_repository()
+        batch_path = root / 'release/batch.json'
+        valid = batch_path.read_text()
+        batch_path.write_text('{ definitely-not-json\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'malformed authoritative publication')
+        expected = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        batch_path.write_text(valid)
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'repair descendant batch')
+
+        completed, output = self.run_main_binding(root, pending=expected)
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('authoritative upstream batch pointer', completed.stdout)
+        self.assertEqual(output, '')
+
+    def test_release_pr_rejects_semantically_invalid_expected_even_when_descendant_repairs_it(self):
+        root, _, _, _ = self.release_main_repository()
+        batch_path = root / 'release/batch.json'
+        valid = json.loads(batch_path.read_text())
+        invalid = dict(valid, status='complete')
+        batch_path.write_text(json.dumps(invalid, sort_keys=True) + '\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'semantically invalid authoritative publication')
+        expected = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        batch_path.write_text(json.dumps(valid, sort_keys=True) + '\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'repair descendant semantics')
+
+        completed, output = self.run_main_binding(root, pending=expected)
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('expected-to-latest release state transition is invalid', completed.stdout)
+        self.assertIn('batch status is semantically invalid', completed.stderr)
+        self.assertEqual(output, '')
+
+    def test_release_pr_rejects_malformed_latest_endpoint(self):
+        root, _, publication, _ = self.release_main_repository()
+        (root / 'release/batch.json').write_text('{\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'malformed latest batch')
+
+        completed, output = self.run_main_binding(root, pending=publication)
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('expected-to-latest release state transition is invalid', completed.stdout)
+        self.assertEqual(output, '')
+
+    def test_release_pr_publish_output_precedes_pending_and_skipped_uses_pending(self):
+        root, _, publication, _ = self.release_main_repository()
+        batch_path = root / 'release/batch.json'
+        valid = json.loads(batch_path.read_text())
+        batch_path.write_text(json.dumps(dict(valid, status='complete'), sort_keys=True) + '\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'invalid pending output state')
+        pending = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+        batch_path.write_text(json.dumps(valid, sort_keys=True) + '\n')
+        self.git(root, 'add', 'release/batch.json')
+        self.git(root, 'commit', '-qm', 'valid publish output state')
+        published = self.git(root, 'rev-parse', 'HEAD').stdout.strip()
+
+        completed, output = self.run_main_binding(
+            root, pending=pending, publish=published, result='success')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(output, f'sha={published}\n')
+
+        root, _, pending, _ = self.release_main_repository()
+        completed, output = self.run_main_binding(
+            root, pending=pending, publish='', result='skipped')
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(output, f'sha={pending}\n')
+
+    def test_release_pr_never_falls_back_after_failed_publish(self):
+        root, _, pending, _ = self.release_main_repository()
+        completed, output = self.run_main_binding(
+            root, pending=pending, publish='', result='failure')
+        self.assertEqual(completed.returncode, 75)
+        self.assertIn('publish result is failure', completed.stdout)
+        self.assertEqual(output, '')
+
     def test_release_pr_fails_closed_when_publication_is_missing_or_not_ancestor(self):
-        root, trigger, publication = self.release_main_repository()
+        root, trigger, publication, _ = self.release_main_repository()
         completed, output = self.run_main_binding(
             root, pending=publication, publish='', result='success')
         self.assertEqual(completed.returncode, 75)
@@ -556,7 +730,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(output, '')
 
         self.git(root, 'switch', '-q', '-c', 'unpublished', trigger)
-        (root / 'release').mkdir()
         (root / 'release/batch.json').write_text('{"schema":2,"side":true}\n')
         self.git(root, 'add', 'release/batch.json')
         self.git(root, 'commit', '-qm', 'unpublished release state')
@@ -591,6 +764,23 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git merge-base --is-ancestor "$expected" "$main_sha"', binding['run'])
         self.assertIn('"$expected:release/batch.json"', binding['run'])
         self.assertNotIn('$GITHUB_SHA', binding['run'])
+
+    def test_release_pr_validates_both_immutable_endpoints_and_transition_before_binding(self):
+        binding = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                       if s.get('name') == 'Bind latest main to the upstream publication')
+        run = binding['run']
+        self.assertIn('git worktree add --detach "$expected_tree" "$expected"', run)
+        self.assertIn('git worktree add --detach "$latest_tree" "$main_sha"', run)
+        self.assertIn('bootstrap-source --head "$expected"', run)
+        self.assertIn('git worktree add --detach "$source_tree" "$source"', run)
+        self.assertIn('tools/verify-git-build-identity.sh "$tool_head"', run)
+        self.assertIn('release-pr-pinned-servicerelease', run)
+        self.assertIn('"$pinned_tool" validate-transition', run)
+        self.assertIn('--from-root "$expected_tree" --from-head "$expected"', run)
+        self.assertIn('--to-root "$latest_tree" --to-head "$main_sha"', run)
+        self.assertLess(run.index('validate-transition'), run.index('echo "sha=$main_sha"'))
+        self.assertNotIn('GIT_PUSH_TOKEN', run)
+        self.assertNotIn('github.token', str(binding))
 
     def test_the_release_pr_gets_its_checks(self):
         # GitHub starts no pull_request run for a PR the workflow's token opened or

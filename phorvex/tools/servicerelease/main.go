@@ -28,6 +28,7 @@ const usage = `usage:
   servicerelease release-files [--dir release] [--components <name>[,<name>...]]
   servicerelease verify-staged [--dir release] [--head <rev>] [--components <name>[,<name>...]]
   servicerelease verify-committed [--dir release] [--head <rev>]
+  servicerelease validate-transition --from-root <path> --from-head <sha> --to-root <path> --to-head <sha> [--dir release]
   servicerelease verify-build-paths --dockerfile <path> --context <path>
   servicerelease record --environment staging --component <name> --repository <repo> --tag <version> --digest <sha256:...> --source <sha>
   servicerelease deploy --environment <env> --component <name> --repository <repo> --tag <version> --digest <sha256:...> [--source <sha>]
@@ -39,7 +40,7 @@ const usage = `usage:
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "release-files": true, "verify-staged": true, "verify-committed": true, "verify-build-paths": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "release-files": true, "verify-staged": true, "verify-committed": true, "validate-transition": true, "verify-build-paths": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -50,7 +51,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	head := fs.String("head", "HEAD", "the revision the change ends at; [pull-request] the PR's branch")
 	asJSON := fs.Bool("json", false, "[plan, pending] print JSON")
 	markdown := fs.Bool("markdown", false, "[affected] print a Markdown summary, as for a CI job summary")
-	dir := fs.String("dir", "release", "[prepare, bootstrap-source, import-terminal-batch, batch, batch-source, pending, record] the release directory, relative to the repository root")
+	dir := fs.String("dir", "release", "[prepare, bootstrap-source, import-terminal-batch, batch, batch-source, pending, record, validate-transition] the release directory, relative to the repository root")
 	date := fs.String("date", time.Now().UTC().Format("2006-01-02"), "[prepare] the release date in the changelogs")
 	titleFile := fs.String("title-file", "", "[prepare, pull-request] the release PR's title")
 	bodyFile := fs.String("body-file", "", "[prepare, pull-request] the release PR's Markdown body")
@@ -65,6 +66,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 	components := fs.String("components", "", "[release-files, verify-staged] comma-separated release components changed by this attempt")
 	dockerfile := fs.String("dockerfile", "", "[verify-build-paths] repository-relative Dockerfile")
 	context := fs.String("context", "", "[verify-build-paths] repository-relative Docker build context")
+	fromRoot := fs.String("from-root", "", "[validate-transition] clean detached expected endpoint repository root")
+	fromHead := fs.String("from-head", "", "[validate-transition] exact expected endpoint commit")
+	toRoot := fs.String("to-root", "", "[validate-transition] clean detached latest endpoint repository root")
+	toHead := fs.String("to-head", "", "[validate-transition] exact latest endpoint commit")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -254,6 +259,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return fail(err)
 		}
 		fmt.Fprintf(stdout, "%s\t%d\n", batch.Status, len(batch.Components))
+	case "validate-transition":
+		previous, latest, err := ValidateBatchTransition(*fromRoot, *toRoot, *dir, *fromHead, *toHead)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", previous.Status, latest.Status, len(previous.Releases), len(latest.Releases))
 	case "verify-build-paths":
 		if *dockerfile == "" || *context == "" {
 			fmt.Fprintln(stderr, "servicerelease verify-build-paths: --dockerfile and --context are required")

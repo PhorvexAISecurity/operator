@@ -397,6 +397,47 @@ jobs:
           git cat-file -e "$expected:release/batch.json" 2>/dev/null || retryable_error "upstream publication commit $expected lacks release/batch.json"
           git cat-file -e "$main_sha:release/batch.json" 2>/dev/null || retryable_error "latest main $main_sha lacks release/batch.json"
           [ -z "$(git status --porcelain --untracked-files=all)" ] || retryable_error "latest main checkout is dirty"
+
+          # Validate immutable endpoint trees with the helper compiled at the
+          # batch's authoritative source. Current main may locate only the
+          # schema/source pointer; it cannot reinterpret component authority.
+          transition_dir="$(mktemp -d "$RUNNER_TEMP/release-transition.XXXXXX")"
+          expected_tree="$transition_dir/expected"
+          latest_tree="$transition_dir/latest"
+          source_tree="$transition_dir/source"
+          cleanup_transition() {
+            set +e
+            git worktree remove --force "$source_tree" >/dev/null 2>&1
+            git worktree remove --force "$latest_tree" >/dev/null 2>&1
+            git worktree remove --force "$expected_tree" >/dev/null 2>&1
+            rmdir "$transition_dir" >/dev/null 2>&1
+          }
+          trap cleanup_transition EXIT
+          git worktree add --detach "$expected_tree" "$expected"
+          git worktree add --detach "$latest_tree" "$main_sha"
+
+          bootstrap_tool="$RUNNER_TEMP/release-pr-bootstrap-servicerelease"
+          go -C "$latest_tree/phorvex" build -o "$bootstrap_tool" ./tools/servicerelease
+          if ! source="$(cd "$expected_tree" && "$bootstrap_tool" bootstrap-source --head "$expected")"; then
+            retryable_error "authoritative upstream batch pointer at $expected is invalid"
+          fi
+          git worktree add --detach "$source_tree" "$source"
+          tool_tree="$source_tree"
+          tool_head="$source"
+          if ! git -C "$source_tree" show 'HEAD:phorvex/tools/servicerelease/batch.go' 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            # The sole legacy terminal import has a source predating batch.go;
+            # its complete record is governed by the exact publication commit.
+            tool_tree="$expected_tree"
+            tool_head="$expected"
+          fi
+          (cd "$tool_tree" && tools/verify-git-build-identity.sh "$tool_head" > /dev/null)
+          pinned_tool="$RUNNER_TEMP/release-pr-pinned-servicerelease"
+          go -C "$tool_tree/phorvex" build -o "$pinned_tool" ./tools/servicerelease
+          if ! (cd "$latest_tree" && "$pinned_tool" validate-transition \
+            --from-root "$expected_tree" --from-head "$expected" \
+            --to-root "$latest_tree" --to-head "$main_sha"); then
+            retryable_error "expected-to-latest release state transition is invalid"
+          fi
           echo "sha=$main_sha" >> "$GITHUB_OUTPUT"
       - name: Prepare the release PR from bound main
         id: prepare

@@ -571,10 +571,23 @@ func validatePin(root string, batch *Batch, contract *BatchComponent, released R
 // validateBatch verifies the whole batch. allowTag permits RecordRelease to
 // validate the one just-created local tag before adding its release entry.
 func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag string) error {
-	return validateBatchOverlay(root, dir, head, batch, current, allowTag, nil)
+	return validateBatchOverlayMode(root, dir, head, batch, current, allowTag, nil, false)
 }
 
 func validateBatchOverlay(root, dir, head string, batch *Batch, current bool, allowTag string, overrides map[string][]byte) error {
+	return validateBatchOverlayMode(root, dir, head, batch, current, allowTag, overrides, false)
+}
+
+// validateHistoricalBatch validates a batch at an immutable historical commit.
+// A tag created by a later descendant may already be visible through the shared
+// Git object database, so an unrecorded matching-source tag is tolerated here.
+// The transition's latest endpoint is validated normally and must account for
+// every such tag with a complete release record and deployment pin.
+func validateHistoricalBatch(root, dir, head string, batch *Batch) error {
+	return validateBatchOverlayMode(root, dir, head, batch, true, "", nil, true)
+}
+
+func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool, allowTag string, overrides map[string][]byte, historical bool) error {
 	if batch.Schema != batchSchema {
 		return fmt.Errorf("%s: schema %d, want %d", BatchFile, batch.Schema, batchSchema)
 	}
@@ -648,7 +661,7 @@ func validateBatchOverlay(root, dir, head string, batch *Batch, current bool, al
 		switch {
 		case recorded && !tagged:
 			return fmt.Errorf("component %s is recorded without tag %s", name, contract.Record.GitTag)
-		case !recorded && tagged && allowTag != name:
+		case !recorded && tagged && allowTag != name && !historical:
 			return fmt.Errorf("component %s tag exists without a release record", name)
 		case recorded:
 			if err := validatePin(root, batch, contract, released, overrideRaw); err != nil {

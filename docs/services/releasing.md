@@ -91,6 +91,24 @@ summary.
    rejects prepared or partial state, so it cannot authorize a build, push,
    record or deployment change.
 
+   Before `release-pr` prepares the next version set, it selects the exact
+   upstream publication commit: the `publish` output when publication succeeded,
+   or the `pending` output only when publication was legitimately skipped. It
+   checks out the latest `main`, creates clean detached worktrees for that
+   expected commit and the latest commit, and locates the batch source through
+   the narrow bootstrap pointer. The helper compiled at that source validates
+   the complete batch, tags, pins, deployment routes and rendered consumers at
+   both endpoints, then validates the expected-to-latest state transition. The
+   immutable schema, source, versions, ordered expected set and full component
+   contract must remain exactly equivalent as structured data; every existing
+   release record must remain unchanged. The only accepted difference is
+   additive completion of previously pending records. A malformed, missing,
+   semantically invalid, rewritten or rolled-back expected state therefore
+   cannot be hidden by a descendant that repairs or replaces it. Only after
+   both endpoints and the transition pass does the job bind preparation to the
+   validated latest SHA. The complete legacy import uses the exact publication
+   commit's helper because its historical source predates `batch.go`.
+
    `servicerelease pending` then validates the batch record, existing component
    tags and staging pins before reporting its unrecorded components. It renders
    every chart in the persisted expected set through the exact Argo value-file
