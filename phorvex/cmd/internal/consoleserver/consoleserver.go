@@ -54,6 +54,7 @@ import (
 	"time"
 
 	"github.com/phorvex/phorvex/internal/audittransport"
+	"github.com/phorvex/phorvex/internal/buildinfo"
 	"github.com/phorvex/phorvex/internal/cataloguev1"
 	"github.com/phorvex/phorvex/internal/console"
 	"github.com/phorvex/phorvex/internal/eventtrust"
@@ -129,7 +130,9 @@ func Run(binary console.Service) int {
 		catalogueV1Runtime   string
 		injectorIdentity     string
 		attacksURL           string
+		printVersion         bool
 	)
+	flag.BoolVar(&printVersion, "version", false, "Print the release version and exact Git SHA, then exit.")
 	flag.StringVar(&root, "root", "", "Phorvex root dir (holds phorvex/ + build/test-harness/). Default: walk up from CWD.")
 	flag.StringVar(&addr, "addr", ":8090", "HTTP listen address.")
 	flag.StringVar(&auditPath, "audit-json", "", "Optional explicit decision-audit JSONL for the owner view.")
@@ -157,6 +160,13 @@ func Run(binary console.Service) int {
 	}
 	logging.RegisterFlags(flag.CommandLine, &logOptions)
 	flag.Parse()
+	if printVersion {
+		if err := buildinfo.WriteVersion(os.Stdout, string(binary)); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		return 0
+	}
 	if err := setLogger(logOptions); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2

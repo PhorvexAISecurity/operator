@@ -88,7 +88,9 @@ PHORVEX_ACTUATOR=hybrid go -C phorvex run ./cmd/actuator --listen=:9090 \
 The `phorvex-actuator` image is built from `deploy/docker/service.Dockerfile`:
 
 ```sh
-docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=actuator -t phorvex-actuator .
+sha=$(tools/verify-git-build-identity.sh "$(git rev-parse HEAD)")
+docker build -f deploy/docker/service.Dockerfile --build-arg SERVICE=actuator \
+  --build-arg "GIT_SHA=$sha" --build-arg RELEASE_VERSION=dev -t phorvex-actuator .
 ```
 
 It holds the one binary as `/service` on distroless nonroot. PR validation builds

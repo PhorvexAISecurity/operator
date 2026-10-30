@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -102,38 +101,50 @@ func TestPrepareWritesVersionsAndChangelogs(t *testing.T) {
 	}
 }
 
+func TestPrepareRejectsDuplicateAndAliasedComponentSetsBeforeWriting(t *testing.T) {
+	for name, plans := range map[string][]Plan{
+		"duplicate": {
+			{Component: "brain", Next: "1.0.0"},
+			{Component: "brain", Next: "1.0.1"},
+		},
+		"alias": {{Component: "operator", Next: "1.0.0"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, _, err := Prepare(dir, "2026-10-30", plans); err == nil {
+				t.Fatalf("%s release plan was accepted", name)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("rejected %s plan wrote %v", name, entries)
+			}
+		})
+	}
+}
+
 func TestPendingReleasesSkipsTaggedVersions(t *testing.T) {
-	dir := t.TempDir()
-	gitIn := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	gitIn("init", "-q", "-b", "main")
-	gitIn("commit", "-q", "--allow-empty", "-m", "start")
-	gitIn("tag", "brain-v0.2.0")
-	release := filepath.Join(dir, "release")
-	if err := os.MkdirAll(release, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(release, VersionsFile), []byte(`{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	pending, err := PendingReleases(dir, release, "HEAD")
+	r := newBatchTestRepo(t, map[string]string{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"})
+	r.ensureBatch()
+	r.commit("pin batch")
+	r.record("brain", "0.2.0", "a")
+	r.commit("record brain")
+	pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var names []string
 	for _, p := range pending {
-		names = append(names, p.Component+" "+p.Version+" "+strings.Join(p.BuildArgs, ",")+" "+p.Target)
+		names = append(names, p.Component+" "+p.Version+" "+strings.Join(p.Build.Args, ",")+" "+p.Build.Target)
 	}
 	// The attacks service is a stage of the console's Dockerfile.
-	if want := []string{"sensor 0.1.0 SERVICE=sensor ", "console 0.5.1 CONSOLE_VERSION=0.5.1 ", "attacks 0.1.0 CONSOLE_VERSION=0.1.0 attacks"}; !slices.Equal(names, want) {
+	if want := []string{
+		"sensor 0.1.0 GIT_SHA=" + r.source + ",RELEASE_VERSION=0.1.0,SERVICE=sensor ",
+		"console 0.5.1 CONSOLE_VERSION=0.5.1,GIT_SHA=" + r.source + ",RELEASE_VERSION=0.5.1 ",
+		"attacks 0.1.0 CONSOLE_VERSION=0.1.0,GIT_SHA=" + r.source + ",RELEASE_VERSION=0.1.0 attacks",
+	}; !slices.Equal(names, want) {
 		t.Errorf("pending = %v, want %v", names, want)
 	}
 }
@@ -145,9 +156,9 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"brain.yaml":   "# The brain chart's own staging values.\n{}\n",
-		"manager.yaml": "# The manager chart's values.\nphorvex:\n  leaderElect: true # kept\n",
-		"console.yaml": "# The console chart's values.\n{}\n",
+		"brain.yaml":   "# The brain chart's own staging values.\nimage:\n  repository: \"old/brain\"\n  tag: \"0.1.0\"\n  digest: \"sha256:" + strings.Repeat("0", 64) + "\"\n",
+		"manager.yaml": "# The manager chart's values.\nphorvex:\n  leaderElect: true # kept\n  image:\n    repository: \"old/manager\"\n    tag: \"0.5.0\"\n    releaseDigest: \"sha256:" + strings.Repeat("0", 64) + "\"\n    releaseSourceSHA: \"old\"\n",
+		"console.yaml": "# The console chart's values.\nphorvex:\n  console:\n    image:\n      repository: \"old/console\"\n      tag: \"0.5.0\"\n      releaseDigest: \"sha256:" + strings.Repeat("0", 64) + "\"\n      releaseSourceSHA: \"old\"\n",
 	} {
 		if err := os.WriteFile(filepath.Join(env, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -155,13 +166,15 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
 	repo := "registry.example/phorvex/"
+	sourceA := strings.Repeat("a", 40)
+	sourceB := strings.Repeat("b", 40)
 	if err := Deploy(root, "staging", "brain", repo+"brain", "0.2.0", digest, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Deploy(root, "staging", "manager", repo+"manager", "0.5.1", digest, "abc"); err != nil {
+	if err := Deploy(root, "staging", "manager", repo+"manager", "0.5.1", digest, sourceA); err != nil {
 		t.Fatal(err)
 	}
-	if err := Deploy(root, "staging", "console", repo+"console", "0.5.2", digest, "def"); err != nil {
+	if err := Deploy(root, "staging", "console", repo+"console", "0.5.2", digest, sourceB); err != nil {
 		t.Fatal(err)
 	}
 	brain, _ := os.ReadFile(filepath.Join(env, "brain.yaml"))
@@ -185,13 +198,13 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 	if err := yaml.Unmarshal(console, &consoleValues); err != nil {
 		t.Fatal(err)
 	}
-	if !managerValues.Phorvex.LeaderElect || managerValues.Phorvex.Image["tag"] != "0.5.1" || managerValues.Phorvex.Image["releaseSourceSHA"] != "abc" ||
+	if !managerValues.Phorvex.LeaderElect || managerValues.Phorvex.Image["tag"] != "0.5.1" || managerValues.Phorvex.Image["releaseSourceSHA"] != sourceA ||
 		managerValues.Phorvex.Console.Image != nil {
 		t.Errorf("manager.yaml =\n%s", manager)
 	}
 	// The console chart deploys the console: its image is pinned in its own file.
 	if consoleValues.Phorvex.Console.Image["tag"] != "0.5.2" || consoleValues.Phorvex.Console.Image["releaseDigest"] != digest ||
-		consoleValues.Phorvex.Console.Image["releaseSourceSHA"] != "def" {
+		consoleValues.Phorvex.Console.Image["releaseSourceSHA"] != sourceB {
 		t.Errorf("console.yaml =\n%s", console)
 	}
 	if !strings.Contains(string(manager), "# The manager chart's values.") || !strings.Contains(string(manager), "# kept") {
@@ -201,6 +214,32 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 		if err := Deploy(root, "staging", bad[0], repo+bad[0], bad[1], bad[2], ""); err == nil {
 			t.Errorf("Deploy%v accepted", bad)
 		}
+	}
+}
+
+func TestReleaseMutationRequiresOneExactExistingUnaliasedShape(t *testing.T) {
+	flat := ComponentDeploy{ValuesFile: "values.yaml", Path: []string{"image"}, RepositoryKey: "repository", TagKey: "tag", DigestKey: "digest"}
+	nested := ComponentDeploy{ValuesFile: "values.yaml", Path: []string{"phorvex", "image"}, RepositoryKey: "repository", TagKey: "tag", DigestKey: "digest", SourceKey: "source"}
+	valid := "image:\n  repository: old/repo\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\n"
+	for _, test := range []struct {
+		name   string
+		raw    string
+		target ComponentDeploy
+	}{
+		{"path removed", "{}\n", flat},
+		{"parent removed", "phorvex: {}\n", nested},
+		{"parent is scalar", "phorvex: old\n", nested},
+		{"image is scalar", "image: old\n", flat},
+		{"release value is mapping", "image:\n  repository: {}\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\n", flat},
+		{"release key removed", "image:\n  repository: old/repo\n  tag: 0.1.0\n", flat},
+		{"duplicate path", valid + valid, flat},
+		{"yaml alias", "image: &release\n  repository: old/repo\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\ncopy: *release\n", flat},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := mutateDeploymentValues([]byte(test.raw), test.target, "new/repo", "1.0.0", "sha256:"+strings.Repeat("a", 64), strings.Repeat("b", 40)); err == nil {
+				t.Fatal("unsafe release values shape was accepted")
+			}
+		})
 	}
 }
 

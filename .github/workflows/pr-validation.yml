@@ -187,6 +187,16 @@ jobs:
           git diff --exit-code -- 'phorvex/internal/*pb'
           test -z "$(git status --porcelain -- 'phorvex/internal/*pb')"
 
+  fixture-images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Rebuild each fixture twice and compare complete OCI identities
+        run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
+
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the
   # image. Built locally under a per-run tag and discarded; nothing is pushed.
@@ -205,15 +215,27 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
           TAG: operator-refactored-${{ matrix.image }}:ci-${{ github.run_id }}-${{ github.run_attempt }}
+          RELEASE_VERSION: 0.0.0-ci
         # The services (ADR-0001) share one Dockerfile; the manager and the
         # console have their own.
         run: |
+          reviewed_sha="$(tools/verify-git-build-identity.sh "$GITHUB_SHA")"
           case "$IMAGE" in
-            operator|console) docker build --file "deploy/docker/$IMAGE.Dockerfile" --tag "$TAG" . ;;
+            operator) docker build --file "deploy/docker/$IMAGE.Dockerfile" --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
+            console) docker build --file "deploy/docker/$IMAGE.Dockerfile" --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "CONSOLE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
             # The attacks service is a stage of the console's Dockerfile.
-            attacks) docker build --file deploy/docker/console.Dockerfile --target attacks --tag "$TAG" . ;;
-            *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --tag "$TAG" . ;;
+            attacks) docker build --file deploy/docker/console.Dockerfile --target attacks --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "CONSOLE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
+            *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
           esac
+          service="$IMAGE"
+          [ "$service" != operator ] || service=manager
+          case "$service" in
+            manager) entrypoint=/manager ;;
+            brain|sensor|actuator) entrypoint=/service ;;
+            console) entrypoint=/app/console ;;
+            attacks) entrypoint=/app/attacks ;;
+          esac
+          python3 tools/verify_service_image_identity.py --image "$TAG" --service "$service" --entrypoint "$entrypoint" --git-sha "$reviewed_sha" --version "$RELEASE_VERSION"
           docker image rm "$TAG"
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of
@@ -314,7 +336,7 @@ jobs:
   pr-validation:
     name: PR validation
     if: always()
-    needs: [charts, go-unit, go-envtest, frontend, lint, images]
+    needs: [charts, go-unit, go-envtest, frontend, lint, fixture-images, images]
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     steps:
@@ -325,6 +347,7 @@ jobs:
           GO_ENVTEST: ${{ needs.go-envtest.result }}
           FRONTEND: ${{ needs.frontend.result }}
           LINT: ${{ needs.lint.result }}
+          FIXTURE_IMAGES: ${{ needs.fixture-images.result }}
           IMAGES: ${{ needs.images.result }}
         run: |
           test "$CHARTS" = success
@@ -332,4 +355,5 @@ jobs:
           test "$GO_ENVTEST" = success
           test "$FRONTEND" = success
           test "$LINT" = success
+          test "$FIXTURE_IMAGES" = success
           test "$IMAGES" = success

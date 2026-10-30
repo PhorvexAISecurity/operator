@@ -86,6 +86,8 @@ func newScheme() *runtime.Scheme {
 
 func main() {
 	cfg := config{log: logging.Options{Service: "phorvex-actuator", Version: buildinfo.Current().GitSHA}}
+	var printVersion bool
+	flag.BoolVar(&printVersion, "version", false, "Print the release version and exact Git SHA, then exit.")
 	flag.StringVar(&cfg.listen, "listen", ":9090", "Address the gRPC actuator service binds to.")
 	flag.StringVar(&cfg.metricsAddr, "metrics-bind-address", ":8080", "Address the metric endpoint binds to.")
 	flag.StringVar(&cfg.probeAddr, "health-probe-bind-address", ":8081", "Address the health probe binds to.")
@@ -97,6 +99,13 @@ func main() {
 	logging.RegisterFlags(flag.CommandLine, &cfg.log)
 	cfg.tls.RegisterServer(flag.CommandLine)
 	flag.Parse()
+	if printVersion {
+		if err := buildinfo.WriteVersion(os.Stdout, "actuator"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	logger, err := logging.New(os.Stderr, cfg.log)
 	if err != nil {

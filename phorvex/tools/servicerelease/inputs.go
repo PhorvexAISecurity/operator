@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -46,19 +47,42 @@ type listedPackage struct {
 // graph is read for the images' platform, linux/amd64 without cgo, so files
 // another platform would compile are not inputs.
 func ResolveInputs(root string, c Component) (Inputs, error) {
+	if err := VerifyBuildPaths(root, c.Dockerfile, "."); err != nil {
+		return Inputs{}, fmt.Errorf("component %s build paths: %w", c.Name, err)
+	}
 	in := Inputs{Files: map[string]bool{c.Dockerfile: true}, Dirs: append([]string(nil), c.Paths...)}
 	if c.Chart != "" {
 		in.Dirs = append(in.Dirs, c.Chart)
 	}
 	for _, b := range c.Builds {
-		cmd := exec.Command("go", append([]string{"list", "-mod=readonly", "-deps", "-json"}, b.Packages...)...)
-		cmd.Dir = filepath.Join(root, filepath.FromSlash(b.Module))
+		moduleDir, err := safeRepoPath(root, b.Module, true)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("Go module %s: %w", b.Module, err)
+		}
+		goPath, err := exec.LookPath("go")
+		if err != nil {
+			return Inputs{}, err
+		}
+		goBefore, err := pathSnapshot(goPath, false)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("go executable: %w", err)
+		}
+		cmd, cleanup, err := pinnedCommand(goPath, append([]string{"list", "-mod=readonly", "-deps", "-json"}, b.Packages...)...)
+		if err != nil {
+			return Inputs{}, err
+		}
+		cmd.Dir = moduleDir
 		cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0", "GOFLAGS=", "GOWORK=off")
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		out, err := cmd.Output()
+		cleanup()
 		if err != nil {
 			return Inputs{}, fmt.Errorf("go list in %s: %v: %s", b.Module, err, strings.TrimSpace(stderr.String()))
+		}
+		goAfter, err := pathSnapshot(goPath, false)
+		if err != nil || !reflect.DeepEqual(goBefore, goAfter) {
+			return Inputs{}, fmt.Errorf("go executable identity changed during go list")
 		}
 		dec := json.NewDecoder(bytes.NewReader(out))
 		for {

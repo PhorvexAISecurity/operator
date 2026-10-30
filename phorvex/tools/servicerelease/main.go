@@ -20,7 +20,17 @@ const usage = `usage:
   servicerelease affected --base <rev> [--head <rev>] [--markdown]
   servicerelease plan [--head <rev>] [--json]
   servicerelease prepare [--dir release] [--date YYYY-MM-DD] --title-file <path> --body-file <path>
+  servicerelease bootstrap-source [--dir release] [--head <rev>]
+  servicerelease import-terminal-batch [--dir release] [--head <rev>] [--environment staging]
+  servicerelease batch [--dir release] [--head <rev>] [--environment staging]
+  servicerelease batch-source [--dir release] [--head <rev>]
   servicerelease pending [--dir release]
+  servicerelease release-files [--dir release] [--components <name>[,<name>...]]
+  servicerelease verify-staged [--dir release] [--head <rev>] [--components <name>[,<name>...]]
+  servicerelease verify-committed [--dir release] [--head <rev>]
+  servicerelease validate-transition --from-root <path> --from-head <sha> --to-root <path> --to-head <sha> [--dir release]
+  servicerelease verify-build-paths --dockerfile <path> --context <path>
+  servicerelease record --environment staging --component <name> --repository <repo> --tag <version> --digest <sha256:...> --source <sha>
   servicerelease deploy --environment <env> --component <name> --repository <repo> --tag <version> --digest <sha256:...> [--source <sha>]
   servicerelease pull-request --head <branch> --base <branch> --title-file <path> --body-file <path>
   servicerelease dispatch --ref <branch> --workflows <file>[,<file>...]
@@ -30,7 +40,7 @@ const usage = `usage:
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "pending": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "release-files": true, "verify-staged": true, "verify-committed": true, "validate-transition": true, "verify-build-paths": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -39,20 +49,27 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	base := fs.String("base", "", "[affected] the revision the change starts from; [pull-request] the branch the PR merges into")
 	head := fs.String("head", "HEAD", "the revision the change ends at; [pull-request] the PR's branch")
-	asJSON := fs.Bool("json", false, "[plan] print the plans as JSON")
+	asJSON := fs.Bool("json", false, "[plan, pending] print JSON")
 	markdown := fs.Bool("markdown", false, "[affected] print a Markdown summary, as for a CI job summary")
-	dir := fs.String("dir", "release", "[prepare, pending] the release directory, relative to the repository root")
+	dir := fs.String("dir", "release", "[prepare, bootstrap-source, import-terminal-batch, batch, batch-source, pending, record, validate-transition] the release directory, relative to the repository root")
 	date := fs.String("date", time.Now().UTC().Format("2006-01-02"), "[prepare] the release date in the changelogs")
 	titleFile := fs.String("title-file", "", "[prepare, pull-request] the release PR's title")
 	bodyFile := fs.String("body-file", "", "[prepare, pull-request] the release PR's Markdown body")
-	environment := fs.String("environment", "", "[deploy] the environment under deploy/environments")
-	component := fs.String("component", "", "[deploy] the released component")
-	repository := fs.String("repository", "", "[deploy] the image repository, with its registry")
-	tag := fs.String("tag", "", "[deploy] the released version")
-	digest := fs.String("digest", "", "[deploy] the pushed image's digest")
-	source := fs.String("source", "", "[deploy] the released commit")
+	environment := fs.String("environment", "", "[import-terminal-batch, batch, record, deploy] the environment under deploy/environments")
+	component := fs.String("component", "", "[record, deploy] the released component")
+	repository := fs.String("repository", "", "[record, deploy] the image repository, with its registry")
+	tag := fs.String("tag", "", "[record, deploy] the released version")
+	digest := fs.String("digest", "", "[record, deploy] the pushed image's digest")
+	source := fs.String("source", "", "[record, deploy] the released commit")
 	ref := fs.String("ref", "", "[dispatch] the branch the workflows run on")
 	workflows := fs.String("workflows", "", "[dispatch] comma-separated workflow files")
+	components := fs.String("components", "", "[release-files, verify-staged] comma-separated release components changed by this attempt")
+	dockerfile := fs.String("dockerfile", "", "[verify-build-paths] repository-relative Dockerfile")
+	context := fs.String("context", "", "[verify-build-paths] repository-relative Docker build context")
+	fromRoot := fs.String("from-root", "", "[validate-transition] clean detached expected endpoint repository root")
+	fromHead := fs.String("from-head", "", "[validate-transition] exact expected endpoint commit")
+	toRoot := fs.String("to-root", "", "[validate-transition] clean detached latest endpoint repository root")
+	toHead := fs.String("to-head", "", "[validate-transition] exact latest endpoint commit")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -62,9 +79,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	root = strings.TrimSpace(root)
+	root, err = safeRoot(root)
+	if err != nil {
+		fmt.Fprintln(stderr, "servicerelease:", err)
+		return 2
+	}
 	releaseDir := *dir
 	if !filepath.IsAbs(releaseDir) {
 		releaseDir = filepath.Join(root, releaseDir)
+	}
+	releaseDir, err = withinRoot(root, releaseDir)
+	if err != nil {
+		fmt.Fprintln(stderr, "servicerelease:", err)
+		return 2
 	}
 	fail := func(err error) int {
 		fmt.Fprintln(stderr, "servicerelease:", err)
@@ -137,29 +164,122 @@ func run(args []string, stdout, stderr io.Writer) int {
 		} else if err != nil {
 			return fail(err)
 		}
-		if err := os.WriteFile(*titleFile, []byte(title+"\n"), 0o644); err != nil {
+		if err := writeAtomicFile(*titleFile, []byte(title+"\n")); err != nil {
 			return fail(err)
 		}
-		if err := os.WriteFile(*bodyFile, []byte(body), 0o644); err != nil {
+		if err := writeAtomicFile(*bodyFile, []byte(body)); err != nil {
 			return fail(err)
 		}
 		fmt.Fprintln(stdout, title)
+	case "bootstrap-source":
+		source, err := BootstrapSource(root, releaseDir, *head)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, source)
+	case "import-terminal-batch":
+		env := *environment
+		if env == "" {
+			env = ReleaseEnvironment
+		}
+		batch, err := ImportTerminalBatch(root, releaseDir, *head, env)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, batch.Source)
+	case "batch":
+		env := *environment
+		if env == "" {
+			env = ReleaseEnvironment
+		}
+		batch, _, err := EnsureBatch(root, releaseDir, *head, env)
+		if err != nil {
+			return fail(err)
+		}
+		if batch != nil {
+			fmt.Fprintln(stdout, batch.Source)
+		}
+	case "batch-source":
+		batch, err := LoadBatch(root, releaseDir, *head, true)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, batch.Source)
 	case "pending":
 		pending, err := PendingReleases(root, releaseDir, *head)
 		if err != nil {
 			return fail(err)
 		}
+		if *asJSON {
+			if pending == nil {
+				pending = []Pending{}
+			}
+			enc := json.NewEncoder(stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(pending); err != nil {
+				return fail(err)
+			}
+			return 0
+		}
 		// One release per line, tab-separated, for the release workflow; the last
 		// field is the image's docker build options.
 		for _, p := range pending {
 			var buildArgs []string
-			for _, a := range p.BuildArgs {
+			for _, a := range p.Build.Args {
 				buildArgs = append(buildArgs, "--build-arg", a)
 			}
-			if p.Target != "" {
-				buildArgs = append(buildArgs, "--target", p.Target)
+			if p.Build.Target != "" {
+				buildArgs = append(buildArgs, "--target", p.Build.Target)
 			}
-			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Dockerfile, p.Repository, strings.Join(buildArgs, " "))
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Build.Dockerfile, p.Image.Repository, strings.Join(buildArgs, " "))
+		}
+	case "release-files":
+		batch, err := readBatch(releaseDir)
+		if err != nil {
+			return fail(err)
+		}
+		files, err := selectedReleaseFiles(root, releaseDir, batch, *components)
+		if err != nil {
+			return fail(err)
+		}
+		for _, path := range files {
+			fmt.Fprintln(stdout, path)
+		}
+	case "verify-staged":
+		files, err := VerifyStaged(root, releaseDir, *head, *components)
+		if err != nil {
+			return fail(err)
+		}
+		for _, path := range files {
+			fmt.Fprintln(stdout, path)
+		}
+	case "verify-committed":
+		batch, err := VerifyCommitted(root, releaseDir, *head)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(stdout, "%s\t%d\n", batch.Status, len(batch.Components))
+	case "validate-transition":
+		previous, latest, err := ValidateBatchTransition(*fromRoot, *toRoot, *dir, *fromHead, *toHead)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintf(stdout, "%s\t%s\t%d\t%d\n", previous.Status, latest.Status, len(previous.Releases), len(latest.Releases))
+	case "verify-build-paths":
+		if *dockerfile == "" || *context == "" {
+			fmt.Fprintln(stderr, "servicerelease verify-build-paths: --dockerfile and --context are required")
+			return 2
+		}
+		if err := VerifyBuildPaths(root, *dockerfile, *context); err != nil {
+			return fail(err)
+		}
+	case "record":
+		if *environment == "" || *component == "" || *repository == "" || *tag == "" || *digest == "" || *source == "" {
+			fmt.Fprintln(stderr, "servicerelease record: --environment, --component, --repository, --tag, --digest and --source are required")
+			return 2
+		}
+		if err := RecordRelease(root, releaseDir, *head, *environment, *component, *repository, *tag, *digest, *source); err != nil {
+			return fail(err)
 		}
 	case "deploy":
 		if *environment == "" || *component == "" || *repository == "" {
@@ -207,11 +327,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stderr, "servicerelease pull-request: --head, --base, --title-file and --body-file are required")
 			return 2
 		}
-		title, err := os.ReadFile(*titleFile)
+		title, err := readRegularFile(*titleFile)
 		if err != nil {
 			return fail(err)
 		}
-		body, err := os.ReadFile(*bodyFile)
+		body, err := readRegularFile(*bodyFile)
 		if err != nil {
 			return fail(err)
 		}

@@ -55,7 +55,10 @@ an environment that runs the attacks service sets it to that account.
 The `phorvex-attacks` image is the `attacks` stage of the console's Dockerfile:
 
 ```sh
-docker build -f deploy/docker/console.Dockerfile --target attacks -t phorvex-attacks .
+sha=$(tools/verify-git-build-identity.sh "$(git rev-parse HEAD)")
+docker build -f deploy/docker/console.Dockerfile --target attacks \
+  --build-arg "GIT_SHA=$sha" --build-arg RELEASE_VERSION=dev \
+  --build-arg CONSOLE_VERSION=dev -t phorvex-attacks .
 ```
 
 - **Contents.** The harness and its data, the NATS observer, the phorvex binary

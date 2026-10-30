@@ -175,7 +175,9 @@ func main() {
 		brainConnectTimeout            time.Duration
 		brainCallTimeout               time.Duration
 		brainDecideTimeout             time.Duration
+		printVersion                   bool
 	)
+	flag.BoolVar(&printVersion, "version", false, "Print the release version and exact Git SHA, then exit.")
 	flag.BoolVar(&scan, "scan", false, "One-shot (P-PHYSICS): scan the live cluster, print the DISCOVERED both-products PhysicsWitness per pod + the scarcity ablation, then exit.")
 	flag.StringVar(&scanNS, "scan-namespace", "", "[scan] restrict the scan/ablation to this namespace.")
 	flag.StringVar(&kubeContext, "context", "", "[scan] kubeconfig context to scan (empty = current-context; the console derives this from your kubeconfig, never hardcoded).")
@@ -255,6 +257,13 @@ func main() {
 	logOptions := logging.Options{Service: "phorvex-manager", Version: buildinfo.Current().GitSHA}
 	logging.RegisterFlags(flag.CommandLine, &logOptions)
 	flag.Parse()
+	if printVersion {
+		if err := buildinfo.WriteVersion(os.Stdout, "manager"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	// Logs go to stderr: one-shot modes (--scan, --ablation) print their results on
 	// stdout for the console to parse. Set up before any configuration check, so
 	// a refusal below is logged instead of discarded by the unset delegating logger.

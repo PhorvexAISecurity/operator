@@ -233,7 +233,7 @@ LEASE_ENV = {'PHORVEX_' + f.upper().replace('-', '_') for f in LEASE_FLAGS}
 TRUST_ENV_FLAGS = LEASE_FLAGS | {'injector-identity'}
 TRUST_ENV = {'PHORVEX_' + f.upper().replace('-', '_') for f in TRUST_ENV_FLAGS}
 # The service's own listener, probes and shutdown, not the manager's.
-OWN_FLAGS = {'listen', 'metrics-bind-address', 'health-probe-bind-address', 'shutdown-grace'}
+OWN_FLAGS = {'listen', 'metrics-bind-address', 'health-probe-bind-address', 'shutdown-grace', 'version'}
 
 
 def source_names(*paths):

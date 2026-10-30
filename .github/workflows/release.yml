@@ -30,96 +30,322 @@ env:
 
 jobs:
   pending:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
     outputs:
       releases: ${{ steps.pending.outputs.releases }}
+      source: ${{ steps.pending.outputs.source }}
+      main: ${{ steps.pending.outputs.main }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          persist-credentials: false
+          ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - name: Prepared releases not yet tagged
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.4
+      - name: Persist and validate the prepared batch source
         id: pending
+        env:
+          GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          go -C phorvex run ./tools/servicerelease pending | tee "$RUNNER_TEMP/pending.tsv"
-          echo "releases=$(wc -l < "$RUNNER_TEMP/pending.tsv" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+          }
+          git_push() {
+            local auth
+            local status=0
+            assert_clean_git_auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
+            unset auth
+            assert_clean_git_auth
+            return "$status"
+          }
+          # The current-main helper may locate only the minimal schema/source
+          # pointer. Component authority begins with the helper built at source.
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
+          record_head="$(git rev-parse HEAD)"
+          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            git switch --detach "$source"
+            tools/verify-git-build-identity.sh "$source" > /dev/null
+            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+            git switch --force-create release-record "$record_head"
+            tool="$RUNNER_TEMP/pinned-servicerelease"
+            "$tool" batch --environment "$ENVIRONMENT" >/dev/null
+          else
+            # One historical, already-complete six-tag release predates batch.go.
+            # This command refuses missing/partial/mixed tags or pins and cannot
+            # produce pending work, so current-main metadata never builds/pushes.
+            tool="$RUNNER_TEMP/bootstrap-servicerelease"
+            if [ ! -e release/batch.json ]; then
+              "$tool" import-terminal-batch --environment "$ENVIRONMENT" >/dev/null
+            fi
+          fi
+          if [ -n "$(git status --porcelain -- release/batch.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            mapfile -t release_files < <("$tool" release-files)
+            git add -- "${release_files[@]}"
+            "$tool" verify-staged > /dev/null
+            git commit -m "release: pin batch source ${source:0:12}"
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            committed="$RUNNER_TEMP/committed-batch"
+            git worktree add --detach "$committed" HEAD
+            (cd "$committed" && "$tool" verify-committed > /dev/null)
+            git worktree remove --force "$committed"
+            # A remote advance fails this exact push. A later explicit retry or
+            # user-triggered run checks out that head, then reconstructs and
+            # re-verifies the batch without retaining this write credential.
+            git_push --atomic origin HEAD:main
+          fi
+          source="$("$tool" batch-source)"
+          "$tool" pending --json | tee "$RUNNER_TEMP/pending.json"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "releases=$(jq 'length' "$RUNNER_TEMP/pending.json")" >> "$GITHUB_OUTPUT"
+          echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: pending
-    if: needs.pending.outputs.releases != '0'
+    if: github.ref == 'refs/heads/main' && needs.pending.outputs.releases != '0'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
+    env:
+      BATCH_SOURCE_SHA: ${{ needs.pending.outputs.source }}
+    outputs:
+      main: ${{ steps.record.outputs.main }}
     permissions:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.4
+      - name: Load the record and checkout its exact clean source
+        run: |
+          set -euo pipefail
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          [ "$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)" = "$BATCH_SOURCE_SHA" ]
+          record_head="$(git rev-parse HEAD)"
+          git switch --detach "$BATCH_SOURCE_SHA"
+          tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA" > /dev/null
+          go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+          git switch --force-create release-record "$record_head"
+          git rev-parse HEAD > "$RUNNER_TEMP/record-head"
+          tool="$RUNNER_TEMP/pinned-servicerelease"
+          [ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]
+          "$tool" pending --json > "$RUNNER_TEMP/pending.json"
+          install -m 0600 release/batch.json "$RUNNER_TEMP/record-batch.json"
+          git switch --detach "$BATCH_SOURCE_SHA"
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+          "$tool" verify-build-paths --dockerfile farm-fixtures/agentsim/Dockerfile --context .
+          "$tool" verify-build-paths --dockerfile farm-fixtures/catalogue-workload/Dockerfile --context .
+          while IFS= read -r release; do
+            "$tool" verify-build-paths \
+              --dockerfile "$(jq -er '.build.dockerfile' <<< "$release")" \
+              --context "$(jq -er '.build.context' <<< "$release")"
+          done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Require the release role
         env:
           ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
         run: |
           set -euo pipefail
           [[ "$ROLE" =~ ^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$ ]] || { echo "::error::set the repository variable PHORVEX_RELEASE_ROLE_ARN"; exit 1; }
-      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         id: ecr
+      - name: Preflight the exact release batch in ECR
+        run: |
+          set -euo pipefail
+          python3 tools/verify_release_ecr.py preflight --batch "$RUNNER_TEMP/record-batch.json" \
+            > "$RUNNER_TEMP/ecr-preflight.json"
+          chmod 0400 "$RUNNER_TEMP/ecr-preflight.json"
+      - name: Rebuild each fixture twice and compare complete OCI identities
+        run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
       - name: Build, push, tag and pin each release
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           set -euo pipefail
-          go -C phorvex run ./tools/servicerelease pending > "$RUNNER_TEMP/pending.tsv"
-          # Nothing in the loop may read its stdin, the list of releases.
-          while IFS=$'\t' read -r component version dockerfile repository build_args; do
-            image="$REGISTRY/$repository:$version"
-            # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V and --target words
-            docker build --file "$dockerfile" $build_args --tag "$image" . < /dev/null
+          : > "$RUNNER_TEMP/released"
+          while IFS= read -r release; do
+            component="$(jq -er '.component' <<< "$release")"
+            service="$(jq -er '.identity.service' <<< "$release")"
+            command="$(jq -er '.identity.command' <<< "$release")"
+            source="$(jq -er '.source' <<< "$release")"
+            version="$(jq -er '.version' <<< "$release")"
+            dockerfile="$(jq -er '.build.dockerfile' <<< "$release")"
+            context="$(jq -er '.build.context' <<< "$release")"
+            target="$(jq -er '.build.target' <<< "$release")"
+            registry="$(jq -er '.image.registry' <<< "$release")"
+            repository="$(jq -er '.image.repository' <<< "$release")"
+            tag="$(jq -er '.image.tag' <<< "$release")"
+            git_tag="$(jq -er '.record.gitTag' <<< "$release")"
+            [ "$source" = "$BATCH_SOURCE_SHA" ]
+            [ "$version" = "$tag" ]
+            [ "$registry" = "$REGISTRY" ]
+            probe="$(python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$component")"
+            if [ "$(jq -r '.exists' <<< "$probe")" = true ]; then
+              [ "$(jq -er '.state' <<< "$probe")" = recoverable ]
+              digest="$(jq -er '.digest' <<< "$probe")"
+              printf '%s\t%s\t%s\t%s\t%s\n' "$component" "$version" "$registry/$repository" "$digest" "$git_tag" >> "$RUNNER_TEMP/released"
+              continue
+            fi
+            image="$registry/$repository:$tag"
+            docker_args=()
+            while IFS= read -r arg; do docker_args+=(--build-arg "$arg"); done < <(jq -er '.build.args[]' <<< "$release")
+            [ -z "$target" ] || docker_args+=(--target "$target")
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            "$RUNNER_TEMP/pinned-servicerelease" verify-build-paths --dockerfile "$dockerfile" --context "$context"
+            docker build --file "$dockerfile" "${docker_args[@]}" --tag "$image" "$context" < /dev/null
+            python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" --git-sha "$source" --version "$version"
+            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$component" > /dev/null
             docker push "$image" < /dev/null
-            digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"
+            registry_id="${registry%%.*}"
+            [[ "$registry_id" =~ ^[0-9]{12}$ ]]
+            digest=''
+            for attempt in 1 2 3 4 5 6; do
+              if digest="$(aws ecr describe-images --registry-id "$registry_id" --repository-name "$repository" \
+                --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null)" \
+                && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                break
+              fi
+              digest=''
+              sleep 5
+            done
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            docker pull "$image" < /dev/null
+            python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" \
+              --git-sha "$source" --version "$version" --expected-repository "$registry/$repository" \
+              --expected-tag "$tag" --expected-digest "$digest"
             docker image rm "$image"
-            go -C phorvex run ./tools/servicerelease deploy --environment "$ENVIRONMENT" --component "$component" \
-              --repository "$REGISTRY/$repository" --tag "$version" --digest "${digest#*@}" --source "$GITHUB_SHA" < /dev/null
-            git tag "$component-v$version" "$GITHUB_SHA"
-            echo "$component $version" >> "$RUNNER_TEMP/released"
-          done < "$RUNNER_TEMP/pending.tsv"
+            printf '%s\t%s\t%s\t%s\t%s\n' "$component" "$version" "$registry/$repository" "$digest" "$git_tag" >> "$RUNNER_TEMP/released"
+          done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Record the releases
+        id: record
         if: always()
+        env:
+          GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [ -s "$RUNNER_TEMP/released" ] || exit 0
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+          }
+          git_push() {
+            local auth
+            local status=0
+            assert_clean_git_auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
+            unset auth
+            assert_clean_git_auth
+            return "$status"
+          }
+          verify_committed_head() {
+            local committed="$RUNNER_TEMP/committed-record"
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            git worktree add --detach "$committed" HEAD
+            (cd "$committed" && "$tool" verify-committed > /dev/null)
+            git worktree remove --force "$committed"
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+          }
+          tool="$RUNNER_TEMP/pinned-servicerelease"
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+          git switch --force-create release-record "$(cat "$RUNNER_TEMP/record-head")"
+          cmp release/batch.json "$RUNNER_TEMP/record-batch.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/environments
-          git commit -m "deploy($ENVIRONMENT): $(paste -sd, "$RUNNER_TEMP/released" | sed 's/,/, /g')"
-          pushed=false
-          for attempt in 1 2 3; do
-            if git push origin HEAD:main; then pushed=true; break; fi
-            git pull --rebase origin main
-          done
-          "$pushed"
-          awk '{print "refs/tags/" $1 "-v" $2}' "$RUNNER_TEMP/released" | xargs git push origin
+          refs=()
+          components=()
+          while IFS=$'\t' read -r component version repository digest git_tag; do
+            git tag "$git_tag" "$BATCH_SOURCE_SHA"
+            "$tool" record --environment "$ENVIRONMENT" --component "$component" --repository "$repository" \
+              --tag "$version" --digest "$digest" --source "$BATCH_SOURCE_SHA"
+            refs+=("refs/tags/$git_tag")
+            components+=("$component")
+          done < "$RUNNER_TEMP/released"
+          "$tool" pending --json > /dev/null
+          python3 tools/verify_release_ecr.py verify --batch release/batch.json --verify-identities > /dev/null
+          component_list="$(IFS=,; echo "${components[*]}")"
+          mapfile -t release_files < <("$tool" release-files --components "$component_list")
+          git add -- "${release_files[@]}"
+          "$tool" verify-staged --components "$component_list" > /dev/null
+          git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
+          verify_committed_head
+          # Last practical publication boundary: repository immutability and
+          # every exact version-tag digest are re-read after committed-HEAD proof.
+          # A remote advance fails this run; a later explicit or user-triggered
+          # clean run reconstructs the record (including interrupted ECR pushes)
+          # and repeats every proof. GITHUB_TOKEN pushes do not trigger one.
+          python3 tools/verify_release_ecr.py verify --batch release/batch.json > /dev/null
+          git_push --atomic origin HEAD:main "${refs[@]}"
+          echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
   release-pr:
     needs: [pending, publish]
-    if: always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
+    if: github.ref == 'refs/heads/main' && always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -128,44 +354,189 @@ jobs:
       # To start CI on the release PR, which GitHub does not do for its token's pushes.
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - name: Bring the release PR up to date
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.4
+      - name: Bind latest main to the upstream publication
+        id: main
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          PENDING_MAIN_SHA: ${{ needs.pending.outputs.main }}
+          PUBLISH_MAIN_SHA: ${{ needs.publish.outputs.main }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
         run: |
           set -euo pipefail
-          # From main as the publish job left it: its tags and the staging pins.
-          git fetch --tags --force origin main
-          git switch --force-create release/next FETCH_HEAD
-          # Built once: `go run` reports every failing exit as 1, and prepare's 3
-          # means nothing to release.
-          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
-          tool="$RUNNER_TEMP/servicerelease"
+          retryable_error() {
+            echo "::error::release-pr cannot bind latest main to upstream publication: $*; retry after main contains the published release commit"
+            exit 75
+          }
+          case "$PUBLISH_RESULT" in
+            success)
+              expected="$PUBLISH_MAIN_SHA"
+              ;;
+            skipped)
+              expected="$PENDING_MAIN_SHA"
+              ;;
+            *)
+              retryable_error "publish result is $PUBLISH_RESULT"
+              ;;
+          esac
+          [[ "$expected" =~ ^[0-9a-f]{40}$ ]] || retryable_error "upstream publication SHA is missing or malformed"
+          git cat-file -e "$expected^{commit}" 2>/dev/null || retryable_error "upstream publication commit $expected is unavailable"
+          main_sha="$(git rev-parse --verify 'HEAD^{commit}')"
+          git merge-base --is-ancestor "$expected" "$main_sha" || retryable_error "upstream publication commit $expected is not an ancestor of main $main_sha"
+          git cat-file -e "$expected:release/batch.json" 2>/dev/null || retryable_error "upstream publication commit $expected lacks release/batch.json"
+          git cat-file -e "$main_sha:release/batch.json" 2>/dev/null || retryable_error "latest main $main_sha lacks release/batch.json"
+          [ -z "$(git status --porcelain --untracked-files=all)" ] || retryable_error "latest main checkout is dirty"
+
+          # Validate immutable endpoint trees with the helper compiled at the
+          # batch's authoritative source. Current main may locate only the
+          # schema/source pointer; it cannot reinterpret component authority.
+          transition_dir="$(mktemp -d "$RUNNER_TEMP/release-transition.XXXXXX")"
+          expected_tree="$transition_dir/expected"
+          latest_tree="$transition_dir/latest"
+          source_tree="$transition_dir/source"
+          cleanup_transition() {
+            set +e
+            git worktree remove --force "$source_tree" >/dev/null 2>&1
+            git worktree remove --force "$latest_tree" >/dev/null 2>&1
+            git worktree remove --force "$expected_tree" >/dev/null 2>&1
+            rmdir "$transition_dir" >/dev/null 2>&1
+          }
+          trap cleanup_transition EXIT
+          git worktree add --detach "$expected_tree" "$expected"
+          git worktree add --detach "$latest_tree" "$main_sha"
+
+          bootstrap_tool="$RUNNER_TEMP/release-pr-bootstrap-servicerelease"
+          go -C "$latest_tree/phorvex" build -o "$bootstrap_tool" ./tools/servicerelease
+          if ! source="$(cd "$expected_tree" && "$bootstrap_tool" bootstrap-source --head "$expected")"; then
+            retryable_error "authoritative upstream batch pointer at $expected is invalid"
+          fi
+          git worktree add --detach "$source_tree" "$source"
+          tool_tree="$source_tree"
+          tool_head="$source"
+          if ! git -C "$source_tree" show 'HEAD:phorvex/tools/servicerelease/batch.go' 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            # The sole legacy terminal import has a source predating batch.go;
+            # its complete record is governed by the exact publication commit.
+            tool_tree="$expected_tree"
+            tool_head="$expected"
+          fi
+          (cd "$tool_tree" && tools/verify-git-build-identity.sh "$tool_head" > /dev/null)
+          pinned_tool="$RUNNER_TEMP/release-pr-pinned-servicerelease"
+          go -C "$tool_tree/phorvex" build -o "$pinned_tool" ./tools/servicerelease
+          if ! (cd "$latest_tree" && "$pinned_tool" validate-transition \
+            --from-root "$expected_tree" --from-head "$expected" \
+            --to-root "$latest_tree" --to-head "$main_sha"); then
+            retryable_error "expected-to-latest release state transition is invalid"
+          fi
+          echo "sha=$main_sha" >> "$GITHUB_OUTPUT"
+      - name: Prepare the release PR from bound main
+        id: prepare
+        env:
+          AUTHORITATIVE_MAIN_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [ "$(git rev-parse HEAD)" = "$AUTHORITATIVE_MAIN_SHA" ]
+          git switch --force-create release/next "$AUTHORITATIVE_MAIN_SHA"
+          # Bound main can locate the pointer, but only the source-built helper
+          # may decide whether a nonterminal batch still has component work.
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
+          record_head="$(git rev-parse HEAD)"
+          batch_tool="$RUNNER_TEMP/bootstrap-servicerelease"
+          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            git switch --detach "$source"
+            tools/verify-git-build-identity.sh "$source" > /dev/null
+            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+            git switch --force-create release/next "$record_head"
+            batch_tool="$RUNNER_TEMP/pinned-servicerelease"
+          fi
           # A newer merge of the release PR is still to publish; its own run brings
           # the PR up to date afterwards. Preparing now would release it again.
-          if [ -n "$("$tool" pending)" ]; then
+          if [ "$("$batch_tool" pending --json | jq 'length')" -ne 0 ]; then
             echo "A merged release is still to publish; its run brings the release PR up to date." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "action=wait" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The prior batch is terminal, so the bound-main helper may plan the
+          # next release. A built binary preserves prepare's distinct exit 3.
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
           status=0
           "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
           if [ "$status" -eq 3 ]; then
-            "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "action=close" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           [ "$status" -eq 0 ]
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add release
+          git add -- release/versions.json release/*.md
+          [ -z "$(git diff --name-only)" ]
+          [ -z "$(git ls-files --others --exclude-standard)" ]
+          [ -z "$(git diff --cached --name-only --diff-filter=D)" ]
+          git diff --cached --check
           git commit -F "$RUNNER_TEMP/title"
-          git push --force origin release/next
-          "$tool" pull-request --head release/next --base main \
-            --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
-          "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+          echo "action=update" >> "$GITHUB_OUTPUT"
+      - name: Publish the prepared release PR state
+        if: steps.prepare.outputs.action != 'wait'
+        env:
+          ACTION: ${{ steps.prepare.outputs.action }}
+          GIT_PUSH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+          }
+          git_push() {
+            local auth
+            local status=0
+            assert_clean_git_auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
+            unset auth
+            assert_clean_git_auth
+            return "$status"
+          }
+          tool="$RUNNER_TEMP/servicerelease"
+          case "$ACTION" in
+            close)
+              GITHUB_TOKEN="$git_push_token" "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
+              ;;
+            update)
+              git_push --atomic --force origin release/next
+              GITHUB_TOKEN="$git_push_token" "$tool" pull-request --head release/next --base main \
+                --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
+              GITHUB_TOKEN="$git_push_token" "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+              ;;
+            *)
+              echo "::error::unexpected prepared release PR action: $ACTION"
+              exit 1
+              ;;
+          esac
