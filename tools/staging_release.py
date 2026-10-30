@@ -621,11 +621,15 @@ def pod_spec_locations(value: Any, path: str = "") -> list[tuple[str, dict[str, 
     found = []
     if isinstance(value, dict):
         sections = ("containers", "initContainers", "ephemeralContainers")
-        is_pod_spec = any(section in value for section in sections)
+        volumes = value.get("volumes")
+        has_image_volume = isinstance(volumes, list) and any(
+            isinstance(volume, dict) and "image" in volume for volume in volumes
+        )
+        is_pod_spec = any(section in value for section in sections) or has_image_volume
         if is_pod_spec:
             found.append((path, value))
         for key, child in value.items():
-            if is_pod_spec and key in sections:
+            if is_pod_spec and key in (*sections, "volumes"):
                 continue
             found.extend(pod_spec_locations(child, f"{path}/{pointer_token(str(key))}"))
     elif isinstance(value, list):
@@ -656,6 +660,22 @@ def rendered_image_consumers(
         ):
             raise ValueError("rendered pod template has no complete apiVersion/kind/name identity")
         for path, pod in locations:
+            volumes = pod.get("volumes", [])
+            if not isinstance(volumes, list):
+                raise ValueError(
+                    f"rendered {document['kind']}/{metadata['name']} volumes must be a list"
+                )
+            for index, volume in enumerate(volumes):
+                if not isinstance(volume, dict) or "image" not in volume:
+                    continue
+                source = volume["image"]
+                reference = source.get("reference") if isinstance(source, dict) else None
+                detail = reference if isinstance(reference, str) and reference else "malformed reference"
+                raise ValueError(
+                    f"{label} rendered {document['kind']}/{metadata['name']} image volume "
+                    f"at {path}/volumes/{index}/image/reference is unsupported by the release "
+                    f"consumer contract: {detail!r}"
+                )
             for section in ("containers", "initContainers", "ephemeralContainers"):
                 if section not in pod:
                     continue

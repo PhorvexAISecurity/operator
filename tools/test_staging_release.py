@@ -335,6 +335,29 @@ class StagingTargetTests(unittest.TestCase):
         custom_item["deploy"]["consumers"].append(custom_consumer)
         RELEASE.verify_service_documents(custom_item, published, [deployment, custom])
 
+        # Kubernetes image volumes are OCI consumers too. They are intentionally
+        # unsupported until the release contract has a first-class volume schema.
+        image_volume = copy.deepcopy(deployment)
+        image_volume["spec"]["template"]["spec"]["volumes"] = [{
+            "name": "rogue",
+            "image": {
+                "reference": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain:shared",
+                "pullPolicy": "IfNotPresent",
+            },
+        }]
+        with self.assertRaisesRegex(ValueError, "image volume.*unsupported"):
+            RELEASE.verify_service_documents(item, published, [image_volume])
+
+        volume_only = {
+            "apiVersion": "example.io/v1", "kind": "ImageVolumeWorkload",
+            "metadata": {"name": "volume-only", "namespace": "phorvex-staging"},
+            "spec": {"template": {"spec": {"volumes": [{
+                "name": "rogue", "image": {"reference": "phorvex/brain:shared"},
+            }]}}},
+        }
+        with self.assertRaisesRegex(ValueError, "image volume.*unsupported"):
+            RELEASE.verify_service_documents(item, published, [deployment, volume_only])
+
     def test_fixture_render_rejects_every_uncontracted_image_consumer(self):
         prepared = prepared_batch()
         complete = RELEASE.complete(prepared, publication_results(prepared))
