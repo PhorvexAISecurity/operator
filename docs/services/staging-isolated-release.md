@@ -2,8 +2,13 @@
 
 This lane publishes one reviewed Git SHA to repositories that are reserved for
 the Console 192-attack reactive-QA campaign. It is separate from the normal
-service release in `.github/workflows/release.yml`; that workflow and its shared
-`phorvex/{manager,brain,sensor,actuator,console,attacks}` defaults are unchanged.
+service release in `.github/workflows/release.yml`; its shared
+`phorvex/{manager,brain,sensor,actuator,console,attacks}` targets and publication
+defaults are unchanged. The normal workflow gains one compatibility bridge for
+an already-complete shared batch whose source predates this lane: the old
+source-built helper proves the byte-identical batch at its last record commit,
+then the current reviewed helper may apply only the isolated-deployment
+supersession rule. Batch drift, partial authority, or invalid records fail closed.
 
 The lane is manual and accepts one input: the complete 40-character commit at
 current `main`. The clean checkout must resolve to that exact commit. There is no repository override input. The only accepted target is
@@ -115,7 +120,8 @@ worktree at the recorded source before accepting a digest-pin PR. It also diffs
 the proposal against that source, so a production/shared or unrelated change is
 rejected even when all staging pins are valid. A complete isolated batch may
 supersede only an older shared deployment selection; shared
-publication records and tags remain validated, and a later shared release
+publication records and tags remain validated on every PR even while their old
+deployment pins are superseded, and a later shared release
 source switches the same staging consumers back through the normal lane. This
 shared → isolated → shared transition is covered by the release-tool tests.
 
