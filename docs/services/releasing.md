@@ -247,9 +247,8 @@ Release prerequisites (the workflow validates but never reconfigures them):
   batch can build or push; a full six-component batch therefore requires all six.
   `MUTABLE` and exclusion-based modes fail closed. This repository deliberately
   does not change that live setting. The last reviewed inventory described the
-  repositories as mutable,
-  so the reviewed infrastructure owner must apply and independently verify the
-  immutability prerequisite before release. Scan/encryption policy is separate.
+  repositories as mutable; all six were set to `IMMUTABLE` on 2026-10-30, and
+  the infrastructure owner must keep and independently verify that setting. Scan/encryption policy is separate.
   The production stack's repositories (`phorvex`, `phorvex-console`) are not
   used or modified by this workflow.
 - **IAM.** The role `phorvex-refactored-release` trusts GitHub's OIDC provider
@@ -257,7 +256,13 @@ Release prerequisites (the workflow validates but never reconfigures them):
   the repository issues immutable subjects, which carry the owner's and the
   repository's IDs, so a renamed or recreated repository cannot match it.
   Its only policy, `phorvex-refactored-release-ecr`, allows `ecr:GetAuthorizationToken`
-  and pushing to those six repositories. The production repository's role,
+  and, on exactly those six repositories, `ecr:DescribeRepositories` (the
+  aggregate preflight), `ecr:DescribeImages` (tag snapshots and read-back),
+  `ecr:BatchGetImage` and `ecr:GetDownloadUrlForLayer` (the post-push pull and
+  identity verification), and `ecr:BatchCheckLayerAvailability`,
+  `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload` and
+  `ecr:PutImage` (the push). A missing read action fails the publish job before
+  or right after the push. The production repository's role,
   `github-actions-phorvex`, is unchanged.
 - **The repository variable.** `PHORVEX_RELEASE_ROLE_ARN` names that role. The
   publish job refuses to run without it.
