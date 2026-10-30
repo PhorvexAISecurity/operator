@@ -837,7 +837,10 @@ def rendered_image_consumers(
     return rendered
 
 
-def verify_service_documents(item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]]) -> None:
+def verify_service_documents(
+    item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]],
+    additional_consumers: dict[tuple[str, str, str, str, str, str], str] | None = None,
+) -> None:
     expected_image = f"{release['repository']}:{item['image']['tag']}@{release['digest']}"
     consumers = item["deploy"]["consumers"]
     if not consumers:
@@ -845,11 +848,16 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
     expected_consumers = {consumer_key(consumer) for consumer in consumers}
     if len(expected_consumers) != len(consumers):
         raise ValueError(f"service {item['component']} rendered consumer contract is duplicated")
+    expected_images = {key: expected_image for key in expected_consumers}
+    for key, image in (additional_consumers or {}).items():
+        if key in expected_images:
+            raise ValueError(f"service {item['component']} additional rendered consumer is ambiguous")
+        expected_images[key] = image
     rendered = rendered_image_consumers(documents, f"service {item['component']}")
-    if set(rendered) != expected_consumers:
+    if set(rendered) != set(expected_images):
         raise ValueError(
             f"service {item['component']} has unexpected rendered image consumers: "
-            f"{sorted(set(rendered) - expected_consumers)}"
+            f"{sorted(set(rendered) - set(expected_images))}"
         )
     for consumer in consumers:
         if consumer.get("component") != item["component"] or consumer.get("expectedRepository") != release["repository"]:
@@ -858,6 +866,12 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
         if actual != expected_image:
             raise ValueError(
                 f"service {item['component']} rendered consumer selects {actual!r}, want {expected_image!r}"
+            )
+    for key, wanted in (additional_consumers or {}).items():
+        if rendered[key] != wanted:
+            raise ValueError(
+                f"service {item['component']} additional rendered consumer {key} "
+                f"selects {rendered[key]!r}, want {wanted!r}"
             )
 
 
@@ -905,7 +919,51 @@ def verify_fixture_documents(
             )
 
 
-def verify_rendered_service(item: dict[str, Any], release: dict[str, str]) -> None:
+def active_catalogue_fixture_consumers(
+    batch: dict[str, Any],
+) -> dict[tuple[str, str, str, str, str, str], str]:
+    path = ROOT / "deploy/environments/staging/catalogue-family.yaml"
+    values = yaml.safe_load(path.read_text(encoding="utf-8"))
+    root = values.get("phorvex", {}) if isinstance(values, dict) else {}
+    console = root.get("console", {}) if isinstance(root, dict) else {}
+    catalog = console.get("attackCatalog", {}) if isinstance(console, dict) else {}
+    fixtures = catalog.get("familyFixtures", {}) if isinstance(catalog, dict) else {}
+    agent = catalog.get("agentAction", {}) if isinstance(catalog, dict) else {}
+    if not any((catalog.get("enabled"), fixtures.get("enabled"), agent.get("enabled"))):
+        return {}
+    if not (
+        catalog.get("enabled") is True
+        and fixtures.get("enabled") is True
+        and fixtures.get("profile") == "agent-action"
+        and agent.get("enabled") is True
+    ):
+        raise ValueError("active staging catalogue window is not the supported agent-action profile")
+
+    fixture = next(item for item in batch["components"] if item["component"] == "agent-sim")
+    fixture_image = (
+        f"{batch['releases']['agent-sim']['repository']}@"
+        f"{batch['releases']['agent-sim']['digest']}"
+    )
+    generated = subprocess.run([
+        "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
+        "--profile", "agent-action", "--agent-image", fixture_image,
+    ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
+    if values != yaml.safe_load(generated):
+        raise ValueError("active agent-action catalogue window differs from the exact generated overlay")
+    consumers = {
+        consumer_key(consumer): fixture_image
+        for consumer in fixture["deploy"]["consumers"]
+        if consumer["profile"] == "agent-action"
+    }
+    if not consumers:
+        raise ValueError("active agent-action catalogue window has no source-pinned fixture consumer")
+    return consumers
+
+
+def verify_rendered_service(
+    item: dict[str, Any], release: dict[str, str],
+    additional_consumers: dict[tuple[str, str, str, str, str, str], str] | None = None,
+) -> None:
     deploy = item["deploy"]
     command = [
         "helm", "template", deploy["releaseName"], str(ROOT / deploy["chart"]),
@@ -916,7 +974,7 @@ def verify_rendered_service(item: dict[str, Any], release: dict[str, str]) -> No
         command.extend(["--values", str(ROOT / values_file)])
     rendered = subprocess.run(command, cwd=ROOT, check=True, text=True, capture_output=True).stdout
     documents = [document for document in yaml.safe_load_all(rendered) if isinstance(document, dict)]
-    verify_service_documents(item, release, documents)
+    verify_service_documents(item, release, documents, additional_consumers)
 
 
 def superseding_shared_services(
@@ -994,10 +1052,17 @@ def verify_deployment(
         superseding_shared_services(superseding_shared, batch["source"])
         if superseding_shared is not None else {}
     )
+    active_fixture_consumers = active_catalogue_fixture_consumers(batch)
     for item in batch["components"][: len(SERVICE_NAMES)]:
+        additional_consumers = (
+            active_fixture_consumers if item["component"] == "attacks" else None
+        )
         if item["component"] in shared_services:
             shared_item, shared_release = shared_services[item["component"]]
-            verify_rendered_service(shared_item, shared_release)
+            if additional_consumers:
+                verify_rendered_service(shared_item, shared_release, additional_consumers)
+            else:
+                verify_rendered_service(shared_item, shared_release)
             continue
         release = batch["releases"][item["component"]]
         values = image_values(item)
@@ -1006,7 +1071,10 @@ def verify_deployment(
             expected["source"] = batch["source"]
         if values != expected:
             raise ValueError(f"service {item['component']} committed staging pin differs from its release contract")
-        verify_rendered_service(item, release)
+        if additional_consumers:
+            verify_rendered_service(item, release, additional_consumers)
+        else:
+            verify_rendered_service(item, release)
     fixture_refs = {}
     for name in FIXTURE_NAMES:
         item = next(component for component in batch["components"] if component["component"] == name)

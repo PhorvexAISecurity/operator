@@ -286,7 +286,7 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
         }
         self.assertEqual(packaged, source)
 
-    def test_staging_base_is_default_off_and_unscoped(self):
+    def test_staging_base_or_exact_reviewed_window_is_fail_closed(self):
         root = yaml.safe_load(STAGING.read_text(encoding="utf-8"))["phorvex"]
         catalog = root["console"]["attackCatalog"]
         self.assertFalse(catalog["enabled"])
@@ -298,10 +298,23 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
             self.assertFalse(set(values).intersection({f"p{i}" for i in range(1, 7)}))
             self.assertFalse(set(values).intersection({f"p{i}-demo" for i in range(1, 7)}))
         family = yaml.safe_load(FAMILY_VALUES.read_text(encoding="utf-8"))["phorvex"]
-        self.assertFalse(family["agentActionDeny"]["enabled"])
-        self.assertFalse(family["outputPolicy"]["enabled"])
-        self.assertFalse(family["console"]["attackCatalog"]["enabled"])
-        self.assertFalse(family["console"]["attackCatalog"]["familyFixtures"]["enabled"])
+        family_catalog = family["console"]["attackCatalog"]
+        if not family_catalog["enabled"]:
+            self.assertFalse(family["agentActionDeny"]["enabled"])
+            self.assertFalse(family["outputPolicy"]["enabled"])
+            self.assertFalse(family_catalog["familyFixtures"]["enabled"])
+            return
+        self.assertEqual(family_catalog["familyFixtures"]["profile"], "agent-action")
+        args = argparse.Namespace(
+            profile="agent-action", workload_image="", phorvex_image="",
+            agent_image=family_catalog["agentAction"]["image"],
+            python_image=render_catalogue_staging_values.DEFAULT_PYTHON,
+            kwok_image=render_catalogue_staging_values.DEFAULT_KWOK,
+        )
+        self.assertEqual(
+            family,
+            render_catalogue_staging_values.overlay(args)["phorvex"],
+        )
 
     def test_overlay_generator_packages_every_profile_and_exact_grant_scope(self):
         for family, (destinations, _) in DESTINATIONS.items():

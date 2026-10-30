@@ -378,6 +378,32 @@ class StagingTargetTests(unittest.TestCase):
         }
         RELEASE.verify_service_documents(item, published, [deployment])
 
+        fixture_key = (
+            "apps/v1", "Deployment", "p6-demo", "agent-sim",
+            "/spec/template/spec/containers/0/image", "agent-sim",
+        )
+        fixture_image = (
+            "753556437180.dkr.ecr.us-east-2.amazonaws.com/"
+            "phorvex/staging/agent-sim@sha256:" + "b" * 64
+        )
+        fixture = {
+            "apiVersion": "apps/v1", "kind": "Deployment",
+            "metadata": {"name": "agent-sim", "namespace": "p6-demo"},
+            "spec": {"template": {"spec": {"containers": [{
+                "name": "agent-sim", "image": fixture_image,
+            }]}}},
+        }
+        RELEASE.verify_service_documents(
+            item, published, [deployment, fixture], {fixture_key: fixture_image}
+        )
+        fixture["spec"]["template"]["spec"]["containers"][0]["image"] = (
+            "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/agent-sim:mutable"
+        )
+        with self.assertRaisesRegex(ValueError, "additional rendered consumer.*selects"):
+            RELEASE.verify_service_documents(
+                item, published, [deployment, fixture], {fixture_key: fixture_image}
+            )
+
         # A later values file can otherwise override a valid authoritative scalar.
         deployment["spec"]["template"]["spec"]["containers"][0]["image"] = (
             "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain:shared"
