@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "name": "staging-isolated",
+  "environment": "staging",
+  "accountId": "753556437180",
+  "region": "us-east-2",
+  "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+  "repositoryPrefix": "phorvex/staging/",
+  "repositories": {
+    "manager": "phorvex/staging/manager",
+    "brain": "phorvex/staging/brain",
+    "sensor": "phorvex/staging/sensor",
+    "actuator": "phorvex/staging/actuator",
+    "console": "phorvex/staging/console",
+    "attacks": "phorvex/staging/attacks",
+    "agent-sim": "phorvex/staging/agent-sim",
+    "catalogue-workload": "phorvex/staging/catalogue-workload"
+  },
+  "repositoryControls": {
+    "imageTagMutability": "IMMUTABLE",
+    "scanOnPush": true,
+    "encryptionType": "AES256",
+    "resourcePolicy": "IAM_ONLY",
+    "tags": {
+      "campaign": "console-reactive-qa-192",
+      "environment": "staging",
+      "isolation": "staging-only",
+      "managed-by": "PhorvexSecurity/operator-refactored",
+      "project": "phorvex"
+    },
+    "lifecyclePolicy": {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Remove untagged staging build remnants after 7 days",
+          "selection": {
+            "tagStatus": "untagged",
+            "countType": "sinceImagePushed",
+            "countUnit": "days",
+            "countNumber": 7
+          },
+          "action": {
+            "type": "expire"
+          }
+        },
+        {
+          "rulePriority": 2,
+          "description": "Retain the 30 most recent immutable staging release images",
+          "selection": {
+            "tagStatus": "any",
+            "countType": "imageCountMoreThan",
+            "countNumber": 30
+          },
+          "action": {
+            "type": "expire"
+          }
+        }
+      ]
+    }
+  },
+  "deployment": {
+    "applicationManifest": "deploy/argocd/services/applicationset.yaml",
+    "valuesRoot": "deploy/environments/staging",
+    "releaseName": "staging",
+    "namespace": "phorvex-staging",
+    "branchPrefix": "release/staging-isolated-"
+  }
+}

@@ -1,0 +1,485 @@
+#!/usr/bin/env python3
+"""Create, complete, pin and verify the explicit staging-isolated release contract."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import stat
+import subprocess
+import tempfile
+from typing import Any
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+TARGET_FILE = ROOT / "release/staging-target.json"
+FIXTURE_IDENTITIES_FILE = ROOT / "release/staging-fixture-identities.json"
+SERVICE_NAMES = ["manager", "brain", "sensor", "actuator", "console", "attacks"]
+FIXTURE_NAMES = ["agent-sim", "catalogue-workload"]
+COMPONENTS = SERVICE_NAMES + FIXTURE_NAMES
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+SHA = re.compile(r"^[0-9a-f]{40}$")
+TAG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+EXPECTED_REPOSITORIES = {name: f"phorvex/staging/{name}" for name in COMPONENTS}
+SERVICE_COMMANDS = {
+    "manager": "/manager",
+    "brain": "/service",
+    "sensor": "/service",
+    "actuator": "/service",
+    "console": "/app/console",
+    "attacks": "/app/attacks",
+}
+FIXTURE_SPECS = {
+    "agent-sim": {
+        "version": "fixture-v1",
+        "dockerfile": "farm-fixtures/agentsim/Dockerfile",
+        "deploy": {
+            "valuesFile": "deploy/environments/staging/catalogue-family.yaml",
+            "path": ["phorvex", "console", "attackCatalog", "agentAction", "image"],
+            "consumers": ["Deployment/p6-demo/agent-sim#containers/agent-sim"],
+        },
+    },
+    "catalogue-workload": {
+        "version": "fixture-v1",
+        "dockerfile": "farm-fixtures/catalogue-workload/Dockerfile",
+        "deploy": {
+            "valuesFile": "deploy/environments/staging/catalogue-family.yaml",
+            "path": ["phorvex", "console", "attackCatalog", "familyFixtures", "images", "workload"],
+            "consumers": ["catalogue-family-profile/*#workload-image"],
+        },
+    },
+}
+
+
+def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key {key!r}")
+        result[key] = value
+    return result
+
+
+def read_json(path: Path) -> Any:
+    absolute = Path(os.path.abspath(path))
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        info = current.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise ValueError(f"{current}: symlinks are not permitted")
+        if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
+            raise ValueError(f"{current}: hard-linked authority files are not permitted")
+    raw = absolute.read_bytes()
+    return json.loads(raw, object_pairs_hook=reject_duplicates)
+
+
+def canonical_digest(value: Any) -> str:
+    raw = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return "sha256:" + hashlib.sha256(raw).hexdigest()
+
+
+def write_json(path: Path, value: Any) -> None:
+    path.write_text(json.dumps(value, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+
+
+def expected_target() -> dict[str, Any]:
+    target = read_json(TARGET_FILE)
+    if target.get("schema") != 1 or target.get("name") != "staging-isolated":
+        raise ValueError("release/staging-target.json is not the staging-isolated v1 target")
+    if target.get("environment") != "staging" or target.get("accountId") != "753556437180" or target.get("region") != "us-east-2":
+        raise ValueError("staging target account, region or environment changed")
+    if target.get("registry") != "753556437180.dkr.ecr.us-east-2.amazonaws.com":
+        raise ValueError("staging target registry changed")
+    if target.get("repositoryPrefix") != "phorvex/staging/" or target.get("repositories") != EXPECTED_REPOSITORIES:
+        raise ValueError("staging target repository set is not the exact isolated eight-component set")
+    controls = target.get("repositoryControls", {})
+    if controls.get("imageTagMutability") != "IMMUTABLE" or controls.get("scanOnPush") is not True or controls.get("encryptionType") not in {"AES256", "KMS"}:
+        raise ValueError("staging target repository controls are weaker than required")
+    if controls.get("resourcePolicy") != "IAM_ONLY" or controls.get("tags") != {
+        "campaign": "console-reactive-qa-192",
+        "environment": "staging",
+        "isolation": "staging-only",
+        "managed-by": "PhorvexSecurity/operator-refactored",
+        "project": "phorvex",
+    }:
+        raise ValueError("staging target ownership/access identity changed")
+    deployment = target.get("deployment", {})
+    if deployment != {
+        "applicationManifest": "deploy/argocd/services/applicationset.yaml",
+        "valuesRoot": "deploy/environments/staging",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "branchPrefix": "release/staging-isolated-",
+    }:
+        raise ValueError("staging deployment route changed or can fan out")
+    return target
+
+
+def fixture_identities() -> dict[str, Any]:
+    value = read_json(FIXTURE_IDENTITIES_FILE)
+    if value.get("schema") != 1 or value.get("sourceDateEpoch") != 0 or set(value.get("fixtures", {})) != set(FIXTURE_NAMES):
+        raise ValueError("fixture identity authority is incomplete")
+    for name, identity in value["fixtures"].items():
+        if set(identity) != {"index", "manifest", "config", "applicationLayer"} or not all(DIGEST.fullmatch(item) for item in identity.values()):
+            raise ValueError(f"fixture {name} identity is malformed")
+    return value["fixtures"]
+
+
+def validate_service_contracts(contracts: Any, source: str, target: dict[str, Any]) -> list[dict[str, Any]]:
+    if not isinstance(contracts, list) or [item.get("component") for item in contracts if isinstance(item, dict)] != SERVICE_NAMES:
+        raise ValueError("service contract is not the exact canonical six-component set")
+    registry = target["registry"]
+    seen_deployments: set[tuple[str, tuple[str, ...]]] = set()
+    for contract in contracts:
+        name = contract["component"]
+        version = contract.get("version")
+        image = contract.get("image", {})
+        deploy = contract.get("deploy", {})
+        identity = contract.get("identity", {})
+        build = contract.get("build", {})
+        expected_tag = f"{version}-git-{source}"
+        if contract.get("source") != source or not isinstance(version, str) or not version:
+            raise ValueError(f"service {name} source/version is not exact")
+        if identity.get("service") != name or identity.get("command") != SERVICE_COMMANDS[name] or identity.get("aliases") != []:
+            raise ValueError(f"service {name} embedded identity contract changed")
+        if image != {
+            "registry": registry,
+            "repository": target["repositories"][name],
+            "tag": expected_tag,
+            "tags": [expected_tag, f"git-{source}"],
+        }:
+            raise ValueError(f"service {name} image target/tags are not canonical staging-only values")
+        if build.get("context") != "." or not build.get("dockerfile") or f"GIT_SHA={source}" not in build.get("args", []) or f"RELEASE_VERSION={version}" not in build.get("args", []):
+            raise ValueError(f"service {name} build identity is incomplete")
+        if deploy.get("application") != target["deployment"]["applicationManifest"] or deploy.get("releaseName") != "staging" or deploy.get("namespace") != "phorvex-staging":
+            raise ValueError(f"service {name} deployment is not isolated staging")
+        values_file = deploy.get("valuesFile", "")
+        if not values_file.startswith(target["deployment"]["valuesRoot"] + "/") or not deploy.get("consumers"):
+            raise ValueError(f"service {name} has no exact staging values/consumer contract")
+        for consumer in deploy["consumers"]:
+            if consumer.get("component") != name or consumer.get("expectedRepository") != f"{registry}/{target['repositories'][name]}":
+                raise ValueError(f"service {name} rendered consumer escapes its staging repository")
+        deployment_key = (values_file, tuple(deploy.get("path", [])))
+        if deployment_key in seen_deployments:
+            raise ValueError(f"service {name} shares a deployment pin target")
+        seen_deployments.add(deployment_key)
+    return contracts
+
+
+def prepare(source: str, services_path: Path) -> dict[str, Any]:
+    if not SHA.fullmatch(source):
+        raise ValueError("--source must be an exact lowercase 40-character Git SHA")
+    target = expected_target()
+    services = validate_service_contracts(read_json(services_path), source, target)
+    identities = fixture_identities()
+    components: list[dict[str, Any]] = []
+    for service in services:
+        item = copy.deepcopy(service)
+        item["kind"] = "service"
+        components.append(item)
+    for name in FIXTURE_NAMES:
+        spec = FIXTURE_SPECS[name]
+        version = spec["version"]
+        deployment_tag = f"{version}-git-{source}"
+        components.append({
+            "component": name,
+            "kind": "fixture",
+            "source": source,
+            "version": version,
+            "build": {
+                "dockerfile": spec["dockerfile"],
+                "context": ".",
+                "target": "",
+                "args": ["SOURCE_DATE_EPOCH=0"],
+                "platform": "linux/amd64",
+                "network": "none",
+                "provenance": False,
+                "sbom": False,
+            },
+            "image": {
+                "registry": target["registry"],
+                "repository": target["repositories"][name],
+                "tag": deployment_tag,
+                "tags": [deployment_tag, f"git-{source}"],
+            },
+            "identity": {"oci": identities[name]},
+            "deploy": spec["deploy"],
+        })
+    batch = {
+        "schema": 1,
+        "status": "prepared",
+        "target": target["name"],
+        "targetDigest": canonical_digest(target),
+        "environment": target["environment"],
+        "source": source,
+        "sourceTree": git_output(["rev-parse", f"{source}^{{tree}}"]),
+        "expectedComponents": COMPONENTS,
+        "components": components,
+        "releases": {},
+    }
+    validate_batch(batch, require_complete=False)
+    return batch
+
+
+def validate_batch(batch: Any, require_complete: bool | None = None) -> dict[str, Any]:
+    target = expected_target()
+    if not isinstance(batch, dict) or set(batch) != {
+        "schema", "status", "target", "targetDigest", "environment", "source", "sourceTree",
+        "expectedComponents", "components", "releases",
+    }:
+        raise ValueError("staging batch has an incomplete or unknown top-level contract")
+    source = batch.get("source", "")
+    if batch["schema"] != 1 or batch["target"] != "staging-isolated" or batch["environment"] != "staging" or not SHA.fullmatch(source):
+        raise ValueError("staging batch schema/target/environment/source is invalid")
+    if batch["targetDigest"] != canonical_digest(target) or not SHA.fullmatch(batch.get("sourceTree", "")):
+        raise ValueError("staging batch target or source-tree identity changed")
+    if batch.get("expectedComponents") != COMPONENTS or not isinstance(batch.get("components"), list) or len(batch["components"]) != len(COMPONENTS):
+        raise ValueError("staging batch does not contain the exact eight-component set")
+    if [item.get("component") for item in batch["components"]] != COMPONENTS:
+        raise ValueError("staging batch component contracts are missing, extra or reordered")
+    validate_service_contracts(batch["components"][: len(SERVICE_NAMES)], source, target)
+    identities = fixture_identities()
+    for item in batch["components"][len(SERVICE_NAMES):]:
+        name = item["component"]
+        expected = FIXTURE_SPECS[name]
+        version = expected["version"]
+        tag = f"{version}-git-{source}"
+        if item.get("kind") != "fixture" or item.get("source") != source or item.get("version") != version:
+            raise ValueError(f"fixture {name} source/version contract changed")
+        if item.get("image") != {
+            "registry": target["registry"], "repository": target["repositories"][name],
+            "tag": tag, "tags": [tag, f"git-{source}"],
+        } or item.get("identity") != {"oci": identities[name]} or item.get("deploy") != expected["deploy"]:
+            raise ValueError(f"fixture {name} image/OCI/deployment contract changed")
+        if item.get("build") != {
+            "dockerfile": expected["dockerfile"], "context": ".", "target": "",
+            "args": ["SOURCE_DATE_EPOCH=0"], "platform": "linux/amd64", "network": "none",
+            "provenance": False, "sbom": False,
+        }:
+            raise ValueError(f"fixture {name} build contract changed")
+    releases = batch.get("releases")
+    if not isinstance(releases, dict) or not set(releases).issubset(COMPONENTS):
+        raise ValueError("staging releases are not a component-keyed object")
+    for item in batch["components"]:
+        name = item["component"]
+        release = releases.get(name)
+        if release is None:
+            continue
+        expected_repository = f"{target['registry']}/{target['repositories'][name]}"
+        if release != {"repository": expected_repository, "digest": release.get("digest")} or not DIGEST.fullmatch(release.get("digest", "")):
+            raise ValueError(f"component {name} release repository/digest is invalid")
+    expected_status = "complete" if len(releases) == len(COMPONENTS) else ("prepared" if not releases else "partial")
+    if batch.get("status") != expected_status:
+        raise ValueError(f"staging batch status {batch.get('status')!r}, want {expected_status!r}")
+    if require_complete is True and expected_status != "complete":
+        raise ValueError("staging batch is not complete")
+    if require_complete is False and expected_status != "prepared":
+        raise ValueError("staging batch is not prepared/empty")
+    return batch
+
+
+def complete(batch: dict[str, Any], results: Any) -> dict[str, Any]:
+    validate_batch(batch, require_complete=False)
+    if not isinstance(results, dict) or list(results) != COMPONENTS:
+        raise ValueError("publication results must contain the canonical eight components in order")
+    candidate = copy.deepcopy(batch)
+    candidate["releases"] = results
+    candidate["status"] = "complete"
+    validate_batch(candidate, require_complete=True)
+    return candidate
+
+
+def nested(root: dict[str, Any], path: list[str]) -> Any:
+    value: Any = root
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            raise ValueError(f"missing deployment value {'.'.join(path)}")
+        value = value[key]
+    return value
+
+
+def replace_yaml_scalar(path: Path, keys: list[str], value: str) -> None:
+    raw = path.read_text(encoding="utf-8")
+    before = yaml.safe_load(raw)
+    if not isinstance(nested(before, keys), str):
+        raise ValueError(f"{path}: {'.'.join(keys)} is not an existing string scalar")
+    stack: list[tuple[int, str]] = []
+    matches: list[int] = []
+    pattern = re.compile(r"^(?P<indent> *)(?P<key>[A-Za-z0-9_-]+):(?P<rest>.*)$")
+    lines = raw.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        match = pattern.match(line.rstrip("\n"))
+        if not match or line.lstrip().startswith("#"):
+            continue
+        indent = len(match.group("indent"))
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        key = match.group("key")
+        current = [item[1] for item in stack] + [key]
+        rest = match.group("rest").strip()
+        if current == keys:
+            if not rest:
+                raise ValueError(f"{path}: {'.'.join(keys)} unexpectedly became a mapping")
+            matches.append(index)
+        if not rest or rest.startswith("#"):
+            stack.append((indent, key))
+    if len(matches) != 1:
+        raise ValueError(f"{path}: found {len(matches)} textual matches for {'.'.join(keys)}, want one")
+    line_index = matches[0]
+    indent = " " * (len(lines[line_index]) - len(lines[line_index].lstrip(" ")))
+    suffix = "\n" if lines[line_index].endswith("\n") else ""
+    lines[line_index] = f'{indent}{keys[-1]}: "{value}"{suffix}'
+    output = "".join(lines)
+    after = yaml.safe_load(output)
+    expected = copy.deepcopy(before)
+    current = expected
+    for key in keys[:-1]:
+        current = current[key]
+    current[keys[-1]] = value
+    if after != expected:
+        raise ValueError(f"{path}: fixture pin update changed values outside {'.'.join(keys)}")
+    path.write_text(output, encoding="utf-8")
+
+
+def pin_fixtures(batch: dict[str, Any]) -> None:
+    validate_batch(batch, require_complete=True)
+    for name in FIXTURE_NAMES:
+        item = next(component for component in batch["components"] if component["component"] == name)
+        release = batch["releases"][name]
+        value = f"{release['repository']}@{release['digest']}"
+        replace_yaml_scalar(ROOT / item["deploy"]["valuesFile"], item["deploy"]["path"], value)
+
+
+def git_output(args: list[str]) -> str:
+    return subprocess.run(["git", *args], cwd=ROOT, check=True, text=True, capture_output=True).stdout.strip()
+
+
+def image_values(item: dict[str, Any]) -> dict[str, str]:
+    path = ROOT / item["deploy"]["valuesFile"]
+    values = yaml.safe_load(path.read_text(encoding="utf-8"))
+    node = nested(values, item["deploy"]["path"])
+    keys = item["deploy"]
+    return {key: node[value] for key, value in {
+        "repository": keys["repositoryKey"], "tag": keys["tagKey"], "digest": keys["digestKey"],
+        **({"source": keys["sourceKey"]} if keys.get("sourceKey") else {}),
+    }.items()}
+
+
+def verify_argocd(target: dict[str, Any]) -> None:
+    manifest = yaml.safe_load((ROOT / target["deployment"]["applicationManifest"]).read_text(encoding="utf-8"))
+    matrix = manifest["spec"]["generators"][0]["matrix"]["generators"]
+    environments = matrix[0]["list"]["elements"]
+    services = matrix[1]["list"]["elements"]
+    if environments != [{"environment": "staging", "server": "https://kubernetes.default.svc", "namespace": "phorvex-staging", "release": "staging"}]:
+        raise ValueError("Argo service ApplicationSet can fan out beyond the exact staging destination")
+    service_names = [item["service"] for item in services]
+    if len(service_names) != len(SERVICE_NAMES) or set(service_names) != set(SERVICE_NAMES):
+        raise ValueError("Argo service ApplicationSet does not cover exactly six services")
+    template = manifest["spec"]["template"]
+    if template["spec"]["destination"] != {"server": "{{.server}}", "namespace": "{{.namespace}}"}:
+        raise ValueError("Argo destination bypasses the staging generator")
+    value_files = template["spec"]["sources"][0]["helm"]["valueFiles"]
+    if "$values/deploy/environments/{{.environment}}/{{.service}}.yaml" not in value_files:
+        raise ValueError("Argo service values are not environment/service bound")
+
+
+def render_fixture(profile: str, workload: str, agent: str) -> list[dict[str, Any]]:
+    command = [
+        "python3", str(ROOT / "tools/render_catalogue_staging_values.py"), "--profile", profile,
+        "--workload-image", workload, "--agent-image", agent,
+    ]
+    overlay = subprocess.run(command, cwd=ROOT, check=True, text=True, capture_output=True).stdout
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as handle:
+        handle.write(overlay)
+        handle.flush()
+        rendered = subprocess.run([
+            "helm", "template", "staging", str(ROOT / "deploy/charts/phorvex-attacks"),
+            "--namespace", "phorvex-staging", "--skip-crds",
+            "-f", str(ROOT / "deploy/environments/staging/phorvex.yaml"),
+            "-f", str(ROOT / "deploy/environments/staging/attacks.yaml"), "-f", handle.name,
+        ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
+    return [item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)]
+
+
+def verify_deployment(batch: dict[str, Any], base: str | None) -> None:
+    validate_batch(batch, require_complete=True)
+    target = expected_target()
+    verify_argocd(target)
+    for item in batch["components"][: len(SERVICE_NAMES)]:
+        release = batch["releases"][item["component"]]
+        values = image_values(item)
+        expected = {"repository": release["repository"], "tag": item["image"]["tag"], "digest": release["digest"]}
+        if item["deploy"].get("sourceKey"):
+            expected["source"] = batch["source"]
+        if values != expected:
+            raise ValueError(f"service {item['component']} committed staging pin differs from its release contract")
+    fixture_refs = {}
+    for name in FIXTURE_NAMES:
+        item = next(component for component in batch["components"] if component["component"] == name)
+        expected = f"{batch['releases'][name]['repository']}@{batch['releases'][name]['digest']}"
+        values = yaml.safe_load((ROOT / item["deploy"]["valuesFile"]).read_text(encoding="utf-8"))
+        if nested(values, item["deploy"]["path"]) != expected:
+            raise ValueError(f"fixture {name} committed staging pin differs from its release contract")
+        fixture_refs[name] = expected
+    agent_docs = render_fixture("agent-action", fixture_refs["catalogue-workload"], fixture_refs["agent-sim"])
+    agent_images = [container["image"] for item in agent_docs if item.get("kind") == "Deployment" and item.get("metadata", {}).get("name") == "agent-sim" for container in item["spec"]["template"]["spec"]["containers"] if container["name"] == "agent-sim"]
+    if agent_images != [fixture_refs["agent-sim"]]:
+        raise ValueError("rendered agent-sim consumer is not the exact staging fixture digest")
+    workload_docs = render_fixture("quarantine", fixture_refs["catalogue-workload"], fixture_refs["agent-sim"])
+    workload_images = {container["image"] for item in workload_docs for spec in ([item.get("spec", {}).get("template", {}).get("spec", {})] if item.get("kind") in {"Deployment", "Job"} else []) for container in spec.get("containers", [])}
+    if fixture_refs["catalogue-workload"] not in workload_images:
+        raise ValueError("rendered catalogue workload consumer is not the exact staging fixture digest")
+    if base:
+        changed = set(filter(None, git_output(["diff", "--name-only", base, "--"]).splitlines()))
+        allowed = {"release/staging-batch.json", "deploy/environments/staging/catalogue-family.yaml"}
+        allowed.update(item["deploy"]["valuesFile"] for item in batch["components"][: len(SERVICE_NAMES)])
+        if not changed or not changed.issubset(allowed):
+            raise ValueError(f"staging pin diff contains non-staging/production paths: {sorted(changed - allowed)}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    prepare_parser = sub.add_parser("prepare")
+    prepare_parser.add_argument("--source", required=True)
+    prepare_parser.add_argument("--services", type=Path, required=True)
+    prepare_parser.add_argument("--output", type=Path, required=True)
+    complete_parser = sub.add_parser("complete")
+    complete_parser.add_argument("--batch", type=Path, required=True)
+    complete_parser.add_argument("--results", type=Path, required=True)
+    complete_parser.add_argument("--output", type=Path, required=True)
+    verify_parser = sub.add_parser("verify")
+    verify_parser.add_argument("--batch", type=Path, required=True)
+    verify_parser.add_argument("--complete", action="store_true")
+    pin_parser = sub.add_parser("pin-fixtures")
+    pin_parser.add_argument("--batch", type=Path, required=True)
+    deploy_parser = sub.add_parser("verify-deployment")
+    deploy_parser.add_argument("--batch", type=Path, required=True)
+    deploy_parser.add_argument("--base")
+    args = parser.parse_args()
+    try:
+        if args.command == "prepare":
+            write_json(args.output, prepare(args.source, args.services))
+        elif args.command == "complete":
+            write_json(args.output, complete(validate_batch(read_json(args.batch), require_complete=False), read_json(args.results)))
+        elif args.command == "verify":
+            validate_batch(read_json(args.batch), require_complete=True if args.complete else None)
+        elif args.command == "pin-fixtures":
+            pin_fixtures(validate_batch(read_json(args.batch), require_complete=True))
+        elif args.command == "verify-deployment":
+            verify_deployment(validate_batch(read_json(args.batch), require_complete=True), args.base)
+    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+        parser.error(str(error))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

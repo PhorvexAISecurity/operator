@@ -53,6 +53,10 @@ type ComponentImage struct {
 	Registry   string `json:"registry"`
 	Repository string `json:"repository"`
 	Tag        string `json:"tag"`
+	// Tags is the complete immutable remote tag set when a first-class target
+	// publishes more than the deployment tag. It is omitted for the historical
+	// shared release contract, whose single Tag remains unchanged.
+	Tags []string `json:"tags,omitempty"`
 }
 
 // ComponentDeploy fixes the authoritative Argo render route, exact values
@@ -361,6 +365,14 @@ func versionsAtSource(root, dir, source string) (map[string]string, error) {
 }
 
 func componentContracts(root, dir, source, environment string, expected []string, versions map[string]string, proveConsumers bool) ([]BatchComponent, error) {
+	return componentContractsForTarget(root, dir, source, environment, expected, versions, proveConsumers, nil)
+}
+
+// componentContractsForTarget keeps the source/build/deployment proof shared by
+// every release lane while allowing one reviewed target to replace only the
+// repository and immutable tag set. A nil target preserves the shared release
+// contract byte-for-byte.
+func componentContractsForTarget(root, dir, source, environment string, expected []string, versions map[string]string, proveConsumers bool, target func(string, string) (string, string, []string, error)) ([]BatchComponent, error) {
 	safeDir, err := withinRoot(root, dir)
 	if err != nil {
 		return nil, err
@@ -386,6 +398,17 @@ func componentContracts(root, dir, source, environment string, expected []string
 		if !ok {
 			return nil, fmt.Errorf("expected component %q has no prepared version", name)
 		}
+		imageTag := version
+		var imageTags []string
+		if target != nil {
+			repository, tag, tags, err := target(name, version)
+			if err != nil {
+				return nil, err
+			}
+			c.Repository = repository
+			imageTag = tag
+			imageTags = append([]string(nil), tags...)
+		}
 		args := []string{"GIT_SHA=" + source, "RELEASE_VERSION=" + version}
 		for key, value := range c.BuildArgs {
 			args = append(args, key+"="+strings.ReplaceAll(value, "{version}", version))
@@ -410,7 +433,7 @@ func componentContracts(root, dir, source, environment string, expected []string
 			Build: ComponentBuild{
 				Dockerfile: c.Dockerfile, Context: ".", Target: c.Target, Args: args,
 			},
-			Image:  ComponentImage{Registry: ReleaseRegistry, Repository: c.Repository, Tag: version},
+			Image:  ComponentImage{Registry: ReleaseRegistry, Repository: c.Repository, Tag: imageTag, Tags: imageTags},
 			Deploy: deploy,
 			Record: ComponentRecord{BatchFile: recordFile, ReleaseKey: c.Name, GitTag: c.Name + "-v" + version},
 		})

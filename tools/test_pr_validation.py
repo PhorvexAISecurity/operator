@@ -170,10 +170,11 @@ class PRValidationTests(unittest.TestCase):
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
         # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change;
-        # the one that has, release.yml, is held to its exact shape by ReleaseWorkflowTests.
+        # the two that have, release.yml and staging-isolated-release.yml, are held
+        # to their exact shapes by their dedicated workflow test classes.
         # Every job runs on a GitHub-hosted runner, never on a runner with live access.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
-            if path.name == 'release.yml':
+            if path.name in {'release.yml', 'staging-isolated-release.yml'}:
                 continue
             raw = path.read_text()
             doc = yaml.load(raw, Loader=yaml.BaseLoader)
@@ -229,6 +230,80 @@ RELEASE_ACTIONS = {
     'aws-actions/configure-aws-credentials': '7474bc4690e29a8392af63c5b98e7449536d5c3a',
     'aws-actions/amazon-ecr-login': '03f1aad4c6c7ffd436567f42f9384779290529bd',
 }
+
+STAGING_RELEASE_PATH = ROOT / '.github/workflows/staging-isolated-release.yml'
+STAGING_RELEASE_RAW = STAGING_RELEASE_PATH.read_text()
+STAGING_RELEASE = yaml.load(STAGING_RELEASE_RAW, Loader=yaml.BaseLoader)
+
+
+class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
+    def test_lane_is_manual_source_pinned_and_staging_scoped(self):
+        self.assertEqual(set(STAGING_RELEASE['on']), {'workflow_dispatch'})
+        source = STAGING_RELEASE['on']['workflow_dispatch']['inputs']['source']
+        self.assertEqual(source['required'], 'true')
+        self.assertEqual(source['type'], 'string')
+        self.assertEqual(STAGING_RELEASE['permissions'], {'contents': 'read'})
+        self.assertEqual(STAGING_RELEASE['env']['TARGET'], 'staging-isolated')
+        self.assertEqual(STAGING_RELEASE['concurrency'], {
+            'group': 'staging-isolated-release', 'cancel-in-progress': 'false',
+        })
+        job = STAGING_RELEASE['jobs']['publish']
+        self.assertEqual(job['environment'], 'staging-release')
+        self.assertEqual(job['permissions'], {
+            'actions': 'write', 'contents': 'write', 'pull-requests': 'write', 'id-token': 'write',
+        })
+        checkout = next(step for step in job['steps'] if step.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], 'main')
+        self.assertEqual(checkout['with']['persist-credentials'], 'false')
+        runs = '\n'.join(step.get('run', '') for step in job['steps'])
+        self.assertIn('tools/verify-git-build-identity.sh "$REQUESTED_SOURCE"', runs)
+        self.assertIn('[ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]', runs)
+        self.assertNotIn('git fetch', runs)
+        self.assertIn('staging-contract --target "$TARGET" --source "$SOURCE"', runs)
+        self.assertNotIn('$GITHUB_SHA', runs)
+        for forbidden in ('kubectl ', 'argocd ', 'git push origin main', 'refs/heads/main',
+                          'phorvex/manager:', 'phorvex/brain:', 'continue-on-error', '|| true'):
+            self.assertNotIn(forbidden, STAGING_RELEASE_RAW)
+
+    def test_aggregate_gate_and_reviewed_identities_precede_every_push(self):
+        runs = '\n'.join(step.get('run', '') for step in STAGING_RELEASE['jobs']['publish']['steps'])
+        preflight = runs.index('verify_staging_ecr.py preflight')
+        fixture = runs.index('--expected-identities release/staging-fixture-identities.json')
+        service_push = runs.index('docker push "$image"')
+        fixture_push = runs.index('type=image,push=true')
+        self.assertLess(preflight, fixture)
+        self.assertLess(fixture, service_push)
+        self.assertLess(fixture, fixture_push)
+        self.assertIn('--preflight-state "$RUNNER_TEMP/ecr-preflight.json"', runs)
+        self.assertGreaterEqual(runs.count('verify_staging_ecr.py probe'), 3)
+        self.assertIn('verify_service_image_identity.py', runs)
+        self.assertIn('verify_staging_ecr.py verify-component', runs)
+        self.assertIn('verify_staging_ecr.py verify --batch "$RUNNER_TEMP/staging-complete.json"', runs)
+
+    def test_publication_only_opens_an_allowlisted_staging_pin_pr(self):
+        runs = '\n'.join(step.get('run', '') for step in STAGING_RELEASE['jobs']['publish']['steps'])
+        self.assertIn('staging-pin --contracts "$RUNNER_TEMP/service-contracts.json"', runs)
+        self.assertIn('pin-fixtures --batch "$RUNNER_TEMP/staging-complete.json"', runs)
+        self.assertIn('verify-deployment --batch release/staging-batch.json --base "$SOURCE"', runs)
+        self.assertIn('git diff --name-only "$SOURCE" -- | sort', runs)
+        self.assertIn('git diff --cached --name-only | sort', runs)
+        self.assertIn('pull-request --head "$branch" --base main', runs)
+        self.assertIn('dispatch --ref "$branch" --workflows pr-validation.yml', runs)
+        self.assertNotIn('gh pr merge', runs)
+        self.assertNotIn('git merge --', runs)
+        for path in ('manager.yaml', 'brain.yaml', 'sensor.yaml', 'actuator.yaml',
+                     'console.yaml', 'attacks.yaml', 'catalogue-family.yaml'):
+            self.assertIn(f'deploy/environments/staging/{path}', runs)
+        self.assertNotIn('deploy/helm/phorvex-stack', runs)
+        self.assertNotIn('deploy/argocd/apps', runs)
+
+    def test_every_privileged_action_is_commit_pinned(self):
+        references = re.findall(r'^\s*- uses: ([^\s#]+)(?:\s+#\s*([^\s]+))?$', STAGING_RELEASE_RAW, re.M)
+        self.assertTrue(references)
+        for reference, version_comment in references:
+            owner, sha = reference.split('@', 1)
+            self.assertEqual(sha, RELEASE_ACTIONS[owner])
+            self.assertRegex(version_comment, r'^v[0-9]')
 
 
 class ReleaseWorkflowTests(unittest.TestCase):

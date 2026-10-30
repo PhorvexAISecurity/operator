@@ -805,6 +805,14 @@ func authoritativeComponent(consumer ImageConsumer, image string) string {
 }
 
 func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, component string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
+	definition := componentByName(component)
+	if definition == nil {
+		return nil, nil, fmt.Errorf("unknown release component %s", component)
+	}
+	return probeConsumersForRepository(root, route, target, component, ReleaseRegistry+"/"+definition.Repository, overrideRaw)
+}
+
+func probeConsumersForRepository(root string, route deploymentRoute, target ComponentDeploy, component, expectedRepository string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
 	baselineOverride := ""
 	if overrideRaw != nil {
 		baselineOverride = target.ValuesFile
@@ -848,11 +856,6 @@ func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, 
 		}
 	}
 	wantProbe := expectedRenderedImage(probeRepository, probeTag, probeDigest)
-	definition := componentByName(component)
-	if definition == nil {
-		return nil, nil, fmt.Errorf("unknown release component %s", component)
-	}
-	expectedRepository := ReleaseRegistry + "/" + definition.Repository
 	imageSource := target.ValuesFile + "#" + strings.Join(target.Path, ".")
 	var consumers []ImageConsumer
 	primary := false
@@ -908,7 +911,7 @@ func buildComponentDeployment(root, environment string, c *Component, target Com
 	target.ValuesFiles = append([]string(nil), route.ValuesFiles...)
 	target.ValuesDigests = append([]FileDigest(nil), route.ValuesDigests...)
 	if prove {
-		consumers, _, err := probeConsumers(root, route, target, c.Name, nil)
+		consumers, _, err := probeConsumersForRepository(root, route, target, c.Name, ReleaseRegistry+"/"+c.Repository, nil)
 		if err != nil {
 			return ComponentDeploy{}, err
 		}
@@ -934,7 +937,7 @@ func validateDeploymentConsumer(root string, batch *Batch, contract *BatchCompon
 	if !reflect.DeepEqual(current, want) {
 		return fmt.Errorf("component %s deployment chart/values consumer drifted from pinned source", contract.Component)
 	}
-	consumers, images, err := probeConsumers(root, current, contract.Deploy, contract.Component, overrideRaw)
+	consumers, images, err := probeConsumersForRepository(root, current, contract.Deploy, contract.Component, expectedRepository(contract), overrideRaw)
 	if err != nil {
 		return fmt.Errorf("component %s deployment consumer: %w", contract.Component, err)
 	}

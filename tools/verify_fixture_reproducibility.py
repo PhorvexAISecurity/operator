@@ -85,6 +85,7 @@ def image_identity(layout: Path, epoch: int, fixture: str) -> dict:
         "index": digest(index_raw),
         "manifest": manifest_descriptor["digest"],
         "config": manifest["config"]["digest"],
+        "applicationLayer": manifest["layers"][-1]["digest"],
         "layers": [descriptor["digest"] for descriptor in manifest["layers"]],
         "layerMediaTypes": [descriptor["mediaType"] for descriptor in manifest["layers"]],
         "platform": {
@@ -215,10 +216,23 @@ def main() -> int:
         help="non-negative timestamp applied to all fixture-owned OCI metadata (default: 0)",
     )
     parser.add_argument("--builder", default=os.environ.get("BUILDX_BUILDER"))
+    parser.add_argument(
+        "--expected-identities",
+        type=Path,
+        help="optional reviewed JSON identity authority; each recorded field must match",
+    )
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9]+", args.source_date_epoch):
         parser.error("--source-date-epoch must be an unsigned integer")
     epoch = int(args.source_date_epoch)
+    expected = None
+    if args.expected_identities:
+        authority = json.loads(args.expected_identities.read_text(encoding="utf-8"))
+        if authority.get("schema") != 1 or authority.get("sourceDateEpoch") != epoch:
+            parser.error("--expected-identities schema/epoch does not match this build")
+        expected = authority.get("fixtures")
+        if not isinstance(expected, dict) or set(expected) != set(FIXTURES):
+            parser.error("--expected-identities does not contain the exact fixture set")
     owned_builder = not args.builder
     builder = args.builder or create_builder()
     try:
@@ -240,6 +254,11 @@ def main() -> int:
                     raise SystemExit(
                         f"{fixture} OCI identity drifted between clean builds"
                     )
+                if expected is not None:
+                    wanted = expected[fixture]
+                    if not isinstance(wanted, dict) or not wanted or any(first.get(key) != value for key, value in wanted.items()):
+                        print(json.dumps({"fixture": fixture, "expected": wanted, "actual": first}, indent=2, sort_keys=True))
+                        raise SystemExit(f"{fixture} OCI identity differs from the reviewed expected identity")
                 print(
                     json.dumps(
                         {"fixture": fixture, "runs": 2, **first},
