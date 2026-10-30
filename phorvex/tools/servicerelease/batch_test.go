@@ -79,6 +79,10 @@ func newBatchTestRepo(t *testing.T, versions map[string]string) *batchTestRepo {
 		t.Fatal(err)
 	}
 	r.writeVersions(versions)
+	write(".dockerignore", ".git\n")
+	write("deploy/docker/operator.Dockerfile", "FROM scratch\n")
+	write("deploy/docker/service.Dockerfile", "FROM scratch\n")
+	write("deploy/docker/console.Dockerfile", "FROM scratch\n")
 	write("deploy/environments/staging/phorvex.yaml", "{}\n")
 	write("deploy/environments/staging/catalogue-family.yaml", "{}\n")
 	var services strings.Builder

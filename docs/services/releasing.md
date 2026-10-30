@@ -64,9 +64,11 @@ summary.
    validation-image identities, identity-reporting command, aliases, Dockerfile,
    context, target and complete build arguments, registry/repository/tag, chart
    and exact values-file/key path, the Argo ApplicationSet render route, canonical
-   chart and values fingerprints, every rendered workload image consumer, batch
-   release key and Git tag. Missing, extra, duplicate, reordered, aliased or
-   changed contracts are rejected.
+   chart and values fingerprints, and every rendered workload image consumer's
+   API version, kind, namespace, object name, container section/name, exact image
+   field path, release component and expected repository/value source. Batch
+   release keys and Git tags are pinned too. Missing, extra, duplicate,
+   reordered, aliased or changed contracts are rejected.
 
    That record is the source-of-truth for push-triggered runs, workflow reruns,
    manual dispatches and the record-commit runs that advance `main`. A helper
@@ -87,11 +89,26 @@ summary.
    tags and staging pins before reporting its unrecorded components. It renders
    all six charts through the exact Argo value-file order at both the pinned
    source and current record head. A unique probe repository/tag/digest must
-   change the same pinned workload consumers, including the component's primary
-   Deployment container. Chart, helper, subchart, ApplicationSet, shared-values
-   or consumer drift fails before a build. An existing release path that is
-   unused, shadowed, ambiguous, aliased, duplicated, absent or the wrong YAML
-   type also fails. For each pending component, the `publish` job:
+   change the same exhaustive pinned workload-consumer set, including the
+   component's primary Deployment container. Standard Deployments, StatefulSets,
+   DaemonSets, ReplicaSets, Jobs, CronJobs and Pods, Helm hooks/tests, every
+   container/initContainer/ephemeralContainer, and pod templates in custom
+   objects are inspected. Every rendered image slot that is not bound to the
+   component's one persisted values source is rejected, including arbitrary
+   sidecars and alternate registry/repository strings. Rendered objects without
+   a Pod spec are the only intentional exclusion. Chart, helper, subchart, ApplicationSet,
+   shared-values or consumer drift fails before a build. An existing release
+   path that is unused, shadowed, ambiguous, aliased, duplicated, absent or the
+   wrong YAML type also fails.
+
+   Every release-authoritative repository path is canonicalized below the exact
+   worktree root. The root ancestry, batch/version files, ApplicationSet, every
+   chart/template and ordered values file, writable target, Dockerfile/context,
+   generated candidate and Git staging path reject symlink components and
+   hard-linked files. Reads and atomic replacements compare device/inode/path
+   identities before and after the authority boundary, so a validation-time
+   symlink, rename or parent swap cannot redirect the later read/write. For each
+   pending component, the `publish` job:
    - proves both fixture images reproduce the same complete OCI identity across
      two clean no-cache builds;
    - checks out the batch source in detached-HEAD state and refuses a missing,
@@ -100,10 +117,15 @@ summary.
      same SHA to every service build;
    - runs the built service binary's `-version` endpoint and checks its exact
      release version and Git SHA against the image's OCI labels;
-   - pushes it only to the contract's ECR registry as
-     `phorvex/<service>:<version>`, reads that exact repository/tag back from
-     ECR, pulls it, and re-verifies that the returned digest owns the expected
-     service binary, source SHA and version before any record is written;
+   - first proves the exact ECR repository already has `IMMUTABLE` tag
+     mutability. A pre-existing pending version tag is a conflict and is never
+     overwritten. A pre-existing tag is accepted only for a recorded idempotent
+     retry whose repository, tag and digest equal the persisted batch, after its
+     platform, service, version and source identity are re-verified;
+   - pushes a new image only to the contract's ECR registry as
+     `phorvex/<service>:<version>`, reads that exact repository/tag back from ECR,
+     pulls it, and re-verifies that the returned digest owns the expected service
+     binary, source SHA and version before any record is written;
    - tags the commit `<service>-v<version>`;
    - pins staging to the pushed digest (`servicerelease record`), in
      `deploy/environments/staging/<service>.yaml`: `manager.yaml` for the
@@ -112,13 +134,20 @@ summary.
      Before either the pin or batch record is written, the candidate chart is
      rendered and every pinned consumer must select the verified
      `repository:tag@digest`; source metadata is also checked where the contract
-     has a source key. Every pod therefore pulls its image by that digest: the
-     ECR tags are mutable, so a tag alone could change what a release runs.
+     has a source key. Every pod therefore pulls its image by that digest.
 
    One commit to main appends every successful component repository/digest to
    `release/batch.json` and records its staging pin. That commit and all of its
    component tags are pushed atomically, so a tag can never be skipped without
-   its matching record. Argo CD syncs the pin commit. A service whose build or
+   its matching record. Before commit, Git's index must contain exactly the
+   batch file and values files selected by that attempt, with no deletion, extra
+   staged file, unstaged change or untracked file. After commit, the workflow
+   creates a clean detached worktree from committed `HEAD` and re-runs
+   whole-batch and exhaustive consumer verification there. It re-reads every
+   recorded ECR repository setting and exact version-tag digest immediately
+   before the commit boundary and again immediately before each atomic push. A
+   concurrent main advance, ECR identity change or partial Git push fails
+   closed. Argo CD syncs the pin commit. A service whose build or
    push fails is absent from both the record and Git tags; a retry skips the
    already-recorded services and builds the remainder from the original batch
    source even after `main` advances. A new version set can replace the batch
@@ -132,6 +161,13 @@ summary.
    cannot rename `.Values.image` while the source helper recreates an obsolete
    `image` mapping. The same validation runs after each failed atomic push is
    rebased onto newer main.
+
+   All third-party actions in the three privileged release jobs are pinned to
+   reviewed 40-character commits with their human version in an inline comment.
+   Checkout never persists credentials. The GitHub token is supplied only to
+   the exact push subprocess through an ephemeral Git configuration environment;
+   the workflow then proves no credential/header was left in local Git config or
+   any remote URL.
 
    Before `batch.json` existed, completed releases were represented only by a
    unanimous set of component tags and pins. `import-terminal-batch` imports
@@ -148,13 +184,18 @@ inside the `release` environment.
 
 ### Setup
 
-In place since 2026-10-22:
+Release prerequisites (the workflow validates but never reconfigures them):
 
 - **ECR.** The repositories `phorvex/manager`, `phorvex/brain`,
   `phorvex/sensor`, `phorvex/actuator`, `phorvex/console` and `phorvex/attacks`
-  exist in account
-  753556437180, us-east-2: mutable tags, scan on push, AES256. The production
-  stack's repositories (`phorvex`, `phorvex-console`) are not used.
+  exist in account 753556437180, us-east-2. All six **must be configured with
+  immutable tags** before any release attempt; `MUTABLE` and exclusion-based
+  modes fail closed. This repository deliberately does not change that live
+  setting. The last reviewed inventory described the repositories as mutable,
+  so the reviewed infrastructure owner must apply and independently verify the
+  immutability prerequisite before release. Scan/encryption policy is separate.
+  The production stack's repositories (`phorvex`, `phorvex-console`) are not
+  used or modified by this workflow.
 - **IAM.** The role `phorvex-refactored-release` trusts GitHub's OIDC provider
   for exactly `repo:PhorvexSecurity@289469515/operator-refactored@1421933320:environment:release`:
   the repository issues immutable subjects, which carry the owner's and the

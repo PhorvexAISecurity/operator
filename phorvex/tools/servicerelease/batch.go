@@ -157,7 +157,7 @@ func parseVersions(raw []byte) (map[string]string, error) {
 }
 
 func readVersions(dir string) (map[string]string, error) {
-	raw, err := os.ReadFile(filepath.Join(dir, VersionsFile))
+	raw, err := readRegularFile(filepath.Join(dir, VersionsFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -169,7 +169,7 @@ func readVersions(dir string) (map[string]string, error) {
 
 func readBatch(dir string) (*Batch, error) {
 	path := filepath.Join(dir, BatchFile)
-	raw, err := os.ReadFile(path)
+	raw, err := readRegularFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func readBatch(dir string) (*Batch, error) {
 // reads only the versioned source pointer needed to locate a candidate helper;
 // the helper built from the candidate source later validates the whole batch.
 func readBatchPointer(dir string) (schema int, source string, err error) {
-	raw, err := os.ReadFile(filepath.Join(dir, BatchFile))
+	raw, err := readRegularFile(filepath.Join(dir, BatchFile))
 	if err != nil {
 		return 0, "", err
 	}
@@ -215,7 +215,7 @@ func writeBatch(dir string, batch *Batch) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, BatchFile), raw, 0o644)
+	return writeAtomicFile(filepath.Join(dir, BatchFile), raw)
 }
 
 func marshalBatch(batch *Batch) ([]byte, error) {
@@ -238,37 +238,12 @@ func cloneBatch(batch *Batch) (*Batch, error) {
 	return &clone, nil
 }
 
-func writeAtomicFile(path string, raw []byte) error {
-	temp, err := os.CreateTemp(filepath.Dir(path), ".servicerelease-*")
-	if err != nil {
-		return err
-	}
-	tempPath := temp.Name()
-	defer os.Remove(tempPath)
-	if err := temp.Chmod(0o644); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if _, err := temp.Write(raw); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Sync(); err != nil {
-		_ = temp.Close()
-		return err
-	}
-	if err := temp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tempPath, path)
-}
-
 func writeRecordAtomically(valuesPath string, valuesRaw []byte, batchPath string, batchRaw []byte) error {
-	oldValues, err := os.ReadFile(valuesPath)
+	oldValues, err := readRegularFile(valuesPath)
 	if err != nil {
 		return err
 	}
-	if _, err := os.Stat(batchPath); err != nil {
+	if _, err := pathSnapshot(batchPath, false); err != nil {
 		return err
 	}
 	if err := writeAtomicFile(valuesPath, valuesRaw); err != nil {
@@ -294,6 +269,9 @@ func mapsEqual(a, b map[string]string) bool {
 }
 
 func requireClean(root string) error {
+	if _, err := safeRoot(root); err != nil {
+		return err
+	}
 	status, err := git(root, "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
 		return err
@@ -308,7 +286,14 @@ func requireClean(root string) error {
 // versions record. For a merged release PR this is its merge commit, even when
 // main has advanced through later record commits.
 func preparedSource(root, dir, head string) (string, error) {
-	rel, err := filepath.Rel(root, filepath.Join(dir, VersionsFile))
+	versionsPath, err := withinRoot(root, filepath.Join(dir, VersionsFile))
+	if err != nil {
+		return "", err
+	}
+	if _, err := pathSnapshot(versionsPath, false); err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(root, versionsPath)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return "", fmt.Errorf("release directory %q is outside repository", dir)
 	}
@@ -340,7 +325,11 @@ func tagCommit(root, tag string) (string, bool, error) {
 }
 
 func versionsAtSource(root, dir, source string) (map[string]string, error) {
-	rel, err := filepath.Rel(root, filepath.Join(dir, VersionsFile))
+	versionsPath, err := withinRoot(root, filepath.Join(dir, VersionsFile))
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(root, versionsPath)
 	if err != nil || strings.HasPrefix(rel, "..") {
 		return nil, fmt.Errorf("release directory %q is outside repository", dir)
 	}
@@ -352,7 +341,11 @@ func versionsAtSource(root, dir, source string) (map[string]string, error) {
 }
 
 func componentContracts(root, dir, source, environment string, versions map[string]string, proveConsumers bool) ([]BatchComponent, error) {
-	releaseDir, err := filepath.Rel(root, dir)
+	safeDir, err := withinRoot(root, dir)
+	if err != nil {
+		return nil, err
+	}
+	releaseDir, err := filepath.Rel(root, safeDir)
 	if err != nil || releaseDir == "." || strings.HasPrefix(releaseDir, "..") {
 		return nil, fmt.Errorf("release directory %q is outside repository", dir)
 	}
@@ -480,6 +473,14 @@ func validateContractSet(root, dir string, batch *Batch) error {
 		if !reflect.DeepEqual(contract, expected[i]) {
 			return fmt.Errorf("%s: component %s contract differs from the helper's pinned-source contract", BatchFile, name)
 		}
+		if _, err := cleanRepoPath(contract.Build.Dockerfile); err != nil {
+			return fmt.Errorf("component %s Dockerfile: %w", name, err)
+		}
+		if contract.Build.Context != "." {
+			if _, err := cleanRepoPath(contract.Build.Context); err != nil {
+				return fmt.Errorf("component %s build context: %w", name, err)
+			}
+		}
 	}
 	for name := range batch.Versions {
 		if !seenComponents[name] {
@@ -490,8 +491,7 @@ func validateContractSet(root, dir string, batch *Batch) error {
 }
 
 func pinValues(root string, target ComponentDeploy) (map[string]string, error) {
-	path := filepath.Join(root, filepath.FromSlash(target.ValuesFile))
-	raw, err := os.ReadFile(path)
+	raw, err := readRepoFile(root, target.ValuesFile)
 	if err != nil {
 		return nil, err
 	}
@@ -741,7 +741,11 @@ func ImportTerminalBatch(root, dir, head, environment string) (*Batch, error) {
 	if err := requireClean(root); err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(filepath.Join(dir, BatchFile)); err == nil {
+	batchPath := filepath.Join(dir, BatchFile)
+	if _, err := pathSnapshot(batchPath, true); err != nil {
+		return nil, err
+	}
+	if _, err := os.Lstat(batchPath); err == nil {
 		return nil, fmt.Errorf("%s already exists; terminal import is only for legacy releases", BatchFile)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
@@ -858,6 +862,98 @@ func PendingReleases(root, dir, head string) ([]Pending, error) {
 	return out, nil
 }
 
+func selectedReleaseFiles(root, dir string, batch *Batch, components string) ([]string, error) {
+	releaseDir, err := filepath.Rel(root, dir)
+	if err != nil || releaseDir == "." || strings.HasPrefix(releaseDir, "..") {
+		return nil, fmt.Errorf("release directory %q is outside repository", dir)
+	}
+	files := []string{filepath.ToSlash(filepath.Join(releaseDir, BatchFile))}
+	seen := map[string]bool{}
+	if components != "" {
+		for _, name := range strings.Split(components, ",") {
+			name = strings.TrimSpace(name)
+			if name == "" || seen[name] {
+				return nil, fmt.Errorf("duplicate or empty release component selection %q", components)
+			}
+			seen[name] = true
+			contract := contractByName(batch, name)
+			if contract == nil {
+				return nil, fmt.Errorf("component %q is not in the immutable batch contract", name)
+			}
+			files = append(files, contract.Deploy.ValuesFile)
+		}
+	}
+	sort.Strings(files)
+	for _, path := range files {
+		if _, err := safeRepoPath(root, path, false); err != nil {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+// VerifyStaged proves that Git will commit exactly the batch and values files
+// changed by this release attempt. It rejects any unstaged, untracked, deleted,
+// type-changed or extra staged path anywhere in the worktree.
+func VerifyStaged(root, dir, head, components string) ([]string, error) {
+	batch, err := readBatch(dir)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateBatch(root, dir, head, batch, true, ""); err != nil {
+		return nil, err
+	}
+	expected, err := selectedReleaseFiles(root, dir, batch, components)
+	if err != nil {
+		return nil, err
+	}
+	staged, err := git(root, "diff", "--cached", "--name-only", "--diff-filter=ACDMRTUXB")
+	if err != nil {
+		return nil, err
+	}
+	var actual []string
+	for _, path := range strings.Split(strings.TrimSpace(staged), "\n") {
+		if path != "" {
+			actual = append(actual, filepath.ToSlash(path))
+		}
+	}
+	sort.Strings(actual)
+	if !reflect.DeepEqual(actual, expected) {
+		return nil, fmt.Errorf("staged release files %v, want exact allowlist %v", actual, expected)
+	}
+	for _, args := range [][]string{
+		{"diff", "--name-only"},
+		{"ls-files", "--others", "--exclude-standard"},
+		{"diff", "--cached", "--name-only", "--diff-filter=D"},
+	} {
+		out, err := git(root, args...)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(out) != "" {
+			return nil, fmt.Errorf("unexpected worktree/index release state from git %s:\n%s", strings.Join(args, " "), strings.TrimSpace(out))
+		}
+	}
+	if _, err := git(root, "diff", "--cached", "--check"); err != nil {
+		return nil, err
+	}
+	return expected, nil
+}
+
+// VerifyCommitted is run from a clean detached worktree created from the new
+// commit. LoadBatch re-proves the complete immutable contract, every recorded
+// pin, and baseline/sentinel/candidate consumer set for every component there.
+func VerifyCommitted(root, dir, head string) (*Batch, error) {
+	batch, err := LoadBatch(root, dir, head, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(batch.Components) == 0 {
+		return nil, fmt.Errorf("%s has no component consumer contracts", BatchFile)
+	}
+	return batch, nil
+}
+
 // RecordRelease adds one locally tagged component and its staging pin to the
 // batch. The caller publishes the record commit and component tags atomically.
 func RecordRelease(root, dir, head, environment, component, repository, version, digest, source string) error {
@@ -894,8 +990,11 @@ func RecordRelease(root, dir, head, environment, component, repository, version,
 	if old, exists := batch.Releases[contract.Record.ReleaseKey]; exists && old != released {
 		return fmt.Errorf("component %s is already recorded with different image provenance", component)
 	}
-	valuesPath := filepath.Join(root, filepath.FromSlash(contract.Deploy.ValuesFile))
-	valuesRaw, err := os.ReadFile(valuesPath)
+	valuesPath, err := safeRepoPath(root, contract.Deploy.ValuesFile, false)
+	if err != nil {
+		return err
+	}
+	valuesRaw, err := readRegularFile(valuesPath)
 	if err != nil {
 		return err
 	}

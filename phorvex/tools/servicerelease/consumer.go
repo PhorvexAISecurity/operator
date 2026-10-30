@@ -40,16 +40,20 @@ type FileDigest struct {
 // selected by a component's release values. The complete sorted set is pinned
 // in the batch contract; adding, removing, renaming or shadowing one is drift.
 type ImageConsumer struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Namespace  string `json:"namespace"`
-	Name       string `json:"name"`
-	Section    string `json:"section"`
-	Container  string `json:"container"`
+	APIVersion         string `json:"apiVersion"`
+	Kind               string `json:"kind"`
+	Namespace          string `json:"namespace"`
+	Name               string `json:"name"`
+	Section            string `json:"section"`
+	Container          string `json:"container"`
+	FieldPath          string `json:"fieldPath"`
+	Component          string `json:"component"`
+	ExpectedRepository string `json:"expectedRepository"`
+	ImageSource        string `json:"imageSource"`
 }
 
 func (c ImageConsumer) key() string {
-	return strings.Join([]string{c.APIVersion, c.Kind, c.Namespace, c.Name, c.Section, c.Container}, "\x00")
+	return strings.Join([]string{c.APIVersion, c.Kind, c.Namespace, c.Name, c.FieldPath, c.Container}, "\x00")
 }
 
 type deploymentRoute struct {
@@ -301,7 +305,10 @@ func chartDigest(root, chart string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	base := filepath.Join(root, filepath.FromSlash(chart))
+	base, err := safeRepoPath(root, chart, true)
+	if err != nil {
+		return "", err
+	}
 	var files []string
 	if err := filepath.WalkDir(base, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -331,7 +338,7 @@ func chartDigest(root, chart string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		raw, err := os.ReadFile(path)
+		raw, err := readRegularFile(path)
 		if err != nil {
 			return "", err
 		}
@@ -417,8 +424,7 @@ func findElement(generators []any, key, want string) (map[string]any, error) {
 }
 
 func resolveDeploymentRoute(root, environment, service string, target ComponentDeploy) (deploymentRoute, error) {
-	manifestPath := filepath.Join(root, filepath.FromSlash(deploymentManifest))
-	raw, err := os.ReadFile(manifestPath)
+	raw, err := readRepoFile(root, deploymentManifest)
 	if err != nil {
 		return deploymentRoute{}, err
 	}
@@ -525,7 +531,7 @@ func resolveDeploymentRoute(root, environment, service string, target ComponentD
 	}
 	digests := make([]FileDigest, 0, len(valuesFiles))
 	for _, valueFile := range valuesFiles {
-		valueRaw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(valueFile)))
+		valueRaw, err := readRepoFile(root, valueFile)
 		if err != nil {
 			return deploymentRoute{}, err
 		}
@@ -563,9 +569,21 @@ func renderChart(root string, route deploymentRoute, overridePath string, overri
 	if err != nil {
 		return nil, err
 	}
+	helmBefore, err := pathSnapshot(helm, false)
+	if err != nil {
+		return nil, fmt.Errorf("helm executable: %w", err)
+	}
+	chartPath, err := safeRepoPath(root, route.Chart, true)
+	if err != nil {
+		return nil, err
+	}
+	chartBefore, err := chartDigest(root, route.Chart)
+	if err != nil {
+		return nil, err
+	}
 	var tempPath string
 	if overridePath != "" {
-		file, err := os.CreateTemp("", "servicerelease-values-*.yaml")
+		file, err := os.CreateTemp(root, ".servicerelease-values-*.yaml")
 		if err != nil {
 			return nil, err
 		}
@@ -578,19 +596,34 @@ func renderChart(root string, route deploymentRoute, overridePath string, overri
 		if err := file.Close(); err != nil {
 			return nil, err
 		}
+		if _, err := pathSnapshot(tempPath, false); err != nil {
+			return nil, err
+		}
 	}
-	args := []string{"template", route.ReleaseName, filepath.Join(root, filepath.FromSlash(route.Chart)), "--namespace", route.Namespace, "--skip-crds"}
+	args := []string{"template", route.ReleaseName, chartPath, "--namespace", route.Namespace, "--skip-crds"}
+	valueSnapshots := map[string][]pathIdentity{}
 	for _, apiVersion := range renderAPIVersions {
 		args = append(args, "--api-versions", apiVersion)
 	}
 	for _, valueFile := range route.ValuesFiles {
-		path := filepath.Join(root, filepath.FromSlash(valueFile))
+		path, err := safeRepoPath(root, valueFile, false)
+		if err != nil {
+			return nil, err
+		}
 		if valueFile == overridePath {
 			path = tempPath
 		}
+		valueSnapshots[path], err = pathSnapshot(path, false)
+		if err != nil {
+			return nil, err
+		}
 		args = append(args, "--values", path)
 	}
-	cmd := exec.Command(helm, args...)
+	cmd, commandCleanup, err := pinnedCommand(helm, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer commandCleanup()
 	cmd.Dir = root
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -603,6 +636,20 @@ func renderChart(root string, route deploymentRoute, overridePath string, overri
 			diagnostic = strings.TrimSpace(stdout.String())
 		}
 		return nil, fmt.Errorf("helm render %s: %w\n%s", route.Chart, err, diagnostic)
+	}
+	helmAfter, err := pathSnapshot(helm, false)
+	if err != nil || !reflect.DeepEqual(helmBefore, helmAfter) {
+		return nil, fmt.Errorf("helm executable identity changed during render")
+	}
+	chartAfter, err := chartDigest(root, route.Chart)
+	if err != nil || chartAfter != chartBefore {
+		return nil, fmt.Errorf("chart %s changed during render", route.Chart)
+	}
+	for path, before := range valueSnapshots {
+		after, err := pathSnapshot(path, false)
+		if err != nil || !reflect.DeepEqual(before, after) {
+			return nil, fmt.Errorf("values file %s changed during render", path)
+		}
 	}
 	return stdout.Bytes(), nil
 }
@@ -619,6 +666,38 @@ func mapValue(m map[string]any, keys ...string) (map[string]any, bool) {
 		current = next
 	}
 	return current, true
+}
+
+type podSpecLocation struct {
+	path string
+	pod  map[string]any
+}
+
+func podSpecLocations(value any, path string) []podSpecLocation {
+	var found []podSpecLocation
+	switch current := value.(type) {
+	case map[string]any:
+		isPodSpec := false
+		for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
+			if _, exists := current[section]; exists {
+				isPodSpec = true
+			}
+		}
+		if isPodSpec {
+			found = append(found, podSpecLocation{path: path, pod: current})
+		}
+		for key, child := range current {
+			if isPodSpec && (key == "containers" || key == "initContainers" || key == "ephemeralContainers") {
+				continue
+			}
+			found = append(found, podSpecLocations(child, path+"/"+key)...)
+		}
+	case []any:
+		for i, child := range current {
+			found = append(found, podSpecLocations(child, fmt.Sprintf("%s/%d", path, i))...)
+		}
+	}
+	return found
 }
 
 func workloadImages(rendered []byte) (map[string]string, map[string]ImageConsumer, error) {
@@ -642,6 +721,10 @@ func workloadImages(rendered []byte) (map[string]string, map[string]ImageConsume
 		if err := doc.Decode(&object); err != nil {
 			return nil, nil, err
 		}
+		locations := podSpecLocations(object, "")
+		if len(locations) == 0 {
+			continue
+		}
 		apiVersion, _ := object["apiVersion"].(string)
 		kind, _ := object["kind"].(string)
 		metadata, _ := stringMap(object["metadata"])
@@ -650,44 +733,43 @@ func workloadImages(rendered []byte) (map[string]string, map[string]ImageConsume
 		if namespace == "" {
 			namespace = "default"
 		}
-		var pod map[string]any
-		switch kind {
-		case "Deployment", "StatefulSet", "DaemonSet", "ReplicaSet":
-			pod, _ = mapValue(object, "spec", "template", "spec")
-		case "Job":
-			pod, _ = mapValue(object, "spec", "template", "spec")
-		case "CronJob":
-			pod, _ = mapValue(object, "spec", "jobTemplate", "spec", "template", "spec")
-		case "Pod":
-			pod, _ = mapValue(object, "spec")
-		default:
-			continue
+		if apiVersion == "" || kind == "" || name == "" {
+			return nil, nil, fmt.Errorf("rendered pod template has no complete apiVersion/kind/name identity")
 		}
-		if pod == nil || apiVersion == "" || name == "" {
-			return nil, nil, fmt.Errorf("rendered %s/%s has no complete workload identity or Pod spec", kind, name)
-		}
-		for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
-			entries, ok := anySlice(pod[section])
-			if !ok {
-				continue
-			}
-			for _, rawContainer := range entries {
-				container, ok := stringMap(rawContainer)
-				if !ok {
-					return nil, nil, fmt.Errorf("rendered %s/%s %s entry is not a mapping", kind, name, section)
+		for _, location := range locations {
+			for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
+				rawEntries, exists := location.pod[section]
+				if !exists {
+					continue
 				}
-				containerName, _ := container["name"].(string)
-				image, _ := container["image"].(string)
-				if containerName == "" || image == "" {
-					return nil, nil, fmt.Errorf("rendered %s/%s %s has no name/image", kind, name, section)
+				entries, ok := anySlice(rawEntries)
+				if !ok || len(entries) == 0 {
+					return nil, nil, fmt.Errorf("rendered %s/%s %s must be a non-empty list", kind, name, section)
 				}
-				consumer := ImageConsumer{APIVersion: apiVersion, Kind: kind, Namespace: namespace, Name: name, Section: section, Container: containerName}
-				key := consumer.key()
-				if _, duplicate := images[key]; duplicate {
-					return nil, nil, fmt.Errorf("rendered workload consumer %s is duplicated or ambiguous", strings.ReplaceAll(key, "\x00", "/"))
+				seenNames := map[string]bool{}
+				for i, rawContainer := range entries {
+					container, ok := stringMap(rawContainer)
+					if !ok {
+						return nil, nil, fmt.Errorf("rendered %s/%s %s entry is not a mapping", kind, name, section)
+					}
+					containerName, _ := container["name"].(string)
+					image, _ := container["image"].(string)
+					if containerName == "" || image == "" {
+						return nil, nil, fmt.Errorf("rendered %s/%s %s has no name/image", kind, name, section)
+					}
+					if seenNames[containerName] {
+						return nil, nil, fmt.Errorf("rendered %s/%s has duplicate %s container %q", kind, name, section, containerName)
+					}
+					seenNames[containerName] = true
+					fieldPath := fmt.Sprintf("%s/%s/%d/image", location.path, section, i)
+					consumer := ImageConsumer{APIVersion: apiVersion, Kind: kind, Namespace: namespace, Name: name, Section: section, Container: containerName, FieldPath: fieldPath}
+					key := consumer.key()
+					if _, duplicate := images[key]; duplicate {
+						return nil, nil, fmt.Errorf("rendered workload consumer %s is duplicated or ambiguous", strings.ReplaceAll(key, "\x00", "/"))
+					}
+					images[key] = image
+					consumers[key] = consumer
 				}
-				images[key] = image
-				consumers[key] = consumer
 			}
 		}
 	}
@@ -709,6 +791,19 @@ func imageRepository(image string) string {
 	return image
 }
 
+func authoritativeComponent(consumer ImageConsumer, image string) string {
+	if componentByName(consumer.Container) != nil {
+		return consumer.Container
+	}
+	repository := imageRepository(image)
+	for _, candidate := range Components {
+		if repository == candidate.Repository || strings.HasSuffix(repository, "/"+candidate.Repository) {
+			return candidate.Name
+		}
+	}
+	return ""
+}
+
 func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, component string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
 	baselineOverride := ""
 	if overrideRaw != nil {
@@ -724,16 +819,11 @@ func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, 
 	}
 	targetRaw := overrideRaw
 	if targetRaw == nil {
-		targetRaw, err = os.ReadFile(filepath.Join(root, filepath.FromSlash(target.ValuesFile)))
+		targetRaw, err = readRepoFile(root, target.ValuesFile)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
-	currentValues, err := pinValuesRaw(targetRaw, target)
-	if err != nil {
-		return nil, nil, err
-	}
-	currentRepository := currentValues[target.RepositoryKey]
 	probeRepository := "release.invalid/phorvex-consumer-probe/" + component
 	probeTag := "0.0.0-probe"
 	probeDigest := "sha256:" + strings.Repeat("f", 64)
@@ -758,20 +848,40 @@ func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, 
 		}
 	}
 	wantProbe := expectedRenderedImage(probeRepository, probeTag, probeDigest)
+	definition := componentByName(component)
+	if definition == nil {
+		return nil, nil, fmt.Errorf("unknown release component %s", component)
+	}
+	expectedRepository := ReleaseRegistry + "/" + definition.Repository
+	imageSource := target.ValuesFile + "#" + strings.Join(target.Path, ".")
 	var consumers []ImageConsumer
 	primary := false
 	for key, before := range baseImages {
 		after := probeImages[key]
+		slot := probeSlots[key]
+		authoritative := authoritativeComponent(slot, before)
 		if before == after {
-			if imageRepository(before) == currentRepository {
-				return nil, nil, fmt.Errorf("component %s image repository is shadowed by unbound rendered consumer %s", component, strings.ReplaceAll(key, "\x00", "/"))
+			if authoritative != "" {
+				if authoritative != component {
+					return nil, nil, fmt.Errorf("component %s chart contains cross-component %s consumer %s", component, authoritative, strings.ReplaceAll(key, "\x00", "/"))
+				}
 			}
-			continue
+			// A release chart is an authority boundary, not a general application
+			// chart. Every rendered Pod-spec image must therefore be bound to the
+			// one persisted component image source. Unknown repositories and
+			// container names are deliberately not treated as an exclusion.
+			return nil, nil, fmt.Errorf("component %s has unbound authoritative rendered consumer %s selecting %q", component, strings.ReplaceAll(key, "\x00", "/"), before)
+		}
+		if authoritative != "" && authoritative != component {
+			return nil, nil, fmt.Errorf("component %s values control cross-component %s consumer %s", component, authoritative, strings.ReplaceAll(key, "\x00", "/"))
 		}
 		if after != wantProbe {
 			return nil, nil, fmt.Errorf("component %s values ambiguously render %q at %s, want %q", component, after, strings.ReplaceAll(key, "\x00", "/"), wantProbe)
 		}
-		consumer := probeSlots[key]
+		consumer := slot
+		consumer.Component = component
+		consumer.ExpectedRepository = expectedRepository
+		consumer.ImageSource = imageSource
 		consumers = append(consumers, consumer)
 		primary = primary || (consumer.Kind == "Deployment" && consumer.Section == "containers" && consumer.Container == component)
 	}
@@ -848,13 +958,11 @@ func gitShow(root, source, path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("git", "show", source+":"+path)
-	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
+	out, err := git(root, "show", source+":"+path)
 	if err != nil {
-		return nil, fmt.Errorf("git show %s:%s: %w\n%s", source, path, err, strings.TrimSpace(string(out)))
+		return nil, fmt.Errorf("git show %s:%s: %w", source, path, err)
 	}
-	return out, nil
+	return []byte(out), nil
 }
 
 func sourceReleaseTree(root, source, environment string) (string, func(), error) {
@@ -877,7 +985,7 @@ func sourceReleaseTree(root, source, environment string) (string, func(), error)
 	if !ok {
 		return "", nil, fmt.Errorf("%s: spec.generators must be a list", deploymentManifest)
 	}
-	paths := []string{deploymentManifest, filepath.ToSlash(filepath.Join("deploy", "environments", environment))}
+	paths := []string{".dockerignore", deploymentManifest, filepath.ToSlash(filepath.Join("deploy", "environments", environment))}
 	for _, component := range Components {
 		element, err := findElement(generators, "service", component.Name)
 		if err != nil {
@@ -891,17 +999,32 @@ func sourceReleaseTree(root, source, environment string) (string, func(), error)
 		if err != nil {
 			return "", nil, err
 		}
-		paths = append(paths, chart)
+		paths = append(paths, chart, component.Dockerfile)
 	}
 	sort.Strings(paths)
 	paths = slicesCompact(paths)
-	temp, err := os.MkdirTemp("", "servicerelease-source-*")
+	temp, err := os.MkdirTemp(root, ".servicerelease-source-*")
 	if err != nil {
 		return "", nil, err
 	}
 	cleanup := func() { _ = os.RemoveAll(temp) }
 	args := append([]string{"archive", "--format=tar", source, "--"}, paths...)
-	cmd := exec.Command("git", args...)
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	gitBefore, err := pathSnapshot(gitPath, false)
+	if err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	cmd, commandCleanup, err := pinnedCommand(gitPath, args...)
+	if err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	defer commandCleanup()
 	cmd.Dir = root
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -975,6 +1098,15 @@ func sourceReleaseTree(root, source, environment string) (string, func(), error)
 	if err := cmd.Wait(); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("git archive %s: %w: %s", source, err, strings.TrimSpace(stderr.String()))
+	}
+	gitAfter, err := pathSnapshot(gitPath, false)
+	if err != nil || !reflect.DeepEqual(gitBefore, gitAfter) {
+		cleanup()
+		return "", nil, fmt.Errorf("git executable identity changed during source archive")
+	}
+	if _, err := safeRoot(temp); err != nil {
+		cleanup()
+		return "", nil, err
 	}
 	return temp, cleanup, nil
 }

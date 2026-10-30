@@ -43,7 +43,7 @@ func Prepare(dir, date string, plans []Plan) (title, body string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if err := os.WriteFile(filepath.Join(dir, VersionsFile), append(raw, '\n'), 0o644); err != nil {
+	if err := writeAtomicFile(filepath.Join(dir, VersionsFile), append(raw, '\n')); err != nil {
 		return "", "", err
 	}
 	title = "release: " + strings.Join(names, ", ")
@@ -79,12 +79,12 @@ func changelogSection(p Plan, date string) string {
 
 func prependChangelog(path, component, section string) error {
 	head := "# " + component + " changelog\n\n"
-	old, err := os.ReadFile(path)
+	old, err := readRegularFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	rest := strings.TrimPrefix(string(old), head)
-	return os.WriteFile(path, []byte(head+section+"\n"+rest), 0o644)
+	return writeAtomicFile(path, []byte(head+section+"\n"+rest))
 }
 
 // Deploy pins a component's released image in an environment's value file,
@@ -122,8 +122,11 @@ func Deploy(root, environment, component, repository, tag, digest, source string
 // deployContract writes only the exact source-pinned deployment target supplied
 // by the immutable batch contract.
 func deployContract(root string, target ComponentDeploy, repository, tag, digest, source string) error {
-	path := filepath.Join(root, filepath.FromSlash(target.ValuesFile))
-	raw, err := os.ReadFile(path)
+	path, err := safeRepoPath(root, target.ValuesFile, false)
+	if err != nil {
+		return err
+	}
+	raw, err := readRegularFile(path)
 	if err != nil {
 		return err
 	}
@@ -131,5 +134,5 @@ func deployContract(root string, target ComponentDeploy, repository, tag, digest
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out, 0o644)
+	return writeAtomicFile(path, out)
 }

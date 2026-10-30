@@ -64,6 +64,11 @@ func TestConsumerProbeFollowsHelperTemplateIndirection(t *testing.T) {
 	if len(consumers) != 1 || consumers[0].Container != "brain" || consumers[0].Kind != "Deployment" {
 		t.Fatalf("helper consumers = %#v", consumers)
 	}
+	if consumers[0].Component != "brain" || consumers[0].FieldPath != "/spec/template/spec/containers/0/image" ||
+		consumers[0].ExpectedRepository != ReleaseRegistry+"/phorvex/brain" ||
+		consumers[0].ImageSource != "values.yaml#image" {
+		t.Fatalf("incomplete explicit consumer contract = %#v", consumers[0])
+	}
 }
 
 func TestConsumerProbeFollowsSubchartGlobalValues(t *testing.T) {
@@ -96,7 +101,7 @@ func TestConsumerProbeRejectsUnusedAndShadowedImagePaths(t *testing.T) {
 			name:     "path exists but is not consumed",
 			values:   fixtureValues("image") + strings.Replace(fixtureValues("runtimeImage"), "old.invalid/phorvex/brain", "other.invalid/phorvex/brain", 1),
 			template: fixtureDeployment("{{ .Values.runtimeImage.repository }}:{{ .Values.runtimeImage.tag }}@{{ .Values.runtimeImage.digest }}"),
-			contains: "not consumed",
+			contains: "unbound authoritative",
 		},
 		{
 			name:     "chart retains an old digest",
@@ -109,7 +114,7 @@ func TestConsumerProbeRejectsUnusedAndShadowedImagePaths(t *testing.T) {
 			values: fixtureValues("image") + fixtureValues("runtimeImage"),
 			template: fixtureDeployment("{{ .Values.image.repository }}:{{ .Values.image.tag }}@{{ .Values.image.digest }}") + "---\n" +
 				strings.ReplaceAll(strings.ReplaceAll(fixtureDeployment("{{ .Values.runtimeImage.repository }}:{{ .Values.runtimeImage.tag }}@{{ .Values.runtimeImage.digest }}"), "staging-brain", "staging-shadow"), "name: brain\n", "name: shadow\n"),
-			contains: "shadowed",
+			contains: "unbound authoritative",
 		},
 		{
 			name:     "duplicate workload consumer identity",
@@ -127,6 +132,85 @@ func TestConsumerProbeRejectsUnusedAndShadowedImagePaths(t *testing.T) {
 			_, _, err := probeConsumers(root, fixtureRoute(), fixtureTarget("image"), "brain", nil)
 			if err == nil || !strings.Contains(err.Error(), test.contains) {
 				t.Fatalf("consumer error = %v, want %q", err, test.contains)
+			}
+		})
+	}
+}
+
+func extraConsumerManifest(kind, name, section, container string) string {
+	image := "alternate.invalid/phorvex/brain:0.0.1@sha256:" + strings.Repeat("e", 64)
+	pod := "      " + section + ":\n      - name: " + container + "\n        image: '" + image + "'\n"
+	switch kind {
+	case "Pod":
+		return "apiVersion: v1\nkind: Pod\nmetadata:\n  name: " + name + "\nspec:\n" + strings.ReplaceAll(pod, "      ", "  ")
+	case "Job":
+		return "apiVersion: batch/v1\nkind: Job\nmetadata:\n  name: " + name + "\nspec:\n  template:\n    spec:\n      restartPolicy: Never\n" + pod
+	case "CronJob":
+		return "apiVersion: batch/v1\nkind: CronJob\nmetadata:\n  name: " + name + "\nspec:\n  schedule: '* * * * *'\n  jobTemplate:\n    spec:\n      template:\n        spec:\n          restartPolicy: Never\n" + strings.ReplaceAll(pod, "      ", "          ")
+	case "BrainFleet":
+		return "apiVersion: example.invalid/v1\nkind: BrainFleet\nmetadata:\n  name: " + name + "\nspec:\n  podTemplate:\n    spec:\n" + pod
+	default:
+		return "apiVersion: apps/v1\nkind: " + kind + "\nmetadata:\n  name: " + name + "\nspec:\n  selector:\n    matchLabels:\n      app: " + name + "\n  template:\n    metadata:\n      labels:\n        app: " + name + "\n    spec:\n" + pod
+	}
+}
+
+func TestConsumerProbeRejectsEveryUnboundAuthoritativeWorkloadAndContainerClass(t *testing.T) {
+	useRealReleaseRenderer(t)
+	cases := []struct {
+		name, manifest string
+	}{
+		{"alternate repository deployment", extraConsumerManifest("Deployment", "alternate", "containers", "brain")},
+		{"second sidecar", extraConsumerManifest("Deployment", "sidecar", "containers", "sidecar")},
+		{"unrelated repository and container", strings.Replace(extraConsumerManifest("Deployment", "unknown", "containers", "helper"), "alternate.invalid/phorvex/brain", "registry.invalid/unrelated/tool", 1)},
+		{"init container", extraConsumerManifest("Deployment", "init", "initContainers", "bootstrap")},
+		{"ephemeral container", extraConsumerManifest("Deployment", "debug", "ephemeralContainers", "debugger")},
+		{"statefulset", extraConsumerManifest("StatefulSet", "stateful", "containers", "brain")},
+		{"daemonset", extraConsumerManifest("DaemonSet", "daemon", "containers", "brain")},
+		{"job", extraConsumerManifest("Job", "job", "containers", "brain")},
+		{"cronjob", extraConsumerManifest("CronJob", "cron", "containers", "brain")},
+		{"hook job", strings.Replace(extraConsumerManifest("Job", "hook", "containers", "brain"), "metadata:\n", "metadata:\n  annotations:\n    helm.sh/hook: test\n", 1)},
+		{"pod", extraConsumerManifest("Pod", "pod", "containers", "brain")},
+		{"custom controller pod template", extraConsumerManifest("BrainFleet", "fleet", "containers", "brain")},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeConsumerFixture(t, root, "chart/Chart.yaml", "apiVersion: v2\nname: brain\nversion: 0.1.0\n")
+			writeConsumerFixture(t, root, "chart/values.yaml", "{}\n")
+			writeConsumerFixture(t, root, "values.yaml", fixtureValues("image"))
+			writeConsumerFixture(t, root, "chart/templates/workloads.yaml", fixtureDeployment("{{ .Values.image.repository }}:{{ .Values.image.tag }}@{{ .Values.image.digest }}")+"---\n"+test.manifest)
+			_, _, err := probeConsumers(root, fixtureRoute(), fixtureTarget("image"), "brain", nil)
+			if err == nil || (!strings.Contains(err.Error(), "unbound authoritative") && !strings.Contains(err.Error(), "cross-component")) {
+				t.Fatalf("unbound %s error = %v", test.name, err)
+			}
+		})
+	}
+}
+
+func TestConsumerProbeRejectsConsumersAddedOrRemovedBetweenRenderPhases(t *testing.T) {
+	primary := fixtureDeployment("old.invalid/phorvex/brain:0.1.0@sha256:" + strings.Repeat("0", 64))
+	extra := "---\n" + extraConsumerManifest("Deployment", "dynamic", "containers", "brain")
+	for _, test := range []struct {
+		name   string
+		render [][]byte
+	}{
+		{"added", [][]byte{[]byte(primary), []byte(primary + extra)}},
+		{"removed", [][]byte{[]byte(primary + extra), []byte(primary)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeConsumerFixture(t, root, "values.yaml", fixtureValues("image"))
+			previous := renderReleaseChart
+			calls := 0
+			renderReleaseChart = func(string, deploymentRoute, string, []byte) ([]byte, error) {
+				result := test.render[min(calls, len(test.render)-1)]
+				calls++
+				return result, nil
+			}
+			t.Cleanup(func() { renderReleaseChart = previous })
+			_, _, err := probeConsumers(root, fixtureRoute(), fixtureTarget("image"), "brain", nil)
+			if err == nil || !strings.Contains(err.Error(), "rendered workload set") {
+				t.Fatalf("dynamic %s consumer error = %v", test.name, err)
 			}
 		})
 	}

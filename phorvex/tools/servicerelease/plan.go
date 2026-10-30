@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"reflect"
 	"strings"
 )
 
@@ -30,7 +31,19 @@ type Resolver func(root string, c Component) (Inputs, error)
 
 func git(root string, args ...string) (string, error) {
 	// Paths are read verbatim, not C-quoted.
-	cmd := exec.Command("git", append([]string{"-c", "core.quotePath=false"}, args...)...)
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		return "", err
+	}
+	before, err := pathSnapshot(gitPath, false)
+	if err != nil {
+		return "", fmt.Errorf("git executable: %w", err)
+	}
+	cmd, cleanup, err := pinnedCommand(gitPath, append([]string{"-c", "core.quotePath=false"}, args...)...)
+	if err != nil {
+		return "", err
+	}
+	defer cleanup()
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {
@@ -38,6 +51,10 @@ func git(root string, args ...string) (string, error) {
 			return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(ee.Stderr)))
 		}
 		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	after, err := pathSnapshot(gitPath, false)
+	if err != nil || !reflect.DeepEqual(before, after) {
+		return "", fmt.Errorf("git executable identity changed during command")
 	}
 	return string(out), nil
 }

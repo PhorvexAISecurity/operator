@@ -30,6 +30,7 @@ env:
 
 jobs:
   pending:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -38,22 +39,60 @@ jobs:
       releases: ${{ steps.pending.outputs.releases }}
       source: ${{ steps.pending.outputs.source }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.4
       - name: Persist and validate the prepared batch source
         id: pending
+        env:
+          GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'unset git_push_token' EXIT
+          git_push() {
+            local auth
+            local status=0
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push "$@" || status=$?
+            unset auth
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+            return "$status"
+          }
+          git_fetch() {
+            local auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git fetch "$@"
+            unset auth
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+          }
           # The current-main helper may locate only the minimal schema/source
           # pointer. Component authority begins with the helper built at source.
           go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
@@ -78,11 +117,18 @@ jobs:
           if [ -n "$(git status --porcelain -- release/batch.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add release/batch.json
+            mapfile -t release_files < <("$tool" release-files)
+            git add -- "${release_files[@]}"
+            "$tool" verify-staged > /dev/null
             git commit -m "release: pin batch source ${source:0:12}"
-            if ! git push origin HEAD:main; then
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            committed="$RUNNER_TEMP/committed-batch"
+            git worktree add --detach "$committed" HEAD
+            (cd "$committed" && "$tool" verify-committed > /dev/null)
+            git worktree remove --force "$committed"
+            if ! git_push origin HEAD:main; then
               # A concurrent creator may win only with the byte-identical batch.
-              git fetch --tags --force origin main
+              git_fetch --tags --force origin main
               git show FETCH_HEAD:release/batch.json > "$RUNNER_TEMP/remote-batch.json"
               cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"
               git switch --force-create release-record FETCH_HEAD
@@ -95,7 +141,7 @@ jobs:
 
   publish:
     needs: pending
-    if: needs.pending.outputs.releases != '0'
+    if: github.ref == 'refs/heads/main' && needs.pending.outputs.releases != '0'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
@@ -105,16 +151,17 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: main
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.4
       - name: Load the record and checkout its exact clean source
@@ -122,16 +169,25 @@ jobs:
           set -euo pipefail
           go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
           [ "$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)" = "$BATCH_SOURCE_SHA" ]
+          record_head="$(git rev-parse HEAD)"
           git switch --detach "$BATCH_SOURCE_SHA"
           tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA" > /dev/null
           go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
-          git fetch --tags --force origin main
-          git switch --force-create release-record origin/main
+          git switch --force-create release-record "$record_head"
           git rev-parse HEAD > "$RUNNER_TEMP/record-head"
           tool="$RUNNER_TEMP/pinned-servicerelease"
           [ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]
           "$tool" pending --json > "$RUNNER_TEMP/pending.json"
+          install -m 0600 release/batch.json "$RUNNER_TEMP/record-batch.json"
           git switch --detach "$BATCH_SOURCE_SHA"
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+          "$tool" verify-build-paths --dockerfile farm-fixtures/agentsim/Dockerfile --context .
+          "$tool" verify-build-paths --dockerfile farm-fixtures/catalogue-workload/Dockerfile --context .
+          while IFS= read -r release; do
+            "$tool" verify-build-paths \
+              --dockerfile "$(jq -er '.build.dockerfile' <<< "$release")" \
+              --context "$(jq -er '.build.context' <<< "$release")"
+          done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Rebuild each fixture twice and compare complete OCI identities
         run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
       - name: Require the release role
@@ -140,17 +196,18 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$ROLE" =~ ^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$ ]] || { echo "::error::set the repository variable PHORVEX_RELEASE_ROLE_ARN"; exit 1; }
-      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
         with:
           role-to-assume: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         id: ecr
       - name: Build, push, tag and pin each release
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           set -euo pipefail
+          : > "$RUNNER_TEMP/released"
           while IFS= read -r release; do
             component="$(jq -er '.component' <<< "$release")"
             service="$(jq -er '.identity.service' <<< "$release")"
@@ -167,12 +224,16 @@ jobs:
             [ "$source" = "$BATCH_SOURCE_SHA" ]
             [ "$version" = "$tag" ]
             [ "$registry" = "$REGISTRY" ]
+            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" --component "$component" > /dev/null
             image="$registry/$repository:$tag"
             docker_args=()
             while IFS= read -r arg; do docker_args+=(--build-arg "$arg"); done < <(jq -er '.build.args[]' <<< "$release")
             [ -z "$target" ] || docker_args+=(--target "$target")
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            "$RUNNER_TEMP/pinned-servicerelease" verify-build-paths --dockerfile "$dockerfile" --context "$context"
             docker build --file "$dockerfile" "${docker_args[@]}" --tag "$image" "$context" < /dev/null
             python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" --git-sha "$source" --version "$version"
+            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" --component "$component" > /dev/null
             docker push "$image" < /dev/null
             registry_id="${registry%%.*}"
             [[ "$registry_id" =~ ^[0-9]{12}$ ]]
@@ -196,34 +257,93 @@ jobs:
           done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Record the releases
         if: always()
+        env:
+          GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           [ -s "$RUNNER_TEMP/released" ] || exit 0
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'unset git_push_token' EXIT
+          git_push() {
+            local auth
+            local status=0
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push "$@" || status=$?
+            unset auth
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+            return "$status"
+          }
+          git_fetch() {
+            local auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git fetch "$@"
+            unset auth
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+          }
+          verify_committed_head() {
+            local committed="$RUNNER_TEMP/committed-record"
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+            git worktree add --detach "$committed" HEAD
+            (cd "$committed" && "$tool" verify-committed > /dev/null)
+            git worktree remove --force "$committed"
+            [ -z "$(git status --porcelain --untracked-files=all)" ]
+          }
           tool="$RUNNER_TEMP/pinned-servicerelease"
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
           git switch --force-create release-record "$(cat "$RUNNER_TEMP/record-head")"
+          cmp release/batch.json "$RUNNER_TEMP/record-batch.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           refs=()
+          components=()
           while IFS=$'\t' read -r component version repository digest git_tag; do
             git tag "$git_tag" "$BATCH_SOURCE_SHA"
             "$tool" record --environment "$ENVIRONMENT" --component "$component" --repository "$repository" \
               --tag "$version" --digest "$digest" --source "$BATCH_SOURCE_SHA"
             refs+=("refs/tags/$git_tag")
+            components+=("$component")
           done < "$RUNNER_TEMP/released"
-          git add release/batch.json deploy/environments
+          "$tool" pending --json > /dev/null
+          python3 tools/verify_release_ecr.py verify --batch release/batch.json --verify-identities > /dev/null
+          component_list="$(IFS=,; echo "${components[*]}")"
+          mapfile -t release_files < <("$tool" release-files --components "$component_list")
+          git add -- "${release_files[@]}"
+          "$tool" verify-staged --components "$component_list" > /dev/null
           git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
+          verify_committed_head
           pushed=false
           for attempt in 1 2 3; do
-            if git push --atomic origin HEAD:main "${refs[@]}"; then pushed=true; break; fi
-            git fetch --tags --force origin main
+            # Last practical publication boundary: repository immutability and
+            # every exact version-tag digest are re-read after committed-HEAD proof.
+            python3 tools/verify_release_ecr.py verify --batch release/batch.json > /dev/null
+            if git_push --atomic origin HEAD:main "${refs[@]}"; then pushed=true; break; fi
+            git_fetch --tags --force origin main
             git rebase origin/main
             "$tool" pending --json > /dev/null
+            verify_committed_head
           done
           [ "$pushed" = true ]
 
   release-pr:
     needs: [pending, publish]
-    if: always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
+    if: github.ref == 'refs/heads/main' && always() && needs.pending.result == 'success' && contains(fromJSON('["success", "skipped"]'), needs.publish.result)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -232,25 +352,48 @@ jobs:
       # To start CI on the release PR, which GitHub does not do for its token's pushes.
       actions: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
           fetch-tags: true
-      - uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - uses: azure/setup-helm@v4
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.4
       - name: Bring the release PR up to date
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # From main as the publish job left it: its tags and the staging pins.
-          git fetch --tags --force origin main
-          git switch --force-create release/next FETCH_HEAD
+          git_push_token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'unset git_push_token' EXIT
+          git_push() {
+            local auth
+            local status=0
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_COUNT=1 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              git push "$@" || status=$?
+            unset auth
+            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
+              echo "::error::temporary Git credential persisted in local config"
+              exit 1
+            fi
+            if git remote get-url --all origin | grep -E '(x-access-token|github_pat_|gh[pousr]_)' >/dev/null; then
+              echo "::error::Git credential leaked into origin URL"
+              exit 1
+            fi
+            return "$status"
+          }
+          # Checkout already selected current main with full history and tags.
+          git switch --force-create release/next HEAD
           # Current main can locate the pointer, but only the source-built helper
           # may decide whether a nonterminal batch still has component work.
           go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
@@ -283,9 +426,13 @@ jobs:
           [ "$status" -eq 0 ]
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add release
+          git add -- release/versions.json release/*.md
+          [ -z "$(git diff --name-only)" ]
+          [ -z "$(git ls-files --others --exclude-standard)" ]
+          [ -z "$(git diff --cached --name-only --diff-filter=D)" ]
+          git diff --cached --check
           git commit -F "$RUNNER_TEMP/title"
-          git push --force origin release/next
+          git_push --force origin release/next
           "$tool" pull-request --head release/next --base main \
             --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
           "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml

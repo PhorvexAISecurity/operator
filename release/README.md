@@ -6,7 +6,10 @@ Written by the release workflow (`.github/workflows/release.yml`), not by hand:
 - `batch.json`: the schema-versioned canonical prepared/partial/complete batch
   record, including its immutable source SHA, ordered source-derived component
   build/image/identity/deployment/record contract, pinned Argo render inputs and
-  workload image consumers, and every published digest;
+  exhaustive workload/container image-field consumers, and every published
+  digest. Release tooling rejects symlinked/hard-linked authority paths, stages
+  only the exact contract-derived file allowlist, verifies committed `HEAD` from
+  a clean detached worktree, and requires immutable ECR version tags;
 - `<service>.md`: each service's changelog.
 
 See `docs/services/releasing.md`.
