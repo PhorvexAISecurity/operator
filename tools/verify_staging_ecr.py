@@ -16,6 +16,10 @@ import staging_release as release
 
 ROOT = Path(__file__).resolve().parents[1]
 Runner = Callable[..., subprocess.CompletedProcess[str]]
+IMAGE_MEDIA_TYPES = {
+    "application/vnd.docker.distribution.manifest.v2+json",
+    "application/vnd.oci.image.manifest.v1+json",
+}
 
 
 def run(command: list[str], runner: Runner = subprocess.run) -> subprocess.CompletedProcess[str]:
@@ -46,8 +50,46 @@ def component(batch_value: dict[str, Any], name: str) -> dict[str, Any]:
     return matches[0]
 
 
-def repository_state(contract: dict[str, Any], runner: Runner = subprocess.run) -> dict[str, Any]:
+def registry_state(runner: Runner = subprocess.run) -> dict[str, Any]:
     target = release.expected_target()
+    controls = target["repositoryControls"]
+    caller = aws_json(["sts", "get-caller-identity"], runner)
+    if str(caller.get("Account")) != target["accountId"]:
+        raise RuntimeError("AWS caller is outside the exact staging registry account")
+    policy = run(["aws", "ecr", "get-registry-policy", "--region", target["region"], "--output", "json"], runner)
+    if policy.returncode == 0:
+        raise RuntimeError("ECR registry unexpectedly has a registry policy; IAM_ONLY was required")
+    if "RegistryPolicyNotFoundException" not in policy.stderr:
+        raise RuntimeError(policy.stderr.strip() or "cannot prove the ECR registry policy is absent")
+    settings: dict[str, str] = {}
+    for name in ("REGISTRY_POLICY_SCOPE", "BASIC_SCAN_TYPE_VERSION"):
+        response = aws_json(["ecr", "get-account-setting", "--region", target["region"], "--name", name], runner)
+        if response.get("name") != name or not isinstance(response.get("value"), str):
+            raise RuntimeError(f"ECR account setting {name} was not returned exactly")
+        settings[name] = response["value"]
+    if settings != {
+        "REGISTRY_POLICY_SCOPE": controls["registryPolicyScope"],
+        "BASIC_SCAN_TYPE_VERSION": controls["basicScanTypeVersion"],
+    }:
+        raise RuntimeError("ECR registry policy/scan scope differs from the staging target")
+    state = {
+        "accountId": target["accountId"],
+        "registryPolicy": "ABSENT",
+        "registryPolicyScope": settings["REGISTRY_POLICY_SCOPE"],
+        "basicScanTypeVersion": settings["BASIC_SCAN_TYPE_VERSION"],
+    }
+    state["digest"] = release.canonical_digest(state)
+    return state
+
+
+def repository_state(
+    contract: dict[str, Any],
+    runner: Runner = subprocess.run,
+    registry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    target = release.expected_target()
+    if registry is None:
+        registry = registry_state(runner)
     name = contract["component"]
     repository = contract["image"]["repository"]
     if repository != target["repositories"][name]:
@@ -96,6 +138,7 @@ def repository_state(contract: dict[str, Any], runner: Runner = subprocess.run) 
         "tags": tags,
         "lifecyclePolicy": policy,
         "resourcePolicy": "IAM_ONLY",
+        "registryStateDigest": registry["digest"],
     }
     state["digest"] = release.canonical_digest(state)
     return state
@@ -159,10 +202,11 @@ def verify_remote_identity(contract: dict[str, Any], digest: str, runner: Runner
 
 
 def preflight(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> dict[str, Any]:
+    registry = registry_state(runner)
     states = []
     for name in batch_value["expectedComponents"]:
         contract = component(batch_value, name)
-        remote = repository_state(contract, runner)
+        remote = repository_state(contract, runner, registry)
         digests = tag_digests(contract, runner)
         release_record = batch_value["releases"].get(name)
         digest = next(iter(digests.values()), None)
@@ -190,6 +234,7 @@ def preflight(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> d
         "target": batch_value["target"],
         "source": batch_value["source"],
         "batchDigest": release.canonical_digest(batch_value),
+        "registryState": registry,
         "components": states,
     }
     result["stateDigest"] = release.canonical_digest(result)
@@ -198,7 +243,7 @@ def preflight(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> d
 
 def read_preflight(path: Path, batch_value: dict[str, Any]) -> dict[str, Any]:
     state = release.read_json(path)
-    if not isinstance(state, dict) or set(state) != {"schema", "target", "source", "batchDigest", "components", "stateDigest"}:
+    if not isinstance(state, dict) or set(state) != {"schema", "target", "source", "batchDigest", "registryState", "components", "stateDigest"}:
         raise RuntimeError("preflight state has an incomplete or unknown contract")
     digest = state.pop("stateDigest")
     expected_digest = release.canonical_digest(state)
@@ -207,6 +252,9 @@ def read_preflight(path: Path, batch_value: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("preflight state does not match the exact staging batch")
     if [item.get("component") for item in state.get("components", [])] != batch_value["expectedComponents"]:
         raise RuntimeError("preflight state does not cover the exact staging component set")
+    registry = state.get("registryState")
+    if not isinstance(registry, dict) or registry.get("digest") != release.canonical_digest({key: value for key, value in registry.items() if key != "digest"}):
+        raise RuntimeError("preflight registry state is malformed")
     for item in state["components"]:
         contract = component(batch_value, item["component"])
         if item.get("contractDigest") != release.canonical_digest(contract) or item.get("state") not in {"absent", "recoverable", "recorded"}:
@@ -219,7 +267,10 @@ def probe(batch_value: dict[str, Any], name: str, state: dict[str, Any], runner:
     saved = next((item for item in state["components"] if item["component"] == name), None)
     if saved is None:
         raise RuntimeError(f"component {name} is absent from preflight state")
-    remote = repository_state(contract, runner)
+    registry = registry_state(runner)
+    if registry["digest"] != state["registryState"]["digest"]:
+        raise RuntimeError("ECR registry access controls changed after aggregate preflight")
+    remote = repository_state(contract, runner, registry)
     if remote["digest"] != saved["repositoryStateDigest"]:
         raise RuntimeError(f"component {name} repository controls changed after aggregate preflight")
     digests = tag_digests(contract, runner)
@@ -236,11 +287,76 @@ def probe(batch_value: dict[str, Any], name: str, state: dict[str, Any], runner:
     return {"component": name, "exists": digest is not None, "state": saved["state"], "digest": digest, "missingTags": missing}
 
 
+def ensure_tags(
+    batch_value: dict[str, Any],
+    name: str,
+    digest: str,
+    state: dict[str, Any],
+    runner: Runner = subprocess.run,
+) -> dict[str, str]:
+    if not release.DIGEST.fullmatch(digest):
+        raise RuntimeError(f"component {name} publication digest is malformed")
+    contract = component(batch_value, name)
+    saved = next((item for item in state["components"] if item["component"] == name), None)
+    if saved is None:
+        raise RuntimeError(f"component {name} is absent from preflight state")
+    registry = registry_state(runner)
+    if registry["digest"] != state["registryState"]["digest"]:
+        raise RuntimeError("ECR registry access controls changed after aggregate preflight")
+    remote = repository_state(contract, runner, registry)
+    if remote["digest"] != saved["repositoryStateDigest"]:
+        raise RuntimeError(f"component {name} repository controls changed after aggregate preflight")
+    digests = tag_digests(contract, runner)
+    canonical_tag = contract["image"]["tag"]
+    if digests.get(canonical_tag) != digest:
+        raise RuntimeError(f"component {name} canonical tag does not select the verified publication digest")
+    if any(value != digest for value in digests.values()):
+        raise RuntimeError(f"component {name} immutable tags do not select one digest")
+    verify_remote_identity(contract, digest, runner)
+
+    target = release.expected_target()
+    repository = contract["image"]["repository"]
+    base = ["--region", target["region"], "--registry-id", target["accountId"], "--repository-name", repository]
+    response = aws_json([
+        "ecr", "batch-get-image", *base, "--image-ids", f"imageDigest={digest}",
+        "--accepted-media-types", *sorted(IMAGE_MEDIA_TYPES),
+    ], runner)
+    if response.get("failures") not in (None, []):
+        raise RuntimeError(f"component {name} manifest lookup returned failures")
+    images = response.get("images")
+    if not isinstance(images, list) or len(images) != 1:
+        raise RuntimeError(f"component {name} manifest lookup was not exact")
+    image = images[0]
+    manifest = image.get("imageManifest")
+    media_type = image.get("imageManifestMediaType")
+    image_id = image.get("imageId", {})
+    if not isinstance(manifest, str) or media_type not in IMAGE_MEDIA_TYPES or image_id.get("imageDigest") != digest:
+        raise RuntimeError(f"component {name} manifest identity/media type is invalid")
+    manifest_digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+    if manifest_digest != digest:
+        raise RuntimeError(f"component {name} manifest bytes do not match the verified digest")
+    for tag in contract["image"]["tags"]:
+        if tag in digests:
+            continue
+        created = aws_json([
+            "ecr", "put-image", *base, "--image-tag", tag,
+            "--image-manifest", manifest, "--image-manifest-media-type", media_type,
+        ], runner)
+        created_id = created.get("image", {}).get("imageId", {})
+        if created_id.get("imageDigest") != digest or created_id.get("imageTag") != tag:
+            raise RuntimeError(f"component {name} alias {tag} was not created at the verified digest")
+    final = tag_digests(contract, runner)
+    if set(final) != set(contract["image"]["tags"]) or set(final.values()) != {digest}:
+        raise RuntimeError(f"component {name} immutable alias set is incomplete")
+    return {"component": name, "digest": digest}
+
+
 def verify_complete(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> list[dict[str, str]]:
+    registry = registry_state(runner)
     output = []
     for name in batch_value["expectedComponents"]:
         contract = component(batch_value, name)
-        repository_state(contract, runner)
+        repository_state(contract, runner, registry)
         digests = tag_digests(contract, runner)
         if set(digests) != set(contract["image"]["tags"]) or len(set(digests.values())) != 1:
             raise RuntimeError(f"component {name} does not have its exact immutable tag set")
@@ -254,7 +370,7 @@ def verify_complete(batch_value: dict[str, Any], runner: Runner = subprocess.run
 
 def verify_component(batch_value: dict[str, Any], name: str, runner: Runner = subprocess.run) -> dict[str, str]:
     contract = component(batch_value, name)
-    repository_state(contract, runner)
+    repository_state(contract, runner, registry_state(runner))
     digests = tag_digests(contract, runner)
     if set(digests) != set(contract["image"]["tags"]) or len(set(digests.values())) != 1:
         raise RuntimeError(f"component {name} does not have its exact immutable tag set")
@@ -273,6 +389,11 @@ def main() -> int:
     probe_parser.add_argument("--preflight-state", type=Path, required=True)
     probe_parser.add_argument("--component", required=True, choices=release.COMPONENTS)
     probe_parser.add_argument("--require-complete", action="store_true")
+    tags_parser = sub.add_parser("ensure-tags")
+    tags_parser.add_argument("--batch", type=Path, required=True)
+    tags_parser.add_argument("--preflight-state", type=Path, required=True)
+    tags_parser.add_argument("--component", required=True, choices=release.COMPONENTS)
+    tags_parser.add_argument("--digest", required=True)
     verify_parser = sub.add_parser("verify")
     verify_parser.add_argument("--batch", type=Path, required=True)
     component_parser = sub.add_parser("verify-component")
@@ -285,6 +406,8 @@ def main() -> int:
             output: Any = preflight(value)
         elif args.command == "probe":
             output = probe(value, args.component, read_preflight(args.preflight_state, value), require_complete=args.require_complete)
+        elif args.command == "ensure-tags":
+            output = ensure_tags(value, args.component, args.digest, read_preflight(args.preflight_state, value))
         elif args.command == "verify":
             output = verify_complete(value)
         else:

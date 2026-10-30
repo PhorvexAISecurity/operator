@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,5 +97,117 @@ func TestPinStagingServicesUsesOnlyPersistedContractsAndRendersDigests(t *testin
 		if values[contract.Deploy.RepositoryKey] != result.Repository || values[contract.Deploy.TagKey] != contract.Image.Tag || values[contract.Deploy.DigestKey] != result.Digest {
 			t.Fatalf("%s pin = %#v", contract.Component, values)
 		}
+	}
+}
+
+func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, contracts []BatchComponent, results map[string]Released) {
+	t.Helper()
+	targetRaw := []byte("{\"name\":\"staging-isolated\"}\n")
+	if err := os.WriteFile(filepath.Join(r.releaseDir, "staging-target.json"), targetRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	targetSum := sha256.Sum256([]byte("{\"name\":\"staging-isolated\"}"))
+	components := make([]map[string]any, 0, len(stagingComponentOrder))
+	releases := map[string]Released{}
+	for i := range contracts {
+		raw, err := json.Marshal(contracts[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		var item map[string]any
+		if err := json.Unmarshal(raw, &item); err != nil {
+			t.Fatal(err)
+		}
+		item["kind"] = "service"
+		components = append(components, item)
+		releases[contracts[i].Component] = results[contracts[i].Component]
+	}
+	for _, name := range []string{"agent-sim", "catalogue-workload"} {
+		version := "fixture-v1"
+		tag := version + "-git-" + source
+		components = append(components, map[string]any{
+			"component": name, "kind": "fixture", "source": source, "version": version,
+			"build": map[string]any{}, "identity": map[string]any{}, "deploy": map[string]any{},
+			"image": ComponentImage{Registry: ReleaseRegistry, Repository: StagingRepositoryPrefix + name, Tag: tag, Tags: []string{tag, "git-" + source}},
+		})
+		releases[name] = Released{Repository: ReleaseRegistry + "/" + StagingRepositoryPrefix + name, Digest: "sha256:" + strings.Repeat("f", 64)}
+	}
+	value := map[string]any{
+		"schema": 1, "status": "complete", "target": StagingTargetName,
+		"targetDigest": fmt.Sprintf("sha256:%x", targetSum), "environment": ReleaseEnvironment,
+		"source": source, "sourceTree": r.git("rev-parse", source+"^{tree}"),
+		"expectedComponents": stagingComponentOrder, "components": components, "releases": releases,
+	}
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(r.releaseDir, "staging-batch.json"), append(raw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSharedIsolatedSharedDeploymentSelectionTransition(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	r.ensureBatch()
+	r.commit("persist shared batch")
+	for i, component := range Components {
+		r.record(component.Name, "1.0.0", string(rune('a'+i)))
+	}
+	r.commit("complete shared batch")
+
+	marker := filepath.Join(r.root, "isolated-source")
+	if err := os.WriteFile(marker, []byte("reviewed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	isolationSource := r.commit("review isolated release source")
+	contracts, err := StagingContracts(r.root, r.releaseDir, isolationSource, StagingTargetName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := map[string]Released{}
+	for i := range contracts {
+		contract := &contracts[i]
+		results[contract.Component] = Released{
+			Repository: expectedRepository(contract),
+			Digest:     "sha256:" + strings.Repeat(string(rune('1'+i)), 64),
+		}
+	}
+	temporary := t.TempDir()
+	contractsRaw, _ := stagingContractsJSON(contracts)
+	contractsPath := filepath.Join(temporary, "contracts.json")
+	resultsPath := filepath.Join(temporary, "results.json")
+	if err := os.WriteFile(contractsPath, contractsRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resultsRaw, _ := json.Marshal(results)
+	if err := os.WriteFile(resultsPath, resultsRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := PinStagingServices(r.root, contractsPath, resultsPath); err != nil {
+		t.Fatal(err)
+	}
+	writeIsolatedBatchForTest(t, r, isolationSource, contracts, results)
+	r.commit("select isolated staging deployment")
+	if pending, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err != nil || len(pending) != 0 {
+		t.Fatalf("shared publication after isolated selection = %v, %v", pending, err)
+	}
+
+	next := batchVersions()
+	for name := range next {
+		next[name] = "1.0.1"
+	}
+	r.writeVersions(next)
+	r.commit("prepare later shared release")
+	if _, changed, err := EnsureBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment); err != nil || !changed {
+		t.Fatalf("prepare shared successor: changed=%v err=%v", changed, err)
+	}
+	r.commit("persist shared successor")
+	for i, component := range Components {
+		r.record(component.Name, "1.0.1", string("789abc"[i]))
+	}
+	r.commit("complete shared successor")
+	if pending, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err != nil || len(pending) != 0 {
+		t.Fatalf("shared successor after isolated selection = %v, %v", pending, err)
 	}
 }

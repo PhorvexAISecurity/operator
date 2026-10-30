@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 import yaml
 
@@ -53,6 +54,19 @@ def prepared_batch() -> dict:
         return RELEASE.prepare(source, path)
 
 
+def publication_results(value: dict) -> dict:
+    results = {}
+    for index, item in enumerate(value["components"]):
+        digest = "sha256:" + format(index + 1, "064x")
+        if item["kind"] == "fixture":
+            digest = item["identity"]["oci"]["manifest"]
+        results[item["component"]] = {
+            "repository": f"{item['image']['registry']}/{item['image']['repository']}",
+            "digest": digest,
+        }
+    return results
+
+
 class StagingTargetTests(unittest.TestCase):
     def test_target_is_exact_staging_only_inventory(self):
         target = RELEASE.expected_target()
@@ -81,19 +95,33 @@ class StagingTargetTests(unittest.TestCase):
 
     def test_complete_requires_exact_ordered_eight_component_results(self):
         value = prepared_batch()
-        results = {
-            name: {
-                "repository": f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/{name}",
-                "digest": "sha256:" + format(index + 1, "064x"),
-            }
-            for index, name in enumerate(RELEASE.COMPONENTS)
-        }
+        results = publication_results(value)
         complete = RELEASE.complete(value, results)
         self.assertEqual(complete["status"], "complete")
         missing = dict(results)
         missing.pop("attacks")
         with self.assertRaisesRegex(ValueError, "canonical eight"):
             RELEASE.complete(value, missing)
+
+    def test_complete_rejects_a_fixture_digest_other_than_the_reviewed_manifest(self):
+        value = prepared_batch()
+        results = publication_results(value)
+        results["agent-sim"]["digest"] = "sha256:" + "f" * 64
+        with self.assertRaisesRegex(ValueError, "reviewed OCI manifest"):
+            RELEASE.complete(value, results)
+
+    def test_batch_binds_git_tree_and_exact_source_derived_service_contracts(self):
+        value = prepared_batch()
+        canonical = service_contracts(value["source"])
+        RELEASE.validate_batch(value, canonical_services=canonical)
+        changed = copy.deepcopy(value)
+        changed["sourceTree"] = "0" * 40
+        with self.assertRaisesRegex(ValueError, "source-tree identity"):
+            RELEASE.validate_batch(changed, canonical_services=canonical)
+        changed = copy.deepcopy(value)
+        changed["components"][0]["build"]["dockerfile"] = "deploy/docker/service.Dockerfile"
+        with self.assertRaisesRegex(ValueError, "exact source-derived"):
+            RELEASE.validate_batch(changed, canonical_services=canonical)
 
     def test_fixture_pin_replaces_only_the_exact_existing_scalar(self):
         raw = "phorvex:\n  console:\n    attackCatalog:\n      agentAction:\n        enabled: false\n        image: \"\"\n"
@@ -109,6 +137,44 @@ class StagingTargetTests(unittest.TestCase):
 
     def test_argocd_route_is_exact_staging_six_service_set(self):
         RELEASE.verify_argocd(RELEASE.expected_target())
+
+    def test_argocd_rejects_template_generator_and_source_overrides(self):
+        target = RELEASE.expected_target()
+        source = yaml.safe_load((ROOT / target["deployment"]["applicationManifest"]).read_text())
+        mutations = []
+        patched = copy.deepcopy(source)
+        patched["spec"]["templatePatch"] = "spec:\n  destination:\n    namespace: production\n"
+        mutations.append(patched)
+        patched = copy.deepcopy(source)
+        patched["spec"]["generators"][0]["matrix"]["generators"][0]["template"] = {"spec": {"destination": {"namespace": "production"}}}
+        mutations.append(patched)
+        patched = copy.deepcopy(source)
+        patched["spec"]["template"]["spec"]["sources"][1]["repoURL"] = "https://github.com/example/production.git"
+        mutations.append(patched)
+        for index, manifest in enumerate(mutations):
+            with self.subTest(index=index), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                path = root / target["deployment"]["applicationManifest"]
+                path.parent.mkdir(parents=True)
+                path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+                with mock.patch.object(RELEASE, "ROOT", root), self.assertRaisesRegex(ValueError, "override|route|bound"):
+                    RELEASE.verify_argocd(target)
+
+    def test_both_fixture_destinations_exist_and_are_preflighted_before_any_write(self):
+        values = yaml.safe_load((ROOT / "deploy/environments/staging/catalogue-family.yaml").read_text())
+        for name in RELEASE.FIXTURE_NAMES:
+            self.assertIsInstance(RELEASE.nested(values, RELEASE.FIXTURE_SPECS[name]["deploy"]["path"]), str)
+
+        value = RELEASE.complete(prepared_batch(), publication_results(prepared_batch()))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            overlay = root / "deploy/environments/staging/catalogue-family.yaml"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text("phorvex:\n  console:\n    attackCatalog:\n      agentAction:\n        image: \"unchanged\"\n")
+            with mock.patch.object(RELEASE, "ROOT", root), mock.patch.object(RELEASE, "validate_batch", return_value=value):
+                with self.assertRaisesRegex(ValueError, "missing deployment value"):
+                    RELEASE.pin_fixtures(value)
+            self.assertIn('image: "unchanged"', overlay.read_text())
 
 
 if __name__ == "__main__":

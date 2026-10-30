@@ -46,6 +46,8 @@ jobs:
           # One chart per service (ADR-0001); tools/test_service_charts.py renders them.
           for chart in deploy/charts/*/; do helm lint --strict "$chart"; done
           python tools/check-claim-language.py
+      - name: Reconstruct any committed staging batch from its exact source
+        run: python tools/verify_committed_staging_batch.py
       - name: Tracked paths portable to case-insensitive checkouts
         run: python tools/check-path-case-collisions.py
       - run: python -m unittest discover -s tools -p 'test_*.py' -v

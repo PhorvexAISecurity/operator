@@ -103,13 +103,19 @@ def expected_target() -> dict[str, Any]:
     controls = target.get("repositoryControls", {})
     if controls.get("imageTagMutability") != "IMMUTABLE" or controls.get("scanOnPush") is not True or controls.get("encryptionType") not in {"AES256", "KMS"}:
         raise ValueError("staging target repository controls are weaker than required")
-    if controls.get("resourcePolicy") != "IAM_ONLY" or controls.get("tags") != {
+    if (
+        controls.get("resourcePolicy") != "IAM_ONLY"
+        or controls.get("registryPolicy") != "ABSENT"
+        or controls.get("registryPolicyScope") != "V2"
+        or controls.get("basicScanTypeVersion") != "AWS_NATIVE"
+        or controls.get("tags") != {
         "campaign": "console-reactive-qa-192",
         "environment": "staging",
         "isolation": "staging-only",
         "managed-by": "PhorvexSecurity/operator-refactored",
         "project": "phorvex",
-    }:
+        }
+    ):
         raise ValueError("staging target ownership/access identity changed")
     deployment = target.get("deployment", {})
     if deployment != {
@@ -178,6 +184,7 @@ def prepare(source: str, services_path: Path) -> dict[str, Any]:
     if not SHA.fullmatch(source):
         raise ValueError("--source must be an exact lowercase 40-character Git SHA")
     target = expected_target()
+    verify_argocd(target)
     services = validate_service_contracts(read_json(services_path), source, target)
     identities = fixture_identities()
     components: list[dict[str, Any]] = []
@@ -229,8 +236,13 @@ def prepare(source: str, services_path: Path) -> dict[str, Any]:
     return batch
 
 
-def validate_batch(batch: Any, require_complete: bool | None = None) -> dict[str, Any]:
+def validate_batch(
+    batch: Any,
+    require_complete: bool | None = None,
+    canonical_services: Any | None = None,
+) -> dict[str, Any]:
     target = expected_target()
+    verify_argocd(target)
     if not isinstance(batch, dict) or set(batch) != {
         "schema", "status", "target", "targetDigest", "environment", "source", "sourceTree",
         "expectedComponents", "components", "releases",
@@ -239,13 +251,20 @@ def validate_batch(batch: Any, require_complete: bool | None = None) -> dict[str
     source = batch.get("source", "")
     if batch["schema"] != 1 or batch["target"] != "staging-isolated" or batch["environment"] != "staging" or not SHA.fullmatch(source):
         raise ValueError("staging batch schema/target/environment/source is invalid")
-    if batch["targetDigest"] != canonical_digest(target) or not SHA.fullmatch(batch.get("sourceTree", "")):
+    source_tree = git_output(["rev-parse", f"{source}^{{tree}}"])
+    if batch["targetDigest"] != canonical_digest(target) or batch.get("sourceTree") != source_tree:
         raise ValueError("staging batch target or source-tree identity changed")
     if batch.get("expectedComponents") != COMPONENTS or not isinstance(batch.get("components"), list) or len(batch["components"]) != len(COMPONENTS):
         raise ValueError("staging batch does not contain the exact eight-component set")
     if [item.get("component") for item in batch["components"]] != COMPONENTS:
         raise ValueError("staging batch component contracts are missing, extra or reordered")
-    validate_service_contracts(batch["components"][: len(SERVICE_NAMES)], source, target)
+    services = validate_service_contracts(batch["components"][: len(SERVICE_NAMES)], source, target)
+    if canonical_services is not None:
+        expected_services = copy.deepcopy(validate_service_contracts(canonical_services, source, target))
+        for item in expected_services:
+            item["kind"] = "service"
+        if services != expected_services:
+            raise ValueError("staging service contracts differ from the exact source-derived contracts")
     identities = fixture_identities()
     for item in batch["components"][len(SERVICE_NAMES):]:
         name = item["component"]
@@ -276,6 +295,8 @@ def validate_batch(batch: Any, require_complete: bool | None = None) -> dict[str
         expected_repository = f"{target['registry']}/{target['repositories'][name]}"
         if release != {"repository": expected_repository, "digest": release.get("digest")} or not DIGEST.fullmatch(release.get("digest", "")):
             raise ValueError(f"component {name} release repository/digest is invalid")
+        if item.get("kind") == "fixture" and release["digest"] != item["identity"]["oci"]["manifest"]:
+            raise ValueError(f"fixture {name} release digest differs from its reviewed OCI manifest")
     expected_status = "complete" if len(releases) == len(COMPONENTS) else ("prepared" if not releases else "partial")
     if batch.get("status") != expected_status:
         raise ValueError(f"staging batch status {batch.get('status')!r}, want {expected_status!r}")
@@ -286,14 +307,14 @@ def validate_batch(batch: Any, require_complete: bool | None = None) -> dict[str
     return batch
 
 
-def complete(batch: dict[str, Any], results: Any) -> dict[str, Any]:
-    validate_batch(batch, require_complete=False)
+def complete(batch: dict[str, Any], results: Any, canonical_services: Any | None = None) -> dict[str, Any]:
+    validate_batch(batch, require_complete=False, canonical_services=canonical_services)
     if not isinstance(results, dict) or list(results) != COMPONENTS:
         raise ValueError("publication results must contain the canonical eight components in order")
     candidate = copy.deepcopy(batch)
     candidate["releases"] = results
     candidate["status"] = "complete"
-    validate_batch(candidate, require_complete=True)
+    validate_batch(candidate, require_complete=True, canonical_services=canonical_services)
     return candidate
 
 
@@ -351,11 +372,19 @@ def replace_yaml_scalar(path: Path, keys: list[str], value: str) -> None:
 
 def pin_fixtures(batch: dict[str, Any]) -> None:
     validate_batch(batch, require_complete=True)
+    planned: list[tuple[Path, list[str], str]] = []
     for name in FIXTURE_NAMES:
         item = next(component for component in batch["components"] if component["component"] == name)
         release = batch["releases"][name]
         value = f"{release['repository']}@{release['digest']}"
-        replace_yaml_scalar(ROOT / item["deploy"]["valuesFile"], item["deploy"]["path"], value)
+        path = ROOT / item["deploy"]["valuesFile"]
+        keys = item["deploy"]["path"]
+        values = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(nested(values, keys), str):
+            raise ValueError(f"{path}: {'.'.join(keys)} is not an existing string scalar")
+        planned.append((path, keys, value))
+    for path, keys, value in planned:
+        replace_yaml_scalar(path, keys, value)
 
 
 def git_output(args: list[str]) -> str:
@@ -375,20 +404,60 @@ def image_values(item: dict[str, Any]) -> dict[str, str]:
 
 def verify_argocd(target: dict[str, Any]) -> None:
     manifest = yaml.safe_load((ROOT / target["deployment"]["applicationManifest"]).read_text(encoding="utf-8"))
-    matrix = manifest["spec"]["generators"][0]["matrix"]["generators"]
+    if not isinstance(manifest, dict) or set(manifest) != {"apiVersion", "kind", "metadata", "spec"}:
+        raise ValueError("Argo service ApplicationSet has an unsupported top-level shape")
+    if manifest["apiVersion"] != "argoproj.io/v1alpha1" or manifest["kind"] != "ApplicationSet" or manifest["metadata"] != {"name": "phorvex-services", "namespace": "argocd"}:
+        raise ValueError("Argo service ApplicationSet identity changed")
+    spec = manifest["spec"]
+    if not isinstance(spec, dict) or "templatePatch" in spec or set(spec) != {"goTemplate", "goTemplateOptions", "generators", "template"}:
+        raise ValueError("Argo service ApplicationSet permits an unsupported template override")
+    if spec["goTemplate"] is not True or spec["goTemplateOptions"] != ["missingkey=error"]:
+        raise ValueError("Argo service ApplicationSet template safety changed")
+    generators = spec["generators"]
+    if not isinstance(generators, list) or len(generators) != 1 or set(generators[0]) != {"matrix"} or set(generators[0]["matrix"]) != {"generators"}:
+        raise ValueError("Argo service ApplicationSet generator shape can fan out")
+    matrix = generators[0]["matrix"]["generators"]
+    if not isinstance(matrix, list) or len(matrix) != 2 or any(not isinstance(item, dict) or set(item) != {"list"} or set(item["list"]) != {"elements"} for item in matrix):
+        raise ValueError("Argo service ApplicationSet generator contains an override")
     environments = matrix[0]["list"]["elements"]
     services = matrix[1]["list"]["elements"]
     if environments != [{"environment": "staging", "server": "https://kubernetes.default.svc", "namespace": "phorvex-staging", "release": "staging"}]:
         raise ValueError("Argo service ApplicationSet can fan out beyond the exact staging destination")
-    service_names = [item["service"] for item in services]
-    if len(service_names) != len(SERVICE_NAMES) or set(service_names) != set(SERVICE_NAMES):
+    expected_services = [
+        {"service": "manager", "chart": "phorvex/charts/phorvex"},
+        {"service": "brain", "chart": "deploy/charts/phorvex-brain"},
+        {"service": "sensor", "chart": "deploy/charts/phorvex-sensor"},
+        {"service": "actuator", "chart": "deploy/charts/phorvex-actuator"},
+        {"service": "attacks", "chart": "deploy/charts/phorvex-attacks"},
+        {"service": "console", "chart": "deploy/charts/phorvex-console"},
+    ]
+    if services != expected_services:
         raise ValueError("Argo service ApplicationSet does not cover exactly six services")
-    template = manifest["spec"]["template"]
-    if template["spec"]["destination"] != {"server": "{{.server}}", "namespace": "{{.namespace}}"}:
+    template = spec["template"]
+    if not isinstance(template, dict) or set(template) != {"metadata", "spec"}:
+        raise ValueError("Argo service ApplicationSet template has an unsupported override")
+    template_spec = template["spec"]
+    if not isinstance(template_spec, dict) or set(template_spec) != {"project", "sources", "destination", "syncPolicy", "ignoreDifferences"}:
+        raise ValueError("Argo service ApplicationSet application spec has an unsupported route")
+    if template_spec["project"] != "phorvex-services" or template_spec["destination"] != {"server": "{{.server}}", "namespace": "{{.namespace}}"}:
         raise ValueError("Argo destination bypasses the staging generator")
-    value_files = template["spec"]["sources"][0]["helm"]["valueFiles"]
-    if "$values/deploy/environments/{{.environment}}/{{.service}}.yaml" not in value_files:
+    sources = template_spec["sources"]
+    repository = "https://github.com/PhorvexSecurity/operator-refactored.git"
+    expected_value_files = [
+        "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+        "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+        "$values/deploy/environments/{{.environment}}/catalogue-family.yaml",
+    ]
+    if not isinstance(sources, list) or len(sources) != 2:
+        raise ValueError("Argo service ApplicationSet must bind exactly chart and values sources")
+    chart_source, values_source = sources
+    if set(chart_source) != {"repoURL", "targetRevision", "path", "helm"} or chart_source.get("repoURL") != repository or chart_source.get("targetRevision") != "main" or chart_source.get("path") != "{{.chart}}":
+        raise ValueError("Argo chart source is not bound to the reviewed repository/main route")
+    helm = chart_source.get("helm")
+    if not isinstance(helm, dict) or set(helm) != {"releaseName", "skipCrds", "valueFiles"} or helm.get("releaseName") != "{{.release}}" or helm.get("skipCrds") is not True or helm.get("valueFiles") != expected_value_files:
         raise ValueError("Argo service values are not environment/service bound")
+    if values_source != {"repoURL": repository, "targetRevision": "main", "ref": "values"}:
+        raise ValueError("Argo values source is not bound to the reviewed repository/main route")
 
 
 def render_fixture(profile: str, workload: str, agent: str) -> list[dict[str, Any]]:
@@ -409,8 +478,8 @@ def render_fixture(profile: str, workload: str, agent: str) -> list[dict[str, An
     return [item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)]
 
 
-def verify_deployment(batch: dict[str, Any], base: str | None) -> None:
-    validate_batch(batch, require_complete=True)
+def verify_deployment(batch: dict[str, Any], base: str | None, canonical_services: Any) -> None:
+    validate_batch(batch, require_complete=True, canonical_services=canonical_services)
     target = expected_target()
     verify_argocd(target)
     for item in batch["components"][: len(SERVICE_NAMES)]:
@@ -455,27 +524,38 @@ def main() -> int:
     complete_parser = sub.add_parser("complete")
     complete_parser.add_argument("--batch", type=Path, required=True)
     complete_parser.add_argument("--results", type=Path, required=True)
+    complete_parser.add_argument("--services", type=Path, required=True)
     complete_parser.add_argument("--output", type=Path, required=True)
     verify_parser = sub.add_parser("verify")
     verify_parser.add_argument("--batch", type=Path, required=True)
+    verify_parser.add_argument("--services", type=Path, required=True)
     verify_parser.add_argument("--complete", action="store_true")
     pin_parser = sub.add_parser("pin-fixtures")
     pin_parser.add_argument("--batch", type=Path, required=True)
     deploy_parser = sub.add_parser("verify-deployment")
     deploy_parser.add_argument("--batch", type=Path, required=True)
+    deploy_parser.add_argument("--services", type=Path, required=True)
     deploy_parser.add_argument("--base")
     args = parser.parse_args()
     try:
         if args.command == "prepare":
             write_json(args.output, prepare(args.source, args.services))
         elif args.command == "complete":
-            write_json(args.output, complete(validate_batch(read_json(args.batch), require_complete=False), read_json(args.results)))
+            services = read_json(args.services)
+            value = validate_batch(read_json(args.batch), require_complete=False, canonical_services=services)
+            write_json(args.output, complete(value, read_json(args.results), services))
         elif args.command == "verify":
-            validate_batch(read_json(args.batch), require_complete=True if args.complete else None)
+            validate_batch(
+                read_json(args.batch),
+                require_complete=True if args.complete else None,
+                canonical_services=read_json(args.services),
+            )
         elif args.command == "pin-fixtures":
             pin_fixtures(validate_batch(read_json(args.batch), require_complete=True))
         elif args.command == "verify-deployment":
-            verify_deployment(validate_batch(read_json(args.batch), require_complete=True), args.base)
+            services = read_json(args.services)
+            value = validate_batch(read_json(args.batch), require_complete=True, canonical_services=services)
+            verify_deployment(value, args.base, services)
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         parser.error(str(error))
     return 0

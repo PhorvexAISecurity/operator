@@ -670,6 +670,13 @@ func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool
 		return err
 	}
 	complete := batchStatus(batch.ExpectedComponents, batch.Releases) == "complete"
+	deploymentSuperseded := false
+	if batch.Status == "complete" {
+		deploymentSuperseded, err = isolatedStagingSupersedes(root, dir, head, batch)
+		if err != nil {
+			return err
+		}
+	}
 	for i := range batch.Components {
 		contract := &batch.Components[i]
 		name := contract.Component
@@ -688,11 +695,13 @@ func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool
 		case !recorded && tagged && allowTag != name && !historical:
 			return fmt.Errorf("component %s tag exists without a release record", name)
 		case recorded:
-			if err := validatePin(root, batch, contract, released, overrideRaw); err != nil {
-				return err
+			if !deploymentSuperseded {
+				if err := validatePin(root, batch, contract, released, overrideRaw); err != nil {
+					return err
+				}
 			}
 		}
-		if current {
+		if current && !deploymentSuperseded {
 			// An in-flight batch pins its exact route and consumer set; a complete one only
 			// requires the current route to still render the released images.
 			if complete {

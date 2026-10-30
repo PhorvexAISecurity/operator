@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -14,6 +17,116 @@ const (
 	StagingTargetName       = "staging-isolated"
 	StagingRepositoryPrefix = "phorvex/staging/"
 )
+
+var stagingComponentOrder = []string{
+	"manager", "brain", "sensor", "actuator", "console", "attacks", "agent-sim", "catalogue-workload",
+}
+
+type isolatedStagingBatch struct {
+	Schema             int                          `json:"schema"`
+	Status             string                       `json:"status"`
+	Target             string                       `json:"target"`
+	TargetDigest       string                       `json:"targetDigest"`
+	Environment        string                       `json:"environment"`
+	Source             string                       `json:"source"`
+	SourceTree         string                       `json:"sourceTree"`
+	ExpectedComponents []string                     `json:"expectedComponents"`
+	Components         []map[string]json.RawMessage `json:"components"`
+	Releases           map[string]Released          `json:"releases"`
+}
+
+// isolatedStagingSupersedes reports whether a complete, committed isolated
+// batch is the active deployment selection after this historical shared batch.
+// It never weakens publication/tag validation, and a later shared source does
+// not treat an older isolated batch as active.
+func isolatedStagingSupersedes(root, dir, head string, shared *Batch) (bool, error) {
+	path := filepath.Join(dir, "staging-batch.json")
+	raw, err := readRegularFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	var candidate isolatedStagingBatch
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&candidate); err != nil {
+		return false, fmt.Errorf("staging-batch.json: %w", err)
+	}
+	var trailing any
+	if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return false, fmt.Errorf("staging-batch.json: trailing data")
+		}
+		return false, fmt.Errorf("staging-batch.json: %w", err)
+	}
+	if candidate.Schema != 1 || candidate.Status != "complete" || candidate.Target != StagingTargetName ||
+		candidate.Environment != ReleaseEnvironment || !fullSHA.MatchString(candidate.Source) ||
+		!fullSHA.MatchString(candidate.SourceTree) || !digestSHA.MatchString(candidate.TargetDigest) ||
+		!reflect.DeepEqual(candidate.ExpectedComponents, stagingComponentOrder) || len(candidate.Components) != len(stagingComponentOrder) ||
+		len(candidate.Releases) != len(stagingComponentOrder) {
+		return false, fmt.Errorf("staging-batch.json is not a complete exact isolated batch")
+	}
+	targetRaw, err := readRegularFile(filepath.Join(dir, "staging-target.json"))
+	if err != nil {
+		return false, err
+	}
+	var targetValue any
+	if err := json.Unmarshal(targetRaw, &targetValue); err != nil {
+		return false, fmt.Errorf("staging-target.json: %w", err)
+	}
+	targetCanonical, err := json.Marshal(targetValue)
+	if err != nil {
+		return false, err
+	}
+	targetSum := sha256.Sum256(targetCanonical)
+	if candidate.TargetDigest != fmt.Sprintf("sha256:%x", targetSum) {
+		return false, fmt.Errorf("staging-batch.json target digest does not match staging-target.json")
+	}
+	tree, err := git(root, "rev-parse", candidate.Source+"^{tree}")
+	if err != nil || strings.TrimSpace(tree) != candidate.SourceTree {
+		return false, fmt.Errorf("staging-batch.json source tree does not match Git")
+	}
+	if _, err := git(root, "merge-base", "--is-ancestor", candidate.Source, head); err != nil {
+		return false, fmt.Errorf("staging-batch.json source is not an ancestor of %s", head)
+	}
+	if _, err := git(root, "merge-base", "--is-ancestor", shared.Source, candidate.Source); err != nil {
+		return false, nil
+	}
+	for i, fields := range candidate.Components {
+		name := stagingComponentOrder[i]
+		var component, kind, source, version string
+		var image ComponentImage
+		for key, target := range map[string]any{
+			"component": &component, "kind": &kind, "source": &source, "version": &version, "image": &image,
+		} {
+			value, ok := fields[key]
+			if !ok || json.Unmarshal(value, target) != nil {
+				return false, fmt.Errorf("staging-batch.json component %s has malformed %s", name, key)
+			}
+		}
+		wantKind := "fixture"
+		if i < len(Components) {
+			wantKind = "service"
+		}
+		wantKeys := 8
+		if wantKind == "service" {
+			wantKeys = 9
+		}
+		wantTag := version + "-git-" + candidate.Source
+		if len(fields) != wantKeys || component != name || kind != wantKind || source != candidate.Source || version == "" ||
+			image.Registry != ReleaseRegistry || image.Repository != StagingRepositoryPrefix+name || image.Tag != wantTag ||
+			!reflect.DeepEqual(image.Tags, []string{wantTag, "git-" + candidate.Source}) {
+			return false, fmt.Errorf("staging-batch.json component %s is not an exact isolated image contract", name)
+		}
+		released, ok := candidate.Releases[name]
+		if !ok || released.Repository != ReleaseRegistry+"/"+StagingRepositoryPrefix+name || !digestSHA.MatchString(released.Digest) {
+			return false, fmt.Errorf("staging-batch.json component %s has no exact isolated release", name)
+		}
+	}
+	return true, nil
+}
 
 // StagingContracts derives the complete six-service build and rendered-consumer
 // contract from one exact clean source. It has no repository override flag: the

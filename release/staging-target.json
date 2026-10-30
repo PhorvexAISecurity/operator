@@ -21,6 +21,9 @@
     "scanOnPush": true,
     "encryptionType": "AES256",
     "resourcePolicy": "IAM_ONLY",
+    "registryPolicy": "ABSENT",
+    "registryPolicyScope": "V2",
+    "basicScanTypeVersion": "AWS_NATIVE",
     "tags": {
       "campaign": "console-reactive-qa-192",
       "environment": "staging",

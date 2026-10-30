@@ -34,7 +34,7 @@ const usage = `usage:
   servicerelease staging-pin --contracts <path> --results <path>
   servicerelease record --environment staging --component <name> --repository <repo> --tag <version> --digest <sha256:...> --source <sha>
   servicerelease deploy --environment <env> --component <name> --repository <repo> --tag <version> --digest <sha256:...> [--source <sha>]
-  servicerelease pull-request --head <branch> --base <branch> --title-file <path> --body-file <path>
+  servicerelease pull-request [--require-open] --head <branch> --base <branch> --title-file <path> --body-file <path>
   servicerelease dispatch --ref <branch> --workflows <file>[,<file>...]
   servicerelease close-pull-request --head <branch> --base <branch>`
 
@@ -76,6 +76,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	output := fs.String("output", "-", "[staging-contract] output path, or - for stdout")
 	contracts := fs.String("contracts", "", "[staging-pin] source-derived service contract JSON")
 	results := fs.String("results", "", "[staging-pin] verified service repository/digest JSON")
+	requireOpen := fs.Bool("require-open", false, "[pull-request] fail unless the exact open PR can be read back")
 	if err := fs.Parse(args[1:]); err != nil {
 		return 2
 	}
@@ -367,6 +368,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		u, err := g.Upsert(*head, *base, strings.TrimSpace(string(title)), string(body))
 		if errors.Is(err, ErrCreateRefused) {
+			if *requireOpen {
+				return fail(err)
+			}
 			// The pushed branch waits for someone to open the PR; once open, the
 			// workflow keeps it up to date.
 			server := os.Getenv("GITHUB_SERVER_URL")
@@ -378,6 +382,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 0
 		} else if err != nil {
 			return fail(err)
+		}
+		if *requireOpen {
+			if err := g.VerifyOpen(*head, *base, u); err != nil {
+				return fail(err)
+			}
 		}
 		fmt.Fprintln(stdout, "The release PR is up to date:", u)
 	}

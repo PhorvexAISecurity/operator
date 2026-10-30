@@ -83,6 +83,12 @@ func (g PullRequests) CloseOpen(head, base, why string) (string, error) {
 type openPull struct {
 	Number  int    `json:"number"`
 	HTMLURL string `json:"html_url"`
+	Head    struct {
+		Ref string `json:"ref"`
+	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
 }
 
 func (g PullRequests) open(head, base string) ([]openPull, error) {
@@ -91,6 +97,20 @@ func (g PullRequests) open(head, base string) ([]openPull, error) {
 	q := url.Values{"state": {"open"}, "head": {owner + ":" + head}, "base": {base}}
 	err := g.call("GET", "/pulls?"+q.Encode(), nil, &open)
 	return open, err
+}
+
+// VerifyOpen proves that Upsert resulted in exactly the requested open PR. It is
+// used by lanes for which a pushed branch without a review object is failure.
+func (g PullRequests) VerifyOpen(head, base, expectedURL string) error {
+	open, err := g.open(head, base)
+	if err != nil {
+		return err
+	}
+	if len(open) != 1 || open[0].Number <= 0 || open[0].HTMLURL == "" || open[0].HTMLURL != expectedURL ||
+		open[0].Head.Ref != head || open[0].Base.Ref != base {
+		return fmt.Errorf("GitHub did not return exactly the requested open %s -> %s pull request", head, base)
+	}
+	return nil
 }
 
 // Upsert updates the open PR from head into base, or opens one, and returns its URL.
