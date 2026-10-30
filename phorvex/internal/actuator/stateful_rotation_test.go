@@ -23,8 +23,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/metrics"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/statefulrotation"
 )
@@ -468,5 +470,72 @@ func TestStatefulRotationHonoursDryRunGuard(t *testing.T) {
 	}
 	if len(cluster.events) != 0 {
 		t.Fatalf("dry-run reached the API: %v", cluster.events)
+	}
+}
+
+// statefulRotationCount reads phorvex_stateful_rotations_total from the registry the
+// metrics endpoint serves.
+func statefulRotationCount(t *testing.T, namespace string, action model.Action, outcome metrics.StatefulRotationOutcome) float64 {
+	t.Helper()
+	families, err := crmetrics.Registry.Gather()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range families {
+		if f.GetName() != "phorvex_stateful_rotations_total" {
+			continue
+		}
+		for _, m := range f.GetMetric() {
+			labels := map[string]string{}
+			for _, l := range m.GetLabel() {
+				labels[l.GetName()] = l.GetValue()
+			}
+			if labels["namespace"] == namespace && labels["action"] == string(action) && labels["outcome"] == string(outcome) {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+// Every dispatch records exactly one closed outcome; only a confirmed one has a recovery time.
+func TestStatefulRotationRecordsOneOutcomePerDispatch(t *testing.T) {
+	for name, tc := range map[string]struct {
+		opts    statefulFixtureOptions
+		setup   func(*statefulCluster)
+		app     http.RoundTripper
+		outcome metrics.StatefulRotationOutcome
+	}{
+		"confirmed rebuild":    {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild}, outcome: metrics.StatefulRotationConfirmed},
+		"pdb refusal":          {opts: statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild}, setup: func(c *statefulCluster) { c.refusePDB = true }, outcome: metrics.StatefulRotationRefused},
+		"snapshot failure":     {opts: statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate}, setup: func(c *statefulCluster) { c.snapshotFailure = "csi" }, outcome: metrics.StatefulRotationPartial},
+		"unobserved":           {opts: statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate}, setup: func(c *statefulCluster) { c.replace = false }, outcome: metrics.StatefulRotationUnconfirmed},
+		"checkpoint refused":   {opts: statefulFixtureOptions{action: model.ActionStatefulCheckpointHandoff, volumeless: true}, app: &checkpointApp{failCheckpoint: true}, outcome: metrics.StatefulRotationRefused},
+		"checkpoint confirmed": {opts: statefulFixtureOptions{action: model.ActionStatefulCheckpointHandoff, volumeless: true}, app: &checkpointApp{restoredSHA: statefulTestDigest}, outcome: metrics.StatefulRotationConfirmed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cluster, _, req := statefulFixture(t, tc.opts)
+			if tc.setup != nil {
+				tc.setup(cluster)
+			}
+			before := map[metrics.StatefulRotationOutcome]float64{}
+			all := []metrics.StatefulRotationOutcome{metrics.StatefulRotationConfirmed, metrics.StatefulRotationUnconfirmed,
+				metrics.StatefulRotationPartial, metrics.StatefulRotationRefused, metrics.StatefulRotationError}
+			for _, o := range all {
+				before[o] = statefulRotationCount(t, req.Namespace, req.Action, o)
+			}
+			if _, err := dispatch(t.Context(), statefulEnact(cluster, tc.app), req); err != nil {
+				t.Fatal(err)
+			}
+			for _, o := range all {
+				want := before[o]
+				if o == tc.outcome {
+					want++
+				}
+				if got := statefulRotationCount(t, req.Namespace, req.Action, o); got != want {
+					t.Errorf("%s: outcome %s = %v, want %v", name, o, got, want)
+				}
+			}
+		})
 	}
 }

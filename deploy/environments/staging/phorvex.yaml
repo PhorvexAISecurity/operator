@@ -41,6 +41,10 @@ phorvex:
   agentActionDeny:
     enabled: false
     namespaces: []
+  # Stateful rotation family (docs/stateful-rotation.md): claim and VolumeSnapshot
+  # grants in the actuator namespaces for deploy/demo's nats-demo StatefulSet.
+  statefulRotation:
+    enabled: true
   outputPolicy:
     enabled: false
     targetNamespace: ""
