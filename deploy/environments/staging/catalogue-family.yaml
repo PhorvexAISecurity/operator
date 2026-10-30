@@ -1,26 +1,50 @@
-# Shared by every split service after its service-specific values. A later
-# reviewed fixture window replaces this file only with exact output from
-# tools/render_catalogue_staging_values.py. Base staging remains fail-closed.
 phorvex:
+  policyNamespaces: &id001
+  - phorvex-staging-demo
+  - console-identity-shared
+  - p6-demo
+  actuatorNamespaces: *id001
+  trustedDetectors:
+  - phorvex-staging/staging-attacks
+  - p6/p6-attacks
   agentActionDeny:
-    enabled: false
-    namespaces: []
+    enabled: true
+    namespaces:
+    - p6-demo
   outputPolicy:
     enabled: false
-    targetNamespace: ""
-    configMapName: ""
+    targetNamespace: ''
+    configMapName: ''
     configMapNames: []
   console:
+    attackNamespaces: *id001
     attackCatalog:
-      enabled: false
-      authorizationTenant: ""
+      enabled: true
+      authorizationTenant: p6-demo
       familyFixtures:
-        enabled: false
-        profile: ""
+        enabled: true
+        profile: agent-action
         cleanupPolicy: Delete
+        images:
+          workload: ''
+          phorvex: ''
+          guardrail: ''
+          python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
+          kwok: registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0
       agentAction:
-        enabled: false
+        enabled: true
         namespace: p6-demo
-        image: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:6ec1514a419a67ba7ade3dd499496b61db0c2475a1add4d2935cc8a2919fcb78"
+        image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:6ec1514a419a67ba7ade3dd499496b61db0c2475a1add4d2935cc8a2919fcb78
       prometheusEvidence:
-        enabled: false
+        enabled: true
+    auth:
+      grants:
+        data: "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\": \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\"\
+          ,\n      \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n      \"roles\": [\n        \"operator\"\n    \
+          \  ],\n      \"tenants\": [\n        \"p6-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n\
+          \      \"note\": \"The production console's operator, confined to staging's demo tenant.\"\n    },\n    {\n    \
+          \  \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\n      \"subject\"\
+          : \"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\",\n      \"roles\": [\n        \"operator\"\
+          \n      ],\n      \"tenants\": [\n        \"p6-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n   \
+          \   ],\n      \"note\": \"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\"\
+          \n    }\n  ]\n}\n"
