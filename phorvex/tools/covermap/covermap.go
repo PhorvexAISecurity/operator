@@ -422,13 +422,13 @@ func Fixtures() []Fixture {
 		{Name: "stateful-replicated", Why: "Replicated StatefulSet member declaring peer-resync rebuild and a snapshot class: replica-rebuild alone covers persistentVolumeState; snapshot-rotate covers exactly rotate's process facts; checkpoint-handoff has no cover on a volume-backed member.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful-replicated", Node: "node-a", Stateful: true, StatefulRotation: &model.StatefulRotationObservation{
 				Contract: model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi-snapclass", RecoverySeconds: 120, ResyncSeconds: 600},
-				OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, Complete: true,
+				OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, SinceMemberReady: time.Hour, Complete: true,
 				Claims: []model.StatefulClaim{{Name: "data-stateful-replicated", UID: "claim-uid", Bound: true, FromTemplate: true}}}},
 			Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "stateful-checkpointed", Why: "Volume-less StatefulSet member declaring an application checkpoint: checkpoint-handoff covers identity and memory but not the session state it carries across.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful-checkpointed", Node: "node-a", Stateful: true, StatefulRotation: &model.StatefulRotationObservation{
 				Contract:  model.StatefulRotationContract{CheckpointPort: 8080, CheckpointPath: "/checkpoint", RestorePath: "/restore", RecoverySeconds: 60, ResyncSeconds: 3600},
-				OwnerName: "worker", OwnerUID: "worker-uid", Replicas: 1, ReadyReplicas: 1, Complete: true}},
+				OwnerName: "worker", OwnerUID: "worker-uid", Replicas: 1, ReadyReplicas: 1, SinceMemberReady: time.Hour, Complete: true}},
 			Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "neighbors", Why: "Two blast-graph neighbours: one lateralEdge fact per neighbour, quarantine-only cover, weight scales with neighbour value.",
 			Pod: PodSpec{Namespace: ns, Name: "neighbors", Node: "node-a"},

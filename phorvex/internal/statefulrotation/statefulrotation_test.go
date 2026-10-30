@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -70,7 +71,7 @@ func TestParseContractFailsClosed(t *testing.T) {
 func healthyReplicated() *model.StatefulRotationObservation {
 	return &model.StatefulRotationObservation{
 		Contract:  model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi", CheckpointPort: 8080, CheckpointPath: "/c", RestorePath: "/r", RecoverySeconds: 60, ResyncSeconds: 600},
-		OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, Complete: true,
+		OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, SinceMemberReady: time.Hour, Complete: true,
 		Claims: []model.StatefulClaim{{Name: "data-db-1", UID: "c1", Bound: true, FromTemplate: true}},
 	}
 }
@@ -102,7 +103,15 @@ func TestAdmitPerClass(t *testing.T) {
 			want: map[model.Action]string{A: "peer-resync", C: "checkpoint endpoint"}},
 		"invalid contract": {ready: true, mutate: func(o *model.StatefulRotationObservation) { o.Invalid = "bad" }, want: map[model.Action]string{A: "invalid", B: "invalid", C: "invalid"}},
 		"incomplete":       {ready: true, mutate: func(o *model.StatefulRotationObservation) { o.Complete, o.Reason = false, "claim unreadable" }, want: map[model.Action]string{A: "incomplete", B: "incomplete", C: "incomplete"}},
-		"single writer":    {ready: true, mutate: func(o *model.StatefulRotationObservation) { o.Contract.Quorum, o.Replicas, o.ReadyReplicas = 0, 1, 1 }, want: map[model.Action]string{B: ""}},
+		"owner settling": {ready: true, mutate: func(o *model.StatefulRotationObservation) { o.SinceMemberReady = 5 * time.Minute },
+			want: map[model.Action]string{A: "owner settling", B: "owner settling", C: "owner settling"}},
+		"settled past recovery without peer-resync": {ready: true, mutate: func(o *model.StatefulRotationObservation) {
+			o.Contract.PeerResync, o.SinceMemberReady = false, 2*time.Minute
+		}, want: map[model.Action]string{A: "peer-resync", B: ""}},
+		"settling within recovery without peer-resync": {ready: true, mutate: func(o *model.StatefulRotationObservation) {
+			o.Contract.PeerResync, o.SinceMemberReady = false, 30*time.Second
+		}, want: map[model.Action]string{B: "owner settling"}},
+		"single writer": {ready: true, mutate: func(o *model.StatefulRotationObservation) { o.Contract.Quorum, o.Replicas, o.ReadyReplicas = 0, 1, 1 }, want: map[model.Action]string{B: ""}},
 	}
 	for name, c := range cases {
 		o := healthyReplicated()
@@ -134,10 +143,23 @@ func TestObserveReadsOwnerClaimsAndSnapshotClass(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "db", UID: "db-uid", Generation: 3, ResourceVersion: "7",
 			Annotations: map[string]string{AnnotationQuorum: "2", AnnotationReplicaRebuild: ReplicaRebuildPeerResync,
 				AnnotationLeaderLabel: "role=primary", AnnotationSnapshotClass: "csi"}},
-		Spec: appsv1.StatefulSetSpec{Replicas: &replicas,
+		Spec: appsv1.StatefulSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "db"}},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{ObjectMeta: metav1.ObjectMeta{Name: "data"}}}},
 		Status: appsv1.StatefulSetStatus{ObservedGeneration: 3, ReadyReplicas: 3, CurrentRevision: "r1", UpdateRevision: "r1"},
 	}
+	now := time.Now()
+	member := func(name string, owner types.UID, readyAgo time.Duration) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: name, UID: types.UID(name + "-uid"), Labels: map[string]string{"app": "db"},
+				OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "db", UID: owner, Controller: &controller}}},
+			Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue,
+				LastTransitionTime: metav1.NewTime(now.Add(-readyAgo))}}},
+		}
+	}
+	// The youngest member joined two hours ago; a Pod of another owner matching the selector
+	// does not count.
+	db0, db2 := member("db-0", "db-uid", 3*time.Hour), member("db-2", "db-uid", 2*time.Hour)
+	foreign := member("db-foreign", "other-uid", time.Second)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "db-1", UID: "pod-uid", Labels: map[string]string{"role": "replica"},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "db", UID: "db-uid", Controller: &controller}}},
@@ -153,7 +175,7 @@ func TestObserveReadsOwnerClaimsAndSnapshotClass(t *testing.T) {
 	class := &unstructured.Unstructured{}
 	class.SetGroupVersionKind(VolumeSnapshotClassGVK)
 	class.SetName("csi")
-	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(sts, claim("data-db-1"), claim("manual"), class).Build()
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(sts, claim("data-db-1"), claim("manual"), class, db0, db2, foreign).Build()
 
 	o := Observe(ctx, c, pod)
 	if o == nil || !o.Complete || o.Invalid != "" {
@@ -164,6 +186,9 @@ func TestObserveReadsOwnerClaimsAndSnapshotClass(t *testing.T) {
 	}
 	if len(o.Claims) != 2 || !o.Claims[0].FromTemplate || o.Claims[1].FromTemplate || !o.Claims[0].Bound {
 		t.Fatalf("claims wrong: %+v", o.Claims)
+	}
+	if o.SinceMemberReady < 2*time.Hour || o.SinceMemberReady > 2*time.Hour+time.Minute {
+		t.Fatalf("since member Ready = %s, want the youngest owned member's 2h", o.SinceMemberReady)
 	}
 	// The manual claim would not be recreated: replica-rebuild must refuse, snapshot-rotate admits.
 	if ok, why := Admit(o, true, model.ActionStatefulReplicaRebuild); ok || !strings.Contains(why, "manual") {
@@ -176,6 +201,23 @@ func TestObserveReadsOwnerClaimsAndSnapshotClass(t *testing.T) {
 	pod.Labels["role"] = "primary"
 	if o := Observe(ctx, c, pod); !o.Leader {
 		t.Fatal("leader label not observed")
+	}
+	pod.Labels["role"] = "replica"
+
+	// A member that just became Ready (the previous replacement) holds every class until the
+	// declared resync bound has passed.
+	db2.Status.Conditions[0].LastTransitionTime = metav1.NewTime(time.Now().Add(-10 * time.Second))
+	if err := c.Status().Update(ctx, db2); err != nil {
+		t.Fatal(err)
+	}
+	if ok, why := Admit(Observe(ctx, c, pod), true, model.ActionStatefulSnapshotRotate); ok || !strings.Contains(why, "owner settling") {
+		t.Fatalf("snapshot rotate while a member just joined: %t %q", ok, why)
+	}
+	selectorless := sts.DeepCopy()
+	selectorless.Spec.Selector = nil
+	c3 := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(selectorless, claim("data-db-1"), claim("manual"), class).Build()
+	if o := Observe(ctx, c3, pod); o == nil || o.Complete || !strings.Contains(o.Reason, "members unreadable") {
+		t.Fatalf("unlistable members must be incomplete: %+v", o)
 	}
 
 	sts.Status.UpdateRevision = "r2"

@@ -2,6 +2,7 @@ package statefulrotation
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
@@ -44,6 +45,12 @@ func Admit(o *model.StatefulRotationObservation, targetReady bool, a model.Actio
 	if c.Quorum > 0 && o.ReadyReplicas-1 < c.Quorum {
 		return false, fmt.Sprintf("quorum headroom: ready=%d-1 < quorum=%d", o.ReadyReplicas, c.Quorum)
 	}
+	// One member at a time, and only once the set has settled: a member that just became
+	// Ready (typically the previous replacement) may still be catching up beyond its
+	// readiness probe, so the owner's declared resync (or recovery) bound must pass first.
+	if settle := settleBound(c); o.SinceMemberReady < settle {
+		return false, fmt.Sprintf("owner settling: a member became Ready %s ago < %s", o.SinceMemberReady.Round(time.Second), settle)
+	}
 	switch a {
 	case model.ActionStatefulReplicaRebuild:
 		if o.Leader {
@@ -72,6 +79,16 @@ func Admit(o *model.StatefulRotationObservation, targetReady bool, a model.Actio
 		}
 		return true, ""
 	}
+}
+
+// settleBound is how long the set must have been unchanged before another member is
+// replaced: the declared peer-resync bound when members re-seed from peers, else the
+// declared recovery bound.
+func settleBound(c model.StatefulRotationContract) time.Duration {
+	if c.PeerResync {
+		return time.Duration(c.ResyncSeconds) * time.Second
+	}
+	return time.Duration(c.RecoverySeconds) * time.Second
 }
 
 func classDeclared(c model.StatefulRotationContract, a model.Action) string {

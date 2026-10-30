@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 // StatefulRotationContract is the stateful rotation contract a StatefulSet owner declares
 // through its own annotations (parsed by internal/statefulrotation). Each class is opt-in:
 // an undeclared class is never offered, whatever the workload looks like.
@@ -61,6 +63,9 @@ type StatefulRotationObservation struct {
 	Claims []StatefulClaim
 	// SnapshotClassReady is true when the declared VolumeSnapshotClass was read.
 	SnapshotClassReady bool
+	// SinceMemberReady is the time since the most recent Ready transition among the owner's
+	// members, i.e. since the youngest (possibly just replaced) member joined the set.
+	SinceMemberReady time.Duration
 
 	// Complete is true only when the owner and every claim were read authoritatively.
 	Complete bool

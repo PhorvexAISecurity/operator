@@ -235,7 +235,7 @@ func aiViewForAction(action model.Action) *model.WorkloadView {
 		v.Pod.StatefulRotation = &model.StatefulRotationObservation{
 			Contract: model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi",
 				CheckpointPort: 8080, CheckpointPath: "/checkpoint", RestorePath: "/restore", RecoverySeconds: 60, ResyncSeconds: 600},
-			OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, Complete: true,
+			OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, SinceMemberReady: time.Hour, Complete: true,
 		}
 		if action != model.ActionStatefulCheckpointHandoff {
 			v.Pod.StatefulRotation.Claims = []model.StatefulClaim{{Name: "data-p", UID: "claim-uid", Bound: true, FromTemplate: true}}
