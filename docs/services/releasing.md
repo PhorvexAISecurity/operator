@@ -6,6 +6,11 @@ Each service is released on its own (ADR-0001): `manager`, `brain`, `sensor`,
 Dockerfile (`docker build --target attacks`), so both build the same binaries.
 `phorvex/tools/servicerelease` decides what a release contains.
 
+The Console reactive-QA staging-isolated lane is a separate, manually invoked
+target with its own immutable repositories and batch. It does not override this
+workflow's repositories or deployment transaction. See
+`docs/services/staging-isolated-release.md`.
+
 ## What belongs to a service
 
 The services share one Go module, so a change to a shared package belongs to every

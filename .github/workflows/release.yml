@@ -100,6 +100,25 @@ jobs:
             go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
             git switch --force-create release-record "$record_head"
             tool="$RUNNER_TEMP/pinned-servicerelease"
+            if [ -e release/staging-batch.json ] \
+              && ! git show "$source:phorvex/tools/servicerelease/staging.go" 2>/dev/null | grep -F 'func isolatedStagingSupersedes' >/dev/null; then
+              # A complete shared batch whose source predates the isolated lane
+              # remains authoritative for component identity, while current main
+              # alone understands that its deployment pins were superseded. Prove
+              # the byte-identical batch at its last record commit with the old
+              # source helper before current main supplies only that new routing
+              # rule. Any later shared batch is source-built with the new helper.
+              authority_head="$(git log -1 --format=%H "$record_head" -- release/batch.json)"
+              [[ "$authority_head" =~ ^[0-9a-f]{40}$ ]]
+              git merge-base --is-ancestor "$authority_head" "$record_head"
+              authority_tree="$(mktemp -d "$RUNNER_TEMP/shared-batch-authority.XXXXXX")"
+              rmdir "$authority_tree"
+              git worktree add --detach "$authority_tree" "$authority_head"
+              cmp release/batch.json "$authority_tree/release/batch.json"
+              (cd "$authority_tree" && "$tool" verify-committed > /dev/null)
+              git worktree remove --force "$authority_tree"
+              tool="$RUNNER_TEMP/bootstrap-servicerelease"
+            fi
             "$tool" batch --environment "$ENVIRONMENT" >/dev/null
           else
             # One historical, already-complete six-tag release predates batch.go.
@@ -405,8 +424,10 @@ jobs:
           expected_tree="$transition_dir/expected"
           latest_tree="$transition_dir/latest"
           source_tree="$transition_dir/source"
+          authority_tree="$transition_dir/authority"
           cleanup_transition() {
             set +e
+            git worktree remove --force "$authority_tree" >/dev/null 2>&1
             git worktree remove --force "$source_tree" >/dev/null 2>&1
             git worktree remove --force "$latest_tree" >/dev/null 2>&1
             git worktree remove --force "$expected_tree" >/dev/null 2>&1
@@ -433,7 +454,25 @@ jobs:
           (cd "$tool_tree" && tools/verify-git-build-identity.sh "$tool_head" > /dev/null)
           pinned_tool="$RUNNER_TEMP/release-pr-pinned-servicerelease"
           go -C "$tool_tree/phorvex" build -o "$pinned_tool" ./tools/servicerelease
-          if ! (cd "$latest_tree" && "$pinned_tool" validate-transition \
+          transition_tool="$pinned_tool"
+          if [ -e "$latest_tree/release/staging-batch.json" ] \
+            && ! git -C "$source_tree" show 'HEAD:phorvex/tools/servicerelease/staging.go' 2>/dev/null | grep -F 'func isolatedStagingSupersedes' >/dev/null; then
+            authority_head="$(git -C "$latest_tree" log -1 --format=%H "$main_sha" -- release/batch.json)"
+            [[ "$authority_head" =~ ^[0-9a-f]{40}$ ]] || retryable_error "shared batch authority commit is malformed"
+            git -C "$latest_tree" merge-base --is-ancestor "$authority_head" "$main_sha" \
+              || retryable_error "shared batch authority is not an ancestor of latest main"
+            git worktree add --detach "$authority_tree" "$authority_head"
+            cmp "$authority_tree/release/batch.json" "$expected_tree/release/batch.json" \
+              || retryable_error "expected batch differs from its source-verified authority"
+            cmp "$authority_tree/release/batch.json" "$latest_tree/release/batch.json" \
+              || retryable_error "latest batch differs from its source-verified authority"
+            (cd "$authority_tree" && "$pinned_tool" verify-committed > /dev/null) \
+              || retryable_error "source helper rejected shared batch authority"
+            git worktree remove --force "$authority_tree" \
+              || retryable_error "cannot remove shared batch authority worktree"
+            transition_tool="$bootstrap_tool"
+          fi
+          if ! (cd "$latest_tree" && "$transition_tool" validate-transition \
             --from-root "$expected_tree" --from-head "$expected" \
             --to-root "$latest_tree" --to-head "$main_sha"); then
             retryable_error "expected-to-latest release state transition is invalid"
@@ -459,6 +498,12 @@ jobs:
             go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
             git switch --force-create release/next "$record_head"
             batch_tool="$RUNNER_TEMP/pinned-servicerelease"
+            if [ -e release/staging-batch.json ] \
+              && ! git show "$source:phorvex/tools/servicerelease/staging.go" 2>/dev/null | grep -F 'func isolatedStagingSupersedes' >/dev/null; then
+              # The preceding immutable-endpoint gate already proved the old
+              # source helper's batch authority and current main's routing rule.
+              batch_tool="$RUNNER_TEMP/bootstrap-servicerelease"
+            fi
           fi
           # A newer merge of the release PR is still to publish; its own run brings
           # the PR up to date afterwards. Preparing now would release it again.

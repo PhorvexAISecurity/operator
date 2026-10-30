@@ -1,0 +1,328 @@
+name: Staging isolated release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Exact reviewed main merge SHA to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-isolated-release
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  TARGET: staging-isolated
+  GOTOOLCHAIN: local
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    environment: staging-release
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Require one exact reviewed main source
+        env:
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          [ "$EVENT_REF" = refs/heads/main ]
+          [ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]
+          reviewed_sha="$(tools/verify-git-build-identity.sh "$REQUESTED_SOURCE")"
+          [ "$reviewed_sha" = "$REQUESTED_SOURCE" ]
+          [ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$REQUESTED_SOURCE" ]
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache: false
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.4
+      - name: Provision pinned Python 3.12
+        run: |
+          bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Install the pinned contract dependency
+        run: python -m pip install PyYAML==6.0.2
+      - name: Validate shared authority and persist a separate exact staging batch
+        env:
+          SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          "$RUNNER_TEMP/servicerelease" staging-authority --target "$TARGET" --source "$SOURCE" \
+            --output "$RUNNER_TEMP/staging-authority.json"
+          jq -e '.schema == 1 and .target == "staging-isolated" and
+            .shared.batchPath == "release/batch.json" and
+            .isolated.batchPath == "release/staging-batch.json"' \
+            "$RUNNER_TEMP/staging-authority.json" > /dev/null
+          "$RUNNER_TEMP/servicerelease" staging-contract --target "$TARGET" --source "$SOURCE" \
+            --output "$RUNNER_TEMP/service-contracts.json"
+          python tools/staging_release.py prepare --source "$SOURCE" \
+            --services "$RUNNER_TEMP/service-contracts.json" \
+            --authority "$RUNNER_TEMP/staging-authority.json" \
+            --output "$RUNNER_TEMP/staging-batch.json"
+          python tools/staging_release.py verify --batch "$RUNNER_TEMP/staging-batch.json" \
+            --services "$RUNNER_TEMP/service-contracts.json"
+          while IFS= read -r item; do
+            "$RUNNER_TEMP/servicerelease" verify-build-paths \
+              --dockerfile "$(jq -er '.build.dockerfile' <<< "$item")" \
+              --context "$(jq -er '.build.context' <<< "$item")"
+          done < <(jq -c '.components[]' "$RUNNER_TEMP/staging-batch.json")
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
+      - name: Require the release role
+        env:
+          ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$ROLE" =~ ^arn:aws:iam::753556437180:role/[A-Za-z0-9+=,.@_/-]+$ ]] || {
+            echo "::error::set PHORVEX_RELEASE_ROLE_ARN"; exit 1;
+          }
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: Aggregate preflight all eight immutable staging repositories
+        run: |
+          set -euo pipefail
+          python tools/verify_staging_ecr.py preflight --batch "$RUNNER_TEMP/staging-batch.json" \
+            > "$RUNNER_TEMP/ecr-preflight.json"
+          chmod 0400 "$RUNNER_TEMP/ecr-preflight.json"
+      - name: Start the pinned fixture BuildKit builder
+        run: |
+          set -euo pipefail
+          name="phorvex-staging-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx create --name "$name" --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea \
+            --bootstrap
+          echo "FIXTURE_BUILDER=$name" >> "$GITHUB_ENV"
+      - name: Reproduce both fixtures against reviewed OCI identities
+        run: >-
+          python tools/verify_fixture_reproducibility.py --source-date-epoch 0 --builder "$FIXTURE_BUILDER"
+          --expected-identities release/staging-fixture-identities.json
+      - name: Build and publish the exact eight-component batch
+        env:
+          SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          printf '{}\n' > "$RUNNER_TEMP/results.json"
+          while IFS= read -r contract; do
+            name="$(jq -er '.component' <<< "$contract")"
+            kind="$(jq -er '.kind' <<< "$contract")"
+            registry="$(jq -er '.image.registry' <<< "$contract")"
+            repository="$(jq -er '.image.repository' <<< "$contract")"
+            canonical_tag="$(jq -er '.image.tag' <<< "$contract")"
+            remote_repository="$registry/$repository"
+            remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+            [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+            [ "$remote_main" = "$SOURCE" ]
+            probe="$(python tools/verify_staging_ecr.py probe --batch "$RUNNER_TEMP/staging-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$name")"
+            digest="$(jq -r '.digest // empty' <<< "$probe")"
+            if [ -z "$digest" ]; then
+              image="$remote_repository:$canonical_tag"
+              if [ "$kind" = service ]; then
+                docker_args=()
+                while IFS= read -r arg; do docker_args+=(--build-arg "$arg"); done < <(jq -er '.build.args[]' <<< "$contract")
+                target="$(jq -er '.build.target' <<< "$contract")"
+                [ -z "$target" ] || docker_args+=(--target "$target")
+                docker build --file "$(jq -er '.build.dockerfile' <<< "$contract")" \
+                  "${docker_args[@]}" --tag "$image" "$(jq -er '.build.context' <<< "$contract")" < /dev/null
+                python tools/verify_service_image_identity.py --image "$image" \
+                  --service "$(jq -er '.identity.service' <<< "$contract")" \
+                  --entrypoint "$(jq -er '.identity.command' <<< "$contract")" \
+                  --git-sha "$SOURCE" --version "$(jq -er '.version' <<< "$contract")"
+                python tools/verify_staging_ecr.py probe --batch "$RUNNER_TEMP/staging-batch.json" \
+                  --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$name" > /dev/null
+                docker push "$image" < /dev/null
+              else
+                python tools/verify_staging_ecr.py probe --batch "$RUNNER_TEMP/staging-batch.json" \
+                  --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$name" > /dev/null
+                docker buildx build --builder "$FIXTURE_BUILDER" --no-cache --pull \
+                  --file "$(jq -er '.build.dockerfile' <<< "$contract")" \
+                  --platform linux/amd64 --network none --provenance=false --sbom=false \
+                  --build-arg SOURCE_DATE_EPOCH=0 \
+                  --output type=image,push=true,oci-mediatypes=true,compression=gzip,compression-level=9,force-compression=true \
+                  --tag "$image" "$(jq -er '.build.context' <<< "$contract")"
+              fi
+              for attempt in 1 2 3 4 5 6; do
+                if ! digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \
+                  --image-ids "imageTag=$canonical_tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null)"; then
+                  digest=''
+                fi
+                [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] && break
+                digest=''
+                sleep 5
+              done
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            fi
+            python tools/verify_staging_ecr.py ensure-tags \
+              --batch "$RUNNER_TEMP/staging-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" \
+              --component "$name" --digest "$digest" > /dev/null
+            verified="$(python tools/verify_staging_ecr.py verify-component \
+              --batch "$RUNNER_TEMP/staging-batch.json" --component "$name")"
+            [ "$(jq -er '.digest' <<< "$verified")" = "$digest" ]
+            jq --arg name "$name" --arg repository "$remote_repository" --arg digest "$digest" \
+              '. + {($name): {repository: $repository, digest: $digest}}' \
+              "$RUNNER_TEMP/results.json" > "$RUNNER_TEMP/results.next.json"
+            mv "$RUNNER_TEMP/results.next.json" "$RUNNER_TEMP/results.json"
+          done < <(jq -c '.components[]' "$RUNNER_TEMP/staging-batch.json")
+          python tools/staging_release.py complete --batch "$RUNNER_TEMP/staging-batch.json" \
+            --results "$RUNNER_TEMP/results.json" --services "$RUNNER_TEMP/service-contracts.json" \
+            --output "$RUNNER_TEMP/staging-complete.json"
+          python tools/verify_staging_ecr.py verify --batch "$RUNNER_TEMP/staging-complete.json" \
+            > "$RUNNER_TEMP/ecr-complete.json"
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
+      - name: Create a staging-only digest-pin proposal
+        env:
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          branch="release/staging-isolated-${SOURCE:0:12}"
+          git switch --create "$branch"
+          jq '{manager,brain,sensor,actuator,console,attacks}' "$RUNNER_TEMP/results.json" \
+            > "$RUNNER_TEMP/service-results.json"
+          "$RUNNER_TEMP/servicerelease" staging-pin --contracts "$RUNNER_TEMP/service-contracts.json" \
+            --results "$RUNNER_TEMP/service-results.json"
+          python tools/staging_release.py pin-fixtures --batch "$RUNNER_TEMP/staging-complete.json"
+          install -m 0644 "$RUNNER_TEMP/staging-complete.json" release/staging-batch.json
+          python tools/staging_release.py verify-deployment --batch release/staging-batch.json \
+            --services "$RUNNER_TEMP/service-contracts.json" --base "$SOURCE"
+          allowed="$RUNNER_TEMP/allowed-files"
+          {
+            echo release/staging-batch.json
+            echo deploy/environments/staging/manager.yaml
+            echo deploy/environments/staging/brain.yaml
+            echo deploy/environments/staging/sensor.yaml
+            echo deploy/environments/staging/actuator.yaml
+            echo deploy/environments/staging/console.yaml
+            echo deploy/environments/staging/attacks.yaml
+            echo deploy/environments/staging/phorvex.yaml
+            echo deploy/environments/staging/catalogue-family.yaml
+          } | sort > "$allowed"
+          jq -r '.authority.isolated.proposalPaths[]' release/staging-batch.json | sort \
+            > "$RUNNER_TEMP/authority-allowed-files"
+          cmp "$allowed" "$RUNNER_TEMP/authority-allowed-files"
+          git add -- release/staging-batch.json \
+            deploy/environments/staging/manager.yaml \
+            deploy/environments/staging/brain.yaml \
+            deploy/environments/staging/sensor.yaml \
+            deploy/environments/staging/actuator.yaml \
+            deploy/environments/staging/console.yaml \
+            deploy/environments/staging/attacks.yaml \
+            deploy/environments/staging/phorvex.yaml \
+            deploy/environments/staging/catalogue-family.yaml
+          git diff --cached --name-only "$SOURCE" -- | sort > "$RUNNER_TEMP/actual-files"
+          comm -23 "$RUNNER_TEMP/actual-files" "$allowed" > "$RUNNER_TEMP/unexpected-files"
+          [ ! -s "$RUNNER_TEMP/unexpected-files" ]
+          grep -Fxq release/staging-batch.json "$RUNNER_TEMP/actual-files"
+          [ -z "$(git diff --name-only)" ]
+          [ -z "$(git ls-files --others --exclude-standard)" ]
+          git diff --exit-code "$SOURCE" -- release/batch.json release/versions.json 'release/*.md'
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "deploy(staging): pin isolated release ${SOURCE:0:12}"
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+          ! git show --format=%B --no-patch | grep -E 'Co-authored-by|Generated-by'
+          echo "branch=$branch" >> "$GITHUB_ENV"
+      - name: Push the staging proposal without persisting credentials
+        env:
+          GIT_PUSH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
+          expected_remote=''
+          if gh api "repos/$REPOSITORY/git/ref/heads/$branch" > "$RUNNER_TEMP/proposal-ref.json" \
+            2> "$RUNNER_TEMP/proposal-ref.error"; then
+            expected_remote="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' \
+              "$RUNNER_TEMP/proposal-ref.json")"
+          elif ! grep -Fq 'HTTP 404' "$RUNNER_TEMP/proposal-ref.error"; then
+            cat "$RUNNER_TEMP/proposal-ref.error" >&2
+            exit 1
+          fi
+          unset GH_TOKEN
+          token="$GIT_PUSH_TOKEN"
+          unset GIT_PUSH_TOKEN
+          trap 'token=; unset token GIT_PUSH_TOKEN' EXIT
+          auth="$(printf 'x-access-token:%s' "$token" | base64 -w0)"
+          GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+            GIT_CONFIG_COUNT=2 \
+            GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+            GIT_CONFIG_KEY_1=core.hooksPath \
+            GIT_CONFIG_VALUE_1=/dev/null \
+            git push --force-with-lease="refs/heads/$branch:$expected_remote" \
+              origin "HEAD:refs/heads/$branch"
+          auth=; unset auth
+          ! git config --local --get-regexp '(extraheader|credential|token)'
+      - name: Open or update the reviewed staging deployment PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "deploy(staging): isolated release ${SOURCE:0:12}" > "$RUNNER_TEMP/title"
+          {
+            echo '## Staging-isolated publication'
+            echo
+            echo "Exact source: \`$SOURCE\`"
+            echo
+            echo '- all six services passed embedded service/version/SHA identity verification'
+            echo '- both fixtures matched the reviewed OCI identities'
+            echo '- all eight images are in immutable `phorvex/staging/*` repositories and pinned by digest'
+            echo '- only `deploy/environments/staging/*` and `release/staging-batch.json` change'
+            echo '- merging this PR is the separately reviewed deployment authorization; this workflow does not merge or sync Argo'
+            echo
+            echo 'The complete repositories, tags, digests, source tree, rendered consumers and target digest are in `release/staging-batch.json`.'
+          } > "$RUNNER_TEMP/body"
+          "$RUNNER_TEMP/servicerelease" pull-request --require-open --head "$branch" --base main \
+            --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body"
+          "$RUNNER_TEMP/servicerelease" dispatch --ref "$branch" --workflows pr-validation.yml
+      - name: Remove the fixture builder
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${FIXTURE_BUILDER:-}" ]; then
+            docker buildx rm "$FIXTURE_BUILDER"
+          fi

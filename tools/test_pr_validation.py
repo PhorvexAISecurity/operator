@@ -49,6 +49,40 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('bash tools/check-vendored-chart.sh', runs['charts'])
         self.assertIn('helm template phorvex deploy/helm/phorvex-stack', runs['charts'])
         self.assertIn('for chart in deploy/charts/*/; do helm lint --strict "$chart"; done', runs['charts'])
+        self.assertIn('python tools/verify_committed_staging_batch.py', runs['charts'])
+        committed_verifier = (ROOT / 'tools/verify_committed_staging_batch.py').read_text()
+        self.assertIn('release.verify_deployment(value, None, canonical)', committed_verifier)
+        self.assertIn('selection = isolated_selection_commit(source)', committed_verifier)
+        self.assertIn('"--services", str(services), "--base", source', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('selection = isolated_selection_commit(source)'),
+            committed_verifier.index('if shared_source:'),
+        )
+        self.assertLess(
+            committed_verifier.index('"--services", str(services), "--base", source'),
+            committed_verifier.index('if shared_source:'),
+        )
+        self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
+        self.assertIn('run(str(helper), "pending", "--json", cwd=source_root)', committed_verifier)
+        self.assertIn('current_shared_validation_required(source_root)', committed_verifier)
+        self.assertIn('str(current_helper), "pending", "--json", cwd=ROOT', committed_verifier)
+        self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('run(str(helper), "pending", "--json", cwd=source_root)'),
+            committed_verifier.index('if shared_source:'),
+        )
+        self.assertIn('superseding_shared=release.read_json(SHARED_BATCH)', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('run(str(shared_helper), "pending", "--json", cwd=ROOT)'),
+            committed_verifier.index('superseding_shared=release.read_json(SHARED_BATCH)'),
+        )
+        self.assertIn(
+            'cleanup_worktrees(temporary, list(reversed(registered_worktrees)))',
+            committed_verifier,
+        )
+        self.assertNotIn('if not worktree.exists()', committed_verifier)
+        self.assertNotIn('check=False', committed_verifier)
+        self.assertNotIn('ignore_errors=True', committed_verifier)
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')
@@ -170,10 +204,11 @@ class PRValidationTests(unittest.TestCase):
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
         # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change;
-        # the one that has, release.yml, is held to its exact shape by ReleaseWorkflowTests.
+        # the two that have, release.yml and staging-isolated-release.yml, are held
+        # to their exact shapes by their dedicated workflow test classes.
         # Every job runs on a GitHub-hosted runner, never on a runner with live access.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
-            if path.name == 'release.yml':
+            if path.name in {'release.yml', 'staging-isolated-release.yml'}:
                 continue
             raw = path.read_text()
             doc = yaml.load(raw, Loader=yaml.BaseLoader)
@@ -229,6 +264,113 @@ RELEASE_ACTIONS = {
     'aws-actions/configure-aws-credentials': '7474bc4690e29a8392af63c5b98e7449536d5c3a',
     'aws-actions/amazon-ecr-login': '03f1aad4c6c7ffd436567f42f9384779290529bd',
 }
+
+STAGING_RELEASE_PATH = ROOT / '.github/workflows/staging-isolated-release.yml'
+STAGING_RELEASE_RAW = STAGING_RELEASE_PATH.read_text()
+STAGING_RELEASE = yaml.load(STAGING_RELEASE_RAW, Loader=yaml.BaseLoader)
+
+
+class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
+    def test_lane_is_manual_source_pinned_and_staging_scoped(self):
+        self.assertEqual(set(STAGING_RELEASE['on']), {'workflow_dispatch'})
+        source = STAGING_RELEASE['on']['workflow_dispatch']['inputs']['source']
+        self.assertEqual(source['required'], 'true')
+        self.assertEqual(source['type'], 'string')
+        self.assertEqual(STAGING_RELEASE['permissions'], {'contents': 'read'})
+        self.assertEqual(STAGING_RELEASE['env']['TARGET'], 'staging-isolated')
+        self.assertEqual(STAGING_RELEASE['concurrency'], {
+            'group': 'staging-isolated-release', 'cancel-in-progress': 'false',
+        })
+        job = STAGING_RELEASE['jobs']['publish']
+        self.assertEqual(job['environment'], 'staging-release')
+        self.assertEqual(job['permissions'], {
+            'actions': 'write', 'contents': 'write', 'pull-requests': 'write', 'id-token': 'write',
+        })
+        checkout = next(step for step in job['steps'] if step.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
+        self.assertEqual(checkout['with']['persist-credentials'], 'false')
+        source_gate = next(i for i, step in enumerate(job['steps'])
+                           if step.get('name') == 'Require one exact reviewed main source')
+        first_source_consumer = next(i for i, step in enumerate(job['steps'])
+                                     if step.get('uses', '').startswith('actions/setup-go@'))
+        self.assertLess(source_gate, first_source_consumer)
+        runs = '\n'.join(step.get('run', '') for step in job['steps'])
+        self.assertIn('tools/verify-git-build-identity.sh "$REQUESTED_SOURCE"', runs)
+        self.assertIn('[ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]', runs)
+        self.assertIn('[ "$EVENT_REF" = refs/heads/main ]', runs)
+        self.assertIn('[ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]', runs)
+        self.assertGreaterEqual(runs.count('gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha'), 4)
+        self.assertNotIn('git fetch', runs)
+        self.assertIn('staging-authority --target "$TARGET" --source "$SOURCE"', runs)
+        self.assertIn('staging-contract --target "$TARGET" --source "$SOURCE"', runs)
+        authority_gate = runs.index('staging-authority --target "$TARGET"')
+        self.assertLess(authority_gate, runs.index('staging-contract --target "$TARGET"'))
+        self.assertLess(authority_gate, runs.index('verify_staging_ecr.py preflight'))
+        self.assertIn('--authority "$RUNNER_TEMP/staging-authority.json"', runs)
+        self.assertNotIn('complete the source-pinned shared release batch', runs)
+        self.assertNotIn('pending_count', runs)
+        self.assertNotIn('$GITHUB_SHA', runs)
+        for forbidden in ('kubectl ', 'argocd ', 'git push origin main',
+                          'phorvex/manager:', 'phorvex/brain:', 'continue-on-error', '|| true'):
+            self.assertNotIn(forbidden, STAGING_RELEASE_RAW)
+
+    def test_aggregate_gate_and_reviewed_identities_precede_every_push(self):
+        runs = '\n'.join(step.get('run', '') for step in STAGING_RELEASE['jobs']['publish']['steps'])
+        preflight = runs.index('verify_staging_ecr.py preflight')
+        fixture = runs.index('--expected-identities release/staging-fixture-identities.json')
+        service_push = runs.index('docker push "$image"')
+        fixture_push = runs.index('type=image,push=true')
+        self.assertLess(preflight, fixture)
+        self.assertLess(fixture, service_push)
+        self.assertLess(fixture, fixture_push)
+        self.assertIn('image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea', runs)
+        self.assertIn('--builder "$FIXTURE_BUILDER" --no-cache --pull', runs)
+        self.assertIn('--source-date-epoch 0 --builder "$FIXTURE_BUILDER"', runs)
+        self.assertIn('--preflight-state "$RUNNER_TEMP/ecr-preflight.json"', runs)
+        self.assertGreaterEqual(runs.count('verify_staging_ecr.py probe'), 3)
+        self.assertIn('verify_service_image_identity.py', runs)
+        self.assertIn('verify_staging_ecr.py verify-component', runs)
+        self.assertIn('verify_staging_ecr.py ensure-tags', runs)
+        self.assertIn('verify_staging_ecr.py verify --batch "$RUNNER_TEMP/staging-complete.json"', runs)
+        cleanup = next(
+            step['run'] for step in STAGING_RELEASE['jobs']['publish']['steps']
+            if step.get('name') == 'Remove the fixture builder'
+        )
+        self.assertIn('docker buildx rm "$FIXTURE_BUILDER"', cleanup)
+        self.assertNotIn('docker buildx inspect', cleanup)
+
+    def test_publication_only_opens_an_allowlisted_staging_pin_pr(self):
+        runs = '\n'.join(step.get('run', '') for step in STAGING_RELEASE['jobs']['publish']['steps'])
+        self.assertIn('staging-pin --contracts "$RUNNER_TEMP/service-contracts.json"', runs)
+        self.assertIn('pin-fixtures --batch "$RUNNER_TEMP/staging-complete.json"', runs)
+        self.assertIn('verify-deployment --batch release/staging-batch.json', runs)
+        self.assertIn('git diff --cached --name-only "$SOURCE" -- | sort', runs)
+        self.assertIn('comm -23 "$RUNNER_TEMP/actual-files" "$allowed"', runs)
+        self.assertIn('grep -Fxq release/staging-batch.json', runs)
+        self.assertIn("git diff --exit-code \"$SOURCE\" -- release/batch.json release/versions.json 'release/*.md'", runs)
+        self.assertIn(".authority.isolated.proposalPaths[]", runs)
+        self.assertIn('cmp "$allowed" "$RUNNER_TEMP/authority-allowed-files"', runs)
+        self.assertLess(runs.index('git add -- release/staging-batch.json'),
+                        runs.index('git diff --cached --name-only "$SOURCE"'))
+        self.assertIn('pull-request --require-open --head "$branch" --base main', runs)
+        self.assertIn('dispatch --ref "$branch" --workflows pr-validation.yml', runs)
+        self.assertIn('--force-with-lease="refs/heads/$branch:$expected_remote"', runs)
+        self.assertIn('git/ref/heads/$branch', runs)
+        self.assertNotIn('gh pr merge', runs)
+        self.assertNotIn('git merge --', runs)
+        for path in ('manager.yaml', 'brain.yaml', 'sensor.yaml', 'actuator.yaml',
+                     'console.yaml', 'attacks.yaml', 'phorvex.yaml', 'catalogue-family.yaml'):
+            self.assertIn(f'deploy/environments/staging/{path}', runs)
+        self.assertNotIn('deploy/helm/phorvex-stack', runs)
+        self.assertNotIn('deploy/argocd/apps', runs)
+
+    def test_every_privileged_action_is_commit_pinned(self):
+        references = re.findall(r'^\s*- uses: ([^\s#]+)(?:\s+#\s*([^\s]+))?$', STAGING_RELEASE_RAW, re.M)
+        self.assertTrue(references)
+        for reference, version_comment in references:
+            owner, sha = reference.split('@', 1)
+            self.assertEqual(sha, RELEASE_ACTIONS[owner])
+            self.assertRegex(version_comment, r'^v[0-9]')
 
 
 class ReleaseWorkflowTests(unittest.TestCase):
@@ -458,6 +600,13 @@ output.chmod(0o755)
         self.assertIn('echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"', pending)
         self.assertIn("git show \"$source:phorvex/tools/servicerelease/batch.go\"", pending)
         self.assertIn('"$tool" import-terminal-batch --environment "$ENVIRONMENT"', pending)
+        self.assertIn('shared-batch-authority', pending)
+        self.assertIn('cmp release/batch.json "$authority_tree/release/batch.json"', pending)
+        self.assertIn('(cd "$authority_tree" && "$tool" verify-committed', pending)
+        self.assertLess(
+            pending.index('(cd "$authority_tree" && "$tool" verify-committed'),
+            pending.index('tool="$RUNNER_TEMP/bootstrap-servicerelease"'),
+        )
         self.assertIn('cannot\n  # produce pending work', pending)
         self.assertLess(pending.index('git commit -m "release: pin batch source'),
                         pending.index('"$tool" batch-source'))
@@ -775,7 +924,10 @@ output.chmod(0o755)
         self.assertIn('git worktree add --detach "$source_tree" "$source"', run)
         self.assertIn('tools/verify-git-build-identity.sh "$tool_head"', run)
         self.assertIn('release-pr-pinned-servicerelease', run)
-        self.assertIn('"$pinned_tool" validate-transition', run)
+        self.assertIn('transition_tool="$pinned_tool"', run)
+        self.assertIn('(cd "$authority_tree" && "$pinned_tool" verify-committed', run)
+        self.assertIn('transition_tool="$bootstrap_tool"', run)
+        self.assertIn('"$transition_tool" validate-transition', run)
         self.assertIn('--from-root "$expected_tree" --from-head "$expected"', run)
         self.assertIn('--to-root "$latest_tree" --to-head "$main_sha"', run)
         self.assertLess(run.index('validate-transition'), run.index('echo "sha=$main_sha"'))

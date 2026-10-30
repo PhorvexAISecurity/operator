@@ -673,11 +673,28 @@ type podSpecLocation struct {
 	pod  map[string]any
 }
 
+func containsImageVolume(value any) bool {
+	entries, ok := anySlice(value)
+	if !ok {
+		return false
+	}
+	for _, rawVolume := range entries {
+		volume, ok := stringMap(rawVolume)
+		if !ok {
+			continue
+		}
+		if _, exists := volume["image"]; exists {
+			return true
+		}
+	}
+	return false
+}
+
 func podSpecLocations(value any, path string) []podSpecLocation {
 	var found []podSpecLocation
 	switch current := value.(type) {
 	case map[string]any:
-		isPodSpec := false
+		isPodSpec := containsImageVolume(current["volumes"])
 		for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
 			if _, exists := current[section]; exists {
 				isPodSpec = true
@@ -687,7 +704,7 @@ func podSpecLocations(value any, path string) []podSpecLocation {
 			found = append(found, podSpecLocation{path: path, pod: current})
 		}
 		for key, child := range current {
-			if isPodSpec && (key == "containers" || key == "initContainers" || key == "ephemeralContainers") {
+			if isPodSpec && (key == "containers" || key == "initContainers" || key == "ephemeralContainers" || key == "volumes") {
 				continue
 			}
 			found = append(found, podSpecLocations(child, path+"/"+key)...)
@@ -737,6 +754,34 @@ func workloadImages(rendered []byte) (map[string]string, map[string]ImageConsume
 			return nil, nil, fmt.Errorf("rendered pod template has no complete apiVersion/kind/name identity")
 		}
 		for _, location := range locations {
+			if rawVolumes, exists := location.pod["volumes"]; exists {
+				volumes, ok := anySlice(rawVolumes)
+				if !ok {
+					return nil, nil, fmt.Errorf("rendered %s/%s volumes must be a list", kind, name)
+				}
+				for i, rawVolume := range volumes {
+					volume, ok := stringMap(rawVolume)
+					if !ok {
+						continue
+					}
+					rawImage, exists := volume["image"]
+					if !exists {
+						continue
+					}
+					imageSource, ok := stringMap(rawImage)
+					reference := ""
+					if ok {
+						reference, _ = imageSource["reference"].(string)
+					}
+					if reference == "" {
+						reference = "malformed reference"
+					}
+					return nil, nil, fmt.Errorf(
+						"rendered %s/%s image volume at %s/volumes/%d/image/reference is unsupported by the release consumer contract: %q",
+						kind, name, location.path, i, reference,
+					)
+				}
+			}
 			for _, section := range []string{"containers", "initContainers", "ephemeralContainers"} {
 				rawEntries, exists := location.pod[section]
 				if !exists {
@@ -805,6 +850,14 @@ func authoritativeComponent(consumer ImageConsumer, image string) string {
 }
 
 func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, component string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
+	definition := componentByName(component)
+	if definition == nil {
+		return nil, nil, fmt.Errorf("unknown release component %s", component)
+	}
+	return probeConsumersForRepository(root, route, target, component, ReleaseRegistry+"/"+definition.Repository, overrideRaw)
+}
+
+func probeConsumersForRepository(root string, route deploymentRoute, target ComponentDeploy, component, expectedRepository string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
 	baselineOverride := ""
 	if overrideRaw != nil {
 		baselineOverride = target.ValuesFile
@@ -848,11 +901,6 @@ func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, 
 		}
 	}
 	wantProbe := expectedRenderedImage(probeRepository, probeTag, probeDigest)
-	definition := componentByName(component)
-	if definition == nil {
-		return nil, nil, fmt.Errorf("unknown release component %s", component)
-	}
-	expectedRepository := ReleaseRegistry + "/" + definition.Repository
 	imageSource := target.ValuesFile + "#" + strings.Join(target.Path, ".")
 	var consumers []ImageConsumer
 	primary := false
@@ -908,7 +956,7 @@ func buildComponentDeployment(root, environment string, c *Component, target Com
 	target.ValuesFiles = append([]string(nil), route.ValuesFiles...)
 	target.ValuesDigests = append([]FileDigest(nil), route.ValuesDigests...)
 	if prove {
-		consumers, _, err := probeConsumers(root, route, target, c.Name, nil)
+		consumers, _, err := probeConsumersForRepository(root, route, target, c.Name, ReleaseRegistry+"/"+c.Repository, nil)
 		if err != nil {
 			return ComponentDeploy{}, err
 		}
@@ -934,7 +982,7 @@ func validateDeploymentConsumer(root string, batch *Batch, contract *BatchCompon
 	if !reflect.DeepEqual(current, want) {
 		return fmt.Errorf("component %s deployment chart/values consumer drifted from pinned source", contract.Component)
 	}
-	consumers, images, err := probeConsumers(root, current, contract.Deploy, contract.Component, overrideRaw)
+	consumers, images, err := probeConsumersForRepository(root, current, contract.Deploy, contract.Component, expectedRepository(contract), overrideRaw)
 	if err != nil {
 		return fmt.Errorf("component %s deployment consumer: %w", contract.Component, err)
 	}

@@ -257,7 +257,10 @@ func TestPullRequestsUpsert(t *testing.T) {
 		case r.Method == "GET":
 			_ = json.NewEncoder(w).Encode(open)
 		case r.Method == "POST":
-			open = []map[string]any{{"number": 7, "html_url": "https://example.invalid/pull/7"}}
+			open = []map[string]any{{
+				"number": 7, "html_url": "https://example.invalid/pull/7",
+				"head": map[string]any{"ref": "release/next"}, "base": map[string]any{"ref": "main"},
+			}}
 			_ = json.NewEncoder(w).Encode(open[0])
 		case r.Method == "PATCH":
 			_ = json.NewEncoder(w).Encode(open[0])
@@ -270,6 +273,12 @@ func TestPullRequestsUpsert(t *testing.T) {
 		if err != nil || u != "https://example.invalid/pull/7" {
 			t.Fatalf("Upsert = %q, %v", u, err)
 		}
+	}
+	if err := g.VerifyOpen("release/next", "main", "https://example.invalid/pull/7"); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.VerifyOpen("release/next", "production", "https://example.invalid/pull/7"); err == nil {
+		t.Fatal("mismatched PR base was accepted")
 	}
 	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -289,9 +298,43 @@ func TestPullRequestsUpsert(t *testing.T) {
 		t.Errorf("dispatch = %q", last)
 	}
 	calls = calls[:len(calls)-1]
-	if len(calls) != 4 || !strings.HasPrefix(calls[0], "GET /repos/PhorvexSecurity/operator-refactored/pulls?base=main&head=PhorvexSecurity%3Arelease%2Fnext&state=open") ||
+	if len(calls) != 6 || !strings.HasPrefix(calls[0], "GET /repos/PhorvexSecurity/operator-refactored/pulls?base=main&head=PhorvexSecurity%3Arelease%2Fnext&state=open") ||
 		!strings.HasPrefix(calls[1], "POST /repos/PhorvexSecurity/operator-refactored/pulls ") || !strings.HasPrefix(calls[3], "PATCH /repos/PhorvexSecurity/operator-refactored/pulls/7 ") {
 		t.Errorf("calls = %q", calls)
+	}
+}
+
+func TestPullRequestRequireOpenRejectsRefusedCreation(t *testing.T) {
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			_, _ = w.Write([]byte("[]"))
+			return
+		}
+		http.Error(w, `{"message":"pull request creation disabled"}`, http.StatusForbidden)
+	}))
+	defer refusing.Close()
+	t.Setenv("GITHUB_API_URL", refusing.URL)
+	t.Setenv("GITHUB_REPOSITORY", "PhorvexSecurity/operator-refactored")
+	t.Setenv("GITHUB_TOKEN", "token")
+	directory := t.TempDir()
+	title := filepath.Join(directory, "title")
+	body := filepath.Join(directory, "body")
+	if err := os.WriteFile(title, []byte("title\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(body, []byte("body\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"pull-request", "--require-open", "--head", "release/staging", "--base", "main", "--title-file", title, "--body-file", body}
+	var stdout, stderr strings.Builder
+	if code := run(args, &stdout, &stderr); code != 1 || !strings.Contains(stderr.String(), ErrCreateRefused.Error()) {
+		t.Fatalf("strict refused PR code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	args = append(args[:1], args[2:]...)
+	if code := run(args, &stdout, &stderr); code != 0 || !strings.Contains(stdout.String(), "compare/main...release/staging") {
+		t.Fatalf("compatible refused PR code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
 
