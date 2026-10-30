@@ -22,7 +22,9 @@ package main
 type Component struct {
 	Name string
 	// Image is the name the PR validation images matrix builds it under.
-	Image      string
+	Image string
+	// Command is the identity-reporting binary the release verifier executes.
+	Command    string
 	Dockerfile string
 	// Target is the Dockerfile stage its image is, when it is not the last one.
 	Target string
@@ -69,7 +71,7 @@ type Build struct {
 // Components are the released services, in the order they are reported.
 var Components = []Component{
 	{
-		Name: "manager", Image: "operator", Dockerfile: "deploy/docker/operator.Dockerfile", Chart: "phorvex/charts/phorvex",
+		Name: "manager", Image: "operator", Command: "/manager", Dockerfile: "deploy/docker/operator.Dockerfile", Chart: "phorvex/charts/phorvex",
 		Builds: []Build{{Module: "phorvex", Packages: []string{"./cmd", "./cmd/brain-replay", "./cmd/recovery",
 			"./cmd/mig-allocation-helper", "./cmd/loss-observer", "./cmd/current-inventory-observer",
 			"./cmd/cost-budget-admin", "./cmd/persistence-observer"}}},
@@ -80,24 +82,24 @@ var Components = []Component{
 			Repository: "repository", Tag: "tag", Digest: "releaseDigest", Source: "releaseSourceSHA"},
 	},
 	{
-		Name: "brain", Image: "brain", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-brain",
+		Name: "brain", Image: "brain", Command: "/service", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-brain",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/brain"}}},
 		Initial: "0.1.0", Repository: "phorvex/brain", BuildArgs: map[string]string{"SERVICE": "brain"}, Deploy: serviceImage("brain"),
 	},
 	{
-		Name: "sensor", Image: "sensor", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-sensor",
+		Name: "sensor", Image: "sensor", Command: "/service", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-sensor",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/sensor"}}},
 		Initial: "0.1.0", Repository: "phorvex/sensor", BuildArgs: map[string]string{"SERVICE": "sensor"}, Deploy: serviceImage("sensor"),
 	},
 	{
-		Name: "actuator", Image: "actuator", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-actuator",
+		Name: "actuator", Image: "actuator", Command: "/service", Dockerfile: "deploy/docker/service.Dockerfile", Chart: "deploy/charts/phorvex-actuator",
 		Builds:  []Build{{Module: "phorvex", Packages: []string{"./cmd/actuator"}}},
 		Initial: "0.1.0", Repository: "phorvex/actuator", BuildArgs: map[string]string{"SERVICE": "actuator"}, Deploy: serviceImage("actuator"),
 	},
 	{
 		// Its own chart deploys the console where phorvex.console.separate is set, the
 		// manager chart elsewhere (docs/services/console.md).
-		Name: "console", Image: "console", Dockerfile: "deploy/docker/console.Dockerfile", Chart: "deploy/charts/phorvex-console",
+		Name: "console", Image: "console", Command: "/app/console", Dockerfile: "deploy/docker/console.Dockerfile", Chart: "deploy/charts/phorvex-console",
 		Builds: []Build{
 			// The console Dockerfile builds the attacks service too.
 			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd/attacks", "./cmd"}},
@@ -114,7 +116,7 @@ var Components = []Component{
 	},
 	{
 		// The console's image without the UI, run as cmd/attacks (docs/services/attacks.md).
-		Name: "attacks", Image: "attacks", Dockerfile: "deploy/docker/console.Dockerfile", Target: "attacks",
+		Name: "attacks", Image: "attacks", Command: "/app/attacks", Dockerfile: "deploy/docker/console.Dockerfile", Target: "attacks",
 		Chart: "deploy/charts/phorvex-attacks",
 		Builds: []Build{
 			{Module: "phorvex", Packages: []string{"./cmd/console", "./cmd/attacks", "./cmd"}},

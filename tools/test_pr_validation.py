@@ -274,7 +274,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA"', runs)
         self.assertIn('git switch --detach "$BATCH_SOURCE_SHA"', runs)
         self.assertNotIn('$GITHUB_SHA', runs)
-        self.assertIn('--build-arg "GIT_SHA=$REVIEWED_GIT_SHA"', runs)
+        self.assertIn('"${docker_args[@]}"', runs)
+        self.assertIn('--entrypoint "$command"', runs)
         self.assertIn('tools/verify_service_image_identity.py', runs)
         self.assertLess(runs.index('git switch --detach "$BATCH_SOURCE_SHA"'),
                         runs.index('tools/verify_fixture_reproducibility.py'))
@@ -291,8 +292,25 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git push origin HEAD:main', pending)
         self.assertIn('cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"', pending)
         self.assertIn('echo "source=$source" >> "$GITHUB_OUTPUT"', pending)
+        self.assertIn("git show \"$source:phorvex/tools/servicerelease/batch.go\"", pending)
+        self.assertIn('"$tool" import-terminal-batch --environment "$ENVIRONMENT"', pending)
+        self.assertIn('cannot\n  # produce pending work', pending)
+        self.assertLess(pending.index('git commit -m "release: pin batch source'),
+                        pending.index('"$tool" batch-source'))
         self.assertEqual(jobs['publish']['env']['BATCH_SOURCE_SHA'], '${{ needs.pending.outputs.source }}')
         self.assertIn('[ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]', publish)
+        for run in (pending, publish):
+            self.assertIn('bootstrap-servicerelease" bootstrap-source', run)
+            self.assertIn('git switch --detach', run)
+            self.assertIn('tools/verify-git-build-identity.sh', run)
+            self.assertIn('pinned-servicerelease', run)
+            self.assertLess(run.index('bootstrap-source'), run.index('pinned-servicerelease'))
+            self.assertLess(run.index('git switch --detach'),
+                            run.index('tools/verify-git-build-identity.sh'))
+            self.assertLess(run.index('tools/verify-git-build-identity.sh'),
+                            run.index('go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease"'))
+        self.assertIn('"$tool" pending --json', pending)
+        self.assertIn('"$tool" pending --json', publish)
         for name in ('pending', 'publish'):
             checkout = next(s for s in jobs[name]['steps'] if s.get('uses', '').startswith('actions/checkout@'))
             self.assertEqual(checkout['with']['ref'], 'main', name)
@@ -302,7 +320,15 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('"$tool" pending', run)
         self.assertIn('"$tool" record --environment "$ENVIRONMENT"', run)
         self.assertIn('--digest "$digest" --source "$BATCH_SOURCE_SHA"', run)
-        self.assertIn('git tag "$component-v$version" "$BATCH_SOURCE_SHA"', run)
+        self.assertIn('git tag "$git_tag" "$BATCH_SOURCE_SHA"', run)
+        self.assertIn('aws ecr describe-images', run)
+        self.assertIn('--image-ids "imageTag=$tag"', run)
+        self.assertIn('for attempt in 1 2 3 4 5 6; do', run)
+        self.assertIn('sleep 5', run)
+        self.assertIn('--expected-repository "$registry/$repository"', run)
+        self.assertIn('--expected-tag "$tag" --expected-digest "$digest"', run)
+        self.assertLess(run.index('aws ecr describe-images'),
+                        run.index('"$tool" record --environment "$ENVIRONMENT"'))
         self.assertIn('git add release/batch.json deploy/environments', run)
         self.assertIn('git push --atomic origin HEAD:main "${refs[@]}"', run)
         self.assertNotIn('xargs git push', run)
@@ -314,8 +340,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('"$tool" prepare --title-file', pr)
         # A release still to publish is left to its own run, and nothing to release
         # closes a release PR left open.
-        self.assertIn('if [ -n "$("$tool" pending)" ]; then', pr)
-        self.assertLess(pr.index('"$tool" pending'), pr.index('"$tool" prepare'))
+        self.assertIn('"$batch_tool" pending --json', pr)
+        self.assertLess(pr.index('"$batch_tool" pending'), pr.index('"$tool" prepare'))
         self.assertIn('"$tool" close-pull-request --head release/next --base main', pr)
         self.assertIn('"$tool" pull-request --head release/next --base main', pr)
 

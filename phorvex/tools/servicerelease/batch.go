@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -18,9 +19,12 @@ import (
 const (
 	// BatchFile is the canonical, committed record for the prepared release.
 	BatchFile   = "batch.json"
-	batchSchema = 1
+	batchSchema = 2
 	// ReleaseEnvironment is the one environment the release workflow records.
 	ReleaseEnvironment = "staging"
+	// ReleaseRegistry is part of the immutable component contract. The workflow
+	// refuses credentials for, or a push result from, any other registry.
+	ReleaseRegistry = "753556437180.dkr.ecr.us-east-2.amazonaws.com"
 )
 
 var (
@@ -28,21 +32,81 @@ var (
 	digestSHA = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
+// ComponentIdentity fixes every name used to select or verify a component.
+// Aliases is explicit (and currently empty) so adding an alternate lookup key is
+// a contract change rather than an unrecorded convenience in a later helper.
+type ComponentIdentity struct {
+	Service         string   `json:"service"`
+	Command         string   `json:"command"`
+	ValidationImage string   `json:"validationImage"`
+	Aliases         []string `json:"aliases"`
+}
+
+// ComponentBuild fixes all Docker inputs selected by release orchestration.
+type ComponentBuild struct {
+	Dockerfile string   `json:"dockerfile"`
+	Context    string   `json:"context"`
+	Target     string   `json:"target"`
+	Args       []string `json:"args"`
+}
+
+// ComponentImage is the one remotely tagged image the component may publish.
+type ComponentImage struct {
+	Registry   string `json:"registry"`
+	Repository string `json:"repository"`
+	Tag        string `json:"tag"`
+}
+
+// ComponentDeploy fixes the chart and exact values location written for a pin.
+type ComponentDeploy struct {
+	Chart         string   `json:"chart"`
+	ValuesFile    string   `json:"valuesFile"`
+	Path          []string `json:"path"`
+	RepositoryKey string   `json:"repositoryKey"`
+	TagKey        string   `json:"tagKey"`
+	DigestKey     string   `json:"digestKey"`
+	SourceKey     string   `json:"sourceKey"`
+}
+
+// ComponentRecord fixes every Git/release-record lookup key for a component.
+type ComponentRecord struct {
+	BatchFile  string `json:"batchFile"`
+	ReleaseKey string `json:"releaseKey"`
+	GitTag     string `json:"gitTag"`
+}
+
+// BatchComponent is the immutable, source-derived execution contract for one
+// prepared component. Its order in Batch.Components is also canonical.
+type BatchComponent struct {
+	Component string            `json:"component"`
+	Identity  ComponentIdentity `json:"identity"`
+	Source    string            `json:"source"`
+	Version   string            `json:"version"`
+	Build     ComponentBuild    `json:"build"`
+	Image     ComponentImage    `json:"image"`
+	Deploy    ComponentDeploy   `json:"deploy"`
+	Record    ComponentRecord   `json:"record"`
+}
+
+// Pending is an unrecorded component of the current prepared batch.
+type Pending = BatchComponent
+
 // Released records the immutable image identity published for one component.
-// Source is deliberately batch-wide, in Batch.Source, rather than repeated.
+// Source, version, repository and tag are fixed by the matching BatchComponent.
 type Released struct {
 	Repository string `json:"repository"`
 	Digest     string `json:"digest"`
 }
 
-// Batch is the canonical release record. Versions and Source never change for
-// a batch; Releases grows from empty to the complete version set.
+// Batch is the canonical release record. Source, Versions and Components never
+// change for a batch; Releases grows from empty to the complete version set.
 type Batch struct {
 	Schema      int                 `json:"schema"`
 	Status      string              `json:"status"`
 	Environment string              `json:"environment"`
 	Source      string              `json:"source"`
 	Versions    map[string]string   `json:"versions"`
+	Components  []BatchComponent    `json:"components"`
 	Releases    map[string]Released `json:"releases"`
 }
 
@@ -118,6 +182,27 @@ func readBatch(dir string) (*Batch, error) {
 	return &batch, nil
 }
 
+// readBatchPointer is the deliberately narrow current-main trust boundary. It
+// reads only the versioned source pointer needed to locate a candidate helper;
+// the helper built from the candidate source later validates the whole batch.
+func readBatchPointer(dir string) (schema int, source string, err error) {
+	raw, err := os.ReadFile(filepath.Join(dir, BatchFile))
+	if err != nil {
+		return 0, "", err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return 0, "", fmt.Errorf("%s pointer: %w", BatchFile, err)
+	}
+	if err := json.Unmarshal(fields["schema"], &schema); err != nil {
+		return 0, "", fmt.Errorf("%s pointer: schema: %w", BatchFile, err)
+	}
+	if err := json.Unmarshal(fields["source"], &source); err != nil {
+		return 0, "", fmt.Errorf("%s pointer: source: %w", BatchFile, err)
+	}
+	return schema, source, nil
+}
+
 func writeBatch(dir string, batch *Batch) error {
 	raw, err := json.MarshalIndent(batch, "", "  ")
 	if err != nil {
@@ -176,9 +261,8 @@ func resolveCommit(root, ref string) (string, error) {
 	return strings.TrimSpace(out), nil
 }
 
-func tagCommit(root, component, version string) (string, bool, error) {
-	ref := "refs/tags/" + component + "-v" + version
-	out, err := git(root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+func tagCommit(root, tag string) (string, bool, error) {
+	out, err := git(root, "rev-parse", "--verify", "--quiet", "refs/tags/"+tag+"^{commit}")
 	if err != nil {
 		return "", false, nil
 	}
@@ -197,6 +281,131 @@ func versionsAtSource(root, dir, source string) (map[string]string, error) {
 	return parseVersions([]byte(raw))
 }
 
+func componentContracts(root, dir, source, environment string, versions map[string]string) ([]BatchComponent, error) {
+	releaseDir, err := filepath.Rel(root, dir)
+	if err != nil || releaseDir == "." || strings.HasPrefix(releaseDir, "..") {
+		return nil, fmt.Errorf("release directory %q is outside repository", dir)
+	}
+	recordFile := filepath.ToSlash(filepath.Join(releaseDir, BatchFile))
+	contracts := make([]BatchComponent, 0, len(versions))
+	for _, c := range Components {
+		version, ok := versions[c.Name]
+		if !ok {
+			continue
+		}
+		args := []string{"GIT_SHA=" + source, "RELEASE_VERSION=" + version}
+		for key, value := range c.BuildArgs {
+			args = append(args, key+"="+strings.ReplaceAll(value, "{version}", version))
+		}
+		sort.Strings(args)
+		contracts = append(contracts, BatchComponent{
+			Component: c.Name,
+			Identity: ComponentIdentity{
+				Service: c.Name, Command: c.Command, ValidationImage: c.Image, Aliases: []string{},
+			},
+			Source:  source,
+			Version: version,
+			Build: ComponentBuild{
+				Dockerfile: c.Dockerfile, Context: ".", Target: c.Target, Args: args,
+			},
+			Image: ComponentImage{Registry: ReleaseRegistry, Repository: c.Repository, Tag: version},
+			Deploy: ComponentDeploy{
+				Chart:      c.Chart,
+				ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", environment, c.Deploy.File+".yaml")),
+				Path:       append([]string(nil), c.Deploy.Path...), RepositoryKey: c.Deploy.Repository,
+				TagKey: c.Deploy.Tag, DigestKey: c.Deploy.Digest, SourceKey: c.Deploy.Source,
+			},
+			Record: ComponentRecord{BatchFile: recordFile, ReleaseKey: c.Name, GitTag: c.Name + "-v" + version},
+		})
+	}
+	return contracts, nil
+}
+
+func contractByName(batch *Batch, name string) *BatchComponent {
+	for i := range batch.Components {
+		if batch.Components[i].Component == name {
+			return &batch.Components[i]
+		}
+	}
+	return nil
+}
+
+func validateContractSet(root, dir string, batch *Batch) error {
+	expected, err := componentContracts(root, dir, batch.Source, batch.Environment, batch.Versions)
+	if err != nil {
+		return err
+	}
+	if len(batch.Components) != len(batch.Versions) {
+		return fmt.Errorf("%s: %d component contracts, want %d", BatchFile, len(batch.Components), len(batch.Versions))
+	}
+	if len(batch.Components) != len(expected) {
+		return fmt.Errorf("%s: prepared component set is missing or has extra components", BatchFile)
+	}
+	canonical := map[string]bool{}
+	for name := range batch.Versions {
+		canonical[name] = true
+	}
+	seenComponents := map[string]bool{}
+	seenImages := map[string]string{}
+	seenDeploys := map[string]string{}
+	seenReleaseKeys := map[string]string{}
+	seenTags := map[string]string{}
+	seenAliases := map[string]string{}
+	for i, contract := range batch.Components {
+		name := contract.Component
+		if seenComponents[name] {
+			return fmt.Errorf("%s: duplicate component contract %q", BatchFile, name)
+		}
+		seenComponents[name] = true
+		version, ok := batch.Versions[name]
+		if !ok {
+			return fmt.Errorf("%s: extra component contract %q", BatchFile, name)
+		}
+		if contract.Source != batch.Source || contract.Version != version {
+			return fmt.Errorf("%s: component %s source/version differs from its batch", BatchFile, name)
+		}
+		if expected[i].Component != name {
+			return fmt.Errorf("%s: component contract %d is %q, want %q (reordered or aliased)", BatchFile, i, name, expected[i].Component)
+		}
+		image := contract.Image.Registry + "/" + contract.Image.Repository
+		if other := seenImages[image]; other != "" {
+			return fmt.Errorf("%s: components %s and %s share image repository %s", BatchFile, other, name, image)
+		}
+		seenImages[image] = name
+		deploy := contract.Deploy.ValuesFile + "\x00" + strings.Join(contract.Deploy.Path, "\x00")
+		if other := seenDeploys[deploy]; other != "" {
+			return fmt.Errorf("%s: components %s and %s share deployment pin target", BatchFile, other, name)
+		}
+		seenDeploys[deploy] = name
+		if other := seenReleaseKeys[contract.Record.ReleaseKey]; other != "" {
+			return fmt.Errorf("%s: components %s and %s share release key %q", BatchFile, other, name, contract.Record.ReleaseKey)
+		}
+		seenReleaseKeys[contract.Record.ReleaseKey] = name
+		if other := seenTags[contract.Record.GitTag]; other != "" {
+			return fmt.Errorf("%s: components %s and %s share Git tag %q", BatchFile, other, name, contract.Record.GitTag)
+		}
+		seenTags[contract.Record.GitTag] = name
+		for _, alias := range contract.Identity.Aliases {
+			if alias == "" || canonical[alias] {
+				return fmt.Errorf("%s: component %s alias %q is empty or redirects a canonical component", BatchFile, name, alias)
+			}
+			if other := seenAliases[alias]; other != "" {
+				return fmt.Errorf("%s: components %s and %s share alias %q", BatchFile, other, name, alias)
+			}
+			seenAliases[alias] = name
+		}
+		if !reflect.DeepEqual(contract, expected[i]) {
+			return fmt.Errorf("%s: component %s contract differs from the helper's pinned-source contract", BatchFile, name)
+		}
+	}
+	for name := range batch.Versions {
+		if !seenComponents[name] {
+			return fmt.Errorf("%s: missing component contract %q", BatchFile, name)
+		}
+	}
+	return nil
+}
+
 func lookupMapping(m *yaml.Node, key string) (*yaml.Node, bool) {
 	if m == nil || m.Kind != yaml.MappingNode {
 		return nil, false
@@ -209,8 +418,8 @@ func lookupMapping(m *yaml.Node, key string) (*yaml.Node, bool) {
 	return nil, false
 }
 
-func pinValues(root, environment string, c *Component) (map[string]string, error) {
-	path := filepath.Join(root, "deploy", "environments", environment, c.Deploy.File+".yaml")
+func pinValues(root string, target ComponentDeploy) (map[string]string, error) {
+	path := filepath.Join(root, filepath.FromSlash(target.ValuesFile))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -223,15 +432,15 @@ func pinValues(root, environment string, c *Component) (map[string]string, error
 		return nil, fmt.Errorf("%s: not a document", path)
 	}
 	node := doc.Content[0]
-	for _, key := range c.Deploy.Path {
+	for _, key := range target.Path {
 		var ok bool
 		node, ok = lookupMapping(node, key)
 		if !ok {
-			return nil, fmt.Errorf("%s: missing image path %s", path, strings.Join(c.Deploy.Path, "."))
+			return nil, fmt.Errorf("%s: missing image path %s", path, strings.Join(target.Path, "."))
 		}
 	}
 	values := map[string]string{}
-	for _, key := range []string{c.Deploy.Repository, c.Deploy.Tag, c.Deploy.Digest, c.Deploy.Source} {
+	for _, key := range []string{target.RepositoryKey, target.TagKey, target.DigestKey, target.SourceKey} {
 		if key == "" {
 			continue
 		}
@@ -244,33 +453,34 @@ func pinValues(root, environment string, c *Component) (map[string]string, error
 	return values, nil
 }
 
-func validateRepository(repository string, c *Component) error {
-	if !strings.HasSuffix(repository, "/"+c.Repository) || strings.TrimSuffix(repository, "/"+c.Repository) == "" {
-		return fmt.Errorf("component %s repository %q does not end in /%s", c.Name, repository, c.Repository)
+func expectedRepository(contract *BatchComponent) string {
+	return contract.Image.Registry + "/" + contract.Image.Repository
+}
+
+func validateRepository(repository string, contract *BatchComponent) error {
+	want := expectedRepository(contract)
+	if repository != want {
+		return fmt.Errorf("component %s repository %q, want immutable batch repository %q", contract.Component, repository, want)
 	}
 	return nil
 }
 
-func validatePin(root string, batch *Batch, name, version string, released Released) error {
-	c := componentByName(name)
-	if c == nil {
-		return fmt.Errorf("batch: unknown component %q", name)
-	}
-	if err := validateRepository(released.Repository, c); err != nil {
+func validatePin(root string, batch *Batch, contract *BatchComponent, released Released) error {
+	if err := validateRepository(released.Repository, contract); err != nil {
 		return err
 	}
 	if !digestSHA.MatchString(released.Digest) {
-		return fmt.Errorf("component %s digest %q is not sha256:<64 lowercase hex>", name, released.Digest)
+		return fmt.Errorf("component %s digest %q is not sha256:<64 lowercase hex>", contract.Component, released.Digest)
 	}
-	values, err := pinValues(root, batch.Environment, c)
+	values, err := pinValues(root, contract.Deploy)
 	if err != nil {
 		return err
 	}
-	if values[c.Deploy.Repository] != released.Repository || values[c.Deploy.Tag] != version || values[c.Deploy.Digest] != released.Digest {
-		return fmt.Errorf("component %s release record does not match its %s image pin", name, batch.Environment)
+	if values[contract.Deploy.RepositoryKey] != released.Repository || values[contract.Deploy.TagKey] != contract.Image.Tag || values[contract.Deploy.DigestKey] != released.Digest {
+		return fmt.Errorf("component %s release record does not match its %s image pin", contract.Component, batch.Environment)
 	}
-	if c.Deploy.Source != "" && values[c.Deploy.Source] != batch.Source {
-		return fmt.Errorf("component %s image pin source %q does not match batch source %s", name, values[c.Deploy.Source], batch.Source)
+	if contract.Deploy.SourceKey != "" && values[contract.Deploy.SourceKey] != contract.Source {
+		return fmt.Errorf("component %s image pin source %q does not match batch source %s", contract.Component, values[contract.Deploy.SourceKey], batch.Source)
 	}
 	return nil
 }
@@ -333,15 +543,14 @@ func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag 
 	if batch.Releases == nil {
 		return fmt.Errorf("%s: releases must be an object", BatchFile)
 	}
-	for name, version := range batch.Versions {
-		if componentByName(name) == nil {
-			return fmt.Errorf("%s: unknown component %q", BatchFile, name)
-		}
-		if _, err := ParseVersion(version); err != nil {
-			return fmt.Errorf("%s: %s: %w", BatchFile, name, err)
-		}
-		released, recorded := batch.Releases[name]
-		taggedSource, tagged, err := tagCommit(root, name, version)
+	if err := validateContractSet(root, dir, batch); err != nil {
+		return err
+	}
+	for i := range batch.Components {
+		contract := &batch.Components[i]
+		name := contract.Component
+		released, recorded := batch.Releases[contract.Record.ReleaseKey]
+		taggedSource, tagged, err := tagCommit(root, contract.Record.GitTag)
 		if err != nil {
 			return err
 		}
@@ -350,18 +559,19 @@ func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag 
 		}
 		switch {
 		case recorded && !tagged:
-			return fmt.Errorf("component %s is recorded without tag %s-v%s", name, name, version)
+			return fmt.Errorf("component %s is recorded without tag %s", name, contract.Record.GitTag)
 		case !recorded && tagged && allowTag != name:
 			return fmt.Errorf("component %s tag exists without a release record", name)
 		case recorded:
-			if err := validatePin(root, batch, name, version, released); err != nil {
+			if err := validatePin(root, batch, contract, released); err != nil {
 				return err
 			}
 		}
 	}
 	for name := range batch.Releases {
-		if _, ok := batch.Versions[name]; !ok {
-			return fmt.Errorf("%s: release %q is not in the prepared version set", BatchFile, name)
+		contract := contractByName(batch, name)
+		if contract == nil || contract.Record.ReleaseKey != name {
+			return fmt.Errorf("%s: release %q is not in the prepared component contract", BatchFile, name)
 		}
 	}
 	wantStatus := batchStatus(batch.Versions, batch.Releases)
@@ -371,11 +581,51 @@ func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag 
 	return nil
 }
 
+// BootstrapSource is the only operation a helper built from current main may
+// perform for an in-flight batch. It validates only schema/source pointer shape
+// and returns the commit that introduced versions.json. All component authority
+// starts after a helper has been compiled from that returned commit.
+func BootstrapSource(root, dir, head string) (string, error) {
+	if err := requireClean(root); err != nil {
+		return "", err
+	}
+	source, err := preparedSource(root, dir, head)
+	if err != nil {
+		return "", err
+	}
+	schema, pointerSource, err := readBatchPointer(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return source, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if schema != batchSchema {
+		return "", fmt.Errorf("%s pointer: schema %d, want %d", BatchFile, schema, batchSchema)
+	}
+	if !fullSHA.MatchString(pointerSource) {
+		return "", fmt.Errorf("%s pointer: source %q is not a full lowercase Git SHA", BatchFile, pointerSource)
+	}
+	resolved, err := resolveCommit(root, pointerSource)
+	if err != nil || resolved != pointerSource {
+		return "", fmt.Errorf("%s pointer: source %s does not resolve exactly", BatchFile, pointerSource)
+	}
+	if _, err := git(root, "merge-base", "--is-ancestor", pointerSource, head); err != nil {
+		return "", fmt.Errorf("%s pointer: source %s is not an ancestor of %s", BatchFile, pointerSource, head)
+	}
+	return source, nil
+}
+
 func importCompleteBatch(root, dir, head, environment, source string, versions map[string]string) (*Batch, error) {
-	batch := &Batch{Schema: batchSchema, Environment: environment, Source: source, Versions: versions, Releases: map[string]Released{}}
+	contracts, err := componentContracts(root, dir, source, environment, versions)
+	if err != nil {
+		return nil, err
+	}
+	batch := &Batch{Schema: batchSchema, Environment: environment, Source: source, Versions: versions, Components: contracts, Releases: map[string]Released{}}
 	tagged := 0
-	for name, version := range versions {
-		taggedSource, ok, err := tagCommit(root, name, version)
+	for i := range contracts {
+		contract := &contracts[i]
+		taggedSource, ok, err := tagCommit(root, contract.Record.GitTag)
 		if err != nil {
 			return nil, err
 		}
@@ -384,27 +634,27 @@ func importCompleteBatch(root, dir, head, environment, source string, versions m
 		}
 		tagged++
 		if taggedSource != source {
-			return nil, fmt.Errorf("component %s tag points to %s, prepared source is %s", name, taggedSource, source)
+			return nil, fmt.Errorf("component %s tag points to %s, prepared source is %s", contract.Component, taggedSource, source)
 		}
 	}
 	if tagged != 0 && tagged != len(versions) {
 		return nil, fmt.Errorf("%s is missing for a partially tagged release; refusing to infer a batch source", BatchFile)
 	}
 	if tagged == len(versions) {
-		for name, version := range versions {
-			c := componentByName(name)
-			values, err := pinValues(root, environment, c)
+		for i := range contracts {
+			contract := &contracts[i]
+			values, err := pinValues(root, contract.Deploy)
 			if err != nil {
 				return nil, err
 			}
-			released := Released{Repository: values[c.Deploy.Repository], Digest: values[c.Deploy.Digest]}
-			if values[c.Deploy.Tag] != version {
-				return nil, fmt.Errorf("component %s pin version %q, want %q", name, values[c.Deploy.Tag], version)
+			released := Released{Repository: values[contract.Deploy.RepositoryKey], Digest: values[contract.Deploy.DigestKey]}
+			if values[contract.Deploy.TagKey] != contract.Image.Tag {
+				return nil, fmt.Errorf("component %s pin version %q, want %q", contract.Component, values[contract.Deploy.TagKey], contract.Image.Tag)
 			}
-			if c.Deploy.Source != "" && values[c.Deploy.Source] != source {
-				return nil, fmt.Errorf("component %s pin source %q, want %q", name, values[c.Deploy.Source], source)
+			if contract.Deploy.SourceKey != "" && values[contract.Deploy.SourceKey] != source {
+				return nil, fmt.Errorf("component %s pin source %q, want %q", contract.Component, values[contract.Deploy.SourceKey], source)
 			}
-			batch.Releases[name] = released
+			batch.Releases[contract.Record.ReleaseKey] = released
 		}
 	}
 	batch.Status = batchStatus(batch.Versions, batch.Releases)
@@ -414,8 +664,50 @@ func importCompleteBatch(root, dir, head, environment, source string, versions m
 	return batch, nil
 }
 
-// EnsureBatch creates the source pin for a newly prepared version set, or
-// validates the existing batch. It must run and be committed before any build.
+// ImportTerminalBatch is the one-time bridge for a fully published release
+// whose source predates the versioned batch helper. It is intentionally unable
+// to create a prepared or partial batch: current-main metadata can describe
+// historical state only after every tag and deployment pin already proves the
+// same source. It can never authorize component work.
+func ImportTerminalBatch(root, dir, head, environment string) (*Batch, error) {
+	if environment != ReleaseEnvironment {
+		return nil, fmt.Errorf("release environment %q, want %q", environment, ReleaseEnvironment)
+	}
+	if err := requireClean(root); err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(filepath.Join(dir, BatchFile)); err == nil {
+		return nil, fmt.Errorf("%s already exists; terminal import is only for legacy releases", BatchFile)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+	versions, err := readVersions(dir)
+	if err != nil {
+		return nil, err
+	}
+	if versions == nil {
+		return nil, fmt.Errorf("%s is missing", VersionsFile)
+	}
+	source, err := preparedSource(root, dir, head)
+	if err != nil {
+		return nil, err
+	}
+	batch, err := importCompleteBatch(root, dir, head, environment, source, versions)
+	if err != nil {
+		return nil, err
+	}
+	if batch.Status != "complete" {
+		return nil, fmt.Errorf("legacy release at %s is %s, not terminal; refusing current-main metadata authority", source, batch.Status)
+	}
+	if err := writeBatch(dir, batch); err != nil {
+		return nil, err
+	}
+	return batch, nil
+}
+
+// EnsureBatch creates the source and complete component contract for a newly
+// prepared version set, or validates the existing batch. It must run and be
+// committed before any build.
 func EnsureBatch(root, dir, head, environment string) (*Batch, bool, error) {
 	if environment != ReleaseEnvironment {
 		return nil, false, fmt.Errorf("release environment %q, want %q", environment, ReleaseEnvironment)
@@ -454,7 +746,11 @@ func EnsureBatch(root, dir, head, environment string) (*Batch, bool, error) {
 	if batch.Status != "complete" {
 		return nil, false, fmt.Errorf("prior batch %s is %s, refusing concurrent batch creation", batch.Source, batch.Status)
 	}
-	batch = &Batch{Schema: batchSchema, Status: "prepared", Environment: environment, Source: source, Versions: versions, Releases: map[string]Released{}}
+	contracts, err := componentContracts(root, dir, source, environment, versions)
+	if err != nil {
+		return nil, false, err
+	}
+	batch = &Batch{Schema: batchSchema, Status: "prepared", Environment: environment, Source: source, Versions: versions, Components: contracts, Releases: map[string]Released{}}
 	if err := validateBatch(root, dir, head, batch, true, ""); err != nil {
 		return nil, false, err
 	}
@@ -478,7 +774,7 @@ func LoadBatch(root, dir, head string, clean bool) (*Batch, error) {
 	return batch, nil
 }
 
-// PendingReleases lists the unrecorded components of a valid prepared batch.
+// PendingReleases lists the immutable contracts of unrecorded components.
 func PendingReleases(root, dir, head string) ([]Pending, error) {
 	batch, err := LoadBatch(root, dir, head, true)
 	if errors.Is(err, os.ErrNotExist) {
@@ -488,20 +784,11 @@ func PendingReleases(root, dir, head string) ([]Pending, error) {
 		return nil, err
 	}
 	var out []Pending
-	for _, c := range Components {
-		version, ok := batch.Versions[c.Name]
-		if !ok {
+	for _, contract := range batch.Components {
+		if _, released := batch.Releases[contract.Record.ReleaseKey]; released {
 			continue
 		}
-		if _, released := batch.Releases[c.Name]; released {
-			continue
-		}
-		pending := Pending{Component: c.Name, Version: version, Dockerfile: c.Dockerfile, Repository: c.Repository, Target: c.Target}
-		for key, value := range c.BuildArgs {
-			pending.BuildArgs = append(pending.BuildArgs, key+"="+strings.ReplaceAll(value, "{version}", version))
-		}
-		sort.Strings(pending.BuildArgs)
-		out = append(out, pending)
+		out = append(out, contract)
 	}
 	return out, nil
 }
@@ -519,30 +806,30 @@ func RecordRelease(root, dir, head, environment, component, repository, version,
 	if batch.Source != source {
 		return fmt.Errorf("component %s source %s does not match batch source %s", component, source, batch.Source)
 	}
-	if batch.Versions[component] != version {
-		return fmt.Errorf("component %s version %q does not match prepared version %q", component, version, batch.Versions[component])
+	if err := validateBatch(root, dir, head, batch, true, component); err != nil {
+		return err
 	}
-	c := componentByName(component)
-	if c == nil {
-		return fmt.Errorf("no component %q", component)
+	contract := contractByName(batch, component)
+	if contract == nil {
+		return fmt.Errorf("component %q is not in the immutable batch contract", component)
 	}
-	if err := validateRepository(repository, c); err != nil {
+	if contract.Version != version || contract.Image.Tag != version {
+		return fmt.Errorf("component %s version %q does not match immutable batch version/tag %q", component, version, contract.Version)
+	}
+	if err := validateRepository(repository, contract); err != nil {
 		return err
 	}
 	if !digestSHA.MatchString(digest) {
 		return fmt.Errorf("digest %q is not sha256:<64 lowercase hex>", digest)
 	}
-	if err := validateBatch(root, dir, head, batch, true, component); err != nil {
-		return err
-	}
 	released := Released{Repository: repository, Digest: digest}
-	if old, exists := batch.Releases[component]; exists && old != released {
+	if old, exists := batch.Releases[contract.Record.ReleaseKey]; exists && old != released {
 		return fmt.Errorf("component %s is already recorded with different image provenance", component)
 	}
-	if err := Deploy(root, environment, component, repository, version, digest, source); err != nil {
+	if err := deployContract(root, contract.Deploy, repository, contract.Image.Tag, digest, contract.Source); err != nil {
 		return err
 	}
-	batch.Releases[component] = released
+	batch.Releases[contract.Record.ReleaseKey] = released
 	batch.Status = batchStatus(batch.Versions, batch.Releases)
 	if err := writeBatch(dir, batch); err != nil {
 		return err

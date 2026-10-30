@@ -57,9 +57,30 @@ summary.
    service updates it.
 2. **Merging it publishes.** The `pending` job finds the versions in
    `release/versions.json`, selects the first-parent commit that introduced that
-   exact version set, and commits it to `release/batch.json` before publication.
+   exact version set, builds `servicerelease` from that commit, and uses that
+   source-built helper to commit schema-v2 `release/batch.json` before
+   publication. The record contains the source SHA, version set and an ordered,
+   immutable contract for every prepared component: canonical service and
+   validation-image identities, identity-reporting command, aliases, Dockerfile,
+   context, target and complete build arguments, registry/repository/tag, chart
+   and exact values-file/key path, batch release key and Git tag. Missing, extra,
+   duplicate, reordered, aliased or changed contracts are rejected.
+
    That record is the source-of-truth for push-triggered runs, workflow reruns,
-   manual dispatches and the record-commit runs that advance `main`.
+   manual dispatches and the record-commit runs that advance `main`. A helper
+   compiled from current `main` has one narrow bootstrap authority: it may read
+   only the versioned schema/source pointer and locate the commit that introduced
+   `versions.json`. The workflow then checks out that candidate, compiles the
+   authoritative helper there, returns to the record branch, and uses only the
+   source-built helper for `batch`, `pending`, `batch-source` and `record`.
+   Component metadata compiled into a later `main` can therefore neither alter
+   nor validate an in-flight batch. The sole migration exception is the
+   historical six-tag release whose source predates `batch.go`: current main may
+   persist it only as an already-complete batch after all six tags resolve to
+   that one source and all six existing pins validate. The migration command
+   rejects prepared or partial state, so it cannot authorize a build, push,
+   record or deployment change.
+
    `servicerelease pending` then validates the batch record, existing component
    tags and staging pins before reporting its unrecorded components. For each
    pending component, the `publish` job:
@@ -71,7 +92,10 @@ summary.
      same SHA to every service build;
    - runs the built service binary's `-version` endpoint and checks its exact
      release version and Git SHA against the image's OCI labels;
-   - pushes it to ECR as `phorvex/<service>:<version>`;
+   - pushes it only to the contract's ECR registry as
+     `phorvex/<service>:<version>`, reads that exact repository/tag back from
+     ECR, pulls it, and re-verifies that the returned digest owns the expected
+     service binary, source SHA and version before any record is written;
    - tags the commit `<service>-v<version>`;
    - pins staging to the pushed digest (`servicerelease deploy`), in
      `deploy/environments/staging/<service>.yaml`: `manager.yaml` for the
@@ -89,10 +113,16 @@ summary.
    record only after the prior batch is complete and validates against its tags
    and pins.
 
+   A retry fails closed if the schema/source pointer, any immutable component
+   field, component order, tag, repository, digest or deployment target differs.
+   In particular, a source-A `brain` can never be built, recorded or pinned via
+   source-B `sensor` metadata.
+
    Before `batch.json` existed, completed releases were represented only by a
-   unanimous set of component tags and pins. The command imports that legacy
-   state only when every prepared component is tagged at the same prepared
-   source and every pin matches; a partial or mixed set is rejected.
+   unanimous set of component tags and pins. `import-terminal-batch` imports
+   that legacy state only when every prepared component is tagged at the same
+   prepared source and every pin matches; a missing, partial or mixed set is
+   rejected without writing a batch.
 
 The workflow is the only one in this repository that writes or reaches AWS.
 `ReleaseWorkflowTests` in `tools/test_pr_validation.py` holds it to that shape:

@@ -229,7 +229,13 @@ jobs:
           esac
           service="$IMAGE"
           [ "$service" != operator ] || service=manager
-          python3 tools/verify_service_image_identity.py --image "$TAG" --service "$service" --git-sha "$reviewed_sha" --version "$RELEASE_VERSION"
+          case "$service" in
+            manager) entrypoint=/manager ;;
+            brain|sensor|actuator) entrypoint=/service ;;
+            console) entrypoint=/app/console ;;
+            attacks) entrypoint=/app/attacks ;;
+          esac
+          python3 tools/verify_service_image_identity.py --image "$TAG" --service "$service" --entrypoint "$entrypoint" --git-sha "$reviewed_sha" --version "$RELEASE_VERSION"
           docker image rm "$TAG"
 
   # Local API/controller proof. tools/envtest_gate.py runs the COMPLETE test suites of

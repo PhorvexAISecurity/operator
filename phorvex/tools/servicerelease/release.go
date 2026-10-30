@@ -90,18 +90,6 @@ func prependChangelog(path, component, section string) error {
 	return os.WriteFile(path, []byte(head+section+"\n"+rest), 0o644)
 }
 
-// Pending is an unrecorded component of the current prepared batch.
-type Pending struct {
-	Component  string
-	Version    string
-	Dockerfile string
-	Repository string
-	// BuildArgs are sorted --build-arg values.
-	BuildArgs []string
-	// Target is the Dockerfile stage to build, or empty for the last.
-	Target string
-}
-
 // Deploy pins a component's released image in an environment's value file,
 // keeping the file's other values and comments.
 func Deploy(root, environment, component, repository, tag, digest, source string) error {
@@ -120,7 +108,18 @@ func Deploy(root, environment, component, repository, tag, digest, source string
 	if !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
 		return fmt.Errorf("digest %q is not sha256:<64 hex>", digest)
 	}
-	path := filepath.Join(root, "deploy", "environments", environment, c.Deploy.File+".yaml")
+	target := ComponentDeploy{
+		Chart: c.Chart, ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", environment, c.Deploy.File+".yaml")),
+		Path: append([]string(nil), c.Deploy.Path...), RepositoryKey: c.Deploy.Repository,
+		TagKey: c.Deploy.Tag, DigestKey: c.Deploy.Digest, SourceKey: c.Deploy.Source,
+	}
+	return deployContract(root, target, repository, tag, digest, source)
+}
+
+// deployContract writes only the exact source-pinned deployment target supplied
+// by the immutable batch contract.
+func deployContract(root string, target ComponentDeploy, repository, tag, digest, source string) error {
+	path := filepath.Join(root, filepath.FromSlash(target.ValuesFile))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -133,14 +132,14 @@ func Deploy(root, environment, component, repository, tag, digest, source string
 		return fmt.Errorf("%s: not a mapping", path)
 	}
 	node := doc.Content[0]
-	for _, key := range c.Deploy.Path {
+	for _, key := range target.Path {
 		node = mapping(node, key)
 	}
-	set(node, c.Deploy.Repository, repository)
-	set(node, c.Deploy.Tag, tag)
-	set(node, c.Deploy.Digest, digest)
-	if c.Deploy.Source != "" {
-		set(node, c.Deploy.Source, source)
+	set(node, target.RepositoryKey, repository)
+	set(node, target.TagKey, tag)
+	set(node, target.DigestKey, digest)
+	if target.SourceKey != "" {
+		set(node, target.SourceKey, source)
 	}
 	var out bytes.Buffer
 	enc := yaml.NewEncoder(&out)

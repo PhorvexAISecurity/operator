@@ -51,14 +51,31 @@ jobs:
         id: pending
         run: |
           set -euo pipefail
-          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
-          tool="$RUNNER_TEMP/servicerelease"
-          "$tool" batch --environment "$ENVIRONMENT" >/dev/null
+          # The current-main helper may locate only the minimal schema/source
+          # pointer. Component authority begins with the helper built at source.
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
+          record_head="$(git rev-parse HEAD)"
+          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            git switch --detach "$source"
+            tools/verify-git-build-identity.sh "$source" > /dev/null
+            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+            git switch --force-create release-record "$record_head"
+            tool="$RUNNER_TEMP/pinned-servicerelease"
+            "$tool" batch --environment "$ENVIRONMENT" >/dev/null
+          else
+            # One historical, already-complete six-tag release predates batch.go.
+            # This command refuses missing/partial/mixed tags or pins and cannot
+            # produce pending work, so current-main metadata never builds/pushes.
+            tool="$RUNNER_TEMP/bootstrap-servicerelease"
+            if [ ! -e release/batch.json ]; then
+              "$tool" import-terminal-batch --environment "$ENVIRONMENT" >/dev/null
+            fi
+          fi
           if [ -n "$(git status --porcelain -- release/batch.json)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add release/batch.json
-            source="$("$tool" batch-source)"
             git commit -m "release: pin batch source ${source:0:12}"
             if ! git push origin HEAD:main; then
               # A concurrent creator may win only with the byte-identical batch.
@@ -69,9 +86,9 @@ jobs:
             fi
           fi
           source="$("$tool" batch-source)"
-          "$tool" pending | tee "$RUNNER_TEMP/pending.tsv"
+          "$tool" pending --json | tee "$RUNNER_TEMP/pending.json"
           echo "source=$source" >> "$GITHUB_OUTPUT"
-          echo "releases=$(wc -l < "$RUNNER_TEMP/pending.tsv" | tr -d ' ')" >> "$GITHUB_OUTPUT"
+          echo "releases=$(jq 'length' "$RUNNER_TEMP/pending.json")" >> "$GITHUB_OUTPUT"
 
   publish:
     needs: pending
@@ -97,15 +114,18 @@ jobs:
       - name: Load the record and checkout its exact clean source
         run: |
           set -euo pipefail
-          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
-          tool="$RUNNER_TEMP/servicerelease"
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          [ "$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)" = "$BATCH_SOURCE_SHA" ]
+          git switch --detach "$BATCH_SOURCE_SHA"
+          tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA" > /dev/null
+          go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
           git fetch --tags --force origin main
           git switch --force-create release-record origin/main
           git rev-parse HEAD > "$RUNNER_TEMP/record-head"
+          tool="$RUNNER_TEMP/pinned-servicerelease"
           [ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]
-          "$tool" pending > "$RUNNER_TEMP/pending.tsv"
+          "$tool" pending --json > "$RUNNER_TEMP/pending.json"
           git switch --detach "$BATCH_SOURCE_SHA"
-          echo "REVIEWED_GIT_SHA=$(tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA")" >> "$GITHUB_ENV"
       - name: Rebuild each fixture twice and compare complete OCI identities
         run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
       - name: Require the release role
@@ -125,32 +145,64 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           set -euo pipefail
-          # Nothing in the loop may read its stdin, the list of releases.
-          while IFS=$'\t' read -r component version dockerfile repository build_args; do
-            image="$REGISTRY/$repository:$version"
-            # shellcheck disable=SC2086 # build_args is a list of --build-arg K=V and --target words
-            docker build --file "$dockerfile" $build_args --build-arg "GIT_SHA=$REVIEWED_GIT_SHA" --build-arg "RELEASE_VERSION=$version" --tag "$image" . < /dev/null
-            python3 tools/verify_service_image_identity.py --image "$image" --service "$component" --git-sha "$REVIEWED_GIT_SHA" --version "$version"
+          while IFS= read -r release; do
+            component="$(jq -er '.component' <<< "$release")"
+            service="$(jq -er '.identity.service' <<< "$release")"
+            command="$(jq -er '.identity.command' <<< "$release")"
+            source="$(jq -er '.source' <<< "$release")"
+            version="$(jq -er '.version' <<< "$release")"
+            dockerfile="$(jq -er '.build.dockerfile' <<< "$release")"
+            context="$(jq -er '.build.context' <<< "$release")"
+            target="$(jq -er '.build.target' <<< "$release")"
+            registry="$(jq -er '.image.registry' <<< "$release")"
+            repository="$(jq -er '.image.repository' <<< "$release")"
+            tag="$(jq -er '.image.tag' <<< "$release")"
+            git_tag="$(jq -er '.record.gitTag' <<< "$release")"
+            [ "$source" = "$BATCH_SOURCE_SHA" ]
+            [ "$version" = "$tag" ]
+            [ "$registry" = "$REGISTRY" ]
+            image="$registry/$repository:$tag"
+            docker_args=()
+            while IFS= read -r arg; do docker_args+=(--build-arg "$arg"); done < <(jq -er '.build.args[]' <<< "$release")
+            [ -z "$target" ] || docker_args+=(--target "$target")
+            docker build --file "$dockerfile" "${docker_args[@]}" --tag "$image" "$context" < /dev/null
+            python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" --git-sha "$source" --version "$version"
             docker push "$image" < /dev/null
-            digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"
+            registry_id="${registry%%.*}"
+            [[ "$registry_id" =~ ^[0-9]{12}$ ]]
+            digest=''
+            for attempt in 1 2 3 4 5 6; do
+              if digest="$(aws ecr describe-images --registry-id "$registry_id" --repository-name "$repository" \
+                --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null)" \
+                && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                break
+              fi
+              digest=''
+              sleep 5
+            done
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            docker pull "$image" < /dev/null
+            python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" \
+              --git-sha "$source" --version "$version" --expected-repository "$registry/$repository" \
+              --expected-tag "$tag" --expected-digest "$digest"
             docker image rm "$image"
-            printf '%s\t%s\t%s\t%s\n' "$component" "$version" "$REGISTRY/$repository" "${digest#*@}" >> "$RUNNER_TEMP/released"
-          done < "$RUNNER_TEMP/pending.tsv"
+            printf '%s\t%s\t%s\t%s\t%s\n' "$component" "$version" "$registry/$repository" "$digest" "$git_tag" >> "$RUNNER_TEMP/released"
+          done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
       - name: Record the releases
         if: always()
         run: |
           set -euo pipefail
           [ -s "$RUNNER_TEMP/released" ] || exit 0
-          tool="$RUNNER_TEMP/servicerelease"
+          tool="$RUNNER_TEMP/pinned-servicerelease"
           git switch --force-create release-record "$(cat "$RUNNER_TEMP/record-head")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           refs=()
-          while IFS=$'\t' read -r component version repository digest; do
-            git tag "$component-v$version" "$BATCH_SOURCE_SHA"
+          while IFS=$'\t' read -r component version repository digest git_tag; do
+            git tag "$git_tag" "$BATCH_SOURCE_SHA"
             "$tool" record --environment "$ENVIRONMENT" --component "$component" --repository "$repository" \
               --tag "$version" --digest "$digest" --source "$BATCH_SOURCE_SHA"
-            refs+=("refs/tags/$component-v$version")
+            refs+=("refs/tags/$git_tag")
           done < "$RUNNER_TEMP/released"
           git add release/batch.json deploy/environments
           git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
@@ -159,7 +211,7 @@ jobs:
             if git push --atomic origin HEAD:main "${refs[@]}"; then pushed=true; break; fi
             git fetch --tags --force origin main
             git rebase origin/main
-            "$tool" pending > /dev/null
+            "$tool" pending --json > /dev/null
           done
           [ "$pushed" = true ]
 
@@ -190,16 +242,29 @@ jobs:
           # From main as the publish job left it: its tags and the staging pins.
           git fetch --tags --force origin main
           git switch --force-create release/next FETCH_HEAD
-          # Built once: `go run` reports every failing exit as 1, and prepare's 3
-          # means nothing to release.
-          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
-          tool="$RUNNER_TEMP/servicerelease"
+          # Current main can locate the pointer, but only the source-built helper
+          # may decide whether a nonterminal batch still has component work.
+          go -C phorvex build -o "$RUNNER_TEMP/bootstrap-servicerelease" ./tools/servicerelease
+          source="$("$RUNNER_TEMP/bootstrap-servicerelease" bootstrap-source)"
+          record_head="$(git rev-parse HEAD)"
+          batch_tool="$RUNNER_TEMP/bootstrap-servicerelease"
+          if git show "$source:phorvex/tools/servicerelease/batch.go" 2>/dev/null | grep -F 'batchSchema = 2' >/dev/null; then
+            git switch --detach "$source"
+            tools/verify-git-build-identity.sh "$source" > /dev/null
+            go -C phorvex build -o "$RUNNER_TEMP/pinned-servicerelease" ./tools/servicerelease
+            git switch --force-create release/next "$record_head"
+            batch_tool="$RUNNER_TEMP/pinned-servicerelease"
+          fi
           # A newer merge of the release PR is still to publish; its own run brings
           # the PR up to date afterwards. Preparing now would release it again.
-          if [ -n "$("$tool" pending)" ]; then
+          if [ "$("$batch_tool" pending --json | jq 'length')" -ne 0 ]; then
             echo "A merged release is still to publish; its run brings the release PR up to date." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # The prior batch is terminal, so the current-main helper may plan the
+          # next release. A built binary preserves prepare's distinct exit 3.
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
           status=0
           "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
           if [ "$status" -eq 3 ]; then

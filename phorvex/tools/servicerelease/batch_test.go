@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -99,7 +100,7 @@ func (r *batchTestRepo) record(component, version, digestByte string) {
 	}
 	r.git("tag", component+"-v"+version, batch.Source)
 	err = RecordRelease(r.root, r.releaseDir, "HEAD", ReleaseEnvironment, component,
-		"registry.example/phorvex/"+component, version, "sha256:"+strings.Repeat(digestByte, 64), batch.Source)
+		ReleaseRegistry+"/phorvex/"+component, version, "sha256:"+strings.Repeat(digestByte, 64), batch.Source)
 	if err != nil {
 		r.t.Fatal(err)
 	}
@@ -148,6 +149,193 @@ func TestPartialReleaseRetryKeepsThePreparedSource(t *testing.T) {
 				t.Fatalf("pending = %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+func TestMainAdvancementCannotRedirectBrainToSensor(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	batchA := r.ensureBatch()
+	r.commit("pin complete SHA A contract")
+	r.record("manager", "1.0.0", "a")
+	r.commit("record manager at SHA A")
+	if err := os.WriteFile(filepath.Join(r.root, "main-advance"), []byte("SHA B\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shaB := r.commit("advance main to SHA B")
+	if shaB == batchA.Source {
+		t.Fatal("main did not advance beyond SHA A")
+	}
+
+	// This is the reviewed black-box defect in deterministic form: a later-main
+	// helper changes brain's repository and pin target to sensor. The old code
+	// emitted and accepted that current table against the unchanged SHA-A batch.
+	original := Components
+	changed := append([]Component(nil), Components...)
+	for i := range changed {
+		if changed[i].Name == "brain" {
+			changed[i].Repository = "phorvex/sensor"
+			changed[i].Deploy = serviceImage("sensor")
+		}
+	}
+	Components = changed
+	if source, err := BootstrapSource(r.root, r.releaseDir, "HEAD"); err != nil || source != batchA.Source {
+		t.Fatalf("minimal bootstrap source = %q, %v; want SHA A %s", source, err, batchA.Source)
+	}
+	if _, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err == nil || !strings.Contains(err.Error(), "pinned-source contract") {
+		t.Fatalf("later-main helper metadata was not rejected: %v", err)
+	}
+
+	// The helper compiled from SHA A has the original table and consumes the
+	// persisted contract. It continues with brain's SHA-A build/repo/pin data.
+	Components = original
+	defer func() { Components = original }()
+	pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	brain := pending[0]
+	if brain.Component != "brain" || brain.Source != batchA.Source || brain.Image.Repository != "phorvex/brain" ||
+		brain.Deploy.ValuesFile != "deploy/environments/staging/brain.yaml" || brain.Identity.Service != "brain" {
+		t.Fatalf("SHA-A brain contract drifted: %#v", brain)
+	}
+	r.git("tag", brain.Record.GitTag, batchA.Source)
+	before, err := os.ReadFile(filepath.Join(r.root, "deploy/environments/staging/sensor.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = RecordRelease(r.root, r.releaseDir, "HEAD", ReleaseEnvironment, "brain",
+		ReleaseRegistry+"/phorvex/sensor", brain.Version, "sha256:"+strings.Repeat("b", 64), batchA.Source)
+	if err == nil || !strings.Contains(err.Error(), "immutable batch repository") {
+		t.Fatalf("brain -> sensor repository drift was accepted: %v", err)
+	}
+	after, err := os.ReadFile(filepath.Join(r.root, "deploy/environments/staging/sensor.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("rejected brain record changed the sensor deployment pin")
+	}
+}
+
+func TestBatchRejectsEveryComponentMetadataClassTamper(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*BatchComponent)
+	}{
+		{"canonical component", func(c *BatchComponent) { c.Component = "renamed" }},
+		{"service identity", func(c *BatchComponent) { c.Identity.Service = "sensor" }},
+		{"command identity", func(c *BatchComponent) { c.Identity.Command = "/sensor" }},
+		{"validation image lookup", func(c *BatchComponent) { c.Identity.ValidationImage = "sensor" }},
+		{"alias lookup", func(c *BatchComponent) { c.Identity.Aliases = append(c.Identity.Aliases, "manager-old") }},
+		{"component source", func(c *BatchComponent) { c.Source = strings.Repeat("f", 40) }},
+		{"component version", func(c *BatchComponent) { c.Version = "1.0.1" }},
+		{"dockerfile", func(c *BatchComponent) { c.Build.Dockerfile = "deploy/docker/service.Dockerfile" }},
+		{"build context", func(c *BatchComponent) { c.Build.Context = "phorvex" }},
+		{"build target", func(c *BatchComponent) { c.Build.Target = "sensor" }},
+		{"build argument", func(c *BatchComponent) { c.Build.Args[0] = "GIT_SHA=" + strings.Repeat("f", 40) }},
+		{"image registry", func(c *BatchComponent) { c.Image.Registry = "registry.example" }},
+		{"image repository", func(c *BatchComponent) { c.Image.Repository = "phorvex/sensor" }},
+		{"image tag", func(c *BatchComponent) { c.Image.Tag = "1.0.1" }},
+		{"chart", func(c *BatchComponent) { c.Deploy.Chart = "deploy/charts/phorvex-sensor" }},
+		{"values file", func(c *BatchComponent) { c.Deploy.ValuesFile = "deploy/environments/staging/sensor.yaml" }},
+		{"values path", func(c *BatchComponent) { c.Deploy.Path = []string{"sensor", "image"} }},
+		{"repository key", func(c *BatchComponent) { c.Deploy.RepositoryKey = "sensorRepository" }},
+		{"tag key", func(c *BatchComponent) { c.Deploy.TagKey = "sensorTag" }},
+		{"digest key", func(c *BatchComponent) { c.Deploy.DigestKey = "sensorDigest" }},
+		{"source key", func(c *BatchComponent) { c.Deploy.SourceKey = "sensorSource" }},
+		{"batch record file", func(c *BatchComponent) { c.Record.BatchFile = "release/other.json" }},
+		{"release record key", func(c *BatchComponent) { c.Record.ReleaseKey = "sensor" }},
+		{"git tag", func(c *BatchComponent) { c.Record.GitTag = "sensor-v1.0.0" }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, batchVersions())
+			batch := r.ensureBatch()
+			test.mutate(&batch.Components[0])
+			if err := writeBatch(r.releaseDir, batch); err != nil {
+				t.Fatal(err)
+			}
+			r.commit("tamper " + test.name)
+			if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil {
+				t.Fatalf("tampered %s was accepted", test.name)
+			}
+		})
+	}
+}
+
+func TestBatchRejectsStructuralContractCorruption(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*Batch)
+	}{
+		{"schema version mismatch", func(b *Batch) { b.Schema++ }},
+		{"environment mismatch", func(b *Batch) { b.Environment = "production" }},
+		{"version set tamper", func(b *Batch) { b.Versions["brain"] = "1.0.1" }},
+		{"status tamper", func(b *Batch) { b.Status = "complete" }},
+		{"missing component", func(b *Batch) { b.Components = b.Components[:len(b.Components)-1] }},
+		{"extra component", func(b *Batch) {
+			b.Components = append(b.Components, b.Components[0])
+			b.Components[len(b.Components)-1].Component = "extra"
+		}},
+		{"duplicate component", func(b *Batch) { b.Components[len(b.Components)-1] = b.Components[0] }},
+		{"reordered components", func(b *Batch) { b.Components[0], b.Components[1] = b.Components[1], b.Components[0] }},
+		{"partial component", func(b *Batch) { b.Components[0].Build = ComponentBuild{} }},
+		{"extra release record", func(b *Batch) {
+			b.Releases["extra"] = Released{Repository: "registry.example/extra", Digest: "sha256:" + strings.Repeat("a", 64)}
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, batchVersions())
+			batch := r.ensureBatch()
+			test.mutate(batch)
+			if err := writeBatch(r.releaseDir, batch); err != nil {
+				t.Fatal(err)
+			}
+			r.commit("corrupt " + test.name)
+			if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil {
+				t.Fatalf("%s was accepted", test.name)
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name string
+		raw  string
+	}{
+		{"truncated JSON", "{\n"},
+		{"unknown field", `{"schema":2,"unknown":true}`},
+		{"partial manifest", `{"schema":2,"status":"prepared"}`},
+		{"trailing document", `{"schema":2} {"schema":2}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, batchVersions())
+			r.ensureBatch()
+			if err := os.WriteFile(filepath.Join(r.releaseDir, BatchFile), []byte(test.raw), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			r.commit("corrupt manifest")
+			if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil {
+				t.Fatalf("%s was accepted", test.name)
+			}
+		})
+	}
+}
+
+func TestBootstrapReadsOnlyPointerAndPinnedToolValidatesContract(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	batch := r.ensureBatch()
+	r.commit("pin batch")
+	batch.Components[1].Image.Repository = "phorvex/sensor"
+	if err := writeBatch(r.releaseDir, batch); err != nil {
+		t.Fatal(err)
+	}
+	r.commit("tamper non-pointer metadata")
+	if source, err := BootstrapSource(r.root, r.releaseDir, "HEAD"); err != nil || source != r.source {
+		t.Fatalf("bootstrap source = %q, %v; want %s", source, err, r.source)
+	}
+	if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil {
+		t.Fatal("authoritative pinned helper accepted metadata bootstrap deliberately ignored")
 	}
 }
 
@@ -240,7 +428,7 @@ func TestBatchRejectsMixedTagsDigestsAndRecordSource(t *testing.T) {
 		r.commit("pin batch")
 		r.record("manager", "1.0.0", "a")
 		r.commit("record manager")
-		if err := Deploy(r.root, ReleaseEnvironment, "manager", "registry.example/phorvex/manager", "1.0.0", "sha256:"+strings.Repeat("b", 64), r.source); err != nil {
+		if err := Deploy(r.root, ReleaseEnvironment, "manager", ReleaseRegistry+"/phorvex/manager", "1.0.0", "sha256:"+strings.Repeat("b", 64), r.source); err != nil {
 			t.Fatal(err)
 		}
 		r.commit("tamper digest")
@@ -254,7 +442,7 @@ func TestBatchRejectsMixedTagsDigestsAndRecordSource(t *testing.T) {
 		r.ensureBatch()
 		r.commit("pin batch")
 		r.git("tag", "manager-v1.0.0", r.source)
-		err := RecordRelease(r.root, r.releaseDir, "HEAD", ReleaseEnvironment, "manager", "registry.example/phorvex/manager",
+		err := RecordRelease(r.root, r.releaseDir, "HEAD", ReleaseEnvironment, "manager", ReleaseRegistry+"/phorvex/manager",
 			"1.0.0", "sha256:"+strings.Repeat("a", 64), strings.Repeat("b", 40))
 		if err == nil || !strings.Contains(err.Error(), "does not match batch source") {
 			t.Fatalf("record mismatch error = %v", err)
@@ -316,16 +504,36 @@ func TestLegacyCompleteBatchImportsOnlyUnanimousProvenance(t *testing.T) {
 	r := newBatchTestRepo(t, batchVersions())
 	for i, c := range Components {
 		r.git("tag", c.Name+"-v1.0.0", r.source)
-		if err := Deploy(r.root, ReleaseEnvironment, c.Name, "registry.example/phorvex/"+c.Name, "1.0.0",
+		if err := Deploy(r.root, ReleaseEnvironment, c.Name, ReleaseRegistry+"/phorvex/"+c.Name, "1.0.0",
 			"sha256:"+strings.Repeat(string(rune('a'+i)), 64), r.source); err != nil {
 			t.Fatal(err)
 		}
 	}
 	r.commit("legacy complete pins")
-	batch, changed, err := EnsureBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment)
-	if err != nil || !changed || batch.Status != "complete" || batch.Source != r.source {
-		t.Fatalf("legacy import = %#v changed=%v err=%v", batch, changed, err)
+	batch, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment)
+	if err != nil || batch.Status != "complete" || batch.Source != r.source {
+		t.Fatalf("legacy import = %#v err=%v", batch, err)
 	}
+}
+
+func TestLegacyTerminalImportCannotAuthorizeComponentWork(t *testing.T) {
+	t.Run("untagged", func(t *testing.T) {
+		r := newBatchTestRepo(t, batchVersions())
+		if _, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment); err == nil || !strings.Contains(err.Error(), "not terminal") {
+			t.Fatalf("untagged terminal import error = %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(r.releaseDir, BatchFile)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("terminal import wrote a work-authorizing batch: %v", err)
+		}
+	})
+
+	t.Run("partial tags", func(t *testing.T) {
+		r := newBatchTestRepo(t, batchVersions())
+		r.git("tag", "manager-v1.0.0", r.source)
+		if _, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment); err == nil || !strings.Contains(err.Error(), "partially tagged") {
+			t.Fatalf("partial terminal import error = %v", err)
+		}
+	})
 }
 
 func TestBatchCommandsRejectDirtyLocalSource(t *testing.T) {

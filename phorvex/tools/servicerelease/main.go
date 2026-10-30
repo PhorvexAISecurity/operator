@@ -20,6 +20,8 @@ const usage = `usage:
   servicerelease affected --base <rev> [--head <rev>] [--markdown]
   servicerelease plan [--head <rev>] [--json]
   servicerelease prepare [--dir release] [--date YYYY-MM-DD] --title-file <path> --body-file <path>
+  servicerelease bootstrap-source [--dir release] [--head <rev>]
+  servicerelease import-terminal-batch [--dir release] [--head <rev>] [--environment staging]
   servicerelease batch [--dir release] [--head <rev>] [--environment staging]
   servicerelease batch-source [--dir release] [--head <rev>]
   servicerelease pending [--dir release]
@@ -33,7 +35,7 @@ const usage = `usage:
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "batch": true, "batch-source": true, "pending": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -42,13 +44,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	base := fs.String("base", "", "[affected] the revision the change starts from; [pull-request] the branch the PR merges into")
 	head := fs.String("head", "HEAD", "the revision the change ends at; [pull-request] the PR's branch")
-	asJSON := fs.Bool("json", false, "[plan] print the plans as JSON")
+	asJSON := fs.Bool("json", false, "[plan, pending] print JSON")
 	markdown := fs.Bool("markdown", false, "[affected] print a Markdown summary, as for a CI job summary")
-	dir := fs.String("dir", "release", "[prepare, batch, batch-source, pending, record] the release directory, relative to the repository root")
+	dir := fs.String("dir", "release", "[prepare, bootstrap-source, import-terminal-batch, batch, batch-source, pending, record] the release directory, relative to the repository root")
 	date := fs.String("date", time.Now().UTC().Format("2006-01-02"), "[prepare] the release date in the changelogs")
 	titleFile := fs.String("title-file", "", "[prepare, pull-request] the release PR's title")
 	bodyFile := fs.String("body-file", "", "[prepare, pull-request] the release PR's Markdown body")
-	environment := fs.String("environment", "", "[batch, record, deploy] the environment under deploy/environments")
+	environment := fs.String("environment", "", "[import-terminal-batch, batch, record, deploy] the environment under deploy/environments")
 	component := fs.String("component", "", "[record, deploy] the released component")
 	repository := fs.String("repository", "", "[record, deploy] the image repository, with its registry")
 	tag := fs.String("tag", "", "[record, deploy] the released version")
@@ -147,6 +149,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return fail(err)
 		}
 		fmt.Fprintln(stdout, title)
+	case "bootstrap-source":
+		source, err := BootstrapSource(root, releaseDir, *head)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, source)
+	case "import-terminal-batch":
+		env := *environment
+		if env == "" {
+			env = ReleaseEnvironment
+		}
+		batch, err := ImportTerminalBatch(root, releaseDir, *head, env)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, batch.Source)
 	case "batch":
 		env := *environment
 		if env == "" {
@@ -170,17 +188,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return fail(err)
 		}
+		if *asJSON {
+			if pending == nil {
+				pending = []Pending{}
+			}
+			enc := json.NewEncoder(stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(pending); err != nil {
+				return fail(err)
+			}
+			return 0
+		}
 		// One release per line, tab-separated, for the release workflow; the last
 		// field is the image's docker build options.
 		for _, p := range pending {
 			var buildArgs []string
-			for _, a := range p.BuildArgs {
+			for _, a := range p.Build.Args {
 				buildArgs = append(buildArgs, "--build-arg", a)
 			}
-			if p.Target != "" {
-				buildArgs = append(buildArgs, "--target", p.Target)
+			if p.Build.Target != "" {
+				buildArgs = append(buildArgs, "--target", p.Build.Target)
 			}
-			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Dockerfile, p.Repository, strings.Join(buildArgs, " "))
+			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Build.Dockerfile, p.Image.Repository, strings.Join(buildArgs, " "))
 		}
 	case "record":
 		if *environment == "" || *component == "" || *repository == "" || *tag == "" || *digest == "" || *source == "" {
