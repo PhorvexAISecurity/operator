@@ -695,6 +695,27 @@ const (
 	StatefulRotationError       StatefulRotationOutcome = "error"
 )
 
+// statefulRotationOutcomes is every StatefulRotationOutcome, in severity order.
+var statefulRotationOutcomes = []StatefulRotationOutcome{StatefulRotationConfirmed, StatefulRotationUnconfirmed,
+	StatefulRotationPartial, StatefulRotationRefused, StatefulRotationError}
+
+// InitStatefulRotation creates the stateful rotation series at zero. It creates the
+// recovery histogram for every stateful action, and the dispatch counter for every
+// action and outcome in each namespace whose policies this actuator serves. A series
+// first exported at 1 hides that first dispatch from increase() and rate(), so the
+// dashboards would miss it. An unscoped actuator (no namespaces) pre-creates only the
+// histograms.
+func InitStatefulRotation(namespaces []string) {
+	for _, action := range model.StatefulRotationActions {
+		statefulRecovery.WithLabelValues(string(action))
+		for _, namespace := range namespaces {
+			for _, outcome := range statefulRotationOutcomes {
+				statefulRotations.WithLabelValues(namespace, string(action), string(outcome))
+			}
+		}
+	}
+}
+
 // RecordStatefulRotation counts one stateful rotation dispatch. A confirmed dispatch also
 // records its recovery time from the accepted Eviction.
 func RecordStatefulRotation(namespace, action string, outcome StatefulRotationOutcome, recovery time.Duration) {

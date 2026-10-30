@@ -145,6 +145,7 @@ func run(ctx context.Context, cfg config, restConfig *rest.Config, lis net.Liste
 	if err != nil {
 		return err
 	}
+	metrics.InitStatefulRotation(policyNamespaces)
 	backend, err := actuator.ResolveBackendFromEnv()
 	if err != nil {
 		return fmt.Errorf("invalid actuator configuration: %w", err)
