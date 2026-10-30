@@ -2,6 +2,7 @@ package statefulrotation
 
 import (
 	"context"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -92,6 +93,12 @@ func Observe(ctx context.Context, r client.Reader, p *corev1.Pod) *model.Statefu
 			FromTemplate: templates[pvc.Name],
 		})
 	}
+	since, ok := sinceMemberReady(ctx, r, sts, time.Now())
+	if !ok {
+		o.Reason = "owner members unreadable"
+		return o
+	}
+	o.SinceMemberReady = since
 	if contract.SnapshotClass != "" {
 		class := &unstructured.Unstructured{}
 		class.SetGroupVersionKind(VolumeSnapshotClassGVK)
@@ -99,6 +106,39 @@ func Observe(ctx context.Context, r client.Reader, p *corev1.Pod) *model.Statefu
 	}
 	o.Complete = true
 	return o
+}
+
+// sinceMemberReady lists the owner's members and returns the time since the latest
+// PodReady=True transition among them. No Ready member reports zero, which admission
+// treats as unsettled.
+func sinceMemberReady(ctx context.Context, r client.Reader, sts *appsv1.StatefulSet, now time.Time) (time.Duration, bool) {
+	if sts.Spec.Selector == nil {
+		return 0, false
+	}
+	selector, err := metav1.LabelSelectorAsSelector(sts.Spec.Selector)
+	if err != nil || selector.Empty() {
+		return 0, false
+	}
+	pods := &corev1.PodList{}
+	if err := r.List(ctx, pods, client.InNamespace(sts.Namespace), client.MatchingLabelsSelector{Selector: selector}); err != nil {
+		return 0, false
+	}
+	var latest time.Time
+	for i := range pods.Items {
+		p := &pods.Items[i]
+		if owner := OwnerStatefulSet(p); owner == nil || owner.UID != sts.UID {
+			continue
+		}
+		for _, c := range p.Status.Conditions {
+			if c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue && c.LastTransitionTime.After(latest) {
+				latest = c.LastTransitionTime.Time
+			}
+		}
+	}
+	if latest.IsZero() {
+		return 0, true
+	}
+	return now.Sub(latest), true
 }
 
 // PodReady reports the Pod's Ready condition.

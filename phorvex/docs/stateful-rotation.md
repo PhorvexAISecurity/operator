@@ -30,7 +30,9 @@ Selection uses the existing optimizer unchanged. The inputs are:
 - **Admission** (`internal/statefulrotation/admit.go`, through the feasibility law
   `stateful-rotation-admission`): the class must be declared, the observation complete,
   the target Ready, and the owner not mid-rollout with every member Ready. A replicated
-  set must keep its quorum with the target out. Each class adds its own volume
+  set must keep its quorum with the target out. The set must also have settled: no member
+  may have become Ready within the declared resync bound (or the recovery bound when the
+  owner does not declare peer-resync). Each class adds its own volume
   preconditions (A: non-leader member, claims from `volumeClaimTemplates`, Bound; B: the
   snapshot class exists and claims are Bound; C: no claims). The policy availability floor
   and PodDisruptionBudget rules apply as they do for `rotate`.
@@ -62,8 +64,8 @@ malformed value fails the whole contract closed.
 | `phorvex.ai/stateful-leader-label` | `key=value` | class A never rebuilds the matching member |
 | `phorvex.ai/stateful-snapshot-class` | VolumeSnapshotClass name | class B |
 | `phorvex.ai/stateful-checkpoint-port` / `-checkpoint-path` / `-restore-path` | port, absolute paths | class C |
-| `phorvex.ai/stateful-recovery-seconds` | 1–3600 (default 300) | Ready bound; confirmation window and cost |
-| `phorvex.ai/stateful-resync-seconds` | 1–3600 (default 3600) | peer catch-up bound for class A cost |
+| `phorvex.ai/stateful-recovery-seconds` | 1–3600 (default 300) | Ready bound; confirmation window, cost, and the settle time without peer-resync |
+| `phorvex.ai/stateful-resync-seconds` | 1–3600 (default 3600) | peer catch-up bound; class A cost and the settle time with peer-resync |
 
 A replicated database that allows rebuild, plus a snapshot restart for its primary:
 
@@ -136,8 +138,14 @@ Failure outcomes:
   `unconfirmed`. It never claims success.
 
 Repeated actions on the same member are damped by the pod-identity anti-over-rotation
-clock. Quorum headroom and "every member Ready" mean a set is never rotated twice before
-it has recovered.
+clock. That clock is per Pod, so it does not stop the brain from moving straight on to a
+sibling. A readiness probe also does not prove that a rebuilt member has caught up with
+its peers. The owner settle time closes that gap. Every class on the set is refused until
+the youngest member has been Ready for the declared resync bound (or the recovery bound
+without peer-resync), measured from the latest `Ready` transition among the owner's
+Pods. If the members cannot be listed, the observation is incomplete, and every class is
+refused. A set is therefore rotated one member at a time, with each replacement given its
+declared catch-up time first.
 
 ## Restoring from a class B snapshot
 

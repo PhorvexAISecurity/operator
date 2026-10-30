@@ -31,12 +31,12 @@ func TestSnapshotProjectsStatefulRotationObservation(t *testing.T) {
 	owner := func(name string, annotations map[string]string) *appsv1.StatefulSet {
 		return &appsv1.StatefulSet{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "db", Name: name, UID: types.UID("uid-" + name), Annotations: annotations},
-			Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+			Spec:       appsv1.StatefulSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": name}}},
 			Status:     appsv1.StatefulSetStatus{ReadyReplicas: 2, CurrentRevision: "r1", UpdateRevision: "r1"},
 		}
 	}
 	member := func(owner string) *corev1.Pod {
-		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "db", Name: owner + "-0", UID: types.UID("pod-" + owner),
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "db", Name: owner + "-0", UID: types.UID("pod-" + owner), Labels: map[string]string{"app": owner},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: "apps/v1", Kind: "StatefulSet", Name: owner, UID: types.UID("uid-" + owner), Controller: &yes}}}}
 	}
 	c := fake.NewClientBuilder().WithScheme(s).WithObjects(
