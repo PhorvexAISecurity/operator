@@ -127,14 +127,28 @@ shared → isolated → shared transition is covered by the release-tool tests.
 
 ## Reviewed publication and deployment
 
-After this source PR is independently reviewed and merged:
+After this source PR is independently reviewed and merged, first wait for the
+normal `Release` run triggered by that merge. The current PR #119 shared batch
+is still prepared; it must become complete before isolated pins can supersede
+its staging consumers. Then publish from the new exact `main` SHA (which
+contains this reviewed source and the source-pinned shared release record):
 
 ```sh
-source_sha="$(gh pr view <source-pr> --repo PhorvexSecurity/operator-refactored --json mergeCommit --jq .mergeCommit.oid)"
+repo=PhorvexSecurity/operator-refactored
+merge_sha="$(gh pr view <source-pr> --repo "$repo" --json mergeCommit --jq .mergeCommit.oid)"
+release_run="$(gh run list --repo "$repo" --workflow release.yml --event push \
+  --commit "$merge_sha" --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run watch "$release_run" --repo "$repo" --exit-status
+
+git fetch origin main
+source_sha="$(git rev-parse origin/main)"
+test "$(git show "$source_sha:release/batch.json" | jq -r .status)" = complete
 gh workflow run staging-isolated-release.yml \
-  --repo PhorvexSecurity/operator-refactored \
+  --repo "$repo" \
   --ref main -f source="$source_sha"
-gh run watch --repo PhorvexSecurity/operator-refactored --exit-status
+staging_run="$(gh run list --repo "$repo" --workflow staging-isolated-release.yml \
+  --branch main --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run watch "$staging_run" --repo "$repo" --exit-status
 ```
 
 That run publishes the images and opens/updates a separate staging digest-pin
