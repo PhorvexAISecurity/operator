@@ -67,7 +67,9 @@ jobs:
           set -euo pipefail
           go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
           "$RUNNER_TEMP/servicerelease" pending --json > "$RUNNER_TEMP/shared-pending.json"
-          if [ "$(jq 'length' "$RUNNER_TEMP/shared-pending.json")" -ne 0 ]; then
+          pending_count="$(jq -er 'if type == "array" then length else error("shared pending result is not an array") end' \
+            "$RUNNER_TEMP/shared-pending.json")"
+          if [ "$pending_count" -ne 0 ]; then
             echo "::error::complete the source-pinned shared release batch before isolated publication"
             exit 1
           fi
