@@ -274,6 +274,20 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
 
 
 class CatalogueFixtureSourceTests(unittest.TestCase):
+    def test_overlay_generator_emits_no_yaml_aliases(self):
+        args = argparse.Namespace(
+            profile="agent-action", workload_image="", phorvex_image="",
+            agent_image="registry.example.test/phorvex/agentsim@" + DIGEST,
+            python_image=IMAGES["python"], kwok_image=IMAGES["kwok"],
+        )
+        rendered = yaml.safe_dump(
+            render_catalogue_staging_values.overlay(args), sort_keys=False, width=120,
+        )
+        self.assertFalse(any(
+            isinstance(event, yaml.events.AliasEvent) or getattr(event, "anchor", None)
+            for event in yaml.parse(rendered)
+        ))
+
     def test_generated_profiles_cover_exact_catalogue_once(self):
         catalogue = json.loads(CATALOGUE.read_text(encoding="utf-8"))
         profiles = yaml.safe_load(PROFILES.read_text(encoding="utf-8"))

@@ -1,9 +1,12 @@
 phorvex:
-  policyNamespaces: &id001
+  policyNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
   - p6-demo
-  actuatorNamespaces: *id001
+  actuatorNamespaces:
+  - phorvex-staging-demo
+  - console-identity-shared
+  - p6-demo
   trustedDetectors:
   - phorvex-staging/staging-attacks
   - p6/p6-attacks
@@ -17,7 +20,10 @@ phorvex:
     configMapName: ''
     configMapNames: []
   console:
-    attackNamespaces: *id001
+    attackNamespaces:
+    - phorvex-staging-demo
+    - console-identity-shared
+    - p6-demo
     attackCatalog:
       enabled: true
       authorizationTenant: p6-demo

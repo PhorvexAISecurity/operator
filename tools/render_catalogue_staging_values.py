@@ -60,13 +60,13 @@ def overlay(args: argparse.Namespace) -> dict:
 
     result = {
         "phorvex": {
-            "policyNamespaces": scopes,
-            "actuatorNamespaces": scopes,
+            "policyNamespaces": list(scopes),
+            "actuatorNamespaces": list(scopes),
             "trustedDetectors": trusted,
             "agentActionDeny": {"enabled": args.profile == "agent-action", "namespaces": ["p6-demo"] if args.profile == "agent-action" else []},
             "outputPolicy": {"enabled": False, "targetNamespace": "", "configMapName": "", "configMapNames": []},
             "console": {
-                "attackNamespaces": scopes,
+                "attackNamespaces": list(scopes),
                 "attackCatalog": {
                     "enabled": True,
                     "authorizationTenant": destinations[0],
