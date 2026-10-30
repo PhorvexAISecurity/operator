@@ -54,6 +54,14 @@ class PRValidationTests(unittest.TestCase):
         self.assertIn('release.verify_deployment(value, None, canonical)', committed_verifier)
         self.assertIn('selection = isolated_selection_commit(source)', committed_verifier)
         self.assertIn('"--services", str(services), "--base", source', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('selection = isolated_selection_commit(source)'),
+            committed_verifier.index('if shared_source:'),
+        )
+        self.assertLess(
+            committed_verifier.index('"--services", str(services), "--base", source'),
+            committed_verifier.index('if shared_source:'),
+        )
         self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
         self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])

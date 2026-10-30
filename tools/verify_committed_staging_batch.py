@@ -87,6 +87,19 @@ def main() -> int:
             "--batch", str(BATCH), "--services", str(services), "--complete", cwd=source_root,
         )
         canonical = release.read_json(services)
+        value = release.validate_batch(
+            release.read_json(BATCH), require_complete=True, canonical_services=canonical
+        )
+        selection = isolated_selection_commit(source)
+        run("git", "worktree", "add", "--detach", str(selection_root), selection)
+        # Re-run the source-pinned proposal gate at the exact commit that selected
+        # this batch even after a later shared publication supersedes its consumers.
+        # This retains the original production/staging non-diff proof permanently.
+        run(
+            sys.executable, str(selection_root / "tools/staging_release.py"),
+            "verify-deployment", "--batch", str(selection_root / "release/staging-batch.json"),
+            "--services", str(services), "--base", source, cwd=selection_root,
+        )
         shared_source = superseding_shared_source(source)
         if shared_source:
             shared_helper = temporary / "shared-servicerelease"
@@ -100,22 +113,9 @@ def main() -> int:
             # the historical isolated selection.
             run(str(shared_helper), "pending", "--json", cwd=ROOT)
         else:
-            value = release.validate_batch(
-                release.read_json(BATCH), require_complete=True, canonical_services=canonical
-            )
             # Current source PRs may evolve unrelated reviewed code after the pin
             # selection, but the retained staging consumers must remain exact.
             release.verify_deployment(value, None, canonical)
-            selection = isolated_selection_commit(source)
-            run("git", "worktree", "add", "--detach", str(selection_root), selection)
-            # Re-run the source-pinned proposal gate at the exact commit that selected
-            # this batch. This keeps the production/staging non-diff guarantee without
-            # rejecting unrelated later source PRs.
-            run(
-                sys.executable, str(selection_root / "tools/staging_release.py"),
-                "verify-deployment", "--batch", str(selection_root / "release/staging-batch.json"),
-                "--services", str(services), "--base", source, cwd=selection_root,
-            )
     finally:
         if selection_root.exists():
             subprocess.run(
