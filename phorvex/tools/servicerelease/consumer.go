@@ -592,11 +592,19 @@ func renderChart(root string, route deploymentRoute, overridePath string, overri
 	}
 	cmd := exec.Command(helm, args...)
 	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err = cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("helm render %s: %w\n%s", route.Chart, err, strings.TrimSpace(string(out)))
+		diagnostic := strings.TrimSpace(stderr.String())
+		if diagnostic == "" {
+			diagnostic = strings.TrimSpace(stdout.String())
+		}
+		return nil, fmt.Errorf("helm render %s: %w\n%s", route.Chart, err, diagnostic)
 	}
-	return out, nil
+	return stdout.Bytes(), nil
 }
 
 var renderReleaseChart = renderChart

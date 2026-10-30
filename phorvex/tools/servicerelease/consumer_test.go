@@ -50,6 +50,7 @@ func useRealReleaseRenderer(t *testing.T) {
 
 func TestConsumerProbeFollowsHelperTemplateIndirection(t *testing.T) {
 	useRealReleaseRenderer(t)
+	t.Setenv("KUBECONFIG", "/dev/null")
 	root := t.TempDir()
 	writeConsumerFixture(t, root, "chart/Chart.yaml", "apiVersion: v2\nname: brain\nversion: 0.1.0\n")
 	writeConsumerFixture(t, root, "chart/values.yaml", "{}\n")
