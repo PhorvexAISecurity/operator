@@ -646,6 +646,7 @@ func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool
 	if err := validateContractSet(root, dir, batch); err != nil {
 		return err
 	}
+	complete := batchStatus(batch.ExpectedComponents, batch.Releases) == "complete"
 	for i := range batch.Components {
 		contract := &batch.Components[i]
 		name := contract.Component
@@ -669,6 +670,14 @@ func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool
 			}
 		}
 		if current {
+			// An in-flight batch pins its exact route and consumer set; a complete one only
+			// requires the current route to still render the released images.
+			if complete {
+				if err := validateReleasedDeploymentConsumer(root, batch, contract, released, overrideRaw); err != nil {
+					return err
+				}
+				continue
+			}
 			var release *Released
 			if recorded {
 				release = &released

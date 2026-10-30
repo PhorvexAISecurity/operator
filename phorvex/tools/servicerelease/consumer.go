@@ -953,6 +953,32 @@ func validateDeploymentConsumer(root string, batch *Batch, contract *BatchCompon
 	return nil
 }
 
+// validateReleasedDeploymentConsumer checks one component of a complete batch at a later
+// head. The batch is then a historical record: the chart, helpers and values may have
+// changed since its source, and the next version set pins them anew. What must still hold
+// is that every image consumer rendered through the current route is bound to the
+// component's values source and selects exactly the released image.
+func validateReleasedDeploymentConsumer(root string, batch *Batch, contract *BatchComponent, released Released, overrideRaw []byte) error {
+	current, err := resolveDeploymentRoute(root, batch.Environment, contract.Component, contract.Deploy)
+	if err != nil {
+		return fmt.Errorf("component %s deployment consumer: %w", contract.Component, err)
+	}
+	consumers, images, err := probeConsumers(root, current, contract.Deploy, contract.Component, overrideRaw)
+	if err != nil {
+		return fmt.Errorf("component %s deployment consumer: %w", contract.Component, err)
+	}
+	if len(consumers) == 0 {
+		return fmt.Errorf("component %s renders no image consumer", contract.Component)
+	}
+	wantImage := expectedRenderedImage(released.Repository, contract.Image.Tag, released.Digest)
+	for _, consumer := range consumers {
+		if got := images[consumer.key()]; got != wantImage {
+			return fmt.Errorf("component %s rendered consumer %s selects %q, want verified image %q", contract.Component, strings.ReplaceAll(consumer.key(), "\x00", "/"), got, wantImage)
+		}
+	}
+	return nil
+}
+
 func gitShow(root, source, path string) ([]byte, error) {
 	path, err := cleanRepoPath(path)
 	if err != nil {

@@ -696,6 +696,75 @@ func TestCompleteBatchAndTerminalNextBatch(t *testing.T) {
 	}
 }
 
+// A complete batch is a historical record: a later chart or shared-values change does not
+// block pending/preparation of the next version set, but staging must still render only the
+// released images.
+func TestCompleteBatchAllowsLaterRouteChangesButOnlyReleasedImages(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	r.ensureBatch()
+	r.commit("pin batch")
+	digestByte := map[string]string{}
+	for i, c := range Components {
+		digestByte[c.Name] = string(rune('a' + i))
+		r.record(c.Name, "1.0.0", digestByte[c.Name])
+	}
+	r.commit("record full batch")
+
+	var manager Component
+	for _, c := range Components {
+		if c.Name == "manager" {
+			manager = c
+		}
+	}
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(r.root, filepath.FromSlash(path)), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("deploy/environments/staging/phorvex.yaml", "phorvex:\n  statefulRotation:\n    enabled: true\n")
+	write(manager.Chart+"/values.yaml", "dashboard: {}\n")
+	r.commit("later shared values and chart change")
+	if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err != nil {
+		t.Fatalf("complete batch after a later route change: %v", err)
+	}
+	if pending, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err != nil || len(pending) != 0 {
+		t.Fatalf("pending after a later route change = %v, %v", pending, err)
+	}
+
+	valuesPath := "deploy/environments/staging/" + manager.Deploy.File + ".yaml"
+	raw, err := os.ReadFile(filepath.Join(r.root, filepath.FromSlash(valuesPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := "sha256:" + strings.Repeat(digestByte["manager"], 64)
+	if !strings.Contains(string(raw), released) {
+		t.Fatalf("manager values do not pin the released digest:\n%s", raw)
+	}
+	write(valuesPath, strings.ReplaceAll(string(raw), released, "sha256:"+strings.Repeat("f", 64)))
+	r.commit("point staging at an unreleased manager image")
+	if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil || !strings.Contains(err.Error(), "does not match its staging image pin") {
+		t.Fatalf("unreleased pinned image after a complete batch: %v", err)
+	}
+	write(valuesPath, string(raw))
+	r.commit("restore the released manager pin")
+	if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err != nil {
+		t.Fatalf("restored release pin: %v", err)
+	}
+
+	// An unreleased image can also arrive through the chart rather than the pin.
+	useRealReleaseRenderer(t)
+	template, err := os.ReadFile(filepath.Join(r.root, filepath.FromSlash(manager.Chart), "templates", "deployment.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(manager.Chart+"/templates/deployment.yaml", string(template)+"      - name: sidecar\n        image: \"old.invalid/phorvex/sidecar:0.0.1\"\n")
+	r.commit("add an unbound sidecar image to the manager chart")
+	if _, err := LoadBatch(r.root, r.releaseDir, "HEAD", true); err == nil || !strings.Contains(err.Error(), "component manager") {
+		t.Fatalf("unbound chart image after a complete batch: %v", err)
+	}
+}
+
 func TestLegacyCompleteBatchImportsOnlyUnanimousProvenance(t *testing.T) {
 	r := newBatchTestRepo(t, batchVersions())
 	for i, c := range Components {
