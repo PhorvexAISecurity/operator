@@ -714,6 +714,7 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
 
 def verify_fixture_documents(
     batch: dict[str, Any], name: str, profile: str, documents: list[dict[str, Any]],
+    service_selections: dict[str, tuple[dict[str, Any], dict[str, str]]] | None = None,
 ) -> None:
     item = next(component for component in batch["components"] if component["component"] == name)
     fixture_image = f"{batch['releases'][name]['repository']}@{batch['releases'][name]['digest']}"
@@ -726,6 +727,8 @@ def verify_fixture_documents(
         raise ValueError(f"fixture {name} has no rendered consumer contract for profile {profile}")
     attacks = next(component for component in batch["components"] if component["component"] == "attacks")
     attacks_release = batch["releases"]["attacks"]
+    if service_selections and "attacks" in service_selections:
+        attacks, attacks_release = service_selections["attacks"]
     attacks_image = (
         f"{attacks_release['repository']}:{attacks['image']['tag']}@{attacks_release['digest']}"
     )
@@ -767,11 +770,84 @@ def verify_rendered_service(item: dict[str, Any], release: dict[str, str]) -> No
     verify_service_documents(item, release, documents)
 
 
-def verify_deployment(batch: dict[str, Any], base: str | None, canonical_services: Any) -> None:
+def superseding_shared_services(
+    shared: Any, isolated_source: str,
+) -> dict[str, tuple[dict[str, Any], dict[str, str]]]:
+    if not isinstance(shared, dict) or set(shared) != {
+        "schema", "status", "source", "environment", "expectedComponents",
+        "versions", "components", "releases",
+    }:
+        raise ValueError("superseding shared batch has an incomplete or unknown contract")
+    source = shared.get("source", "")
+    names = shared.get("expectedComponents")
+    versions = shared.get("versions")
+    components = shared.get("components")
+    releases = shared.get("releases")
+    if (
+        shared.get("schema") != 2 or shared.get("status") != "complete"
+        or shared.get("environment") != "staging" or not SHA.fullmatch(source)
+        or not isinstance(names, list) or not names or not all(isinstance(name, str) for name in names)
+        or not isinstance(versions, dict) or not isinstance(components, list)
+        or not all(isinstance(item, dict) for item in components)
+        or not isinstance(releases, dict)
+    ):
+        raise ValueError("superseding shared batch is not a complete staging release")
+    if source == isolated_source or subprocess.run(
+        ["git", "merge-base", "--is-ancestor", isolated_source, source], cwd=ROOT
+    ).returncode != 0:
+        raise ValueError("superseding shared batch is not newer than the isolated source")
+    if (
+        names != [item.get("component") for item in components if isinstance(item, dict)]
+        or len(names) != len(set(names)) or not set(names).issubset(SERVICE_NAMES)
+        or set(versions) != set(names) or set(releases) != set(names)
+    ):
+        raise ValueError("superseding shared batch component set is malformed")
+    selected = {}
+    for item in components:
+        name = item["component"]
+        version = item.get("version")
+        image = item.get("image", {})
+        identity = item.get("identity", {})
+        deploy = item.get("deploy", {})
+        released = releases[name]
+        expected_repository = f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/{name}"
+        if (
+            item.get("source") != source or not isinstance(version, str) or not version
+            or versions.get(name) != version or not isinstance(image, dict)
+            or set(image) != {"registry", "repository", "tag"}
+            or image.get("registry") != "753556437180.dkr.ecr.us-east-2.amazonaws.com"
+            or image.get("repository") != f"phorvex/{name}"
+            or image.get("tag") != version
+            or not isinstance(identity, dict) or identity.get("service") != name
+            or identity.get("command") != SERVICE_COMMANDS[name] or identity.get("aliases") != []
+            or not isinstance(deploy, dict) or not isinstance(deploy.get("consumers"), list)
+            or not deploy["consumers"] or not all(isinstance(consumer, dict) for consumer in deploy["consumers"])
+            or not isinstance(released, dict) or set(released) != {"repository", "digest"}
+            or released.get("repository") != expected_repository
+            or not DIGEST.fullmatch(released.get("digest", ""))
+        ):
+            raise ValueError(f"superseding shared component {name} identity is malformed")
+        for consumer in deploy["consumers"]:
+            if consumer.get("component") != name or consumer.get("expectedRepository") != expected_repository:
+                raise ValueError(f"superseding shared component {name} consumer escapes its repository")
+        selected[name] = (item, released)
+    return selected
+
+
+def verify_deployment(
+    batch: dict[str, Any], base: str | None, canonical_services: Any,
+    superseding_shared: Any | None = None,
+) -> None:
     validate_batch(batch, require_complete=True, canonical_services=canonical_services)
     target = expected_target()
     verify_argocd(target)
+    shared_services = (
+        superseding_shared_services(superseding_shared, batch["source"])
+        if superseding_shared is not None else {}
+    )
     for item in batch["components"][: len(SERVICE_NAMES)]:
+        if item["component"] in shared_services:
+            continue
         release = batch["releases"][item["component"]]
         values = image_values(item)
         expected = {"repository": release["repository"], "tag": item["image"]["tag"], "digest": release["digest"]}
@@ -795,7 +871,7 @@ def verify_deployment(batch: dict[str, Any], base: str | None, canonical_service
             documents = render_fixture(
                 profile, fixture_refs["catalogue-workload"], fixture_refs["agent-sim"]
             )
-            verify_fixture_documents(batch, name, profile, documents)
+            verify_fixture_documents(batch, name, profile, documents, shared_services)
     if base:
         changed = set(filter(None, git_output(["diff", "--name-only", base, "--"]).splitlines()))
         allowed = {"release/staging-batch.json"}

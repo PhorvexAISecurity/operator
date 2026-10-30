@@ -64,6 +64,11 @@ class PRValidationTests(unittest.TestCase):
         )
         self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
         self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
+        self.assertIn('superseding_shared=release.read_json(SHARED_BATCH)', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('run(str(shared_helper), "pending", "--json", cwd=ROOT)'),
+            committed_verifier.index('superseding_shared=release.read_json(SHARED_BATCH)'),
+        )
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')

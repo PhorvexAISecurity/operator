@@ -21,28 +21,49 @@ def source_sha() -> str:
 
 
 def service_contracts(source: str) -> list[dict]:
-    historical = json.loads((ROOT / "release/batch.json").read_text(encoding="utf-8"))["components"]
-    contracts = copy.deepcopy(historical)
-    for item in contracts:
-        name = item["component"]
-        version = item["version"]
-        item["source"] = source
-        item["build"]["args"] = [
-            f"GIT_SHA={source}" if value.startswith("GIT_SHA=") else value
-            for value in item["build"]["args"]
-        ]
+    specs = {
+        "manager": ("operator", "/manager", "deploy/docker/operator.Dockerfile", "", "phorvex/charts/phorvex", "manager", ["phorvex", "image"], "releaseDigest", "releaseSourceSHA", "staging-phorvex"),
+        "brain": ("brain", "/service", "deploy/docker/service.Dockerfile", "", "deploy/charts/phorvex-brain", "brain", ["image"], "digest", "", "staging-brain"),
+        "sensor": ("sensor", "/service", "deploy/docker/service.Dockerfile", "", "deploy/charts/phorvex-sensor", "sensor", ["image"], "digest", "", "staging-sensor"),
+        "actuator": ("actuator", "/service", "deploy/docker/service.Dockerfile", "", "deploy/charts/phorvex-actuator", "actuator", ["image"], "digest", "", "staging-actuator"),
+        "console": ("console", "/app/console", "deploy/docker/console.Dockerfile", "", "deploy/charts/phorvex-console", "console", ["phorvex", "console", "image"], "releaseDigest", "releaseSourceSHA", "staging-phorvex-console"),
+        "attacks": ("attacks", "/app/attacks", "deploy/docker/console.Dockerfile", "attacks", "deploy/charts/phorvex-attacks", "attacks", ["image"], "digest", "", "staging-attacks"),
+    }
+    contracts = []
+    for name in RELEASE.SERVICE_NAMES:
+        image_name, command, dockerfile, target, chart, values_name, path, digest_key, source_key, workload = specs[name]
+        version = "1.0.0"
+        args = [f"GIT_SHA={source}", f"RELEASE_VERSION={version}"]
+        if name in {"brain", "sensor", "actuator"}:
+            args.append(f"SERVICE={name}")
+        if name in {"console", "attacks"}:
+            args.append(f"CONSOLE_VERSION={version}")
         tag = f"{version}-git-{source}"
-        item["image"] = {
-            "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
-            "repository": f"phorvex/staging/{name}",
-            "tag": tag,
-            "tags": [tag, f"git-{source}"],
-        }
-        item["deploy"]["application"] = "deploy/argocd/services/applicationset.yaml"
-        item["deploy"]["releaseName"] = "staging"
-        item["deploy"]["namespace"] = "phorvex-staging"
-        for consumer in item["deploy"]["consumers"]:
-            consumer["expectedRepository"] = f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/{name}"
+        values_file = f"deploy/environments/staging/{values_name}.yaml"
+        contracts.append({
+            "component": name, "source": source, "version": version,
+            "build": {"dockerfile": dockerfile, "context": ".", "target": target, "args": args},
+            "image": {
+                "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+                "repository": f"phorvex/staging/{name}", "tag": tag,
+                "tags": [tag, f"git-{source}"],
+            },
+            "identity": {"service": name, "command": command, "validationImage": image_name, "aliases": []},
+            "deploy": {
+                "application": "deploy/argocd/services/applicationset.yaml", "chart": chart,
+                "releaseName": "staging", "namespace": "phorvex-staging",
+                "valuesFiles": ["deploy/environments/staging/phorvex.yaml", values_file,
+                                "deploy/environments/staging/catalogue-family.yaml"],
+                "valuesFile": values_file, "path": path, "repositoryKey": "repository",
+                "tagKey": "tag", "digestKey": digest_key, "sourceKey": source_key,
+                "consumers": [{
+                    "apiVersion": "apps/v1", "kind": "Deployment", "namespace": "phorvex-staging",
+                    "name": workload, "container": name,
+                    "fieldPath": "/spec/template/spec/containers/0/image", "component": name,
+                    "expectedRepository": f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/{name}",
+                }],
+            },
+        })
     return contracts
 
 
@@ -65,6 +86,40 @@ def publication_results(value: dict) -> dict:
             "digest": digest,
         }
     return results
+
+
+def shared_batch(value: dict, names: list[str]) -> dict:
+    source = "f" * 40
+    components = []
+    releases = {}
+    versions = {}
+    for isolated in value["components"][: len(RELEASE.SERVICE_NAMES)]:
+        name = isolated["component"]
+        if name not in names:
+            continue
+        item = copy.deepcopy(isolated)
+        item.pop("kind")
+        item["source"] = source
+        item["version"] = "2.0.0"
+        item["image"] = {
+            "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+            "repository": f"phorvex/{name}", "tag": "2.0.0",
+        }
+        for consumer in item["deploy"]["consumers"]:
+            consumer["expectedRepository"] = (
+                f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/{name}"
+            )
+        components.append(item)
+        versions[name] = "2.0.0"
+        releases[name] = {
+            "repository": f"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/{name}",
+            "digest": "sha256:" + format(len(components), "064x"),
+        }
+    return {
+        "schema": 2, "status": "complete", "source": source, "environment": "staging",
+        "expectedComponents": names, "versions": versions, "components": components,
+        "releases": releases,
+    }
 
 
 class StagingTargetTests(unittest.TestCase):
@@ -123,6 +178,50 @@ class StagingTargetTests(unittest.TestCase):
         changed["components"][0]["build"]["dockerfile"] = "deploy/docker/service.Dockerfile"
         with self.assertRaisesRegex(ValueError, "exact source-derived"):
             RELEASE.validate_batch(changed, canonical_services=canonical)
+
+    def test_subset_shared_release_supersedes_only_its_exact_components(self):
+        value = prepared_batch()
+        complete = RELEASE.complete(value, publication_results(value))
+        shared = shared_batch(complete, ["console"])
+        relation = subprocess.CompletedProcess([], 0)
+        with mock.patch.object(RELEASE.subprocess, "run", return_value=relation):
+            selected = RELEASE.superseding_shared_services(shared, complete["source"])
+        self.assertEqual(set(selected), {"console"})
+
+        shared["components"][0]["image"]["repository"] = "phorvex/staging/console"
+        with mock.patch.object(RELEASE.subprocess, "run", return_value=relation), self.assertRaisesRegex(
+            ValueError, "identity is malformed"
+        ):
+            RELEASE.superseding_shared_services(shared, complete["source"])
+
+    def test_subset_shared_release_keeps_unselected_isolated_pins_enforced(self):
+        value = prepared_batch()
+        complete = RELEASE.complete(value, publication_results(value))
+        shared = shared_batch(complete, ["console"])
+        selected = {"console": (shared["components"][0], shared["releases"]["console"])}
+
+        def current_values(item):
+            if item["component"] == "brain":
+                raise ValueError("retained isolated brain pin drift")
+            release = complete["releases"][item["component"]]
+            result = {
+                "repository": release["repository"], "tag": item["image"]["tag"],
+                "digest": release["digest"],
+            }
+            if item["deploy"].get("sourceKey"):
+                result["source"] = complete["source"]
+            return result
+
+        with (
+            mock.patch.object(RELEASE, "validate_batch"),
+            mock.patch.object(RELEASE, "expected_target", return_value={}),
+            mock.patch.object(RELEASE, "verify_argocd"),
+            mock.patch.object(RELEASE, "superseding_shared_services", return_value=selected),
+            mock.patch.object(RELEASE, "image_values", side_effect=current_values),
+            mock.patch.object(RELEASE, "verify_rendered_service"),
+            self.assertRaisesRegex(ValueError, "retained isolated brain pin drift"),
+        ):
+            RELEASE.verify_deployment(complete, None, service_contracts(complete["source"]), shared)
 
     def test_fixture_pin_replaces_only_the_exact_existing_scalar(self):
         raw = "phorvex:\n  console:\n    attackCatalog:\n      agentAction:\n        enabled: false\n        image: \"\"\n"

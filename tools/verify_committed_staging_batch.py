@@ -112,6 +112,13 @@ def main() -> int:
             # deployment consumers and clean working tree before it supersedes
             # the historical isolated selection.
             run(str(shared_helper), "pending", "--json", cwd=ROOT)
+            # Shared releases are legitimately component subsets. Only those
+            # exact components supersede isolated pins; every retained service
+            # and both fixtures must still match the isolated batch. Fixture
+            # renders also bind a shared attacks image when attacks is selected.
+            release.verify_deployment(
+                value, None, canonical, superseding_shared=release.read_json(SHARED_BATCH)
+            )
         else:
             # Current source PRs may evolve unrelated reviewed code after the pin
             # selection, but the retained staging consumers must remain exact.
