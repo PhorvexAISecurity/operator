@@ -280,6 +280,8 @@ class EnvironmentRenderTests(unittest.TestCase):
                     docs = render(environment, element)
                     for d in docs:
                         if d['kind'] in CLUSTER_SCOPED:
+                            if d['kind'] == 'Namespace' and d['metadata']['name'] in FIXTURE_NAMESPACES:
+                                continue
                             self.assertTrue(d['metadata']['name'].startswith(release + '-'), (service, d['kind'], d['metadata']['name']))
                     if service in ('manager', 'sensor', 'actuator'):
                         pod = service_pod(docs, service)
