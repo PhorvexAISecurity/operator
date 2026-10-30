@@ -69,6 +69,12 @@ class PRValidationTests(unittest.TestCase):
             committed_verifier.index('run(str(shared_helper), "pending", "--json", cwd=ROOT)'),
             committed_verifier.index('superseding_shared=release.read_json(SHARED_BATCH)'),
         )
+        self.assertIn(
+            'cleanup_worktrees(temporary, [selection_root, shared_root, source_root])',
+            committed_verifier,
+        )
+        self.assertNotIn('check=False', committed_verifier)
+        self.assertNotIn('ignore_errors=True', committed_verifier)
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')

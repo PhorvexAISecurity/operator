@@ -58,6 +58,26 @@ def isolated_selection_commit(source: str) -> str:
     return selection
 
 
+def cleanup_worktrees(temporary: Path, worktrees: list[Path]) -> None:
+    failures = []
+    for worktree in worktrees:
+        if not worktree.exists():
+            continue
+        try:
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(worktree)],
+                cwd=ROOT, check=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as error:
+            failures.append(f"{worktree.name}: {type(error).__name__}")
+    if failures:
+        raise RuntimeError("temporary worktree cleanup failed: " + ", ".join(failures))
+    try:
+        shutil.rmtree(temporary)
+    except OSError as error:
+        raise RuntimeError(f"temporary release directory cleanup failed: {temporary}") from error
+
+
 def main() -> int:
     if not BATCH.exists():
         print("no committed staging batch")
@@ -124,16 +144,7 @@ def main() -> int:
             # selection, but the retained staging consumers must remain exact.
             release.verify_deployment(value, None, canonical)
     finally:
-        if selection_root.exists():
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(selection_root)], cwd=ROOT, check=False
-            )
-        if shared_root.exists():
-            subprocess.run(
-                ["git", "worktree", "remove", "--force", str(shared_root)], cwd=ROOT, check=False
-            )
-        subprocess.run(["git", "worktree", "remove", "--force", str(source_root)], cwd=ROOT, check=False)
-        shutil.rmtree(temporary, ignore_errors=True)
+        cleanup_worktrees(temporary, [selection_root, shared_root, source_root])
     print(f"verified committed staging batch {source}")
     return 0
 
