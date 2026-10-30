@@ -182,6 +182,43 @@ class StagingTargetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "rendered consumer selects"):
             RELEASE.verify_service_documents(item, published, [deployment])
 
+    def test_exact_pin_values_reject_other_changes_in_an_allowed_staging_file(self):
+        prepared = prepared_batch()
+        complete = RELEASE.complete(prepared, publication_results(prepared))
+        base_values = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for item in complete["components"][: len(RELEASE.SERVICE_NAMES)]:
+                relative = item["deploy"]["valuesFile"]
+                before = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
+                base_values[relative] = before
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    yaml.safe_dump(RELEASE.expected_service_values(before, item, complete), sort_keys=False)
+                )
+            fixture_path = complete["components"][len(RELEASE.SERVICE_NAMES)]["deploy"]["valuesFile"]
+            fixture_before = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
+            base_values[fixture_path] = fixture_before
+            fixture_output = root / fixture_path
+            fixture_output.parent.mkdir(parents=True, exist_ok=True)
+            fixture_output.write_text(
+                yaml.safe_dump(RELEASE.expected_fixture_values(fixture_before, complete), sort_keys=False)
+            )
+
+            def loader(_revision, path):
+                return copy.deepcopy(base_values[path])
+
+            with mock.patch.object(RELEASE, "ROOT", root), mock.patch.object(
+                RELEASE, "git_yaml_at_revision", side_effect=loader
+            ):
+                RELEASE.verify_exact_pin_diffs(complete, complete["source"])
+                changed = yaml.safe_load(fixture_output.read_text(encoding="utf-8"))
+                changed["unexpectedWorkload"] = {"namespace": "phorvex-system"}
+                fixture_output.write_text(yaml.safe_dump(changed, sort_keys=False))
+                with self.assertRaisesRegex(ValueError, "outside the two exact staging digest pins"):
+                    RELEASE.verify_exact_pin_diffs(complete, complete["source"])
+
     def test_both_fixture_destinations_exist_and_are_preflighted_before_any_write(self):
         values = yaml.safe_load((ROOT / "deploy/environments/staging/catalogue-family.yaml").read_text())
         for name in RELEASE.FIXTURE_NAMES:

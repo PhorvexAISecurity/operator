@@ -402,6 +402,72 @@ def image_values(item: dict[str, Any]) -> dict[str, str]:
     }.items()}
 
 
+def expected_service_values(
+    values: dict[str, Any], item: dict[str, Any], batch: dict[str, Any]
+) -> dict[str, Any]:
+    expected = copy.deepcopy(values)
+    node = nested(expected, item["deploy"]["path"])
+    if not isinstance(node, dict):
+        raise ValueError(f"service {item['component']} deployment pin target is not a mapping")
+    release = batch["releases"][item["component"]]
+    fields = {
+        "repositoryKey": release["repository"],
+        "tagKey": item["image"]["tag"],
+        "digestKey": release["digest"],
+    }
+    if item["deploy"].get("sourceKey"):
+        fields["sourceKey"] = batch["source"]
+    for contract_key, value in fields.items():
+        key = item["deploy"].get(contract_key)
+        if not isinstance(key, str) or key not in node:
+            raise ValueError(f"service {item['component']} deployment pin key is absent")
+        node[key] = value
+    return expected
+
+
+def expected_fixture_values(values: dict[str, Any], batch: dict[str, Any]) -> dict[str, Any]:
+    expected = copy.deepcopy(values)
+    for name in FIXTURE_NAMES:
+        item = next(component for component in batch["components"] if component["component"] == name)
+        path = item["deploy"]["path"]
+        parent = nested(expected, path[:-1])
+        if not isinstance(parent, dict) or path[-1] not in parent or not isinstance(parent[path[-1]], str):
+            raise ValueError(f"fixture {name} deployment pin scalar is absent")
+        release = batch["releases"][name]
+        parent[path[-1]] = f"{release['repository']}@{release['digest']}"
+    return expected
+
+
+def git_yaml_at_revision(revision: str, path: str) -> dict[str, Any]:
+    if not SHA.fullmatch(revision):
+        raise ValueError("staging pin diff base is not an exact Git SHA")
+    raw = subprocess.run(
+        ["git", "show", f"{revision}:{path}"], cwd=ROOT, check=True, text=True, capture_output=True
+    ).stdout
+    value = yaml.safe_load(raw)
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} at {revision} is not a values mapping")
+    return value
+
+
+def verify_exact_pin_diffs(batch: dict[str, Any], base: str) -> None:
+    if base != batch["source"]:
+        raise ValueError("staging pin diff base differs from the exact batch source")
+    for item in batch["components"][: len(SERVICE_NAMES)]:
+        path = item["deploy"]["valuesFile"]
+        before = git_yaml_at_revision(base, path)
+        current = yaml.safe_load((ROOT / path).read_text(encoding="utf-8"))
+        if current != expected_service_values(before, item, batch):
+            raise ValueError(
+                f"service {item['component']} values contain changes outside its exact staging image pin"
+            )
+    fixture_path = batch["components"][len(SERVICE_NAMES)]["deploy"]["valuesFile"]
+    before = git_yaml_at_revision(base, fixture_path)
+    current = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
+    if current != expected_fixture_values(before, batch):
+        raise ValueError("fixture values contain changes outside the two exact staging digest pins")
+
+
 def verify_argocd(target: dict[str, Any]) -> None:
     manifest = yaml.safe_load((ROOT / target["deployment"]["applicationManifest"]).read_text(encoding="utf-8"))
     if not isinstance(manifest, dict) or set(manifest) != {"apiVersion", "kind", "metadata", "spec"}:
@@ -566,6 +632,7 @@ def verify_deployment(batch: dict[str, Any], base: str | None, canonical_service
         allowed.update(item["deploy"]["valuesFile"] for item in batch["components"][: len(SERVICE_NAMES)])
         if not changed or not changed.issubset(allowed):
             raise ValueError(f"staging pin diff contains non-staging/production paths: {sorted(changed - allowed)}")
+        verify_exact_pin_diffs(batch, base)
 
 
 def main() -> int:

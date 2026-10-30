@@ -89,9 +89,11 @@ no source path that names them as a publication target.
    the service and fixture consumers select the exact digests after every Argo
    values file, including the catalogue overlay, has been applied in order.
 8. The workflow stages only those seven staging values files plus the batch
-   record, rejects any changed path outside that allowlist, requires the batch
-   record, commits the changed subset to `release/staging-isolated-<sha12>`, and
-   requires GitHub to return the exact open PR before dispatching its checks.
+   record, rejects any changed path outside that allowlist, and reconstructs each
+   values file from the source to prove that only the contracted image-pin scalars
+   changed. It requires the batch record, commits the changed subset to
+   `release/staging-isolated-<sha12>`, and requires GitHub to return the exact open
+   PR before dispatching its checks.
    It never pushes deployment state to `main`, merges, syncs Argo, or runs an
    attack.
 
