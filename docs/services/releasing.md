@@ -122,9 +122,13 @@ summary.
    component's one persisted values source is rejected, including arbitrary
    sidecars and alternate registry/repository strings. Rendered objects without
    a Pod spec are the only intentional exclusion. Chart, helper, subchart, ApplicationSet,
-   shared-values or consumer drift fails before a build. An existing release
-   path that is unused, shadowed, ambiguous, aliased, duplicated, absent or the
-   wrong YAML type also fails.
+   shared-values or consumer drift fails before a build while a batch is in flight.
+   An existing release path that is unused, shadowed, ambiguous, aliased,
+   duplicated, absent or the wrong YAML type also fails. Once a batch is complete
+   it is a historical record: a later head may change the charts and values that
+   the next version set pins anew, but every image consumer rendered through the
+   current route must still be bound to the component's values source and select
+   exactly the released image, and every recorded pin must still match its release.
 
    Before any fixture or service image build, push, version-tag creation or Git
    publication, one aggregate read-only ECR preflight covers the entire persisted
