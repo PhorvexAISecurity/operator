@@ -132,9 +132,9 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for name, content := range map[string]string{
-		"brain.yaml":   "# The brain chart's own staging values.\n{}\n",
-		"manager.yaml": "# The manager chart's values.\nphorvex:\n  leaderElect: true # kept\n",
-		"console.yaml": "# The console chart's values.\n{}\n",
+		"brain.yaml":   "# The brain chart's own staging values.\nimage:\n  repository: \"old/brain\"\n  tag: \"0.1.0\"\n  digest: \"sha256:" + strings.Repeat("0", 64) + "\"\n",
+		"manager.yaml": "# The manager chart's values.\nphorvex:\n  leaderElect: true # kept\n  image:\n    repository: \"old/manager\"\n    tag: \"0.5.0\"\n    releaseDigest: \"sha256:" + strings.Repeat("0", 64) + "\"\n    releaseSourceSHA: \"old\"\n",
+		"console.yaml": "# The console chart's values.\nphorvex:\n  console:\n    image:\n      repository: \"old/console\"\n      tag: \"0.5.0\"\n      releaseDigest: \"sha256:" + strings.Repeat("0", 64) + "\"\n      releaseSourceSHA: \"old\"\n",
 	} {
 		if err := os.WriteFile(filepath.Join(env, name), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
@@ -142,13 +142,15 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 	}
 	digest := "sha256:" + strings.Repeat("a", 64)
 	repo := "registry.example/phorvex/"
+	sourceA := strings.Repeat("a", 40)
+	sourceB := strings.Repeat("b", 40)
 	if err := Deploy(root, "staging", "brain", repo+"brain", "0.2.0", digest, "abc"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Deploy(root, "staging", "manager", repo+"manager", "0.5.1", digest, "abc"); err != nil {
+	if err := Deploy(root, "staging", "manager", repo+"manager", "0.5.1", digest, sourceA); err != nil {
 		t.Fatal(err)
 	}
-	if err := Deploy(root, "staging", "console", repo+"console", "0.5.2", digest, "def"); err != nil {
+	if err := Deploy(root, "staging", "console", repo+"console", "0.5.2", digest, sourceB); err != nil {
 		t.Fatal(err)
 	}
 	brain, _ := os.ReadFile(filepath.Join(env, "brain.yaml"))
@@ -172,13 +174,13 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 	if err := yaml.Unmarshal(console, &consoleValues); err != nil {
 		t.Fatal(err)
 	}
-	if !managerValues.Phorvex.LeaderElect || managerValues.Phorvex.Image["tag"] != "0.5.1" || managerValues.Phorvex.Image["releaseSourceSHA"] != "abc" ||
+	if !managerValues.Phorvex.LeaderElect || managerValues.Phorvex.Image["tag"] != "0.5.1" || managerValues.Phorvex.Image["releaseSourceSHA"] != sourceA ||
 		managerValues.Phorvex.Console.Image != nil {
 		t.Errorf("manager.yaml =\n%s", manager)
 	}
 	// The console chart deploys the console: its image is pinned in its own file.
 	if consoleValues.Phorvex.Console.Image["tag"] != "0.5.2" || consoleValues.Phorvex.Console.Image["releaseDigest"] != digest ||
-		consoleValues.Phorvex.Console.Image["releaseSourceSHA"] != "def" {
+		consoleValues.Phorvex.Console.Image["releaseSourceSHA"] != sourceB {
 		t.Errorf("console.yaml =\n%s", console)
 	}
 	if !strings.Contains(string(manager), "# The manager chart's values.") || !strings.Contains(string(manager), "# kept") {
@@ -188,6 +190,32 @@ func TestDeployPinsTheImageAndKeepsTheFile(t *testing.T) {
 		if err := Deploy(root, "staging", bad[0], repo+bad[0], bad[1], bad[2], ""); err == nil {
 			t.Errorf("Deploy%v accepted", bad)
 		}
+	}
+}
+
+func TestReleaseMutationRequiresOneExactExistingUnaliasedShape(t *testing.T) {
+	flat := ComponentDeploy{ValuesFile: "values.yaml", Path: []string{"image"}, RepositoryKey: "repository", TagKey: "tag", DigestKey: "digest"}
+	nested := ComponentDeploy{ValuesFile: "values.yaml", Path: []string{"phorvex", "image"}, RepositoryKey: "repository", TagKey: "tag", DigestKey: "digest", SourceKey: "source"}
+	valid := "image:\n  repository: old/repo\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\n"
+	for _, test := range []struct {
+		name   string
+		raw    string
+		target ComponentDeploy
+	}{
+		{"path removed", "{}\n", flat},
+		{"parent removed", "phorvex: {}\n", nested},
+		{"parent is scalar", "phorvex: old\n", nested},
+		{"image is scalar", "image: old\n", flat},
+		{"release value is mapping", "image:\n  repository: {}\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\n", flat},
+		{"release key removed", "image:\n  repository: old/repo\n  tag: 0.1.0\n", flat},
+		{"duplicate path", valid + valid, flat},
+		{"yaml alias", "image: &release\n  repository: old/repo\n  tag: 0.1.0\n  digest: sha256:" + strings.Repeat("0", 64) + "\ncopy: *release\n", flat},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := mutateDeploymentValues([]byte(test.raw), test.target, "new/repo", "1.0.0", "sha256:"+strings.Repeat("a", 64), strings.Repeat("b", 40)); err == nil {
+				t.Fatal("unsafe release values shape was accepted")
+			}
+		})
 	}
 }
 

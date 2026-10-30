@@ -25,28 +25,84 @@ func batchVersions() map[string]string {
 	}
 }
 
+func fakeReleaseRenderer(root string, route deploymentRoute, overridePath string, overrideRaw []byte) ([]byte, error) {
+	var component *Component
+	for i := range Components {
+		if Components[i].Chart == route.Chart {
+			component = &Components[i]
+			break
+		}
+	}
+	if component == nil {
+		return nil, errors.New("unknown fixture chart " + route.Chart)
+	}
+	target := ComponentDeploy{
+		Chart: route.Chart, ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", ReleaseEnvironment, component.Deploy.File+".yaml")),
+		Path: append([]string(nil), component.Deploy.Path...), RepositoryKey: component.Deploy.Repository,
+		TagKey: component.Deploy.Tag, DigestKey: component.Deploy.Digest, SourceKey: component.Deploy.Source,
+	}
+	raw := overrideRaw
+	if overridePath == "" {
+		var err error
+		raw, err = os.ReadFile(filepath.Join(root, filepath.FromSlash(target.ValuesFile)))
+		if err != nil {
+			return nil, err
+		}
+	}
+	values, err := pinValuesRaw(raw, target)
+	if err != nil {
+		return nil, err
+	}
+	image := expectedRenderedImage(values[target.RepositoryKey], values[target.TagKey], values[target.DigestKey])
+	rendered := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: " + route.ReleaseName + "-" + component.Name + "\n  namespace: " + route.Namespace + "\nspec:\n  template:\n    spec:\n      containers:\n      - name: " + component.Name + "\n        image: \"" + image + "\"\n"
+	return []byte(rendered), nil
+}
+
 func newBatchTestRepo(t *testing.T, versions map[string]string) *batchTestRepo {
 	t.Helper()
+	previousRenderer := renderReleaseChart
+	renderReleaseChart = fakeReleaseRenderer
+	t.Cleanup(func() { renderReleaseChart = previousRenderer })
 	r := &batchTestRepo{t: t, root: t.TempDir()}
+	write := func(path, content string) {
+		t.Helper()
+		path = filepath.Join(r.root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	r.releaseDir = filepath.Join(r.root, "release")
 	if err := os.MkdirAll(r.releaseDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	r.writeVersions(versions)
-	envDir := filepath.Join(r.root, "deploy", "environments", ReleaseEnvironment)
-	if err := os.MkdirAll(envDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	seen := map[string]bool{}
+	write("deploy/environments/staging/phorvex.yaml", "{}\n")
+	write("deploy/environments/staging/catalogue-family.yaml", "{}\n")
+	var services strings.Builder
 	for _, c := range Components {
-		if seen[c.Deploy.File] {
-			continue
+		services.WriteString("          - service: " + c.Name + "\n            chart: " + c.Chart + "\n")
+		var values strings.Builder
+		for depth, key := range c.Deploy.Path {
+			values.WriteString(strings.Repeat("  ", depth) + key + ":\n")
 		}
-		seen[c.Deploy.File] = true
-		if err := os.WriteFile(filepath.Join(envDir, c.Deploy.File+".yaml"), []byte("{}\n"), 0o644); err != nil {
-			t.Fatal(err)
+		indent := strings.Repeat("  ", len(c.Deploy.Path))
+		values.WriteString(indent + c.Deploy.Repository + ": \"old.invalid/" + c.Repository + "\"\n")
+		values.WriteString(indent + c.Deploy.Tag + ": \"0.0.1\"\n")
+		values.WriteString(indent + c.Deploy.Digest + ": \"sha256:" + strings.Repeat("0", 64) + "\"\n")
+		if c.Deploy.Source != "" {
+			values.WriteString(indent + c.Deploy.Source + ": \"" + strings.Repeat("0", 40) + "\"\n")
 		}
+		write("deploy/environments/staging/"+c.Deploy.File+".yaml", values.String())
+		write(c.Chart+"/Chart.yaml", "apiVersion: v2\nname: "+c.Name+"\nversion: 0.1.0\n")
+		write(c.Chart+"/values.yaml", "{}\n")
+		value := ".Values." + strings.Join(c.Deploy.Path, ".")
+		template := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Release.Name }}-" + c.Name + "\n  namespace: {{ .Release.Namespace }}\nspec:\n  selector:\n    matchLabels:\n      app: " + c.Name + "\n  template:\n    metadata:\n      labels:\n        app: " + c.Name + "\n    spec:\n      containers:\n      - name: " + c.Name + "\n        image: \"{{ " + value + "." + c.Deploy.Repository + " }}:{{ " + value + "." + c.Deploy.Tag + " }}@{{ " + value + "." + c.Deploy.Digest + " }}\"\n"
+		write(c.Chart+"/templates/deployment.yaml", template)
 	}
+	write(deploymentManifest, "apiVersion: argoproj.io/v1alpha1\nkind: ApplicationSet\nspec:\n  generators:\n  - matrix:\n      generators:\n      - list:\n          elements:\n          - environment: staging\n            namespace: phorvex-staging\n            release: staging\n      - list:\n          elements:\n"+services.String()+"  template:\n    spec:\n      sources:\n      - path: '{{.chart}}'\n        helm:\n          releaseName: '{{.release}}'\n          skipCrds: true\n          valueFiles:\n          - '$values/deploy/environments/{{.environment}}/phorvex.yaml'\n          - '$values/deploy/environments/{{.environment}}/{{.service}}.yaml'\n          - '$values/deploy/environments/{{.environment}}/catalogue-family.yaml'\n")
 	r.git("init", "-q", "-b", "main")
 	r.source = r.commit("prepare release")
 	return r
@@ -152,6 +208,66 @@ func TestPartialReleaseRetryKeepsThePreparedSource(t *testing.T) {
 	}
 }
 
+func TestPartialRetryRejectsRenamedBrainConsumerWithoutRecreatingOldKey(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	useRealReleaseRenderer(t)
+	batchA := r.ensureBatch()
+	r.commit("pin SHA A consumer contract")
+	r.record("manager", "1.0.0", "a")
+	r.commit("record manager at SHA A")
+
+	var brain Component
+	for _, component := range Components {
+		if component.Name == "brain" {
+			brain = component
+			break
+		}
+	}
+	chartPath := filepath.Join(r.root, filepath.FromSlash(brain.Chart), "templates", "deployment.yaml")
+	template := "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Release.Name }}-brain\n  namespace: {{ .Release.Namespace }}\nspec:\n  selector:\n    matchLabels:\n      app: brain\n  template:\n    metadata:\n      labels:\n        app: brain\n    spec:\n      containers:\n      - name: brain\n        image: \"{{ .Values.runtimeImage.repository }}:{{ .Values.runtimeImage.tag }}@{{ .Values.runtimeImage.digest }}\"\n"
+	if err := os.WriteFile(chartPath, []byte(template), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	valuesPath := filepath.Join(r.root, "deploy", "environments", ReleaseEnvironment, "brain.yaml")
+	runtimeValues := "runtimeImage:\n  repository: \"old.invalid/phorvex/brain\"\n  tag: \"0.0.1\"\n  digest: \"sha256:" + strings.Repeat("0", 64) + "\"\n"
+	if err := os.WriteFile(valuesPath, []byte(runtimeValues), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shaB := r.commit("rename brain chart consumer at SHA B")
+	if shaB == batchA.Source {
+		t.Fatal("main did not advance beyond SHA A")
+	}
+
+	before, err := os.ReadFile(valuesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err == nil ||
+		(!strings.Contains(err.Error(), "drifted from pinned source") && !strings.Contains(err.Error(), "missing required key")) {
+		t.Fatalf("renamed destination consumer pending error = %v", err)
+	}
+	r.git("tag", "brain-v1.0.0", batchA.Source)
+	err = RecordRelease(r.root, r.releaseDir, "HEAD", ReleaseEnvironment, "brain", ReleaseRegistry+"/phorvex/brain",
+		"1.0.0", "sha256:"+strings.Repeat("b", 64), batchA.Source)
+	if err == nil || (!strings.Contains(err.Error(), "drifted from pinned source") && !strings.Contains(err.Error(), "missing required key")) {
+		t.Fatalf("renamed destination consumer record error = %v", err)
+	}
+	after, err := os.ReadFile(valuesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) || strings.Contains(string(after), "\nimage:") {
+		t.Fatalf("rejected record recreated obsolete image key:\n%s", after)
+	}
+	batch, err := readBatch(r.releaseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if batch.Status != "partial" || len(batch.Releases) != 1 || batch.Releases["manager"].Digest == "" {
+		t.Fatalf("rejected record changed batch completion: %#v", batch)
+	}
+}
+
 func TestMainAdvancementCannotRedirectBrainToSensor(t *testing.T) {
 	r := newBatchTestRepo(t, batchVersions())
 	batchA := r.ensureBatch()
@@ -178,17 +294,18 @@ func TestMainAdvancementCannotRedirectBrainToSensor(t *testing.T) {
 		}
 	}
 	Components = changed
+	defer func() { Components = original }()
 	if source, err := BootstrapSource(r.root, r.releaseDir, "HEAD"); err != nil || source != batchA.Source {
 		t.Fatalf("minimal bootstrap source = %q, %v; want SHA A %s", source, err, batchA.Source)
 	}
-	if _, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err == nil || !strings.Contains(err.Error(), "pinned-source contract") {
+	if _, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err == nil ||
+		(!strings.Contains(err.Error(), "pinned-source contract") && !strings.Contains(err.Error(), "not consumed by its deployment manifest")) {
 		t.Fatalf("later-main helper metadata was not rejected: %v", err)
 	}
 
 	// The helper compiled from SHA A has the original table and consumes the
 	// persisted contract. It continues with brain's SHA-A build/repo/pin data.
 	Components = original
-	defer func() { Components = original }()
 	pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
 	if err != nil {
 		t.Fatal(err)
@@ -236,13 +353,21 @@ func TestBatchRejectsEveryComponentMetadataClassTamper(t *testing.T) {
 		{"image registry", func(c *BatchComponent) { c.Image.Registry = "registry.example" }},
 		{"image repository", func(c *BatchComponent) { c.Image.Repository = "phorvex/sensor" }},
 		{"image tag", func(c *BatchComponent) { c.Image.Tag = "1.0.1" }},
+		{"deployment application", func(c *BatchComponent) { c.Deploy.Application = "deploy/other.yaml" }},
+		{"deployment application digest", func(c *BatchComponent) { c.Deploy.ApplicationDigest = "sha256:" + strings.Repeat("f", 64) }},
 		{"chart", func(c *BatchComponent) { c.Deploy.Chart = "deploy/charts/phorvex-sensor" }},
+		{"chart digest", func(c *BatchComponent) { c.Deploy.ChartDigest = "sha256:" + strings.Repeat("f", 64) }},
+		{"release name", func(c *BatchComponent) { c.Deploy.ReleaseName = "other" }},
+		{"namespace", func(c *BatchComponent) { c.Deploy.Namespace = "other" }},
+		{"values files", func(c *BatchComponent) { c.Deploy.ValuesFiles[0] = "deploy/environments/staging/other.yaml" }},
+		{"values digest", func(c *BatchComponent) { c.Deploy.ValuesDigests[0].SHA256 = "sha256:" + strings.Repeat("f", 64) }},
 		{"values file", func(c *BatchComponent) { c.Deploy.ValuesFile = "deploy/environments/staging/sensor.yaml" }},
 		{"values path", func(c *BatchComponent) { c.Deploy.Path = []string{"sensor", "image"} }},
 		{"repository key", func(c *BatchComponent) { c.Deploy.RepositoryKey = "sensorRepository" }},
 		{"tag key", func(c *BatchComponent) { c.Deploy.TagKey = "sensorTag" }},
 		{"digest key", func(c *BatchComponent) { c.Deploy.DigestKey = "sensorDigest" }},
 		{"source key", func(c *BatchComponent) { c.Deploy.SourceKey = "sensorSource" }},
+		{"rendered consumer", func(c *BatchComponent) { c.Deploy.Consumers[0].Container = "other" }},
 		{"batch record file", func(c *BatchComponent) { c.Record.BatchFile = "release/other.json" }},
 		{"release record key", func(c *BatchComponent) { c.Record.ReleaseKey = "sensor" }},
 		{"git tag", func(c *BatchComponent) { c.Record.GitTag = "sensor-v1.0.0" }},
@@ -513,6 +638,34 @@ func TestLegacyCompleteBatchImportsOnlyUnanimousProvenance(t *testing.T) {
 	batch, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment)
 	if err != nil || batch.Status != "complete" || batch.Source != r.source {
 		t.Fatalf("legacy import = %#v err=%v", batch, err)
+	}
+}
+
+func TestLegacyTerminalImportRejectsConsumerDrift(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	useRealReleaseRenderer(t)
+	for i, component := range Components {
+		r.git("tag", component.Name+"-v1.0.0", r.source)
+		if err := Deploy(r.root, ReleaseEnvironment, component.Name, ReleaseRegistry+"/phorvex/"+component.Name, "1.0.0",
+			"sha256:"+strings.Repeat(string(rune('a'+i)), 64), r.source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	brainChart := filepath.Join(r.root, "deploy", "charts", "phorvex-brain", "templates", "deployment.yaml")
+	raw, err := os.ReadFile(brainChart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(brainChart, []byte(strings.ReplaceAll(string(raw), ".Values.image", ".Values.runtimeImage")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r.commit("legacy pins with disconnected brain consumer")
+	if _, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment); err == nil ||
+		(!strings.Contains(err.Error(), "drifted from pinned source") && !strings.Contains(err.Error(), "runtimeImage")) {
+		t.Fatalf("terminal import consumer drift error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(r.releaseDir, BatchFile)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("terminal import wrote a batch after consumer drift: %v", err)
 	}
 }
 

@@ -63,8 +63,10 @@ summary.
    immutable contract for every prepared component: canonical service and
    validation-image identities, identity-reporting command, aliases, Dockerfile,
    context, target and complete build arguments, registry/repository/tag, chart
-   and exact values-file/key path, batch release key and Git tag. Missing, extra,
-   duplicate, reordered, aliased or changed contracts are rejected.
+   and exact values-file/key path, the Argo ApplicationSet render route, canonical
+   chart and values fingerprints, every rendered workload image consumer, batch
+   release key and Git tag. Missing, extra, duplicate, reordered, aliased or
+   changed contracts are rejected.
 
    That record is the source-of-truth for push-triggered runs, workflow reruns,
    manual dispatches and the record-commit runs that advance `main`. A helper
@@ -82,8 +84,14 @@ summary.
    record or deployment change.
 
    `servicerelease pending` then validates the batch record, existing component
-   tags and staging pins before reporting its unrecorded components. For each
-   pending component, the `publish` job:
+   tags and staging pins before reporting its unrecorded components. It renders
+   all six charts through the exact Argo value-file order at both the pinned
+   source and current record head. A unique probe repository/tag/digest must
+   change the same pinned workload consumers, including the component's primary
+   Deployment container. Chart, helper, subchart, ApplicationSet, shared-values
+   or consumer drift fails before a build. An existing release path that is
+   unused, shadowed, ambiguous, aliased, duplicated, absent or the wrong YAML
+   type also fails. For each pending component, the `publish` job:
    - proves both fixture images reproduce the same complete OCI identity across
      two clean no-cache builds;
    - checks out the batch source in detached-HEAD state and refuses a missing,
@@ -97,11 +105,15 @@ summary.
      ECR, pulls it, and re-verifies that the returned digest owns the expected
      service binary, source SHA and version before any record is written;
    - tags the commit `<service>-v<version>`;
-   - pins staging to the pushed digest (`servicerelease deploy`), in
+   - pins staging to the pushed digest (`servicerelease record`), in
      `deploy/environments/staging/<service>.yaml`: `manager.yaml` for the
-     manager, `console.yaml` for the console. Every pod pulls its image by that
-     digest: the ECR tags are mutable, so a tag alone could change what a
-     release runs.
+     manager, `console.yaml` for the console. Release mutation changes only the
+     exact existing string fields: it never creates a missing key or parent.
+     Before either the pin or batch record is written, the candidate chart is
+     rendered and every pinned consumer must select the verified
+     `repository:tag@digest`; source metadata is also checked where the contract
+     has a source key. Every pod therefore pulls its image by that digest: the
+     ECR tags are mutable, so a tag alone could change what a release runs.
 
    One commit to main appends every successful component repository/digest to
    `release/batch.json` and records its staging pin. That commit and all of its
@@ -114,15 +126,20 @@ summary.
    and pins.
 
    A retry fails closed if the schema/source pointer, any immutable component
-   field, component order, tag, repository, digest or deployment target differs.
-   In particular, a source-A `brain` can never be built, recorded or pinned via
-   source-B `sensor` metadata.
+   field, component order, tag, repository, digest, deployment route/input or
+   rendered consumer differs. In particular, a source-A `brain` can never be
+   built, recorded or pinned via source-B `sensor` metadata, and a later chart
+   cannot rename `.Values.image` while the source helper recreates an obsolete
+   `image` mapping. The same validation runs after each failed atomic push is
+   rebased onto newer main.
 
    Before `batch.json` existed, completed releases were represented only by a
    unanimous set of component tags and pins. `import-terminal-batch` imports
    that legacy state only when every prepared component is tagged at the same
-   prepared source and every pin matches; a missing, partial or mixed set is
-   rejected without writing a batch.
+   prepared source, every pin matches and every current workload renders that
+   exact immutable image. A missing, partial, mixed or disconnected consumer is
+   rejected without writing a batch. This terminal-only bridge has no weaker
+   consumer-verification exception.
 
 The workflow is the only one in this repository that writes or reaches AWS.
 `ReleaseWorkflowTests` in `tools/test_pr_validation.py` holds it to that shape:

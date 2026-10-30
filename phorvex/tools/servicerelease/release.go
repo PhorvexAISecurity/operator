@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // VersionsFile, in the release directory, lists the versions the release PR
@@ -105,13 +102,19 @@ func Deploy(root, environment, component, repository, tag, digest, source string
 	if _, err := ParseVersion(tag); err != nil {
 		return err
 	}
-	if !strings.HasPrefix(digest, "sha256:") || len(digest) != len("sha256:")+64 {
-		return fmt.Errorf("digest %q is not sha256:<64 hex>", digest)
+	if repository == "" {
+		return fmt.Errorf("repository is empty")
+	}
+	if !digestSHA.MatchString(digest) {
+		return fmt.Errorf("digest %q is not sha256:<64 lowercase hex>", digest)
 	}
 	target := ComponentDeploy{
 		Chart: c.Chart, ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", environment, c.Deploy.File+".yaml")),
 		Path: append([]string(nil), c.Deploy.Path...), RepositoryKey: c.Deploy.Repository,
 		TagKey: c.Deploy.Tag, DigestKey: c.Deploy.Digest, SourceKey: c.Deploy.Source,
+	}
+	if target.SourceKey != "" && !fullSHA.MatchString(source) {
+		return fmt.Errorf("source %q is not a full lowercase Git SHA", source)
 	}
 	return deployContract(root, target, repository, tag, digest, source)
 }
@@ -124,60 +127,9 @@ func deployContract(root string, target ComponentDeploy, repository, tag, digest
 	if err != nil {
 		return err
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
-		return fmt.Errorf("%s: not a mapping", path)
-	}
-	node := doc.Content[0]
-	for _, key := range target.Path {
-		node = mapping(node, key)
-	}
-	set(node, target.RepositoryKey, repository)
-	set(node, target.TagKey, tag)
-	set(node, target.DigestKey, digest)
-	if target.SourceKey != "" {
-		set(node, target.SourceKey, source)
-	}
-	var out bytes.Buffer
-	enc := yaml.NewEncoder(&out)
-	enc.SetIndent(2)
-	if err := enc.Encode(&doc); err != nil {
+	out, err := mutateDeploymentValues(raw, target, repository, tag, digest, source)
+	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, out.Bytes(), 0o644)
-}
-
-// mapping returns the mapping under key in m, creating it, in block style.
-func mapping(m *yaml.Node, key string) *yaml.Node {
-	m.Style = 0
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			v := m.Content[i+1]
-			if v.Kind != yaml.MappingNode {
-				*v = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-			}
-			v.Style = 0
-			return v
-		}
-	}
-	v := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, v)
-	return v
-}
-
-// set sets key in m to a quoted string.
-func set(m *yaml.Node, key, value string) {
-	m.Style = 0
-	v := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value, Style: yaml.DoubleQuotedStyle}
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			v.LineComment = m.Content[i+1].LineComment
-			m.Content[i+1] = v
-			return
-		}
-	}
-	m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}, v)
+	return os.WriteFile(path, out, 0o644)
 }

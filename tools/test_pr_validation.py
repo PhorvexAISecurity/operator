@@ -252,7 +252,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     self.assertFalse({u for u in uses if u.startswith('aws-actions/')})
                     self.assertNotIn('id-token', job.get('permissions', {}))
                 self.assertLessEqual({u.split('@')[0] for u in uses},
-                                     {'actions/checkout', 'actions/setup-go', 'aws-actions/configure-aws-credentials', 'aws-actions/amazon-ecr-login'})
+                                     {'actions/checkout', 'actions/setup-go', 'azure/setup-helm',
+                                      'aws-actions/configure-aws-credentials', 'aws-actions/amazon-ecr-login'})
+                helm = [s for s in job['steps'] if s.get('uses', '').startswith('azure/setup-helm@')]
+                self.assertEqual([s.get('with') for s in helm], [{'version': 'v3.16.4'}])
         self.assertEqual(jobs['pending']['permissions'], {'contents': 'write'})
         self.assertEqual(jobs['release-pr']['permissions'], {'contents': 'write', 'pull-requests': 'write', 'actions': 'write'})
         pending_checkout = next(s for s in jobs['pending']['steps'] if s.get('uses', '').startswith('actions/checkout@'))

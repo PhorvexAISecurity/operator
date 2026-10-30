@@ -47,6 +47,9 @@ jobs:
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
       - name: Persist and validate the prepared batch source
         id: pending
         run: |
@@ -111,6 +114,9 @@ jobs:
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
       - name: Load the record and checkout its exact clean source
         run: |
           set -euo pipefail
@@ -234,6 +240,9 @@ jobs:
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
       - name: Bring the release PR up to date
         env:
           GITHUB_TOKEN: ${{ github.token }}

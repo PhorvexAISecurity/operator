@@ -12,8 +12,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 const (
@@ -57,15 +55,24 @@ type ComponentImage struct {
 	Tag        string `json:"tag"`
 }
 
-// ComponentDeploy fixes the chart and exact values location written for a pin.
+// ComponentDeploy fixes the authoritative Argo render route, exact values
+// location, source-input fingerprints and every workload image consumer.
 type ComponentDeploy struct {
-	Chart         string   `json:"chart"`
-	ValuesFile    string   `json:"valuesFile"`
-	Path          []string `json:"path"`
-	RepositoryKey string   `json:"repositoryKey"`
-	TagKey        string   `json:"tagKey"`
-	DigestKey     string   `json:"digestKey"`
-	SourceKey     string   `json:"sourceKey"`
+	Application       string          `json:"application"`
+	ApplicationDigest string          `json:"applicationDigest"`
+	Chart             string          `json:"chart"`
+	ChartDigest       string          `json:"chartDigest"`
+	ReleaseName       string          `json:"releaseName"`
+	Namespace         string          `json:"namespace"`
+	ValuesFiles       []string        `json:"valuesFiles"`
+	ValuesDigests     []FileDigest    `json:"valuesDigests"`
+	ValuesFile        string          `json:"valuesFile"`
+	Path              []string        `json:"path"`
+	RepositoryKey     string          `json:"repositoryKey"`
+	TagKey            string          `json:"tagKey"`
+	DigestKey         string          `json:"digestKey"`
+	SourceKey         string          `json:"sourceKey"`
+	Consumers         []ImageConsumer `json:"consumers"`
 }
 
 // ComponentRecord fixes every Git/release-record lookup key for a component.
@@ -204,11 +211,74 @@ func readBatchPointer(dir string) (schema int, source string, err error) {
 }
 
 func writeBatch(dir string, batch *Batch) error {
-	raw, err := json.MarshalIndent(batch, "", "  ")
+	raw, err := marshalBatch(batch)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, BatchFile), append(raw, '\n'), 0o644)
+	return os.WriteFile(filepath.Join(dir, BatchFile), raw, 0o644)
+}
+
+func marshalBatch(batch *Batch) ([]byte, error) {
+	raw, err := json.MarshalIndent(batch, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(raw, '\n'), nil
+}
+
+func cloneBatch(batch *Batch) (*Batch, error) {
+	raw, err := json.Marshal(batch)
+	if err != nil {
+		return nil, err
+	}
+	var clone Batch
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		return nil, err
+	}
+	return &clone, nil
+}
+
+func writeAtomicFile(path string, raw []byte) error {
+	temp, err := os.CreateTemp(filepath.Dir(path), ".servicerelease-*")
+	if err != nil {
+		return err
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if err := temp.Chmod(0o644); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if _, err := temp.Write(raw); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		_ = temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
+}
+
+func writeRecordAtomically(valuesPath string, valuesRaw []byte, batchPath string, batchRaw []byte) error {
+	oldValues, err := os.ReadFile(valuesPath)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(batchPath); err != nil {
+		return err
+	}
+	if err := writeAtomicFile(valuesPath, valuesRaw); err != nil {
+		return err
+	}
+	if err := writeAtomicFile(batchPath, batchRaw); err != nil {
+		restoreErr := writeAtomicFile(valuesPath, oldValues)
+		return errors.Join(err, restoreErr)
+	}
+	return nil
 }
 
 func mapsEqual(a, b map[string]string) bool {
@@ -281,11 +351,16 @@ func versionsAtSource(root, dir, source string) (map[string]string, error) {
 	return parseVersions([]byte(raw))
 }
 
-func componentContracts(root, dir, source, environment string, versions map[string]string) ([]BatchComponent, error) {
+func componentContracts(root, dir, source, environment string, versions map[string]string, proveConsumers bool) ([]BatchComponent, error) {
 	releaseDir, err := filepath.Rel(root, dir)
 	if err != nil || releaseDir == "." || strings.HasPrefix(releaseDir, "..") {
 		return nil, fmt.Errorf("release directory %q is outside repository", dir)
 	}
+	sourceTree, cleanup, err := sourceReleaseTree(root, source, environment)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
 	recordFile := filepath.ToSlash(filepath.Join(releaseDir, BatchFile))
 	contracts := make([]BatchComponent, 0, len(versions))
 	for _, c := range Components {
@@ -298,6 +373,15 @@ func componentContracts(root, dir, source, environment string, versions map[stri
 			args = append(args, key+"="+strings.ReplaceAll(value, "{version}", version))
 		}
 		sort.Strings(args)
+		deploy, err := buildComponentDeployment(sourceTree, environment, &c, ComponentDeploy{
+			Chart:      c.Chart,
+			ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", environment, c.Deploy.File+".yaml")),
+			Path:       append([]string(nil), c.Deploy.Path...), RepositoryKey: c.Deploy.Repository,
+			TagKey: c.Deploy.Tag, DigestKey: c.Deploy.Digest, SourceKey: c.Deploy.Source,
+		}, proveConsumers)
+		if err != nil {
+			return nil, fmt.Errorf("component %s source deployment contract: %w", c.Name, err)
+		}
 		contracts = append(contracts, BatchComponent{
 			Component: c.Name,
 			Identity: ComponentIdentity{
@@ -308,13 +392,8 @@ func componentContracts(root, dir, source, environment string, versions map[stri
 			Build: ComponentBuild{
 				Dockerfile: c.Dockerfile, Context: ".", Target: c.Target, Args: args,
 			},
-			Image: ComponentImage{Registry: ReleaseRegistry, Repository: c.Repository, Tag: version},
-			Deploy: ComponentDeploy{
-				Chart:      c.Chart,
-				ValuesFile: filepath.ToSlash(filepath.Join("deploy", "environments", environment, c.Deploy.File+".yaml")),
-				Path:       append([]string(nil), c.Deploy.Path...), RepositoryKey: c.Deploy.Repository,
-				TagKey: c.Deploy.Tag, DigestKey: c.Deploy.Digest, SourceKey: c.Deploy.Source,
-			},
+			Image:  ComponentImage{Registry: ReleaseRegistry, Repository: c.Repository, Tag: version},
+			Deploy: deploy,
 			Record: ComponentRecord{BatchFile: recordFile, ReleaseKey: c.Name, GitTag: c.Name + "-v" + version},
 		})
 	}
@@ -331,7 +410,7 @@ func contractByName(batch *Batch, name string) *BatchComponent {
 }
 
 func validateContractSet(root, dir string, batch *Batch) error {
-	expected, err := componentContracts(root, dir, batch.Source, batch.Environment, batch.Versions)
+	expected, err := componentContracts(root, dir, batch.Source, batch.Environment, batch.Versions, false)
 	if err != nil {
 		return err
 	}
@@ -394,6 +473,10 @@ func validateContractSet(root, dir string, batch *Batch) error {
 			}
 			seenAliases[alias] = name
 		}
+		expected[i].Deploy.Consumers = append([]ImageConsumer(nil), contract.Deploy.Consumers...)
+		if len(contract.Deploy.Consumers) == 0 {
+			return fmt.Errorf("%s: component %s has no pinned rendered image consumers", BatchFile, name)
+		}
 		if !reflect.DeepEqual(contract, expected[i]) {
 			return fmt.Errorf("%s: component %s contract differs from the helper's pinned-source contract", BatchFile, name)
 		}
@@ -406,51 +489,13 @@ func validateContractSet(root, dir string, batch *Batch) error {
 	return nil
 }
 
-func lookupMapping(m *yaml.Node, key string) (*yaml.Node, bool) {
-	if m == nil || m.Kind != yaml.MappingNode {
-		return nil, false
-	}
-	for i := 0; i+1 < len(m.Content); i += 2 {
-		if m.Content[i].Value == key {
-			return m.Content[i+1], true
-		}
-	}
-	return nil, false
-}
-
 func pinValues(root string, target ComponentDeploy) (map[string]string, error) {
 	path := filepath.Join(root, filepath.FromSlash(target.ValuesFile))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var doc yaml.Node
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 {
-		return nil, fmt.Errorf("%s: not a document", path)
-	}
-	node := doc.Content[0]
-	for _, key := range target.Path {
-		var ok bool
-		node, ok = lookupMapping(node, key)
-		if !ok {
-			return nil, fmt.Errorf("%s: missing image path %s", path, strings.Join(target.Path, "."))
-		}
-	}
-	values := map[string]string{}
-	for _, key := range []string{target.RepositoryKey, target.TagKey, target.DigestKey, target.SourceKey} {
-		if key == "" {
-			continue
-		}
-		value, ok := lookupMapping(node, key)
-		if !ok || value.Kind != yaml.ScalarNode || value.Value == "" {
-			return nil, fmt.Errorf("%s: missing image value %s", path, key)
-		}
-		values[key] = value.Value
-	}
-	return values, nil
+	return pinValuesRaw(raw, target)
 }
 
 func expectedRepository(contract *BatchComponent) string {
@@ -465,14 +510,20 @@ func validateRepository(repository string, contract *BatchComponent) error {
 	return nil
 }
 
-func validatePin(root string, batch *Batch, contract *BatchComponent, released Released) error {
+func validatePin(root string, batch *Batch, contract *BatchComponent, released Released, overrideRaw []byte) error {
 	if err := validateRepository(released.Repository, contract); err != nil {
 		return err
 	}
 	if !digestSHA.MatchString(released.Digest) {
 		return fmt.Errorf("component %s digest %q is not sha256:<64 lowercase hex>", contract.Component, released.Digest)
 	}
-	values, err := pinValues(root, contract.Deploy)
+	var values map[string]string
+	var err error
+	if overrideRaw == nil {
+		values, err = pinValues(root, contract.Deploy)
+	} else {
+		values, err = pinValuesRaw(overrideRaw, contract.Deploy)
+	}
 	if err != nil {
 		return err
 	}
@@ -488,6 +539,10 @@ func validatePin(root string, batch *Batch, contract *BatchComponent, released R
 // validateBatch verifies the whole batch. allowTag permits RecordRelease to
 // validate the one just-created local tag before adding its release entry.
 func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag string) error {
+	return validateBatchOverlay(root, dir, head, batch, current, allowTag, nil)
+}
+
+func validateBatchOverlay(root, dir, head string, batch *Batch, current bool, allowTag string, overrides map[string][]byte) error {
 	if batch.Schema != batchSchema {
 		return fmt.Errorf("%s: schema %d, want %d", BatchFile, batch.Schema, batchSchema)
 	}
@@ -550,6 +605,7 @@ func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag 
 		contract := &batch.Components[i]
 		name := contract.Component
 		released, recorded := batch.Releases[contract.Record.ReleaseKey]
+		overrideRaw := overrides[contract.Deploy.ValuesFile]
 		taggedSource, tagged, err := tagCommit(root, contract.Record.GitTag)
 		if err != nil {
 			return err
@@ -563,7 +619,16 @@ func validateBatch(root, dir, head string, batch *Batch, current bool, allowTag 
 		case !recorded && tagged && allowTag != name:
 			return fmt.Errorf("component %s tag exists without a release record", name)
 		case recorded:
-			if err := validatePin(root, batch, contract, released); err != nil {
+			if err := validatePin(root, batch, contract, released, overrideRaw); err != nil {
+				return err
+			}
+		}
+		if current {
+			var release *Released
+			if recorded {
+				release = &released
+			}
+			if err := validateDeploymentConsumer(root, batch, contract, release, overrideRaw); err != nil {
 				return err
 			}
 		}
@@ -617,7 +682,7 @@ func BootstrapSource(root, dir, head string) (string, error) {
 }
 
 func importCompleteBatch(root, dir, head, environment, source string, versions map[string]string) (*Batch, error) {
-	contracts, err := componentContracts(root, dir, source, environment, versions)
+	contracts, err := componentContracts(root, dir, source, environment, versions, true)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +811,7 @@ func EnsureBatch(root, dir, head, environment string) (*Batch, bool, error) {
 	if batch.Status != "complete" {
 		return nil, false, fmt.Errorf("prior batch %s is %s, refusing concurrent batch creation", batch.Source, batch.Status)
 	}
-	contracts, err := componentContracts(root, dir, source, environment, versions)
+	contracts, err := componentContracts(root, dir, source, environment, versions, true)
 	if err != nil {
 		return nil, false, err
 	}
@@ -806,7 +871,10 @@ func RecordRelease(root, dir, head, environment, component, repository, version,
 	if batch.Source != source {
 		return fmt.Errorf("component %s source %s does not match batch source %s", component, source, batch.Source)
 	}
-	if err := validateBatch(root, dir, head, batch, true, component); err != nil {
+	if batch.Schema != batchSchema || batch.Releases == nil {
+		return fmt.Errorf("%s is not a complete schema-v%d batch object", BatchFile, batchSchema)
+	}
+	if err := validateContractSet(root, dir, batch); err != nil {
 		return err
 	}
 	contract := contractByName(batch, component)
@@ -826,13 +894,27 @@ func RecordRelease(root, dir, head, environment, component, repository, version,
 	if old, exists := batch.Releases[contract.Record.ReleaseKey]; exists && old != released {
 		return fmt.Errorf("component %s is already recorded with different image provenance", component)
 	}
-	if err := deployContract(root, contract.Deploy, repository, contract.Image.Tag, digest, contract.Source); err != nil {
+	valuesPath := filepath.Join(root, filepath.FromSlash(contract.Deploy.ValuesFile))
+	valuesRaw, err := os.ReadFile(valuesPath)
+	if err != nil {
 		return err
 	}
-	batch.Releases[contract.Record.ReleaseKey] = released
-	batch.Status = batchStatus(batch.Versions, batch.Releases)
-	if err := writeBatch(dir, batch); err != nil {
+	newValues, err := mutateDeploymentValues(valuesRaw, contract.Deploy, repository, contract.Image.Tag, digest, contract.Source)
+	if err != nil {
 		return err
 	}
-	return validateBatch(root, dir, head, batch, true, "")
+	candidate, err := cloneBatch(batch)
+	if err != nil {
+		return err
+	}
+	candidate.Releases[contract.Record.ReleaseKey] = released
+	candidate.Status = batchStatus(candidate.Versions, candidate.Releases)
+	if err := validateBatchOverlay(root, dir, head, candidate, true, "", map[string][]byte{contract.Deploy.ValuesFile: newValues}); err != nil {
+		return err
+	}
+	batchRaw, err := marshalBatch(candidate)
+	if err != nil {
+		return err
+	}
+	return writeRecordAtomically(valuesPath, newValues, filepath.Join(dir, BatchFile), batchRaw)
 }
