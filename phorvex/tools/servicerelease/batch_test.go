@@ -174,6 +174,66 @@ func pendingNames(pending []Pending) []string {
 	return names
 }
 
+func TestBatchPersistsOneCanonicalExpectedComponentSet(t *testing.T) {
+	tests := []struct {
+		name     string
+		versions map[string]string
+		want     []string
+	}{
+		{"full six", batchVersions(), []string{"manager", "brain", "sensor", "actuator", "console", "attacks"}},
+		{"four component", map[string]string{"brain": "1.0.0", "sensor": "1.0.0", "console": "1.0.0", "attacks": "1.0.0"}, []string{"brain", "sensor", "console", "attacks"}},
+		{"one component", map[string]string{"console": "1.0.0"}, []string{"console"}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, test.versions)
+			batch := r.ensureBatch()
+			r.commit("pin expected component set")
+			if !slices.Equal(batch.ExpectedComponents, test.want) {
+				t.Fatalf("expected components = %v, want %v", batch.ExpectedComponents, test.want)
+			}
+			if len(batch.Components) != len(test.want) || len(batch.Versions) != len(test.want) {
+				t.Fatalf("batch set sizes differ: expected=%d contracts=%d versions=%d", len(batch.ExpectedComponents), len(batch.Components), len(batch.Versions))
+			}
+			pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := pendingNames(pending); !slices.Equal(got, test.want) {
+				t.Fatalf("pending = %v, want %v", got, test.want)
+			}
+		})
+	}
+
+	t.Run("empty rejected", func(t *testing.T) {
+		r := newBatchTestRepo(t, map[string]string{})
+		if _, _, err := EnsureBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment); err == nil || !strings.Contains(err.Error(), "no prepared releases") {
+			t.Fatalf("empty batch error = %v", err)
+		}
+	})
+}
+
+func TestSubsetPartialCompletionRetriesOnlyItsPersistedRemainder(t *testing.T) {
+	versions := map[string]string{"brain": "1.0.0", "sensor": "1.0.0", "console": "1.0.0", "attacks": "1.0.0"}
+	r := newBatchTestRepo(t, versions)
+	batch := r.ensureBatch()
+	r.commit("pin four-component batch")
+	r.record("brain", "1.0.0", "b")
+	r.commit("record one subset component")
+
+	pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"sensor", "console", "attacks"}
+	if got := pendingNames(pending); !slices.Equal(got, want) {
+		t.Fatalf("partial subset pending = %v, want %v", got, want)
+	}
+	if batch.Source == "" {
+		t.Fatal("subset batch source was not pinned")
+	}
+}
+
 func TestPartialReleaseRetryKeepsThePreparedSource(t *testing.T) {
 	r := newBatchTestRepo(t, batchVersions())
 	batchA := r.ensureBatch()
@@ -399,6 +459,13 @@ func TestBatchRejectsStructuralContractCorruption(t *testing.T) {
 	}{
 		{"schema version mismatch", func(b *Batch) { b.Schema++ }},
 		{"environment mismatch", func(b *Batch) { b.Environment = "production" }},
+		{"missing expected component", func(b *Batch) { b.ExpectedComponents = b.ExpectedComponents[:len(b.ExpectedComponents)-1] }},
+		{"extra expected component", func(b *Batch) { b.ExpectedComponents = append(b.ExpectedComponents, "extra") }},
+		{"duplicate expected component", func(b *Batch) { b.ExpectedComponents[len(b.ExpectedComponents)-1] = b.ExpectedComponents[0] }},
+		{"reordered expected components", func(b *Batch) {
+			b.ExpectedComponents[0], b.ExpectedComponents[1] = b.ExpectedComponents[1], b.ExpectedComponents[0]
+		}},
+		{"aliased expected component", func(b *Batch) { b.ExpectedComponents[0] = "operator" }},
 		{"version set tamper", func(b *Batch) { b.Versions["brain"] = "1.0.1" }},
 		{"status tamper", func(b *Batch) { b.Status = "complete" }},
 		{"missing component", func(b *Batch) { b.Components = b.Components[:len(b.Components)-1] }},
@@ -640,8 +707,27 @@ func TestLegacyCompleteBatchImportsOnlyUnanimousProvenance(t *testing.T) {
 	}
 	r.commit("legacy complete pins")
 	batch, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment)
-	if err != nil || batch.Status != "complete" || batch.Source != r.source {
+	want := []string{"manager", "brain", "sensor", "actuator", "console", "attacks"}
+	if err != nil || batch.Status != "complete" || batch.Source != r.source || !slices.Equal(batch.ExpectedComponents, want) {
 		t.Fatalf("legacy import = %#v err=%v", batch, err)
+	}
+}
+
+func TestLegacySubsetImportPersistsItsExactTerminalSet(t *testing.T) {
+	names := []string{"brain", "sensor", "console", "attacks"}
+	versions := map[string]string{"brain": "1.0.0", "sensor": "1.0.0", "console": "1.0.0", "attacks": "1.0.0"}
+	r := newBatchTestRepo(t, versions)
+	for i, name := range names {
+		r.git("tag", name+"-v1.0.0", r.source)
+		if err := Deploy(r.root, ReleaseEnvironment, name, ReleaseRegistry+"/phorvex/"+name, "1.0.0",
+			"sha256:"+strings.Repeat(string(rune('a'+i)), 64), r.source); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r.commit("legacy subset pins")
+	batch, err := ImportTerminalBatch(r.root, r.releaseDir, "HEAD", ReleaseEnvironment)
+	if err != nil || batch.Status != "complete" || !slices.Equal(batch.ExpectedComponents, names) || len(batch.Releases) != len(names) {
+		t.Fatalf("legacy subset import = %#v err=%v", batch, err)
 	}
 }
 

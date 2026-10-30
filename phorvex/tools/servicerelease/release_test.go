@@ -101,6 +101,30 @@ func TestPrepareWritesVersionsAndChangelogs(t *testing.T) {
 	}
 }
 
+func TestPrepareRejectsDuplicateAndAliasedComponentSetsBeforeWriting(t *testing.T) {
+	for name, plans := range map[string][]Plan{
+		"duplicate": {
+			{Component: "brain", Next: "1.0.0"},
+			{Component: "brain", Next: "1.0.1"},
+		},
+		"alias": {{Component: "operator", Next: "1.0.0"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if _, _, err := Prepare(dir, "2026-10-30", plans); err == nil {
+				t.Fatalf("%s release plan was accepted", name)
+			}
+			entries, err := os.ReadDir(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(entries) != 0 {
+				t.Fatalf("rejected %s plan wrote %v", name, entries)
+			}
+		})
+	}
+}
+
 func TestPendingReleasesSkipsTaggedVersions(t *testing.T) {
 	r := newBatchTestRepo(t, map[string]string{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"})
 	r.ensureBatch()

@@ -60,16 +60,8 @@ jobs:
           set -euo pipefail
           git_push_token="$GIT_PUSH_TOKEN"
           unset GIT_PUSH_TOKEN
-          trap 'unset git_push_token' EXIT
-          git_push() {
-            local auth
-            local status=0
-            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
-            GIT_CONFIG_COUNT=1 \
-              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git push "$@" || status=$?
-            unset auth
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
             if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
               echo "::error::temporary Git credential persisted in local config"
               exit 1
@@ -78,20 +70,23 @@ jobs:
               echo "::error::Git credential leaked into origin URL"
               exit 1
             fi
-            return "$status"
           }
-          git_fetch() {
+          git_push() {
             local auth
+            local status=0
+            assert_clean_git_auth
             auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
-            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
               GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
               GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git fetch "$@"
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
             unset auth
-            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
-              echo "::error::temporary Git credential persisted in local config"
-              exit 1
-            fi
+            assert_clean_git_auth
+            return "$status"
           }
           # The current-main helper may locate only the minimal schema/source
           # pointer. Component authority begins with the helper built at source.
@@ -126,13 +121,10 @@ jobs:
             git worktree add --detach "$committed" HEAD
             (cd "$committed" && "$tool" verify-committed > /dev/null)
             git worktree remove --force "$committed"
-            if ! git_push origin HEAD:main; then
-              # A concurrent creator may win only with the byte-identical batch.
-              git_fetch --tags --force origin main
-              git show FETCH_HEAD:release/batch.json > "$RUNNER_TEMP/remote-batch.json"
-              cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"
-              git switch --force-create release-record FETCH_HEAD
-            fi
+            # A remote advance fails this exact push. The queued/fresh workflow
+            # run checks out that head without retaining this write credential,
+            # reconstructs and re-verifies the batch, then injects a new push.
+            git_push --atomic origin HEAD:main
           fi
           source="$("$tool" batch-source)"
           "$tool" pending --json | tee "$RUNNER_TEMP/pending.json"
@@ -188,8 +180,6 @@ jobs:
               --dockerfile "$(jq -er '.build.dockerfile' <<< "$release")" \
               --context "$(jq -er '.build.context' <<< "$release")"
           done < <(jq -c '.[]' "$RUNNER_TEMP/pending.json")
-      - name: Rebuild each fixture twice and compare complete OCI identities
-        run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
       - name: Require the release role
         env:
           ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
@@ -202,6 +192,14 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         id: ecr
+      - name: Preflight the exact release batch in ECR
+        run: |
+          set -euo pipefail
+          python3 tools/verify_release_ecr.py preflight --batch "$RUNNER_TEMP/record-batch.json" \
+            > "$RUNNER_TEMP/ecr-preflight.json"
+          chmod 0400 "$RUNNER_TEMP/ecr-preflight.json"
+      - name: Rebuild each fixture twice and compare complete OCI identities
+        run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
       - name: Build, push, tag and pin each release
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
@@ -224,7 +222,14 @@ jobs:
             [ "$source" = "$BATCH_SOURCE_SHA" ]
             [ "$version" = "$tag" ]
             [ "$registry" = "$REGISTRY" ]
-            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" --component "$component" > /dev/null
+            probe="$(python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$component")"
+            if [ "$(jq -r '.exists' <<< "$probe")" = true ]; then
+              [ "$(jq -er '.state' <<< "$probe")" = recoverable ]
+              digest="$(jq -er '.digest' <<< "$probe")"
+              printf '%s\t%s\t%s\t%s\t%s\n' "$component" "$version" "$registry/$repository" "$digest" "$git_tag" >> "$RUNNER_TEMP/released"
+              continue
+            fi
             image="$registry/$repository:$tag"
             docker_args=()
             while IFS= read -r arg; do docker_args+=(--build-arg "$arg"); done < <(jq -er '.build.args[]' <<< "$release")
@@ -233,7 +238,8 @@ jobs:
             "$RUNNER_TEMP/pinned-servicerelease" verify-build-paths --dockerfile "$dockerfile" --context "$context"
             docker build --file "$dockerfile" "${docker_args[@]}" --tag "$image" "$context" < /dev/null
             python3 tools/verify_service_image_identity.py --image "$image" --service "$service" --entrypoint "$command" --git-sha "$source" --version "$version"
-            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" --component "$component" > /dev/null
+            python3 tools/verify_release_ecr.py probe --batch "$RUNNER_TEMP/record-batch.json" \
+              --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$component" > /dev/null
             docker push "$image" < /dev/null
             registry_id="${registry%%.*}"
             [[ "$registry_id" =~ ^[0-9]{12}$ ]]
@@ -264,16 +270,8 @@ jobs:
           [ -s "$RUNNER_TEMP/released" ] || exit 0
           git_push_token="$GIT_PUSH_TOKEN"
           unset GIT_PUSH_TOKEN
-          trap 'unset git_push_token' EXIT
-          git_push() {
-            local auth
-            local status=0
-            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
-            GIT_CONFIG_COUNT=1 \
-              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git push "$@" || status=$?
-            unset auth
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
             if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
               echo "::error::temporary Git credential persisted in local config"
               exit 1
@@ -282,20 +280,23 @@ jobs:
               echo "::error::Git credential leaked into origin URL"
               exit 1
             fi
-            return "$status"
           }
-          git_fetch() {
+          git_push() {
             local auth
+            local status=0
+            assert_clean_git_auth
             auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
-            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
               GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
               GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git fetch "$@"
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
             unset auth
-            if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
-              echo "::error::temporary Git credential persisted in local config"
-              exit 1
-            fi
+            assert_clean_git_auth
+            return "$status"
           }
           verify_committed_head() {
             local committed="$RUNNER_TEMP/committed-record"
@@ -328,18 +329,12 @@ jobs:
           "$tool" verify-staged --components "$component_list" > /dev/null
           git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
           verify_committed_head
-          pushed=false
-          for attempt in 1 2 3; do
-            # Last practical publication boundary: repository immutability and
-            # every exact version-tag digest are re-read after committed-HEAD proof.
-            python3 tools/verify_release_ecr.py verify --batch release/batch.json > /dev/null
-            if git_push --atomic origin HEAD:main "${refs[@]}"; then pushed=true; break; fi
-            git_fetch --tags --force origin main
-            git rebase origin/main
-            "$tool" pending --json > /dev/null
-            verify_committed_head
-          done
-          [ "$pushed" = true ]
+          # Last practical publication boundary: repository immutability and
+          # every exact version-tag digest are re-read after committed-HEAD proof.
+          # A remote advance fails this run; the next clean checkout reconstructs
+          # the record (including interrupted ECR pushes) and repeats every proof.
+          python3 tools/verify_release_ecr.py verify --batch release/batch.json > /dev/null
+          git_push --atomic origin HEAD:main "${refs[@]}"
 
   release-pr:
     needs: [pending, publish]
@@ -366,22 +361,13 @@ jobs:
           version: v3.16.4
       - name: Bring the release PR up to date
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           GIT_PUSH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git_push_token="$GIT_PUSH_TOKEN"
           unset GIT_PUSH_TOKEN
-          trap 'unset git_push_token' EXIT
-          git_push() {
-            local auth
-            local status=0
-            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
-            GIT_CONFIG_COUNT=1 \
-              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
-              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
-              git push "$@" || status=$?
-            unset auth
+          trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT
+          assert_clean_git_auth() {
             if git config --local --get-regexp '(extraheader|credential|token)' >/dev/null 2>&1; then
               echo "::error::temporary Git credential persisted in local config"
               exit 1
@@ -390,6 +376,22 @@ jobs:
               echo "::error::Git credential leaked into origin URL"
               exit 1
             fi
+          }
+          git_push() {
+            local auth
+            local status=0
+            assert_clean_git_auth
+            auth="$(printf 'x-access-token:%s' "$git_push_token" | base64 -w0)"
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+              GIT_CONFIG_COUNT=2 \
+              GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
+              GIT_CONFIG_KEY_1=core.hooksPath \
+              GIT_CONFIG_VALUE_1=/dev/null \
+              git push "$@" || status=$?
+            auth=
+            unset auth
+            assert_clean_git_auth
             return "$status"
           }
           # Checkout already selected current main with full history and tags.
@@ -420,7 +422,7 @@ jobs:
           status=0
           "$tool" prepare --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" || status=$?
           if [ "$status" -eq 3 ]; then
-            "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
+            GITHUB_TOKEN="$git_push_token" "$tool" close-pull-request --head release/next --base main | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           [ "$status" -eq 0 ]
@@ -432,7 +434,7 @@ jobs:
           [ -z "$(git diff --cached --name-only --diff-filter=D)" ]
           git diff --cached --check
           git commit -F "$RUNNER_TEMP/title"
-          git_push --force origin release/next
-          "$tool" pull-request --head release/next --base main \
+          git_push --atomic --force origin release/next
+          GITHUB_TOKEN="$git_push_token" "$tool" pull-request --head release/next --base main \
             --title-file "$RUNNER_TEMP/title" --body-file "$RUNNER_TEMP/body.md" | tee -a "$GITHUB_STEP_SUMMARY"
-          "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml
+          GITHUB_TOKEN="$git_push_token" "$tool" dispatch --ref release/next --workflows pr-validation.yml,e2e-contract.yml,native-rbac.yml

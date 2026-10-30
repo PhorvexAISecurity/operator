@@ -304,6 +304,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('tools/verify_service_image_identity.py', runs)
         self.assertLess(runs.index('git switch --detach "$BATCH_SOURCE_SHA"'),
                         runs.index('tools/verify_fixture_reproducibility.py'))
+        self.assertLess(runs.index('verify_release_ecr.py preflight'),
+                        runs.index('tools/verify_fixture_reproducibility.py'))
         self.assertLess(runs.index('tools/verify_service_image_identity.py'),
                         runs.index('docker push "$image"'))
 
@@ -315,8 +317,9 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git status --porcelain -- release/batch.json', pending)
         self.assertIn('git add -- "${release_files[@]}"', pending)
         self.assertIn('"$tool" verify-staged', pending)
-        self.assertIn('git_push origin HEAD:main', pending)
-        self.assertIn('cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"', pending)
+        self.assertIn('git_push --atomic origin HEAD:main', pending)
+        self.assertIn('A remote advance fails this exact push', pending)
+        self.assertNotIn('remote-batch.json', pending)
         self.assertIn('echo "source=$source" >> "$GITHUB_OUTPUT"', pending)
         self.assertIn("git show \"$source:phorvex/tools/servicerelease/batch.go\"", pending)
         self.assertIn('"$tool" import-terminal-batch --environment "$ENVIRONMENT"', pending)
@@ -344,7 +347,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
     def test_git_publication_uses_exact_staging_and_clean_detached_head_proof(self):
         pending = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['pending']['steps'])
         publish = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['publish']['steps'])
-        for run, push_call in ((pending, 'git_push origin HEAD:main'),
+        for run, push_call in ((pending, 'git_push --atomic origin HEAD:main'),
                                (publish, 'git_push --atomic origin HEAD:main')):
             self.assertIn('git worktree add --detach', run)
             self.assertIn('"$tool" verify-committed', run)
@@ -387,6 +390,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn('xargs git push', run)
         self.assertEqual(RELEASE['env']['ENVIRONMENT'], 'staging')
         pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
+        self.assertIn('git_push --atomic --force origin release/next', pr)
         # A built binary, not `go run`, which reports prepare's exit 3 as 1.
         self.assertIn('go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease', pr)
         self.assertNotIn('servicerelease prepare', pr.replace('"$tool" prepare', ''))
@@ -399,13 +403,21 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('"$tool" pull-request --head release/next --base main', pr)
 
     def test_ecr_is_immutable_and_requeried_at_both_publication_boundaries(self):
-        runs = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['publish']['steps'])
+        steps = RELEASE['jobs']['publish']['steps']
+        runs = '\n'.join(s.get('run', '') for s in steps)
+        names = [s.get('name', '') for s in steps]
+        self.assertIn('Preflight the exact release batch in ECR', names)
+        self.assertEqual(runs.count('verify_release_ecr.py preflight'), 1)
+        self.assertIn('--preflight-state "$RUNNER_TEMP/ecr-preflight.json"', runs)
+        self.assertIn('chmod 0400 "$RUNNER_TEMP/ecr-preflight.json"', runs)
         self.assertIn('verify_release_ecr.py probe', runs)
         self.assertGreaterEqual(runs.count('verify_release_ecr.py probe'), 2)
         self.assertIn('verify_release_ecr.py verify --batch release/batch.json --verify-identities', runs)
         self.assertGreaterEqual(runs.count('verify_release_ecr.py verify --batch release/batch.json'), 2)
         self.assertLess(runs.index('verify_release_ecr.py probe'), runs.index('docker push "$image"'))
         self.assertLess(runs.rindex('verify_release_ecr.py probe'), runs.index('docker push "$image"'))
+        self.assertLess(runs.index('verify_release_ecr.py preflight'),
+                        runs.index('docker build --file "$dockerfile"'))
         self.assertLess(runs.index('tools/verify_service_image_identity.py'),
                         runs.rindex('verify_release_ecr.py probe'))
         self.assertLess(runs.index('verify_release_ecr.py verify --batch release/batch.json --verify-identities'),
@@ -419,13 +431,27 @@ class ReleaseWorkflowTests(unittest.TestCase):
                                 if s.get('env', {}).get('GIT_PUSH_TOKEN') == '${{ github.token }}']
             self.assertEqual(len(credential_steps), 1, name)
             run = credential_steps[0]['run']
-            self.assertIn('GIT_CONFIG_COUNT=1', run)
+            self.assertIn('GIT_CONFIG_COUNT=2', run)
             self.assertIn('git_push_token="$GIT_PUSH_TOKEN"\nunset GIT_PUSH_TOKEN', run)
             self.assertLess(run.index('unset GIT_PUSH_TOKEN'), run.index('git_push()'))
             self.assertIn('GIT_CONFIG_KEY_0=http.https://github.com/.extraheader', run)
+            self.assertIn('GIT_CONFIG_KEY_1=core.hooksPath', run)
+            self.assertIn('GIT_CONFIG_VALUE_1=/dev/null', run)
+            self.assertIn("trap 'git_push_token=; unset git_push_token GIT_PUSH_TOKEN' EXIT", run)
+            self.assertNotIn('export git_push_token', run)
             self.assertIn("git config --local --get-regexp '(extraheader|credential|token)'", run)
             self.assertIn('git remote get-url --all origin', run)
             self.assertNotIn('git remote set-url', run)
+            self.assertNotRegex(run, r'git push[^\n]*(x-access-token|github_pat_|gh[pousr]_)')
+            self.assertNotRegex(run, r'https://[^\s]*(x-access-token|github_pat_|gh[pousr]_)')
+        self.assertNotIn('git_fetch()', RELEASE_RAW)
+        self.assertNotIn('git fetch', RELEASE_RAW)
+        self.assertNotIn('git rebase', RELEASE_RAW)
+        self.assertNotRegex(RELEASE_RAW, r'GIT_CONFIG_VALUE_0="AUTHORIZATION:[^\n]+"\s+git fetch')
+        release_pr_step = next(s for s in RELEASE['jobs']['release-pr']['steps']
+                               if s.get('name') == 'Bring the release PR up to date')
+        self.assertNotIn('GITHUB_TOKEN', release_pr_step.get('env', {}))
+        self.assertEqual(release_pr_step['run'].count('GITHUB_TOKEN="$git_push_token"'), 3)
 
     def test_the_release_pr_gets_its_checks(self):
         # GitHub starts no pull_request run for a PR the workflow's token opened or

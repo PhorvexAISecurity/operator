@@ -105,23 +105,24 @@ type Released struct {
 	Digest     string `json:"digest"`
 }
 
-// Batch is the canonical release record. Source, Versions and Components never
-// change for a batch; Releases grows from empty to the complete version set.
+// Batch is the canonical release record. Source, ExpectedComponents, Versions
+// and Components never change; Releases grows to the exact expected set.
 type Batch struct {
-	Schema      int                 `json:"schema"`
-	Status      string              `json:"status"`
-	Environment string              `json:"environment"`
-	Source      string              `json:"source"`
-	Versions    map[string]string   `json:"versions"`
-	Components  []BatchComponent    `json:"components"`
-	Releases    map[string]Released `json:"releases"`
+	Schema             int                 `json:"schema"`
+	Status             string              `json:"status"`
+	Environment        string              `json:"environment"`
+	Source             string              `json:"source"`
+	ExpectedComponents []string            `json:"expectedComponents"`
+	Versions           map[string]string   `json:"versions"`
+	Components         []BatchComponent    `json:"components"`
+	Releases           map[string]Released `json:"releases"`
 }
 
-func batchStatus(versions map[string]string, releases map[string]Released) string {
+func batchStatus(expected []string, releases map[string]Released) string {
 	switch len(releases) {
 	case 0:
 		return "prepared"
-	case len(versions):
+	case len(expected):
 		return "complete"
 	default:
 		return "partial"
@@ -135,6 +136,25 @@ func componentByName(name string) *Component {
 		}
 	}
 	return nil
+}
+
+// expectedComponentSet returns the one canonical order used by preparation,
+// batch contracts, retries and publication. A batch persists this slice and
+// every later operation proves it still equals the source-pinned version set.
+func expectedComponentSet(versions map[string]string) ([]string, error) {
+	if len(versions) == 0 {
+		return nil, fmt.Errorf("%s: no prepared releases", VersionsFile)
+	}
+	expected := make([]string, 0, len(versions))
+	for _, component := range Components {
+		if _, ok := versions[component.Name]; ok {
+			expected = append(expected, component.Name)
+		}
+	}
+	if len(expected) != len(versions) {
+		return nil, fmt.Errorf("%s: expected component set contains an unknown or aliased component", VersionsFile)
+	}
+	return expected, nil
 }
 
 func parseVersions(raw []byte) (map[string]string, error) {
@@ -340,7 +360,7 @@ func versionsAtSource(root, dir, source string) (map[string]string, error) {
 	return parseVersions([]byte(raw))
 }
 
-func componentContracts(root, dir, source, environment string, versions map[string]string, proveConsumers bool) ([]BatchComponent, error) {
+func componentContracts(root, dir, source, environment string, expected []string, versions map[string]string, proveConsumers bool) ([]BatchComponent, error) {
 	safeDir, err := withinRoot(root, dir)
 	if err != nil {
 		return nil, err
@@ -355,11 +375,16 @@ func componentContracts(root, dir, source, environment string, versions map[stri
 	}
 	defer cleanup()
 	recordFile := filepath.ToSlash(filepath.Join(releaseDir, BatchFile))
-	contracts := make([]BatchComponent, 0, len(versions))
-	for _, c := range Components {
-		version, ok := versions[c.Name]
+	contracts := make([]BatchComponent, 0, len(expected))
+	for _, name := range expected {
+		component := componentByName(name)
+		if component == nil {
+			return nil, fmt.Errorf("expected component %q is unknown or aliased", name)
+		}
+		c := *component
+		version, ok := versions[name]
 		if !ok {
-			continue
+			return nil, fmt.Errorf("expected component %q has no prepared version", name)
 		}
 		args := []string{"GIT_SHA=" + source, "RELEASE_VERSION=" + version}
 		for key, value := range c.BuildArgs {
@@ -403,18 +428,25 @@ func contractByName(batch *Batch, name string) *BatchComponent {
 }
 
 func validateContractSet(root, dir string, batch *Batch) error {
-	expected, err := componentContracts(root, dir, batch.Source, batch.Environment, batch.Versions, false)
+	sourceExpected, err := expectedComponentSet(batch.Versions)
 	if err != nil {
 		return err
 	}
-	if len(batch.Components) != len(batch.Versions) {
-		return fmt.Errorf("%s: %d component contracts, want %d", BatchFile, len(batch.Components), len(batch.Versions))
+	if !reflect.DeepEqual(batch.ExpectedComponents, sourceExpected) {
+		return fmt.Errorf("%s: expected component set %v, want canonical source-pinned set %v", BatchFile, batch.ExpectedComponents, sourceExpected)
+	}
+	expected, err := componentContracts(root, dir, batch.Source, batch.Environment, batch.ExpectedComponents, batch.Versions, false)
+	if err != nil {
+		return err
+	}
+	if len(batch.Components) != len(batch.ExpectedComponents) {
+		return fmt.Errorf("%s: %d component contracts, want %d", BatchFile, len(batch.Components), len(batch.ExpectedComponents))
 	}
 	if len(batch.Components) != len(expected) {
 		return fmt.Errorf("%s: prepared component set is missing or has extra components", BatchFile)
 	}
 	canonical := map[string]bool{}
-	for name := range batch.Versions {
+	for _, name := range batch.ExpectedComponents {
 		canonical[name] = true
 	}
 	seenComponents := map[string]bool{}
@@ -482,7 +514,7 @@ func validateContractSet(root, dir string, batch *Batch) error {
 			}
 		}
 	}
-	for name := range batch.Versions {
+	for _, name := range batch.ExpectedComponents {
 		if !seenComponents[name] {
 			return fmt.Errorf("%s: missing component contract %q", BatchFile, name)
 		}
@@ -639,7 +671,7 @@ func validateBatchOverlay(root, dir, head string, batch *Batch, current bool, al
 			return fmt.Errorf("%s: release %q is not in the prepared component contract", BatchFile, name)
 		}
 	}
-	wantStatus := batchStatus(batch.Versions, batch.Releases)
+	wantStatus := batchStatus(batch.ExpectedComponents, batch.Releases)
 	if batch.Status != wantStatus {
 		return fmt.Errorf("%s: status %q, want %q", BatchFile, batch.Status, wantStatus)
 	}
@@ -682,11 +714,15 @@ func BootstrapSource(root, dir, head string) (string, error) {
 }
 
 func importCompleteBatch(root, dir, head, environment, source string, versions map[string]string) (*Batch, error) {
-	contracts, err := componentContracts(root, dir, source, environment, versions, true)
+	expected, err := expectedComponentSet(versions)
 	if err != nil {
 		return nil, err
 	}
-	batch := &Batch{Schema: batchSchema, Environment: environment, Source: source, Versions: versions, Components: contracts, Releases: map[string]Released{}}
+	contracts, err := componentContracts(root, dir, source, environment, expected, versions, true)
+	if err != nil {
+		return nil, err
+	}
+	batch := &Batch{Schema: batchSchema, Environment: environment, Source: source, ExpectedComponents: expected, Versions: versions, Components: contracts, Releases: map[string]Released{}}
 	tagged := 0
 	for i := range contracts {
 		contract := &contracts[i]
@@ -702,10 +738,10 @@ func importCompleteBatch(root, dir, head, environment, source string, versions m
 			return nil, fmt.Errorf("component %s tag points to %s, prepared source is %s", contract.Component, taggedSource, source)
 		}
 	}
-	if tagged != 0 && tagged != len(versions) {
+	if tagged != 0 && tagged != len(expected) {
 		return nil, fmt.Errorf("%s is missing for a partially tagged release; refusing to infer a batch source", BatchFile)
 	}
-	if tagged == len(versions) {
+	if tagged == len(expected) {
 		for i := range contracts {
 			contract := &contracts[i]
 			values, err := pinValues(root, contract.Deploy)
@@ -722,7 +758,7 @@ func importCompleteBatch(root, dir, head, environment, source string, versions m
 			batch.Releases[contract.Record.ReleaseKey] = released
 		}
 	}
-	batch.Status = batchStatus(batch.Versions, batch.Releases)
+	batch.Status = batchStatus(batch.ExpectedComponents, batch.Releases)
 	if err := validateBatch(root, dir, head, batch, true, ""); err != nil {
 		return nil, err
 	}
@@ -815,11 +851,15 @@ func EnsureBatch(root, dir, head, environment string) (*Batch, bool, error) {
 	if batch.Status != "complete" {
 		return nil, false, fmt.Errorf("prior batch %s is %s, refusing concurrent batch creation", batch.Source, batch.Status)
 	}
-	contracts, err := componentContracts(root, dir, source, environment, versions, true)
+	expected, err := expectedComponentSet(versions)
 	if err != nil {
 		return nil, false, err
 	}
-	batch = &Batch{Schema: batchSchema, Status: "prepared", Environment: environment, Source: source, Versions: versions, Components: contracts, Releases: map[string]Released{}}
+	contracts, err := componentContracts(root, dir, source, environment, expected, versions, true)
+	if err != nil {
+		return nil, false, err
+	}
+	batch = &Batch{Schema: batchSchema, Status: "prepared", Environment: environment, Source: source, ExpectedComponents: expected, Versions: versions, Components: contracts, Releases: map[string]Released{}}
 	if err := validateBatch(root, dir, head, batch, true, ""); err != nil {
 		return nil, false, err
 	}
@@ -853,11 +893,15 @@ func PendingReleases(root, dir, head string) ([]Pending, error) {
 		return nil, err
 	}
 	var out []Pending
-	for _, contract := range batch.Components {
+	for _, name := range batch.ExpectedComponents {
+		contract := contractByName(batch, name)
+		if contract == nil {
+			return nil, fmt.Errorf("%s: missing expected component contract %q", BatchFile, name)
+		}
 		if _, released := batch.Releases[contract.Record.ReleaseKey]; released {
 			continue
 		}
-		out = append(out, contract)
+		out = append(out, *contract)
 	}
 	return out, nil
 }
@@ -1007,7 +1051,7 @@ func RecordRelease(root, dir, head, environment, component, repository, version,
 		return err
 	}
 	candidate.Releases[contract.Record.ReleaseKey] = released
-	candidate.Status = batchStatus(candidate.Versions, candidate.Releases)
+	candidate.Status = batchStatus(candidate.ExpectedComponents, candidate.Releases)
 	if err := validateBatchOverlay(root, dir, head, candidate, true, "", map[string][]byte{contract.Deploy.ValuesFile: newValues}); err != nil {
 		return err
 	}

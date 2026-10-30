@@ -59,8 +59,9 @@ summary.
    `release/versions.json`, selects the first-parent commit that introduced that
    exact version set, builds `servicerelease` from that commit, and uses that
    source-built helper to commit schema-v2 `release/batch.json` before
-   publication. The record contains the source SHA, version set and an ordered,
-   immutable contract for every prepared component: canonical service and
+   publication. The record contains the source SHA, version set, one ordered
+   `expectedComponents` set derived from that source's prepared versions, and an
+   immutable contract for every member of exactly that set: canonical service and
    validation-image identities, identity-reporting command, aliases, Dockerfile,
    context, target and complete build arguments, registry/repository/tag, chart
    and exact values-file/key path, the Argo ApplicationSet render route, canonical
@@ -77,18 +78,24 @@ summary.
    `versions.json`. The workflow then checks out that candidate, compiles the
    authoritative helper there, returns to the record branch, and uses only the
    source-built helper for `batch`, `pending`, `batch-source` and `record`.
-   Component metadata compiled into a later `main` can therefore neither alter
-   nor validate an in-flight batch. The sole migration exception is the
-   historical six-tag release whose source predates `batch.go`: current main may
-   persist it only as an already-complete batch after all six tags resolve to
-   that one source and all six existing pins validate. The migration command
+   The expected set may contain one through six canonical components. Its order,
+   membership, versions, contracts, pending work, releases and deployment pins
+   must remain exactly equal on every retry; a full set remains six-way atomic,
+   while a subset is atomic only across its persisted members and cannot bless
+   an untouched service. Component metadata compiled into a later `main` can
+   therefore neither alter nor validate an in-flight batch. The sole migration
+   exception is an already-terminal legacy version set whose source predates
+   `batch.go` (the historical instance is a six-tag release): current main may
+   persist it only after every expected tag resolves to that one source and every
+   expected existing pin validates. The migration command
    rejects prepared or partial state, so it cannot authorize a build, push,
    record or deployment change.
 
    `servicerelease pending` then validates the batch record, existing component
    tags and staging pins before reporting its unrecorded components. It renders
-   all six charts through the exact Argo value-file order at both the pinned
-   source and current record head. A unique probe repository/tag/digest must
+   every chart in the persisted expected set through the exact Argo value-file
+   order at both the pinned source and current record head. A unique probe
+   repository/tag/digest must
    change the same exhaustive pinned workload-consumer set, including the
    component's primary Deployment container. Standard Deployments, StatefulSets,
    DaemonSets, ReplicaSets, Jobs, CronJobs and Pods, Helm hooks/tests, every
@@ -100,6 +107,19 @@ summary.
    shared-values or consumer drift fails before a build. An existing release
    path that is unused, shadowed, ambiguous, aliased, duplicated, absent or the
    wrong YAML type also fails.
+
+   Before any fixture or service image build, push, version-tag creation or Git
+   publication, one aggregate read-only ECR preflight covers the entire persisted
+   expected set. It proves every exact account/region/repository exists and is
+   already `IMMUTABLE`, and snapshots every planned version tag as absent,
+   recorded at its persisted digest, or recoverable from an interrupted push
+   after exact digest and embedded service/version/source identity verification.
+   The snapshot is bound to the complete batch and every component contract;
+   each component is re-read against it immediately before push. An absent tag
+   that appears concurrently, a repository setting change, target drift or a
+   digest change fails safely without overwrite. A matching recoverable tag is
+   recorded without another push, closing the push-acknowledged/runner-stopped
+   retry window.
 
    Every release-authoritative repository path is canonicalized below the exact
    worktree root. The root ancestry, batch/version files, ApplicationSet, every
@@ -117,11 +137,11 @@ summary.
      same SHA to every service build;
    - runs the built service binary's `-version` endpoint and checks its exact
      release version and Git SHA against the image's OCI labels;
-   - first proves the exact ECR repository already has `IMMUTABLE` tag
-     mutability. A pre-existing pending version tag is a conflict and is never
-     overwritten. A pre-existing tag is accepted only for a recorded idempotent
-     retry whose repository, tag and digest equal the persisted batch, after its
-     platform, service, version and source identity are re-verified;
+   - re-proves the exact ECR target still equals the aggregate preflight. No
+     existing tag is overwritten. A recorded idempotent retry must equal its
+     persisted repository/tag/digest; an interrupted unrecorded push may be
+     recovered only when two exact reads agree on its digest and its platform,
+     service, version and source identity match the immutable batch contract;
    - pushes a new image only to the contract's ECR registry as
      `phorvex/<service>:<version>`, reads that exact repository/tag back from ECR,
      pulls it, and re-verifies that the returned digest owns the expected service
@@ -159,15 +179,22 @@ summary.
    rendered consumer differs. In particular, a source-A `brain` can never be
    built, recorded or pinned via source-B `sensor` metadata, and a later chart
    cannot rename `.Values.image` while the source helper recreates an obsolete
-   `image` mapping. The same validation runs after each failed atomic push is
-   rebased onto newer main.
+   `image` mapping. A failed atomic push never fetches or rebases while the
+   contents-write credential is present. It fails the run; the queued/fresh run
+   checks out the newer main through the normal non-persisted checkout path,
+   reconstructs the record (including an exactly matching interrupted ECR push),
+   and repeats every source, committed-HEAD and ECR proof before a new push.
 
    All third-party actions in the three privileged release jobs are pinned to
    reviewed 40-character commits with their human version in an inline comment.
-   Checkout never persists credentials. The GitHub token is supplied only to
-   the exact push subprocess through an ephemeral Git configuration environment;
-   the workflow then proves no credential/header was left in local Git config or
-   any remote URL.
+   Checkout never persists credentials. There is no credentialed fetch or
+   rebase in any write-token step; remote advancement is retried only by a fresh
+   normal checkout.
+   The contents-write Git credential is supplied only to the exact push
+   subprocess through an ephemeral Git configuration environment; hooks are
+   disabled for that subprocess, failure/success traps clear shell material, and
+   the workflow proves no credential/header was left in local Git config or any
+   remote URL before and after every push and retry.
 
    Before `batch.json` existed, completed releases were represented only by a
    unanimous set of component tags and pins. `import-terminal-batch` imports
@@ -188,10 +215,12 @@ Release prerequisites (the workflow validates but never reconfigures them):
 
 - **ECR.** The repositories `phorvex/manager`, `phorvex/brain`,
   `phorvex/sensor`, `phorvex/actuator`, `phorvex/console` and `phorvex/attacks`
-  exist in account 753556437180, us-east-2. All six **must be configured with
-  immutable tags** before any release attempt; `MUTABLE` and exclusion-based
-  modes fail closed. This repository deliberately does not change that live
-  setting. The last reviewed inventory described the repositories as mutable,
+  exist in account 753556437180, us-east-2. Every repository in a batch's exact
+  persisted expected set **must be configured with immutable tags** before that
+  batch can build or push; a full six-component batch therefore requires all six.
+  `MUTABLE` and exclusion-based modes fail closed. This repository deliberately
+  does not change that live setting. The last reviewed inventory described the
+  repositories as mutable,
   so the reviewed infrastructure owner must apply and independently verify the
   immutability prerequisite before release. Scan/encryption policy is separate.
   The production stack's repositories (`phorvex`, `phorvex-console`) are not
