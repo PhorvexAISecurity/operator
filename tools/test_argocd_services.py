@@ -162,9 +162,12 @@ class EnvironmentRenderTests(unittest.TestCase):
                     # The console serves the attack routes itself, and no attacks service runs.
                     self.assertEqual([d for d in docs if d['kind'] == 'Deployment'], [])
                     continue
-                svc = next(d for d in docs if d['kind'] == 'Service')
-                port = next(p['port'] for p in svc['spec']['ports'] if p['name'] == 'http')
-                self.assertEqual(endpoint, f"{svc['metadata']['name']}:{port}")
+                services_by_endpoint = {
+                    f"{d['metadata']['name']}:{port['port']}": d
+                    for d in docs if d['kind'] == 'Service'
+                    for port in d['spec']['ports'] if port['name'] == 'http'
+                }
+                self.assertIn(endpoint, services_by_endpoint)
                 # The console chart deploys the console where it is separate, the manager chart elsewhere.
                 rendered = render(environment, by_service['manager']) + render(environment, by_service['console'])
                 console = next(d for d in rendered if d['kind'] == 'Deployment' and d['metadata']['name'].endswith('-console'))
@@ -254,9 +257,10 @@ class EnvironmentRenderTests(unittest.TestCase):
                 self.assertNotEqual(namespace, 'phorvex-system')
                 self.assertNotEqual(release, 'phorvex')
                 values = load(ENVIRONMENTS / environment['environment'] / 'phorvex.yaml')['phorvex']
+                catalogue = load(ENVIRONMENTS / environment['environment'] / 'catalogue-family.yaml').get('phorvex', {})
                 # Its own namespaces only, and never the one the services run in: the
                 # actuator refuses to quarantine there.
-                scope = values['policyNamespaces']
+                scope = catalogue.get('policyNamespaces', values['policyNamespaces'])
                 self.assertTrue(scope)
                 for policy_namespace in scope:
                     # Its own sub-namespaces, or a known identity-rotate fixture namespace it
@@ -266,8 +270,9 @@ class EnvironmentRenderTests(unittest.TestCase):
                 acts = not values['globalKillSwitch']
                 if acts:
                     self.assertEqual(values['actuator'], 'native')
-                    self.assertTrue(values['actuatorNamespaces'])
-                    for actuator_namespace in values['actuatorNamespaces']:
+                    actuator_scope = catalogue.get('actuatorNamespaces', values['actuatorNamespaces'])
+                    self.assertTrue(actuator_scope)
+                    for actuator_namespace in actuator_scope:
                         self.assertTrue(actuator_namespace.startswith(namespace + '-') or actuator_namespace in FIXTURE_NAMESPACES, actuator_namespace)
                 self.assertIs(values['admissionWebhook']['enabled'], False)
                 self.assertIs(values['eventIdentityPolicy']['enabled'], False)
