@@ -33,10 +33,29 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+      - name: Require one exact reviewed main source
+        env:
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          [ "$EVENT_REF" = refs/heads/main ]
+          [ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]
+          reviewed_sha="$(tools/verify-git-build-identity.sh "$REQUESTED_SOURCE")"
+          [ "$reviewed_sha" = "$REQUESTED_SOURCE" ]
+          [ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$REQUESTED_SOURCE" ]
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: build/test-harness/go.mod
@@ -50,33 +69,26 @@ jobs:
           echo "$bin" >> "$GITHUB_PATH"
       - name: Install the pinned contract dependency
         run: python -m pip install PyYAML==6.0.2
-      - name: Require one exact reviewed main source
-        env:
-          REQUESTED_SOURCE: ${{ inputs.source }}
-        run: |
-          set -euo pipefail
-          [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          reviewed_sha="$(tools/verify-git-build-identity.sh "$REQUESTED_SOURCE")"
-          [ "$reviewed_sha" = "$REQUESTED_SOURCE" ]
-          [ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]
-          [ -z "$(git status --porcelain --untracked-files=all)" ]
-      - name: Build the source-pinned release helper and persist the exact batch
+      - name: Validate shared authority and persist a separate exact staging batch
         env:
           SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
-          "$RUNNER_TEMP/servicerelease" pending --json > "$RUNNER_TEMP/shared-pending.json"
-          pending_count="$(jq -er 'if type == "array" then length else error("shared pending result is not an array") end' \
-            "$RUNNER_TEMP/shared-pending.json")"
-          if [ "$pending_count" -ne 0 ]; then
-            echo "::error::complete the source-pinned shared release batch before isolated publication"
-            exit 1
-          fi
+          "$RUNNER_TEMP/servicerelease" staging-authority --target "$TARGET" --source "$SOURCE" \
+            --output "$RUNNER_TEMP/staging-authority.json"
+          jq -e '.schema == 1 and .target == "staging-isolated" and
+            .shared.batchPath == "release/batch.json" and
+            .isolated.batchPath == "release/staging-batch.json"' \
+            "$RUNNER_TEMP/staging-authority.json" > /dev/null
           "$RUNNER_TEMP/servicerelease" staging-contract --target "$TARGET" --source "$SOURCE" \
             --output "$RUNNER_TEMP/service-contracts.json"
           python tools/staging_release.py prepare --source "$SOURCE" \
-            --services "$RUNNER_TEMP/service-contracts.json" --output "$RUNNER_TEMP/staging-batch.json"
+            --services "$RUNNER_TEMP/service-contracts.json" \
+            --authority "$RUNNER_TEMP/staging-authority.json" \
+            --output "$RUNNER_TEMP/staging-batch.json"
           python tools/staging_release.py verify --batch "$RUNNER_TEMP/staging-batch.json" \
             --services "$RUNNER_TEMP/service-contracts.json"
           while IFS= read -r item; do
@@ -84,6 +96,9 @@ jobs:
               --dockerfile "$(jq -er '.build.dockerfile' <<< "$item")" \
               --context "$(jq -er '.build.context' <<< "$item")"
           done < <(jq -c '.components[]' "$RUNNER_TEMP/staging-batch.json")
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
       - name: Require the release role
         env:
           ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
@@ -118,6 +133,8 @@ jobs:
       - name: Build and publish the exact eight-component batch
         env:
           SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           printf '{}\n' > "$RUNNER_TEMP/results.json"
@@ -128,6 +145,9 @@ jobs:
             repository="$(jq -er '.image.repository' <<< "$contract")"
             canonical_tag="$(jq -er '.image.tag' <<< "$contract")"
             remote_repository="$registry/$repository"
+            remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+            [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+            [ "$remote_main" = "$SOURCE" ]
             probe="$(python tools/verify_staging_ecr.py probe --batch "$RUNNER_TEMP/staging-batch.json" \
               --preflight-state "$RUNNER_TEMP/ecr-preflight.json" --component "$name")"
             digest="$(jq -r '.digest // empty' <<< "$probe")"
@@ -185,6 +205,9 @@ jobs:
             --output "$RUNNER_TEMP/staging-complete.json"
           python tools/verify_staging_ecr.py verify --batch "$RUNNER_TEMP/staging-complete.json" \
             > "$RUNNER_TEMP/ecr-complete.json"
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
       - name: Create a staging-only digest-pin proposal
         env:
           SOURCE: ${{ inputs.source }}
@@ -212,6 +235,9 @@ jobs:
             echo deploy/environments/staging/phorvex.yaml
             echo deploy/environments/staging/catalogue-family.yaml
           } | sort > "$allowed"
+          jq -r '.authority.isolated.proposalPaths[]' release/staging-batch.json | sort \
+            > "$RUNNER_TEMP/authority-allowed-files"
+          cmp "$allowed" "$RUNNER_TEMP/authority-allowed-files"
           git add -- release/staging-batch.json \
             deploy/environments/staging/manager.yaml \
             deploy/environments/staging/brain.yaml \
@@ -227,6 +253,7 @@ jobs:
           grep -Fxq release/staging-batch.json "$RUNNER_TEMP/actual-files"
           [ -z "$(git diff --name-only)" ]
           [ -z "$(git ls-files --others --exclude-standard)" ]
+          git diff --exit-code "$SOURCE" -- release/batch.json release/versions.json 'release/*.md'
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -237,8 +264,24 @@ jobs:
       - name: Push the staging proposal without persisting credentials
         env:
           GIT_PUSH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE: ${{ inputs.source }}
         run: |
           set -euo pipefail
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$SOURCE" ]
+          expected_remote=''
+          if gh api "repos/$REPOSITORY/git/ref/heads/$branch" > "$RUNNER_TEMP/proposal-ref.json" \
+            2> "$RUNNER_TEMP/proposal-ref.error"; then
+            expected_remote="$(jq -er '.object.sha | select(test("^[0-9a-f]{40}$"))' \
+              "$RUNNER_TEMP/proposal-ref.json")"
+          elif ! grep -Fq 'HTTP 404' "$RUNNER_TEMP/proposal-ref.error"; then
+            cat "$RUNNER_TEMP/proposal-ref.error" >&2
+            exit 1
+          fi
+          unset GH_TOKEN
           token="$GIT_PUSH_TOKEN"
           unset GIT_PUSH_TOKEN
           trap 'token=; unset token GIT_PUSH_TOKEN' EXIT
@@ -249,7 +292,8 @@ jobs:
             GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" \
             GIT_CONFIG_KEY_1=core.hooksPath \
             GIT_CONFIG_VALUE_1=/dev/null \
-            git push --force-with-lease origin "HEAD:refs/heads/$branch"
+            git push --force-with-lease="refs/heads/$branch:$expected_remote" \
+              origin "HEAD:refs/heads/$branch"
           auth=; unset auth
           ! git config --local --get-regexp '(extraheader|credential|token)'
       - name: Open or update the reviewed staging deployment PR

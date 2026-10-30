@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -25,9 +26,9 @@ func TestStagingContractsAreExactSourceDerivedAndIsolated(t *testing.T) {
 			t.Fatalf("contract %d identity = %s/%s", i, contract.Component, contract.Source)
 		}
 		wantRepository := StagingRepositoryPrefix + component.Name
-		wantTag := "1.0.0-git-" + r.source
+		wantTag := "staging-1.0.0-git-" + r.source
 		if contract.Image.Repository != wantRepository || contract.Image.Tag != wantTag ||
-			len(contract.Image.Tags) != 2 || contract.Image.Tags[0] != wantTag || contract.Image.Tags[1] != "git-"+r.source {
+			len(contract.Image.Tags) != 2 || contract.Image.Tags[0] != wantTag || contract.Image.Tags[1] != "staging-git-"+r.source {
 			t.Fatalf("%s staging image = %#v", component.Name, contract.Image)
 		}
 		if contract.Deploy.Namespace != "phorvex-staging" || contract.Deploy.ReleaseName != "staging" ||
@@ -100,12 +101,8 @@ func TestPinStagingServicesUsesOnlyPersistedContractsAndRendersDigests(t *testin
 	}
 }
 
-func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, contracts []BatchComponent, results map[string]Released) {
+func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, authority *IsolatedStagingAuthority, contracts []BatchComponent, results map[string]Released) {
 	t.Helper()
-	targetRaw := []byte("{\"name\":\"staging-isolated\"}\n")
-	if err := os.WriteFile(filepath.Join(r.releaseDir, "staging-target.json"), targetRaw, 0o644); err != nil {
-		t.Fatal(err)
-	}
 	targetSum := sha256.Sum256([]byte("{\"name\":\"staging-isolated\"}"))
 	components := make([]map[string]any, 0, len(stagingComponentOrder))
 	releases := map[string]Released{}
@@ -124,11 +121,11 @@ func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, co
 	}
 	for _, name := range []string{"agent-sim", "catalogue-workload"} {
 		version := "fixture-v1"
-		tag := version + "-git-" + source
+		tag := "staging-" + version + "-git-" + source
 		components = append(components, map[string]any{
 			"component": name, "kind": "fixture", "source": source, "version": version,
 			"build": map[string]any{}, "identity": map[string]any{}, "deploy": map[string]any{},
-			"image": ComponentImage{Registry: ReleaseRegistry, Repository: StagingRepositoryPrefix + name, Tag: tag, Tags: []string{tag, "git-" + source}},
+			"image": ComponentImage{Registry: ReleaseRegistry, Repository: StagingRepositoryPrefix + name, Tag: tag, Tags: []string{tag, "staging-git-" + source}},
 		})
 		releases[name] = Released{Repository: ReleaseRegistry + "/" + StagingRepositoryPrefix + name, Digest: "sha256:" + strings.Repeat("f", 64)}
 	}
@@ -136,6 +133,7 @@ func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, co
 		"schema": 1, "status": "complete", "target": StagingTargetName,
 		"targetDigest": fmt.Sprintf("sha256:%x", targetSum), "environment": ReleaseEnvironment,
 		"source": source, "sourceTree": r.git("rev-parse", source+"^{tree}"),
+		"authority":          authority,
 		"expectedComponents": stagingComponentOrder, "components": components, "releases": releases,
 	}
 	raw, err := json.MarshalIndent(value, "", "  ")
@@ -144,6 +142,138 @@ func writeIsolatedBatchForTest(t *testing.T, r *batchTestRepo, source string, co
 	}
 	if err := os.WriteFile(filepath.Join(r.releaseDir, "staging-batch.json"), append(raw, '\n'), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func writeStagingAuthorityFixtures(t *testing.T, root string) {
+	t.Helper()
+	files := map[string]string{
+		".github/workflows/staging-isolated-release.yml": "name: staging\n",
+		"release/staging-fixture-identities.json":        "{}\n",
+		"release/staging-target.json":                    "{\"name\":\"staging-isolated\"}\n",
+		"tools/staging_release.py":                       "# staging helper\n",
+		"phorvex/tools/servicerelease/staging.go":        "package main\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestStagingAuthorityAllowsValidatedPreparedSharedBatch(t *testing.T) {
+	r := newBatchTestRepo(t, batchVersions())
+	r.ensureBatch()
+	r.commit("persist prepared shared batch")
+	writeStagingAuthorityFixtures(t, r.root)
+	source := r.commit("review isolated staging authority")
+	authority, err := BuildStagingAuthority(r.root, r.releaseDir, source, StagingTargetName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if authority.Shared.Status != "prepared" || !reflect.DeepEqual(authority.Shared.PendingComponents, []string{"manager", "brain", "sensor", "actuator", "console", "attacks"}) {
+		t.Fatalf("prepared shared authority = %#v", authority.Shared)
+	}
+	if authority.Shared.BatchPath != "release/batch.json" || authority.Isolated.BatchPath != "release/staging-batch.json" {
+		t.Fatalf("shared/isolated records overlap: %#v", authority)
+	}
+	for _, repository := range authority.Shared.Repositories {
+		if strings.HasPrefix(repository, StagingRepositoryPrefix) {
+			t.Fatalf("shared repository overlaps staging: %s", repository)
+		}
+	}
+}
+
+func TestStagingAuthorityRejectsMalformedTamperedAndNonAncestorSharedBatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, *batchTestRepo)
+		want   string
+	}{
+		{
+			name: "unknown schema",
+			mutate: func(t *testing.T, r *batchTestRepo) {
+				batch, err := readBatch(r.releaseDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				batch.Schema = 99
+				if err := writeBatch(r.releaseDir, batch); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "schema 99",
+		},
+		{
+			name: "unknown field",
+			mutate: func(t *testing.T, r *batchTestRepo) {
+				path := filepath.Join(r.releaseDir, BatchFile)
+				raw, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var value map[string]any
+				if err := json.Unmarshal(raw, &value); err != nil {
+					t.Fatal(err)
+				}
+				value["supersedes"] = "shared"
+				raw, err = json.Marshal(value)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, append(raw, '\n'), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "unknown field",
+		},
+		{
+			name: "repository overlap",
+			mutate: func(t *testing.T, r *batchTestRepo) {
+				batch, err := readBatch(r.releaseDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				batch.Components[0].Image.Repository = "phorvex/staging/manager"
+				if err := writeBatch(r.releaseDir, batch); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "pinned-source contract",
+		},
+		{
+			name: "non ancestor source",
+			mutate: func(t *testing.T, r *batchTestRepo) {
+				other := r.git("commit-tree", r.git("rev-parse", "HEAD^{tree}"), "-m", "unrelated")
+				batch, err := readBatch(r.releaseDir)
+				if err != nil {
+					t.Fatal(err)
+				}
+				batch.Source = other
+				if err := writeBatch(r.releaseDir, batch); err != nil {
+					t.Fatal(err)
+				}
+			},
+			want: "is not an ancestor",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, batchVersions())
+			r.ensureBatch()
+			r.commit("persist prepared shared batch")
+			writeStagingAuthorityFixtures(t, r.root)
+			r.commit("review isolated staging authority")
+			test.mutate(t, r)
+			source := r.commit("tamper shared batch")
+			if _, err := BuildStagingAuthority(r.root, r.releaseDir, source, StagingTargetName); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("authority error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 
@@ -160,7 +290,12 @@ func TestSharedIsolatedSharedDeploymentSelectionTransition(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("reviewed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeStagingAuthorityFixtures(t, r.root)
 	isolationSource := r.commit("review isolated release source")
+	authority, err := BuildStagingAuthority(r.root, r.releaseDir, isolationSource, StagingTargetName)
+	if err != nil {
+		t.Fatal(err)
+	}
 	contracts, err := StagingContracts(r.root, r.releaseDir, isolationSource, StagingTargetName)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +322,7 @@ func TestSharedIsolatedSharedDeploymentSelectionTransition(t *testing.T) {
 	if err := PinStagingServices(r.root, contractsPath, resultsPath); err != nil {
 		t.Fatal(err)
 	}
-	writeIsolatedBatchForTest(t, r, isolationSource, contracts, results)
+	writeIsolatedBatchForTest(t, r, isolationSource, authority, contracts, results)
 	r.commit("select isolated staging deployment")
 	if pending, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err != nil || len(pending) != 0 {
 		t.Fatalf("shared publication after isolated selection = %v, %v", pending, err)

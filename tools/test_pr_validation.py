@@ -63,10 +63,12 @@ class PRValidationTests(unittest.TestCase):
             committed_verifier.index('if shared_source:'),
         )
         self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
+        self.assertIn('run(str(helper), "pending", "--json", cwd=source_root)', committed_verifier)
+        self.assertIn('current_shared_validation_required(source_root)', committed_verifier)
         self.assertIn('str(current_helper), "pending", "--json", cwd=ROOT', committed_verifier)
         self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
         self.assertLess(
-            committed_verifier.index('str(current_helper), "pending", "--json", cwd=ROOT'),
+            committed_verifier.index('run(str(helper), "pending", "--json", cwd=source_root)'),
             committed_verifier.index('if shared_source:'),
         )
         self.assertIn('superseding_shared=release.read_json(SHARED_BATCH)', committed_verifier)
@@ -285,24 +287,30 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
             'actions': 'write', 'contents': 'write', 'pull-requests': 'write', 'id-token': 'write',
         })
         checkout = next(step for step in job['steps'] if step.get('uses', '').startswith('actions/checkout@'))
-        self.assertEqual(checkout['with']['ref'], 'main')
+        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
         self.assertEqual(checkout['with']['persist-credentials'], 'false')
+        source_gate = next(i for i, step in enumerate(job['steps'])
+                           if step.get('name') == 'Require one exact reviewed main source')
+        first_source_consumer = next(i for i, step in enumerate(job['steps'])
+                                     if step.get('uses', '').startswith('actions/setup-go@'))
+        self.assertLess(source_gate, first_source_consumer)
         runs = '\n'.join(step.get('run', '') for step in job['steps'])
         self.assertIn('tools/verify-git-build-identity.sh "$REQUESTED_SOURCE"', runs)
         self.assertIn('[ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]', runs)
+        self.assertIn('[ "$EVENT_REF" = refs/heads/main ]', runs)
+        self.assertIn('[ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]', runs)
+        self.assertGreaterEqual(runs.count('gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha'), 4)
         self.assertNotIn('git fetch', runs)
+        self.assertIn('staging-authority --target "$TARGET" --source "$SOURCE"', runs)
         self.assertIn('staging-contract --target "$TARGET" --source "$SOURCE"', runs)
-        shared_gate = runs.index('pending --json > "$RUNNER_TEMP/shared-pending.json"')
-        decoder_gate = runs.index('pending_count="$(jq -er')
-        self.assertLess(shared_gate, decoder_gate)
-        self.assertIn('if type == "array" then length else error(', runs)
-        self.assertIn('if [ "$pending_count" -ne 0 ]; then', runs)
-        self.assertNotIn('if [ "$(jq', runs)
-        self.assertLess(shared_gate, runs.index('staging-contract --target "$TARGET"'))
-        self.assertLess(shared_gate, runs.index('verify_staging_ecr.py preflight'))
-        self.assertIn('complete the source-pinned shared release batch', runs)
+        authority_gate = runs.index('staging-authority --target "$TARGET"')
+        self.assertLess(authority_gate, runs.index('staging-contract --target "$TARGET"'))
+        self.assertLess(authority_gate, runs.index('verify_staging_ecr.py preflight'))
+        self.assertIn('--authority "$RUNNER_TEMP/staging-authority.json"', runs)
+        self.assertNotIn('complete the source-pinned shared release batch', runs)
+        self.assertNotIn('pending_count', runs)
         self.assertNotIn('$GITHUB_SHA', runs)
-        for forbidden in ('kubectl ', 'argocd ', 'git push origin main', 'refs/heads/main',
+        for forbidden in ('kubectl ', 'argocd ', 'git push origin main',
                           'phorvex/manager:', 'phorvex/brain:', 'continue-on-error', '|| true'):
             self.assertNotIn(forbidden, STAGING_RELEASE_RAW)
 
@@ -339,10 +347,15 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('git diff --cached --name-only "$SOURCE" -- | sort', runs)
         self.assertIn('comm -23 "$RUNNER_TEMP/actual-files" "$allowed"', runs)
         self.assertIn('grep -Fxq release/staging-batch.json', runs)
+        self.assertIn("git diff --exit-code \"$SOURCE\" -- release/batch.json release/versions.json 'release/*.md'", runs)
+        self.assertIn(".authority.isolated.proposalPaths[]", runs)
+        self.assertIn('cmp "$allowed" "$RUNNER_TEMP/authority-allowed-files"', runs)
         self.assertLess(runs.index('git add -- release/staging-batch.json'),
                         runs.index('git diff --cached --name-only "$SOURCE"'))
         self.assertIn('pull-request --require-open --head "$branch" --base main', runs)
         self.assertIn('dispatch --ref "$branch" --workflows pr-validation.yml', runs)
+        self.assertIn('--force-with-lease="refs/heads/$branch:$expected_remote"', runs)
+        self.assertIn('git/ref/heads/$branch', runs)
         self.assertNotIn('gh pr merge', runs)
         self.assertNotIn('git merge --', runs)
         for path in ('manager.yaml', 'brain.yaml', 'sensor.yaml', 'actuator.yaml',

@@ -30,6 +30,7 @@ const usage = `usage:
   servicerelease verify-committed [--dir release] [--head <rev>]
   servicerelease validate-transition --from-root <path> --from-head <sha> --to-root <path> --to-head <sha> [--dir release]
   servicerelease verify-build-paths --dockerfile <path> --context <path>
+  servicerelease staging-authority --target staging-isolated --source <sha> [--output <path>]
   servicerelease staging-contract --target staging-isolated --source <sha> [--output <path>]
   servicerelease staging-pin --contracts <path> --results <path>
   servicerelease record --environment staging --component <name> --repository <repo> --tag <version> --digest <sha256:...> --source <sha>
@@ -42,7 +43,7 @@ const usage = `usage:
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "release-files": true, "verify-staged": true, "verify-committed": true, "validate-transition": true, "verify-build-paths": true, "staging-contract": true, "staging-pin": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "bootstrap-source": true, "import-terminal-batch": true, "batch": true, "batch-source": true, "pending": true, "release-files": true, "verify-staged": true, "verify-committed": true, "validate-transition": true, "verify-build-paths": true, "staging-authority": true, "staging-contract": true, "staging-pin": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -72,8 +73,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fromHead := fs.String("from-head", "", "[validate-transition] exact expected endpoint commit")
 	toRoot := fs.String("to-root", "", "[validate-transition] clean detached latest endpoint repository root")
 	toHead := fs.String("to-head", "", "[validate-transition] exact latest endpoint commit")
-	target := fs.String("target", "", "[staging-contract] reviewed release target")
-	output := fs.String("output", "-", "[staging-contract] output path, or - for stdout")
+	target := fs.String("target", "", "[staging-authority, staging-contract] reviewed release target")
+	output := fs.String("output", "-", "[staging-authority, staging-contract] output path, or - for stdout")
 	contracts := fs.String("contracts", "", "[staging-pin] source-derived service contract JSON")
 	results := fs.String("results", "", "[staging-pin] verified service repository/digest JSON")
 	requireOpen := fs.Bool("require-open", false, "[pull-request] fail unless the exact open PR can be read back")
@@ -278,6 +279,18 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		if err := VerifyBuildPaths(root, *dockerfile, *context); err != nil {
+			return fail(err)
+		}
+	case "staging-authority":
+		if *target == "" || *source == "" {
+			fmt.Fprintln(stderr, "servicerelease staging-authority: --target and --source are required")
+			return 2
+		}
+		value, err := BuildStagingAuthority(root, releaseDir, *source, *target)
+		if err != nil {
+			return fail(err)
+		}
+		if err := writeStagingAuthority(*output, value); err != nil {
 			return fail(err)
 		}
 	case "staging-contract":

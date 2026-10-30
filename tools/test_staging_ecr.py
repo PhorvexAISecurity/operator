@@ -8,6 +8,8 @@ import unittest
 
 import staging_release as RELEASE
 import test_staging_release as FIXTURE
+import test_release_ecr as SHARED_FIXTURE
+import verify_release_ecr as SHARED_ECR
 import verify_staging_ecr as ECR
 
 
@@ -96,6 +98,24 @@ def batch() -> dict:
 
 
 class StagingECRTests(unittest.TestCase):
+    def test_exact_prepared_shared_mutable_state_reaches_isolated_preflight_only(self):
+        shared = SHARED_ECR.read_batch(Path(__file__).resolve().parents[1] / "release/batch.json")
+        self.assertEqual(shared["status"], "prepared")
+        self.assertEqual(shared["expectedComponents"], RELEASE.SERVICE_NAMES)
+        shared_fake = SHARED_FIXTURE.FakeCommands(
+            mutability={f"phorvex/{name}": "MUTABLE" for name in RELEASE.SERVICE_NAMES}
+        )
+        with self.assertRaisesRegex(RuntimeError, "must already be IMMUTABLE"):
+            SHARED_ECR.preflight(shared, Path(__file__).resolve().parents[1], shared_fake)
+        self.assertFalse(any(command[:2] == ["docker", "push"] or command[:3] == ["aws", "ecr", "put-image"]
+                             for command in shared_fake.commands))
+
+        isolated = batch()
+        self.assertEqual(isolated["authority"]["shared"]["pendingComponents"], RELEASE.SERVICE_NAMES)
+        state = ECR.preflight(isolated, FakeECR())
+        self.assertEqual([item["component"] for item in state["components"]], RELEASE.COMPONENTS)
+        self.assertTrue(all(item["state"] == "absent" for item in state["components"]))
+
     def test_service_identity_cleanup_removes_only_the_local_tag(self):
         value = batch()
         contract = ECR.component(value, "brain")

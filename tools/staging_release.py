@@ -28,6 +28,23 @@ DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 TAG = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 EXPECTED_REPOSITORIES = {name: f"phorvex/staging/{name}" for name in COMPONENTS}
+PROPOSAL_PATHS = [
+    "deploy/environments/staging/actuator.yaml",
+    "deploy/environments/staging/attacks.yaml",
+    "deploy/environments/staging/brain.yaml",
+    "deploy/environments/staging/catalogue-family.yaml",
+    "deploy/environments/staging/console.yaml",
+    "deploy/environments/staging/manager.yaml",
+    "deploy/environments/staging/phorvex.yaml",
+    "deploy/environments/staging/sensor.yaml",
+    "release/staging-batch.json",
+]
+SOURCE_AUTHORITY_FILES = [
+    ".github/workflows/staging-isolated-release.yml",
+    "release/staging-fixture-identities.json",
+    "release/staging-target.json",
+    "tools/staging_release.py",
+]
 SERVICE_COMMANDS = {
     "manager": "/manager",
     "brain": "/service",
@@ -132,6 +149,113 @@ def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=False) + "\n", encoding="utf-8")
 
 
+def validate_authority(authority: Any, source: str) -> dict[str, Any]:
+    if not isinstance(authority, dict) or set(authority) != {
+        "schema", "target", "source", "shared", "isolated",
+    }:
+        raise ValueError("staging authority has an incomplete or unknown top-level contract")
+    source_authority = authority.get("source")
+    shared_authority = authority.get("shared")
+    isolated_authority = authority.get("isolated")
+    if (
+        authority.get("schema") != 1 or authority.get("target") != "staging-isolated"
+        or not isinstance(source_authority, dict) or set(source_authority) != {
+            "commit", "tree", "dispatchRef", "serviceHelperTree", "files",
+        }
+        or source_authority.get("commit") != source
+        or source_authority.get("tree") != git_output(["rev-parse", f"{source}^{{tree}}"])
+        or source_authority.get("dispatchRef") != "refs/heads/main"
+        or source_authority.get("serviceHelperTree") != git_output(
+            ["rev-parse", f"{source}:phorvex/tools/servicerelease"]
+        )
+    ):
+        raise ValueError("staging source authority is not the exact reviewed main commit/tree/helper")
+    files = source_authority.get("files")
+    if not isinstance(files, dict) or list(files) != SOURCE_AUTHORITY_FILES:
+        raise ValueError("staging source authority file set is not canonical")
+    for path in SOURCE_AUTHORITY_FILES:
+        if files.get(path) != git_output(["rev-parse", f"{source}:{path}"]):
+            raise ValueError(f"staging source authority changed for {path}")
+
+    if not isinstance(shared_authority, dict) or set(shared_authority) != {
+        "batchPath", "batchDigest", "schema", "status", "source",
+        "expectedComponents", "pendingComponents", "repositories",
+    }:
+        raise ValueError("shared batch authority contract is incomplete")
+    if shared_authority.get("batchPath") != "release/batch.json":
+        raise ValueError("shared batch authority path changed")
+    shared_path = ROOT / shared_authority["batchPath"]
+    shared = read_json(shared_path)
+    shared_raw = shared_path.read_bytes()
+    if shared_authority.get("batchDigest") != "sha256:" + hashlib.sha256(shared_raw).hexdigest():
+        raise ValueError("shared batch authority digest changed")
+    if not isinstance(shared, dict) or set(shared) != {
+        "schema", "status", "environment", "source", "expectedComponents",
+        "versions", "components", "releases",
+    }:
+        raise ValueError("shared batch authority is malformed or has an unknown schema")
+    shared_source = shared.get("source", "")
+    expected = shared.get("expectedComponents")
+    components = shared.get("components")
+    releases = shared.get("releases")
+    if (
+        shared.get("schema") != 2 or shared.get("environment") != "staging"
+        or not SHA.fullmatch(shared_source) or not isinstance(expected, list) or not expected
+        or not all(name in SERVICE_NAMES for name in expected) or len(expected) != len(set(expected))
+        or expected != [name for name in SERVICE_NAMES if name in expected]
+        or not isinstance(components, list) or len(components) != len(expected)
+        or [item.get("component") for item in components if isinstance(item, dict)] != expected
+        or not isinstance(releases, dict) or not set(releases).issubset(expected)
+    ):
+        raise ValueError("shared batch authority component/source contract is malformed")
+    relation = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", shared_source, source], cwd=ROOT,
+        text=True, capture_output=True,
+    )
+    if relation.returncode != 0:
+        raise ValueError("shared batch source is not an ancestor of the isolated source")
+    pending = [name for name in expected if name not in releases]
+    status = "complete" if not pending else ("prepared" if not releases else "partial")
+    shared_repositories = []
+    for item in components:
+        name = item["component"]
+        image = item.get("image", {})
+        record = item.get("record", {})
+        repository = image.get("repository") if isinstance(image, dict) else None
+        if (
+            item.get("source") != shared_source or repository != f"phorvex/{name}"
+            or str(repository).startswith("phorvex/staging/")
+            or not isinstance(record, dict) or record.get("batchFile") != "release/batch.json"
+        ):
+            raise ValueError(f"shared component {name} overlaps isolated authority")
+        shared_repositories.append(repository)
+    if (
+        shared.get("status") != status
+        or shared_authority.get("schema") != shared["schema"]
+        or shared_authority.get("status") != status
+        or shared_authority.get("source") != shared_source
+        or shared_authority.get("expectedComponents") != expected
+        or shared_authority.get("pendingComponents") != pending
+        or shared_authority.get("repositories") != shared_repositories
+    ):
+        raise ValueError("shared batch authority snapshot differs from its validated source record")
+
+    isolated_repositories = [EXPECTED_REPOSITORIES[name] for name in COMPONENTS]
+    if (
+        not isinstance(isolated_authority, dict) or set(isolated_authority) != {
+            "batchPath", "repositories", "proposalPaths",
+        }
+        or isolated_authority.get("batchPath") != "release/staging-batch.json"
+        or isolated_authority.get("repositories") != isolated_repositories
+        or isolated_authority.get("proposalPaths") != PROPOSAL_PATHS
+        or set(isolated_repositories) & set(shared_repositories)
+        or shared_authority["batchPath"] in PROPOSAL_PATHS
+        or "release/versions.json" in PROPOSAL_PATHS
+    ):
+        raise ValueError("shared and isolated file/repository authority is not separated")
+    return authority
+
+
 def expected_target() -> dict[str, Any]:
     target = read_json(TARGET_FILE)
     if target.get("schema") != 1 or target.get("name") != "staging-isolated":
@@ -194,7 +318,7 @@ def validate_service_contracts(contracts: Any, source: str, target: dict[str, An
         deploy = contract.get("deploy", {})
         identity = contract.get("identity", {})
         build = contract.get("build", {})
-        expected_tag = f"{version}-git-{source}"
+        expected_tag = f"staging-{version}-git-{source}"
         if contract.get("source") != source or not isinstance(version, str) or not version:
             raise ValueError(f"service {name} source/version is not exact")
         if identity.get("service") != name or identity.get("command") != SERVICE_COMMANDS[name] or identity.get("aliases") != []:
@@ -203,7 +327,7 @@ def validate_service_contracts(contracts: Any, source: str, target: dict[str, An
             "registry": registry,
             "repository": target["repositories"][name],
             "tag": expected_tag,
-            "tags": [expected_tag, f"git-{source}"],
+            "tags": [expected_tag, f"staging-git-{source}"],
         }:
             raise ValueError(f"service {name} image target/tags are not canonical staging-only values")
         if build.get("context") != "." or not build.get("dockerfile") or f"GIT_SHA={source}" not in build.get("args", []) or f"RELEASE_VERSION={version}" not in build.get("args", []):
@@ -223,11 +347,12 @@ def validate_service_contracts(contracts: Any, source: str, target: dict[str, An
     return contracts
 
 
-def prepare(source: str, services_path: Path) -> dict[str, Any]:
+def prepare(source: str, services_path: Path, authority_path: Path) -> dict[str, Any]:
     if not SHA.fullmatch(source):
         raise ValueError("--source must be an exact lowercase 40-character Git SHA")
     target = expected_target()
     verify_argocd(target)
+    authority = validate_authority(read_json(authority_path), source)
     services = validate_service_contracts(read_json(services_path), source, target)
     identities = fixture_identities()
     components: list[dict[str, Any]] = []
@@ -238,7 +363,7 @@ def prepare(source: str, services_path: Path) -> dict[str, Any]:
     for name in FIXTURE_NAMES:
         spec = FIXTURE_SPECS[name]
         version = spec["version"]
-        deployment_tag = f"{version}-git-{source}"
+        deployment_tag = f"staging-{version}-git-{source}"
         components.append({
             "component": name,
             "kind": "fixture",
@@ -258,7 +383,7 @@ def prepare(source: str, services_path: Path) -> dict[str, Any]:
                 "registry": target["registry"],
                 "repository": target["repositories"][name],
                 "tag": deployment_tag,
-                "tags": [deployment_tag, f"git-{source}"],
+                "tags": [deployment_tag, f"staging-git-{source}"],
             },
             "identity": {"oci": identities[name]},
             "deploy": spec["deploy"],
@@ -271,6 +396,7 @@ def prepare(source: str, services_path: Path) -> dict[str, Any]:
         "environment": target["environment"],
         "source": source,
         "sourceTree": git_output(["rev-parse", f"{source}^{{tree}}"]),
+        "authority": authority,
         "expectedComponents": COMPONENTS,
         "components": components,
         "releases": {},
@@ -288,7 +414,7 @@ def validate_batch(
     verify_argocd(target)
     if not isinstance(batch, dict) or set(batch) != {
         "schema", "status", "target", "targetDigest", "environment", "source", "sourceTree",
-        "expectedComponents", "components", "releases",
+        "authority", "expectedComponents", "components", "releases",
     }:
         raise ValueError("staging batch has an incomplete or unknown top-level contract")
     source = batch.get("source", "")
@@ -297,6 +423,7 @@ def validate_batch(
     source_tree = git_output(["rev-parse", f"{source}^{{tree}}"])
     if batch["targetDigest"] != canonical_digest(target) or batch.get("sourceTree") != source_tree:
         raise ValueError("staging batch target or source-tree identity changed")
+    validate_authority(batch.get("authority"), source)
     if batch.get("expectedComponents") != COMPONENTS or not isinstance(batch.get("components"), list) or len(batch["components"]) != len(COMPONENTS):
         raise ValueError("staging batch does not contain the exact eight-component set")
     if [item.get("component") for item in batch["components"]] != COMPONENTS:
@@ -315,12 +442,12 @@ def validate_batch(
         name = item["component"]
         expected = FIXTURE_SPECS[name]
         version = expected["version"]
-        tag = f"{version}-git-{source}"
+        tag = f"staging-{version}-git-{source}"
         if item.get("kind") != "fixture" or item.get("source") != source or item.get("version") != version:
             raise ValueError(f"fixture {name} source/version contract changed")
         if item.get("image") != {
             "registry": target["registry"], "repository": target["repositories"][name],
-            "tag": tag, "tags": [tag, f"git-{source}"],
+            "tag": tag, "tags": [tag, f"staging-git-{source}"],
         } or item.get("identity") != {"oci": identities[name]} or item.get("deploy") != expected["deploy"]:
             raise ValueError(f"fixture {name} image/OCI/deployment contract changed")
         if item.get("build") != {
@@ -911,6 +1038,7 @@ def main() -> int:
     prepare_parser = sub.add_parser("prepare")
     prepare_parser.add_argument("--source", required=True)
     prepare_parser.add_argument("--services", type=Path, required=True)
+    prepare_parser.add_argument("--authority", type=Path, required=True)
     prepare_parser.add_argument("--output", type=Path, required=True)
     complete_parser = sub.add_parser("complete")
     complete_parser.add_argument("--batch", type=Path, required=True)
@@ -930,7 +1058,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "prepare":
-            write_json(args.output, prepare(args.source, args.services))
+            write_json(args.output, prepare(args.source, args.services, args.authority))
         elif args.command == "complete":
             services = read_json(args.services)
             value = validate_batch(read_json(args.batch), require_complete=False, canonical_services=services)

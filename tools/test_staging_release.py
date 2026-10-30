@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -18,6 +19,49 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def source_sha() -> str:
     return subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, text=True, capture_output=True).stdout.strip()
+
+
+def git_object(source: str, path: str) -> str:
+    return subprocess.run(
+        ["git", "rev-parse", f"{source}:{path}"], cwd=ROOT, check=True,
+        text=True, capture_output=True,
+    ).stdout.strip()
+
+
+def staging_authority(source: str) -> dict:
+    shared_path = ROOT / "release/batch.json"
+    shared_raw = shared_path.read_bytes()
+    shared = json.loads(shared_raw)
+    pending = [name for name in shared["expectedComponents"] if name not in shared["releases"]]
+    return {
+        "schema": 1,
+        "target": "staging-isolated",
+        "source": {
+            "commit": source,
+            "tree": subprocess.run(
+                ["git", "rev-parse", f"{source}^{{tree}}"], cwd=ROOT, check=True,
+                text=True, capture_output=True,
+            ).stdout.strip(),
+            "dispatchRef": "refs/heads/main",
+            "serviceHelperTree": git_object(source, "phorvex/tools/servicerelease"),
+            "files": {path: git_object(source, path) for path in RELEASE.SOURCE_AUTHORITY_FILES},
+        },
+        "shared": {
+            "batchPath": "release/batch.json",
+            "batchDigest": "sha256:" + hashlib.sha256(shared_raw).hexdigest(),
+            "schema": shared["schema"],
+            "status": shared["status"],
+            "source": shared["source"],
+            "expectedComponents": shared["expectedComponents"],
+            "pendingComponents": pending,
+            "repositories": [item["image"]["repository"] for item in shared["components"]],
+        },
+        "isolated": {
+            "batchPath": "release/staging-batch.json",
+            "repositories": [RELEASE.EXPECTED_REPOSITORIES[name] for name in RELEASE.COMPONENTS],
+            "proposalPaths": RELEASE.PROPOSAL_PATHS,
+        },
+    }
 
 
 def service_contracts(source: str) -> list[dict]:
@@ -38,7 +82,7 @@ def service_contracts(source: str) -> list[dict]:
             args.append(f"SERVICE={name}")
         if name in {"console", "attacks"}:
             args.append(f"CONSOLE_VERSION={version}")
-        tag = f"{version}-git-{source}"
+        tag = f"staging-{version}-git-{source}"
         values_file = f"deploy/environments/staging/{values_name}.yaml"
         contracts.append({
             "component": name, "source": source, "version": version,
@@ -46,7 +90,7 @@ def service_contracts(source: str) -> list[dict]:
             "image": {
                 "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
                 "repository": f"phorvex/staging/{name}", "tag": tag,
-                "tags": [tag, f"git-{source}"],
+                "tags": [tag, f"staging-git-{source}"],
             },
             "identity": {"service": name, "command": command, "validationImage": image_name, "aliases": []},
             "deploy": {
@@ -71,8 +115,10 @@ def prepared_batch() -> dict:
     source = source_sha()
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / "services.json"
+        authority = Path(directory) / "authority.json"
         path.write_text(json.dumps(service_contracts(source)), encoding="utf-8")
-        return RELEASE.prepare(source, path)
+        authority.write_text(json.dumps(staging_authority(source)), encoding="utf-8")
+        return RELEASE.prepare(source, path, authority)
 
 
 def publication_results(value: dict) -> dict:
@@ -141,7 +187,38 @@ class StagingTargetTests(unittest.TestCase):
             self.assertEqual(item["source"], value["source"])
             self.assertTrue(item["image"]["repository"].startswith("phorvex/staging/"))
             self.assertEqual(item["image"]["tag"], item["image"]["tags"][0])
-            self.assertEqual(item["image"]["tags"][1], "git-" + value["source"])
+            self.assertTrue(item["image"]["tag"].startswith("staging-"))
+            self.assertEqual(item["image"]["tags"][1], "staging-git-" + value["source"])
+            self.assertNotEqual(item["image"]["tag"], item["version"])
+        self.assertEqual(value["authority"]["shared"]["status"], "prepared")
+        self.assertEqual(value["authority"]["shared"]["pendingComponents"], RELEASE.SERVICE_NAMES)
+        self.assertEqual(value["authority"]["isolated"]["proposalPaths"], RELEASE.PROPOSAL_PATHS)
+
+    def test_authority_tampering_and_overlap_fail_closed(self):
+        value = prepared_batch()
+        mutations = {
+            "helper": lambda candidate: candidate["authority"]["source"].__setitem__(
+                "serviceHelperTree", "0" * 40
+            ),
+            "shared digest": lambda candidate: candidate["authority"]["shared"].__setitem__(
+                "batchDigest", "sha256:" + "0" * 64
+            ),
+            "pending": lambda candidate: candidate["authority"]["shared"].__setitem__(
+                "pendingComponents", []
+            ),
+            "repository overlap": lambda candidate: candidate["authority"]["isolated"][
+                "repositories"
+            ].__setitem__(0, "phorvex/manager"),
+            "proposal escape": lambda candidate: candidate["authority"]["isolated"][
+                "proposalPaths"
+            ].append("release/batch.json"),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name):
+                candidate = copy.deepcopy(value)
+                mutate(candidate)
+                with self.assertRaises(ValueError):
+                    RELEASE.validate_batch(candidate)
 
     def test_shared_or_arbitrary_repository_is_rejected(self):
         value = prepared_batch()

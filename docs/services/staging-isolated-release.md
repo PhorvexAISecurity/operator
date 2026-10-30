@@ -11,11 +11,28 @@ then the current reviewed helper may apply only the isolated-deployment
 supersession rule. Batch drift, partial authority, or invalid records fail closed.
 
 The lane is manual and accepts one input: the complete 40-character commit at
-current `main`. The clean checkout must resolve to that exact commit. There is no repository override input. The only accepted target is
+current `main`. The dispatch ref, event SHA, input, clean detached checkout and
+remote `refs/heads/main` must all resolve to that exact commit. The check is
+repeated before every push and before the proposal is pushed, so a main advance
+fails closed and the run is retried from the new reviewed head. There is no repository override input. The only accepted target is
 the reviewed `staging-isolated` profile in `release/staging-target.json`. Before
-assuming AWS credentials or building anything, the source-built helper also
-requires the normal shared batch to have no pending components. A prepared or
-partial shared release therefore fails closed instead of racing isolated pins.
+assuming AWS credentials or building anything, `servicerelease
+staging-authority` validates the complete normal shared-batch schema, source,
+ancestry, contracts, records, consumers and pending set with the source-built
+helper. A valid prepared or partial shared batch is recorded as evidence rather
+than treated as staging authority. Its bytes, status, releases and six pending
+components remain untouched; the normal workflow retains its aggregate
+immutable-ECR gate and still cannot publish to a `MUTABLE` shared repository.
+Malformed, tampered, unknown-schema or non-ancestor shared state fails closed.
+
+The resulting authority binds the source commit/tree, dispatch ref, Git object
+identity of the workflow, Python helper, Go helper tree, target and fixture
+configuration; the exact shared batch digest/status/source/pending set and six
+shared repositories; and the separate staging batch path, exact eight isolated
+repositories and nine-file proposal allowlist. `release/staging-batch.json`
+persists that authority with every version, build, fixture and rendered
+consumer. It never marks, rewrites, completes, supersedes or records anything in
+`release/batch.json`.
 
 ## Provisioned ECR inventory
 
@@ -67,7 +84,8 @@ no source path that names them as a publication target.
 
 ## Contract and publication sequence
 
-1. `servicerelease staging-contract` derives all six service build, embedded
+1. `servicerelease staging-authority` validates and snapshots the shared state
+   without changing it. `servicerelease staging-contract` then derives all six service build, embedded
    identity, staging Argo route, values, and rendered workload-consumer contracts
    from the exact source. It fails unless all six services are present.
 2. `tools/staging_release.py prepare` joins those six contracts to the two
@@ -85,7 +103,9 @@ no source path that names them as a publication target.
    identities.
 5. The six services are built from the one SHA with service/version/SHA identity
    embedded and locally verified. Services and fixtures publish only a
-   `<version>-git-<full-sha>` tag and `git-<full-sha>` alias. Interrupted alias
+   `staging-<version>-git-<full-sha>` tag and
+   `staging-git-<full-sha>` alias. These tags cannot equal a normal shared
+   release version tag. Interrupted alias
    creation is recoverable only after the existing digest and identity pass the
    same gate. Alias creation preserves either OCI or Docker schema-2 media type,
    rejects ECR batch failures, hashes the returned manifest bytes back to the
@@ -104,7 +124,9 @@ no source path that names them as a publication target.
    values file from the source to prove that only the contracted image-pin scalars
    changed. It requires the batch record, commits the changed subset to
    `release/staging-isolated-<sha12>`, and requires GitHub to return the exact open
-   PR before dispatching its checks.
+   PR before dispatching its checks. It also proves `release/batch.json`,
+   `release/versions.json` and every shared release record are byte-identical to
+   the source.
    It never pushes deployment state to `main`, merges, syncs Argo, or runs an
    attack.
 
@@ -117,9 +139,13 @@ destination, values root, shared repository, extra consumer, mutable tag,
 missing digest, partial result, or non-allowlisted file makes the lane fail
 closed.
 
-The complete batch records the actual Git tree and the exact source-derived Go
-contracts. Normal PR validation reconstructs those contracts in a detached
-worktree at the recorded source before accepting a digest-pin PR. It also diffs
+The complete batch records the actual Git tree, source authority and the exact
+source-derived Go contracts. Normal PR validation reconstructs those contracts
+in a detached worktree at the recorded source before accepting a digest-pin PR.
+For a prepared/partial shared batch it validates the shared record in that
+immutable pre-selection worktree and separately proves the current shared batch
+bytes did not change; isolated consumer pins are never mistaken for a shared
+batch transition. It also diffs
 the proposal against that source, so a production/shared or unrelated change is
 rejected even when all staging pins are valid. A complete isolated batch may
 supersede only an older shared deployment selection; shared
@@ -130,22 +156,19 @@ shared → isolated → shared transition is covered by the release-tool tests.
 
 ## Reviewed publication and deployment
 
-After this source PR is independently reviewed and merged, first wait for the
-normal `Release` run triggered by that merge. The current PR #119 shared batch
-is still prepared; it must become complete before isolated pins can supersede
-its staging consumers. Then publish from the new exact `main` SHA (which
-contains this reviewed source and the source-pinned shared release record):
+After this source PR is independently reviewed and merged, dispatch only from
+the new exact `main` SHA. That commit must contain this workflow/tooling and all
+catalogue/Console changes intended for staging. The current prepared shared
+batch does not need to complete and is not changed. If `main` advances after the
+dispatch, the run fails before its next publication boundary and must be
+retried from the newly reviewed exact head:
 
 ```sh
 repo=PhorvexSecurity/operator-refactored
 merge_sha="$(gh pr view <source-pr> --repo "$repo" --json mergeCommit --jq .mergeCommit.oid)"
-release_run="$(gh run list --repo "$repo" --workflow release.yml --event push \
-  --commit "$merge_sha" --limit 1 --json databaseId --jq '.[0].databaseId')"
-gh run watch "$release_run" --repo "$repo" --exit-status
-
 git fetch origin main
 source_sha="$(git rev-parse origin/main)"
-test "$(git show "$source_sha:release/batch.json" | jq -r .status)" = complete
+test "$source_sha" = "$merge_sha"
 gh workflow run staging-isolated-release.yml \
   --repo "$repo" \
   --ref main -f source="$source_sha"

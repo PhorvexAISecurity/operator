@@ -9,6 +9,32 @@ import verify_committed_staging_batch as VERIFY
 
 
 class CleanupTests(unittest.TestCase):
+    def test_prepared_shared_batch_must_remain_byte_identical(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            current = root / "current-batch.json"
+            source_root = root / "source"
+            (source_root / "release").mkdir(parents=True)
+            raw = b'{"status":"prepared"}\n'
+            current.write_bytes(raw)
+            (source_root / "release/batch.json").write_bytes(raw)
+            with mock.patch.object(VERIFY, "SHARED_BATCH", current):
+                self.assertFalse(VERIFY.current_shared_validation_required(source_root))
+                current.write_bytes(b'{"status":"partial"}\n')
+                with self.assertRaisesRegex(ValueError, "in-flight shared batch changed"):
+                    VERIFY.current_shared_validation_required(source_root)
+
+    def test_complete_shared_batch_uses_current_compatibility_validation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            current = root / "current-batch.json"
+            source_root = root / "source"
+            (source_root / "release").mkdir(parents=True)
+            current.write_text('{"status":"complete"}\n')
+            (source_root / "release/batch.json").write_text('{"status":"prepared"}\n')
+            with mock.patch.object(VERIFY, "SHARED_BATCH", current):
+                self.assertTrue(VERIFY.current_shared_validation_required(source_root))
+
     def test_every_worktree_cleanup_is_attempted_and_failure_propagates(self):
         temporary = Path(tempfile.mkdtemp(prefix="phorvex-cleanup-test-"))
         worktrees = [temporary / name for name in ("selection", "shared", "source")]
