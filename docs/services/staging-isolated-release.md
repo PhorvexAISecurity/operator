@@ -32,9 +32,10 @@ push. Each has the exact tags `environment=staging`, `project=phorvex`,
 `campaign=console-reactive-qa-192`, and `isolation=staging-only`. No repository
 resource policy or account registry policy is present: access is not widened
 and remains controlled by the account's identity-based IAM/OIDC permissions.
-The registry uses policy scope `V2` and native basic scanning. The release gate
-proves the exact caller account, both policy absences, account settings and each
-repository state again at publication boundaries.
+The registry uses policy scope `V2`, scan type `BASIC`, and native basic scanning.
+The release gate proves the exact caller account, both policy absences, effective
+registry scan mode, account settings and each repository state again at publication
+boundaries.
 
 The lifecycle policy removes untagged build remnants after seven days and keeps
 the 30 newest immutable release images. It exists only on the eight repositories
@@ -85,10 +86,10 @@ no source path that names them as a publication target.
    complete `release/staging-batch.json` is then created.
 7. The existing release consumer writer pins only the six files under
    `deploy/environments/staging/`; the fixture writer pins the two disabled-by-
-   default catalogue image values in `catalogue-family.yaml`. Helm renders prove
-   the service and fixture consumers select the exact digests after every Argo
-   values file, including the catalogue overlay, has been applied in order.
-8. The workflow stages only those seven staging values files plus the batch
+   default catalogue image values already present in `phorvex.yaml` and
+   `catalogue-family.yaml`. Helm renders prove the service and fixture consumers
+   select the exact digests after every Argo values file has been applied in order.
+8. The workflow stages only those eight staging values files plus the batch
    record, rejects any changed path outside that allowlist, and reconstructs each
    values file from the source to prove that only the contracted image-pin scalars
    changed. It requires the batch record, commits the changed subset to
@@ -129,7 +130,7 @@ gh run watch --repo PhorvexSecurity/operator-refactored --exit-status
 ```
 
 That run publishes the images and opens/updates a separate staging digest-pin
-PR. Review its `release/staging-batch.json`, ECR evidence, exact seven staging
+PR. Review its `release/staging-batch.json`, ECR evidence, exact eight staging
 values diffs, and required PR checks. Merging that second PR is the separate
 deployment authorization because the existing staging ApplicationSet watches
 `main`; do not merge it until the staging rollout is authorized. Argo sync and

@@ -18,8 +18,6 @@ phorvex:
         enabled: false
         profile: ""
         cleanupPolicy: Delete
-        images:
-          workload: ""
       agentAction:
         enabled: false
         namespace: p6-demo

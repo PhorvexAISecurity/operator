@@ -202,6 +202,7 @@ jobs:
             echo deploy/environments/staging/actuator.yaml
             echo deploy/environments/staging/console.yaml
             echo deploy/environments/staging/attacks.yaml
+            echo deploy/environments/staging/phorvex.yaml
             echo deploy/environments/staging/catalogue-family.yaml
           } | sort > "$allowed"
           git add -- release/staging-batch.json \
@@ -211,6 +212,7 @@ jobs:
             deploy/environments/staging/actuator.yaml \
             deploy/environments/staging/console.yaml \
             deploy/environments/staging/attacks.yaml \
+            deploy/environments/staging/phorvex.yaml \
             deploy/environments/staging/catalogue-family.yaml
           git diff --cached --name-only "$SOURCE" -- | sort > "$RUNNER_TEMP/actual-files"
           comm -23 "$RUNNER_TEMP/actual-files" "$allowed" > "$RUNNER_TEMP/unexpected-files"

@@ -72,11 +72,19 @@ def registry_state(runner: Runner = subprocess.run) -> dict[str, Any]:
         "BASIC_SCAN_TYPE_VERSION": controls["basicScanTypeVersion"],
     }:
         raise RuntimeError("ECR registry policy/scan scope differs from the staging target")
+    scanning = aws_json(["ecr", "get-registry-scanning-configuration", "--region", target["region"]], runner)
+    configuration = scanning.get("scanningConfiguration")
+    if (
+        str(scanning.get("registryId")) != target["accountId"]
+        or configuration != {"scanType": controls["registryScanType"], "rules": []}
+    ):
+        raise RuntimeError("ECR registry scanning mode does not provide repository basic scan-on-push")
     state = {
         "accountId": target["accountId"],
         "registryPolicy": "ABSENT",
         "registryPolicyScope": settings["REGISTRY_POLICY_SCOPE"],
         "basicScanTypeVersion": settings["BASIC_SCAN_TYPE_VERSION"],
+        "registryScanType": configuration["scanType"],
     }
     state["digest"] = release.canonical_digest(state)
     return state
@@ -194,11 +202,15 @@ def verify_remote_identity(contract: dict[str, Any], digest: str, runner: Runner
         "--git-sha", contract["source"], "--version", contract["version"],
         "--expected-repository", repository, "--expected-tag", image["tag"], "--expected-digest", digest,
     ], runner)
-    cleanup = run(["docker", "image", "rm", tagged, immutable], runner)
+    # Removing the sole local tag can also remove Docker's digest reference.
+    # Do not pass that now-absent digest as a second removal target.
+    cleanup = run(["docker", "image", "rm", tagged], runner)
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or f"component {contract['component']} embedded identity verification failed")
     if cleanup.returncode != 0:
-        raise RuntimeError(cleanup.stderr.strip() or f"component {contract['component']} image cleanup failed")
+        remaining = run(["docker", "image", "inspect", tagged], runner)
+        if remaining.returncode == 0:
+            raise RuntimeError(cleanup.stderr.strip() or f"component {contract['component']} image cleanup failed")
 
 
 def preflight(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> dict[str, Any]:

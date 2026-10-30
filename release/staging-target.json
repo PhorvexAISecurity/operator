@@ -24,6 +24,7 @@
     "registryPolicy": "ABSENT",
     "registryPolicyScope": "V2",
     "basicScanTypeVersion": "AWS_NATIVE",
+    "registryScanType": "BASIC",
     "tags": {
       "campaign": "console-reactive-qa-192",
       "environment": "staging",

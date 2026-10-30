@@ -74,6 +74,7 @@ class StagingTargetTests(unittest.TestCase):
         self.assertTrue(all(value.startswith("phorvex/staging/") for value in target["repositories"].values()))
         self.assertEqual(target["repositoryControls"]["imageTagMutability"], "IMMUTABLE")
         self.assertTrue(target["repositoryControls"]["scanOnPush"])
+        self.assertEqual(target["repositoryControls"]["registryScanType"], "BASIC")
         self.assertEqual(target["repositoryControls"]["resourcePolicy"], "IAM_ONLY")
 
     def test_prepared_contract_covers_six_services_and_two_fixtures(self):
@@ -197,14 +198,23 @@ class StagingTargetTests(unittest.TestCase):
                 path.write_text(
                     yaml.safe_dump(RELEASE.expected_service_values(before, item, complete), sort_keys=False)
                 )
-            fixture_path = complete["components"][len(RELEASE.SERVICE_NAMES)]["deploy"]["valuesFile"]
-            fixture_before = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
-            base_values[fixture_path] = fixture_before
-            fixture_output = root / fixture_path
-            fixture_output.parent.mkdir(parents=True, exist_ok=True)
-            fixture_output.write_text(
-                yaml.safe_dump(RELEASE.expected_fixture_values(fixture_before, complete), sort_keys=False)
-            )
+            fixture_outputs = {}
+            fixture_files = {
+                item["deploy"]["valuesFile"]
+                for item in complete["components"][len(RELEASE.SERVICE_NAMES):]
+            }
+            for fixture_path in fixture_files:
+                fixture_before = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
+                base_values[fixture_path] = fixture_before
+                fixture_output = root / fixture_path
+                fixture_output.parent.mkdir(parents=True, exist_ok=True)
+                fixture_output.write_text(
+                    yaml.safe_dump(
+                        RELEASE.expected_fixture_values(fixture_before, complete, fixture_path),
+                        sort_keys=False,
+                    )
+                )
+                fixture_outputs[fixture_path] = fixture_output
 
             def loader(_revision, path):
                 return copy.deepcopy(base_values[path])
@@ -213,15 +223,17 @@ class StagingTargetTests(unittest.TestCase):
                 RELEASE, "git_yaml_at_revision", side_effect=loader
             ):
                 RELEASE.verify_exact_pin_diffs(complete, complete["source"])
+                fixture_output = fixture_outputs["deploy/environments/staging/catalogue-family.yaml"]
                 changed = yaml.safe_load(fixture_output.read_text(encoding="utf-8"))
                 changed["unexpectedWorkload"] = {"namespace": "phorvex-system"}
                 fixture_output.write_text(yaml.safe_dump(changed, sort_keys=False))
-                with self.assertRaisesRegex(ValueError, "outside the two exact staging digest pins"):
+                with self.assertRaisesRegex(ValueError, "outside its exact staging fixture pin"):
                     RELEASE.verify_exact_pin_diffs(complete, complete["source"])
 
     def test_both_fixture_destinations_exist_and_are_preflighted_before_any_write(self):
-        values = yaml.safe_load((ROOT / "deploy/environments/staging/catalogue-family.yaml").read_text())
         for name in RELEASE.FIXTURE_NAMES:
+            spec = RELEASE.FIXTURE_SPECS[name]
+            values = yaml.safe_load((ROOT / spec["deploy"]["valuesFile"]).read_text())
             self.assertIsInstance(RELEASE.nested(values, RELEASE.FIXTURE_SPECS[name]["deploy"]["path"]), str)
 
         value = RELEASE.complete(prepared_batch(), publication_results(prepared_batch()))
@@ -230,6 +242,8 @@ class StagingTargetTests(unittest.TestCase):
             overlay = root / "deploy/environments/staging/catalogue-family.yaml"
             overlay.parent.mkdir(parents=True)
             overlay.write_text("phorvex:\n  console:\n    attackCatalog:\n      agentAction:\n        image: \"unchanged\"\n")
+            base = root / "deploy/environments/staging/phorvex.yaml"
+            base.write_text("phorvex:\n  console:\n    attackCatalog:\n      familyFixtures:\n        images: {}\n")
             with mock.patch.object(RELEASE, "ROOT", root), mock.patch.object(RELEASE, "validate_batch", return_value=value):
                 with self.assertRaisesRegex(ValueError, "missing deployment value"):
                     RELEASE.pin_fixtures(value)

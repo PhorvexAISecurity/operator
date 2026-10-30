@@ -50,7 +50,7 @@ FIXTURE_SPECS = {
         "version": "fixture-v1",
         "dockerfile": "farm-fixtures/catalogue-workload/Dockerfile",
         "deploy": {
-            "valuesFile": "deploy/environments/staging/catalogue-family.yaml",
+            "valuesFile": "deploy/environments/staging/phorvex.yaml",
             "path": ["phorvex", "console", "attackCatalog", "familyFixtures", "images", "workload"],
             "consumers": ["catalogue-family-profile/*#workload-image"],
         },
@@ -108,6 +108,7 @@ def expected_target() -> dict[str, Any]:
         or controls.get("registryPolicy") != "ABSENT"
         or controls.get("registryPolicyScope") != "V2"
         or controls.get("basicScanTypeVersion") != "AWS_NATIVE"
+        or controls.get("registryScanType") != "BASIC"
         or controls.get("tags") != {
         "campaign": "console-reactive-qa-192",
         "environment": "staging",
@@ -425,16 +426,24 @@ def expected_service_values(
     return expected
 
 
-def expected_fixture_values(values: dict[str, Any], batch: dict[str, Any]) -> dict[str, Any]:
+def expected_fixture_values(
+    values: dict[str, Any], batch: dict[str, Any], values_file: str
+) -> dict[str, Any]:
     expected = copy.deepcopy(values)
+    selected = []
     for name in FIXTURE_NAMES:
         item = next(component for component in batch["components"] if component["component"] == name)
+        if item["deploy"]["valuesFile"] != values_file:
+            continue
+        selected.append(name)
         path = item["deploy"]["path"]
         parent = nested(expected, path[:-1])
         if not isinstance(parent, dict) or path[-1] not in parent or not isinstance(parent[path[-1]], str):
             raise ValueError(f"fixture {name} deployment pin scalar is absent")
         release = batch["releases"][name]
         parent[path[-1]] = f"{release['repository']}@{release['digest']}"
+    if not selected:
+        raise ValueError(f"{values_file} has no exact fixture pin contract")
     return expected
 
 
@@ -461,11 +470,14 @@ def verify_exact_pin_diffs(batch: dict[str, Any], base: str) -> None:
             raise ValueError(
                 f"service {item['component']} values contain changes outside its exact staging image pin"
             )
-    fixture_path = batch["components"][len(SERVICE_NAMES)]["deploy"]["valuesFile"]
-    before = git_yaml_at_revision(base, fixture_path)
-    current = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
-    if current != expected_fixture_values(before, batch):
-        raise ValueError("fixture values contain changes outside the two exact staging digest pins")
+    fixture_files = {
+        item["deploy"]["valuesFile"] for item in batch["components"][len(SERVICE_NAMES):]
+    }
+    for fixture_path in fixture_files:
+        before = git_yaml_at_revision(base, fixture_path)
+        current = yaml.safe_load((ROOT / fixture_path).read_text(encoding="utf-8"))
+        if current != expected_fixture_values(before, batch, fixture_path):
+            raise ValueError(f"{fixture_path} contains changes outside its exact staging fixture pin")
 
 
 def verify_argocd(target: dict[str, Any]) -> None:
@@ -628,8 +640,8 @@ def verify_deployment(batch: dict[str, Any], base: str | None, canonical_service
         raise ValueError("rendered catalogue workload consumer is not the exact staging fixture digest")
     if base:
         changed = set(filter(None, git_output(["diff", "--name-only", base, "--"]).splitlines()))
-        allowed = {"release/staging-batch.json", "deploy/environments/staging/catalogue-family.yaml"}
-        allowed.update(item["deploy"]["valuesFile"] for item in batch["components"][: len(SERVICE_NAMES)])
+        allowed = {"release/staging-batch.json"}
+        allowed.update(item["deploy"]["valuesFile"] for item in batch["components"])
         if not changed or not changed.issubset(allowed):
             raise ValueError(f"staging pin diff contains non-staging/production paths: {sorted(changed - allowed)}")
         verify_exact_pin_diffs(batch, base)

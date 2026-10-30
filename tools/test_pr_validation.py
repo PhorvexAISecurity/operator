@@ -53,6 +53,8 @@ class PRValidationTests(unittest.TestCase):
         committed_verifier = (ROOT / 'tools/verify_committed_staging_batch.py').read_text()
         self.assertIn('release.verify_deployment(value, source, canonical)', committed_verifier)
         self.assertNotIn('release.verify_deployment(value, None, canonical)', committed_verifier)
+        self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
+        self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])
         self.assertIn('go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...', runs['go-unit'])
         self.assertEqual(jobs['go-unit']['env']['KUBECONFIG'], '/dev/null')
@@ -303,7 +305,7 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
         self.assertNotIn('gh pr merge', runs)
         self.assertNotIn('git merge --', runs)
         for path in ('manager.yaml', 'brain.yaml', 'sensor.yaml', 'actuator.yaml',
-                     'console.yaml', 'attacks.yaml', 'catalogue-family.yaml'):
+                     'console.yaml', 'attacks.yaml', 'phorvex.yaml', 'catalogue-family.yaml'):
             self.assertIn(f'deploy/environments/staging/{path}', runs)
         self.assertNotIn('deploy/helm/phorvex-stack', runs)
         self.assertNotIn('deploy/argocd/apps', runs)

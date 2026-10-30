@@ -13,11 +13,13 @@ import verify_staging_ecr as ECR
 
 class FakeECR:
     def __init__(self, *, mutable: set[str] | None = None, digests: dict[str, dict[str, str]] | None = None,
-                 manifests: dict[str, tuple[str, str]] | None = None, registry_policy: bool = False):
+                 manifests: dict[str, tuple[str, str]] | None = None, registry_policy: bool = False,
+                 scan_type: str = "BASIC"):
         self.mutable = mutable or set()
         self.digests = digests or {}
         self.manifests = manifests or {}
         self.registry_policy = registry_policy
+        self.scan_type = scan_type
         self.commands: list[list[str]] = []
         self.target = RELEASE.expected_target()
 
@@ -37,6 +39,12 @@ class FakeECR:
             name = self.option(command, "--name")
             values = {"REGISTRY_POLICY_SCOPE": "V2", "BASIC_SCAN_TYPE_VERSION": "AWS_NATIVE"}
             return subprocess.CompletedProcess(command, 0, json.dumps({"name": name, "value": values[name]}), "")
+        if command[:3] == ["aws", "ecr", "get-registry-scanning-configuration"]:
+            response = {
+                "registryId": self.target["accountId"],
+                "scanningConfiguration": {"scanType": self.scan_type, "rules": []},
+            }
+            return subprocess.CompletedProcess(command, 0, json.dumps(response), "")
         if command[:3] == ["aws", "ecr", "describe-repositories"]:
             repository = self.option(command, "--repository-names")
             response = {"repositories": [{
@@ -88,6 +96,26 @@ def batch() -> dict:
 
 
 class StagingECRTests(unittest.TestCase):
+    def test_service_identity_cleanup_removes_only_the_local_tag(self):
+        value = batch()
+        contract = ECR.component(value, "brain")
+        digest = "sha256:" + "a" * 64
+        commands = []
+
+        def runner(command, **_kwargs):
+            commands.append(command)
+            return subprocess.CompletedProcess(command, 0, "", "")
+
+        ECR.verify_remote_identity(contract, digest, runner)
+        repository = f"{contract['image']['registry']}/{contract['image']['repository']}"
+        self.assertIn(
+            ["docker", "image", "rm", f"{repository}:{contract['image']['tag']}"], commands
+        )
+        self.assertNotIn(
+            ["docker", "image", "rm", f"{repository}:{contract['image']['tag']}", f"{repository}@{digest}"],
+            commands,
+        )
+
     def test_aggregate_preflight_covers_exact_eight_empty_repositories(self):
         value = batch()
         state = ECR.preflight(value, FakeECR())
@@ -99,6 +127,11 @@ class StagingECRTests(unittest.TestCase):
         value = batch()
         fake = FakeECR(registry_policy=True)
         with self.assertRaisesRegex(RuntimeError, "registry policy"):
+            ECR.preflight(value, fake)
+        self.assertFalse(any(command[:3] == ["aws", "ecr", "describe-repositories"] for command in fake.commands))
+
+        fake = FakeECR(scan_type="ENHANCED")
+        with self.assertRaisesRegex(RuntimeError, "scanning mode"):
             ECR.preflight(value, fake)
         self.assertFalse(any(command[:3] == ["aws", "ecr", "describe-repositories"] for command in fake.commands))
 
