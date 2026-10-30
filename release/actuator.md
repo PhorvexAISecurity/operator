@@ -1,5 +1,10 @@
 # actuator changelog
 
+## 0.11.0 (2026-10-30)
+
+- feat(actuator): stateful rotation metrics, dashboard and staging NATS demo (22f0e192)
+- fix(release): enforce reproducible images and source identity (748ed22a)
+
 ## 0.10.0 (2026-10-29)
 
 - fix(packaging): close catalogue staging release gates (56c5e6d4)
