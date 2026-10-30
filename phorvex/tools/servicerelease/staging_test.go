@@ -192,6 +192,20 @@ func TestSharedIsolatedSharedDeploymentSelectionTransition(t *testing.T) {
 	if pending, err := PendingReleases(r.root, r.releaseDir, "HEAD"); err != nil || len(pending) != 0 {
 		t.Fatalf("shared publication after isolated selection = %v, %v", pending, err)
 	}
+	shared, err := readBatch(r.releaseDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := shared.Releases["manager"]
+	shared.Releases["manager"] = Released{Repository: ReleaseRegistry + "/phorvex/staging/manager", Digest: manager.Digest}
+	if err := validateBatch(r.root, r.releaseDir, "HEAD", shared, true, ""); err == nil || !strings.Contains(err.Error(), "immutable batch repository") {
+		t.Fatalf("superseded shared repository error = %v", err)
+	}
+	shared.Releases["manager"] = Released{Repository: manager.Repository, Digest: "not-a-digest"}
+	if err := validateBatch(r.root, r.releaseDir, "HEAD", shared, true, ""); err == nil || !strings.Contains(err.Error(), "sha256:<64 lowercase hex>") {
+		t.Fatalf("superseded shared digest error = %v", err)
+	}
+	shared.Releases["manager"] = manager
 
 	next := batchVersions()
 	for name := range next {

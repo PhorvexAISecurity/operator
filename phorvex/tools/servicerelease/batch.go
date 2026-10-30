@@ -565,13 +565,17 @@ func validateRepository(repository string, contract *BatchComponent) error {
 	return nil
 }
 
-func validatePin(root string, batch *Batch, contract *BatchComponent, released Released, overrideRaw []byte) error {
+func validateReleasedIdentity(contract *BatchComponent, released Released) error {
 	if err := validateRepository(released.Repository, contract); err != nil {
 		return err
 	}
 	if !digestSHA.MatchString(released.Digest) {
 		return fmt.Errorf("component %s digest %q is not sha256:<64 lowercase hex>", contract.Component, released.Digest)
 	}
+	return nil
+}
+
+func validatePin(root string, batch *Batch, contract *BatchComponent, released Released, overrideRaw []byte) error {
 	var values map[string]string
 	var err error
 	if overrideRaw == nil {
@@ -695,6 +699,9 @@ func validateBatchOverlayMode(root, dir, head string, batch *Batch, current bool
 		case !recorded && tagged && allowTag != name && !historical:
 			return fmt.Errorf("component %s tag exists without a release record", name)
 		case recorded:
+			if err := validateReleasedIdentity(contract, released); err != nil {
+				return err
+			}
 			if !deploymentSuperseded {
 				if err := validatePin(root, batch, contract, released, overrideRaw); err != nil {
 					return err
