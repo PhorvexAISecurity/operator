@@ -88,11 +88,21 @@ def main() -> int:
     temporary = Path(tempfile.mkdtemp(prefix="phorvex-staging-source-"))
     source_root = temporary / "source"
     helper = temporary / "servicerelease"
+    current_helper = temporary / "current-servicerelease"
     services = temporary / "services.json"
     shared_root = temporary / "shared-source"
     selection_root = temporary / "isolated-selection"
     registered_worktrees = []
     try:
+        # Always validate the shared record with the current reviewed helper,
+        # including an older record whose deployment pins are now superseded by
+        # the isolated selection. The source helpers below remain authoritative
+        # for the isolated contract and any newer shared publication.
+        run(
+            "go", "-C", str(ROOT / "phorvex"), "build", "-o", str(current_helper),
+            "./tools/servicerelease",
+        )
+        run(str(current_helper), "pending", "--json", cwd=ROOT)
         run("git", "worktree", "add", "--detach", str(source_root), source)
         registered_worktrees.append(source_root)
         run("go", "-C", str(source_root / "phorvex"), "build", "-o", str(helper), "./tools/servicerelease")

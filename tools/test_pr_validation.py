@@ -63,7 +63,12 @@ class PRValidationTests(unittest.TestCase):
             committed_verifier.index('if shared_source:'),
         )
         self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
+        self.assertIn('str(current_helper), "pending", "--json", cwd=ROOT', committed_verifier)
         self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
+        self.assertLess(
+            committed_verifier.index('str(current_helper), "pending", "--json", cwd=ROOT'),
+            committed_verifier.index('if shared_source:'),
+        )
         self.assertIn('superseding_shared=release.read_json(SHARED_BATCH)', committed_verifier)
         self.assertLess(
             committed_verifier.index('run(str(shared_helper), "pending", "--json", cwd=ROOT)'),
@@ -573,6 +578,13 @@ output.chmod(0o755)
         self.assertIn('echo "main=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"', pending)
         self.assertIn("git show \"$source:phorvex/tools/servicerelease/batch.go\"", pending)
         self.assertIn('"$tool" import-terminal-batch --environment "$ENVIRONMENT"', pending)
+        self.assertIn('shared-batch-authority', pending)
+        self.assertIn('cmp release/batch.json "$authority_tree/release/batch.json"', pending)
+        self.assertIn('(cd "$authority_tree" && "$tool" verify-committed', pending)
+        self.assertLess(
+            pending.index('(cd "$authority_tree" && "$tool" verify-committed'),
+            pending.index('tool="$RUNNER_TEMP/bootstrap-servicerelease"'),
+        )
         self.assertIn('cannot\n  # produce pending work', pending)
         self.assertLess(pending.index('git commit -m "release: pin batch source'),
                         pending.index('"$tool" batch-source'))
@@ -890,7 +902,10 @@ output.chmod(0o755)
         self.assertIn('git worktree add --detach "$source_tree" "$source"', run)
         self.assertIn('tools/verify-git-build-identity.sh "$tool_head"', run)
         self.assertIn('release-pr-pinned-servicerelease', run)
-        self.assertIn('"$pinned_tool" validate-transition', run)
+        self.assertIn('transition_tool="$pinned_tool"', run)
+        self.assertIn('(cd "$authority_tree" && "$pinned_tool" verify-committed', run)
+        self.assertIn('transition_tool="$bootstrap_tool"', run)
+        self.assertIn('"$transition_tool" validate-transition', run)
         self.assertIn('--from-root "$expected_tree" --from-head "$expected"', run)
         self.assertIn('--to-root "$latest_tree" --to-head "$main_sha"', run)
         self.assertLess(run.index('validate-transition'), run.index('echo "sha=$main_sha"'))
