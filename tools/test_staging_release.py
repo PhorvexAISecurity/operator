@@ -160,6 +160,28 @@ class StagingTargetTests(unittest.TestCase):
                 with mock.patch.object(RELEASE, "ROOT", root), self.assertRaisesRegex(ValueError, "override|route|bound"):
                     RELEASE.verify_argocd(target)
 
+    def test_final_rendered_service_consumer_must_select_the_exact_staging_digest(self):
+        value = prepared_batch()
+        complete = RELEASE.complete(value, publication_results(value))
+        item = next(component for component in complete["components"] if component["component"] == "brain")
+        published = complete["releases"]["brain"]
+        consumer = item["deploy"]["consumers"][0]
+        expected = f"{published['repository']}:{item['image']['tag']}@{published['digest']}"
+        deployment = {
+            "apiVersion": consumer["apiVersion"],
+            "kind": consumer["kind"],
+            "metadata": {"name": consumer["name"], "namespace": consumer["namespace"]},
+            "spec": {"template": {"spec": {"containers": [{"image": expected}]}}},
+        }
+        RELEASE.verify_service_documents(item, published, [deployment])
+
+        # A later values file can otherwise override a valid authoritative scalar.
+        deployment["spec"]["template"]["spec"]["containers"][0]["image"] = (
+            "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain:shared"
+        )
+        with self.assertRaisesRegex(ValueError, "rendered consumer selects"):
+            RELEASE.verify_service_documents(item, published, [deployment])
+
     def test_both_fixture_destinations_exist_and_are_preflighted_before_any_write(self):
         values = yaml.safe_load((ROOT / "deploy/environments/staging/catalogue-family.yaml").read_text())
         for name in RELEASE.FIXTURE_NAMES:

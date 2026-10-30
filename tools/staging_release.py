@@ -478,6 +478,59 @@ def render_fixture(profile: str, workload: str, agent: str) -> list[dict[str, An
     return [item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)]
 
 
+def json_pointer(value: Any, pointer: str) -> Any:
+    if not pointer.startswith("/"):
+        raise ValueError(f"rendered consumer field path {pointer!r} is not a JSON pointer")
+    current = value
+    for raw in pointer[1:].split("/"):
+        token = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, dict) and token in current:
+            current = current[token]
+        elif isinstance(current, list) and token.isdigit() and int(token) < len(current):
+            current = current[int(token)]
+        else:
+            raise ValueError(f"rendered consumer field path {pointer!r} is absent")
+    return current
+
+
+def verify_service_documents(item: dict[str, Any], release: dict[str, str], documents: list[dict[str, Any]]) -> None:
+    expected_image = f"{release['repository']}:{item['image']['tag']}@{release['digest']}"
+    consumers = item["deploy"]["consumers"]
+    if not consumers:
+        raise ValueError(f"service {item['component']} has no rendered consumer contract")
+    for consumer in consumers:
+        matches = [
+            document for document in documents
+            if document.get("apiVersion") == consumer["apiVersion"]
+            and document.get("kind") == consumer["kind"]
+            and document.get("metadata", {}).get("name") == consumer["name"]
+            and document.get("metadata", {}).get("namespace") == consumer["namespace"]
+        ]
+        if len(matches) != 1:
+            raise ValueError(f"service {item['component']} rendered consumer identity is not unique")
+        if consumer.get("component") != item["component"] or consumer.get("expectedRepository") != release["repository"]:
+            raise ValueError(f"service {item['component']} rendered consumer repository contract changed")
+        actual = json_pointer(matches[0], consumer["fieldPath"])
+        if actual != expected_image:
+            raise ValueError(
+                f"service {item['component']} rendered consumer selects {actual!r}, want {expected_image!r}"
+            )
+
+
+def verify_rendered_service(item: dict[str, Any], release: dict[str, str]) -> None:
+    deploy = item["deploy"]
+    command = [
+        "helm", "template", deploy["releaseName"], str(ROOT / deploy["chart"]),
+        "--namespace", deploy["namespace"], "--skip-crds",
+        "--api-versions", "monitoring.coreos.com/v1/PodMonitor",
+    ]
+    for values_file in deploy["valuesFiles"]:
+        command.extend(["--values", str(ROOT / values_file)])
+    rendered = subprocess.run(command, cwd=ROOT, check=True, text=True, capture_output=True).stdout
+    documents = [document for document in yaml.safe_load_all(rendered) if isinstance(document, dict)]
+    verify_service_documents(item, release, documents)
+
+
 def verify_deployment(batch: dict[str, Any], base: str | None, canonical_services: Any) -> None:
     validate_batch(batch, require_complete=True, canonical_services=canonical_services)
     target = expected_target()
@@ -490,6 +543,7 @@ def verify_deployment(batch: dict[str, Any], base: str | None, canonical_service
             expected["source"] = batch["source"]
         if values != expected:
             raise ValueError(f"service {item['component']} committed staging pin differs from its release contract")
+        verify_rendered_service(item, release)
     fixture_refs = {}
     for name in FIXTURE_NAMES:
         item = next(component for component in batch["components"] if component["component"] == name)

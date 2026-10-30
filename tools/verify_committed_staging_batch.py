@@ -41,7 +41,9 @@ def main() -> int:
         )
         canonical = release.read_json(services)
         value = release.validate_batch(release.read_json(BATCH), require_complete=True, canonical_services=canonical)
-        release.verify_deployment(value, None, canonical)
+        # The recorded source is the only allowed base: this rejects a digest-pin
+        # proposal that also changes any production/shared or unrelated path.
+        release.verify_deployment(value, source, canonical)
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", str(source_root)], cwd=ROOT, check=False)
         shutil.rmtree(temporary, ignore_errors=True)

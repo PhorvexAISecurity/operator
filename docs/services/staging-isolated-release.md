@@ -86,7 +86,8 @@ no source path that names them as a publication target.
 7. The existing release consumer writer pins only the six files under
    `deploy/environments/staging/`; the fixture writer pins the two disabled-by-
    default catalogue image values in `catalogue-family.yaml`. Helm renders prove
-   the service and fixture consumers select the exact digests.
+   the service and fixture consumers select the exact digests after every Argo
+   values file, including the catalogue overlay, has been applied in order.
 8. The workflow stages only those seven staging values files plus the batch
    record, rejects any changed path outside that allowlist, requires the batch
    record, commits the changed subset to `release/staging-isolated-<sha12>`, and
@@ -105,8 +106,10 @@ closed.
 
 The complete batch records the actual Git tree and the exact source-derived Go
 contracts. Normal PR validation reconstructs those contracts in a detached
-worktree at the recorded source before accepting a digest-pin PR. A complete
-isolated batch may supersede only an older shared deployment selection; shared
+worktree at the recorded source before accepting a digest-pin PR. It also diffs
+the proposal against that source, so a production/shared or unrelated change is
+rejected even when all staging pins are valid. A complete isolated batch may
+supersede only an older shared deployment selection; shared
 publication records and tags remain validated, and a later shared release
 source switches the same staging consumers back through the normal lane. This
 shared → isolated → shared transition is covered by the release-tool tests.
