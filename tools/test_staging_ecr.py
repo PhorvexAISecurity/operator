@@ -116,6 +116,39 @@ class StagingECRTests(unittest.TestCase):
             commands,
         )
 
+    def test_service_identity_cleanup_distinguishes_absence_from_daemon_failure(self):
+        value = batch()
+        contract = ECR.component(value, "brain")
+        digest = "sha256:" + "a" * 64
+
+        def runner(inspect_result, identity_ok=True):
+            def run(command, **_kwargs):
+                if "verify_service_image_identity.py" in " ".join(command):
+                    return subprocess.CompletedProcess(command, 0 if identity_ok else 1, "", "identity failed")
+                if command[:3] == ["docker", "image", "rm"]:
+                    return subprocess.CompletedProcess(command, 1, "", "cleanup failed")
+                if command[:3] == ["docker", "image", "inspect"]:
+                    return subprocess.CompletedProcess(command, *inspect_result)
+                return subprocess.CompletedProcess(command, 0, "", "")
+            return run
+
+        ECR.verify_remote_identity(
+            contract, digest,
+            runner((1, "", "Error response from daemon: No such image: missing")),
+        )
+        with self.assertRaisesRegex(RuntimeError, "cleanup failed"):
+            ECR.verify_remote_identity(contract, digest, runner((0, "[]", "")))
+        with self.assertRaisesRegex(RuntimeError, "Cannot connect to the Docker daemon"):
+            ECR.verify_remote_identity(
+                contract, digest,
+                runner((1, "", "Cannot connect to the Docker daemon")),
+            )
+        with self.assertRaisesRegex(RuntimeError, "identity failed"):
+            ECR.verify_remote_identity(
+                contract, digest,
+                runner((1, "", "Error response from daemon: No such object: missing"), identity_ok=False),
+            )
+
     def test_aggregate_preflight_covers_exact_eight_empty_repositories(self):
         value = batch()
         state = ECR.preflight(value, FakeECR())

@@ -211,6 +211,12 @@ def verify_remote_identity(contract: dict[str, Any], digest: str, runner: Runner
         remaining = run(["docker", "image", "inspect", tagged], runner)
         if remaining.returncode == 0:
             raise RuntimeError(cleanup.stderr.strip() or f"component {contract['component']} image cleanup failed")
+        inspect_error = remaining.stderr.strip()
+        if not any(marker in inspect_error for marker in ("No such image", "No such object")):
+            raise RuntimeError(
+                inspect_error or cleanup.stderr.strip()
+                or f"component {contract['component']} image cleanup verification failed"
+            )
 
 
 def preflight(batch_value: dict[str, Any], runner: Runner = subprocess.run) -> dict[str, Any]:
