@@ -70,9 +70,10 @@ class PRValidationTests(unittest.TestCase):
             committed_verifier.index('superseding_shared=release.read_json(SHARED_BATCH)'),
         )
         self.assertIn(
-            'cleanup_worktrees(temporary, [selection_root, shared_root, source_root])',
+            'cleanup_worktrees(temporary, list(reversed(registered_worktrees)))',
             committed_verifier,
         )
+        self.assertNotIn('if not worktree.exists()', committed_verifier)
         self.assertNotIn('check=False', committed_verifier)
         self.assertNotIn('ignore_errors=True', committed_verifier)
         self.assertIn('python tools/check-path-case-collisions.py', runs['charts'])

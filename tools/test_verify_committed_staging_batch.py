@@ -42,6 +42,17 @@ class CleanupTests(unittest.TestCase):
         )
         self.assertFalse(temporary.exists())
 
+    def test_registered_worktree_is_removed_even_when_its_directory_is_missing(self):
+        temporary = Path(tempfile.mkdtemp(prefix="phorvex-cleanup-test-"))
+        missing = temporary / "deleted-source"
+        with mock.patch.object(VERIFY.subprocess, "run") as remove:
+            VERIFY.cleanup_worktrees(temporary, [missing])
+        remove.assert_called_once_with(
+            ["git", "worktree", "remove", "--force", str(missing)],
+            cwd=VERIFY.ROOT, check=True,
+        )
+        self.assertFalse(temporary.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

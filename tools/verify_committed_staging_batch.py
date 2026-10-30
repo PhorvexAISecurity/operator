@@ -61,8 +61,6 @@ def isolated_selection_commit(source: str) -> str:
 def cleanup_worktrees(temporary: Path, worktrees: list[Path]) -> None:
     failures = []
     for worktree in worktrees:
-        if not worktree.exists():
-            continue
         try:
             subprocess.run(
                 ["git", "worktree", "remove", "--force", str(worktree)],
@@ -93,8 +91,10 @@ def main() -> int:
     services = temporary / "services.json"
     shared_root = temporary / "shared-source"
     selection_root = temporary / "isolated-selection"
+    registered_worktrees = []
     try:
         run("git", "worktree", "add", "--detach", str(source_root), source)
+        registered_worktrees.append(source_root)
         run("go", "-C", str(source_root / "phorvex"), "build", "-o", str(helper), "./tools/servicerelease")
         run(
             str(helper), "staging-contract", "--target", "staging-isolated",
@@ -112,6 +112,7 @@ def main() -> int:
         )
         selection = isolated_selection_commit(source)
         run("git", "worktree", "add", "--detach", str(selection_root), selection)
+        registered_worktrees.append(selection_root)
         # Re-run the source-pinned proposal gate at the exact commit that selected
         # this batch even after a later shared publication supersedes its consumers.
         # This retains the original production/staging non-diff proof permanently.
@@ -124,6 +125,7 @@ def main() -> int:
         if shared_source:
             shared_helper = temporary / "shared-servicerelease"
             run("git", "worktree", "add", "--detach", str(shared_root), shared_source)
+            registered_worktrees.append(shared_root)
             run(
                 "go", "-C", str(shared_root / "phorvex"), "build", "-o", str(shared_helper),
                 "./tools/servicerelease",
@@ -144,7 +146,7 @@ def main() -> int:
             # selection, but the retained staging consumers must remain exact.
             release.verify_deployment(value, None, canonical)
     finally:
-        cleanup_worktrees(temporary, [selection_root, shared_root, source_root])
+        cleanup_worktrees(temporary, list(reversed(registered_worktrees)))
     print(f"verified committed staging batch {source}")
     return 0
 
