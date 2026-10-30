@@ -1,8 +1,8 @@
 {
   "schema": 2,
-  "status": "complete",
+  "status": "prepared",
   "environment": "staging",
-  "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+  "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
   "expectedComponents": [
     "manager",
     "brain",
@@ -12,12 +12,12 @@
     "attacks"
   ],
   "versions": {
-    "actuator": "0.10.0",
-    "attacks": "0.10.0",
-    "brain": "0.9.0",
-    "console": "0.15.0",
-    "manager": "0.15.0",
-    "sensor": "0.10.0"
+    "actuator": "0.11.0",
+    "attacks": "0.11.0",
+    "brain": "0.10.0",
+    "console": "0.16.0",
+    "manager": "0.16.0",
+    "sensor": "0.11.0"
   },
   "components": [
     {
@@ -28,27 +28,27 @@
         "validationImage": "operator",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.15.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.16.0",
       "build": {
         "dockerfile": "deploy/docker/operator.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.15.0"
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.16.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/manager",
-        "tag": "0.15.0"
+        "tag": "0.16.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
         "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
         "chart": "phorvex/charts/phorvex",
-        "chartDigest": "sha256:3895d1030a87a5593de3a6133f6114c9ec8830b9cd8988ed8b5c84d5464f13e8",
+        "chartDigest": "sha256:06ea1db7adedae4c6312a8955f84ec7da05abada894304fdee777b5c6da735d1",
         "releaseName": "staging",
         "namespace": "phorvex-staging",
         "valuesFiles": [
@@ -59,7 +59,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/manager.yaml",
@@ -97,7 +97,7 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "manager",
-        "gitTag": "manager-v0.15.0"
+        "gitTag": "manager-v0.16.0"
       }
     },
     {
@@ -108,22 +108,22 @@
         "validationImage": "brain",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.9.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.10.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.9.0",
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.10.0",
           "SERVICE=brain"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/brain",
-        "tag": "0.9.0"
+        "tag": "0.10.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
@@ -140,7 +140,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/brain.yaml",
@@ -177,7 +177,7 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "brain",
-        "gitTag": "brain-v0.9.0"
+        "gitTag": "brain-v0.10.0"
       }
     },
     {
@@ -188,22 +188,22 @@
         "validationImage": "sensor",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.10.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.10.0",
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.11.0",
           "SERVICE=sensor"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/sensor",
-        "tag": "0.10.0"
+        "tag": "0.11.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
@@ -220,7 +220,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/sensor.yaml",
@@ -257,7 +257,7 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "sensor",
-        "gitTag": "sensor-v0.10.0"
+        "gitTag": "sensor-v0.11.0"
       }
     },
     {
@@ -268,22 +268,22 @@
         "validationImage": "actuator",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.10.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.10.0",
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.11.0",
           "SERVICE=actuator"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/actuator",
-        "tag": "0.10.0"
+        "tag": "0.11.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
@@ -300,7 +300,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/actuator.yaml",
@@ -337,7 +337,7 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "actuator",
-        "gitTag": "actuator-v0.10.0"
+        "gitTag": "actuator-v0.11.0"
       }
     },
     {
@@ -348,22 +348,22 @@
         "validationImage": "console",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.15.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.16.0",
       "build": {
         "dockerfile": "deploy/docker/console.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "CONSOLE_VERSION=0.15.0",
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.15.0"
+          "CONSOLE_VERSION=0.16.0",
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.16.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/console",
-        "tag": "0.15.0"
+        "tag": "0.16.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
@@ -380,7 +380,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/console.yaml",
@@ -419,7 +419,7 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "console",
-        "gitTag": "console-v0.15.0"
+        "gitTag": "console-v0.16.0"
       }
     },
     {
@@ -430,22 +430,22 @@
         "validationImage": "attacks",
         "aliases": []
       },
-      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-      "version": "0.10.0",
+      "source": "76fe5b2118fae236785de33e8764abb894bbedcc",
+      "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/console.Dockerfile",
         "context": ".",
         "target": "attacks",
         "args": [
-          "CONSOLE_VERSION=0.10.0",
-          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
-          "RELEASE_VERSION=0.10.0"
+          "CONSOLE_VERSION=0.11.0",
+          "GIT_SHA=76fe5b2118fae236785de33e8764abb894bbedcc",
+          "RELEASE_VERSION=0.11.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/attacks",
-        "tag": "0.10.0"
+        "tag": "0.11.0"
       },
       "deploy": {
         "application": "deploy/argocd/services/applicationset.yaml",
@@ -462,7 +462,7 @@
         "valuesDigests": [
           {
             "path": "deploy/environments/staging/phorvex.yaml",
-            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+            "sha256": "sha256:2fbedf54b0f98432a0a0f71042170135bf49c344673bfe938422ca58aa6bf213"
           },
           {
             "path": "deploy/environments/staging/attacks.yaml",
@@ -499,34 +499,9 @@
       "record": {
         "batchFile": "release/batch.json",
         "releaseKey": "attacks",
-        "gitTag": "attacks-v0.10.0"
+        "gitTag": "attacks-v0.11.0"
       }
     }
   ],
-  "releases": {
-    "actuator": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/actuator",
-      "digest": "sha256:acc9b3494abe44ee2ba196d10f7a480cb23bca97c93e1c483bcd2aa8bd184a41"
-    },
-    "attacks": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks",
-      "digest": "sha256:a8ab4aa3a4f2c926351bebbfe558f1057518fa689c4cd431ef197b07039465d4"
-    },
-    "brain": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain",
-      "digest": "sha256:2b903963a86007afe0da8d018bbe4c8e746171fcd3e44d6c520fbe4bf5a62621"
-    },
-    "console": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console",
-      "digest": "sha256:fb0906c7efa4a0fad4da85bcaadd76a0da33d5607d70ed1a649323fa832b7c75"
-    },
-    "manager": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager",
-      "digest": "sha256:31b04eeaeea8cd188ddeda7fd366b156f93d7c2b44d10b4355160c507279d53a"
-    },
-    "sensor": {
-      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor",
-      "digest": "sha256:8dceb7f7dceb5cc99c1c9ceb1317fcb8e01dd82a9c3aad091aa958c2d204362d"
-    }
-  }
+  "releases": {}
 }
