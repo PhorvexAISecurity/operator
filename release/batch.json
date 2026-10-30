@@ -1,0 +1,532 @@
+{
+  "schema": 2,
+  "status": "complete",
+  "environment": "staging",
+  "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+  "expectedComponents": [
+    "manager",
+    "brain",
+    "sensor",
+    "actuator",
+    "console",
+    "attacks"
+  ],
+  "versions": {
+    "actuator": "0.10.0",
+    "attacks": "0.10.0",
+    "brain": "0.9.0",
+    "console": "0.15.0",
+    "manager": "0.15.0",
+    "sensor": "0.10.0"
+  },
+  "components": [
+    {
+      "component": "manager",
+      "identity": {
+        "service": "manager",
+        "command": "/manager",
+        "validationImage": "operator",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.15.0",
+      "build": {
+        "dockerfile": "deploy/docker/operator.Dockerfile",
+        "context": ".",
+        "target": "",
+        "args": [
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.15.0"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/manager",
+        "tag": "0.15.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "phorvex/charts/phorvex",
+        "chartDigest": "sha256:3895d1030a87a5593de3a6133f6114c9ec8830b9cd8988ed8b5c84d5464f13e8",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/manager.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/manager.yaml",
+            "sha256": "sha256:6b745c7a383519398b8d7a98b221ee563477846e75b1657227744cc608eaf9f5"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/manager.yaml",
+        "path": [
+          "phorvex",
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "releaseDigest",
+        "sourceKey": "releaseSourceSHA",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-phorvex",
+            "section": "containers",
+            "container": "manager",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "manager",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager",
+            "imageSource": "deploy/environments/staging/manager.yaml#phorvex.image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "manager",
+        "gitTag": "manager-v0.15.0"
+      }
+    },
+    {
+      "component": "brain",
+      "identity": {
+        "service": "brain",
+        "command": "/service",
+        "validationImage": "brain",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.9.0",
+      "build": {
+        "dockerfile": "deploy/docker/service.Dockerfile",
+        "context": ".",
+        "target": "",
+        "args": [
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.9.0",
+          "SERVICE=brain"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/brain",
+        "tag": "0.9.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "deploy/charts/phorvex-brain",
+        "chartDigest": "sha256:a2a49651cac4050bfed3ab6094e0bf2844f8d518e74ac6de91ea1ca7ff270d33",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/brain.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/brain.yaml",
+            "sha256": "sha256:5acd4a99971f012dce223675f61f825d109def40b9afca68c211b4f97d5856fa"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/brain.yaml",
+        "path": [
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "digest",
+        "sourceKey": "",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-brain",
+            "section": "containers",
+            "container": "brain",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "brain",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain",
+            "imageSource": "deploy/environments/staging/brain.yaml#image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "brain",
+        "gitTag": "brain-v0.9.0"
+      }
+    },
+    {
+      "component": "sensor",
+      "identity": {
+        "service": "sensor",
+        "command": "/service",
+        "validationImage": "sensor",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.10.0",
+      "build": {
+        "dockerfile": "deploy/docker/service.Dockerfile",
+        "context": ".",
+        "target": "",
+        "args": [
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.10.0",
+          "SERVICE=sensor"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/sensor",
+        "tag": "0.10.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "deploy/charts/phorvex-sensor",
+        "chartDigest": "sha256:36744bfdf83fa9195bc37f5c2f4d504d9491331667379fd6c8e49a955b2d6eaf",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/sensor.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/sensor.yaml",
+            "sha256": "sha256:5acd4a99971f012dce223675f61f825d109def40b9afca68c211b4f97d5856fa"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/sensor.yaml",
+        "path": [
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "digest",
+        "sourceKey": "",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-sensor",
+            "section": "containers",
+            "container": "sensor",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "sensor",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor",
+            "imageSource": "deploy/environments/staging/sensor.yaml#image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "sensor",
+        "gitTag": "sensor-v0.10.0"
+      }
+    },
+    {
+      "component": "actuator",
+      "identity": {
+        "service": "actuator",
+        "command": "/service",
+        "validationImage": "actuator",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.10.0",
+      "build": {
+        "dockerfile": "deploy/docker/service.Dockerfile",
+        "context": ".",
+        "target": "",
+        "args": [
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.10.0",
+          "SERVICE=actuator"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/actuator",
+        "tag": "0.10.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "deploy/charts/phorvex-actuator",
+        "chartDigest": "sha256:484a36b3715dd81c40c5e650276986c350594966c5ec2fce002b900fe46d5a64",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/actuator.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/actuator.yaml",
+            "sha256": "sha256:5acd4a99971f012dce223675f61f825d109def40b9afca68c211b4f97d5856fa"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/actuator.yaml",
+        "path": [
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "digest",
+        "sourceKey": "",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-actuator",
+            "section": "containers",
+            "container": "actuator",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "actuator",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/actuator",
+            "imageSource": "deploy/environments/staging/actuator.yaml#image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "actuator",
+        "gitTag": "actuator-v0.10.0"
+      }
+    },
+    {
+      "component": "console",
+      "identity": {
+        "service": "console",
+        "command": "/app/console",
+        "validationImage": "console",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.15.0",
+      "build": {
+        "dockerfile": "deploy/docker/console.Dockerfile",
+        "context": ".",
+        "target": "",
+        "args": [
+          "CONSOLE_VERSION=0.15.0",
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.15.0"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/console",
+        "tag": "0.15.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "deploy/charts/phorvex-console",
+        "chartDigest": "sha256:4b14e1e7f20a3ec3b4498bdeff6ca83a024c0c9bc19d855bc379c50f7d597168",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/console.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/console.yaml",
+            "sha256": "sha256:c279d18cb0d1ff28b10fb960ceb8051cb55906a748276a5061639832a7c1c6e8"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/console.yaml",
+        "path": [
+          "phorvex",
+          "console",
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "releaseDigest",
+        "sourceKey": "releaseSourceSHA",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-phorvex-console",
+            "section": "containers",
+            "container": "console",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "console",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console",
+            "imageSource": "deploy/environments/staging/console.yaml#phorvex.console.image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "console",
+        "gitTag": "console-v0.15.0"
+      }
+    },
+    {
+      "component": "attacks",
+      "identity": {
+        "service": "attacks",
+        "command": "/app/attacks",
+        "validationImage": "attacks",
+        "aliases": []
+      },
+      "source": "e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+      "version": "0.10.0",
+      "build": {
+        "dockerfile": "deploy/docker/console.Dockerfile",
+        "context": ".",
+        "target": "attacks",
+        "args": [
+          "CONSOLE_VERSION=0.10.0",
+          "GIT_SHA=e26e9fd1cb4bfd62aed7a08d1e87ce1577a094f6",
+          "RELEASE_VERSION=0.10.0"
+        ]
+      },
+      "image": {
+        "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+        "repository": "phorvex/attacks",
+        "tag": "0.10.0"
+      },
+      "deploy": {
+        "application": "deploy/argocd/services/applicationset.yaml",
+        "applicationDigest": "sha256:cbe9024b5afdc3bf36bb7f43efe169eba16c573031f5ef83751fab9cb2151ba5",
+        "chart": "deploy/charts/phorvex-attacks",
+        "chartDigest": "sha256:212cf8e970e8255edbfcf9915c6a19897b1f45d7ecea12ca97884164d1ed6898",
+        "releaseName": "staging",
+        "namespace": "phorvex-staging",
+        "valuesFiles": [
+          "deploy/environments/staging/phorvex.yaml",
+          "deploy/environments/staging/attacks.yaml",
+          "deploy/environments/staging/catalogue-family.yaml"
+        ],
+        "valuesDigests": [
+          {
+            "path": "deploy/environments/staging/phorvex.yaml",
+            "sha256": "sha256:4e75cbee4e257462a9c9657d374dba44db774300a5e51db0095cc892ca8802a5"
+          },
+          {
+            "path": "deploy/environments/staging/attacks.yaml",
+            "sha256": "sha256:5acd4a99971f012dce223675f61f825d109def40b9afca68c211b4f97d5856fa"
+          },
+          {
+            "path": "deploy/environments/staging/catalogue-family.yaml",
+            "sha256": "sha256:1ce26ca6d26de59bfe2bc521a9f52b9fabb50addbc3b1a8c74c596c822f1d673"
+          }
+        ],
+        "valuesFile": "deploy/environments/staging/attacks.yaml",
+        "path": [
+          "image"
+        ],
+        "repositoryKey": "repository",
+        "tagKey": "tag",
+        "digestKey": "digest",
+        "sourceKey": "",
+        "consumers": [
+          {
+            "apiVersion": "apps/v1",
+            "kind": "Deployment",
+            "namespace": "phorvex-staging",
+            "name": "staging-attacks",
+            "section": "containers",
+            "container": "attacks",
+            "fieldPath": "/spec/template/spec/containers/0/image",
+            "component": "attacks",
+            "expectedRepository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks",
+            "imageSource": "deploy/environments/staging/attacks.yaml#image"
+          }
+        ]
+      },
+      "record": {
+        "batchFile": "release/batch.json",
+        "releaseKey": "attacks",
+        "gitTag": "attacks-v0.10.0"
+      }
+    }
+  ],
+  "releases": {
+    "actuator": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/actuator",
+      "digest": "sha256:acc9b3494abe44ee2ba196d10f7a480cb23bca97c93e1c483bcd2aa8bd184a41"
+    },
+    "attacks": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/attacks",
+      "digest": "sha256:a8ab4aa3a4f2c926351bebbfe558f1057518fa689c4cd431ef197b07039465d4"
+    },
+    "brain": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain",
+      "digest": "sha256:2b903963a86007afe0da8d018bbe4c8e746171fcd3e44d6c520fbe4bf5a62621"
+    },
+    "console": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/console",
+      "digest": "sha256:fb0906c7efa4a0fad4da85bcaadd76a0da33d5607d70ed1a649323fa832b7c75"
+    },
+    "manager": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager",
+      "digest": "sha256:31b04eeaeea8cd188ddeda7fd366b156f93d7c2b44d10b4355160c507279d53a"
+    },
+    "sensor": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/sensor",
+      "digest": "sha256:8dceb7f7dceb5cc99c1c9ceb1317fcb8e01dd82a9c3aad091aa958c2d204362d"
+    }
+  }
+}
