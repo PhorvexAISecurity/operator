@@ -421,7 +421,7 @@ func Fixtures() []Fixture {
 			Pod: PodSpec{Namespace: ns, Name: "stateful", Node: "node-a", Stateful: true}, Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
 		{Name: "stateful-replicated", Why: "Replicated StatefulSet member declaring peer-resync rebuild and a snapshot class: replica-rebuild alone covers persistentVolumeState; snapshot-rotate covers exactly rotate's process facts; checkpoint-handoff has no cover on a volume-backed member.",
 			Pod: PodSpec{Namespace: ns, Name: "stateful-replicated", Node: "node-a", Stateful: true, StatefulRotation: &model.StatefulRotationObservation{
-				Contract: model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi-snapclass", RecoverySeconds: 120, ResyncSeconds: 600},
+				Contract:  model.StatefulRotationContract{Quorum: 2, PeerResync: true, SnapshotClass: "csi-snapclass", RecoverySeconds: 120, ResyncSeconds: 600},
 				OwnerName: "db", OwnerUID: "db-uid", Replicas: 3, ReadyReplicas: 3, SnapshotClassReady: true, SinceMemberReady: time.Hour, Complete: true,
 				Claims: []model.StatefulClaim{{Name: "data-stateful-replicated", UID: "claim-uid", Bound: true, FromTemplate: true}}}},
 			Ctx: func() CtxSpec { c := unit; c.Stateful = true; return c }()},
