@@ -585,17 +585,28 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
     }
     rendered_consumers = set()
     for document in documents:
-        pod = document.get("spec", {}).get("template", {}).get("spec", {})
-        if not isinstance(pod, dict):
-            continue
         metadata = document.get("metadata", {})
-        for section in ("containers", "initContainers", "ephemeralContainers"):
-            for container in pod.get(section, []) or []:
-                if isinstance(container, dict) and isinstance(container.get("image"), str):
-                    rendered_consumers.add((
-                        document.get("apiVersion"), document.get("kind"), metadata.get("namespace"),
-                        metadata.get("name"), section, container.get("name"),
-                    ))
+        spec = document.get("spec", {})
+        pod_specs = []
+        if document.get("kind") == "Pod" and isinstance(spec, dict):
+            pod_specs.append(spec)
+        template_spec = spec.get("template", {}).get("spec", {}) if isinstance(spec, dict) else {}
+        if isinstance(template_spec, dict) and template_spec:
+            pod_specs.append(template_spec)
+        cron_spec = (
+            spec.get("jobTemplate", {}).get("spec", {}).get("template", {}).get("spec", {})
+            if isinstance(spec, dict) else {}
+        )
+        if isinstance(cron_spec, dict) and cron_spec:
+            pod_specs.append(cron_spec)
+        for pod in pod_specs:
+            for section in ("containers", "initContainers", "ephemeralContainers"):
+                for container in pod.get(section, []) or []:
+                    if isinstance(container, dict) and isinstance(container.get("image"), str):
+                        rendered_consumers.add((
+                            document.get("apiVersion"), document.get("kind"), metadata.get("namespace"),
+                            metadata.get("name"), section, container.get("name"),
+                        ))
     if rendered_consumers != expected_consumers:
         raise ValueError(
             f"service {item['component']} has unexpected rendered image consumers: "
