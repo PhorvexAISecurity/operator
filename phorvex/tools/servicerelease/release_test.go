@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -103,28 +102,12 @@ func TestPrepareWritesVersionsAndChangelogs(t *testing.T) {
 }
 
 func TestPendingReleasesSkipsTaggedVersions(t *testing.T) {
-	dir := t.TempDir()
-	gitIn := func(args ...string) {
-		t.Helper()
-		cmd := exec.Command("git", args...)
-		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	gitIn("init", "-q", "-b", "main")
-	gitIn("commit", "-q", "--allow-empty", "-m", "start")
-	gitIn("tag", "brain-v0.2.0")
-	release := filepath.Join(dir, "release")
-	if err := os.MkdirAll(release, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(release, VersionsFile), []byte(`{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	pending, err := PendingReleases(dir, release, "HEAD")
+	r := newBatchTestRepo(t, map[string]string{"brain": "0.2.0", "sensor": "0.1.0", "console": "0.5.1", "attacks": "0.1.0"})
+	r.ensureBatch()
+	r.commit("pin batch")
+	r.record("brain", "0.2.0", "a")
+	r.commit("record brain")
+	pending, err := PendingReleases(r.root, r.releaseDir, "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}

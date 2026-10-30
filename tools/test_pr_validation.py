@@ -253,10 +253,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
                     self.assertNotIn('id-token', job.get('permissions', {}))
                 self.assertLessEqual({u.split('@')[0] for u in uses},
                                      {'actions/checkout', 'actions/setup-go', 'aws-actions/configure-aws-credentials', 'aws-actions/amazon-ecr-login'})
-        self.assertEqual(jobs['pending'].get('permissions'), None)
+        self.assertEqual(jobs['pending']['permissions'], {'contents': 'write'})
         self.assertEqual(jobs['release-pr']['permissions'], {'contents': 'write', 'pull-requests': 'write', 'actions': 'write'})
         pending_checkout = next(s for s in jobs['pending']['steps'] if s.get('uses', '').startswith('actions/checkout@'))
-        self.assertEqual(pending_checkout['with']['persist-credentials'], 'false')
+        self.assertEqual(pending_checkout['with']['ref'], 'main')
 
     def test_the_role_is_checked_before_it_is_assumed(self):
         steps = RELEASE['jobs']['publish']['steps']
@@ -271,18 +271,41 @@ class ReleaseWorkflowTests(unittest.TestCase):
         runs = '\n'.join(step.get('run', '') for step in steps)
         names = [step.get('name', '') for step in steps]
         self.assertIn('Rebuild each fixture twice and compare complete OCI identities', names)
-        self.assertIn('tools/verify-git-build-identity.sh "$GITHUB_SHA"', runs)
+        self.assertIn('tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA"', runs)
+        self.assertIn('git switch --detach "$BATCH_SOURCE_SHA"', runs)
+        self.assertNotIn('$GITHUB_SHA', runs)
         self.assertIn('--build-arg "GIT_SHA=$REVIEWED_GIT_SHA"', runs)
         self.assertIn('tools/verify_service_image_identity.py', runs)
+        self.assertLess(runs.index('git switch --detach "$BATCH_SOURCE_SHA"'),
+                        runs.index('tools/verify_fixture_reproducibility.py'))
         self.assertLess(runs.index('tools/verify_service_image_identity.py'),
                         runs.index('docker push "$image"'))
 
+    def test_batch_source_is_committed_before_build_and_survives_reruns(self):
+        jobs = RELEASE['jobs']
+        pending = '\n'.join(s.get('run', '') for s in jobs['pending']['steps'])
+        publish = '\n'.join(s.get('run', '') for s in jobs['publish']['steps'])
+        self.assertIn('"$tool" batch --environment "$ENVIRONMENT"', pending)
+        self.assertIn('git status --porcelain -- release/batch.json', pending)
+        self.assertIn('git add release/batch.json', pending)
+        self.assertIn('git push origin HEAD:main', pending)
+        self.assertIn('cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"', pending)
+        self.assertIn('echo "source=$source" >> "$GITHUB_OUTPUT"', pending)
+        self.assertEqual(jobs['publish']['env']['BATCH_SOURCE_SHA'], '${{ needs.pending.outputs.source }}')
+        self.assertIn('[ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]', publish)
+        for name in ('pending', 'publish'):
+            checkout = next(s for s in jobs[name]['steps'] if s.get('uses', '').startswith('actions/checkout@'))
+            self.assertEqual(checkout['with']['ref'], 'main', name)
+
     def test_staging_is_pinned_by_digest_and_releases_are_tagged(self):
         run = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['publish']['steps'])
-        self.assertIn('./tools/servicerelease pending', run)
-        self.assertIn('servicerelease deploy --environment "$ENVIRONMENT"', run)
-        self.assertIn('--digest "${digest#*@}"', run)
-        self.assertIn('git tag "$component-v$version" "$GITHUB_SHA"', run)
+        self.assertIn('"$tool" pending', run)
+        self.assertIn('"$tool" record --environment "$ENVIRONMENT"', run)
+        self.assertIn('--digest "$digest" --source "$BATCH_SOURCE_SHA"', run)
+        self.assertIn('git tag "$component-v$version" "$BATCH_SOURCE_SHA"', run)
+        self.assertIn('git add release/batch.json deploy/environments', run)
+        self.assertIn('git push --atomic origin HEAD:main "${refs[@]}"', run)
+        self.assertNotIn('xargs git push', run)
         self.assertEqual(RELEASE['env']['ENVIRONMENT'], 'staging')
         pr = '\n'.join(s.get('run', '') for s in RELEASE['jobs']['release-pr']['steps'])
         # A built binary, not `go run`, which reports prepare's exit 3 as 1.

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -91,7 +90,7 @@ func prependChangelog(path, component, section string) error {
 	return os.WriteFile(path, []byte(head+section+"\n"+rest), 0o644)
 }
 
-// Pending is a prepared release whose tag does not exist yet.
+// Pending is an unrecorded component of the current prepared batch.
 type Pending struct {
 	Component  string
 	Version    string
@@ -101,40 +100,6 @@ type Pending struct {
 	BuildArgs []string
 	// Target is the Dockerfile stage to build, or empty for the last.
 	Target string
-}
-
-// PendingReleases lists the prepared releases in dir not yet tagged at head.
-func PendingReleases(root, dir, head string) ([]Pending, error) {
-	raw, err := os.ReadFile(filepath.Join(dir, VersionsFile))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-	versions := map[string]string{}
-	if err := json.Unmarshal(raw, &versions); err != nil {
-		return nil, fmt.Errorf("%s: %w", VersionsFile, err)
-	}
-	var out []Pending
-	for _, c := range Components {
-		v, ok := versions[c.Name]
-		if !ok {
-			continue
-		}
-		if _, err := ParseVersion(v); err != nil {
-			return nil, fmt.Errorf("%s: %s: %w", VersionsFile, c.Name, err)
-		}
-		if _, err := git(root, "rev-parse", "--verify", "--quiet", "refs/tags/"+c.Name+"-v"+v); err == nil {
-			continue // released
-		}
-		p := Pending{Component: c.Name, Version: v, Dockerfile: c.Dockerfile, Repository: c.Repository, Target: c.Target}
-		for k, val := range c.BuildArgs {
-			p.BuildArgs = append(p.BuildArgs, k+"="+strings.ReplaceAll(val, "{version}", v))
-		}
-		sort.Strings(p.BuildArgs)
-		out = append(out, p)
-	}
-	return out, nil
 }
 
 // Deploy pins a component's released image in an environment's value file,

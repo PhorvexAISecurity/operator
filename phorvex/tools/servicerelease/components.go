@@ -11,8 +11,9 @@
 //	servicerelease affected --base <rev>   the services a change affects
 //	servicerelease plan                    each service's next version and its commits
 //	servicerelease prepare                 write the release PR: versions and changelogs
-//	servicerelease pending                 the prepared releases not yet tagged
-//	servicerelease deploy                  pin a released image in an environment
+//	servicerelease batch                   persist/validate the prepared batch source
+//	servicerelease pending                 the valid batch components not yet recorded
+//	servicerelease record                  record a tagged image and deployment pin
 //	servicerelease pull-request            open or update the release PR
 package main
 

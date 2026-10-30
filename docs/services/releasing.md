@@ -56,13 +56,19 @@ summary.
    changelog, `release/<service>.md`. Every merged change that affects a
    service updates it.
 2. **Merging it publishes.** The `pending` job finds the versions in
-   `release/versions.json` that have no tag yet (`servicerelease pending`). For
-   each one, the `publish` job:
+   `release/versions.json`, selects the first-parent commit that introduced that
+   exact version set, and commits it to `release/batch.json` before publication.
+   That record is the source-of-truth for push-triggered runs, workflow reruns,
+   manual dispatches and the record-commit runs that advance `main`.
+   `servicerelease pending` then validates the batch record, existing component
+   tags and staging pins before reporting its unrecorded components. For each
+   pending component, the `publish` job:
    - proves both fixture images reproduce the same complete OCI identity across
      two clean no-cache builds;
-   - refuses a missing, malformed, mismatched or dirty source revision, then
-     passes that one reviewed SHA to every service build;
-   - builds the image from the merge commit;
+   - checks out the batch source in detached-HEAD state and refuses a missing,
+     malformed, mismatched or dirty source revision;
+   - builds the image from that pinned release-PR merge commit and passes the
+     same SHA to every service build;
    - runs the built service binary's `-version` endpoint and checks its exact
      release version and Git SHA against the image's OCI labels;
    - pushes it to ECR as `phorvex/<service>:<version>`;
@@ -73,9 +79,20 @@ summary.
      digest: the ECR tags are mutable, so a tag alone could change what a
      release runs.
 
-   One commit to main records the pins of every release that succeeded, and
-   Argo CD syncs it. A service whose build or push fails is not tagged, so a
-   rerun builds it again.
+   One commit to main appends every successful component repository/digest to
+   `release/batch.json` and records its staging pin. That commit and all of its
+   component tags are pushed atomically, so a tag can never be skipped without
+   its matching record. Argo CD syncs the pin commit. A service whose build or
+   push fails is absent from both the record and Git tags; a retry skips the
+   already-recorded services and builds the remainder from the original batch
+   source even after `main` advances. A new version set can replace the batch
+   record only after the prior batch is complete and validates against its tags
+   and pins.
+
+   Before `batch.json` existed, completed releases were represented only by a
+   unanimous set of component tags and pins. The command imports that legacy
+   state only when every prepared component is tagged at the same prepared
+   source and every pin matches; a partial or mixed set is rejected.
 
 The workflow is the only one in this repository that writes or reaches AWS.
 `ReleaseWorkflowTests` in `tools/test_pr_validation.py` holds it to that shape:

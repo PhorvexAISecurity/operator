@@ -32,23 +32,45 @@ jobs:
   pending:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
     outputs:
       releases: ${{ steps.pending.outputs.releases }}
+      source: ${{ steps.pending.outputs.source }}
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          ref: main
           fetch-depth: 0
           fetch-tags: true
       - uses: actions/setup-go@v5
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
-      - name: Prepared releases not yet tagged
+      - name: Persist and validate the prepared batch source
         id: pending
         run: |
           set -euo pipefail
-          go -C phorvex run ./tools/servicerelease pending | tee "$RUNNER_TEMP/pending.tsv"
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
+          "$tool" batch --environment "$ENVIRONMENT" >/dev/null
+          if [ -n "$(git status --porcelain -- release/batch.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add release/batch.json
+            source="$("$tool" batch-source)"
+            git commit -m "release: pin batch source ${source:0:12}"
+            if ! git push origin HEAD:main; then
+              # A concurrent creator may win only with the byte-identical batch.
+              git fetch --tags --force origin main
+              git show FETCH_HEAD:release/batch.json > "$RUNNER_TEMP/remote-batch.json"
+              cmp release/batch.json "$RUNNER_TEMP/remote-batch.json"
+              git switch --force-create release-record FETCH_HEAD
+            fi
+          fi
+          source="$("$tool" batch-source)"
+          "$tool" pending | tee "$RUNNER_TEMP/pending.tsv"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "releases=$(wc -l < "$RUNNER_TEMP/pending.tsv" | tr -d ' ')" >> "$GITHUB_OUTPUT"
 
   publish:
@@ -57,22 +79,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     environment: release
+    env:
+      BATCH_SOURCE_SHA: ${{ needs.pending.outputs.source }}
     permissions:
       contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
           fetch-tags: true
       - uses: actions/setup-go@v5
         with:
           go-version-file: build/test-harness/go.mod
           cache: false
+      - name: Load the record and checkout its exact clean source
+        run: |
+          set -euo pipefail
+          go -C phorvex build -o "$RUNNER_TEMP/servicerelease" ./tools/servicerelease
+          tool="$RUNNER_TEMP/servicerelease"
+          git fetch --tags --force origin main
+          git switch --force-create release-record origin/main
+          git rev-parse HEAD > "$RUNNER_TEMP/record-head"
+          [ "$("$tool" batch-source)" = "$BATCH_SOURCE_SHA" ]
+          "$tool" pending > "$RUNNER_TEMP/pending.tsv"
+          git switch --detach "$BATCH_SOURCE_SHA"
+          echo "REVIEWED_GIT_SHA=$(tools/verify-git-build-identity.sh "$BATCH_SOURCE_SHA")" >> "$GITHUB_ENV"
       - name: Rebuild each fixture twice and compare complete OCI identities
         run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
-      - name: Validate the exact clean release source
-        run: echo "REVIEWED_GIT_SHA=$(tools/verify-git-build-identity.sh "$GITHUB_SHA")" >> "$GITHUB_ENV"
       - name: Require the release role
         env:
           ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
@@ -90,7 +125,6 @@ jobs:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
         run: |
           set -euo pipefail
-          go -C phorvex run ./tools/servicerelease pending > "$RUNNER_TEMP/pending.tsv"
           # Nothing in the loop may read its stdin, the list of releases.
           while IFS=$'\t' read -r component version dockerfile repository build_args; do
             image="$REGISTRY/$repository:$version"
@@ -100,27 +134,34 @@ jobs:
             docker push "$image" < /dev/null
             digest="$(docker inspect --format '{{index .RepoDigests 0}}' "$image")"
             docker image rm "$image"
-            go -C phorvex run ./tools/servicerelease deploy --environment "$ENVIRONMENT" --component "$component" \
-              --repository "$REGISTRY/$repository" --tag "$version" --digest "${digest#*@}" --source "$GITHUB_SHA" < /dev/null
-            git tag "$component-v$version" "$GITHUB_SHA"
-            echo "$component $version" >> "$RUNNER_TEMP/released"
+            printf '%s\t%s\t%s\t%s\n' "$component" "$version" "$REGISTRY/$repository" "${digest#*@}" >> "$RUNNER_TEMP/released"
           done < "$RUNNER_TEMP/pending.tsv"
       - name: Record the releases
         if: always()
         run: |
           set -euo pipefail
           [ -s "$RUNNER_TEMP/released" ] || exit 0
+          tool="$RUNNER_TEMP/servicerelease"
+          git switch --force-create release-record "$(cat "$RUNNER_TEMP/record-head")"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add deploy/environments
-          git commit -m "deploy($ENVIRONMENT): $(paste -sd, "$RUNNER_TEMP/released" | sed 's/,/, /g')"
+          refs=()
+          while IFS=$'\t' read -r component version repository digest; do
+            git tag "$component-v$version" "$BATCH_SOURCE_SHA"
+            "$tool" record --environment "$ENVIRONMENT" --component "$component" --repository "$repository" \
+              --tag "$version" --digest "$digest" --source "$BATCH_SOURCE_SHA"
+            refs+=("refs/tags/$component-v$version")
+          done < "$RUNNER_TEMP/released"
+          git add release/batch.json deploy/environments
+          git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
           pushed=false
           for attempt in 1 2 3; do
-            if git push origin HEAD:main; then pushed=true; break; fi
-            git pull --rebase origin main
+            if git push --atomic origin HEAD:main "${refs[@]}"; then pushed=true; break; fi
+            git fetch --tags --force origin main
+            git rebase origin/main
+            "$tool" pending > /dev/null
           done
-          "$pushed"
-          awk '{print "refs/tags/" $1 "-v" $2}' "$RUNNER_TEMP/released" | xargs git push origin
+          [ "$pushed" = true ]
 
   release-pr:
     needs: [pending, publish]

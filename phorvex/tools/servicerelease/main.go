@@ -20,7 +20,10 @@ const usage = `usage:
   servicerelease affected --base <rev> [--head <rev>] [--markdown]
   servicerelease plan [--head <rev>] [--json]
   servicerelease prepare [--dir release] [--date YYYY-MM-DD] --title-file <path> --body-file <path>
+  servicerelease batch [--dir release] [--head <rev>] [--environment staging]
+  servicerelease batch-source [--dir release] [--head <rev>]
   servicerelease pending [--dir release]
+  servicerelease record --environment staging --component <name> --repository <repo> --tag <version> --digest <sha256:...> --source <sha>
   servicerelease deploy --environment <env> --component <name> --repository <repo> --tag <version> --digest <sha256:...> [--source <sha>]
   servicerelease pull-request --head <branch> --base <branch> --title-file <path> --body-file <path>
   servicerelease dispatch --ref <branch> --workflows <file>[,<file>...]
@@ -30,7 +33,7 @@ const usage = `usage:
 const exitNothing = 3
 
 func run(args []string, stdout, stderr io.Writer) int {
-	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "pending": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
+	commands := map[string]bool{"affected": true, "plan": true, "prepare": true, "batch": true, "batch-source": true, "pending": true, "record": true, "deploy": true, "pull-request": true, "dispatch": true, "close-pull-request": true}
 	if len(args) == 0 || !commands[args[0]] {
 		fmt.Fprintln(stderr, usage)
 		return 2
@@ -41,16 +44,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 	head := fs.String("head", "HEAD", "the revision the change ends at; [pull-request] the PR's branch")
 	asJSON := fs.Bool("json", false, "[plan] print the plans as JSON")
 	markdown := fs.Bool("markdown", false, "[affected] print a Markdown summary, as for a CI job summary")
-	dir := fs.String("dir", "release", "[prepare, pending] the release directory, relative to the repository root")
+	dir := fs.String("dir", "release", "[prepare, batch, batch-source, pending, record] the release directory, relative to the repository root")
 	date := fs.String("date", time.Now().UTC().Format("2006-01-02"), "[prepare] the release date in the changelogs")
 	titleFile := fs.String("title-file", "", "[prepare, pull-request] the release PR's title")
 	bodyFile := fs.String("body-file", "", "[prepare, pull-request] the release PR's Markdown body")
-	environment := fs.String("environment", "", "[deploy] the environment under deploy/environments")
-	component := fs.String("component", "", "[deploy] the released component")
-	repository := fs.String("repository", "", "[deploy] the image repository, with its registry")
-	tag := fs.String("tag", "", "[deploy] the released version")
-	digest := fs.String("digest", "", "[deploy] the pushed image's digest")
-	source := fs.String("source", "", "[deploy] the released commit")
+	environment := fs.String("environment", "", "[batch, record, deploy] the environment under deploy/environments")
+	component := fs.String("component", "", "[record, deploy] the released component")
+	repository := fs.String("repository", "", "[record, deploy] the image repository, with its registry")
+	tag := fs.String("tag", "", "[record, deploy] the released version")
+	digest := fs.String("digest", "", "[record, deploy] the pushed image's digest")
+	source := fs.String("source", "", "[record, deploy] the released commit")
 	ref := fs.String("ref", "", "[dispatch] the branch the workflows run on")
 	workflows := fs.String("workflows", "", "[dispatch] comma-separated workflow files")
 	if err := fs.Parse(args[1:]); err != nil {
@@ -144,6 +147,24 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return fail(err)
 		}
 		fmt.Fprintln(stdout, title)
+	case "batch":
+		env := *environment
+		if env == "" {
+			env = ReleaseEnvironment
+		}
+		batch, _, err := EnsureBatch(root, releaseDir, *head, env)
+		if err != nil {
+			return fail(err)
+		}
+		if batch != nil {
+			fmt.Fprintln(stdout, batch.Source)
+		}
+	case "batch-source":
+		batch, err := LoadBatch(root, releaseDir, *head, true)
+		if err != nil {
+			return fail(err)
+		}
+		fmt.Fprintln(stdout, batch.Source)
 	case "pending":
 		pending, err := PendingReleases(root, releaseDir, *head)
 		if err != nil {
@@ -160,6 +181,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 				buildArgs = append(buildArgs, "--target", p.Target)
 			}
 			fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\t%s\n", p.Component, p.Version, p.Dockerfile, p.Repository, strings.Join(buildArgs, " "))
+		}
+	case "record":
+		if *environment == "" || *component == "" || *repository == "" || *tag == "" || *digest == "" || *source == "" {
+			fmt.Fprintln(stderr, "servicerelease record: --environment, --component, --repository, --tag, --digest and --source are required")
+			return 2
+		}
+		if err := RecordRelease(root, releaseDir, *head, *environment, *component, *repository, *tag, *digest, *source); err != nil {
+			return fail(err)
 		}
 	case "deploy":
 		if *environment == "" || *component == "" || *repository == "" {
