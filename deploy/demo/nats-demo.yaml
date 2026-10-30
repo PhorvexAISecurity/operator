@@ -152,12 +152,18 @@ spec:
       volumes:
       - name: config
         configMap: {name: nats-demo-config}
+  # Spelled out as the API server stores it, so Argo CD's diff of the template is clean.
   volumeClaimTemplates:
-  - metadata: {name: data}
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata: {name: data}
     spec:
       accessModes: [ReadWriteOnce]
       storageClassName: gp2-csi
+      volumeMode: Filesystem
       resources: {requests: {storage: 1Gi}}
+    status:
+      phase: Pending
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
