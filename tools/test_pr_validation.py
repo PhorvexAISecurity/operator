@@ -712,6 +712,17 @@ output.chmod(0o755)
         final_check = runs.rindex('verify_release_ecr.py verify --batch release/batch.json')
         self.assertLess(final_check, runs.rindex('git_push --atomic'))
 
+    def test_recorded_batch_is_loaded_only_from_a_clean_committed_tree(self):
+        # The source-pinned helper's batch loaders require a clean worktree; the
+        # record writes are unstaged until the deploy commit.
+        record = next(s['run'] for s in RELEASE['jobs']['publish']['steps'] if s.get('id') == 'record')
+        loop_end = record.index('done < "$RUNNER_TEMP/released"')
+        commit = record.index('git commit -m "deploy($ENVIRONMENT)')
+        self.assertNotIn('"$tool" pending', record[loop_end:commit])
+        self.assertNotIn('"$tool" batch-source', record[loop_end:commit])
+        self.assertLess(commit, record.index('"$tool" pending --json > /dev/null'))
+        self.assertLess(record.index('"$tool" pending --json > /dev/null'), record.index('verify_committed_head\n'))
+
     def test_git_credentials_exist_only_in_the_push_process_environment(self):
         for name in ('pending', 'publish', 'release-pr'):
             credential_steps = [s for s in RELEASE['jobs'][name]['steps']

@@ -345,13 +345,16 @@ jobs:
             refs+=("refs/tags/$git_tag")
             components+=("$component")
           done < "$RUNNER_TEMP/released"
-          "$tool" pending --json > /dev/null
           python3 tools/verify_release_ecr.py verify --batch release/batch.json --verify-identities > /dev/null
           component_list="$(IFS=,; echo "${components[*]}")"
           mapfile -t release_files < <("$tool" release-files --components "$component_list")
           git add -- "${release_files[@]}"
           "$tool" verify-staged --components "$component_list" > /dev/null
           git commit -m "deploy($ENVIRONMENT): $(cut -f1,2 "$RUNNER_TEMP/released" | tr '\t' ' ' | paste -sd, | sed 's/,/, /g')"
+          # The source-pinned helper loads a batch only from a clean tree, so the
+          # recorded batch is re-validated once it is committed, never while the
+          # record writes are still unstaged.
+          "$tool" pending --json > /dev/null
           verify_committed_head
           # Last practical publication boundary: repository immutability and
           # every exact version-tag digest are re-read after committed-HEAD proof.
