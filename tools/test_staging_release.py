@@ -172,7 +172,9 @@ class StagingTargetTests(unittest.TestCase):
             "apiVersion": consumer["apiVersion"],
             "kind": consumer["kind"],
             "metadata": {"name": consumer["name"], "namespace": consumer["namespace"]},
-            "spec": {"template": {"spec": {"containers": [{"image": expected}]}}},
+            "spec": {"template": {"spec": {"containers": [{
+                "name": consumer["container"], "image": expected,
+            }]}}},
         }
         RELEASE.verify_service_documents(item, published, [deployment])
 
@@ -182,6 +184,18 @@ class StagingTargetTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "rendered consumer selects"):
             RELEASE.verify_service_documents(item, published, [deployment])
+
+        deployment["spec"]["template"]["spec"]["containers"][0]["image"] = expected
+        extra = {
+            "apiVersion": "apps/v1",
+            "kind": "DaemonSet",
+            "metadata": {"name": "unexpected", "namespace": "phorvex-system"},
+            "spec": {"template": {"spec": {"containers": [{
+                "name": "gpu", "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/brain@sha256:" + "a" * 64,
+            }]}}},
+        }
+        with self.assertRaisesRegex(ValueError, "unexpected rendered image consumers"):
+            RELEASE.verify_service_documents(item, published, [deployment, extra])
 
     def test_exact_pin_values_reject_other_changes_in_an_allowed_staging_file(self):
         prepared = prepared_batch()

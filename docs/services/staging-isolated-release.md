@@ -88,7 +88,9 @@ no source path that names them as a publication target.
    `deploy/environments/staging/`; the fixture writer pins the two disabled-by-
    default catalogue image values already present in `phorvex.yaml` and
    `catalogue-family.yaml`. Helm renders prove the service and fixture consumers
-   select the exact digests after every Argo values file has been applied in order.
+   select the exact digests after every Argo values file has been applied in order;
+   an added workload image consumer is rejected even when the recorded consumer
+   remains correct.
 8. The workflow stages only those eight staging values files plus the batch
    record, rejects any changed path outside that allowlist, and reconstructs each
    values file from the source to prove that only the contracted image-pin scalars

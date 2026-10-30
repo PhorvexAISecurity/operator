@@ -576,6 +576,31 @@ def verify_service_documents(item: dict[str, Any], release: dict[str, str], docu
     consumers = item["deploy"]["consumers"]
     if not consumers:
         raise ValueError(f"service {item['component']} has no rendered consumer contract")
+    expected_consumers = {
+        (
+            consumer["apiVersion"], consumer["kind"], consumer["namespace"], consumer["name"],
+            consumer["section"], consumer["container"],
+        )
+        for consumer in consumers
+    }
+    rendered_consumers = set()
+    for document in documents:
+        pod = document.get("spec", {}).get("template", {}).get("spec", {})
+        if not isinstance(pod, dict):
+            continue
+        metadata = document.get("metadata", {})
+        for section in ("containers", "initContainers", "ephemeralContainers"):
+            for container in pod.get(section, []) or []:
+                if isinstance(container, dict) and isinstance(container.get("image"), str):
+                    rendered_consumers.add((
+                        document.get("apiVersion"), document.get("kind"), metadata.get("namespace"),
+                        metadata.get("name"), section, container.get("name"),
+                    ))
+    if rendered_consumers != expected_consumers:
+        raise ValueError(
+            f"service {item['component']} has unexpected rendered image consumers: "
+            f"{sorted(rendered_consumers - expected_consumers)}"
+        )
     for consumer in consumers:
         matches = [
             document for document in documents

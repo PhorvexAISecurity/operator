@@ -40,6 +40,24 @@ def superseding_shared_source(isolated_source: str) -> str | None:
     raise RuntimeError("cannot compare isolated and shared release sources")
 
 
+def isolated_selection_commit(source: str) -> str:
+    selection = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "HEAD", "--", "release/staging-batch.json"],
+        cwd=ROOT, check=True, text=True, capture_output=True,
+    ).stdout.strip()
+    if not release.SHA.fullmatch(selection):
+        raise ValueError("committed staging batch has no exact selection commit")
+    run("git", "merge-base", "--is-ancestor", source, selection)
+    run("git", "merge-base", "--is-ancestor", selection, "HEAD")
+    selected = subprocess.run(
+        ["git", "show", f"{selection}:release/staging-batch.json"],
+        cwd=ROOT, check=True, capture_output=True,
+    ).stdout
+    if selected != BATCH.read_bytes():
+        raise ValueError("committed staging batch differs from its selection commit")
+    return selection
+
+
 def main() -> int:
     if not BATCH.exists():
         print("no committed staging batch")
@@ -54,6 +72,7 @@ def main() -> int:
     helper = temporary / "servicerelease"
     services = temporary / "services.json"
     shared_root = temporary / "shared-source"
+    selection_root = temporary / "isolated-selection"
     try:
         run("git", "worktree", "add", "--detach", str(source_root), source)
         run("go", "-C", str(source_root / "phorvex"), "build", "-o", str(helper), "./tools/servicerelease")
@@ -84,11 +103,28 @@ def main() -> int:
             value = release.validate_batch(
                 release.read_json(BATCH), require_complete=True, canonical_services=canonical
             )
-            # The recorded source is the only allowed base: this rejects a digest-pin
-            # proposal that also changes any production/shared or unrelated path.
-            release.verify_deployment(value, source, canonical)
+            # Current source PRs may evolve unrelated reviewed code after the pin
+            # selection, but the retained staging consumers must remain exact.
+            release.verify_deployment(value, None, canonical)
+            selection = isolated_selection_commit(source)
+            run("git", "worktree", "add", "--detach", str(selection_root), selection)
+            # Re-run the source-pinned proposal gate at the exact commit that selected
+            # this batch. This keeps the production/staging non-diff guarantee without
+            # rejecting unrelated later source PRs.
+            run(
+                sys.executable, str(selection_root / "tools/staging_release.py"),
+                "verify-deployment", "--batch", str(selection_root / "release/staging-batch.json"),
+                "--services", str(services), "--base", source, cwd=selection_root,
+            )
     finally:
-        subprocess.run(["git", "worktree", "remove", "--force", str(shared_root)], cwd=ROOT, check=False)
+        if selection_root.exists():
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(selection_root)], cwd=ROOT, check=False
+            )
+        if shared_root.exists():
+            subprocess.run(
+                ["git", "worktree", "remove", "--force", str(shared_root)], cwd=ROOT, check=False
+            )
         subprocess.run(["git", "worktree", "remove", "--force", str(source_root)], cwd=ROOT, check=False)
         shutil.rmtree(temporary, ignore_errors=True)
     print(f"verified committed staging batch {source}")
