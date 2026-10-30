@@ -292,6 +292,10 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('[ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]', runs)
         self.assertNotIn('git fetch', runs)
         self.assertIn('staging-contract --target "$TARGET" --source "$SOURCE"', runs)
+        shared_gate = runs.index('pending --json > "$RUNNER_TEMP/shared-pending.json"')
+        self.assertLess(shared_gate, runs.index('staging-contract --target "$TARGET"'))
+        self.assertLess(shared_gate, runs.index('verify_staging_ecr.py preflight'))
+        self.assertIn('complete the source-pinned shared release batch', runs)
         self.assertNotIn('$GITHUB_SHA', runs)
         for forbidden in ('kubectl ', 'argocd ', 'git push origin main', 'refs/heads/main',
                           'phorvex/manager:', 'phorvex/brain:', 'continue-on-error', '|| true'):

@@ -12,7 +12,10 @@ supersession rule. Batch drift, partial authority, or invalid records fail close
 
 The lane is manual and accepts one input: the complete 40-character commit at
 current `main`. The clean checkout must resolve to that exact commit. There is no repository override input. The only accepted target is
-the reviewed `staging-isolated` profile in `release/staging-target.json`.
+the reviewed `staging-isolated` profile in `release/staging-target.json`. Before
+assuming AWS credentials or building anything, the source-built helper also
+requires the normal shared batch to have no pending components. A prepared or
+partial shared release therefore fails closed instead of racing isolated pins.
 
 ## Provisioned ECR inventory
 
