@@ -243,7 +243,6 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 	evidence.FinishedAt = &finishedAt
 	evidence.CapturedAt = &capturedAt
 	evidence.Errors = nil
-	start := evidence.BaselineAt.Add(-cfg.RangeStep)
 	for i := range evidence.Metrics {
 		metric := &evidence.Metrics[i]
 		metric.Errors = nil
@@ -263,12 +262,11 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 				evidence.Errors = append(evidence.Errors, metric.Key+": final: staging decision telemetry is absent or older than 90s")
 			}
 		}
-		steps := math.Ceil(finalAt.Sub(evidence.BaselineAt).Seconds() / cfg.RangeStep.Seconds())
-		start = finalAt.Add(-time.Duration(steps) * cfg.RangeStep)
 		rawAt := time.Now().UTC()
+		start, end, step := prometheusAnchoredRange(evidence.BaselineAt, rawAt, cfg.RangeStep)
 		rangeSeries, rawCapture, rangeErr := prometheusQuery(ctx, cfg, "/api/v1/query_range", url.Values{
 			"query": {metric.Query}, "start": {formatPrometheusTime(start)},
-			"end": {formatPrometheusTime(rawAt)}, "step": {strconv.FormatFloat(cfg.RangeStep.Seconds(), 'f', -1, 64)},
+			"end": {formatPrometheusTime(end)}, "step": {strconv.FormatFloat(step, 'f', -1, 64)},
 		}, "matrix", rawAt)
 		metric.RawCapture = rawCapture
 		if rangeErr != nil {
@@ -427,6 +425,18 @@ func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time
 	baseline := float64(baselineAt.UnixNano()) / float64(time.Second)
 	final := float64(finalAt.UnixNano()) / float64(time.Second)
 	return (!baselinePresent || first <= baseline+tolerance) && last+tolerance >= final
+}
+
+// Anchor the range grid at the exact baseline and terminal capture boundaries.
+// Prometheus evaluates query_range at start+n*step, so a fixed step can skip a
+// series that exists at baseline when the grid is aligned from the run's end.
+func prometheusAnchoredRange(baselineAt, endAt time.Time, maxStep time.Duration) (time.Time, time.Time, float64) {
+	duration := endAt.Sub(baselineAt)
+	intervals := math.Ceil(duration.Seconds() / maxStep.Seconds())
+	if intervals < 1 {
+		intervals = 1
+	}
+	return baselineAt, endAt, duration.Seconds() / intervals
 }
 
 func prometheusRangeQueryCoversCaptures(raw, baseline, final *PrometheusResponseCapture) bool {
