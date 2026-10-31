@@ -1,0 +1,120 @@
+Independent current-head verification at00eac153: real producers, unchanged baseline fixture, wire/replay, full architecture/covermap and both terminal-completion test controls; exact Go1.26.3/non-cluster env.
+START producer-and-wire-controls
+=== RUN   TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects
+--- PASS: TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects (0.02s)
+=== RUN   TestWorkloadEvidenceCachePreservesGVKIsolation
+--- PASS: TestWorkloadEvidenceCachePreservesGVKIsolation (0.00s)
+=== RUN   TestWorkloadSpecRealProducerCounterexample
+    workload_spec_producer_test.go:44: POSITIVE CONTROL: one observed pod, authoritative spec.replicas=4, valid UID-bound Deployment lineage; legacy desired count remains 1
+--- PASS: TestWorkloadSpecRealProducerCounterexample (0.00s)
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/known
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_reader
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stale_immediate_UID
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stale_parent_UID
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_owner
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/ambiguous_owner
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_replicas
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/unsupported_daemonset
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/standalone
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stateful
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/legacy
+--- PASS: TestWorkloadSpecUnknownsAndSupportedControllers (0.01s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/known (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_reader (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stale_immediate_UID (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stale_parent_UID (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_owner (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/ambiguous_owner (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_replicas (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/unsupported_daemonset (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/standalone (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stateful (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/legacy (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/ingest	0.128s
+=== RUN   TestReplayHistoryRealLedgerReplacementIsolationAndImmutability
+--- PASS: TestReplayHistoryRealLedgerReplacementIsolationAndImmutability (0.00s)
+=== RUN   TestReplayHistoryBoundsAndMissingLedger
+--- PASS: TestReplayHistoryBoundsAndMissingLedger (0.00s)
+=== RUN   TestReplayHistoryDTOCarriesAllLedgerEvidence
+--- PASS: TestReplayHistoryDTOCarriesAllLedgerEvidence (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/slo	0.050s
+=== RUN   TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged
+--- PASS: TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged (0.17s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/mathlab	0.230s
+=== RUN   TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss
+--- PASS: TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss (0.00s)
+=== RUN   TestCostEvidenceCountAndByteLimitsRemainUnavailable
+--- PASS: TestCostEvidenceCountAndByteLimitsRemainUnavailable (0.05s)
+=== RUN   TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick
+--- PASS: TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick (0.11s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/runner	0.296s
+=== RUN   TestRemoteBrainMatchesInProcess
+--- PASS: TestRemoteBrainMatchesInProcess (0.51s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.563s
+=== RUN   TestWorkloadSpecThroughRealRemoteSensor
+--- PASS: TestWorkloadSpecThroughRealRemoteSensor (0.04s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.110s
+END producer-and-wire-controls exit=0
+START architecture-and-covermap
+=== RUN   TestEveryPackageHasADomain
+--- PASS: TestEveryPackageHasADomain (0.13s)
+=== RUN   TestImportsRespectServiceBoundaries
+--- PASS: TestImportsRespectServiceBoundaries (0.07s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/archtest	0.213s
+=== RUN   TestCoverMapDocumentIsCurrent
+--- PASS: TestCoverMapDocumentIsCurrent (0.08s)
+=== RUN   TestBuildIsDeterministic
+--- PASS: TestBuildIsDeterministic (0.15s)
+=== RUN   TestCheckRejectsEditedRowAndDetectsPinOnlyDrift
+--- PASS: TestCheckRejectsEditedRowAndDetectsPinOnlyDrift (0.14s)
+=== RUN   TestRunExitCodes
+--- PASS: TestRunExitCodes (0.50s)
+=== RUN   TestDeclaredActionsAreAllListed
+--- PASS: TestDeclaredActionsAreAllListed (0.07s)
+=== RUN   TestEveryDeclaredFactKindIsEmittedAndEveryFixtureMintsFacts
+--- PASS: TestEveryDeclaredFactKindIsEmittedAndEveryFixtureMintsFacts (0.10s)
+=== RUN   TestPodBoundAPIAuthFixtureRequiresCurrentIdentity
+--- PASS: TestPodBoundAPIAuthFixtureRequiresCurrentIdentity (0.08s)
+=== RUN   TestCurrentCoverFactsHoldInEveryFixture
+--- PASS: TestCurrentCoverFactsHoldInEveryFixture (0.06s)
+=== RUN   TestVectorSteeringIsMeasuredExactly
+--- PASS: TestVectorSteeringIsMeasuredExactly (0.07s)
+PASS
+ok  	github.com/phorvex/phorvex/tools/covermap	1.320s
+END architecture-and-covermap exit=0
+START console-completion-controls
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost
+--- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry (8.94s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost (1.66s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed (2.11s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad (1.13s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent (1.85s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost (2.18s)
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace
+--- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (2.87s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.21s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache (0.16s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain (0.17s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap (0.17s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace (0.17s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/console	11.954s
+END console-completion-controls exit=0

@@ -1,0 +1,38 @@
+diff: PASS
+workflow: FAIL
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-3: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-4: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-5: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-6: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-7: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-8: PASS
+Traceback (most recent call last):
+  File "/workspace/operator-v3-capture/workflow/tools/workflow.py", line 4957, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/operator-v3-capture/workflow/tools/workflow.py", line 4953, in main
+    return int(args.func(args))
+               ^^^^^^^^^^^^^^^
+  File "/workspace/operator-v3-capture/workflow/tools/workflow.py", line 1605, in cmd_preflight
+    receipt = preflight.run_plan(ROOT.parent, selected, output, args)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-v3-capture/workflow/tools/preflight.py", line 198, in run_plan
+    proc.wait(timeout=args.timeout)
+  File "/workspace/.phorvex-tools/python311/python/lib/python3.11/subprocess.py", line 1264, in wait
+    return self._wait(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python311/python/lib/python3.11/subprocess.py", line 2047, in _wait
+    time.sleep(delay)
+KeyboardInterrupt

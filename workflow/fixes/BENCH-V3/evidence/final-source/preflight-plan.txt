@@ -1,0 +1,253 @@
+schema_version: 2
+base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+head_sha: 00eac153f3f27929907f91d4231362051664364c
+changed_paths:
+- docs/math-lab/SNAPSHOT_AND_REPLAY.md
+- phorvex/cmd/main.go
+- phorvex/docs/recon-cover-map.generated.md
+- phorvex/internal/brainapi/brainapi.go
+- phorvex/internal/brainclient/parity_test.go
+- phorvex/internal/brainsvc/local.go
+- phorvex/internal/console/vllm_lora_outcome_test.go
+- phorvex/internal/console/vllm_remaining_outcome_test.go
+- phorvex/internal/ingest/kube.go
+- phorvex/internal/ingest/owner_reader.go
+- phorvex/internal/ingest/owner_reader_test.go
+- phorvex/internal/ingest/workload_spec.go
+- phorvex/internal/ingest/workload_spec_producer_test.go
+- phorvex/internal/ingest/workload_spec_test.go
+- phorvex/internal/mathlab/cost_capture_test.go
+- phorvex/internal/mathlab/inspect.go
+- phorvex/internal/mathlab/recorder.go
+- phorvex/internal/mathlab/snapshot.go
+- phorvex/internal/model/replay_cost.go
+- phorvex/internal/model/types.go
+- phorvex/internal/model/workload_spec.go
+- phorvex/internal/runner/cost_capture.go
+- phorvex/internal/runner/cost_capture_test.go
+- phorvex/internal/runner/manager.go
+- phorvex/internal/runner/mathlab_capture_test.go
+- phorvex/internal/runner/rotation_observation_test.go
+- phorvex/internal/sensorclient/parity_test.go
+- phorvex/internal/slo/ledger.go
+- phorvex/internal/slo/replay.go
+- phorvex/internal/slo/replay_test.go
+- workflow/operations/HANDOFFS.md
+- workflow/tools/preflight.py
+- workflow/tools/tests/test_preflight.py
+jobs:
+- id: diff
+  cwd: .
+  script: 'git diff --check bb92355cf7b6c4a696f44caf52bd5fa1268e7303 00eac153f3f27929907f91d4231362051664364c
+
+    git diff --check HEAD'
+  tool: null
+- id: workflow
+  cwd: .
+  script: bash workflow/tools/check.sh
+  tool: python
+  version: 3.11.17
+  ci_sha256: e72c23711f30b9f86a597f55f223e6ba5ddf9d192c792692f3bc745acc30226e
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-3
+  name: null
+  cwd: .
+  script: python -m pip install PyYAML==6.0.2
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-4
+  name: Current chart consistency and render
+  cwd: .
+  script: 'diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml
+
+    bash tools/check-vendored-chart.sh
+
+    helm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml
+    -f deploy/helm/phorvex-stack/values-eks.yaml --api-versions monitoring.coreos.com/v1/PodMonitor
+    --include-crds > /dev/null
+
+    # One chart per service (ADR-0001); tools/test_service_charts.py renders them.
+
+    for chart in deploy/charts/*/; do helm lint --strict "$chart"; done
+
+    python tools/check-claim-language.py
+
+    '
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-5
+  name: Reconstruct any committed staging batch from its exact source
+  cwd: .
+  script: python tools/verify_committed_staging_batch.py
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-6
+  name: Tracked paths portable to case-insensitive checkouts
+  cwd: .
+  script: python tools/check-path-case-collisions.py
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-7
+  name: null
+  cwd: .
+  script: python -m unittest discover -s tools -p 'test_*.py' -v
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-8
+  name: null
+  cwd: .
+  script: python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py'
+    -v
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- id: chart-9
+  name: Recipe and fixture tests (offline)
+  cwd: .
+  script: "python build/integrations/epss-ecr-auth-runtime/verify_recipe.py\nfor suite\
+    \ in \\\n  build/integrations/epss-ecr-auth-runtime \\\n  build/integrations/litellm-gateway-runtime\
+    \ \\\n  build/integrations/vllm-lease-proxy-runtime \\\n  build/integrations/vllm-native-metrics\
+    \ \\\n  build/test-harness/fixtures/guardrail-output \\\n  build/test-harness/fixtures/vllm-endpoint-lease-console\
+    \ \\\n  build/test-harness/guardrail/canary-fixture \\\n  build/test-harness/security-gain-validation\
+    \ \\\n  deploy/eks/epss \\\n  deploy/helm/phorvex-stack/examples/math-observers/scripts\
+    \ \\\n  phorvex/internal/console; do\n  python -B -m unittest discover -s \"$suite\"\
+    \ -p 'test_*.py'\ndone\n"
+  tool: helm
+  version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  python_version: 3.12.15
+  python_provision_sha256: ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: &id001
+    KUBECONFIG: /dev/null
+    KUBEBUILDER_ASSETS: ''
+    USE_EXISTING_CLUSTER: 'false'
+    GOTOOLCHAIN: local
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-phorvex
+  script: go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-affected-services
+  script: go -C phorvex run ./tools/servicerelease affected --base bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+    --markdown
+  adaptation: GitHub informational step-summary output is captured in this job log;
+    the pinned plan base replaces the CI merge-parent base
+  ci_script: go -C phorvex run ./tools/servicerelease affected --base HEAD^1 --markdown
+    >> "$GITHUB_STEP_SUMMARY"
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-build-metricvalidity
+  script: go -C build/metricvalidity test -mod=readonly -count=1 -timeout=5m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-build-test-harness
+  script: go -C build/test-harness test -mod=readonly -count=1 -timeout=15m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-build-phoenix-extended
+  script: go -C build/phoenix-extended test -mod=readonly -count=1 -timeout=15m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-libs-logging
+  script: go -C libs/logging test -mod=readonly -count=1 -timeout=5m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-build-integrations-epss-ecr-auth-runtime
+  script: go -C build/integrations/epss-ecr-auth-runtime test -mod=readonly -count=1
+    -timeout=5m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-unit-farm-fixtures-agentsim
+  script: go -C farm-fixtures/agentsim test -mod=readonly -count=1 -timeout=5m ./...
+- cwd: .
+  tool: go
+  version: 1.26.3
+  toolchain: local
+  env: *id001
+  helm_version: v3.16.4
+  ci_sha256: d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6
+  go_version_file: build/test-harness/go.mod
+  go_version_file_sha256: 1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57
+  id: go-build-vet-phorvex
+  script: 'go -C phorvex build ./...
+
+    go -C phorvex vet ./...'
+external:
+- Shared-cluster E2E, image builds/deployment and live verification are separate;
+  local PASS does not sign them.
+- Remote go-envtest with local Kubernetes API binaries and other remote CI jobs remain
+  separate and unexecuted here; local PASS is not all remote CI passing.
+

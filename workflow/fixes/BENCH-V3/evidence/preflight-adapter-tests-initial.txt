@@ -1,0 +1,24 @@
+test_command_failure_is_retained_and_cannot_be_a_pass (test_preflight.PreflightTests.test_command_failure_is_retained_and_cannot_be_a_pass) ... fail: FAIL
+ok
+test_current_ci_authority_retains_every_chart_check_and_pinned_setup (test_preflight.PreflightTests.test_current_ci_authority_retains_every_chart_check_and_pinned_setup) ... ERROR
+test_pinned_python_requires_exact_patch_and_version_specific_binary (test_preflight.PreflightTests.test_pinned_python_requires_exact_patch_and_version_specific_binary) ... ok
+test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail (test_preflight.PreflightTests.test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail) ... diff: PASS
+ok
+test_plan_selects_ci_versions_but_never_shared_jobs (test_preflight.PreflightTests.test_plan_selects_ci_versions_but_never_shared_jobs) ... ok
+test_templates_are_code_but_mutable_evidence_is_not (test_preflight.PreflightTests.test_templates_are_code_but_mutable_evidence_is_not) ... ok
+test_unknown_workflow_ci_command_requires_adapter_update (test_preflight.PreflightTests.test_unknown_workflow_ci_command_requires_adapter_update) ... ok
+test_wrong_tool_versions_are_not_silently_accepted (test_preflight.PreflightTests.test_wrong_tool_versions_are_not_silently_accepted) ... ok
+
+======================================================================
+ERROR: test_current_ci_authority_retains_every_chart_check_and_pinned_setup (test_preflight.PreflightTests.test_current_ci_authority_retains_every_chart_check_and_pinned_setup)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-v3-capture/workflow/tools/tests/test_preflight.py", line 57, in test_current_ci_authority_retains_every_chart_check_and_pinned_setup
+    config = w.read_yaml(ci/'pr-validation.yml')
+             ^^^^^^^^^^^
+AttributeError: module 'phorvex_operations_tool' has no attribute 'read_yaml'
+
+----------------------------------------------------------------------
+Ran 8 tests in 7.440s
+
+FAILED (errors=1)

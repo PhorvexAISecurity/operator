@@ -1,0 +1,16 @@
+  Chart.yaml, Chart.lock and dependencies match
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+stale vendored archive: phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz
+stale vendored archive: deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz
+stale vendored archive: deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz
+run tools/package-vendored-charts.sh and commit every regenerated archive

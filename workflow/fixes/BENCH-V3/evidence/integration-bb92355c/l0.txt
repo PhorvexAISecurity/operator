@@ -1,0 +1,6 @@
+ok  	github.com/phorvex/phorvex/internal/ingest	3.446s
+ok  	github.com/phorvex/phorvex/internal/slo	0.093s
+ok  	github.com/phorvex/phorvex/internal/mathlab	1.965s
+ok  	github.com/phorvex/phorvex/internal/runner	9.122s
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.703s
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.174s

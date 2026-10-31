@@ -1,0 +1,13 @@
+{
+  "baseline": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "worktree": "/workspace/.phorvex-test-tmp/bench-v3-chart-tar135.mrnjeivq",
+  "command": "PATH=/workspace/.phorvex-tools/tar135/bin:$PATH HELM_BIN=/workspace/.phorvex-tools/helm TMPDIR=/workspace/.phorvex-test-tmp bash tools/package-vendored-charts.sh --check",
+  "tar_path": "/workspace/.phorvex-tools/tar135/bin/tar",
+  "tar_version": "tar (GNU tar) 1.35",
+  "binary_sha256": "7e6952733a113878d95b09a01b93a9bb9702e33f7e4340ba02882aebc1ccd11a",
+  "source_url": "https://ftp.gnu.org/gnu/tar/tar-1.35.tar.xz",
+  "source_sha256": "4d62ff37342ec7aed748535323930c7cf94acf71c3591882b26a7ea50f3edc16",
+  "exit": 0,
+  "stdout": "all vendored chart archives are byte-reproducible and current\n",
+  "stderr": ""
+}

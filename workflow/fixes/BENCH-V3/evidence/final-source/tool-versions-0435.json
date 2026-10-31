@@ -1,0 +1,11 @@
+{
+  "source": "0435b7f57017dbb5768adf92a80d2accc87e5a33",
+  "go_path": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+  "go_sha256": "d68b7abbc40d0844f673f6cf06ae3cded225c50437c6454fa37ef178d079fe65",
+  "go_version": "go version go1.26.3 linux/amd64",
+  "mode": "GOTOOLCHAIN=local (set for all final commands)",
+  "python311": "3.11.17",
+  "python312": "3.12.15",
+  "helm": "v3.16.4",
+  "tar": "GNU tar 1.35"
+}

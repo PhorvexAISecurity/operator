@@ -1,0 +1,4 @@
+implementation:
+  branch: fix/benchmark-v3-capture
+  base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  head_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33

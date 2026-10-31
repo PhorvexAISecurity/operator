@@ -1,0 +1,37 @@
+Baseline bb92355c diagnostic overlay adds only post-Wait logging; preserves original deadlines/assertions, so failed assertion remains failed. Same explicit environment as unchanged baseline control.
+START baseline-console-postwait-diagnostic
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost
+    vllm_lora_outcome_test.go:261: POST_WAIT after_response=1.522225205s since_fire=1.522567129s status="done" outcome="LANDED" cleanup="completed" observation_error="" cleanup_error="" persistence_error=""
+--- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry (8.56s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost (1.43s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed (1.80s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad (1.10s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent (1.91s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost (2.31s)
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison
+    vllm_remaining_outcome_test.go:556: live unauthorized adapter route was not reported narrowly: &{Claim:<nil> ID:atk-dmjb1d1igvhv FiredAt:2026-10-31T20:26:53.770361203Z Service:vllm Namespace:vllm Pod:vllm-0 TargetUID:pod-uid Deploy: OwnerKind: OwnerUID: Attack:Unapproved LoRA load observation AttackID:poison MITRE:adapter-effect-only Expected:adapter-rotate Stateful:false EvidenceKind:vllm-in-place-effect LiveFire:false StimulusEvidence:0x14d9544ba0c0 EffectEvidence:<nil> GuardrailEffectProbe:<nil> GuardrailOutputProbe:<nil> DrainLiveProbe:<nil> EndpointLeaseProbe:<nil> VoiceMemoryProbe:<nil> VoiceAgencyProbe:<nil> VoiceOutputProbe:<nil> VoiceAdmissionProbe:<nil> VoiceMCPProbe:<nil> LiteLLMLiveProbe:<nil> LiteLLMOutputProbe:<nil> CRMLiveProbe:<nil> OutcomeClass:behavioral-oracle-unsupported LoRACleanupStatus: LoRACleanupError: ProducerRoute: ResultSchema: ObservationStart:2026-10-31T20:26:53.770361203Z ObservationEnd:2026-10-31T20:26:53.775361203Z Status:running Outcome: Action: DefendedPod: Actuated:false TimeToDefendSec:0 DwellSec:0 DwellOngoing:false Containment: ResponseObserved:false ResponseAction: ResponsePod: ResponseSeconds:0 ObservationError: DecisionEvidence:<nil> DecisionTraceEvidence:[] TemporalDecisionEvidence:<nil> DecisionAuditReadGap:false DecisionAuditCoverage: Why: PerDollar:0 PerDollarAvailable:false Stage: CoveredFacts:0 CoveredFactsAvailable:false PHold:0 Lambda:0 LambdaAvailable:false EconomicsVersion: DisruptionAversion:0 DisruptionAversionPresent:false EffectiveCostCoefficient:0 NormPreference:<nil> FlowPreference:<nil> EconomicsAvailable:false R6Would: R6Note: UptimeBefore:-1 UptimeDip:0 UptimeAfter:0 Cost:{ValueAtRisk:0 Without:0 R6:0 With:0 Savings:0 Note: NodeInstance: NodeRatePerHr:0 PreventNone:0 PreventR6:0 PreventPhorvex:0 RatesSource: OperatorCost:0 R6Churn:0} PersistenceError: started:{wall:14029189629717694323 ext:9363770366 loc:0x5c93120} accepted:{wall:14029189629717694323 ext:9363770366 loc:0x5c93120} baseEpoch: baseKVEpoch: baseQuar:map[] baseNP:map[] vllmEffect:0x14d954427c70 loRATerminalPersisted:false loRATerminalPersistFailed:false}
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=1.370025865s since_fire=1.370480215s status="done" outcome="LANDED" cleanup="completed" observation_error="" cleanup_error="" persistence_error=""
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=9.02152ms since_fire=9.214018ms status="partial" outcome="" cleanup="" observation_error="no exact target-bound in-place effect observed within the registered window" cleanup_error="" persistence_error=""
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=8.340916ms since_fire=8.570176ms status="done" outcome="" cleanup="" observation_error="" cleanup_error="" persistence_error=""
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=7.970189ms since_fire=8.099363ms status="done" outcome="" cleanup="" observation_error="" cleanup_error="" persistence_error=""
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=7.568798ms since_fire=7.749647ms status="done" outcome="" cleanup="" observation_error="" cleanup_error="" persistence_error=""
+--- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (2.70s)
+    --- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.06s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache (0.15s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain (0.19s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap (0.16s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace (0.14s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	11.400s
+FAIL
+END baseline-console-postwait-diagnostic exit=1

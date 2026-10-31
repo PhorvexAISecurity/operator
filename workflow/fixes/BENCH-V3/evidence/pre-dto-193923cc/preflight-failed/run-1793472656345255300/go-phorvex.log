@@ -1,0 +1,206 @@
+go: downloading github.com/google/cel-go v0.23.2
+go: downloading cel.dev/expr v0.20.0
+go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a
+go: downloading github.com/stoewer/go-strcase v1.3.0
+go: downloading github.com/antlr4-go/antlr/v4 v4.13.0
+go: downloading golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56
+ok  	github.com/phorvex/phorvex/api/v1alpha1	0.291s
+ok  	github.com/phorvex/phorvex/cmd	60.471s
+ok  	github.com/phorvex/phorvex/cmd/actuator	0.165s
+?   	github.com/phorvex/phorvex/cmd/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/brain	0.083s
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.270s
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/cost-admission	0.065s
+?   	github.com/phorvex/phorvex/cmd/cost-budget-admin	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-client	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-load-detector	[no test files]
+?   	github.com/phorvex/phorvex/cmd/current-inventory-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/internal/actuatorconfig	0.085s
+ok  	github.com/phorvex/phorvex/cmd/internal/consoleserver	0.211s
+ok  	github.com/phorvex/phorvex/cmd/internal/decisionconfig	0.170s
+ok  	github.com/phorvex/phorvex/cmd/internal/grpctlsconfig	0.027s
+ok  	github.com/phorvex/phorvex/cmd/internal/policyscope	0.067s
+ok  	github.com/phorvex/phorvex/cmd/internal/sensorconfig	0.153s
+ok  	github.com/phorvex/phorvex/cmd/internal/trustconfig	0.052s
+?   	github.com/phorvex/phorvex/cmd/loss-observer	[no test files]
+?   	github.com/phorvex/phorvex/cmd/mig-allocation-helper	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/persistence-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/ragstore-fixture	0.093s
+ok  	github.com/phorvex/phorvex/cmd/recovery	0.121s
+?   	github.com/phorvex/phorvex/cmd/sensor	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	0.068s
+ok  	github.com/phorvex/phorvex/internal/actuationbrake	0.083s
+ok  	github.com/phorvex/phorvex/internal/actuator	58.740s
+?   	github.com/phorvex/phorvex/internal/actuatorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actuatorclient	0.409s
+ok  	github.com/phorvex/phorvex/internal/actuatorpb	0.056s
+ok  	github.com/phorvex/phorvex/internal/actuatorsvc	0.081s
+?   	github.com/phorvex/phorvex/internal/agentdeny	[no test files]
+--- FAIL: TestImportsRespectServiceBoundaries (0.08s)
+    boundaries_test.go:221: imports cross a service boundary (ADR-0001); move the shared code to a shared package or go through the owning service:
+          brainapi (shared) -> slo (dispatcher)
+          mathlab (brain) -> slo (dispatcher)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/archtest	0.771s
+ok  	github.com/phorvex/phorvex/internal/attackcatalog	0.018s
+?   	github.com/phorvex/phorvex/internal/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/internal/audit	14.347s
+ok  	github.com/phorvex/phorvex/internal/auditguard	42.002s
+ok  	github.com/phorvex/phorvex/internal/audittransport	0.759s
+ok  	github.com/phorvex/phorvex/internal/authz	0.059s
+?   	github.com/phorvex/phorvex/internal/brainapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.759s
+ok  	github.com/phorvex/phorvex/internal/brainpb	0.056s
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.100s
+ok  	github.com/phorvex/phorvex/internal/buildctx	0.057s
+ok  	github.com/phorvex/phorvex/internal/buildinfo	0.008s
+ok  	github.com/phorvex/phorvex/internal/calib	0.468s
+ok  	github.com/phorvex/phorvex/internal/capability	0.189s
+ok  	github.com/phorvex/phorvex/internal/capacity	0.197s
+ok  	github.com/phorvex/phorvex/internal/cataloguev1	57.410s
+ok  	github.com/phorvex/phorvex/internal/codeexec	7.346s
+2026/10/31 19:22:58 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:22:58.172112192Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:22:58 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:22:58.185645045Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:22:59 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:22:59.478848215Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#real-op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:22:59 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:22:59.496761213Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#real-op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:23:01 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:01.366217509Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:23:01 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:01.369231901Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:23:02 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:02.31552767Z\",\"actor\":\"https://idp.example.test#cli\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:23:02 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:02.318885924Z\",\"actor\":\"https://idp.example.test#cli\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:23:14 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:14.061994615Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:23:14 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:23:14.068029441Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59110: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59150: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59208: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59244: read tcp 127.0.0.1:39919->127.0.0.1:59244: read: connection reset by peer
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59276: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59312: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59350: read tcp 127.0.0.1:39919->127.0.0.1:59350: read: connection reset by peer
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59392: EOF
+2026/10/31 19:24:40 http: TLS handshake error from 127.0.0.1:59414: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59444: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59488: read tcp 127.0.0.1:39919->127.0.0.1:59488: read: connection reset by peer
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59516: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59540: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59570: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59612: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59656: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59692: EOF
+2026/10/31 19:24:41 http: TLS handshake error from 127.0.0.1:59718: EOF
+2026/10/31 19:24:57 http: TLS handshake error from 127.0.0.1:54516: read tcp 127.0.0.1:39667->127.0.0.1:54516: use of closed network connection
+2026/10/31 19:25:04 http: TLS handshake error from 127.0.0.1:43330: write tcp 127.0.0.1:32933->127.0.0.1:43330: use of closed network connection
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.475681189Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"100\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costPreferences\\\":null,\\\"costWeights\\\":{\\\"flowDisruption\\\":\\\"0.7\\\"},\\\"disruptionAversion\\\":\\\"1.5\\\"}}}\",\"verdict\":\"intent\",\"changeId\":\"20261031T192605Z-b8999e884daf2446\",\"policyUid\":\"u1\",\"previousGeneration\":8,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"fixed\",\"parameters\":[{\"key\":\"flowWeight\",\"specPath\":\"spec.objective.costWeights.flowDisruption\",\"before\":{\"present\":true,\"value\":0.6},\"after\":{\"present\":true,\"value\":0.7}},{\"key\":\"beta\",\"specPath\":\"spec.objective.disruptionAversion\",\"before\":{\"present\":false,\"value\":0},\"after\":{\"present\":true,\"value\":1.5}}],\"note\":\"beta sweep arm 1\"}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.479064771Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"100\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costPreferences\\\":null,\\\"costWeights\\\":{\\\"flowDisruption\\\":\\\"0.7\\\"},\\\"disruptionAversion\\\":\\\"1.5\\\"}}}\",\"verdict\":\"applied\",\"changeId\":\"20261031T192605Z-b8999e884daf2446\",\"policyUid\":\"u1\",\"previousGeneration\":8,\"generation\":9,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"fixed\",\"parameters\":[{\"key\":\"flowWeight\",\"specPath\":\"spec.objective.costWeights.flowDisruption\",\"before\":{\"present\":true,\"value\":0.6},\"after\":{\"present\":true,\"value\":0.7}},{\"key\":\"beta\",\"specPath\":\"spec.objective.disruptionAversion\",\"before\":{\"present\":false,\"value\":0},\"after\":{\"present\":true,\"value\":1.5}}],\"note\":\"beta sweep arm 1\"}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.483402329Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"101\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costPreferences\\\":null,\\\"costWeights\\\":{\\\"flowDisruption\\\":\\\"0.6\\\"},\\\"disruptionAversion\\\":null}}}\",\"verdict\":\"intent\",\"changeId\":\"20261031T192605Z-f0ea8b72a9655208\",\"policyUid\":\"u1\",\"previousGeneration\":9,\"economicsModeBefore\":\"fixed\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"flowWeight\",\"specPath\":\"spec.objective.costWeights.flowDisruption\",\"before\":{\"present\":true,\"value\":0.7},\"after\":{\"present\":true,\"value\":0.6}},{\"key\":\"beta\",\"specPath\":\"spec.objective.disruptionAversion\",\"before\":{\"present\":true,\"value\":1.5},\"after\":{\"present\":false,\"value\":0}}],\"restoreOf\":\"20261031T192605Z-b8999e884daf2446\"}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.485754464Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"101\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costPreferences\\\":null,\\\"costWeights\\\":{\\\"flowDisruption\\\":\\\"0.6\\\"},\\\"disruptionAversion\\\":null}}}\",\"verdict\":\"applied\",\"changeId\":\"20261031T192605Z-f0ea8b72a9655208\",\"policyUid\":\"u1\",\"previousGeneration\":9,\"generation\":10,\"economicsModeBefore\":\"fixed\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"flowWeight\",\"specPath\":\"spec.objective.costWeights.flowDisruption\",\"before\":{\"present\":true,\"value\":0.7},\"after\":{\"present\":true,\"value\":0.6}},{\"key\":\"beta\",\"specPath\":\"spec.objective.disruptionAversion\",\"before\":{\"present\":true,\"value\":1.5},\"after\":{\"present\":false,\"value\":0}}],\"restoreOf\":\"20261031T192605Z-b8999e884daf2446\"}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.493647256Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"100\\\"},\\\"spec\\\":{\\\"slo\\\":{\\\"costCeiling\\\":\\\"2\\\"}}}\",\"verdict\":\"intent\",\"changeId\":\"20261031T192605Z-2952a1b4aaf613f4\",\"policyUid\":\"u1\",\"previousGeneration\":8,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"costCeiling\",\"specPath\":\"spec.slo.costCeiling\",\"before\":{\"present\":true,\"value\":1.2},\"after\":{\"present\":true,\"value\":2}}]}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.498685006Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"100\\\"},\\\"spec\\\":{\\\"slo\\\":{\\\"costCeiling\\\":\\\"2\\\"}}}\",\"verdict\":\"applied\",\"changeId\":\"20261031T192605Z-2952a1b4aaf613f4\",\"policyUid\":\"u1\",\"previousGeneration\":8,\"generation\":9,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"costCeiling\",\"specPath\":\"spec.slo.costCeiling\",\"before\":{\"present\":true,\"value\":1.2},\"after\":{\"present\":true,\"value\":2}}]}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.502595849Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"101\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costWeights\\\":{\\\"normSparsity\\\":\\\"0.3\\\"}}}}\",\"verdict\":\"intent\",\"changeId\":\"20261031T192605Z-c9af00c23e3ea3ce\",\"policyUid\":\"u1\",\"previousGeneration\":9,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"normWeight\",\"specPath\":\"spec.objective.costWeights.normSparsity\",\"before\":{\"present\":true,\"value\":0.4},\"after\":{\"present\":true,\"value\":0.3}}]}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.505136193Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"101\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costWeights\\\":{\\\"normSparsity\\\":\\\"0.3\\\"}}}}\",\"verdict\":\"applied\",\"changeId\":\"20261031T192605Z-c9af00c23e3ea3ce\",\"policyUid\":\"u1\",\"previousGeneration\":9,\"generation\":10,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"normWeight\",\"specPath\":\"spec.objective.costWeights.normSparsity\",\"before\":{\"present\":true,\"value\":0.4},\"after\":{\"present\":true,\"value\":0.3}}]}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.507058276Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"102\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costWeights\\\":{\\\"normSparsity\\\":\\\"0.2\\\"}}}}\",\"verdict\":\"intent\",\"changeId\":\"20261031T192605Z-91c9d501c51cd2e5\",\"policyUid\":\"u1\",\"previousGeneration\":10,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"normWeight\",\"specPath\":\"spec.objective.costWeights.normSparsity\",\"before\":{\"present\":true,\"value\":0.3},\"after\":{\"present\":true,\"value\":0.2}}]}"
+2026/10/31 19:26:05 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:05.508684337Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/optimizer/runtime/apply\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"metadata\\\":{\\\"resourceVersion\\\":\\\"102\\\"},\\\"spec\\\":{\\\"objective\\\":{\\\"costWeights\\\":{\\\"normSparsity\\\":\\\"0.2\\\"}}}}\",\"verdict\":\"rejected-by-apiserver\",\"message\":\"PhorvexPolicy.phorvex.ai \\\"vllm-defense\\\" is invalid\",\"changeId\":\"20261031T192605Z-91c9d501c51cd2e5\",\"policyUid\":\"u1\",\"previousGeneration\":10,\"economicsModeBefore\":\"legacy\",\"economicsModeAfter\":\"legacy\",\"parameters\":[{\"key\":\"normWeight\",\"specPath\":\"spec.objective.costWeights.normSparsity\",\"before\":{\"present\":true,\"value\":0.3},\"after\":{\"present\":true,\"value\":0.2}}]}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.702766815Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec.tenant\",\"verdict\":\"rejected-tenant-key-write\",\"message\":\"tenant is not editable from the console: spec.tenant keys the tenant's learned state; merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.710849336Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec.tenant\",\"verdict\":\"rejected-tenant-key-write\",\"message\":\"spec.tenant is not editable from the console: spec.tenant keys the tenant's learned state; merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.721419558Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec.tenant\",\"verdict\":\"rejected-tenant-key-write\",\"message\":\"tenant is not editable from the console: spec.tenant keys the tenant's learned state; merging duals is not supported and a rename is a state reset (M-140) — change it deliberately with kubectl\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.727284611Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"budget\\\":{\\\"maxMovesPerTick\\\":2},\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.729497689Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"budget\\\":{\\\"maxMovesPerTick\\\":2},\\\"mode\\\":\\\"dryRun\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/vllm-defense patched\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.733821428Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"demo\",\"policy\":\"demo-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"triggers\\\":{\\\"reactiveOnly\\\":true}}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.735923459Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"demo\",\"policy\":\"demo-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"triggers\\\":{\\\"reactiveOnly\\\":true}}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/demo-defense patched\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.74060045Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"demo\",\"policy\":\"demo-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"triggers\\\":{\\\"reactiveOnly\\\":false}}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.742357994Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"demo\",\"policy\":\"demo-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"triggers\\\":{\\\"reactiveOnly\\\":false}}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/demo-defense patched\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.74620274Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.748042491Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"rejected-by-apiserver\",\"message\":\"Error from server (Forbidden): admission webhook \\\"vphorvexpolicy.phorvex.ai\\\" denied the request: spec.tenant \\\"litellm\\\" is in use by litellm/litellm-defense\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.751271369Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:11 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:11.753162339Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#direct-handler-subject\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"vllm\",\"policy\":\"vllm-defense\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"effect-unknown\",\"message\":\"Unable to connect to the server: dial tcp: i/o timeout\"}"
+2026/10/31 19:26:17 ERROR attacks service unavailable path=/api/runs/list err="dial tcp 127.0.0.1:45239: connect: connection refused"
+2026/10/31 19:26:20 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:20.190364233Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:20 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:20.201052483Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/p patched\"}"
+2026/10/31 19:26:24 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:24.606919714Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:26 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:26.644628177Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:26 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:26.657644732Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"applied\",\"message\":\"phorvexpolicy.phorvex.ai/p patched\"}"
+2026/10/31 19:26:28 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:28.785210183Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:28 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:28.788699094Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"effect-unknown\",\"message\":\"request timed out\"}"
+2026/10/31 19:26:28 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:28.9324442Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#operator\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:28 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:28.971978875Z\",\"actor\":\"test\",\"endpoint\":\"\",\"namespace\":\"\",\"policy\":\"\",\"field\":\"\",\"verdict\":\"applied\"}"
+2026/10/31 19:26:30 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:30.960710283Z\",\"actor\":\"unauthenticated\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:30 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:30.963025257Z\",\"actor\":\"unauthenticated\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:30 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:30.965669849Z\",\"actor\":\"unauthenticated\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+2026/10/31 19:26:30 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:30.968238485Z\",\"actor\":\"unauthenticated\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"applied\",\"message\":\"patched\"}"
+2026/10/31 19:26:31 INFO console mutation record="{\"kind\":\"phorvex.console.mutation\",\"time\":\"2026-10-31T19:26:31.021832538Z\",\"actor\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_TESTPOOL#op\",\"endpoint\":\"/api/policy/edit\",\"namespace\":\"tenant-a\",\"policy\":\"p\",\"field\":\"spec\",\"patch\":\"{\\\"spec\\\":{\\\"mode\\\":\\\"active\\\"}}\",\"verdict\":\"intent\"}"
+--- FAIL: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry (10.33s)
+    --- FAIL: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost (3.04s)
+        vllm_lora_outcome_test.go:278: exact accepted event was not handed to watcher: record=&{Claim:<nil> ID:atk-dmj9rd6fdqon FiredAt:2026-10-31T19:26:49.315958615Z Service:vllm Namespace:vllm Pod:vllm-0 TargetUID:pod-uid Deploy: OwnerKind: OwnerUID: Attack:Unapproved LoRA load observation AttackID:poison MITRE:adapter-effect-only Expected:adapter-rotate Stateful:false EvidenceKind:vllm-in-place-effect LiveFire:false StimulusEvidence:0x1067a614c6c0 EffectEvidence:<nil> GuardrailEffectProbe:<nil> GuardrailOutputProbe:<nil> DrainLiveProbe:<nil> EndpointLeaseProbe:<nil> VoiceMemoryProbe:<nil> VoiceAgencyProbe:<nil> VoiceOutputProbe:<nil> VoiceAdmissionProbe:<nil> VoiceMCPProbe:<nil> LiteLLMLiveProbe:<nil> LiteLLMOutputProbe:<nil> CRMLiveProbe:<nil> OutcomeClass:behavioral-oracle-unsupported LoRACleanupStatus: LoRACleanupError: ProducerRoute: ResultSchema: ObservationStart:2026-10-31T19:26:49.315958615Z ObservationEnd:2026-10-31T19:26:49.320958615Z Status:running Outcome: Action: DefendedPod: Actuated:false TimeToDefendSec:0 DwellSec:0 DwellOngoing:false Containment: ResponseObserved:false ResponseAction: ResponsePod: ResponseSeconds:0 ObservationError: DecisionEvidence:<nil> DecisionTraceEvidence:[] TemporalDecisionEvidence:<nil> DecisionAuditReadGap:false DecisionAuditCoverage: Why: PerDollar:0 PerDollarAvailable:false Stage: CoveredFacts:0 CoveredFactsAvailable:false PHold:0 Lambda:0 LambdaAvailable:false EconomicsVersion: DisruptionAversion:0 DisruptionAversionPresent:false EffectiveCostCoefficient:0 NormPreference:<nil> FlowPreference:<nil> EconomicsAvailable:false R6Would: R6Note: UptimeBefore:-1 UptimeDip:0 UptimeAfter:0 Cost:{ValueAtRisk:0 Without:0 R6:0 With:0 Savings:0 Note: NodeInstance: NodeRatePerHr:0 PreventNone:0 PreventR6:0 PreventPhorvex:0 RatesSource: OperatorCost:0 R6Churn:0} PersistenceError: started:{wall:14029185759497758039 ext:273184207730 loc:0x5c81100} accepted:{wall:14029185759497758039 ext:273184207730 loc:0x5c81100} baseEpoch: baseKVEpoch: baseQuar:map[] baseNP:map[] vllmEffect:0x1067a3f60c30 loRATerminalPersisted:false loRATerminalPersistFailed:false} unloads=1 body={"action":"poison","attackId":"atk-dmj9rd6fdqon","message":"An unapproved zero-delta adapter route and exact detector stimulus were confirmed on vllm-0. The console will report exact adapter removal if observed; model answer corruption is not claimed.","ok":true}
+--- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (3.00s)
+    --- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.22s)
+        vllm_remaining_outcome_test.go:546: live unauthorized adapter route was not reported narrowly: &{Claim:<nil> ID:atk-dmj9rjtcr799 FiredAt:2026-10-31T19:27:03.762963837Z Service:vllm Namespace:vllm Pod:vllm-0 TargetUID:pod-uid Deploy: OwnerKind: OwnerUID: Attack:Unapproved LoRA load observation AttackID:poison MITRE:adapter-effect-only Expected:adapter-rotate Stateful:false EvidenceKind:vllm-in-place-effect LiveFire:false StimulusEvidence:0x1067a4d97440 EffectEvidence:<nil> GuardrailEffectProbe:<nil> GuardrailOutputProbe:<nil> DrainLiveProbe:<nil> EndpointLeaseProbe:<nil> VoiceMemoryProbe:<nil> VoiceAgencyProbe:<nil> VoiceOutputProbe:<nil> VoiceAdmissionProbe:<nil> VoiceMCPProbe:<nil> LiteLLMLiveProbe:<nil> LiteLLMOutputProbe:<nil> CRMLiveProbe:<nil> OutcomeClass:behavioral-oracle-unsupported LoRACleanupStatus: LoRACleanupError: ProducerRoute: ResultSchema: ObservationStart:2026-10-31T19:27:03.762963837Z ObservationEnd:2026-10-31T19:27:03.767963837Z Status:running Outcome: Action: DefendedPod: Actuated:false TimeToDefendSec:0 DwellSec:0 DwellOngoing:false Containment: ResponseObserved:false ResponseAction: ResponsePod: ResponseSeconds:0 ObservationError: DecisionEvidence:<nil> DecisionTraceEvidence:[] TemporalDecisionEvidence:<nil> DecisionAuditReadGap:false DecisionAuditCoverage: Why: PerDollar:0 PerDollarAvailable:false Stage: CoveredFacts:0 CoveredFactsAvailable:false PHold:0 Lambda:0 LambdaAvailable:false EconomicsVersion: DisruptionAversion:0 DisruptionAversionPresent:false EffectiveCostCoefficient:0 NormPreference:<nil> FlowPreference:<nil> EconomicsAvailable:false R6Would: R6Note: UptimeBefore:-1 UptimeDip:0 UptimeAfter:0 Cost:{ValueAtRisk:0 Without:0 R6:0 With:0 Savings:0 Note: NodeInstance: NodeRatePerHr:0 PreventNone:0 PreventR6:0 PreventPhorvex:0 RatesSource: OperatorCost:0 R6Churn:0} PersistenceError: started:{wall:14029185774977148797 ext:287631212958 loc:0x5c81100} accepted:{wall:14029185774977148797 ext:287631212958 loc:0x5c81100} baseEpoch: baseKVEpoch: baseQuar:map[] baseNP:map[] vllmEffect:0x1067a4846000 loRATerminalPersisted:false loRATerminalPersistFailed:false}
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	293.290s
+ok  	github.com/phorvex/phorvex/internal/controller	0.283s
+ok  	github.com/phorvex/phorvex/internal/cost	0.072s
+ok  	github.com/phorvex/phorvex/internal/crmrefund	0.088s
+ok  	github.com/phorvex/phorvex/internal/ctxprov	0.047s
+ok  	github.com/phorvex/phorvex/internal/currentinventory	0.051s
+ok  	github.com/phorvex/phorvex/internal/currentobserver	0.102s
+?   	github.com/phorvex/phorvex/internal/datastore	[no test files]
+ok  	github.com/phorvex/phorvex/internal/decision	57.362s
+ok  	github.com/phorvex/phorvex/internal/disclosure	0.046s
+ok  	github.com/phorvex/phorvex/internal/endpointlease	0.239s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	5.535s
+ok  	github.com/phorvex/phorvex/internal/epssmeta	0.033s
+ok  	github.com/phorvex/phorvex/internal/eventtrust	0.112s
+ok  	github.com/phorvex/phorvex/internal/exposure	0.079s
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.083s
+ok  	github.com/phorvex/phorvex/internal/gpudevice	0.018s
+ok  	github.com/phorvex/phorvex/internal/graph	0.043s
+ok  	github.com/phorvex/phorvex/internal/identityfixture	0.106s
+ok  	github.com/phorvex/phorvex/internal/ingest	2.629s
+ok  	github.com/phorvex/phorvex/internal/inprocess	0.085s
+ok  	github.com/phorvex/phorvex/internal/killchain	0.062s
+ok  	github.com/phorvex/phorvex/internal/litellmclient	0.528s
+ok  	github.com/phorvex/phorvex/internal/losshistory	0.078s
+ok  	github.com/phorvex/phorvex/internal/lossobserver	0.313s
+ok  	github.com/phorvex/phorvex/internal/mathlab	1.338s
+ok  	github.com/phorvex/phorvex/internal/metrics	0.072s
+ok  	github.com/phorvex/phorvex/internal/model	0.164s
+ok  	github.com/phorvex/phorvex/internal/outputpolicy	0.138s
+ok  	github.com/phorvex/phorvex/internal/ownership	0.058s
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.468s
+?   	github.com/phorvex/phorvex/internal/persistence	[no test files]
+ok  	github.com/phorvex/phorvex/internal/physics	0.056s
+ok  	github.com/phorvex/phorvex/internal/platform	6.175s
+ok  	github.com/phorvex/phorvex/internal/podresources	0.091s
+ok  	github.com/phorvex/phorvex/internal/recon	0.130s
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/representation	0.131s
+ok  	github.com/phorvex/phorvex/internal/runner	8.057s
+ok  	github.com/phorvex/phorvex/internal/scaleprobe	0.016s
+ok  	github.com/phorvex/phorvex/internal/scopedoutcome	3.491s
+?   	github.com/phorvex/phorvex/internal/sensorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.203s
+?   	github.com/phorvex/phorvex/internal/sensorpb	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorsvc	0.114s
+ok  	github.com/phorvex/phorvex/internal/servicetls	0.137s
+ok  	github.com/phorvex/phorvex/internal/servingbudget	15.849s
+?   	github.com/phorvex/phorvex/internal/servingbudget/budgettest	[no test files]
+ok  	github.com/phorvex/phorvex/internal/servingcontext	0.014s
+ok  	github.com/phorvex/phorvex/internal/slo	0.074s
+ok  	github.com/phorvex/phorvex/internal/startupauthz	0.113s
+ok  	github.com/phorvex/phorvex/internal/statefulrotation	0.072s
+ok  	github.com/phorvex/phorvex/internal/voiceadmissionpolicy	0.160s
+ok  	github.com/phorvex/phorvex/internal/voicemcppolicy	0.059s
+ok  	github.com/phorvex/phorvex/internal/voicememorypolicy	0.015s
+ok  	github.com/phorvex/phorvex/internal/voiceoutputpolicy	0.116s
+ok  	github.com/phorvex/phorvex/internal/voicerefundpolicy	0.013s
+ok  	github.com/phorvex/phorvex/internal/wire	0.045s
+--- FAIL: TestCoverMapDocumentIsCurrent (0.09s)
+    covermap_test.go:61: docs/recon-cover-map.generated.md has drifted from the producers: the tables AND the source pin differ (checked-in 5cc2d03222d1982c70fa3a03ff64561685d4ca3aa38d65ad4f8279eecc7f7d06, fresh 20fc6d80d9cca2ae34059d85964af9a3c715c931a1b4e4f516f9adbf00d61bdb): producers or fixtures changed; regenerate
+        Regenerate: go run ./tools/covermap --write
+FAIL
+FAIL	github.com/phorvex/phorvex/tools/covermap	1.303s
+--- FAIL: TestInputsFollowTheImportGraph (18.47s)
+    servicerelease_test.go:129: go list in build/test-harness: exit status 1: go: go.mod requires go >= 1.26.3 (running go 1.26.1; GOTOOLCHAIN=go1.26.1)
+FAIL
+FAIL	github.com/phorvex/phorvex/tools/servicerelease	141.810s
+FAIL

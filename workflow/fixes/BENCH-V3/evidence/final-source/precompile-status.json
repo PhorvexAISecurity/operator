@@ -1,0 +1,48 @@
+{
+  "state": "DONE",
+  "pid": 212885,
+  "source_sha": "0435b7f57017dbb5768adf92a80d2accc87e5a33",
+  "started_at": "2026-10-31T19:55:13.010237+00:00",
+  "results": [
+    {
+      "name": "prepare-phorvex",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-build-metricvalidity",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-build-test-harness",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-build-phoenix-extended",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-libs-logging",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-build-integrations-epss-ecr-auth-runtime",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "prepare-farm-fixtures-agentsim",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 1287.1,
+  "step": "prepare-farm-fixtures-agentsim",
+  "child_pid": 225951,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T20:16:40.109774+00:00"
+}

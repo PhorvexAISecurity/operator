@@ -1,0 +1,21 @@
+source:
+  base: 1c23931621d47218ded424b58e4db127344fb33b
+  head: 773f782bdf8fc3fc068b4293d2ebad8f75328e43
+environment:
+  TMPDIR: /workspace/.phorvex-test-tmp
+  GOCACHE: /workspace/.phorvex-go/capture-cache
+  GOPATH: /workspace/.phorvex-go/gopath
+  GOMAXPROCS: '2'
+  GOTOOLCHAIN: local
+  GO_BIN: /workspace/.phorvex-go/go/bin/go
+commands:
+  baseline-confirmed.txt: bash workflow/fixes/BENCH-V3/evidence/reproduce-baseline.sh
+  l0.txt: /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/ingest ./internal/slo ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient -count=1
+  l1.txt: /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/ingest ./internal/slo ./internal/runner -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues' -count=1 -v
+  l2.txt: /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient -run 'TestOptionalCostCapture|TestMathLabCapture|TestRemoteBrainMatchesInProcess|TestWorkloadSpecThroughRealRemoteSensor|TestRemoteSensorMatchesInProcess' -count=1 -v
+  preflight-adapter-tests-pinned.txt: PYTHONPATH=workflow/tools:workflow/tools/tests /workspace/.phorvex-tools/python311/python/bin/python3.11 -m unittest -v test_preflight
+preflight:
+  state: running
+  python311: /workspace/.phorvex-tools/python311/python/bin/python3.11
+  python312: /workspace/.phorvex-tools/python312/python/bin/python3.12
+  helm: /workspace/.phorvex-tools/helm

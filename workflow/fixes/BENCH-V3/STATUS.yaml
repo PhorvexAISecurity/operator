@@ -1,0 +1,303 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 18
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+checks:
+  decision:
+    result: PASS
+    by: bench-v3-lead
+    artifact: 03-decision.md
+    sha256: abfcb8bed432ea5ae510bd7507c886e2d6b8b0caff219333472f1b7616efc87f
+    source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+    at: '2026-10-31T20:27:20+00:00'
+    contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+    approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+    rationale: Evidence-backed necessary test synchronization repair under existing
+      source-fix and PR authority; no timeout increase, assertion removal, product
+      behavior change or new deployment permission
+  red:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/integration-bb92355c/baseline-red.txt
+    sha256: 89cacd5ed1f7c6dc99618c667111945f4ef23d3b4d48b3cb9b08a67009a1424e
+    source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+    at: '2026-10-31T18:49:22+00:00'
+  preflight:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 34df9b73d52feb8c7cd687ce84ca1e5033efeba2f63389cfdbaf8212819505d1
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:57+00:00'
+  implementation:
+    result: PASS
+    by: bench-v3-worker
+    artifact: 04-diff.patch
+    sha256: 2a7c677737a3fd1b9b10fd6b28e11cd5218809530a09ecf6289524f94c895d8d
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:57+00:00'
+  l0:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l0.txt
+    sha256: 20cbc2f9e586c54f85569b92f646d528aa29a6f287ab51972ac198f56cb04c8a
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:58+00:00'
+  l1:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l1.txt
+    sha256: 95515fe487cee7a3701911d8e0e0cfe5880c5d5e59fca69abb12db7158269f88
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:58+00:00'
+  l2:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l2.txt
+    sha256: 155148e254a845f904bdd6fcbb2cd57be55f72c6b6b21dd396c99b065374298a
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:59+00:00'
+  positive_control:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l1.txt
+    sha256: 95515fe487cee7a3701911d8e0e0cfe5880c5d5e59fca69abb12db7158269f88
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:08:59+00:00'
+  incident:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/incident.md
+    sha256: 7dd07185c19b1317b03b7c148ca7aae0575a59695a2d864e87a06f25c3260b19
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:10:08+00:00'
+    baseline_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  p3:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/p3/verdict.md
+    sha256: f8b504c65a0958a9030aa0248c009a05a2c28b8e671cf99c606c105ec5b990c9
+    source_sha: 00eac153f3f27929907f91d4231362051664364c
+    at: '2026-10-31T21:10:09+00:00'
+    incident_sha256: 7dd07185c19b1317b03b7c148ca7aae0575a59695a2d864e87a06f25c3260b19
+fix_id: BENCH-V3
+issues: []
+title: Capture truthful endpoint-cost replay inputs for paired V2/V3 studies
+profile: standard
+state: PR_READY
+roles:
+  human_owner: hamihoriyat
+  proposer: bench-v3-lead
+  implementer: bench-v3-worker
+  skeptic: bench-v3-lead
+  live_verifier: bench-v3-lead
+  coordinator: bench-v3-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: false
+  deployment_authority: false
+baseline:
+  code_branch: main
+  code_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  deployed_image: null
+  deployed_git_sha: 0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/benchmark-v3-capture
+  base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  head_sha: 00eac153f3f27929907f91d4231362051664364c
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  live_required: false
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-10-31T21:10:46+00:00'
+configuration_history:
+- at: '2026-10-31T17:43:09+00:00'
+  by: bench-v3-lead
+  fields:
+  - approvals
+  - baseline
+  - change_class
+  - roles
+  - verification
+  approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+- at: '2026-10-31T18:20:18+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-10-31T18:44:35+00:00'
+  by: bench-v3-lead
+  fields:
+  - baseline
+  approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+- at: '2026-10-31T18:48:23+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-10-31T19:45:43+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-10-31T20:27:51+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-10-31T17:44:51+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-10-31T17:46:03+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-10-31T21:09:00+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-10-31T21:09:18+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-10-31T21:10:15+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-10-31T21:10:32+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: eaf5805bfbe84fb49deda7f18dee16d9d96a15746a03eacf0ed8bc178f61a5a2
+  source_sha: 1c23931621d47218ded424b58e4db127344fb33b
+  at: '2026-10-31T17:45:36+00:00'
+  contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+- check: red
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/baseline-confirmed.txt
+  sha256: 55827c1711bf55d4f89aebd9aebcd42f92ffe62b19d3e7b84c0e919739626e5d
+  source_sha: 1c23931621d47218ded424b58e4db127344fb33b
+  at: '2026-10-31T18:20:55+00:00'
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: fa20060572b662e7efa0af1b4a6f40760caf84218068e5d50c7a9a7af4ae5c78
+  source_sha: 1c23931621d47218ded424b58e4db127344fb33b
+  at: '2026-10-31T18:02:45+00:00'
+  contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+  approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+  rationale: Lead amendment under existing repair authorization and operations/AUTONOMY.md;
+    necessary delivery adapter repair preserves scope and evidence guarantees, no
+    new human signature asserted
+- check: red
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/baseline-confirmed.txt
+  sha256: 55827c1711bf55d4f89aebd9aebcd42f92ffe62b19d3e7b84c0e919739626e5d
+  source_sha: 1c23931621d47218ded424b58e4db127344fb33b
+  at: '2026-10-31T18:21:17+00:00'
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 3b334ab00cb91e30db05cc43560db6ea0a2f2a63a629e4d6d7b32e8a72cc4ede
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  at: '2026-10-31T18:44:48+00:00'
+  contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+  approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+  rationale: Necessary upstream integration under existing repair and reviewed-PR
+    authorization; preserves GVK isolation and stateful observers, no new human signature
+    or deployment scope
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: e05c78834adde405da23a33a14dff0ca314dccc0e51f5b7169e5d32eecc11bef
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  at: '2026-10-31T19:33:38+00:00'
+  contract_sha256: 93974797acc9b2e17a4896dd230b1331b971a822742437e0eb971eb5ecebeb6e
+  approval_ref: conversation:2026-10-31:user-fix-remaining-benchmark-issues
+  rationale: Necessary exact CI authority migration under existing source repair/PR
+    scope; no weaker checks or added deployment permission
+handoff:
+  id: BENCH-V3:18:review
+  from: bench-v3-lead
+  to: bench-v3-lead
+  role: coordinator
+  kind: review
+  revision: 18

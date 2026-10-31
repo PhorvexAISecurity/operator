@@ -1,0 +1,18 @@
+=== RUN   TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged
+--- PASS: TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged (0.18s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/mathlab	0.253s
+=== RUN   TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick
+--- PASS: TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick (0.15s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/runner	0.327s
+=== RUN   TestRemoteBrainMatchesInProcess
+--- PASS: TestRemoteBrainMatchesInProcess (0.60s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.660s
+=== RUN   TestRemoteSensorMatchesInProcess
+--- PASS: TestRemoteSensorMatchesInProcess (0.06s)
+=== RUN   TestWorkloadSpecThroughRealRemoteSensor
+--- PASS: TestWorkloadSpecThroughRealRemoteSensor (0.02s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.167s

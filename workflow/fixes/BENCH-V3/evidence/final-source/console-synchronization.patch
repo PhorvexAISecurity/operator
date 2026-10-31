@@ -1,0 +1,45 @@
+diff --git a/phorvex/internal/console/vllm_lora_outcome_test.go b/phorvex/internal/console/vllm_lora_outcome_test.go
+index 2d560fcf20a155f1f7089b159cb03ca6dd03d2b3..5eab581138fddee008f4fd96fe42c68a87efb443 100644
+--- a/phorvex/internal/console/vllm_lora_outcome_test.go
++++ b/phorvex/internal/console/vllm_lora_outcome_test.go
+@@ -250,14 +250,9 @@ func TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry(t *testin
+ 				if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil || reply.AttackID == "" {
+ 					t.Fatalf("exact event create acknowledgement was not reconciled: %d %s", response.Code, response.Body.String())
+ 				}
+-				deadline := time.Now().Add(2 * time.Second)
+-				for time.Now().Before(deadline) {
+-					reconciledRecord = attackSnapshotByID(reply.AttackID)
+-					if reconciledRecord != nil && reconciledRecord.Status != "running" {
+-						break
+-					}
+-					time.Sleep(time.Millisecond)
+-				}
++				// Assert the watcher result after its cleanup and persistence finish.
++				s.attackWatchers.Wait()
++				reconciledRecord = attackSnapshotByID(reply.AttackID)
+ 			}
+ 			mu.Lock()
+ 			gotLoads, gotUnloads, stillLoaded := loads, unloads, loaded
+diff --git a/phorvex/internal/console/vllm_remaining_outcome_test.go b/phorvex/internal/console/vllm_remaining_outcome_test.go
+index b1617d6628bb334ab5b0e7a1e47305977fc7a9be..9da216cc19983513ee305fb6ed9f782066345563 100644
+--- a/phorvex/internal/console/vllm_remaining_outcome_test.go
++++ b/phorvex/internal/console/vllm_remaining_outcome_test.go
+@@ -529,15 +529,9 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
+ 			if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
+ 				t.Fatalf("missing attack record identity: %v body=%s", err, response.Body.String())
+ 			}
+-			deadline := time.Now().Add(time.Second)
+-			var record *attackRecord
+-			for time.Now().Before(deadline) {
+-				record = attackSnapshotByID(reply.AttackID)
+-				if record != nil && record.Status != "running" {
+-					break
+-				}
+-				time.Sleep(time.Millisecond)
+-			}
++			// Assert the watcher result after its cleanup and persistence finish.
++			s.attackWatchers.Wait()
++			record := attackSnapshotByID(reply.AttackID)
+ 			if record == nil || record.Actuated || record.Containment != "" || record.DwellSec != 0 || record.DwellOngoing || record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.BehavioralExecuted {
+ 				t.Fatalf("nonbehavioral flow manufactured verdict: %+v", record)
+ 			}

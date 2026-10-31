@@ -1,0 +1,28 @@
+{
+  "state": "DONE",
+  "pid": 228491,
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "started_at": "2026-10-31T20:30:56.997982+00:00",
+  "results": [
+    {
+      "name": "l0",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "l1",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "l2",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 72.002,
+  "step": "l2",
+  "child_pid": 228751,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T20:32:08.999976+00:00"
+}

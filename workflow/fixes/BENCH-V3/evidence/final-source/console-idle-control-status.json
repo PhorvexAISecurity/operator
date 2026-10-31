@@ -1,0 +1,17 @@
+{
+  "source_sha": "0435b7f57017dbb5768adf92a80d2accc87e5a33",
+  "exit_code": 1,
+  "command": [
+    "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "-C",
+    "phorvex",
+    "test",
+    "-mod=readonly",
+    "-count=1",
+    "-timeout=15m",
+    "./internal/console",
+    "-run",
+    "TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry|TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords",
+    "-v"
+  ]
+}

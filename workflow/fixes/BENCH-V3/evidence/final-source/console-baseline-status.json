@@ -1,0 +1,23 @@
+{
+  "state": "FAILED",
+  "pid": 226666,
+  "source_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "started_at": "2026-10-31T20:23:17.898215+00:00",
+  "results": [
+    {
+      "name": "prepare-unchanged-baseline-console",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "unchanged-baseline-console-controls",
+      "exit_code": 1,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 106.647,
+  "step": "unchanged-baseline-console-controls",
+  "child_pid": 226878,
+  "exit_code": 1,
+  "finished_at": "2026-10-31T20:25:04.545512+00:00"
+}

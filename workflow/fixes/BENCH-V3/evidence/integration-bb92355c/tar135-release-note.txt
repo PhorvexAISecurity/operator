@@ -1,0 +1,11 @@
+GNU tar NEWS - User visible changes. 2023-07-18
+Please send GNU tar bug reports to <bug-tar@gnu.org>
+
+
+version 1.35 - Sergey Poznyakoff, 2023-07-18
+
+* Fail when building GNU tar, if the platform supports 64-bit time_t
+  but the build uses only 32-bit time_t.
+
+* Leave the devmajor and devminor fields empty (rather than zero) for
+  non-special files, as this is more compatible with traditional tar.

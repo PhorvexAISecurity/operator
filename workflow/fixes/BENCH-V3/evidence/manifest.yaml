@@ -1,0 +1,1154 @@
+schema_version: 1
+fix_id: BENCH-V3
+artifacts:
+- id: check-red
+  path: evidence/integration-bb92355c/baseline-red.txt
+  sha256: 89cacd5ed1f7c6dc99618c667111945f4ef23d3b4d48b3cb9b08a67009a1424e
+  bytes: 509
+  producer: bench-v3-worker
+  created_at: '2026-10-31T18:49:22+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  command: GO_BIN=/workspace/.phorvex-go/go/bin/go TMPDIR=/workspace/.phorvex-test-tmp
+    GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath
+    GOMAXPROCS=2 GOTOOLCHAIN=local bash workflow/fixes/BENCH-V3/evidence/integration-bb92355c/reproduce-baseline.sh
+  evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: lead-lead-integrated-baseline
+  path: evidence/lead-integrated-baseline.txt
+  bytes: 791
+  sha256: 8127db1637bc2c2d95c5e076b41dd7d654252e8aac8be93ff9842996b55c5b37
+  producer: bench-v3-lead
+  created_at: '2026-10-31T18:52:03+00:00'
+  evidence_class: RED
+  retention: git
+  actual: Expected baseline assertion failed with exit 1 after positive control passed
+  base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+- id: lead-lead-integrated-head
+  path: evidence/lead-integrated-head.txt
+  bytes: 3784
+  sha256: b35f72693362a7b65be0e5112b5e2c9a124c8ffb1d7776ced3ab6223a60dda26
+  producer: bench-v3-lead
+  created_at: '2026-10-31T18:51:38+00:00'
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent integrated head tests passed with exit 0
+  base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  source_sha: 193923cc32c52269f66cb8617940b96d9d555b1e
+- id: lead-lead-integrated-baseline-setup-failure
+  path: evidence/lead-integrated-baseline-setup-failure.txt
+  bytes: 149
+  sha256: 9862a4353649fb9cbeb4d138b75a33c9373aff6f2366be2e88119248ab766a85
+  producer: bench-v3-lead
+  created_at: '2026-10-31T18:48:57+00:00'
+  evidence_class: INCIDENT
+  retention: git
+  actual: Setup failure before Go execution; not incident evidence
+  base_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+- id: lead-incident
+  path: evidence/incident.md
+  bytes: 6104
+  sha256: 7dd07185c19b1317b03b7c148ca7aae0575a59695a2d864e87a06f25c3260b19
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent final incident report at0435 with exact-Go3 baseline/head tests;
+    formal P3 remains pending
+- id: lead-integrated-preflight-adapter
+  path: evidence/lead-integrated-preflight-adapter.txt
+  bytes: 1390
+  sha256: 07bead0e88c9ba95af2b65ca37cf735b4a03bf5872f2698df2ab03f313581d1e
+  producer: bench-v3-lead
+  created_at: '2026-10-31T19:04:07+00:00'
+  evidence_class: INCIDENT
+  retention: git
+  actual: Eight independent preflight adapter regressions pass on exact Python 3.11.17
+  source_sha: 193923cc32c52269f66cb8617940b96d9d555b1e
+- id: lead-final-baseline-interrupted-json
+  path: evidence/lead-final-baseline-interrupted.json
+  bytes: 467
+  sha256: dced62d7134861219a98982c676fa73a23b8781beaa90efce700b563ab1533ae
+  producer: bench-v3-lead
+  created_at: '2026-10-31T19:54:56+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Interrupted wrapper attempt; no completed incident assertion claimed
+- id: lead-final-baseline-interrupted-txt
+  path: evidence/lead-final-baseline-interrupted.txt
+  bytes: 536
+  sha256: f8ecce0c1abf314b8155b8b722166fc8ccf1503d63e3f32ad70e55b6e6d789b5
+  producer: bench-v3-lead
+  created_at: '2026-10-31T19:47:29+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Interrupted wrapper attempt; no completed incident assertion claimed
+- id: lead-final-baseline-launch-json
+  path: evidence/lead-final-baseline-launch.json
+  bytes: 124
+  sha256: d41bca69f897b7ae1834edabb357805ddba0e40d339a3376ff79d498292f4d82
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:06:14+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-baseline-result-json
+  path: evidence/lead-final-baseline-result.json
+  bytes: 727
+  sha256: 9954f9eafab199c08ddccf9de519d5bf32ace9daa96e4378fb21dc3bdcb9fc20
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:06:38+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-baseline-supervisor-txt
+  path: evidence/lead-final-baseline-supervisor.txt
+  bytes: 0
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:06:14+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-baseline-txt
+  path: evidence/lead-final-baseline.txt
+  bytes: 1068
+  sha256: e14f821eaffd1ee697ed790b85ca4dda101026cface2a169c109e9b1635b9c4f
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:06:38+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: RED
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-head-config-json
+  path: evidence/lead-final-head-config.json
+  bytes: 3205
+  sha256: 7423c5fd219e3d465d69fcd6af8e03523a3f93a5670108ea47af52b5a7584d27
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-head-status-json
+  path: evidence/lead-final-head-status.json
+  bytes: 646
+  sha256: 9b700a73cebbeb565f96b5490ac47c78779e1f26b53b864de9abc53145286f41
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-head-supervisor-txt
+  path: evidence/lead-final-head-supervisor.txt
+  bytes: 0
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:07:33+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-head-txt
+  path: evidence/lead-final-head.txt
+  bytes: 7842
+  sha256: 995b0c9aa25287df2f6fc7dd44620f1248178910535ce8b7b625c31d63b70c71
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: lead-final-preflight-adapter-txt
+  path: evidence/lead-final-preflight-adapter.txt
+  bytes: 1932
+  sha256: 3208e0d43d74460638e09d2cd6c5f542ecc1b600d696c11f5a56b450b5133140
+  producer: bench-v3-lead
+  created_at: '2026-10-31T19:46:39+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent lead artifact; completed baseline/head/adapter outcomes are
+    specified in incident.md and final status JSON
+- id: final-tool-versions
+  path: evidence/final-source/tool-versions.json
+  bytes: 461
+  sha256: c83f3f0bcb1429301a23bcc1166657c13da722ad92d9bd6bb53c40d6d9882c0d
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Exact final compiler path/version/hash and supporting tools
+- id: final-committed-boundary-and-map
+  path: evidence/final-source/committed-boundary-and-map.txt
+  bytes: 5162
+  sha256: 4d5876bd74a3870a07c6ec4c596b8c0ab8558bff295124fd6db5764cc19690aa
+  producer: bench-v3-worker
+  created_at: '2026-10-31T19:45:14+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Committed0435 architecture, full slo and generated map suites passed
+- id: final-adapter-tests
+  path: evidence/final-source/adapter-tests.txt
+  bytes: 1933
+  sha256: 6da7224f209bc585055ea2239974f70b12a6d3cdf57ead65863391e26dd2580d
+  producer: bench-v3-worker
+  created_at: '2026-10-31T19:40:43+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Eleven current/legacy/receipt/context/base adapter tests passed
+- id: preflight-193-failed
+  path: evidence/pre-dto-193923cc/preflight-failed/receipt.json
+  bytes: 9573
+  sha256: 25a3a3f60e13ac237f9f8d1846be4075400fb6ffae445259462566b1452655b4
+  producer: bench-v3-worker
+  created_at: '2026-10-31T19:30:39+00:00'
+  source_sha: 193923cc32c52269f66cb8617940b96d9d555b1e
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Complete failed preflight retained unchanged; not eligible for submission
+- id: check-decision
+  path: 03-decision.md
+  sha256: abfcb8bed432ea5ae510bd7507c886e2d6b8b0caff219333472f1b7616efc87f
+  bytes: 7257
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:27:20+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  command: Review unchanged bb92355c console failure and logging-only post-Wait terminal
+    evidence; authorize completion synchronization with all assertions and actual
+    command deadlines preserved
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: worker-final-console-baseline-config-json
+  path: evidence/final-source/console-baseline-config.json
+  sha256: 47e00b435665412a770173e7ef3b8bb9a3b348195a918ff7c06f5d21d1d0f745
+  bytes: 2555
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-baseline-postwait-overlay-json
+  path: evidence/final-source/console-baseline-postwait-overlay.json
+  sha256: 557fbf337e5cf532b7c89f4742f8fd347ea2bd5c5c9cfa71d32e8b608c797ec3
+  bytes: 450
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-baseline-status-json
+  path: evidence/final-source/console-baseline-status.json
+  sha256: 9a2a4f5a80c520bff01b659dfc70af31b8ce7844253b3eb240a6ea0da0367e24
+  bytes: 570
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-baseline-supervisor-txt
+  path: evidence/final-source/console-baseline-supervisor.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-baseline-txt
+  path: evidence/final-source/console-baseline.txt
+  sha256: e786eb537644b1d31fb13364dfa5558e07d2f8eaae40c655a5c578a47b33cbf8
+  bytes: 4858
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-diagnosis-md
+  path: evidence/final-source/console-diagnosis.md
+  sha256: eece42ad19b185b2811cef3ffde0163cef2f40c7e8c31d37af93689beeb6bfe5
+  bytes: 2550
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Source/diagnostic supporting evidence; no independent acceptance claimed
+- id: worker-final-console-idle-control-status-json
+  path: evidence/final-source/console-idle-control-status.json
+  sha256: 68fbdeda31ba00c43842b767939d1c707313a4996e97efe8322b70d1e5bce6be
+  bytes: 478
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-idle-control-txt
+  path: evidence/final-source/console-idle-control.txt
+  sha256: 3ec2fa8a1ddb019c089fc6be14f28ec9f45d49305395ad3001012ffcfd21c5b2
+  bytes: 4882
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-postwait-config-json
+  path: evidence/final-source/console-postwait-config.json
+  sha256: 6b8d6369701fdb8f499ede2b295b8a889c39e07e65ed8b069cc69c3e211e0b47
+  bytes: 2273
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-postwait-status-json
+  path: evidence/final-source/console-postwait-status.json
+  sha256: 7ce27ebb0be4e43fce82200d7c4f4100e29a7a4809f0e8ae1dc5edce00cb0eea
+  bytes: 459
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-postwait-supervisor-txt
+  path: evidence/final-source/console-postwait-supervisor.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-postwait-test-delta-patch
+  path: evidence/final-source/console-postwait-test-delta.patch
+  sha256: ce45ee3c9617d27cf6f665f08d9b027c9dd49983c36f4961bd9f125c45fb4508
+  bytes: 2512
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-postwait-txt
+  path: evidence/final-source/console-postwait.txt
+  sha256: 223feff1c2139c6d3b38e6cc60f634c557e3e34683f4b20c767f523e32bebe5d
+  bytes: 5967
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-console-synchronization-patch
+  path: evidence/final-source/console-synchronization.patch
+  sha256: 1ad1373caed54529587755c9b15e724b20c078af8dc50eb3383c5bb7575273fd
+  bytes: 2586
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Source/diagnostic supporting evidence; no independent acceptance claimed
+- id: worker-final-corrections-md
+  path: evidence/final-source/corrections.md
+  sha256: 8bb0a54535cde2ed4638bca6f9f67a04f04a2389f115a151f2f3308bc99ecf47
+  bytes: 2827
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Source/diagnostic supporting evidence; no independent acceptance claimed
+- id: worker-final-owned-runner-py
+  path: evidence/final-source/owned-runner.py
+  sha256: b406cce591d169de57fb29223e26a4c74031a21f9811f0e9cfdea4008e935e6a
+  bytes: 3173
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Source/diagnostic supporting evidence; no independent acceptance claimed
+- id: worker-final-precompile-config-json
+  path: evidence/final-source/precompile-config.json
+  sha256: 57d249a6f6618b76a84034820b9cc586749c0b5b3deaf7252bc6c59a37455296
+  bytes: 3945
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-precompile-interrupted-txt
+  path: evidence/final-source/precompile-interrupted.txt
+  sha256: 05b1a83812dcffd14e2fbb0bdc7a7876482ab13a0ed9c43246ee761de122ae2d
+  bytes: 189
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-precompile-launch-txt
+  path: evidence/final-source/precompile-launch.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-precompile-status-json
+  path: evidence/final-source/precompile-status.json
+  sha256: 4f54705e254afd9ec01d285326c357e644e040cf2ab1f621860e22bd626bafdb
+  bytes: 1080
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: worker-final-precompile-tests-txt
+  path: evidence/final-source/precompile-tests.txt
+  sha256: e027339b376965e3fc7609d72d95fdd3ce5423e21a784337f9a004abb5e3b212
+  bytes: 13740
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:29:37.297792+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Diagnostic/preparation evidence only; original failed test exits retained;
+    not current acceptance
+- id: superseded-0435-incident-md
+  path: evidence/pre-console-sync-0435/incident.md
+  sha256: d926cc6dae1408ffd8b45b11bc17eb88c9896925db0a6da8c5e6614e880b0424
+  bytes: 3807
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-interrupted-json
+  path: evidence/pre-console-sync-0435/lead-final-baseline-interrupted.json
+  sha256: dced62d7134861219a98982c676fa73a23b8781beaa90efce700b563ab1533ae
+  bytes: 467
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-interrupted-txt
+  path: evidence/pre-console-sync-0435/lead-final-baseline-interrupted.txt
+  sha256: f8ecce0c1abf314b8155b8b722166fc8ccf1503d63e3f32ad70e55b6e6d789b5
+  bytes: 536
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-launch-json
+  path: evidence/pre-console-sync-0435/lead-final-baseline-launch.json
+  sha256: d41bca69f897b7ae1834edabb357805ddba0e40d339a3376ff79d498292f4d82
+  bytes: 124
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-result-json
+  path: evidence/pre-console-sync-0435/lead-final-baseline-result.json
+  sha256: 9954f9eafab199c08ddccf9de519d5bf32ace9daa96e4378fb21dc3bdcb9fc20
+  bytes: 727
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-supervisor-txt
+  path: evidence/pre-console-sync-0435/lead-final-baseline-supervisor.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-baseline-txt
+  path: evidence/pre-console-sync-0435/lead-final-baseline.txt
+  sha256: e14f821eaffd1ee697ed790b85ca4dda101026cface2a169c109e9b1635b9c4f
+  bytes: 1068
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-head-config-json
+  path: evidence/pre-console-sync-0435/lead-final-head-config.json
+  sha256: 12d3cf0ebaec18a2b834781cff710fc77993ef7c1f6c6c90759608f693d260a5
+  bytes: 2655
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-head-status-json
+  path: evidence/pre-console-sync-0435/lead-final-head-status.json
+  sha256: b14f77f4546cb693daf1b67492060c1daec60752662d06c19363637e2f25688e
+  bytes: 539
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-head-supervisor-txt
+  path: evidence/pre-console-sync-0435/lead-final-head-supervisor.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-head-txt
+  path: evidence/pre-console-sync-0435/lead-final-head.txt
+  sha256: 0c0859cd7a5f5086ed3ff91dfc98cc6261c692bb6d36f961ff0cfe7dfe3dfa8b
+  bytes: 5470
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: superseded-0435-lead-final-preflight-adapter-txt
+  path: evidence/pre-console-sync-0435/lead-final-preflight-adapter.txt
+  sha256: 3208e0d43d74460638e09d2cd6c5f542ecc1b600d696c11f5a56b450b5133140
+  bytes: 1932
+  producer: bench-v3-lead
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 0435b7f57017dbb5768adf92a80d2accc87e5a33
+  evidence_class: INCIDENT
+  retention: git
+  actual: Superseded source provenance preserved; current lead rerun indexed separately
+- id: worker-current-console-synchronized-config-json
+  path: evidence/final-source/console-synchronized-config.json
+  sha256: 0c897b4729432b27096db5201f2193caec16db54e985861addd5aa84aff8a358
+  bytes: 2070
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-console-synchronized-status-json
+  path: evidence/final-source/console-synchronized-status.json
+  sha256: 5812f22b58599e5524bb88bc3a0754528e32bb25ef1caa52380a2f4f446e0f91
+  bytes: 443
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-console-synchronized-txt
+  path: evidence/final-source/console-synchronized.txt
+  sha256: 4d292feb3b7ebb9fb3e6b41f70c5ab230cfd35da9780931081bb259ef838f34c
+  bytes: 2522
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-preflight-plan-txt
+  path: evidence/final-source/preflight-plan.txt
+  sha256: 5c9e91cf623ac91f3a0774bc0959ce6ab9e8c81254e34b52c10026ed4385ab07
+  bytes: 10168
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-preflight-config-json
+  path: evidence/final-source/preflight-config.json
+  sha256: 85fdf5d30aafa7377b5ad7b76d3f2634acb6d2313b99da023f3c9be9aabbaa65
+  bytes: 1745
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-run-preflight-sh
+  path: evidence/final-source/run-preflight.sh
+  sha256: bbf14816dee70a09491e23ab0a36498bf215ff7986b4b490d161488ab7293d8f
+  bytes: 1169
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-acceptance-config-json
+  path: evidence/final-source/acceptance-config.json
+  sha256: 904760d77ff150235032169fbb01eee82a392444c5f98264d4cf06629b9fab31
+  bytes: 4576
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:31:40.089440+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed console PASS or current planned-command metadata; full acceptance/preflight
+    status remains separate
+- id: worker-current-acceptance-status-json
+  path: evidence/final-source/acceptance-status.json
+  sha256: 2b287ef0d7173c69c9608c56eec2ecb90579bea22dc7032394fb0b972cb14c5e
+  bytes: 549
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:32:24.700227+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Worker L0/L1/L2 executed on current committed source; all three exit0, independent
+    evidence is separately signed
+- id: worker-current-acceptance-runner-txt
+  path: evidence/final-source/acceptance-runner.txt
+  sha256: 0249e4d2ea1f2bbf52e30b1f9ca909b42898356510bc68c38ad573ff5cf4cf4d
+  bytes: 4937
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:32:24.700227+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Worker L0/L1/L2 executed on current committed source; all three exit0, independent
+    evidence is separately signed
+- id: worker-current-l0-txt
+  path: evidence/final-source/l0.txt
+  sha256: 20cbc2f9e586c54f85569b92f646d528aa29a6f287ab51972ac198f56cb04c8a
+  bytes: 450
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:32:24.700227+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Worker L0/L1/L2 executed on current committed source; all three exit0, independent
+    evidence is separately signed
+- id: worker-current-l1-txt
+  path: evidence/final-source/l1.txt
+  sha256: 95515fe487cee7a3701911d8e0e0cfe5880c5d5e59fca69abb12db7158269f88
+  bytes: 3496
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:32:24.700227+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Worker L0/L1/L2 executed on current committed source; all three exit0, independent
+    evidence is separately signed
+- id: worker-current-l2-txt
+  path: evidence/final-source/l2.txt
+  sha256: 155148e254a845f904bdd6fcbb2cd57be55f72c6b6b21dd396c99b065374298a
+  bytes: 826
+  producer: bench-v3-worker
+  created_at: '2026-10-31T20:32:24.700227+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Worker L0/L1/L2 executed on current committed source; all three exit0, independent
+    evidence is separately signed
+- id: final-handoff-review-yaml
+  path: review.yaml
+  sha256: 7dd1fff3ce255a08f7b55273512c82aed44955496d10a16162f48acaf4683fa0
+  bytes: 838
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent review/incident artifact; authoritative check registration belongs
+    to lead
+- id: final-handoff-evidence-p3-verdict-md
+  path: evidence/p3/verdict.md
+  sha256: f8b504c65a0958a9030aa0248c009a05a2c28b8e671cf99c606c105ec5b990c9
+  bytes: 4076
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent review/incident artifact; authoritative check registration belongs
+    to lead
+- id: final-handoff-evidence-lead-console-baseline-result-json
+  path: evidence/lead-console-baseline-result.json
+  sha256: d5f78e441943eff62c194abcffe6725c61b312f6040d068b848999cf357a0bb6
+  bytes: 1145
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent review/incident artifact; authoritative check registration belongs
+    to lead
+- id: final-handoff-evidence-lead-console-baseline-txt
+  path: evidence/lead-console-baseline.txt
+  sha256: 7271fd6b858a7442bee172c1ef5704715b61907626ec2a9e6b5752b237418c71
+  bytes: 3589
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+  evidence_class: INCIDENT
+  retention: git
+  actual: Independent review/incident artifact; authoritative check registration belongs
+    to lead
+- id: final-handoff-evidence-final-source-preflight-status-json
+  path: evidence/final-source/preflight-status.json
+  sha256: 94040a3118fc90d82d02463e3f8c4b349f6f538649ef0f390b006d41da383ab7
+  bytes: 423
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-final-source-preflight-runner-txt
+  path: evidence/final-source/preflight-runner.txt
+  sha256: 136f3498a44f8f1c01069a0ea3b9f48318c6d2cdce7bf65267f96ec45cd4888a
+  bytes: 3855
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-final-source-preflight-supervisor-txt
+  path: evidence/final-source/preflight-supervisor.txt
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-receipt-json
+  path: evidence/preflight/receipt.json
+  sha256: 34df9b73d52feb8c7cd687ce84ca1e5033efeba2f63389cfdbaf8212819505d1
+  bytes: 18774
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-build-metricvalidity-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-build-metricvalidity.log
+  sha256: 3ca50eb09529c3d4320680efe27866eddf9053067af47b25e355cc058eb28c0c
+  bytes: 46
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-affected-services-log
+  path: evidence/preflight/run-1793478746140506620/go-affected-services.log
+  sha256: 6b7bd9a2b6bd1a274dd8a349d52f82234e27d737dd48d3e0b99af62d8b338566
+  bytes: 104
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-build-test-harness-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-build-test-harness.log
+  sha256: f3092625f4f9d81059ceae7d1a23968b27bc5492726eecc88f68895de183f1bc
+  bytes: 1419
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-5-log
+  path: evidence/preflight/run-1793478746140506620/chart-5.log
+  sha256: 2b64c6f395fcb4a7b4f8181f3c0efb3cba80ed36aa59f5778be80a3758f11b07
+  bytes: 3300
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-8-log
+  path: evidence/preflight/run-1793478746140506620/chart-8.log
+  sha256: 0bee6f120ed2b3f947570423b9e17bd60373d5fff3aa03899dee1ccc4b05b751
+  bytes: 3241
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-build-integrations-epss-ecr-auth-runtime-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-build-integrations-epss-ecr-auth-runtime.log
+  sha256: 7f2cfbe7f461af0306f566b48c500498c70f09dd5aa890ac50f6ff95b76502f6
+  bytes: 53
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-9-log
+  path: evidence/preflight/run-1793478746140506620/chart-9.log
+  sha256: a31cbcc941650092789afcf2e91ad9f6e038db35983074a71750d8052deec8ad
+  bytes: 1317
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-phorvex-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-phorvex.log
+  sha256: 7774bf1e9b0ae72c5a26940cdcda3271e2e8abcb40750e824159cdccb012e76b
+  bytes: 6800
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-6-log
+  path: evidence/preflight/run-1793478746140506620/chart-6.log
+  sha256: fc0f8eb2fa8a52c50961fb239d74b1778dafddf32fb49038deba924dad6ff9e6
+  bytes: 82
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-4-log
+  path: evidence/preflight/run-1793478746140506620/chart-4.log
+  sha256: cd6128f652a592944d3bad4635468ad448c7d0ed60bf24c7d6a5083856936d92
+  bytes: 2854
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-build-vet-phorvex-log
+  path: evidence/preflight/run-1793478746140506620/go-build-vet-phorvex.log
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-workflow-log
+  path: evidence/preflight/run-1793478746140506620/workflow.log
+  sha256: 59cfc20fa1e6f92b97fed1c18892dd0695d3c0bb88a7fe34805f97de7f235252
+  bytes: 1935
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-7-log
+  path: evidence/preflight/run-1793478746140506620/chart-7.log
+  sha256: da0063e33ff99ea09ae02a183126116f9a666fdb06f5fb50ca4ad27d49d2ddbf
+  bytes: 69226
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-chart-3-log
+  path: evidence/preflight/run-1793478746140506620/chart-3.log
+  sha256: 8dfd77df8c765b6f24e721ffbadec44e0c360f0f1de95769301fbd60c10514d2
+  bytes: 241
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-build-phoenix-extended-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-build-phoenix-extended.log
+  sha256: c693141befe8398165f84702106635e3ed70063f9234cd21fc748284bb59dbc7
+  bytes: 299
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-libs-logging-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-libs-logging.log
+  sha256: b74d3c71953c01a9666b332506a751c015ac458e1ba514df1c8eebbd7c130e9e
+  bytes: 36
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-go-unit-farm-fixtures-agentsim-log
+  path: evidence/preflight/run-1793478746140506620/go-unit-farm-fixtures-agentsim.log
+  sha256: da6ce4dc4d7aaed1fb7a94e9f162c4a51d4a22465ea65c58a3699e2d90c0ca28
+  bytes: 46
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: final-handoff-evidence-preflight-run-1793478746140506620-diff-log
+  path: evidence/preflight/run-1793478746140506620/diff.log
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  bytes: 0
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:51.046854+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  evidence_class: PREFLIGHT
+  retention: git
+  actual: Completed coherent current-source preflight PASS; eighteen selected checks,
+    no remote CI/deployment claim
+- id: check-preflight
+  path: evidence/preflight/receipt.json
+  sha256: 34df9b73d52feb8c7cd687ce84ca1e5033efeba2f63389cfdbaf8212819505d1
+  bytes: 18774
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:57+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: workflow.py preflight BENCH-V3 --run
+  evidence_class: PREFLIGHT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: 2a7c677737a3fd1b9b10fd6b28e11cd5218809530a09ecf6289524f94c895d8d
+  bytes: 118581
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:57+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+    00eac153f3f27929907f91d4231362051664364c
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/final-source/l0.txt
+  sha256: 20cbc2f9e586c54f85569b92f646d528aa29a6f287ab51972ac198f56cb04c8a
+  bytes: 450
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:58+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+    TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache
+    GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm
+    KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+    -C phorvex test -mod=readonly -timeout=15m ./internal/archtest ./internal/ingest
+    ./internal/slo ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient
+    ./tools/covermap -count=1
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/final-source/l1.txt
+  sha256: 95515fe487cee7a3701911d8e0e0cfe5880c5d5e59fca69abb12db7158269f88
+  bytes: 3496
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:58+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+    TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache
+    GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm
+    KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+    -C phorvex test -mod=readonly -timeout=15m ./internal/ingest ./internal/slo ./internal/runner
+    -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues'
+    -count=1 -v
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/final-source/l2.txt
+  sha256: 155148e254a845f904bdd6fcbb2cd57be55f72c6b6b21dd396c99b065374298a
+  bytes: 826
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:59+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+    TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache
+    GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm
+    KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+    -C phorvex test -mod=readonly -timeout=15m ./internal/mathlab ./internal/runner
+    ./internal/brainclient ./internal/sensorclient -run 'TestOptionalCostCapture|TestMathLabCapture|TestRemoteBrainMatchesInProcess|TestWorkloadSpecThroughRealRemoteSensor|TestRemoteSensorMatchesInProcess'
+    -count=1 -v
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/final-source/l1.txt
+  sha256: 95515fe487cee7a3701911d8e0e0cfe5880c5d5e59fca69abb12db7158269f88
+  bytes: 3496
+  producer: bench-v3-worker
+  created_at: '2026-10-31T21:08:59+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+    TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache
+    GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm
+    KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+    -C phorvex test -mod=readonly -timeout=15m ./internal/ingest ./internal/slo ./internal/runner
+    -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues'
+    -count=1 -v
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-incident
+  path: evidence/incident.md
+  sha256: 7dd07185c19b1317b03b7c148ca7aae0575a59695a2d864e87a06f25c3260b19
+  bytes: 6104
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:10:08+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: /workspace/.phorvex-tools/python311/python/bin/python3.11 /data/outputs/phorvex-v3-fix-20261031/run_baseline_proof.py;
+    /workspace/.phorvex-tools/python311/python/bin/python3.11 /workspace/.phorvex-test-tmp/bench-v3-owned-runner.py
+    /workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/lead-final-head-config.json;
+    /workspace/.phorvex-tools/python311/python/bin/python3.11 /data/outputs/phorvex-v3-fix-20261031/run_lead_console_baseline.py
+  evidence_class: INCIDENT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-p3
+  path: evidence/p3/verdict.md
+  sha256: f8b504c65a0958a9030aa0248c009a05a2c28b8e671cf99c606c105ec5b990c9
+  bytes: 4076
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:10:09+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: Review complete pinned bb92355cf7b6c4a696f44caf52bd5fa1268e7303..00eac153f3f27929907f91d4231362051664364c
+    diff and independent producer/console controls; preflight.validate_receipt(require_worktree=True)
+    against evidence/preflight/receipt.json
+  evidence_class: P3
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null

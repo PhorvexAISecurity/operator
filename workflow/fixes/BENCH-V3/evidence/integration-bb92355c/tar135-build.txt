@@ -1,0 +1,286 @@
+make  all-recursive
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+Making all in doc
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+Making all in gnu
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+  GEN      alloca.h
+  GEN      configmake.h
+  GEN      ctype.h
+  GEN      dirent.h
+  GEN      error.h
+  GEN      fcntl.h
+  GEN      getopt.h
+  GEN      getopt-cdefs.h
+  GEN      malloc/dynarray-skeleton.gl.h
+  GEN      malloc/dynarray.gl.h
+  GEN      inttypes.h
+  GEN      malloc/scratch_buffer.gl.h
+  GEN      langinfo.h
+  GEN      limits.h
+  GEN      locale.h
+  GEN      selinux/selinux.h
+  GEN      selinux/context.h
+  GEN      selinux/label.h
+  GEN      signal.h
+  GEN      stdckdint.h
+  GEN      stddef.h
+  GEN      stdio.h
+  GEN      stdlib.h
+  GEN      string.h
+  GEN      strings.h
+  GEN      sys/random.h
+  GEN      sys/stat.h
+  GEN      sys/time.h
+  GEN      sys/types.h
+  GEN      time.h
+  GEN      uchar.h
+  GEN      unicase.h
+  GEN      unictype.h
+  GEN      uninorm.h
+  GEN      unistd.h
+  GEN      unitypes.h
+  GEN      uniwidth.h
+  GEN      utime.h
+  GEN      wchar.h
+  GEN      wctype.h
+make  all-recursive
+make[3]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[4]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+  CC       libgnu_a-acl-errno-valid.o
+  CC       libgnu_a-acl-internal.o
+  CC       libgnu_a-get-permissions.o
+  CC       libgnu_a-set-permissions.o
+  CC       libgnu_a-allocator.o
+  CC       libgnu_a-areadlink.o
+  CC       libgnu_a-areadlink-with-size.o
+  CC       libgnu_a-areadlinkat.o
+  CC       libgnu_a-areadlinkat-with-size.o
+  CC       libgnu_a-argmatch.o
+  CC       libgnu_a-argp-ba.o
+  CC       libgnu_a-argp-eexst.o
+  CC       libgnu_a-argp-fmtstream.o
+  CC       libgnu_a-argp-fs-xinl.o
+  CC       libgnu_a-argp-help.o
+  CC       libgnu_a-argp-parse.o
+  CC       libgnu_a-argp-pin.o
+  CC       libgnu_a-argp-pv.o
+  CC       libgnu_a-argp-pvh.o
+  CC       libgnu_a-argp-xinl.o
+  CC       libgnu_a-argp-version-etc.o
+  CC       libgnu_a-openat-proc.o
+  CC       libgnu_a-backupfile.o
+  CC       libgnu_a-backup-find.o
+  CC       libgnu_a-basename-lgpl.o
+  CC       libgnu_a-bitrotate.o
+  CC       libgnu_a-btowc.o
+  CC       libgnu_a-c-ctype.o
+  CC       libgnu_a-c-strcasecmp.o
+  CC       libgnu_a-c-strncasecmp.o
+  CC       libgnu_a-c32isalnum.o
+  CC       libgnu_a-c32isalpha.o
+  CC       libgnu_a-c32isblank.o
+  CC       libgnu_a-c32iscntrl.o
+  CC       libgnu_a-c32isdigit.o
+  CC       libgnu_a-c32isgraph.o
+  CC       libgnu_a-c32islower.o
+  CC       libgnu_a-c32isprint.o
+  CC       libgnu_a-c32ispunct.o
+  CC       libgnu_a-c32isspace.o
+  CC       libgnu_a-c32isupper.o
+  CC       libgnu_a-c32isxdigit.o
+  CC       libgnu_a-c32tolower.o
+  CC       libgnu_a-c32width.o
+  CC       libgnu_a-careadlinkat.o
+  CC       libgnu_a-chdir-long.o
+  CC       libgnu_a-cloexec.o
+  CC       libgnu_a-close-stream.o
+  CC       libgnu_a-closeout.o
+  CC       libgnu_a-opendir-safer.o
+  CC       libgnu_a-dirname.o
+  CC       libgnu_a-basename.o
+  CC       libgnu_a-dirname-lgpl.o
+  CC       libgnu_a-stripslash.o
+  CC       libgnu_a-exclude.o
+  CC       libgnu_a-exitfail.o
+  CC       libgnu_a-fcntl.o
+  CC       libgnu_a-creat-safer.o
+  CC       libgnu_a-open-safer.o
+  CC       libgnu_a-fd-hook.o
+  CC       libgnu_a-fd-safer-flag.o
+  CC       libgnu_a-dup-safer-flag.o
+  CC       libgnu_a-fdutimensat.o
+  CC       libgnu_a-file-has-acl.o
+  CC       libgnu_a-filenamecat-lgpl.o
+  CC       libgnu_a-fprintftime.o
+  CC       libgnu_a-fseek.o
+  CC       libgnu_a-fseeko.o
+  CC       libgnu_a-full-read.o
+  CC       libgnu_a-full-write.o
+  CC       libgnu_a-getopt.o
+  CC       libgnu_a-getopt1.o
+  CC       libgnu_a-getprogname.o
+  CC       libgnu_a-gettime.o
+  CC       libgnu_a-hard-locale.o
+  CC       libgnu_a-hash.o
+  CC       libgnu_a-human.o
+  CC       libgnu_a-ialloc.o
+  CC       libgnu_a-imaxtostr.o
+  CC       libgnu_a-inttostr.o
+  CC       libgnu_a-offtostr.o
+  CC       libgnu_a-uinttostr.o
+  CC       libgnu_a-umaxtostr.o
+  CC       libgnu_a-localcharset.o
+  CC       libgnu_a-malloca.o
+  CC       libgnu_a-mbchar.o
+  CC       libgnu_a-mbrtoc32.o
+  CC       libgnu_a-mbrtowc.o
+  CC       libgnu_a-mbscasecmp.o
+  CC       libgnu_a-mbsrtowcs.o
+  CC       libgnu_a-mbuiter.o
+  CC       libgnu_a-modechange.o
+  CC       libgnu_a-nstrftime.o
+  CC       libgnu_a-obstack.o
+  CC       libgnu_a-openat-die.o
+  CC       libgnu_a-openat-safer.o
+  CC       libgnu_a-opendirat.o
+  CC       libgnu_a-parse-datetime.o
+  CC       libgnu_a-priv-set.o
+  CC       libgnu_a-progname.o
+  CC       libgnu_a-quotearg.o
+  CC       libgnu_a-renameatu.o
+  CC       libgnu_a-safe-read.o
+  CC       libgnu_a-safe-write.o
+  CC       libgnu_a-save-cwd.o
+  CC       libgnu_a-savedir.o
+  CC       libgnu_a-selinux-at.o
+  CC       libgnu_a-se-context.o
+  CC       libgnu_a-se-label.o
+  CC       libgnu_a-se-selinux.o
+  CC       libgnu_a-setlocale_null.o
+  CC       libgnu_a-stat-time.o
+  CC       libgnu_a-stdopen.o
+  CC       libgnu_a-strnlen1.o
+  CC       libgnu_a-strtol.o
+  CC       libgnu_a-strtoll.o
+  CC       libgnu_a-strtoul.o
+  CC       libgnu_a-strtoull.o
+  CC       libgnu_a-tempname.o
+  CC       libgnu_a-time_rz.o
+  CC       libgnu_a-timespec.o
+  CC       libgnu_a-timespec-sub.o
+  CC       libgnu_a-unistd.o
+  CC       libgnu_a-dup-safer.o
+  CC       libgnu_a-fd-safer.o
+  CC       libgnu_a-pipe-safer.o
+  CC       libgnu_a-unlinkdir.o
+  CC       libgnu_a-utimens.o
+  CC       libgnu_a-version-etc.o
+  CC       libgnu_a-version-etc-fsf.o
+  CC       libgnu_a-wctype-h.o
+  CC       libgnu_a-xmalloc.o
+  CC       libgnu_a-xalloc-die.o
+  CC       libgnu_a-xgetcwd.o
+  CC       libgnu_a-xsize.o
+  CC       libgnu_a-xstrtol.o
+  CC       libgnu_a-xstrtoul.o
+  CC       libgnu_a-xstrtoumax.o
+  CC       libgnu_a-xvasprintf.o
+  CC       libgnu_a-xasprintf.o
+  CC       asnprintf.o
+  CC       fopen.o
+  CC       mbsrtowcs-state.o
+  CC       mktime.o
+  CC       printf-args.o
+  CC       printf-parse.o
+  CC       vasnprintf.o
+  CC       malloc/libgnu_a-dynarray_at_failure.o
+  CC       malloc/libgnu_a-dynarray_emplace_enlarge.o
+  CC       malloc/libgnu_a-dynarray_finalize.o
+  CC       malloc/libgnu_a-dynarray_resize.o
+  CC       malloc/libgnu_a-dynarray_resize_clear.o
+  CC       malloc/libgnu_a-scratch_buffer_grow.o
+  CC       malloc/libgnu_a-scratch_buffer_grow_preserve.o
+  CC       malloc/libgnu_a-scratch_buffer_set_array_size.o
+  CC       unicase/libgnu_a-tolower.o
+  CC       unictype/libgnu_a-ctype_alnum.o
+  CC       unictype/libgnu_a-ctype_alpha.o
+  CC       unictype/libgnu_a-ctype_blank.o
+  CC       unictype/libgnu_a-ctype_cntrl.o
+  CC       unictype/libgnu_a-ctype_digit.o
+  CC       unictype/libgnu_a-ctype_graph.o
+  CC       unictype/libgnu_a-ctype_lower.o
+  CC       unictype/libgnu_a-ctype_punct.o
+  CC       unictype/libgnu_a-ctype_print.o
+  CC       unictype/libgnu_a-ctype_space.o
+  CC       unictype/libgnu_a-ctype_upper.o
+  CC       unictype/libgnu_a-ctype_xdigit.o
+  CC       uniwidth/libgnu_a-width.o
+  AR       libgnu.a
+make[4]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[3]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+Making all in lib
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+  GEN      rmt-command.h
+make  all-am
+make[3]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+  CC       paxerror.o
+  CC       paxexit-status.o
+  CC       paxnames.o
+  CC       rtapelib.o
+  CC       wordsplit.o
+  CC       xattr-at.o
+  AR       libtar.a
+make[3]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+Making all in rmt
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+  CC       rmt.o
+  CCLD     rmt
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+Making all in src
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+  CC       checkpoint.o
+  CC       buffer.o
+  CC       compare.o
+  CC       create.o
+  CC       delete.o
+  CC       exit.o
+  CC       exclist.o
+  CC       extract.o
+  CC       xheader.o
+  CC       incremen.o
+  CC       list.o
+  CC       map.o
+  CC       misc.o
+  CC       names.o
+  CC       sparse.o
+  CC       suffix.o
+  CC       system.o
+  CC       tar.o
+  CC       transform.o
+  CC       unlink.o
+  CC       update.o
+  CC       utf8.o
+  CC       warning.o
+  CC       xattrs.o
+  CCLD     tar
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+Making all in scripts
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+Making all in po
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/po'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/po'
+Making all in tests
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[2]: Nothing to be done for 'all'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'

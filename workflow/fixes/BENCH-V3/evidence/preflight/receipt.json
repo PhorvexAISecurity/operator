@@ -1,0 +1,454 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "schema_version": 2,
+    "base_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+    "head_sha": "00eac153f3f27929907f91d4231362051664364c",
+    "changed_paths": [
+      "docs/math-lab/SNAPSHOT_AND_REPLAY.md",
+      "phorvex/cmd/main.go",
+      "phorvex/docs/recon-cover-map.generated.md",
+      "phorvex/internal/brainapi/brainapi.go",
+      "phorvex/internal/brainclient/parity_test.go",
+      "phorvex/internal/brainsvc/local.go",
+      "phorvex/internal/console/vllm_lora_outcome_test.go",
+      "phorvex/internal/console/vllm_remaining_outcome_test.go",
+      "phorvex/internal/ingest/kube.go",
+      "phorvex/internal/ingest/owner_reader.go",
+      "phorvex/internal/ingest/owner_reader_test.go",
+      "phorvex/internal/ingest/workload_spec.go",
+      "phorvex/internal/ingest/workload_spec_producer_test.go",
+      "phorvex/internal/ingest/workload_spec_test.go",
+      "phorvex/internal/mathlab/cost_capture_test.go",
+      "phorvex/internal/mathlab/inspect.go",
+      "phorvex/internal/mathlab/recorder.go",
+      "phorvex/internal/mathlab/snapshot.go",
+      "phorvex/internal/model/replay_cost.go",
+      "phorvex/internal/model/types.go",
+      "phorvex/internal/model/workload_spec.go",
+      "phorvex/internal/runner/cost_capture.go",
+      "phorvex/internal/runner/cost_capture_test.go",
+      "phorvex/internal/runner/manager.go",
+      "phorvex/internal/runner/mathlab_capture_test.go",
+      "phorvex/internal/runner/rotation_observation_test.go",
+      "phorvex/internal/sensorclient/parity_test.go",
+      "phorvex/internal/slo/ledger.go",
+      "phorvex/internal/slo/replay.go",
+      "phorvex/internal/slo/replay_test.go",
+      "workflow/operations/HANDOFFS.md",
+      "workflow/tools/preflight.py",
+      "workflow/tools/tests/test_preflight.py"
+    ],
+    "jobs": [
+      {
+        "id": "diff",
+        "cwd": ".",
+        "script": "git diff --check bb92355cf7b6c4a696f44caf52bd5fa1268e7303 00eac153f3f27929907f91d4231362051664364c\ngit diff --check HEAD",
+        "tool": null
+      },
+      {
+        "id": "workflow",
+        "cwd": ".",
+        "script": "bash workflow/tools/check.sh",
+        "tool": "python",
+        "version": "3.11.17",
+        "ci_sha256": "e72c23711f30b9f86a597f55f223e6ba5ddf9d192c792692f3bc745acc30226e",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-3",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m pip install PyYAML==6.0.2",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-4",
+        "name": "Current chart consistency and render",
+        "cwd": ".",
+        "script": "diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml\nbash tools/check-vendored-chart.sh\nhelm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --api-versions monitoring.coreos.com/v1/PodMonitor --include-crds > /dev/null\n# One chart per service (ADR-0001); tools/test_service_charts.py renders them.\nfor chart in deploy/charts/*/; do helm lint --strict \"$chart\"; done\npython tools/check-claim-language.py\n",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-5",
+        "name": "Reconstruct any committed staging batch from its exact source",
+        "cwd": ".",
+        "script": "python tools/verify_committed_staging_batch.py",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-6",
+        "name": "Tracked paths portable to case-insensitive checkouts",
+        "cwd": ".",
+        "script": "python tools/check-path-case-collisions.py",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-7",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m unittest discover -s tools -p 'test_*.py' -v",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-8",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-9",
+        "name": "Recipe and fixture tests (offline)",
+        "cwd": ".",
+        "script": "python build/integrations/epss-ecr-auth-runtime/verify_recipe.py\nfor suite in \\\n  build/integrations/epss-ecr-auth-runtime \\\n  build/integrations/litellm-gateway-runtime \\\n  build/integrations/vllm-lease-proxy-runtime \\\n  build/integrations/vllm-native-metrics \\\n  build/test-harness/fixtures/guardrail-output \\\n  build/test-harness/fixtures/vllm-endpoint-lease-console \\\n  build/test-harness/guardrail/canary-fixture \\\n  build/test-harness/security-gain-validation \\\n  deploy/eks/epss \\\n  deploy/helm/phorvex-stack/examples/math-observers/scripts \\\n  phorvex/internal/console; do\n  python -B -m unittest discover -s \"$suite\" -p 'test_*.py'\ndone\n",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-phorvex",
+        "script": "go -C phorvex test -mod=readonly -count=1 -timeout=15m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-affected-services",
+        "script": "go -C phorvex run ./tools/servicerelease affected --base bb92355cf7b6c4a696f44caf52bd5fa1268e7303 --markdown",
+        "adaptation": "GitHub informational step-summary output is captured in this job log; the pinned plan base replaces the CI merge-parent base",
+        "ci_script": "go -C phorvex run ./tools/servicerelease affected --base HEAD^1 --markdown >> \"$GITHUB_STEP_SUMMARY\""
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-build-metricvalidity",
+        "script": "go -C build/metricvalidity test -mod=readonly -count=1 -timeout=5m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-build-test-harness",
+        "script": "go -C build/test-harness test -mod=readonly -count=1 -timeout=15m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-build-phoenix-extended",
+        "script": "go -C build/phoenix-extended test -mod=readonly -count=1 -timeout=15m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-libs-logging",
+        "script": "go -C libs/logging test -mod=readonly -count=1 -timeout=5m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-build-integrations-epss-ecr-auth-runtime",
+        "script": "go -C build/integrations/epss-ecr-auth-runtime test -mod=readonly -count=1 -timeout=5m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-unit-farm-fixtures-agentsim",
+        "script": "go -C farm-fixtures/agentsim test -mod=readonly -count=1 -timeout=5m ./..."
+      },
+      {
+        "cwd": ".",
+        "tool": "go",
+        "version": "1.26.3",
+        "toolchain": "local",
+        "env": {
+          "KUBECONFIG": "/dev/null",
+          "KUBEBUILDER_ASSETS": "",
+          "USE_EXISTING_CLUSTER": "false",
+          "GOTOOLCHAIN": "local"
+        },
+        "helm_version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "go_version_file": "build/test-harness/go.mod",
+        "go_version_file_sha256": "1da825d7e5d308259223bf486b6bc4d8addecd7553641ffd78a601c24b9d1b57",
+        "id": "go-build-vet-phorvex",
+        "script": "go -C phorvex build ./...\ngo -C phorvex vet ./..."
+      }
+    ],
+    "external": [
+      "Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.",
+      "Remote go-envtest with local Kubernetes API binaries and other remote CI jobs remain separate and unexecuted here; local PASS is not all remote CI passing."
+    ]
+  },
+  "plan_sha256": "f6f670c5aa566e04dae44cb6dfbd2e31307de4419e099015655665c99eee4d82",
+  "worktree_sha256": "b1072b49ef9730cca29de8d003a76e8985ed858b6afbb015a931256cef1de300",
+  "results": [
+    {
+      "id": "diff",
+      "log": "run-1793478746140506620/diff.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.118,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "workflow",
+      "log": "run-1793478746140506620/workflow.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 465.381,
+      "sha256": "59cfc20fa1e6f92b97fed1c18892dd0695d3c0bb88a7fe34805f97de7f235252"
+    },
+    {
+      "id": "chart-3",
+      "log": "run-1793478746140506620/chart-3.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 1.976,
+      "sha256": "8dfd77df8c765b6f24e721ffbadec44e0c360f0f1de95769301fbd60c10514d2"
+    },
+    {
+      "id": "chart-4",
+      "log": "run-1793478746140506620/chart-4.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 4.469,
+      "sha256": "cd6128f652a592944d3bad4635468ad448c7d0ed60bf24c7d6a5083856936d92"
+    },
+    {
+      "id": "chart-5",
+      "log": "run-1793478746140506620/chart-5.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 28.001,
+      "sha256": "2b64c6f395fcb4a7b4f8181f3c0efb3cba80ed36aa59f5778be80a3758f11b07"
+    },
+    {
+      "id": "chart-6",
+      "log": "run-1793478746140506620/chart-6.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.492,
+      "sha256": "fc0f8eb2fa8a52c50961fb239d74b1778dafddf32fb49038deba924dad6ff9e6"
+    },
+    {
+      "id": "chart-7",
+      "log": "run-1793478746140506620/chart-7.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 373.545,
+      "sha256": "da0063e33ff99ea09ae02a183126116f9a666fdb06f5fb50ca4ad27d49d2ddbf"
+    },
+    {
+      "id": "chart-8",
+      "log": "run-1793478746140506620/chart-8.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.83,
+      "sha256": "0bee6f120ed2b3f947570423b9e17bd60373d5fff3aa03899dee1ccc4b05b751"
+    },
+    {
+      "id": "chart-9",
+      "log": "run-1793478746140506620/chart-9.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 24.89,
+      "sha256": "a31cbcc941650092789afcf2e91ad9f6e038db35983074a71750d8052deec8ad"
+    },
+    {
+      "id": "go-unit-phorvex",
+      "log": "run-1793478746140506620/go-unit-phorvex.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 650.207,
+      "sha256": "7774bf1e9b0ae72c5a26940cdcda3271e2e8abcb40750e824159cdccb012e76b"
+    },
+    {
+      "id": "go-affected-services",
+      "log": "run-1793478746140506620/go-affected-services.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 26.342,
+      "sha256": "6b7bd9a2b6bd1a274dd8a349d52f82234e27d737dd48d3e0b99af62d8b338566"
+    },
+    {
+      "id": "go-unit-build-metricvalidity",
+      "log": "run-1793478746140506620/go-unit-build-metricvalidity.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.954,
+      "sha256": "3ca50eb09529c3d4320680efe27866eddf9053067af47b25e355cc058eb28c0c"
+    },
+    {
+      "id": "go-unit-build-test-harness",
+      "log": "run-1793478746140506620/go-unit-build-test-harness.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 161.819,
+      "sha256": "f3092625f4f9d81059ceae7d1a23968b27bc5492726eecc88f68895de183f1bc"
+    },
+    {
+      "id": "go-unit-build-phoenix-extended",
+      "log": "run-1793478746140506620/go-unit-build-phoenix-extended.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 11.904,
+      "sha256": "c693141befe8398165f84702106635e3ed70063f9234cd21fc748284bb59dbc7"
+    },
+    {
+      "id": "go-unit-libs-logging",
+      "log": "run-1793478746140506620/go-unit-libs-logging.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 1.089,
+      "sha256": "b74d3c71953c01a9666b332506a751c015ac458e1ba514df1c8eebbd7c130e9e"
+    },
+    {
+      "id": "go-unit-build-integrations-epss-ecr-auth-runtime",
+      "log": "run-1793478746140506620/go-unit-build-integrations-epss-ecr-auth-runtime.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 2.306,
+      "sha256": "7f2cfbe7f461af0306f566b48c500498c70f09dd5aa890ac50f6ff95b76502f6"
+    },
+    {
+      "id": "go-unit-farm-fixtures-agentsim",
+      "log": "run-1793478746140506620/go-unit-farm-fixtures-agentsim.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 1.628,
+      "sha256": "da6ce4dc4d7aaed1fb7a94e9f162c4a51d4a22465ea65c58a3699e2d90c0ca28"
+    },
+    {
+      "id": "go-build-vet-phorvex",
+      "log": "run-1793478746140506620/go-build-vet-phorvex.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 243.997,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "result": "PASS"
+}

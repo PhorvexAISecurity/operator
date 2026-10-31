@@ -1,0 +1,42 @@
+preflight: evidence/preflight/receipt.json
+checks:
+  implementation:
+    artifact: 04-diff.patch
+    command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+      00eac153f3f27929907f91d4231362051664364c
+  l0:
+    artifact: evidence/final-source/l0.txt
+    command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+      TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath
+      GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      -C phorvex test -mod=readonly -timeout=15m ./internal/archtest ./internal/ingest ./internal/slo
+      ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient ./tools/covermap
+      -count=1
+  l1:
+    artifact: evidence/final-source/l1.txt
+    command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+      TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath
+      GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      -C phorvex test -mod=readonly -timeout=15m ./internal/ingest ./internal/slo ./internal/runner -run
+      'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues'
+      -count=1 -v
+  l2:
+    artifact: evidence/final-source/l2.txt
+    command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+      TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath
+      GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      -C phorvex test -mod=readonly -timeout=15m ./internal/mathlab ./internal/runner ./internal/brainclient
+      ./internal/sensorclient -run 'TestOptionalCostCapture|TestMathLabCapture|TestRemoteBrainMatchesInProcess|TestWorkloadSpecThroughRealRemoteSensor|TestRemoteSensorMatchesInProcess'
+      -count=1 -v
+  positive_control:
+    artifact: evidence/final-source/l1.txt
+    command: PATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH
+      TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath
+      GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      -C phorvex test -mod=readonly -timeout=15m ./internal/ingest ./internal/slo ./internal/runner -run
+      'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues'
+      -count=1 -v

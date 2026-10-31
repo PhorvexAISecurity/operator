@@ -1,0 +1,26 @@
+{
+  "base": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "purpose": "Independent reviewer reproduction; logging-only overlay preserves original poll and assertions, then observes existing cleanup completion.",
+  "command": [
+    "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "-C",
+    "/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex",
+    "test",
+    "-overlay=/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-baseline-postwait-overlay.json",
+    "-mod=readonly",
+    "-count=1",
+    "-timeout=15m",
+    "./internal/console",
+    "-run",
+    "^TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords$/^poison$",
+    "-v"
+  ],
+  "overlay_sha256": "557fbf337e5cf532b7c89f4742f8fd347ea2bd5c5c9cfa71d32e8b608c797ec3",
+  "started_at": "2026-10-31T21:06:26Z",
+  "go_exit": 1,
+  "terminal_success_observed": true,
+  "intended_failure_observed": true,
+  "interpretation": "EXPECTED_RED_WITH_TERMINAL_CONTROL",
+  "finished_at": "2026-10-31T21:06:42Z",
+  "log_sha256": "7271fd6b858a7442bee172c1ef5704715b61907626ec2a9e6b5752b237418c71"
+}

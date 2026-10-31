@@ -1,0 +1,46 @@
+{
+  "baseline": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "worktree": "/workspace/.phorvex-test-tmp/bench-v3-chart-baseline.h1inzp55",
+  "check_exit": 1,
+  "check_stdout": "",
+  "check_stderr": "stale vendored archive: phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz\nstale vendored archive: deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz\nstale vendored archive: deploy/helm/phorvex-stack/charts/phoenix-0.1.4.tgz\nrun tools/package-vendored-charts.sh and commit every regenerated archive\n",
+  "write_exit": 0,
+  "write_stdout": "regenerated 6 common archives plus phorvex and phoenix deterministically\n",
+  "tools": {
+    "tar": "tar (GNU tar) 1.34",
+    "gzip": "gzip 1.12"
+  },
+  "gzip_headers": [
+    "1f8b0800000000000203",
+    "1f8b0800000000000203"
+  ],
+  "sha256": [
+    "9f3db37b166b19172a234fd01afc87f1d1c0fa8ee5932246ba58812667120e4d",
+    "498f8a289c5e5003e569c7efcd3f6fdb37d9e32a2abb4207887b866b6b5f7561"
+  ],
+  "tar_sha256": [
+    "857caa86ba910a06239244a13ea0f78af67da0746560e098706d984eac89b464",
+    "6f80df49b8dbd05ea49d50c1f25389e40dbd68648d9862e0fd0ce7dbcee2d8b9"
+  ],
+  "tar_equal": false,
+  "member_differences": [],
+  "first_tar_difference": {
+    "offset": 150,
+    "old": "303030003030303030303030303030003030303030303030303030003031303732360020350000000000000000000000000000000000000000000000",
+    "new": "303030003030303030303030303030003030303030303030303030003031323136360020350000000000000000000000000000000000000000000000"
+  },
+  "header_field_differences": {
+    "checksum": {
+      "old": "b'010726\\x00 '",
+      "new": "b'012166\\x00 '"
+    },
+    "devmajor": {
+      "old": "b'\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00'",
+      "new": "b'0000000\\x00'"
+    },
+    "devminor": {
+      "old": "b'\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x00'",
+      "new": "b'0000000\\x00'"
+    }
+  }
+}

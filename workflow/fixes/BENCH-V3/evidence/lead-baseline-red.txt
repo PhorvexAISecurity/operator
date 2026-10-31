@@ -1,0 +1,7 @@
+=== RUN   TestWorkloadSpecRealProducerCounterexample
+    workload_spec_producer_test.go:44: POSITIVE CONTROL: one observed pod, authoritative spec.replicas=4, valid UID-bound Deployment lineage; legacy desired count remains 1
+    workload_spec_producer_test.go:47: BASELINE COUNTEREXAMPLE: real ingest loses authoritative controller spec.replicas=4 and exposes only observed count=1
+--- FAIL: TestWorkloadSpecRealProducerCounterexample (0.08s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/ingest	0.285s
+FAIL

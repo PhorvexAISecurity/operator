@@ -1,0 +1,28 @@
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost
+--- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry (8.33s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost (1.63s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed (1.83s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad (1.05s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent (1.82s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost (2.01s)
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison
+    vllm_remaining_outcome_test.go:546: live unauthorized adapter route was not reported narrowly: &{Claim:<nil> ID:atk-dmj9volj3vyh FiredAt:2026-10-31T19:32:27.630472073Z Service:vllm Namespace:vllm Pod:vllm-0 TargetUID:pod-uid Deploy: OwnerKind: OwnerUID: Attack:Unapproved LoRA load observation AttackID:poison MITRE:adapter-effect-only Expected:adapter-rotate Stateful:false EvidenceKind:vllm-in-place-effect LiveFire:false StimulusEvidence:0x24205d09a780 EffectEvidence:<nil> GuardrailEffectProbe:<nil> GuardrailOutputProbe:<nil> DrainLiveProbe:<nil> EndpointLeaseProbe:<nil> VoiceMemoryProbe:<nil> VoiceAgencyProbe:<nil> VoiceOutputProbe:<nil> VoiceAdmissionProbe:<nil> VoiceMCPProbe:<nil> LiteLLMLiveProbe:<nil> LiteLLMOutputProbe:<nil> CRMLiveProbe:<nil> OutcomeClass:behavioral-oracle-unsupported LoRACleanupStatus: LoRACleanupError: ProducerRoute: ResultSchema: ObservationStart:2026-10-31T19:32:27.630472073Z ObservationEnd:2026-10-31T19:32:27.635472073Z Status:running Outcome: Action: DefendedPod: Actuated:false TimeToDefendSec:0 DwellSec:0 DwellOngoing:false Containment: ResponseObserved:false ResponseAction: ResponsePod: ResponseSeconds:0 ObservationError: DecisionEvidence:<nil> DecisionTraceEvidence:[] TemporalDecisionEvidence:<nil> DecisionAuditReadGap:false DecisionAuditCoverage: Why: PerDollar:0 PerDollarAvailable:false Stage: CoveredFacts:0 CoveredFactsAvailable:false PHold:0 Lambda:0 LambdaAvailable:false EconomicsVersion: DisruptionAversion:0 DisruptionAversionPresent:false EffectiveCostCoefficient:0 NormPreference:<nil> FlowPreference:<nil> EconomicsAvailable:false R6Would: R6Note: UptimeBefore:-1 UptimeDip:0 UptimeAfter:0 Cost:{ValueAtRisk:0 Without:0 R6:0 With:0 Savings:0 Note: NodeInstance: NodeRatePerHr:0 PreventNone:0 PreventR6:0 PreventPhorvex:0 RatesSource: OperatorCost:0 R6Churn:0} PersistenceError: started:{wall:14029186122737008009 ext:9300842302 loc:0x5c81100} accepted:{wall:14029186122737008009 ext:9300842302 loc:0x5c81100} baseEpoch: baseKVEpoch: baseQuar:map[] baseNP:map[] vllmEffect:0x24205cefbc20 loRATerminalPersisted:false loRATerminalPersistFailed:false}
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace
+--- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (3.08s)
+    --- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.42s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache (0.18s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain (0.14s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap (0.16s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace (0.18s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	11.579s
+FAIL
