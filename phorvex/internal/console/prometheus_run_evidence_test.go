@@ -31,14 +31,49 @@ func TestPrometheusRangeCoverageAllowsOnlyMillisecondSerializationLoss(t *testin
 	final := baseline.Add(3*time.Minute + 17*time.Millisecond)
 	first := float64(baseline.Truncate(time.Millisecond).UnixNano()) / float64(time.Second)
 	last := float64(final.Truncate(time.Millisecond).UnixNano()) / float64(time.Second)
-	if !prometheusRangeCoversCaptures(first, last, baseline, final) {
+	if !prometheusRangeCoversCaptures(first, last, baseline, final, true) {
 		t.Fatal("millisecond Prometheus timestamps did not cover nanosecond capture boundaries")
 	}
-	if prometheusRangeCoversCaptures(first, last-2*float64(time.Millisecond)/float64(time.Second), baseline, final) {
+	if prometheusRangeCoversCaptures(first, last-2*float64(time.Millisecond)/float64(time.Second), baseline, final, true) {
 		t.Fatal("range ending more than one millisecond before final capture was accepted")
 	}
-	if prometheusRangeCoversCaptures(first+2*float64(time.Millisecond)/float64(time.Second), last, baseline, final) {
+	if prometheusRangeCoversCaptures(first+2*float64(time.Millisecond)/float64(time.Second), last, baseline, final, true) {
 		t.Fatal("range starting more than one millisecond after baseline capture was accepted")
+	}
+}
+
+func TestPrometheusRangeCoverageAllowsSeriesBornAfterEmptyBaseline(t *testing.T) {
+	baseline := time.Unix(1793422103, 687061238).UTC()
+	final := time.Unix(1793422276, 880911235).UTC()
+	first := 1793422141.881
+	last := 1793422276.881
+	if !prometheusRangeCoversCaptures(first, last, baseline, final, false) {
+		t.Fatal("series born after an empty baseline was rejected")
+	}
+	if prometheusRangeCoversCaptures(first, last, baseline, final, true) {
+		t.Fatal("late first sample was accepted for a series present at baseline")
+	}
+}
+
+func TestPrometheusRangeQueryMustCoverEmptyBaselineAndFinal(t *testing.T) {
+	baselineAt := time.Unix(1793422103, 687061238).UTC()
+	finalAt := time.Unix(1793422276, 880911235).UTC()
+	query := `sum(phorvex_decisions_total{selected="true"})`
+	baseline := &PrometheusResponseCapture{CapturedAt: baselineAt, Path: "/api/v1/query", Parameters: map[string]string{
+		"query": query, "time": formatPrometheusTime(baselineAt),
+	}}
+	final := &PrometheusResponseCapture{CapturedAt: finalAt, Path: "/api/v1/query", Parameters: map[string]string{
+		"query": query, "time": formatPrometheusTime(finalAt),
+	}}
+	raw := &PrometheusResponseCapture{CapturedAt: finalAt.Add(time.Millisecond), Path: "/api/v1/query_range", Parameters: map[string]string{
+		"query": query, "start": "1793422096.880911350", "end": "1793422276.882098436", "step": "15",
+	}}
+	if !prometheusRangeQueryCoversCaptures(raw, baseline, final) {
+		t.Fatal("real empty-baseline query window was rejected")
+	}
+	raw.Parameters["start"] = "1793422141.881"
+	if prometheusRangeQueryCoversCaptures(raw, baseline, final) {
+		t.Fatal("query window starting after the baseline was accepted")
 	}
 }
 
