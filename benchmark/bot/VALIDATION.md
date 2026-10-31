@@ -4,6 +4,55 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## Storage guard and retained-cache repair — 2026-10-31
+
+Batch `1914ba6938f9`, child `ee669037d7a6`, stopped at the disk guard at
+14:29:44 UTC: 3.1 GiB free, below the unchanged 4 GiB requirement. No model,
+Go test or replay ran for that child. The upload was
+`PHORVEX_V2_NEW_COST_SECURITY_GREEDY_BENCH.txt`, SHA-256
+`d9822ef901ece902c3fe023c72970f184c34e6c06b0a06a189e30f817ace9756`.
+It requests full V2 integration, unlike the earlier successful V2-A helper.
+
+At the beginning of this investigation, before cleanup, the host already had
+about 10.2 GiB free; this work does not claim to have caused that earlier
+recovery. The completed V2-A diagnostic probe still retained its two disposable
+checkouts and temporary Go home. Its candidate commit was archived in a verified
+incremental Git bundle, then those exact clean, unused directories were removed.
+Reports/diff/test/result hashes were unchanged. This reclaimed 929,902,592 bytes,
+leaving about 11.1 GiB free. No snapshots, user reports, SDKs, modules, unrelated
+caches or historical service releases were deleted.
+
+Source `72146f2ba9f58929e5001fd76f879515b7858e74` gives bot code jobs their own
+`BOT_STATE_DIR/go-build-cache`, trims retained entries to 2 GiB before/after
+jobs (or further for free-space pressure), and cleans the temporary Go home.
+The 4 GiB start guard remains. Retention is not an in-progress disk quota and
+does not guarantee capacity against other writers or indefinitely retained
+result artifacts. Cleanup records preserve counts/free space and warnings.
+Recorded model-decline reasons are now included directly in failure messages.
+
+Validation: **124 bot tests passed locally and on the host**. A real Go 1.26.10
+compile/test of the isolated, previously verified V2-A arithmetic source passed
+**50 tests**, populated the dedicated probe cache, then reclaimed 1,025 files
+(56,104,975 bytes) without changing evidence. An initial probe command used an
+absent SDK path; it was corrected to the active service's configured Go/PATH.
+This probe validates cache wiring, not a full V2/V3 benchmark.
+
+Release `bot-storage-72146f2b` was activated at 15:18:07 UTC and verified at
+15:18:11 UTC with all seven overlay hashes matching. No jobs were pending at
+restart. API/web/proxy identities, dashboard pointer and bot membership/offset
+were preserved. Menu configuration and polling started without errors. At
+15:18:47 UTC all nine dependency checks passed, including free disk at
+11,870,728,192 bytes (about 11.1 GiB). These checks sent no user chat messages.
+Evidence, rollback unit and candidate bundle are retained privately under
+`~/phorvex-benchmark/bot-validation-20261031/storage-repair/`.
+
+A separate, later job `5cef32684060` requested full V3 and stopped with the
+model's recorded reason: its supplied context omitted candidate-generation and
+fact-to-actuator/provenance code under `phorvex/internal/actionset/`. The source
+was not established to be absent from the repository; it was absent from that
+model context. The storage repair does not establish a successful V2/V3 run,
+new algorithm integration, or the availability of required measured telemetry.
+
 ## Planner/test scope and upload-caption repair — 2026-10-31
 
 User batch `758c67a02528`, job `a517af2aad65`, failed before Go tests/replay with
