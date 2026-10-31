@@ -849,6 +849,19 @@ func authoritativeComponent(consumer ImageConsumer, image string) string {
 	return ""
 }
 
+func exactIsolatedStagingConsumer(component string, consumer ImageConsumer, image string) bool {
+	if component != "attacks" {
+		return false
+	}
+	want := ImageConsumer{
+		APIVersion: "apps/v1", Kind: "Deployment", Namespace: "p6-demo", Name: "agent-sim",
+		Section: "containers", Container: "agent-sim", FieldPath: "/spec/template/spec/containers/0/image",
+	}
+	prefix := ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim@"
+	return consumer.key() == want.key() && strings.HasPrefix(image, prefix) &&
+		digestSHA.MatchString(strings.TrimPrefix(image, prefix))
+}
+
 func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, component string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
 	definition := componentByName(component)
 	if definition == nil {
@@ -909,6 +922,12 @@ func probeConsumersForRepository(root string, route deploymentRoute, target Comp
 		slot := probeSlots[key]
 		authoritative := authoritativeComponent(slot, before)
 		if before == after {
+			// The reviewed agent-action window renders one isolated, digest-pinned
+			// staging fixture through the attacks chart. It is exhaustively scanned
+			// here but is not controlled by the attacks service image value.
+			if exactIsolatedStagingConsumer(component, slot, before) {
+				continue
+			}
 			if authoritative != "" {
 				if authoritative != component {
 					return nil, nil, fmt.Errorf("component %s chart contains cross-component %s consumer %s", component, authoritative, strings.ReplaceAll(key, "\x00", "/"))

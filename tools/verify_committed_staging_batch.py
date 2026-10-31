@@ -133,6 +133,13 @@ def main() -> int:
             sys.executable, str(source_root / "tools/staging_release.py"), "verify",
             "--batch", str(BATCH), "--services", str(services), "--complete", cwd=source_root,
         )
+        # A later source PR may intentionally revise the reproducible fixture
+        # identity before its replacement batch is published. Keep validating
+        # this committed historical batch against the identity reviewed at its
+        # exact source; the source-pinned verifier above already proved it.
+        release.FIXTURE_IDENTITIES_FILE = (
+            source_root / "release/staging-fixture-identities.json"
+        )
         canonical = release.read_json(services)
         value = release.validate_batch(
             release.read_json(BATCH), require_complete=True, canonical_services=canonical

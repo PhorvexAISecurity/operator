@@ -3,10 +3,10 @@
   "sourceDateEpoch": 0,
   "fixtures": {
     "agent-sim": {
-      "index": "sha256:a6f0b7398d61fc63c411e6f15b9087c1feb7fd2f4483fdb6a4e2cccbe64f23a9",
-      "manifest": "sha256:6ec1514a419a67ba7ade3dd499496b61db0c2475a1add4d2935cc8a2919fcb78",
-      "config": "sha256:2d6923e9855e4a01b2076d97e716e60772440e30e7d1e7b155ff192ca4f8dc65",
-      "applicationLayer": "sha256:10ad37f610d4f3c78da656201e2cfbf3bfa599bc4fbb045a021e19db97981cf3"
+      "index": "sha256:f7a8af73d9489919249d98d61c50101d85952286f28c5536114e96d12fff7157",
+      "manifest": "sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8",
+      "config": "sha256:bd828940ea6dfb3ce6d85e28245e9d67ba395caa4cfb041b2745fa9d659067c0",
+      "applicationLayer": "sha256:e46398fa632575d339740d16b3021ead2c92c6e5662ef991e91407cdf18bcf92"
     },
     "catalogue-workload": {
       "index": "sha256:5526ae15768af6486d0a077d76d0b14f14a7806f0147f6e7957b086f3b91e466",

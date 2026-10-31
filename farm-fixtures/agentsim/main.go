@@ -78,7 +78,7 @@ func newHandler(guardFile string) http.Handler {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "guard unavailable"})
 			return
 		}
-		ids := append([]string(nil), g.DeniedAgentActions...)
+		ids := append([]string{}, g.DeniedAgentActions...)
 		sort.Strings(ids)
 		writeJSON(w, http.StatusOK, guard{DeniedAgentActions: ids})
 	})

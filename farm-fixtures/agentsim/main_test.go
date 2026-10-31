@@ -34,6 +34,18 @@ func TestExactPairDenyAndTwoSidedControls(t *testing.T) {
 	}
 }
 
+func TestEmptyGuardReadbackIsAnArray(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "denied.json")
+	if err := os.WriteFile(path, []byte(`{"denied_agent_actions":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	newHandler(path).ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/phorvex-guard/state", nil))
+	if response.Code != http.StatusOK || strings.TrimSpace(response.Body.String()) != `{"denied_agent_actions":[]}` {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestMalformedOrAbsentGuardFailsClosed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "denied.json")
 	handler := newHandler(path)
