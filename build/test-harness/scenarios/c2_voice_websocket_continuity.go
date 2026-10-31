@@ -1285,6 +1285,24 @@ func sampleVoiceWSAvailabilityEvery(ctx context.Context, env *core.Env, serviceU
 				out.OriginalAbsentSeen = true
 			}
 		}
+		// The stop signal can be closed by the observation itself. Check it
+		// before selecting the ticker so a simultaneously-ready tick cannot
+		// add observations after the configured sampling window has ended.
+		select {
+		case <-stop:
+			for uid := range seen {
+				out.ObservedReadyUIDs = append(out.ObservedReadyUIDs, uid)
+			}
+			sort.Strings(out.ObservedReadyUIDs)
+			return out
+		case <-ctx.Done():
+			for uid := range seen {
+				out.ObservedReadyUIDs = append(out.ObservedReadyUIDs, uid)
+			}
+			sort.Strings(out.ObservedReadyUIDs)
+			return out
+		default:
+		}
 		select {
 		case <-stop:
 			for uid := range seen {
