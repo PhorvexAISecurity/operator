@@ -5,6 +5,6 @@ phorvex:
   console:
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console"
-      tag: "staging-0.16.0-git-2f1c92bc487024ac0a159c70305a4d97a16a3592"
-      releaseDigest: "sha256:28e8a68c297bffcd23a993d4b06892156064debd8b53167c7bcdcb32d8b995ec"
-      releaseSourceSHA: "2f1c92bc487024ac0a159c70305a4d97a16a3592"
+      tag: "staging-0.16.0-git-71c4f540a5e0378ccd51417165ab84228bacb98d"
+      releaseDigest: "sha256:fa90e2c4b786f3532e34cdbf23b43d2fb3eaf8c8f12cecd5f5b7afe8db5116bf"
+      releaseSourceSHA: "71c4f540a5e0378ccd51417165ab84228bacb98d"
