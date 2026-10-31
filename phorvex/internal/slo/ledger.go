@@ -66,6 +66,12 @@ type Entry struct {
 	Cause     Cause
 	Outcome   Outcome
 
+	// Replay-only immutable identities. Older rows have these absent and cannot
+	// be attributed to a later policy/workload merely by matching display names.
+	PolicyOwner string
+	PodUID      string
+	WorkloadUID string
+
 	// Replicas is how many Ready serving replicas the action removed.
 	Replicas int
 	// Duration is how long they stayed removed — MEASURED, from actuation to the
@@ -155,8 +161,9 @@ type Consumption struct {
 // can never mistake "everything this process has seen" for "everything in the
 // SLO window".
 type Ledger struct {
-	mu      sync.RWMutex
-	byOwner map[string][]Entry
+	mu        sync.RWMutex
+	byOwner   map[string][]Entry
+	createdAt time.Time
 
 	// Retain bounds how far back entries are kept. Zero means keep everything.
 	Retain time.Duration
@@ -165,7 +172,7 @@ type Ledger struct {
 // NewLedger returns a ledger retaining entries for the given span. Pass the
 // longest SLO window in use; entries older than that can never affect a ratio.
 func NewLedger(retain time.Duration) *Ledger {
-	return &Ledger{byOwner: map[string][]Entry{}, Retain: retain}
+	return &Ledger{byOwner: map[string][]Entry{}, Retain: retain, createdAt: time.Now().UTC()}
 }
 
 // Record appends an action observation. Legacy empty zero-impact records are

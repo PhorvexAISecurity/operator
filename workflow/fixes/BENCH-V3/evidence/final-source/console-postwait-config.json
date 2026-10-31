@@ -1,0 +1,43 @@
+{
+  "source_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "cwd": "/workspace/operator-v3-capture",
+  "env": {
+    "PATH": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games",
+    "GO_BIN": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2",
+    "HELM_BIN": "/workspace/.phorvex-tools/helm",
+    "KUBECONFIG": "/dev/null",
+    "KUBEBUILDER_ASSETS": "",
+    "USE_EXISTING_CLUSTER": "false",
+    "PREFLIGHT_PYTHON_3_11": "/workspace/.phorvex-tools/python311/python/bin/python3.11",
+    "PREFLIGHT_PYTHON_3_12": "/workspace/.phorvex-tools/python312/python/bin/python3.12"
+  },
+  "status": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-postwait-status.json",
+  "log": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-postwait.txt",
+  "description": "Baseline bb92355c diagnostic overlay adds only post-Wait logging; preserves original deadlines/assertions, so failed assertion remains failed. Same explicit environment as unchanged baseline control.",
+  "total_timeout_seconds": 1100,
+  "steps": [
+    {
+      "name": "baseline-console-postwait-diagnostic",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "-C",
+        "/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex",
+        "test",
+        "-overlay=/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-baseline-postwait-overlay.json",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=15m",
+        "./internal/console",
+        "-run",
+        "TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry|TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords",
+        "-v"
+      ],
+      "timeout_seconds": 1000
+    }
+  ]
+}

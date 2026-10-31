@@ -1,0 +1,49 @@
+base_sha: 1c23931621d47218ded424b58e4db127344fb33b
+head_sha: 1c23931621d47218ded424b58e4db127344fb33b
+changed_path_count: 25
+checks:
+- id: diff
+  cwd: .
+  tool: null
+- id: workflow
+  cwd: .
+  tool: python
+  version: 3.11.17
+- id: chart-3
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: null
+- id: chart-4
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: Current chart consistency and render
+- id: chart-5
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: Tracked paths portable to case-insensitive checkouts
+- id: chart-6
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: null
+- id: chart-7
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: null
+- id: chart-8
+  cwd: .
+  tool: helm
+  version: v3.16.4
+  name: Recipe and fixture tests (offline)
+- id: go-phorvex
+  cwd: phorvex
+  tool: go
+  version: 1.26.1
+external:
+- Shared-cluster E2E, image builds/deployment and live verification are separate;
+  local PASS does not sign them.
+

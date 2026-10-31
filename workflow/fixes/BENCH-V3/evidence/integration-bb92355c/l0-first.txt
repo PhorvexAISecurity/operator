@@ -1,0 +1,10 @@
+ok  	github.com/phorvex/phorvex/internal/ingest	5.518s
+ok  	github.com/phorvex/phorvex/internal/slo	0.306s
+ok  	github.com/phorvex/phorvex/internal/mathlab	5.715s
+--- FAIL: TestM174SuccessfulOverrunCoalescesWithoutOverlap (0.30s)
+    m174_scheduler_test.go:421: missed deadlines replayed as a burst: 12.835531ms
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/runner	14.693s
+ok  	github.com/phorvex/phorvex/internal/brainclient	2.360s
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.800s
+FAIL

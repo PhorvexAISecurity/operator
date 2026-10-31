@@ -53,6 +53,7 @@ func TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick(t *testing.T) {
 		p.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate), v1alpha1.ActionType(model.ActionQuarantine)}
 		m, engine := m140BlockedTickManager(t, nil, p)
 		m.Calibration = nil
+		m.CaptureCostEvidence = withCapture
 		engine.Now = func() time.Time { return now }
 		var auditJSON bytes.Buffer
 		m.Audit = audit.New(logr.Discard(), &auditJSON)
@@ -108,6 +109,9 @@ func TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick(t *testing.T) {
 	snap, err := mathlab.Decode(raw)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if snap.Inputs.EndpointCostEvidence == nil || snap.Inputs.EndpointCostEvidence.EndpointLossStatus != "unavailable" || snap.Inputs.EndpointCostEvidence.Schema != "phorvex.endpoint-cost-evidence.v1" {
+		t.Fatalf("manager capture did not reach recorder: %+v", snap.Inputs.EndpointCostEvidence)
 	}
 	rs, err := mathlab.Replay(snap, mathlab.ReplayOptions{Arms: []mathlab.Arm{{ID: "baseline"}}})
 	if err != nil {

@@ -1,0 +1,41 @@
+  Chart.yaml, Chart.lock and dependencies match
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-actuator/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-attacks/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-brain/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-common/
+[INFO] Chart.yaml: icon is recommended
+[INFO] values.yaml: file does not exist
+
+1 chart(s) linted, 0 chart(s) failed
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-console/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+==> Linting deploy/charts/phorvex-sensor/
+[INFO] Chart.yaml: icon is recommended
+
+1 chart(s) linted, 0 chart(s) failed
+M100 claim-language gate passed (232 current product source files)

@@ -1,0 +1,56 @@
+{
+  "pull_request": {
+    "number": 181,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/181",
+    "state": "open",
+    "draft": false,
+    "head_sha": "b31b87d9ecb6c98871ce7afa438645c5aafee9c3",
+    "base_sha": "e8674419bdab387e740128ce1284fad11f6267fc",
+    "reviewed_source": "00eac153f3f27929907f91d4231362051664364c"
+  },
+  "source_equivalence": {
+    "reviewed_source": "00eac153f3f27929907f91d4231362051664364c",
+    "delivery_tip": "b31b87d9ecb6c98871ce7afa438645c5aafee9c3",
+    "code_tree_sha256": "c980a1ebf4f9f2bfa0e8fa5d90c5c92ced1e489beea017d2981120b1eb680e2a",
+    "code_equivalent": true,
+    "note": "Successor commit contains fix records and evidence only; source, tests and CI inputs are byte-identical."
+  },
+  "target_main_check": {
+    "main": "e8674419bdab387e740128ce1284fad11f6267fc",
+    "status": "ahead",
+    "total_commits": 2,
+    "changed_paths": [
+      "deploy/environments/staging/actuator.yaml",
+      "deploy/environments/staging/attacks.yaml",
+      "deploy/environments/staging/brain.yaml",
+      "deploy/environments/staging/console.yaml",
+      "deploy/environments/staging/manager.yaml",
+      "deploy/environments/staging/sensor.yaml",
+      "release/staging-batch.json"
+    ],
+    "overlap": [],
+    "commits": [
+      {
+        "sha": "df214cc9c75d195e6f22e4f3918c942926eaf0a7",
+        "subject": "deploy(staging): pin isolated release bb92355cf7b6"
+      },
+      {
+        "sha": "e8674419bdab387e740128ce1284fad11f6267fc",
+        "subject": "Merge pull request #180 from PhorvexSecurity/release/staging-isolated-bb92355cf7b6"
+      }
+    ],
+    "merge_tree": "576bdeeaca55c29097c23c73d2bf2df16b6035c9",
+    "merge_conflicts": false,
+    "integrated_delta": [
+      "deploy/environments/staging/actuator.yaml",
+      "deploy/environments/staging/attacks.yaml",
+      "deploy/environments/staging/brain.yaml",
+      "deploy/environments/staging/console.yaml",
+      "deploy/environments/staging/manager.yaml",
+      "deploy/environments/staging/sensor.yaml",
+      "release/staging-batch.json"
+    ],
+    "interpretation": "Only unrelated staging release metadata is added by current target main; reviewed production source and CI authority remain unchanged. No worktree merge/rebase/deployment performed."
+  },
+  "scope": "Metadata-only successor of the independently reviewed source; remote CI remains separate. No merge or operator deployment."
+}

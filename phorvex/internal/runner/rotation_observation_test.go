@@ -200,7 +200,8 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Disruption: ledger}
 	startedAt := time.Unix(1_700_000_000, 0).UTC()
 	view := &model.WorkloadView{Pod: model.Pod{
-		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+		WorkloadSpec: model.WorkloadSpecObservation{Known: true, Workload: model.ObjectIdentity{UID: "deployment-uid"}},
+		Namespace:    "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
 	}}
 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
 
@@ -212,6 +213,10 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 		t.Fatal("ledger-enabled censored rotation was retired before recovery")
 	}
 
+	frozen := ledger.SnapshotForReplay("tenant-a", "ns", model.OwnerKey(model.OwnerKindName, "tenant-a"), startedAt.Add(800*time.Second), 20)
+	if len(frozen.Entries) != 1 || !frozen.Entries[0].Censored || frozen.Entries[0].PodUID != "old-uid" || frozen.Entries[0].WorkloadUID != "deployment-uid" {
+		t.Fatalf("real censored producer lost identity: %+v", frozen)
+	}
 	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(1200 * time.Second)})
 	if got := ledger.Consumed("tenant-a", startedAt); got != 1200 {
 		t.Fatalf("extended censored floor = %v, want 1200 replica-seconds", got)
@@ -233,6 +238,10 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T) 
 	entries := ledger.Entries("tenant-a", startedAt)
 	if len(entries) != 1 || entries[0].Censored {
 		t.Fatalf("final recovery did not replace censored entry: %+v", entries)
+	}
+	final := ledger.SnapshotForReplay("tenant-a", "ns", model.OwnerKey(model.OwnerKindName, "tenant-a"), startedAt.Add(1400*time.Second), 20)
+	if len(final.Entries) != 1 || final.Entries[0].ID != frozen.Entries[0].ID || final.Entries[0].Censored || !frozen.Entries[0].Censored || final.Entries[0].WorkloadUID != "deployment-uid" || final.HistoryComplete || final.Source != "replica-readiness" {
+		t.Fatalf("settlement changed identity/frozen evidence or claimed endpoint history: %+v / %+v", frozen, final)
 	}
 	if len(m.pendingRotations) != 0 {
 		t.Fatal("recovered disruption remained pending")

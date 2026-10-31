@@ -76,7 +76,7 @@ func (l *Local) Decide(req brainapi.DecideRequest) ([]model.Decision, brainapi.R
 	defer l.withGate(req.Gate)()
 	var capture *mathlab.TickCapture
 	if req.Capture != nil {
-		capture = l.recorder.Begin(l.ce, req.Capture.Spec, req.Views, req.Policy, req.Capture.CapturedAt)
+		capture = l.recorder.Begin(l.ce, req.Capture.Spec, req.Views, req.Policy, req.Capture.CapturedAt, req.Capture.EndpointCostEvidence)
 	}
 	decisions, err := l.ce.DecideChecked(req.Views, req.Policy)
 	if capture == nil {

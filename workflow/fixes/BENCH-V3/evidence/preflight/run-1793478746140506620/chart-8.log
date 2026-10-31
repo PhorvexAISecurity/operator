@@ -1,0 +1,26 @@
+test_changed_adapter_and_pod_refuse_new_event (test_detector.DetectorContract.test_changed_adapter_and_pod_refuse_new_event) ... ok
+test_claim_uncertainty_and_restart_fail_closed (test_detector.DetectorContract.test_claim_uncertainty_and_restart_fail_closed) ... ok
+test_clearance_keeps_event_until_protected_terminal_review (test_detector.DetectorContract.test_clearance_keeps_event_until_protected_terminal_review) ... ok
+test_conflicting_own_event_cannot_be_deleted_or_overridden (test_detector.DetectorContract.test_conflicting_own_event_cannot_be_deleted_or_overridden) ... ok
+test_create_uncertainty_never_reposts_within_process (test_detector.DetectorContract.test_create_uncertainty_never_reposts_within_process) ... ok
+test_event_deleted_after_claim_cannot_rearm_on_restart (test_detector.DetectorContract.test_event_deleted_after_claim_cannot_rearm_on_restart) ... ok
+test_event_time_is_sampled_after_observation_not_at_poll_start (test_detector.DetectorContract.test_event_time_is_sampled_after_observation_not_at_poll_start) ... ok
+test_expiry_refuses_renewal_and_duplicate_mitigation (test_detector.DetectorContract.test_expiry_refuses_renewal_and_duplicate_mitigation) ... ok
+test_explicit_expected_adapter_is_clean_without_claim (test_detector.DetectorContract.test_explicit_expected_adapter_is_clean_without_claim) ... ok
+test_inventory_ambiguity_prevents_event (test_detector.DetectorContract.test_inventory_ambiguity_prevents_event) ... ok
+test_missing_or_foreign_operator_lock_refuses_event (test_detector.DetectorContract.test_missing_or_foreign_operator_lock_refuses_event) ... ok
+test_multiple_path_shaped_base_ids_still_bind_one_adapter (test_detector.DetectorContract.test_multiple_path_shaped_base_ids_still_bind_one_adapter) ... ok
+test_one_exact_target_emits_canonical_uid_bound_event_once (test_detector.DetectorContract.test_one_exact_target_emits_canonical_uid_bound_event_once) ... ok
+test_post_before_final_uid_bind_refuses_after_restart (test_detector.DetectorContract.test_post_before_final_uid_bind_refuses_after_restart) ... ok
+test_real_future_or_stale_api_event_time_refuses_uid_binding (test_detector.DetectorContract.test_real_future_or_stale_api_event_time_refuses_uid_binding) ... ok
+test_route_and_incarnation_ambiguity_prevents_event (test_detector.DetectorContract.test_route_and_incarnation_ambiguity_prevents_event) ... ok
+test_same_name_new_uid_cannot_replace_bound_event (test_detector.DetectorContract.test_same_name_new_uid_cannot_replace_bound_event) ... ok
+test_saved_consumer_fixture_is_actual_current_producer_output (test_detector.DetectorContract.test_saved_consumer_fixture_is_actual_current_producer_output) ... ok
+test_second_cas_ambiguous_stops_even_if_server_bound_it (test_detector.DetectorContract.test_second_cas_ambiguous_stops_even_if_server_bound_it) ... ok
+test_slow_drip_body_and_whole_request_have_finite_deadlines (test_detector.DetectorContract.test_slow_drip_body_and_whole_request_have_finite_deadlines) ... ok
+test_successful_post_uid_replaced_before_readback_refuses (test_detector.DetectorContract.test_successful_post_uid_replaced_before_readback_refuses) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.077s
+
+OK

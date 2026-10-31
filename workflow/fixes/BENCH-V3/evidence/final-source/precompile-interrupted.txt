@@ -1,0 +1,3 @@
+Build preparation only: -run ^$ does not execute test cases and is not test evidence.
+Preparing test binaries: phorvex
+ok  	github.com/phorvex/phorvex/api/v1alpha1	0.099s [no tests to run]

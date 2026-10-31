@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 227700,
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "started_at": "2026-10-31T20:28:19.417647+00:00",
+  "results": [
+    {
+      "name": "synchronized-console-controls",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 75.974,
+  "step": "synchronized-console-controls",
+  "child_pid": 227703,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T20:29:35.391946+00:00"
+}

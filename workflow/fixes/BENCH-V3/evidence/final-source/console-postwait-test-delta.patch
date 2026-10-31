@@ -1,0 +1,38 @@
+--- /workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex/internal/console/vllm_lora_outcome_test.go	2026-10-31 16:53:36.000000000 +0000
++++ /workspace/.phorvex-test-tmp/bench-v3-console-postwait.fv3ykc2q/vllm_lora_outcome_test.go	2026-10-31 20:23:17.783707899 +0000
+@@ -250,6 +250,16 @@
+ 				if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil || reply.AttackID == "" {
+ 					t.Fatalf("exact event create acknowledgement was not reconciled: %d %s", response.Code, response.Body.String())
+ 				}
++				diagnosticReturned := time.Now()
++				t.Cleanup(func() {
++					s.attackWatchers.Wait()
++					terminal := attackSnapshotByID(reply.AttackID)
++					if terminal == nil {
++						t.Log("POST_WAIT terminal record missing")
++						return
++					}
++					t.Logf("POST_WAIT after_response=%s since_fire=%s status=%q outcome=%q cleanup=%q observation_error=%q cleanup_error=%q persistence_error=%q", time.Since(diagnosticReturned), time.Since(terminal.started), terminal.Status, terminal.Outcome, terminal.LoRACleanupStatus, terminal.ObservationError, terminal.LoRACleanupError, terminal.PersistenceError)
++				})
+ 				deadline := time.Now().Add(2 * time.Second)
+ 				for time.Now().Before(deadline) {
+ 					reconciledRecord = attackSnapshotByID(reply.AttackID)
+--- /workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex/internal/console/vllm_remaining_outcome_test.go	2026-10-31 16:53:36.000000000 +0000
++++ /workspace/.phorvex-test-tmp/bench-v3-console-postwait.fv3ykc2q/vllm_remaining_outcome_test.go	2026-10-31 20:23:17.781707882 +0000
+@@ -529,6 +529,16 @@
+ 			if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
+ 				t.Fatalf("missing attack record identity: %v body=%s", err, response.Body.String())
+ 			}
++			diagnosticReturned := time.Now()
++			t.Cleanup(func() {
++				s.attackWatchers.Wait()
++				terminal := attackSnapshotByID(reply.AttackID)
++				if terminal == nil {
++					t.Log("POST_WAIT terminal record missing")
++					return
++				}
++				t.Logf("POST_WAIT after_response=%s since_fire=%s status=%q outcome=%q cleanup=%q observation_error=%q cleanup_error=%q persistence_error=%q", time.Since(diagnosticReturned), time.Since(terminal.started), terminal.Status, terminal.Outcome, terminal.LoRACleanupStatus, terminal.ObservationError, terminal.LoRACleanupError, terminal.PersistenceError)
++			})
+ 			deadline := time.Now().Add(time.Second)
+ 			var record *attackRecord
+ 			for time.Now().Before(deadline) {

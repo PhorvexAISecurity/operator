@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "plan": {
+    "schema_version": 1,
+    "base_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+    "head_sha": "193923cc32c52269f66cb8617940b96d9d555b1e",
+    "changed_paths": [
+      "docs/math-lab/SNAPSHOT_AND_REPLAY.md",
+      "phorvex/cmd/main.go",
+      "phorvex/internal/brainapi/brainapi.go",
+      "phorvex/internal/brainclient/parity_test.go",
+      "phorvex/internal/brainsvc/local.go",
+      "phorvex/internal/ingest/kube.go",
+      "phorvex/internal/ingest/owner_reader.go",
+      "phorvex/internal/ingest/owner_reader_test.go",
+      "phorvex/internal/ingest/workload_spec.go",
+      "phorvex/internal/ingest/workload_spec_producer_test.go",
+      "phorvex/internal/ingest/workload_spec_test.go",
+      "phorvex/internal/mathlab/cost_capture_test.go",
+      "phorvex/internal/mathlab/inspect.go",
+      "phorvex/internal/mathlab/recorder.go",
+      "phorvex/internal/mathlab/snapshot.go",
+      "phorvex/internal/model/types.go",
+      "phorvex/internal/model/workload_spec.go",
+      "phorvex/internal/runner/cost_capture.go",
+      "phorvex/internal/runner/cost_capture_test.go",
+      "phorvex/internal/runner/manager.go",
+      "phorvex/internal/runner/mathlab_capture_test.go",
+      "phorvex/internal/runner/rotation_observation_test.go",
+      "phorvex/internal/sensorclient/parity_test.go",
+      "phorvex/internal/slo/ledger.go",
+      "phorvex/internal/slo/replay.go",
+      "phorvex/internal/slo/replay_test.go",
+      "workflow/operations/HANDOFFS.md",
+      "workflow/tools/preflight.py",
+      "workflow/tools/tests/test_preflight.py"
+    ],
+    "jobs": [
+      {
+        "id": "diff",
+        "cwd": ".",
+        "script": "git diff --check bb92355cf7b6c4a696f44caf52bd5fa1268e7303 193923cc32c52269f66cb8617940b96d9d555b1e\ngit diff --check HEAD",
+        "tool": null
+      },
+      {
+        "id": "workflow",
+        "cwd": ".",
+        "script": "bash workflow/tools/check.sh",
+        "tool": "python",
+        "version": "3.11.17",
+        "ci_sha256": "e72c23711f30b9f86a597f55f223e6ba5ddf9d192c792692f3bc745acc30226e",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-3",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m pip install PyYAML==6.0.2",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-4",
+        "name": "Current chart consistency and render",
+        "cwd": ".",
+        "script": "diff -u phorvex/config/crd/bases/phorvex.ai_phorvexpolicies.yaml phorvex/charts/phorvex/crds/phorvex.ai_phorvexpolicies.yaml\nbash tools/check-vendored-chart.sh\nhelm template phorvex deploy/helm/phorvex-stack -n phorvex-system -f deploy/helm/phorvex-stack/values.yaml -f deploy/helm/phorvex-stack/values-eks.yaml --api-versions monitoring.coreos.com/v1/PodMonitor --include-crds > /dev/null\n# One chart per service (ADR-0001); tools/test_service_charts.py renders them.\nfor chart in deploy/charts/*/; do helm lint --strict \"$chart\"; done\npython tools/check-claim-language.py\n",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-5",
+        "name": "Reconstruct any committed staging batch from its exact source",
+        "cwd": ".",
+        "script": "python tools/verify_committed_staging_batch.py",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-6",
+        "name": "Tracked paths portable to case-insensitive checkouts",
+        "cwd": ".",
+        "script": "python tools/check-path-case-collisions.py",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-7",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m unittest discover -s tools -p 'test_*.py' -v",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-8",
+        "name": null,
+        "cwd": ".",
+        "script": "python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "chart-9",
+        "name": "Recipe and fixture tests (offline)",
+        "cwd": ".",
+        "script": "python build/integrations/epss-ecr-auth-runtime/verify_recipe.py\nfor suite in \\\n  build/integrations/epss-ecr-auth-runtime \\\n  build/integrations/litellm-gateway-runtime \\\n  build/integrations/vllm-lease-proxy-runtime \\\n  build/integrations/vllm-native-metrics \\\n  build/test-harness/fixtures/guardrail-output \\\n  build/test-harness/fixtures/vllm-endpoint-lease-console \\\n  build/test-harness/guardrail/canary-fixture \\\n  build/test-harness/security-gain-validation \\\n  deploy/eks/epss \\\n  deploy/helm/phorvex-stack/examples/math-observers/scripts \\\n  phorvex/internal/console; do\n  python -B -m unittest discover -s \"$suite\" -p 'test_*.py'\ndone\n",
+        "tool": "helm",
+        "version": "v3.16.4",
+        "ci_sha256": "d9297917f89b586b5016147b0b87af680bad4855af2a5bc850a3553df25af5c6",
+        "python_version": "3.12.15",
+        "python_provision_sha256": "ad0f5924af9a2856075944391c580dd3613c00c7952bbf02c0460a50fa75bc96"
+      },
+      {
+        "id": "go-phorvex",
+        "cwd": "phorvex",
+        "tool": "go",
+        "version": "1.26.1",
+        "script": "go build ./...\ngo test ./...\ngo vet ./..."
+      }
+    ],
+    "external": [
+      "Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them."
+    ]
+  },
+  "plan_sha256": "f560a5736dcd2a7e8a6c643f6b94cc6817f69445153f900b3a775394a4252ca6",
+  "worktree_sha256": "d3281b4e287a3c4b5c0a102faa07164e2466c9f0e08844bc9b4a734a83abeb00",
+  "results": [
+    {
+      "id": "diff",
+      "log": "run-1793472656345255300/diff.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.598,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "workflow",
+      "log": "run-1793472656345255300/workflow.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 535.959,
+      "sha256": "5adb2c40b1b65f2c033d0a096e21824e45c37476516eab102ae047b59eb5267b"
+    },
+    {
+      "id": "chart-3",
+      "log": "run-1793472656345255300/chart-3.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 1.576,
+      "sha256": "8dfd77df8c765b6f24e721ffbadec44e0c360f0f1de95769301fbd60c10514d2"
+    },
+    {
+      "id": "chart-4",
+      "log": "run-1793472656345255300/chart-4.log",
+      "result": "FAIL",
+      "exit_code": 1,
+      "seconds": 1.408,
+      "sha256": "8386e4af023565a00e3269ecc06e27ab65b84e8ec49dbfe668372a9043945580"
+    },
+    {
+      "id": "chart-5",
+      "log": "run-1793472656345255300/chart-5.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 29.868,
+      "sha256": "fa2883303fc40ddaf4546488410f9f66d173e7a619916c2f4ae7d5ccaafb403c"
+    },
+    {
+      "id": "chart-6",
+      "log": "run-1793472656345255300/chart-6.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.432,
+      "sha256": "7ef9e781a79a5f650ab85f568cdf688fcb5b9d274568abb070dd2b478191ee24"
+    },
+    {
+      "id": "chart-7",
+      "log": "run-1793472656345255300/chart-7.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 385.99,
+      "sha256": "a5016a2e8c7bb67547d42b66fd112f0021f37d04011d2b6002fdd8325cc62716"
+    },
+    {
+      "id": "chart-8",
+      "log": "run-1793472656345255300/chart-8.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 0.66,
+      "sha256": "8562abe0162525ecfb334ccda37cc9e598d3fee1ac83a0e3cd59dcd874abeec5"
+    },
+    {
+      "id": "chart-9",
+      "log": "run-1793472656345255300/chart-9.log",
+      "result": "PASS",
+      "exit_code": 0,
+      "seconds": 25.728,
+      "sha256": "63a1b2712e2f2aeb329a29f5fd82b166a48456a6139adaeef9261be6cba936cd"
+    },
+    {
+      "id": "go-phorvex",
+      "log": "run-1793472656345255300/go-phorvex.log",
+      "result": "FAIL",
+      "exit_code": 1,
+      "seconds": 1400.322,
+      "sha256": "b789db92c58e70a42d8eaede1e28e264fa14394a6b12b1aa401582a3574518dd"
+    }
+  ],
+  "result": "FAIL"
+}

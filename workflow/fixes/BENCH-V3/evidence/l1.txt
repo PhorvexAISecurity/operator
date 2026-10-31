@@ -1,0 +1,47 @@
+=== RUN   TestSnapshotOwnerReadsDeduplicatedAndScoped
+--- PASS: TestSnapshotOwnerReadsDeduplicatedAndScoped (0.42s)
+=== RUN   TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects
+--- PASS: TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects (0.01s)
+=== RUN   TestWorkloadSpecRealProducerCounterexample
+    workload_spec_producer_test.go:44: POSITIVE CONTROL: one observed pod, authoritative spec.replicas=4, valid UID-bound Deployment lineage; legacy desired count remains 1
+--- PASS: TestWorkloadSpecRealProducerCounterexample (0.01s)
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/known
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_reader
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stale_immediate_UID
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stale_parent_UID
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_owner
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/ambiguous_owner
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/missing_replicas
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/unsupported_daemonset
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/standalone
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/stateful
+=== RUN   TestWorkloadSpecUnknownsAndSupportedControllers/legacy
+--- PASS: TestWorkloadSpecUnknownsAndSupportedControllers (0.01s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/known (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_reader (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stale_immediate_UID (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stale_parent_UID (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_owner (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/ambiguous_owner (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/missing_replicas (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/unsupported_daemonset (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/standalone (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/stateful (0.00s)
+    --- PASS: TestWorkloadSpecUnknownsAndSupportedControllers/legacy (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/ingest	0.601s
+=== RUN   TestReplayHistoryRealLedgerReplacementIsolationAndImmutability
+--- PASS: TestReplayHistoryRealLedgerReplacementIsolationAndImmutability (0.00s)
+=== RUN   TestReplayHistoryBoundsAndMissingLedger
+--- PASS: TestReplayHistoryBoundsAndMissingLedger (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/slo	0.091s
+=== RUN   TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss
+--- PASS: TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss (0.01s)
+=== RUN   TestCostEvidenceCountAndByteLimitsRemainUnavailable
+--- PASS: TestCostEvidenceCountAndByteLimitsRemainUnavailable (0.03s)
+=== RUN   TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery
+--- PASS: TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/runner	0.174s

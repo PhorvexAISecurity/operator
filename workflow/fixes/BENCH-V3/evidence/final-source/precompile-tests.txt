@@ -1,0 +1,197 @@
+Build preparation only: -run ^$ does not execute test cases and is not test evidence. Resumes after retained SIGTERM interruption.
+START prepare-phorvex
+ok  	github.com/phorvex/phorvex/api/v1alpha1	(cached) [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd	0.103s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/actuator	0.088s [no tests to run]
+?   	github.com/phorvex/phorvex/cmd/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/brain	0.060s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.060s [no tests to run]
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/cost-admission	0.059s [no tests to run]
+?   	github.com/phorvex/phorvex/cmd/cost-budget-admin	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-client	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-load-detector	[no test files]
+?   	github.com/phorvex/phorvex/cmd/current-inventory-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/internal/actuatorconfig	0.068s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/consoleserver	0.156s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/decisionconfig	0.045s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/grpctlsconfig	0.014s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/policyscope	0.052s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/sensorconfig	0.110s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/internal/trustconfig	0.044s [no tests to run]
+?   	github.com/phorvex/phorvex/cmd/loss-observer	[no test files]
+?   	github.com/phorvex/phorvex/cmd/mig-allocation-helper	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/persistence-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/ragstore-fixture	0.114s [no tests to run]
+ok  	github.com/phorvex/phorvex/cmd/recovery	0.111s [no tests to run]
+?   	github.com/phorvex/phorvex/cmd/sensor	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	0.045s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/actuationbrake	0.065s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/actuator	0.178s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/actuatorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actuatorclient	0.114s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/actuatorpb	0.089s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/actuatorsvc	0.130s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/agentdeny	[no test files]
+ok  	github.com/phorvex/phorvex/internal/archtest	0.017s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/attackcatalog	0.009s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/internal/audit	0.055s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/auditguard	0.129s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/audittransport	0.077s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/authz	0.054s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/brainapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.057s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/brainpb	0.064s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.140s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/buildctx	0.009s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/buildinfo	0.010s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/calib	0.088s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/capability	0.134s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/capacity	0.075s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/cataloguev1	0.042s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/codeexec	0.056s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/console	0.089s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/controller	0.203s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/cost	0.086s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/crmrefund	0.093s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/ctxprov	0.086s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/currentinventory	0.072s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/currentobserver	0.042s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/datastore	[no test files]
+ok  	github.com/phorvex/phorvex/internal/decision	0.093s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/disclosure	0.052s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/endpointlease	0.066s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/epssfeed	0.066s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/epssmeta	0.008s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/eventtrust	0.046s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/exposure	0.039s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.044s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/gpudevice	0.013s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/graph	0.013s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/identityfixture	0.053s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/ingest	0.117s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/inprocess	0.087s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/killchain	0.058s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/litellmclient	0.037s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/losshistory	0.043s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/lossobserver	0.039s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/mathlab	0.063s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/metrics	0.071s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/model	0.079s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/outputpolicy	0.020s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/ownership	0.058s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.006s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/persistence	[no test files]
+ok  	github.com/phorvex/phorvex/internal/physics	0.048s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/platform	0.066s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/podresources	0.013s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/recon	0.048s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/representation	0.050s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/runner	0.133s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/scaleprobe	0.011s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/scopedoutcome	0.071s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/sensorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.076s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/sensorpb	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorsvc	0.094s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/servicetls	0.018s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/servingbudget	0.051s [no tests to run]
+?   	github.com/phorvex/phorvex/internal/servingbudget/budgettest	[no test files]
+ok  	github.com/phorvex/phorvex/internal/servingcontext	0.010s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/slo	0.051s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/startupauthz	0.076s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/statefulrotation	0.045s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/voiceadmissionpolicy	0.036s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/voicemcppolicy	0.097s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/voicememorypolicy	0.007s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/voiceoutputpolicy	0.042s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/voicerefundpolicy	0.007s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/wire	0.052s [no tests to run]
+ok  	github.com/phorvex/phorvex/tools/covermap	0.096s [no tests to run]
+ok  	github.com/phorvex/phorvex/tools/servicerelease	0.012s [no tests to run]
+END prepare-phorvex exit=0
+START prepare-build-metricvalidity
+ok  	github.com/phorvex/metricvalidity	0.010s [no tests to run]
+END prepare-build-metricvalidity exit=0
+START prepare-build-test-harness
+go: downloading github.com/nats-io/nats.go v1.47.0
+go: downloading github.com/nats-io/nats-server/v2 v2.10.29
+go: downloading go.mongodb.org/mongo-driver/v2 v2.8.0
+go: downloading github.com/klauspost/compress v1.18.0
+go: downloading github.com/nats-io/nkeys v0.4.11
+go: downloading github.com/nats-io/nuid v1.0.1
+go: downloading github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78
+go: downloading golang.org/x/time v0.10.0
+go: downloading github.com/minio/highwayhash v1.0.3
+go: downloading github.com/nats-io/jwt/v2 v2.7.4
+go: downloading golang.org/x/crypto v0.41.0
+go: downloading github.com/xdg-go/scram v1.2.0
+go: downloading github.com/xdg-go/stringprep v1.0.4
+?   	github.com/r6security/phoenix-test-harness/cmd/catalogue-collector	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/cmd/harness	0.205s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/cmd/nats-owned-observer	0.015s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/defenders	0.069s [no tests to run]
+?   	github.com/r6security/phoenix-test-harness/fixtures/crm	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/internal/adaptive	0.008s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/capability	0.055s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/cataloguecollector	0.050s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/config	0.017s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/core	0.059s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/gpufunctional	0.014s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/guardrailstatic	0.035s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/jetstreamprobe	0.027s [no tests to run]
+?   	github.com/r6security/phoenix-test-harness/internal/kube	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/internal/mocks	0.067s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/natsexposure	0.017s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/report	0.068s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/internal/safety	0.035s [no tests to run]
+ok  	github.com/r6security/phoenix-test-harness/scenarios	0.070s [no tests to run]
+END prepare-build-test-harness exit=0
+START prepare-build-phoenix-extended
+go: downloading github.com/onsi/ginkgo/v2 v2.25.2
+go: downloading github.com/onsi/gomega v1.38.2
+go: downloading github.com/go-logr/zapr v1.3.0
+go: downloading go.uber.org/zap v1.27.0
+go: downloading k8s.io/apiserver v0.33.2
+go: downloading github.com/google/go-cmp v0.7.0
+go: downloading go.uber.org/multierr v1.11.0
+go: downloading k8s.io/component-base v0.33.2
+go: downloading github.com/Masterminds/semver/v3 v3.4.0
+go: downloading go.opentelemetry.io/otel/trace v1.40.0
+go: downloading go.opentelemetry.io/otel v1.40.0
+go: downloading cel.dev/expr v0.19.1
+go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576
+go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576
+go: downloading google.golang.org/grpc v1.68.1
+go: downloading sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2
+go: downloading go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.58.0
+go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.33.0
+go: downloading go.opentelemetry.io/otel/sdk v1.40.0
+go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.33.0
+go: downloading github.com/spf13/cobra v1.8.1
+go: downloading github.com/felixge/httpsnoop v1.0.4
+go: downloading go.opentelemetry.io/otel/metric v1.40.0
+go: downloading go.opentelemetry.io/proto/otlp v1.4.0
+go: downloading github.com/cenkalti/backoff/v4 v4.3.0
+go: downloading github.com/grpc-ecosystem/grpc-gateway/v2 v2.24.0
+go: downloading github.com/go-logr/stdr v1.2.2
+go: downloading go.opentelemetry.io/auto/sdk v1.2.1
+ok  	github.com/r6security/phoenix/api/v1beta1	0.015s [no tests to run]
+?   	github.com/r6security/phoenix/cmd	[no test files]
+ok  	github.com/r6security/phoenix/internal/controller	0.068s [no tests to run]
+ok  	github.com/r6security/phoenix/internal/scheduler	0.007s [no tests to run]
+?   	github.com/r6security/phoenix/pkg/controllers	[no test files]
+END prepare-build-phoenix-extended exit=0
+START prepare-libs-logging
+ok  	phorvex.ai/libs/logging	0.012s [no tests to run]
+END prepare-libs-logging exit=0
+START prepare-build-integrations-epss-ecr-auth-runtime
+go: downloading github.com/aws/aws-sdk-go-v2/service/ecr v1.66.4
+ok  	github.com/phorvex/epss-ecr-auth-runtime	0.016s [no tests to run]
+END prepare-build-integrations-epss-ecr-auth-runtime exit=0
+START prepare-farm-fixtures-agentsim
+ok  	phorvex.ai/farm-fixtures/agentsim	0.017s [no tests to run]
+END prepare-farm-fixtures-agentsim exit=0

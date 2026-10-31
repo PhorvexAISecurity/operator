@@ -1,0 +1,29 @@
+Committed 00eac153: two terminal-observation controls synchronized to existing watcher completion; all outcome assertions retained, 15m Go deadline unchanged.
+START synchronized-console-controls
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent
+=== RUN   TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost
+--- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry (8.01s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/load-ack-lost (1.43s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-failed (1.81s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/route-probe-stays-bad (1.08s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-absent (1.77s)
+    --- PASS: TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry/event-create-ack-lost (1.92s)
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace
+--- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (2.68s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.05s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/kvcache (0.16s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/request-drain (0.14s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/warm-swap (0.17s)
+    --- PASS: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/model-shard-replace (0.16s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/console	10.811s
+END synchronized-console-controls exit=0

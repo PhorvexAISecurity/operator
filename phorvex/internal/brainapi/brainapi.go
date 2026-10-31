@@ -42,8 +42,9 @@ type Gate struct {
 // Capture marks a committing evaluation the brain may record for offline replay
 // (Math Lab), subject to the brain's own allowlist.
 type Capture struct {
-	Spec       v1alpha1.PhorvexPolicySpec
-	CapturedAt time.Time
+	Spec                 v1alpha1.PhorvexPolicySpec
+	CapturedAt           time.Time
+	EndpointCostEvidence *model.ReplayCostEvidence
 }
 
 // DecideRequest is one tenant tick.

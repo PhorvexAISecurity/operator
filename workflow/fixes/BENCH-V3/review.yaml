@@ -1,0 +1,8 @@
+checks:
+  incident:
+    artifact: evidence/incident.md
+    command: "/workspace/.phorvex-tools/python311/python/bin/python3.11 /data/outputs/phorvex-v3-fix-20261031/run_baseline_proof.py; /workspace/.phorvex-tools/python311/python/bin/python3.11 /workspace/.phorvex-test-tmp/bench-v3-owned-runner.py /workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/lead-final-head-config.json; /workspace/.phorvex-tools/python311/python/bin/python3.11 /data/outputs/phorvex-v3-fix-20261031/run_lead_console_baseline.py"
+  p3:
+    artifact: evidence/p3/verdict.md
+    result: PASS
+    command: "Review complete pinned bb92355cf7b6c4a696f44caf52bd5fa1268e7303..00eac153f3f27929907f91d4231362051664364c diff and independent producer/console controls; preflight.validate_receipt(require_worktree=True) against evidence/preflight/receipt.json"

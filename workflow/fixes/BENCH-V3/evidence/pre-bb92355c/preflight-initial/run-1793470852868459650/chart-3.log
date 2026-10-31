@@ -1,0 +1,4 @@
+Requirement already satisfied: PyYAML==6.0.2 in /workspace/.phorvex-tools/python312/python/lib/python3.12/site-packages (6.0.2)
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: pip install --upgrade pip

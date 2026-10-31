@@ -312,7 +312,12 @@ func TestRemoteBrainMatchesInProcess(t *testing.T) {
 
 			views[i] = fleet()
 			committed, rec, err := s.brain.Decide(brainapi.DecideRequest{Views: views[i], Policy: pol, Gate: s.gates.gate(),
-				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now}})
+				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now, EndpointCostEvidence: &model.ReplayCostEvidence{
+					Schema: model.ReplayCostEvidenceSchema, CapturedAt: now, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
+					EndpointLossStatus: "unavailable", AdmissionLedgerStatus: "not-authoritative",
+					ReplicaHistory: model.ReplicaHistorySnapshot{Source: "replica-readiness", Entries: []model.ReplicaHistoryEntry{{ID: "move", PolicyOwner: pol.Owner(), PodUID: "pod", WorkloadUID: "workload", Outcome: "right_censored", Censored: true}}},
+					Missing:        []string{"endpoint-loss-intervals:not-recorded"},
+				}}})
 			decisions[i] = append(decisions[i], committed...)
 			decisions[i] = append(decisions[i], model.Decision{Reason: "error: " + errorText(err)})
 			final := append([]model.Decision(nil), committed...)
@@ -348,6 +353,14 @@ func TestRemoteBrainMatchesInProcess(t *testing.T) {
 		l, r := localSink.items[i], remoteSink.items[i]
 		if !r.Header.Finalized {
 			t.Fatalf("remote recording %d was not finalized", i)
+		}
+		var captured mathlab.Inputs
+		if err := gob.NewDecoder(bytes.NewReader(r.Stream)).Decode(&captured); err != nil {
+			t.Fatal(err)
+		}
+		evidence := captured.EndpointCostEvidence
+		if evidence == nil || evidence.EndpointLossStatus != "unavailable" || len(evidence.ReplicaHistory.Entries) != 1 || evidence.ReplicaHistory.Entries[0].WorkloadUID != "workload" {
+			t.Fatalf("capture evidence lost across actual gRPC: %+v", evidence)
 		}
 		// Gob writes maps in iteration order, so the streams are compared by content.
 		same(fmt.Sprintf("recording %d content", i), recordingContent(t, l.Stream), recordingContent(t, bytes.ReplaceAll(r.Stream, remoteEpoch, localEpoch)))

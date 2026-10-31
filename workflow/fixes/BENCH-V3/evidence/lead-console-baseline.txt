@@ -1,0 +1,29 @@
+{
+  "base": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "purpose": "Independent reviewer reproduction; logging-only overlay preserves original poll and assertions, then observes existing cleanup completion.",
+  "command": [
+    "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "-C",
+    "/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex",
+    "test",
+    "-overlay=/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-baseline-postwait-overlay.json",
+    "-mod=readonly",
+    "-count=1",
+    "-timeout=15m",
+    "./internal/console",
+    "-run",
+    "^TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords$/^poison$",
+    "-v"
+  ],
+  "overlay_sha256": "557fbf337e5cf532b7c89f4742f8fd347ea2bd5c5c9cfa71d32e8b608c797ec3",
+  "started_at": "2026-10-31T21:06:26Z"
+}
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords
+=== RUN   TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison
+    vllm_remaining_outcome_test.go:556: live unauthorized adapter route was not reported narrowly: &{Claim:<nil> ID:atk-dmjbvtk56b70 FiredAt:2026-10-31T21:06:40.650330924Z Service:vllm Namespace:vllm Pod:vllm-0 TargetUID:pod-uid Deploy: OwnerKind: OwnerUID: Attack:Unapproved LoRA load observation AttackID:poison MITRE:adapter-effect-only Expected:adapter-rotate Stateful:false EvidenceKind:vllm-in-place-effect LiveFire:false StimulusEvidence:0x1e1213542240 EffectEvidence:<nil> GuardrailEffectProbe:<nil> GuardrailOutputProbe:<nil> DrainLiveProbe:<nil> EndpointLeaseProbe:<nil> VoiceMemoryProbe:<nil> VoiceAgencyProbe:<nil> VoiceOutputProbe:<nil> VoiceAdmissionProbe:<nil> VoiceMCPProbe:<nil> LiteLLMLiveProbe:<nil> LiteLLMOutputProbe:<nil> CRMLiveProbe:<nil> OutcomeClass:behavioral-oracle-unsupported LoRACleanupStatus: LoRACleanupError: ProducerRoute: ResultSchema: ObservationStart:2026-10-31T21:06:40.650330924Z ObservationEnd:2026-10-31T21:06:40.655330924Z Status:running Outcome: Action: DefendedPod: Actuated:false TimeToDefendSec:0 DwellSec:0 DwellOngoing:false Containment: ResponseObserved:false ResponseAction: ResponsePod: ResponseSeconds:0 ObservationError: DecisionEvidence:<nil> DecisionTraceEvidence:[] TemporalDecisionEvidence:<nil> DecisionAuditReadGap:false DecisionAuditCoverage: Why: PerDollar:0 PerDollarAvailable:false Stage: CoveredFacts:0 CoveredFactsAvailable:false PHold:0 Lambda:0 LambdaAvailable:false EconomicsVersion: DisruptionAversion:0 DisruptionAversionPresent:false EffectiveCostCoefficient:0 NormPreference:<nil> FlowPreference:<nil> EconomicsAvailable:false R6Would: R6Note: UptimeBefore:-1 UptimeDip:0 UptimeAfter:0 Cost:{ValueAtRisk:0 Without:0 R6:0 With:0 Savings:0 Note: NodeInstance: NodeRatePerHr:0 PreventNone:0 PreventR6:0 PreventPhorvex:0 RatesSource: OperatorCost:0 R6Churn:0} PersistenceError: started:{wall:14029192192619397932 ext:1042073048 loc:0x5c93120} accepted:{wall:14029192192619397932 ext:1042073048 loc:0x5c93120} baseEpoch: baseKVEpoch: baseQuar:map[] baseNP:map[] vllmEffect:0x1e121352ea50 loRATerminalPersisted:false loRATerminalPersistFailed:false}
+    vllm_remaining_outcome_test.go:540: POST_WAIT after_response=1.449318519s since_fire=1.449589858s status="done" outcome="LANDED" cleanup="completed" observation_error="" cleanup_error="" persistence_error=""
+--- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords (2.41s)
+    --- FAIL: TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords/poison (2.41s)
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/console	2.511s
+FAIL

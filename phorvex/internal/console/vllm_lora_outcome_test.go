@@ -250,14 +250,9 @@ func TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry(t *testin
 				if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil || reply.AttackID == "" {
 					t.Fatalf("exact event create acknowledgement was not reconciled: %d %s", response.Code, response.Body.String())
 				}
-				deadline := time.Now().Add(2 * time.Second)
-				for time.Now().Before(deadline) {
-					reconciledRecord = attackSnapshotByID(reply.AttackID)
-					if reconciledRecord != nil && reconciledRecord.Status != "running" {
-						break
-					}
-					time.Sleep(time.Millisecond)
-				}
+				// Assert the watcher result after its cleanup and persistence finish.
+				s.attackWatchers.Wait()
+				reconciledRecord = attackSnapshotByID(reply.AttackID)
 			}
 			mu.Lock()
 			gotLoads, gotUnloads, stillLoaded := loads, unloads, loaded

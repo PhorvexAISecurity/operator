@@ -1,0 +1,18 @@
+{
+  "state": "FAILED",
+  "pid": 227158,
+  "source_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "started_at": "2026-10-31T20:25:34.647689+00:00",
+  "results": [
+    {
+      "name": "baseline-console-postwait-diagnostic",
+      "exit_code": 1,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 81.387,
+  "step": "baseline-console-postwait-diagnostic",
+  "child_pid": 227160,
+  "exit_code": 1,
+  "finished_at": "2026-10-31T20:26:56.034288+00:00"
+}

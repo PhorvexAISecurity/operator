@@ -1,0 +1,123 @@
+Making install in doc
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+make[2]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/workspace/.phorvex-tools/tar135/share/info'
+ /usr/bin/install -c -m 644 ./tar.info ./tar.info-1 ./tar.info-2 ./tar.info-3 '/workspace/.phorvex-tools/tar135/share/info'
+ /usr/bin/mkdir -p '/workspace/.phorvex-tools/tar135/share/man/man1'
+ /usr/bin/install -c -m 644 tar.1 '/workspace/.phorvex-tools/tar135/share/man/man1'
+ /usr/bin/mkdir -p '/workspace/.phorvex-tools/tar135/share/man/man8'
+ /usr/bin/install -c -m 644 rmt.8 '/workspace/.phorvex-tools/tar135/share/man/man8'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/doc'
+Making install in gnu
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make  install-recursive
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[3]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[4]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[4]: Nothing to be done for 'install-exec-am'.
+make[4]: Nothing to be done for 'install-data-am'.
+make[4]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[3]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/gnu'
+Making install in lib
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make  install-am
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make[3]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make[3]: Nothing to be done for 'install-exec-am'.
+make[3]: Nothing to be done for 'install-data-am'.
+make[3]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/lib'
+Making install in rmt
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+make[2]: Nothing to be done for 'install-exec-am'.
+ /usr/bin/mkdir -p '/workspace/.phorvex-tools/tar135/libexec'
+  /usr/bin/install -c rmt '/workspace/.phorvex-tools/tar135/libexec'
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/rmt'
+Making install in src
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+ /usr/bin/mkdir -p '/workspace/.phorvex-tools/tar135/bin'
+  /usr/bin/install -c tar '/workspace/.phorvex-tools/tar135/bin'
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/src'
+Making install in scripts
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/scripts'
+Making install in po
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/po'
+installing bg.gmo as /workspace/.phorvex-tools/tar135/share/locale/bg/LC_MESSAGES/tar.mo
+installing ca.gmo as /workspace/.phorvex-tools/tar135/share/locale/ca/LC_MESSAGES/tar.mo
+installing cs.gmo as /workspace/.phorvex-tools/tar135/share/locale/cs/LC_MESSAGES/tar.mo
+installing da.gmo as /workspace/.phorvex-tools/tar135/share/locale/da/LC_MESSAGES/tar.mo
+installing de.gmo as /workspace/.phorvex-tools/tar135/share/locale/de/LC_MESSAGES/tar.mo
+installing el.gmo as /workspace/.phorvex-tools/tar135/share/locale/el/LC_MESSAGES/tar.mo
+installing eo.gmo as /workspace/.phorvex-tools/tar135/share/locale/eo/LC_MESSAGES/tar.mo
+installing es.gmo as /workspace/.phorvex-tools/tar135/share/locale/es/LC_MESSAGES/tar.mo
+installing et.gmo as /workspace/.phorvex-tools/tar135/share/locale/et/LC_MESSAGES/tar.mo
+installing eu.gmo as /workspace/.phorvex-tools/tar135/share/locale/eu/LC_MESSAGES/tar.mo
+installing fi.gmo as /workspace/.phorvex-tools/tar135/share/locale/fi/LC_MESSAGES/tar.mo
+installing fr.gmo as /workspace/.phorvex-tools/tar135/share/locale/fr/LC_MESSAGES/tar.mo
+installing ga.gmo as /workspace/.phorvex-tools/tar135/share/locale/ga/LC_MESSAGES/tar.mo
+installing gl.gmo as /workspace/.phorvex-tools/tar135/share/locale/gl/LC_MESSAGES/tar.mo
+installing hr.gmo as /workspace/.phorvex-tools/tar135/share/locale/hr/LC_MESSAGES/tar.mo
+installing hu.gmo as /workspace/.phorvex-tools/tar135/share/locale/hu/LC_MESSAGES/tar.mo
+installing id.gmo as /workspace/.phorvex-tools/tar135/share/locale/id/LC_MESSAGES/tar.mo
+installing it.gmo as /workspace/.phorvex-tools/tar135/share/locale/it/LC_MESSAGES/tar.mo
+installing ja.gmo as /workspace/.phorvex-tools/tar135/share/locale/ja/LC_MESSAGES/tar.mo
+installing ka.gmo as /workspace/.phorvex-tools/tar135/share/locale/ka/LC_MESSAGES/tar.mo
+installing ko.gmo as /workspace/.phorvex-tools/tar135/share/locale/ko/LC_MESSAGES/tar.mo
+installing ky.gmo as /workspace/.phorvex-tools/tar135/share/locale/ky/LC_MESSAGES/tar.mo
+installing ms.gmo as /workspace/.phorvex-tools/tar135/share/locale/ms/LC_MESSAGES/tar.mo
+installing nb.gmo as /workspace/.phorvex-tools/tar135/share/locale/nb/LC_MESSAGES/tar.mo
+installing nl.gmo as /workspace/.phorvex-tools/tar135/share/locale/nl/LC_MESSAGES/tar.mo
+installing pl.gmo as /workspace/.phorvex-tools/tar135/share/locale/pl/LC_MESSAGES/tar.mo
+installing pt.gmo as /workspace/.phorvex-tools/tar135/share/locale/pt/LC_MESSAGES/tar.mo
+installing pt_BR.gmo as /workspace/.phorvex-tools/tar135/share/locale/pt_BR/LC_MESSAGES/tar.mo
+installing ro.gmo as /workspace/.phorvex-tools/tar135/share/locale/ro/LC_MESSAGES/tar.mo
+installing ru.gmo as /workspace/.phorvex-tools/tar135/share/locale/ru/LC_MESSAGES/tar.mo
+installing sk.gmo as /workspace/.phorvex-tools/tar135/share/locale/sk/LC_MESSAGES/tar.mo
+installing sl.gmo as /workspace/.phorvex-tools/tar135/share/locale/sl/LC_MESSAGES/tar.mo
+installing sr.gmo as /workspace/.phorvex-tools/tar135/share/locale/sr/LC_MESSAGES/tar.mo
+installing sv.gmo as /workspace/.phorvex-tools/tar135/share/locale/sv/LC_MESSAGES/tar.mo
+installing tr.gmo as /workspace/.phorvex-tools/tar135/share/locale/tr/LC_MESSAGES/tar.mo
+installing uk.gmo as /workspace/.phorvex-tools/tar135/share/locale/uk/LC_MESSAGES/tar.mo
+installing vi.gmo as /workspace/.phorvex-tools/tar135/share/locale/vi/LC_MESSAGES/tar.mo
+installing zh_CN.gmo as /workspace/.phorvex-tools/tar135/share/locale/zh_CN/LC_MESSAGES/tar.mo
+installing zh_TW.gmo as /workspace/.phorvex-tools/tar135/share/locale/zh_TW/LC_MESSAGES/tar.mo
+if test "tar" = "gettext-tools"; then \
+  /usr/bin/mkdir -p /workspace/.phorvex-tools/tar135/share/gettext/po; \
+  for file in Makefile.in.in remove-potcdate.sin quot.sed boldquot.sed en@quot.header en@boldquot.header insert-header.sin Rules-quot   Makevars.template; do \
+    /usr/bin/install -c -m 644 ./$file \
+		    /workspace/.phorvex-tools/tar135/share/gettext/po/$file; \
+  done; \
+  for file in Makevars; do \
+    rm -f /workspace/.phorvex-tools/tar135/share/gettext/po/$file; \
+  done; \
+else \
+  : ; \
+fi
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/po'
+Making install in tests
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[2]: Nothing to be done for 'install-exec-am'.
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35/tests'
+make[1]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+make[2]: Entering directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+make[2]: Nothing to be done for 'install-exec-am'.
+make[2]: Nothing to be done for 'install-data-am'.
+make[2]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'
+make[1]: Leaving directory '/workspace/.phorvex-tools/tar135-build/tar-1.35'

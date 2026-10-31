@@ -1,0 +1,6 @@
+{
+  "Replace": {
+    "/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex/internal/console/vllm_lora_outcome_test.go": "/workspace/.phorvex-test-tmp/bench-v3-console-postwait.fv3ykc2q/vllm_lora_outcome_test.go",
+    "/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex/internal/console/vllm_remaining_outcome_test.go": "/workspace/.phorvex-test-tmp/bench-v3-console-postwait.fv3ykc2q/vllm_remaining_outcome_test.go"
+  }
+}

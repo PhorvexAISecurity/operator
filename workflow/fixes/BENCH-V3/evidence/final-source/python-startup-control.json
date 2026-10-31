@@ -1,0 +1,21 @@
+{
+  "context": "Diagnostic import latency during build preparation, not proof that console tests pass. Exact final test controls still required.",
+  "rows": [
+    {
+      "binary": "/usr/bin/python3",
+      "seconds": [
+        0.6396,
+        0.3812,
+        0.2957
+      ]
+    },
+    {
+      "binary": "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+      "seconds": [
+        0.4967,
+        0.3667,
+        0.3363
+      ]
+    }
+  ]
+}

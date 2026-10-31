@@ -22,9 +22,11 @@ type Inspection struct {
 	Learned    map[string]any  `json:"learned"`
 	// Manifest and Overrides are the decision parameter set exactly as this binary resolves
 	// it for the recorded policy (source constants and effective policy values).
-	Manifest  *model.DecisionParameterManifest `json:"parameter_manifest,omitempty"`
-	Overrides *model.EffectivePolicyOverrides  `json:"policy_overrides,omitempty"`
-	Complete  []string                         `json:"unreplayable_fields"`
+	Manifest             *model.DecisionParameterManifest `json:"parameter_manifest,omitempty"`
+	Overrides            *model.EffectivePolicyOverrides  `json:"policy_overrides,omitempty"`
+	Complete             []string                         `json:"unreplayable_fields"`
+	EndpointCostEvidence *model.ReplayCostEvidence        `json:"endpoint_cost_evidence,omitempty"`
+	EndpointCostMissing  []string                         `json:"endpoint_cost_missing"`
 }
 
 // Inspect builds the inspection view.
@@ -109,6 +111,12 @@ func Inspect(s *Snapshot) Inspection {
 	}
 	out := Inspection{Schema: "math-lab.inspection.v1", Digest: s.Digest, Header: s.Header,
 		Configured: json.RawMessage(nonEmptyJSON(s.Inputs.SpecJSON)), Effective: eff, Learned: learned, Complete: Completeness(s)}
+	out.EndpointCostEvidence = s.Inputs.EndpointCostEvidence.Clone()
+	if out.EndpointCostEvidence == nil {
+		out.EndpointCostMissing = []string{"endpoint_cost_evidence:not-recorded"}
+	} else {
+		out.EndpointCostMissing = append([]string(nil), out.EndpointCostEvidence.Missing...)
+	}
 	if _, manifest, overrides, err := decision.ParameterSetForPolicy(pol); err == nil {
 		out.Manifest, out.Overrides = &manifest, &overrides
 	}

@@ -1,0 +1,42 @@
+{
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "cwd": "/workspace/operator-v3-capture",
+  "env": {
+    "PATH": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games",
+    "GO_BIN": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2",
+    "HELM_BIN": "/workspace/.phorvex-tools/helm",
+    "KUBECONFIG": "/dev/null",
+    "KUBEBUILDER_ASSETS": "",
+    "USE_EXISTING_CLUSTER": "false",
+    "PREFLIGHT_PYTHON_3_11": "/workspace/.phorvex-tools/python311/python/bin/python3.11",
+    "PREFLIGHT_PYTHON_3_12": "/workspace/.phorvex-tools/python312/python/bin/python3.12"
+  },
+  "status": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-synchronized-status.json",
+  "log": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/console-synchronized.txt",
+  "description": "Committed 00eac153: two terminal-observation controls synchronized to existing watcher completion; all outcome assertions retained, 15m Go deadline unchanged.",
+  "total_timeout_seconds": 2400,
+  "steps": [
+    {
+      "name": "synchronized-console-controls",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "-C",
+        "/workspace/operator-v3-capture/phorvex",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=15m",
+        "./internal/console",
+        "-run",
+        "TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry|TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords",
+        "-v"
+      ],
+      "timeout_seconds": 1000
+    }
+  ]
+}

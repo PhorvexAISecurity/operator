@@ -1,0 +1,2192 @@
+diff --git a/docs/math-lab/SNAPSHOT_AND_REPLAY.md b/docs/math-lab/SNAPSHOT_AND_REPLAY.md
+index 1263914fd8bb99d9358131ea683b360d88c0a61f..65a41775ccb7daf449f2d39e6b13a863b99b062b 100644
+--- a/docs/math-lab/SNAPSHOT_AND_REPLAY.md
++++ b/docs/math-lab/SNAPSHOT_AND_REPLAY.md
+@@ -131,3 +131,47 @@ All tests are in-tree and run in CI. They map to the shared acceptance matrix as
+ | `cmd/brain-replay.TestReplayCommandReproducesAndRefusesForeignRevisions` | V-01 (version mismatch), inspection |
+ | `audittransport.TestMathLabEndpointsAreReadOnlyBoundedAndContentAddressed` | read-only transport |
+ | `actionset.TestEveryGeneratedExclusionNamesItsGate` (AST guard) | D gate attribution completeness |
++
++### Optional cost-input evidence (observability prerequisite)
++
++The manager flag `--math-lab-capture-cost-evidence` defaults to `false`. When
++explicitly enabled it attaches `phorvex.endpoint-cost-evidence.v1` to the capture
++request. Existing policy allowlisting and snapshot storage remain required. In
++remote mode, enable the new flag on the **manager** and the existing
++`--math-lab-capture-policies=namespace/name` and storage flags on the **brain**.
++This proposal does not change chart defaults or activate collection in a cluster.
++The manager, brain, and sensor (when remote) must all run compatible code; older
++components can omit the additive fields, and old snapshots keep them absent.
++
++`model.Pod.WorkloadSpec` records an exact UID-checked controller `spec.replicas`
++observation with resource version, generation, and sensor observation time. A
++Deployment is resolved through its ReplicaSet; standalone ReplicaSets,
++StatefulSets and ReplicationControllers can also supply already-observed replica specs. The
++evidence helper never issues additional API reads: it sees only the existing
++snapshot owner cache after the existing rotation and stateful-rotation producers.
++Objects they do not read, such as direct-Deployment owners, remain
++`owner-object-not-observed`. Cache identity includes type, GVK and object key. Zero is a known
++value. Missing readers, stale or ambiguous identities and unsupported controllers
++remain unknown. In particular, Phoenix observations that do not request owner
++resolution keep `owner-reader-unavailable`; enabling this flag does not broaden
++sensor API reads. Existing `DesiredReplicas` and admission behavior are unchanged.
++
++Inspection exposes `endpoint_cost_evidence` and `endpoint_cost_missing`. The
++optional envelope contains at most 256 workload observations and 2,000 matching
++ledger observations, bounded to 1 MiB. Truncation and attribution gaps are explicit.
++Ledger export is an immutable copy filtered by exact policy owner and namespace;
++rows preserve their observation ID, emitted/censored/completed status and known
++pod/workload UIDs. `process_observed_since` is this ledger instance's creation time,
++not a promise of uninterrupted monitoring. History is in-memory and
++`history_complete` remains false, including after restart.
++
++The exported ledger source is **replica-readiness**: its duration runs from
++actuation to observed replacement Pod readiness. The current EndpointSlice
++producer records point membership, without durable, move-attributed transition
++intervals. Therefore `endpoint_loss_status` is always `unavailable` and
++`admission_ledger_status` is `not-authoritative` for this producer. These records
++cannot activate endpoint pricing, reconstruct an authoritative endpoint budget,
++or supply a complete paired V2/V3 dataset. Accepted endpoint availability targets
++and move-attributed endpoint-loss intervals require a separate producer. Old
++snapshots report `endpoint_cost_evidence:not-recorded` while legacy replay still
++works; no historical observations are invented.
+diff --git a/phorvex/cmd/main.go b/phorvex/cmd/main.go
+index 0dc25f4f77830d0e35d0adeddc0a64d1902fb81a..9949c91413f3105d647ce355fe0cd4d7d2c39cf3 100644
+--- a/phorvex/cmd/main.go
++++ b/phorvex/cmd/main.go
+@@ -163,6 +163,7 @@ func main() {
+ 		mathLabCaptureDir              string
+ 		mathLabCaptureMaxBytes         int64
+ 		mathLabMaxSnapshotBytes        int
++		mathLabCostEvidence            bool
+ 		brainEndpoint                  string
+ 		serviceTLS                     grpctlsconfig.Config
+ 		sensorFlags                    sensorconfig.Flags
+@@ -235,6 +236,7 @@ func main() {
+ 	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
+ 	flag.Int64Var(&mathLabCaptureMaxBytes, "math-lab-capture-max-bytes", 1<<30, "[math-lab-capture-policies] byte bound of the snapshot store; the oldest snapshots are evicted first.")
+ 	flag.IntVar(&mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot; larger ticks are dropped and counted.")
++	flag.BoolVar(&mathLabCostEvidence, "math-lab-capture-cost-evidence", false, "Include bounded, explicitly partial workload-spec and replica-impact history in Math Lab captures. Does not enable endpoint pricing, admission or actuation; requires the brain capture allowlist.")
+ 	flag.StringVar(&brainEndpoint, "brain-endpoint", "", "gRPC address of the brain service (ADR-0001). Empty (default) runs the decision engine in this process. The connection is mutual TLS with --grpc-tls-cert, else plaintext: restrict the brain with a NetworkPolicy.")
+ 	flag.DurationVar(&brainConnectTimeout, "brain-connect-timeout", 2*time.Minute, "[brain-endpoint] how long startup waits for the brain service to accept the handshake.")
+ 	flag.DurationVar(&brainCallTimeout, "brain-call-timeout", 5*time.Second, "[brain-endpoint] deadline of each brain call other than an evaluation.")
+@@ -471,6 +473,7 @@ func main() {
+ 		os.Exit(1)
+ 	}
+ 	rmgr := runner.New(mgr.GetClient(), ctrl.Log, local)
++	rmgr.CaptureCostEvidence = mathLabCostEvidence
+ 	rmgr.OwnershipReader = mgr.GetAPIReader()
+ 	rmgr.VocabularyReader = mgr.GetAPIReader()
+ 	// The manager acts in this process unless --actuator-endpoint names the actuator
+diff --git a/phorvex/docs/recon-cover-map.generated.md b/phorvex/docs/recon-cover-map.generated.md
+index c891bb12948879eab58beb4682f671e76b020562..2fc7e7d148150c2231253b7fea26bd9f988a4ab2 100644
+--- a/phorvex/docs/recon-cover-map.generated.md
++++ b/phorvex/docs/recon-cover-map.generated.md
+@@ -4,7 +4,7 @@ GENERATED by `go run ./tools/covermap` — do not edit by hand. `go run ./tools/
+ 
+ Every row below is the output of an actual `ReconProfile.AssetFacts` call on the named fixture. The fixtures are a branch inventory of the producers; their union is **not** runtime eligibility. Candidate generation (actionset), the capability gate, feasibility, cost and selection are downstream of everything here and are described in `build/test-harness/ACTUATOR_COVERAGE.md`. Weights use AssetValue=1, PHold=1, StageUrgency=1 unless the fixture says otherwise, so a weight reads as the producer's multiplier.
+ 
+-inputs-sha256: 5cc2d03222d1982c70fa3a03ff64561685d4ca3aa38d65ad4f8279eecc7f7d06
++inputs-sha256: 0e14ce4c5f698d36ad654acb68c0c8e8aa0025e4dbd743c482190858f2007030
+ 
+ ## Source inputs
+ 
+@@ -14,7 +14,7 @@ Content hashes of the non-test Go files that determine this report (renames, com
+ |---|---|---|
+ | `internal/recon` | 6 | `edf2e5f5a355f6e4972f74cea248a8cee93a592e03b3af05ee705b5b18f58e68` |
+ | `internal/registry` | 1 | `3e3575f3ab3f360e0de72adf46dca0b7c608257d2b5d80012188224ad289ee50` |
+-| `internal/model` | 26 | `611fe15201ee0f6236f7002d51de23d04ad35b8a59699154ad4d0a3dd6e0cdfe` |
++| `internal/model` | 28 | `a11e95758b651fc36e78e36ed7292ff5579a268c748346219a0b80c15ad2b514` |
+ | `internal/outputpolicy` | 2 | `67d1c283b17e839d99faae4a3e8d985ef9ab741f1871b15a6d7840263a7f4570` |
+ | `tools/covermap` | 2 | `aef9c7a8b0fab5741daf170293ea99865872912c5dd421595c91c40600a62c01` |
+ 
+@@ -1471,14 +1471,16 @@ The same content as JSON (fixture inputs are complete, so any reader can rebuild
+         "phase.go",
+         "pod_bound_api_auth_event.go",
+         "redact_export.go",
++        "replay_cost.go",
+         "representation.go",
+         "representation_owned.go",
+         "scoped_outcome.go",
+         "signal.go",
+         "stateful_rotation.go",
+-        "types.go"
++        "types.go",
++        "workload_spec.go"
+       ],
+-      "sha256": "611fe15201ee0f6236f7002d51de23d04ad35b8a59699154ad4d0a3dd6e0cdfe"
++      "sha256": "a11e95758b651fc36e78e36ed7292ff5579a268c748346219a0b80c15ad2b514"
+     },
+     {
+       "path": "internal/outputpolicy",
+@@ -1497,7 +1499,7 @@ The same content as JSON (fixture inputs are complete, so any reader can rebuild
+       "sha256": "aef9c7a8b0fab5741daf170293ea99865872912c5dd421595c91c40600a62c01"
+     }
+   ],
+-  "inputsSHA256": "5cc2d03222d1982c70fa3a03ff64561685d4ca3aa38d65ad4f8279eecc7f7d06",
++  "inputsSHA256": "0e14ce4c5f698d36ad654acb68c0c8e8aa0025e4dbd743c482190858f2007030",
+   "profiles": [
+     "standard-recon",
+     "ucw-recon"
+diff --git a/phorvex/internal/brainapi/brainapi.go b/phorvex/internal/brainapi/brainapi.go
+index b0ada5ce120587033e3479d7568f87368c33f061..6c84e28c9bcd6fa4b79ea9f3be1bfef12b1c6716 100644
+--- a/phorvex/internal/brainapi/brainapi.go
++++ b/phorvex/internal/brainapi/brainapi.go
+@@ -42,8 +42,9 @@ type Gate struct {
+ // Capture marks a committing evaluation the brain may record for offline replay
+ // (Math Lab), subject to the brain's own allowlist.
+ type Capture struct {
+-	Spec       v1alpha1.PhorvexPolicySpec
+-	CapturedAt time.Time
++	Spec                 v1alpha1.PhorvexPolicySpec
++	CapturedAt           time.Time
++	EndpointCostEvidence *model.ReplayCostEvidence
+ }
+ 
+ // DecideRequest is one tenant tick.
+diff --git a/phorvex/internal/brainclient/parity_test.go b/phorvex/internal/brainclient/parity_test.go
+index ec406a08e8ac7952e02ae7d396bbe1157f4be79b..e205ea9919ad31cffca0fd02ca8b18cc107bf510 100644
+--- a/phorvex/internal/brainclient/parity_test.go
++++ b/phorvex/internal/brainclient/parity_test.go
+@@ -312,7 +312,12 @@ func TestRemoteBrainMatchesInProcess(t *testing.T) {
+ 
+ 			views[i] = fleet()
+ 			committed, rec, err := s.brain.Decide(brainapi.DecideRequest{Views: views[i], Policy: pol, Gate: s.gates.gate(),
+-				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now}})
++				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now, EndpointCostEvidence: &model.ReplayCostEvidence{
++					Schema: model.ReplayCostEvidenceSchema, CapturedAt: now, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
++					EndpointLossStatus: "unavailable", AdmissionLedgerStatus: "not-authoritative",
++					ReplicaHistory: model.ReplicaHistorySnapshot{Source: "replica-readiness", Entries: []model.ReplicaHistoryEntry{{ID: "move", PolicyOwner: pol.Owner(), PodUID: "pod", WorkloadUID: "workload", Outcome: "right_censored", Censored: true}}},
++					Missing:        []string{"endpoint-loss-intervals:not-recorded"},
++				}}})
+ 			decisions[i] = append(decisions[i], committed...)
+ 			decisions[i] = append(decisions[i], model.Decision{Reason: "error: " + errorText(err)})
+ 			final := append([]model.Decision(nil), committed...)
+@@ -349,6 +354,14 @@ func TestRemoteBrainMatchesInProcess(t *testing.T) {
+ 		if !r.Header.Finalized {
+ 			t.Fatalf("remote recording %d was not finalized", i)
+ 		}
++		var captured mathlab.Inputs
++		if err := gob.NewDecoder(bytes.NewReader(r.Stream)).Decode(&captured); err != nil {
++			t.Fatal(err)
++		}
++		evidence := captured.EndpointCostEvidence
++		if evidence == nil || evidence.EndpointLossStatus != "unavailable" || len(evidence.ReplicaHistory.Entries) != 1 || evidence.ReplicaHistory.Entries[0].WorkloadUID != "workload" {
++			t.Fatalf("capture evidence lost across actual gRPC: %+v", evidence)
++		}
+ 		// Gob writes maps in iteration order, so the streams are compared by content.
+ 		same(fmt.Sprintf("recording %d content", i), recordingContent(t, l.Stream), recordingContent(t, bytes.ReplaceAll(r.Stream, remoteEpoch, localEpoch)))
+ 		same(fmt.Sprintf("recording %d selection", i), mustJSON(t, l.Header.Selected), mustJSON(t, r.Header.Selected))
+diff --git a/phorvex/internal/brainsvc/local.go b/phorvex/internal/brainsvc/local.go
+index 088ccf8e6a337d3aed0c91d74abbd615ac185ea7..ddf0fd2d9bc3515719e8b140d333f8302b15d7ec 100644
+--- a/phorvex/internal/brainsvc/local.go
++++ b/phorvex/internal/brainsvc/local.go
+@@ -76,7 +76,7 @@ func (l *Local) Decide(req brainapi.DecideRequest) ([]model.Decision, brainapi.R
+ 	defer l.withGate(req.Gate)()
+ 	var capture *mathlab.TickCapture
+ 	if req.Capture != nil {
+-		capture = l.recorder.Begin(l.ce, req.Capture.Spec, req.Views, req.Policy, req.Capture.CapturedAt)
++		capture = l.recorder.Begin(l.ce, req.Capture.Spec, req.Views, req.Policy, req.Capture.CapturedAt, req.Capture.EndpointCostEvidence)
+ 	}
+ 	decisions, err := l.ce.DecideChecked(req.Views, req.Policy)
+ 	if capture == nil {
+diff --git a/phorvex/internal/console/vllm_lora_outcome_test.go b/phorvex/internal/console/vllm_lora_outcome_test.go
+index 2d560fcf20a155f1f7089b159cb03ca6dd03d2b3..5eab581138fddee008f4fd96fe42c68a87efb443 100644
+--- a/phorvex/internal/console/vllm_lora_outcome_test.go
++++ b/phorvex/internal/console/vllm_lora_outcome_test.go
+@@ -250,14 +250,9 @@ func TestPoisonSetupFailureReconcilesExactOwnedAdapterWithoutLoadRetry(t *testin
+ 				if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &reply) != nil || reply.AttackID == "" {
+ 					t.Fatalf("exact event create acknowledgement was not reconciled: %d %s", response.Code, response.Body.String())
+ 				}
+-				deadline := time.Now().Add(2 * time.Second)
+-				for time.Now().Before(deadline) {
+-					reconciledRecord = attackSnapshotByID(reply.AttackID)
+-					if reconciledRecord != nil && reconciledRecord.Status != "running" {
+-						break
+-					}
+-					time.Sleep(time.Millisecond)
+-				}
++				// Assert the watcher result after its cleanup and persistence finish.
++				s.attackWatchers.Wait()
++				reconciledRecord = attackSnapshotByID(reply.AttackID)
+ 			}
+ 			mu.Lock()
+ 			gotLoads, gotUnloads, stillLoaded := loads, unloads, loaded
+diff --git a/phorvex/internal/console/vllm_remaining_outcome_test.go b/phorvex/internal/console/vllm_remaining_outcome_test.go
+index b1617d6628bb334ab5b0e7a1e47305977fc7a9be..9da216cc19983513ee305fb6ed9f782066345563 100644
+--- a/phorvex/internal/console/vllm_remaining_outcome_test.go
++++ b/phorvex/internal/console/vllm_remaining_outcome_test.go
+@@ -529,15 +529,9 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
+ 			if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
+ 				t.Fatalf("missing attack record identity: %v body=%s", err, response.Body.String())
+ 			}
+-			deadline := time.Now().Add(time.Second)
+-			var record *attackRecord
+-			for time.Now().Before(deadline) {
+-				record = attackSnapshotByID(reply.AttackID)
+-				if record != nil && record.Status != "running" {
+-					break
+-				}
+-				time.Sleep(time.Millisecond)
+-			}
++			// Assert the watcher result after its cleanup and persistence finish.
++			s.attackWatchers.Wait()
++			record := attackSnapshotByID(reply.AttackID)
+ 			if record == nil || record.Actuated || record.Containment != "" || record.DwellSec != 0 || record.DwellOngoing || record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.BehavioralExecuted {
+ 				t.Fatalf("nonbehavioral flow manufactured verdict: %+v", record)
+ 			}
+diff --git a/phorvex/internal/ingest/kube.go b/phorvex/internal/ingest/kube.go
+index 2306a1f0d721859fa3699f2d844bab2a382e99d2..f1d23729c9cd909a309740f60498379a564894f3 100644
+--- a/phorvex/internal/ingest/kube.go
++++ b/phorvex/internal/ingest/kube.go
+@@ -195,8 +195,10 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
+ 		if relevant == nil || relevant(&podList.Items[i]) {
+ 			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
+ 			p.StatefulRotation = statefulrotation.Observe(ctx, ownerReader, &podList.Items[i])
++			p.WorkloadSpec = workloadSpecObservation(ctx, ownerEvidenceReader(ownerReader), &podList.Items[i], now)
+ 		} else {
+ 			p.RotationOwnership.Reason = "outside-rotation-targets"
++			p.WorkloadSpec = model.WorkloadSpecObservation{Reason: "outside-observation-targets", ObservedAt: now, PodUID: p.UID}
+ 		}
+ 		ownerKey := p.Namespace + "/" + p.OwnerKind + "/" + p.OwnerName
+ 		if p.OwnerName != "" {
+diff --git a/phorvex/internal/ingest/owner_reader.go b/phorvex/internal/ingest/owner_reader.go
+index c815a24ed395d7b412bf5ff721cdf57aca68acf3..cca3248ed3facec843248e294f3d9b3357ae97f9 100644
+--- a/phorvex/internal/ingest/owner_reader.go
++++ b/phorvex/internal/ingest/owner_reader.go
+@@ -2,6 +2,7 @@ package ingest
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"reflect"
+ 
+ 	"k8s.io/apimachinery/pkg/runtime/schema"
+@@ -49,3 +50,31 @@ func (r *snapshotOwnerReader) Get(ctx context.Context, key client.ObjectKey, obj
+ 	}
+ 	return v.err
+ }
++
++var errOwnerObjectNotObserved = errors.New("owner object was not observed by this snapshot's existing owner reads")
++
++// Snapshot evidence can inspect only objects already read by the existing
++// rotation and stateful-rotation producers. It has no route to issue an additional API Get or List.
++type snapshotEvidenceReader struct{ cache *snapshotOwnerReader }
++
++func ownerEvidenceReader(r client.Reader) client.Reader {
++	cache, ok := r.(*snapshotOwnerReader)
++	if !ok || cache == nil {
++		return nil
++	}
++	return snapshotEvidenceReader{cache: cache}
++}
++func (r snapshotEvidenceReader) Get(_ context.Context, key client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
++	value, ok := r.cache.reads[ownerReadKey{reflect.TypeOf(obj), obj.GetObjectKind().GroupVersionKind(), key}]
++	if !ok {
++		return errOwnerObjectNotObserved
++	}
++	if value.err != nil {
++		return value.err
++	}
++	reflect.ValueOf(obj).Elem().Set(reflect.ValueOf(value.object.DeepCopyObject()).Elem())
++	return nil
++}
++func (snapshotEvidenceReader) List(context.Context, client.ObjectList, ...client.ListOption) error {
++	return errOwnerObjectNotObserved
++}
+diff --git a/phorvex/internal/ingest/owner_reader_test.go b/phorvex/internal/ingest/owner_reader_test.go
+index ccc07ca32400714b09ecbf6c5841ff1e9e2ee68d..0e5c214b45d28cb6c6c4fdc99a58e62a825b063f 100644
+--- a/phorvex/internal/ingest/owner_reader_test.go
++++ b/phorvex/internal/ingest/owner_reader_test.go
+@@ -2,16 +2,22 @@ package ingest
+ 
+ import (
+ 	"context"
++	"errors"
+ 	"fmt"
++	"reflect"
+ 	"testing"
+ 	"time"
+ 
+ 	"github.com/phorvex/phorvex/api/v1alpha1"
++	"github.com/phorvex/phorvex/internal/ownership"
++	"github.com/phorvex/phorvex/internal/statefulrotation"
+ 	amtd "github.com/r6security/phoenix/api/v1beta1"
+ 	appsv1 "k8s.io/api/apps/v1"
+ 	corev1 "k8s.io/api/core/v1"
+ 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+ 	"k8s.io/apimachinery/pkg/runtime"
++	"k8s.io/apimachinery/pkg/runtime/schema"
+ 	"k8s.io/apimachinery/pkg/types"
+ 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+ 	"sigs.k8s.io/controller-runtime/pkg/client"
+@@ -75,3 +81,97 @@ func TestSnapshotOwnerReadsDeduplicatedAndScoped(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// Defaults cannot expand read authority or introduce latency for owner types
++// that the existing snapshot producers never fetch.
++func TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects(t *testing.T) {
++	s := runtime.NewScheme()
++	_ = clientgoscheme.AddToScheme(s)
++	_ = v1alpha1.AddToScheme(s)
++	_ = amtd.AddToScheme(s)
++	n := int32(4)
++	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "ns", UID: "d", ResourceVersion: "9"}, Spec: appsv1.DeploymentSpec{Replicas: &n}}
++	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns", UID: "r", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &n, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "yes"}}}}
++	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "sts", Namespace: "ns", UID: "s"}, Spec: appsv1.StatefulSetSpec{Replicas: &n}}
++	mk := func(name string, owner client.Object, kind string) *corev1.Pod {
++		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(name), Labels: map[string]string{"app": "yes"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind(kind))}}}
++	}
++	// A separate direct Deployment owner never fetched by the real rotation path.
++	direct := dep.DeepCopy()
++	direct.Name = "direct"
++	direct.UID = "direct"
++	pods := []*corev1.Pod{mk("deployment", rs, "ReplicaSet"), mk("stateful", sts, "StatefulSet"), mk("direct", direct, "Deployment")}
++	objects := []client.Object{dep, rs, sts, direct}
++	for _, p := range pods {
++		objects = append(objects, p)
++	}
++	c := fake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
++	reference := countingOwnerReader{Reader: c, calls: map[string]int{}}
++	cached := newSnapshotOwnerReader(reference)
++	for _, p := range pods {
++		ownership.Check(context.Background(), cached, p)
++		statefulrotation.Observe(context.Background(), cached, p)
++	}
++	reader := countingOwnerReader{Reader: c, calls: map[string]int{}}
++	snap, err := CollectSnapshotForRotationTargets(context.Background(), c, time.Now(), nil, reader, func(*corev1.Pod) bool { return true })
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(reader.calls, reference.calls) || len(reader.calls) != 3 {
++		t.Fatalf("evidence expanded live API reads: reference=%v actual=%v", reference.calls, reader.calls)
++	}
++	for _, p := range snap.Pods {
++		if p.Name == "deployment" {
++			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "d" {
++				t.Fatal(p.WorkloadSpec)
++			}
++		} else if p.Name == "stateful" {
++			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "s" {
++				t.Fatal(p.WorkloadSpec)
++			}
++		} else if p.WorkloadSpec.Known || p.WorkloadSpec.Reason != "owner-object-not-observed" {
++			t.Fatalf("cache miss was invented: %+v", p.WorkloadSpec)
++		}
++	}
++}
++
++func TestWorkloadEvidenceCachePreservesGVKIsolation(t *testing.T) {
++	ctx := context.Background()
++	aGVK := schema.GroupVersionKind{Group: "fixture.example", Version: "v1", Kind: "FirstKind"}
++	bGVK := schema.GroupVersionKind{Group: "fixture.example", Version: "v1", Kind: "SecondKind"}
++	makeObject := func(gvk schema.GroupVersionKind, uid string) *unstructured.Unstructured {
++		o := &unstructured.Unstructured{}
++		o.SetGroupVersionKind(gvk)
++		o.SetNamespace("ns")
++		o.SetName("same")
++		o.SetUID(types.UID(uid))
++		return o
++	}
++	a, b := makeObject(aGVK, "a"), makeObject(bGVK, "b")
++	c := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(a, b).Build()
++	reader := countingOwnerReader{Reader: c, calls: map[string]int{}}
++	cached := newSnapshotOwnerReader(reader)
++	evidence := ownerEvidenceReader(cached)
++	key := client.ObjectKeyFromObject(a)
++	if err := cached.Get(ctx, key, makeObject(aGVK, "")); err != nil {
++		t.Fatal(err)
++	}
++	if err := evidence.Get(ctx, key, makeObject(bGVK, "")); !errors.Is(err, errOwnerObjectNotObserved) {
++		t.Fatalf("unobserved GVK reused another kind: %v", err)
++	}
++	if reader.calls[fmt.Sprintf("%T/%s", a, key)] != 1 {
++		t.Fatal("evidence issued an API read")
++	}
++	if err := cached.Get(ctx, key, makeObject(bGVK, "")); err != nil {
++		t.Fatal(err)
++	}
++	for _, want := range []*unstructured.Unstructured{a, b} {
++		got := makeObject(want.GroupVersionKind(), "")
++		if err := evidence.Get(ctx, key, got); err != nil || got.GetUID() != want.GetUID() {
++			t.Fatalf("GVK cache identity lost: %v %+v", err, got)
++		}
++	}
++	if reader.calls[fmt.Sprintf("%T/%s", a, key)] != 2 {
++		t.Fatal("cache evidence added reads")
++	}
++}
+diff --git a/phorvex/internal/ingest/workload_spec.go b/phorvex/internal/ingest/workload_spec.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c27451628dbf992288e42092e1b9fda2f25ff9f
+--- /dev/null
++++ b/phorvex/internal/ingest/workload_spec.go
+@@ -0,0 +1,113 @@
++package ingest
++
++import (
++	"context"
++	"errors"
++	"time"
++
++	appsv1 "k8s.io/api/apps/v1"
++	corev1 "k8s.io/api/core/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"sigs.k8s.io/controller-runtime/pkg/client"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++// workloadSpecObservation receives a read-only view of this tick's existing owner-read cache. A nil
++// reader (including Phoenix-only observations) stays explicitly unavailable;
++// this observability extension never silently broadens the reader's authority.
++func workloadSpecObservation(ctx context.Context, r client.Reader, pod *corev1.Pod, now time.Time) model.WorkloadSpecObservation {
++	out := model.WorkloadSpecObservation{Source: "controller-spec", ObservedAt: now}
++	deny := func(reason string) model.WorkloadSpecObservation { out.Reason = reason; return out }
++	if pod == nil || pod.UID == "" || pod.Namespace == "" || pod.DeletionTimestamp != nil {
++		return deny("pod-identity-unavailable")
++	}
++	out.PodUID = string(pod.UID)
++	if r == nil {
++		return deny("owner-reader-unavailable")
++	}
++	owner, ok := singleController(pod.OwnerReferences)
++	if !ok {
++		return deny("controller-identity-unavailable")
++	}
++	out.Controller = model.ObjectIdentity{APIVersion: owner.APIVersion, Kind: owner.Kind, Namespace: pod.Namespace, Name: owner.Name, UID: string(owner.UID)}
++	object, replicas, reason := readReplicaSpec(ctx, r, pod.Namespace, owner)
++	if reason != "" {
++		return deny(reason)
++	}
++	if owner.Kind == "ReplicaSet" {
++		if len(object.GetOwnerReferences()) > 0 {
++			parent, valid := singleController(object.GetOwnerReferences())
++			if !valid || parent.APIVersion != "apps/v1" || parent.Kind != "Deployment" {
++				return deny("replicaset-stable-owner-unavailable")
++			}
++			owner = parent
++			object, replicas, reason = readReplicaSpec(ctx, r, pod.Namespace, owner)
++			if reason != "" {
++				return deny(reason)
++			}
++		}
++	} else if len(object.GetOwnerReferences()) > 0 {
++		// This bounded reader does not invent another controller-chain mapping.
++		return deny("workload-parent-unsupported")
++	}
++	if replicas == nil || *replicas < 0 {
++		return deny("workload-spec-replicas-unavailable")
++	}
++	if object.GetResourceVersion() == "" {
++		return deny("workload-resource-version-unavailable")
++	}
++	out.Known = true
++	out.Workload = model.ObjectIdentity{APIVersion: owner.APIVersion, Kind: owner.Kind, Namespace: pod.Namespace, Name: owner.Name, UID: string(owner.UID)}
++	out.ResourceVersion, out.Generation, out.SpecReplicas = object.GetResourceVersion(), object.GetGeneration(), *replicas
++	return out
++}
++
++func singleController(refs []metav1.OwnerReference) (metav1.OwnerReference, bool) {
++	var found metav1.OwnerReference
++	count := 0
++	for _, ref := range refs {
++		if ref.Controller != nil && *ref.Controller {
++			found = ref
++			count++
++		}
++	}
++	return found, count == 1 && found.UID != "" && found.Name != "" && found.Kind != "" && found.APIVersion != ""
++}
++
++func readReplicaSpec(ctx context.Context, r client.Reader, namespace string, ref metav1.OwnerReference) (client.Object, *int32, string) {
++	var object client.Object
++	switch {
++	case ref.APIVersion == "apps/v1" && ref.Kind == "Deployment":
++		object = &appsv1.Deployment{}
++	case ref.APIVersion == "apps/v1" && ref.Kind == "ReplicaSet":
++		object = &appsv1.ReplicaSet{}
++	case ref.APIVersion == "apps/v1" && ref.Kind == "StatefulSet":
++		object = &appsv1.StatefulSet{}
++	case ref.APIVersion == "v1" && ref.Kind == "ReplicationController":
++		object = &corev1.ReplicationController{}
++	default:
++		return nil, nil, "workload-kind-has-no-supported-replica-spec"
++	}
++	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: ref.Name}, object); err != nil {
++		if errors.Is(err, errOwnerObjectNotObserved) {
++			return nil, nil, "owner-object-not-observed"
++		}
++		return nil, nil, "workload-object-unavailable"
++	}
++	if object.GetUID() != ref.UID || object.GetDeletionTimestamp() != nil {
++		return nil, nil, "workload-identity-stale"
++	}
++	var replicas *int32
++	switch typed := object.(type) {
++	case *appsv1.Deployment:
++		replicas = typed.Spec.Replicas
++	case *appsv1.ReplicaSet:
++		replicas = typed.Spec.Replicas
++	case *appsv1.StatefulSet:
++		replicas = typed.Spec.Replicas
++	case *corev1.ReplicationController:
++		replicas = typed.Spec.Replicas
++	}
++	return object, replicas, ""
++}
+diff --git a/phorvex/internal/ingest/workload_spec_producer_test.go b/phorvex/internal/ingest/workload_spec_producer_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..51dba24217f465bb20c8114390860c8e9d051201
+--- /dev/null
++++ b/phorvex/internal/ingest/workload_spec_producer_test.go
+@@ -0,0 +1,58 @@
++package ingest
++
++import (
++	"context"
++	"reflect"
++	"testing"
++	"time"
++
++	"github.com/phorvex/phorvex/api/v1alpha1"
++	amtd "github.com/r6security/phoenix/api/v1beta1"
++	appsv1 "k8s.io/api/apps/v1"
++	corev1 "k8s.io/api/core/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
++	"sigs.k8s.io/controller-runtime/pkg/client"
++	"sigs.k8s.io/controller-runtime/pkg/client/fake"
++)
++
++// This test intentionally uses reflection only at the new metadata boundary,
++// so the same real-producer counterexample compiles and runs on the baseline.
++func TestWorkloadSpecRealProducerCounterexample(t *testing.T) {
++	s := runtime.NewScheme()
++	_ = clientgoscheme.AddToScheme(s)
++	_ = v1alpha1.AddToScheme(s)
++	_ = amtd.AddToScheme(s)
++	replicas := int32(4)
++	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "ns", UID: "deployment-uid", ResourceVersion: "37", Generation: 5}, Spec: appsv1.DeploymentSpec{Replicas: &replicas}}
++	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns", UID: "replicaset-uid", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "demo"}}}}
++	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "only-observed-pod", Namespace: "ns", UID: "pod-uid", Labels: map[string]string{"app": "demo"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}}}
++	c := fake.NewClientBuilder().WithScheme(s).WithObjects(dep, rs, pod).Build()
++	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
++	snap, err := CollectSnapshotForRotationTargets(context.Background(), c, at, nil, c, func(*corev1.Pod) bool { return true })
++	if err != nil {
++		t.Fatal(err)
++	}
++	var observed appsv1.Deployment
++	if err := c.Get(context.Background(), client.ObjectKeyFromObject(dep), &observed); err != nil {
++		t.Fatal(err)
++	}
++	if len(snap.Pods) != 1 || snap.Pods[0].DesiredReplicas != 1 || observed.Spec.Replicas == nil || *observed.Spec.Replicas != 4 || !snap.Pods[0].RotationOwnership.Eligible {
++		t.Fatalf("fixture/control mismatch: pods=%+v deployment=%+v", snap.Pods, observed.Spec.Replicas)
++	}
++	t.Log("POSITIVE CONTROL: one observed pod, authoritative spec.replicas=4, valid UID-bound Deployment lineage; legacy desired count remains 1")
++	field := reflect.ValueOf(snap.Pods[0]).FieldByName("WorkloadSpec")
++	if !field.IsValid() {
++		t.Fatal("BASELINE COUNTEREXAMPLE: real ingest loses authoritative controller spec.replicas=4 and exposes only observed count=1")
++	}
++	if !field.FieldByName("Known").Bool() || field.FieldByName("SpecReplicas").Int() != 4 || field.FieldByName("ResourceVersion").String() != "37" || field.FieldByName("Generation").Int() != 5 {
++		t.Fatalf("wrong authoritative observation: %+v", field.Interface())
++	}
++	if field.FieldByName("Workload").FieldByName("UID").String() != "deployment-uid" || field.FieldByName("Controller").FieldByName("UID").String() != "replicaset-uid" {
++		t.Fatalf("lineage lost: %+v", field.Interface())
++	}
++	if !field.FieldByName("ObservedAt").Interface().(time.Time).Equal(at) {
++		t.Fatal("observation timestamp changed")
++	}
++}
+diff --git a/phorvex/internal/ingest/workload_spec_test.go b/phorvex/internal/ingest/workload_spec_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..cf8a6bb1797afe23cb1d32c4090034781587fc29
+--- /dev/null
++++ b/phorvex/internal/ingest/workload_spec_test.go
+@@ -0,0 +1,80 @@
++package ingest
++
++import (
++	"context"
++	appsv1 "k8s.io/api/apps/v1"
++	corev1 "k8s.io/api/core/v1"
++	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
++	"k8s.io/apimachinery/pkg/runtime"
++	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
++	"sigs.k8s.io/controller-runtime/pkg/client"
++	"sigs.k8s.io/controller-runtime/pkg/client/fake"
++	"testing"
++	"time"
++)
++
++func TestWorkloadSpecUnknownsAndSupportedControllers(t *testing.T) {
++	s := runtime.NewScheme()
++	_ = clientgoscheme.AddToScheme(s)
++	n := int32(4)
++	zero := int32(0)
++	at := time.Now().UTC()
++	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "d", Namespace: "ns", UID: "du", ResourceVersion: "42"}, Spec: appsv1.DeploymentSpec{Replicas: &n}}
++	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "r", Namespace: "ns", UID: "ru", ResourceVersion: "43", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &n}}
++	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p", Namespace: "ns", UID: "pu", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}}}
++	for _, tc := range []struct {
++		name, reason string
++		mutate       func(*corev1.Pod, *appsv1.ReplicaSet, *appsv1.Deployment)
++		noReader     bool
++	}{
++		{name: "known"}, {name: "missing reader", reason: "owner-reader-unavailable", noReader: true},
++		{name: "stale immediate UID", reason: "workload-identity-stale", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) { p.OwnerReferences[0].UID = "old" }},
++		{name: "stale parent UID", reason: "workload-identity-stale", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) { r.OwnerReferences[0].UID = "old" }},
++		{name: "missing owner", reason: "controller-identity-unavailable", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) { p.OwnerReferences = nil }},
++		{name: "ambiguous owner", reason: "controller-identity-unavailable", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) {
++			p.OwnerReferences = append(p.OwnerReferences, p.OwnerReferences[0])
++		}},
++		{name: "missing replicas", reason: "workload-spec-replicas-unavailable", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) { d.Spec.Replicas = nil }},
++		{name: "unsupported daemonset", reason: "workload-kind-has-no-supported-replica-spec", mutate: func(p *corev1.Pod, r *appsv1.ReplicaSet, d *appsv1.Deployment) {
++			p.OwnerReferences[0].Kind = "DaemonSet"
++		}},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			p, r, d := pod.DeepCopy(), rs.DeepCopy(), dep.DeepCopy()
++			if tc.mutate != nil {
++				tc.mutate(p, r, d)
++			}
++			c := fake.NewClientBuilder().WithScheme(s).WithObjects(r, d).Build()
++			var reader client.Reader = c
++			if tc.noReader {
++				reader = nil
++			}
++			got := workloadSpecObservation(context.Background(), reader, p, at)
++			if got.Reason != tc.reason || got.Known != (tc.reason == "") {
++				t.Fatalf("observation=%+v", got)
++			}
++			if got.Known && got.SpecReplicas != 4 {
++				t.Fatal(got)
++			}
++		})
++	}
++	for _, obj := range []client.Object{
++		&appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "standalone", Namespace: "ns", UID: "sr", ResourceVersion: "9"}, Spec: appsv1.ReplicaSetSpec{Replicas: &zero}},
++		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "stateful", Namespace: "ns", UID: "ss", ResourceVersion: "9"}, Spec: appsv1.StatefulSetSpec{Replicas: &zero}},
++		&corev1.ReplicationController{ObjectMeta: metav1.ObjectMeta{Name: "legacy", Namespace: "ns", UID: "rc", ResourceVersion: "9"}, Spec: corev1.ReplicationControllerSpec{Replicas: &zero}},
++	} {
++		t.Run(obj.GetName(), func(t *testing.T) {
++			gvks, _, err := s.ObjectKinds(obj)
++			if err != nil {
++				t.Fatal(err)
++			}
++			p := pod.DeepCopy()
++			p.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(obj, gvks[0])}
++			c := fake.NewClientBuilder().WithScheme(s).WithObjects(obj).Build()
++			got := workloadSpecObservation(context.Background(), c, p, at)
++			if !got.Known || got.SpecReplicas != 0 || got.Workload.UID != string(obj.GetUID()) {
++				t.Fatal(got)
++			}
++		})
++	}
++}
+diff --git a/phorvex/internal/mathlab/cost_capture_test.go b/phorvex/internal/mathlab/cost_capture_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..fb0a5804240b19dc985c4a9491bb999d8936d912
+--- /dev/null
++++ b/phorvex/internal/mathlab/cost_capture_test.go
+@@ -0,0 +1,93 @@
++package mathlab
++
++import (
++	"bytes"
++	"encoding/gob"
++	"reflect"
++	"testing"
++	"time"
++
++	"github.com/phorvex/phorvex/internal/cost"
++	"github.com/phorvex/phorvex/internal/decision"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++func TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged(t *testing.T) {
++	legacy, err := Decode(recordTick(t, t.TempDir()))
++	if err != nil {
++		t.Fatal(err)
++	}
++	inspected := Inspect(legacy)
++	if inspected.EndpointCostEvidence != nil || !reflect.DeepEqual(inspected.EndpointCostMissing, []string{"endpoint_cost_evidence:not-recorded"}) {
++		t.Fatal(inspected.EndpointCostMissing)
++	}
++	// Encode a structural pre-extension Inputs value: this proves absence at the
++	// gob schema boundary, rather than merely encoding a new nil field.
++	old := struct {
++		SpecJSON []byte
++		Policy   model.Policy
++		Views    []*model.WorkloadView
++		Engine   decision.OwnerState
++	}{legacy.Inputs.SpecJSON, legacy.Inputs.Policy, legacy.Inputs.Views, legacy.Inputs.Engine}
++	var stream bytes.Buffer
++	enc := gob.NewEncoder(&stream)
++	for _, v := range []any{old, legacy.Outcome, *legacy.Final} {
++		if err := enc.Encode(v); err != nil {
++			t.Fatal(err)
++		}
++	}
++	raw, err := assemble(legacy.Header, stream.Bytes())
++	if err != nil {
++		t.Fatal(err)
++	}
++	decoded, err := Decode(raw)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if decoded.Inputs.EndpointCostEvidence != nil {
++		t.Fatal("old file synthesized cost evidence")
++	}
++	results, err := Replay(decoded, ReplayOptions{Arms: []Arm{{ID: "baseline"}}})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if results[0].Status != StatusOK || results[0].Baseline == nil || !results[0].Baseline.Reproduced {
++		t.Fatalf("old replay changed: %+v", results)
++	}
++
++	ce := decision.NewCoverageEngine()
++	pol, spec := fixturePolicy()
++	sink := &memorySink{}
++	rec, err := NewRecorder(Config{Policies: []string{"vllm/vllm-defense"}, GPUEnvelopeMax: cost.GPUEnvelopeMax()}, sink, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	evidence := &model.ReplayCostEvidence{Schema: model.ReplayCostEvidenceSchema, EndpointLossStatus: "unavailable", Missing: []string{"endpoint-loss-intervals:not-recorded"}, ReplicaHistory: model.ReplicaHistorySnapshot{Entries: []model.ReplicaHistoryEntry{{ID: "move", Outcome: "right_censored", Censored: true}}}}
++	capture := rec.Begin(ce, spec, fleet(), pol, time.Now(), evidence)
++	evidence.Missing[0] = "changed"
++	evidence.ReplicaHistory.Entries[0].ID = "changed"
++	decisions, decideErr := ce.DecideChecked(fleet(), pol)
++	capture.Decided(decisions, decideErr)
++	capture.Finalize(decisions)
++	capture.Close()
++	if len(sink.items) != 1 {
++		t.Fatal("capture missing")
++	}
++	raw, err = assemble(sink.items[0].Header, sink.items[0].Stream)
++	if err != nil {
++		t.Fatal(err)
++	}
++	decoded, err = Decode(raw)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got := decoded.Inputs.EndpointCostEvidence; got == nil || got.Missing[0] != "endpoint-loss-intervals:not-recorded" || got.ReplicaHistory.Entries[0].ID != "move" || !got.ReplicaHistory.Entries[0].Censored {
++		t.Fatal(got)
++	}
++	inspection := Inspect(decoded)
++	inspection.EndpointCostEvidence.ReplicaHistory.Entries[0].ID = "mutated inspector"
++	inspection.EndpointCostMissing[0] = "mutated missing"
++	if decoded.Inputs.EndpointCostEvidence.ReplicaHistory.Entries[0].ID != "move" || decoded.Inputs.EndpointCostEvidence.Missing[0] != "endpoint-loss-intervals:not-recorded" {
++		t.Fatal("inspector aliases stored evidence")
++	}
++}
+diff --git a/phorvex/internal/mathlab/inspect.go b/phorvex/internal/mathlab/inspect.go
+index 01a2ea44964710b77921bb39707d7f3673f3ce00..74f400d4600ebf1abbd1dd14f49239b2db2a78e3 100644
+--- a/phorvex/internal/mathlab/inspect.go
++++ b/phorvex/internal/mathlab/inspect.go
+@@ -22,9 +22,11 @@ type Inspection struct {
+ 	Learned    map[string]any  `json:"learned"`
+ 	// Manifest and Overrides are the decision parameter set exactly as this binary resolves
+ 	// it for the recorded policy (source constants and effective policy values).
+-	Manifest  *model.DecisionParameterManifest `json:"parameter_manifest,omitempty"`
+-	Overrides *model.EffectivePolicyOverrides  `json:"policy_overrides,omitempty"`
+-	Complete  []string                         `json:"unreplayable_fields"`
++	Manifest             *model.DecisionParameterManifest `json:"parameter_manifest,omitempty"`
++	Overrides            *model.EffectivePolicyOverrides  `json:"policy_overrides,omitempty"`
++	Complete             []string                         `json:"unreplayable_fields"`
++	EndpointCostEvidence *model.ReplayCostEvidence        `json:"endpoint_cost_evidence,omitempty"`
++	EndpointCostMissing  []string                         `json:"endpoint_cost_missing"`
+ }
+ 
+ // Inspect builds the inspection view.
+@@ -109,6 +111,12 @@ func Inspect(s *Snapshot) Inspection {
+ 	}
+ 	out := Inspection{Schema: "math-lab.inspection.v1", Digest: s.Digest, Header: s.Header,
+ 		Configured: json.RawMessage(nonEmptyJSON(s.Inputs.SpecJSON)), Effective: eff, Learned: learned, Complete: Completeness(s)}
++	out.EndpointCostEvidence = s.Inputs.EndpointCostEvidence.Clone()
++	if out.EndpointCostEvidence == nil {
++		out.EndpointCostMissing = []string{"endpoint_cost_evidence:not-recorded"}
++	} else {
++		out.EndpointCostMissing = append([]string(nil), out.EndpointCostEvidence.Missing...)
++	}
+ 	if _, manifest, overrides, err := decision.ParameterSetForPolicy(pol); err == nil {
+ 		out.Manifest, out.Overrides = &manifest, &overrides
+ 	}
+diff --git a/phorvex/internal/mathlab/recorder.go b/phorvex/internal/mathlab/recorder.go
+index 9be1a4f7b570b2e6b8d446ba2cbaa64c59df514b..4c7dd21e242da5ee57e0cc4ac1bb02265ceb0301 100644
+--- a/phorvex/internal/mathlab/recorder.go
++++ b/phorvex/internal/mathlab/recorder.go
+@@ -133,7 +133,7 @@ type TickCapture struct {
+ 
+ // Begin records the pre-decision inputs and starts recording the gate verdicts the
+ // production decision will request. Call it immediately before DecideChecked.
+-func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolicySpec, views []*model.WorkloadView, pol model.Policy, capturedAt time.Time) *TickCapture {
++func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolicySpec, views []*model.WorkloadView, pol model.Policy, capturedAt time.Time, costEvidence ...*model.ReplayCostEvidence) *TickCapture {
+ 	if r == nil || ce == nil || !r.Enabled(pol.Namespace, pol.PolicyName) {
+ 		return nil
+ 	}
+@@ -178,7 +178,11 @@ func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolic
+ 		return c
+ 	}
+ 	c.enc = gob.NewEncoder(&c.buf)
+-	if err := c.enc.Encode(Inputs{SpecJSON: specJSON, Policy: pol, Views: views, Engine: state}); err != nil {
++	var evidence *model.ReplayCostEvidence
++	if len(costEvidence) == 1 {
++		evidence = costEvidence[0].Clone()
++	}
++	if err := c.enc.Encode(Inputs{SpecJSON: specJSON, Policy: pol, Views: views, Engine: state, EndpointCostEvidence: evidence}); err != nil {
+ 		c.fail()
+ 		return c
+ 	}
+diff --git a/phorvex/internal/mathlab/snapshot.go b/phorvex/internal/mathlab/snapshot.go
+index 0af561f47c56d0242cbb840940607219e7f568cf..a6c5d03a942d6a1e76d2dc452e2d4d42320d5f09 100644
+--- a/phorvex/internal/mathlab/snapshot.go
++++ b/phorvex/internal/mathlab/snapshot.go
+@@ -94,6 +94,8 @@ type Inputs struct {
+ 	Policy   model.Policy
+ 	Views    []*model.WorkloadView
+ 	Engine   decision.OwnerState
++	// Optional additive evidence. Its absence does not invalidate legacy replay.
++	EndpointCostEvidence *model.ReplayCostEvidence
+ }
+ 
+ // Outcome is what production computed for the tick.
+diff --git a/phorvex/internal/model/replay_cost.go b/phorvex/internal/model/replay_cost.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..bfc065dee22501df9ebf7e29b469c12f76ef4e56
+--- /dev/null
++++ b/phorvex/internal/model/replay_cost.go
+@@ -0,0 +1,92 @@
++package model
++
++import "time"
++
++// ReplicaHistoryEntry is a frozen observation value shared across service
++// boundaries. It carries no dispatcher accounting or admission behavior. Status
++// labels retain their recorded strings; absence remains absence.
++type ReplicaHistoryEntry struct {
++	ID                           string
++	Tenant                       string
++	Namespace                    string
++	Pod                          string
++	Action                       Action
++	Cause                        string
++	Outcome                      string
++	PolicyOwner                  string
++	PodUID                       string
++	WorkloadUID                  string
++	Replicas                     int
++	Duration                     time.Duration
++	StartedAt                    time.Time
++	ObservedAt                   time.Time
++	Censored                     bool
++	ReplicaImpact                string
++	SelectionBoundStatus         string
++	SelectionBoundFinite         bool
++	SelectionBoundReplicaSeconds float64
++	SelectionBoundEvidence       string
++	ReadyReplicasBefore          int
++	MinAvailableReplicas         int
++	AvailabilityMeasured         bool
++	AvailabilityBreachDuration   time.Duration
++	AvailabilityBreachStartedAt  time.Time
++	AvailabilityBreachObservedAt time.Time
++}
++
++const (
++	ReplayCostEvidenceSchema = "phorvex.endpoint-cost-evidence.v1"
++	MaxReplayHistoryEntries  = 2000
++	MaxReplayEvidenceBytes   = 1 << 20
++)
++
++// ReplicaHistorySnapshot is an immutable, policy-bound copy of what this
++// process observed. It is not an endpoint-loss ledger or an admission budget.
++// HistoryComplete is always false for this in-memory, partial-action producer.
++type ReplicaHistorySnapshot struct {
++	Available            bool                  `json:"available"`
++	Source               string                `json:"source"`
++	CapturedAt           time.Time             `json:"captured_at"`
++	ProcessObservedSince time.Time             `json:"process_observed_since"`
++	RetentionSeconds     float64               `json:"retention_seconds"`
++	HistoryComplete      bool                  `json:"history_complete"`
++	Entries              []ReplicaHistoryEntry `json:"entries"`
++	MatchedEntries       int                   `json:"matched_entries"`
++	UnattributedEntries  int                   `json:"unattributed_entries"`
++	FutureEntries        int                   `json:"future_entries"`
++	Truncated            bool                  `json:"truncated"`
++}
++
++type ReplayWorkloadSpec struct {
++	PodUID      string                  `json:"pod_uid"`
++	Observation WorkloadSpecObservation `json:"observation"`
++}
++
++// ReplayCostEvidence is diagnostic input capture, not a pricing authorization.
++// In particular, replica readiness is never relabelled endpoint loss.
++type ReplayCostEvidence struct {
++	Schema                string                 `json:"schema"`
++	CapturedAt            time.Time              `json:"captured_at"`
++	PolicyOwner           string                 `json:"policy_owner"`
++	PolicyUID             string                 `json:"policy_uid"`
++	Workloads             []ReplayWorkloadSpec   `json:"workloads"`
++	ReplicaHistory        ReplicaHistorySnapshot `json:"replica_history"`
++	EndpointLossStatus    string                 `json:"endpoint_loss_status"`
++	AdmissionLedgerStatus string                 `json:"admission_ledger_status"`
++	WorkloadsTruncated    bool                   `json:"workloads_truncated"`
++	CaptureByteLimit      bool                   `json:"capture_byte_limit"`
++	Missing               []string               `json:"missing"`
++}
++
++// Clone owns every mutable member; callers cannot mutate a retained snapshot
++// by reusing a request or the live ledger after capture.
++func (e *ReplayCostEvidence) Clone() *ReplayCostEvidence {
++	if e == nil {
++		return nil
++	}
++	out := *e
++	out.Workloads = append([]ReplayWorkloadSpec(nil), e.Workloads...)
++	out.ReplicaHistory.Entries = append([]ReplicaHistoryEntry(nil), e.ReplicaHistory.Entries...)
++	out.Missing = append([]string(nil), e.Missing...)
++	return &out
++}
+diff --git a/phorvex/internal/model/types.go b/phorvex/internal/model/types.go
+index 3e78bb90472a2df8ad997ecf8b3e1e37f02ad1c4..448f517d73858a623a2c430f10a95e0bbcc6b0a0 100644
+--- a/phorvex/internal/model/types.go
++++ b/phorvex/internal/model/types.go
+@@ -578,6 +578,8 @@ type PodBoundKubeAPIAuthProjection struct {
+ }
+ 
+ type Pod struct {
++	// WorkloadSpec is additive replay evidence, never an admission input.
++	WorkloadSpec      WorkloadSpecObservation
+ 	RotationOwnership RotationOwnership
+ 	// ServiceAvailability contains one row for every Service whose selector
+ 	// matches this Pod. Empty or incomplete rows cannot authorize a
+diff --git a/phorvex/internal/model/workload_spec.go b/phorvex/internal/model/workload_spec.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f34e9c7a59a189013b4f7ccf125f3bd187fdcdf
+--- /dev/null
++++ b/phorvex/internal/model/workload_spec.go
+@@ -0,0 +1,20 @@
++package model
++
++import "time"
++
++// WorkloadSpecObservation is read-only replay evidence. It is deliberately
++// separate from Pod.DesiredReplicas, whose legacy producer counts observed pods.
++// Known distinguishes a measured zero desired count from missing owner data.
++// ObservedAt is the sensor snapshot time, not a claimed Kubernetes event time.
++type WorkloadSpecObservation struct {
++	Known           bool           `json:"known"`
++	Reason          string         `json:"reason,omitempty"`
++	Source          string         `json:"source"`
++	ObservedAt      time.Time      `json:"observed_at"`
++	PodUID          string         `json:"pod_uid"`
++	Controller      ObjectIdentity `json:"controller"`
++	Workload        ObjectIdentity `json:"workload"`
++	ResourceVersion string         `json:"resource_version"`
++	Generation      int64          `json:"generation"`
++	SpecReplicas    int32          `json:"spec_replicas"`
++}
+diff --git a/phorvex/internal/runner/cost_capture.go b/phorvex/internal/runner/cost_capture.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..f3d8b120af25826c329253f5eacdfa160635b19d
+--- /dev/null
++++ b/phorvex/internal/runner/cost_capture.go
+@@ -0,0 +1,89 @@
++package runner
++
++import (
++	"encoding/json"
++	"fmt"
++	"time"
++
++	"github.com/phorvex/phorvex/api/v1alpha1"
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++func replayWorkloadUID(view *model.WorkloadView) string {
++	if view != nil && view.Pod.WorkloadSpec.Known {
++		return view.Pod.WorkloadSpec.Workload.UID
++	}
++	return ""
++}
++
++// replayCostEvidence is optional observability only. Point EndpointSlice
++// membership and Pod.ReadyAt are insufficient to manufacture move-attributed
++// endpoint-loss intervals, so this producer deliberately keeps that status
++// unavailable. Nothing in selection or admission reads this envelope.
++func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Policy, spec v1alpha1.PhorvexPolicySpec, at time.Time) *model.ReplayCostEvidence {
++	if !m.CaptureCostEvidence {
++		return nil
++	}
++	out := &model.ReplayCostEvidence{
++		Schema: model.ReplayCostEvidenceSchema, CapturedAt: at, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
++		EndpointLossStatus: "unavailable", AdmissionLedgerStatus: "not-authoritative",
++		Missing: []string{"endpoint-loss-intervals:not-recorded", "authoritative-endpoint-budget-ledger:not-recorded",
++			"accepted-endpoint-availability-target:not-recorded", "replica-history:in-memory-and-incomplete"},
++	}
++	if spec.SLO.Window.Duration <= 0 {
++		out.Missing = append(out.Missing, "accepted-slo-window:unavailable")
++	}
++	if pol.PolicyUID == "" {
++		out.Missing = append(out.Missing, "policy-uid:unavailable")
++	}
++	for i, view := range views {
++		if i == 256 {
++			out.WorkloadsTruncated = true
++			out.Missing = append(out.Missing, "workload-specs:capture-count-limit")
++			break
++		}
++		if view == nil {
++			out.Missing = append(out.Missing, "workload-view:unavailable")
++			continue
++		}
++		out.Workloads = append(out.Workloads, model.ReplayWorkloadSpec{PodUID: view.Pod.UID, Observation: view.Pod.WorkloadSpec})
++		if !view.Pod.WorkloadSpec.Known {
++			reason := view.Pod.WorkloadSpec.Reason
++			if reason == "" {
++				reason = "not-recorded"
++			}
++			out.Missing = append(out.Missing, fmt.Sprintf("workload-spec[%s]:%s", view.Pod.UID, reason))
++		}
++	}
++	out.ReplicaHistory = m.Disruption.SnapshotForReplay(pol.Tenant, pol.Namespace, pol.Owner(), at, model.MaxReplayHistoryEntries)
++	if !out.ReplicaHistory.Available {
++		out.Missing = append(out.Missing, "replica-history:unavailable")
++	}
++	if out.ReplicaHistory.Truncated {
++		out.Missing = append(out.Missing, "replica-history:truncated")
++	}
++	if out.ReplicaHistory.UnattributedEntries > 0 {
++		out.Missing = append(out.Missing, "replica-history:policy-attribution-unavailable")
++	}
++	if out.ReplicaHistory.FutureEntries > 0 {
++		out.Missing = append(out.Missing, "replica-history:observations-after-snapshot-excluded")
++	}
++	if out.ReplicaHistory.ProcessObservedSince.IsZero() {
++		out.Missing = append(out.Missing, "replica-history:process-start-unavailable")
++	}
++	if out.ReplicaHistory.ProcessObservedSince.After(at) {
++		out.Missing = append(out.Missing, "replica-history:process-start-after-snapshot")
++	}
++	for _, row := range out.ReplicaHistory.Entries {
++		if row.WorkloadUID == "" {
++			out.Missing = append(out.Missing, "replica-history:workload-attribution-unavailable")
++			break
++		}
++	}
++	if raw, err := json.Marshal(out); err != nil || len(raw) > model.MaxReplayEvidenceBytes {
++		out.Workloads, out.ReplicaHistory.Entries = nil, nil
++		out.WorkloadsTruncated, out.ReplicaHistory.Truncated, out.CaptureByteLimit = true, true, true
++		out.Missing = []string{"endpoint-cost-evidence:capture-byte-limit", "endpoint-loss-intervals:not-recorded", "authoritative-endpoint-budget-ledger:not-recorded"}
++	}
++	return out
++}
+diff --git a/phorvex/internal/runner/cost_capture_test.go b/phorvex/internal/runner/cost_capture_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..bce5bf3ce61181e44573dd155d1aa9b893c1c442
+--- /dev/null
++++ b/phorvex/internal/runner/cost_capture_test.go
+@@ -0,0 +1,66 @@
++package runner
++
++import (
++	"encoding/json"
++	"github.com/phorvex/phorvex/api/v1alpha1"
++	"github.com/phorvex/phorvex/internal/model"
++	"github.com/phorvex/phorvex/internal/slo"
++	"slices"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss(t *testing.T) {
++	at := time.Now().UTC().Add(time.Second)
++	m := &Manager{Disruption: slo.NewLedger(time.Hour)}
++	pol := model.Policy{Tenant: "t", Namespace: "ns", PolicyUID: "policy"}
++	v := &model.WorkloadView{Pod: model.Pod{Name: "p", Namespace: "ns", UID: "pu", WorkloadSpec: model.WorkloadSpecObservation{Known: true, SpecReplicas: 4, Workload: model.ObjectIdentity{UID: "wu"}}}}
++	if got := m.replayCostEvidence([]*model.WorkloadView{v}, pol, v1alpha1.PhorvexPolicySpec{}, at); got != nil {
++		t.Fatal("capture must default off")
++	}
++	m.recordActionOutcome("t", v, model.ActionQuarantine, 1, at.Add(-time.Second), at, slo.OutcomeEmitted, pol.Owner())
++	m.CaptureCostEvidence = true
++	got := m.replayCostEvidence([]*model.WorkloadView{v}, pol, v1alpha1.PhorvexPolicySpec{}, at)
++	if got.EndpointLossStatus != "unavailable" || got.AdmissionLedgerStatus != "not-authoritative" || got.ReplicaHistory.HistoryComplete || !slices.Contains(got.Missing, "accepted-slo-window:unavailable") {
++		t.Fatalf("replica evidence was promoted: %+v", got)
++	}
++	if len(got.ReplicaHistory.Entries) != 1 {
++		t.Fatal(got.ReplicaHistory)
++	}
++	row := got.ReplicaHistory.Entries[0]
++	if row.PolicyOwner != pol.Owner() || row.PodUID != "pu" || row.WorkloadUID != "wu" || row.Outcome != string(slo.OutcomeEmitted) || row.ReplicaImpact != string(slo.ImpactUnmeasured) {
++		t.Fatalf("real outcome producer lost provenance: %+v", row)
++	}
++	v.Pod.WorkloadSpec.Workload.UID = "changed"
++	if got.Workloads[0].Observation.Workload.UID != "wu" {
++		t.Fatal("capture references live view")
++	}
++	// The real unconfirmed-rotation producer also preserves attribution, without
++	// upgrading an emitted action to observed recovery or endpoint history.
++	p := pendingRotation{ledgerID: "rotation", tenant: "t", owner: pol.Owner(), view: *v, startedAt: at.Add(-time.Second)}
++	m.recordUnknownRotation(p, at)
++	next := m.replayCostEvidence([]*model.WorkloadView{v}, pol, v1alpha1.PhorvexPolicySpec{}, at)
++	if len(next.ReplicaHistory.Entries) != 2 || next.EndpointLossStatus != "unavailable" {
++		t.Fatal(next)
++	}
++	m.Disruption = nil
++	if missing := m.replayCostEvidence(nil, pol, v1alpha1.PhorvexPolicySpec{}, at); missing.ReplicaHistory.Available || !slices.Contains(missing.Missing, "replica-history:unavailable") {
++		t.Fatal(missing)
++	}
++}
++
++func TestCostEvidenceCountAndByteLimitsRemainUnavailable(t *testing.T) {
++	m := &Manager{CaptureCostEvidence: true}
++	pol := model.Policy{Tenant: "t", Namespace: "ns", PolicyUID: "p"}
++	got := m.replayCostEvidence(make([]*model.WorkloadView, 1000), pol, v1alpha1.PhorvexPolicySpec{}, time.Now())
++	if !got.WorkloadsTruncated || len(got.Missing) > 280 || got.EndpointLossStatus != "unavailable" {
++		t.Fatalf("nil views bypassed bound: %+v", got)
++	}
++	v := &model.WorkloadView{Pod: model.Pod{UID: "pod", WorkloadSpec: model.WorkloadSpecObservation{Reason: strings.Repeat("x", model.MaxReplayEvidenceBytes)}}}
++	got = m.replayCostEvidence([]*model.WorkloadView{v}, pol, v1alpha1.PhorvexPolicySpec{}, time.Now())
++	raw, err := json.Marshal(got)
++	if err != nil || len(raw) > model.MaxReplayEvidenceBytes || !got.CaptureByteLimit || !got.WorkloadsTruncated || !got.ReplicaHistory.Truncated || got.EndpointLossStatus != "unavailable" || got.ReplicaHistory.HistoryComplete {
++		t.Fatalf("byte cap lost missing status: %+v %v", got, err)
++	}
++}
+diff --git a/phorvex/internal/runner/manager.go b/phorvex/internal/runner/manager.go
+index b92afb2282493a2875f71d150d67d3e6002158b4..bf832c9ffb12144ee3559989e450bb56995bfd29 100644
+--- a/phorvex/internal/runner/manager.go
++++ b/phorvex/internal/runner/manager.go
+@@ -284,6 +284,8 @@ type Manager struct {
+ 	// structural-zero actions, explicit unknown-impact outcomes, and measured or
+ 	// censored rotation disruption. Nil disables recording; it observes and never gates.
+ 	Disruption *slo.Ledger
++	// Default-off bounded replay evidence capture; never a pricing/admission switch.
++	CaptureCostEvidence bool
+ 
+ 	// Decision trace is observational. Build identity is resolved once at
+ 	// startup; disabling the trace is used only for non-interference tests.
+@@ -983,6 +985,7 @@ func (m *Manager) closePendingForOwner(ev lifecycleEvent) int {
+ 			// which would assert a floor we never measured.
+ 			m.Disruption.Record(slo.Entry{
+ 				ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
++				PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
+ 				Action: model.ActionRotate, Cause: slo.CausePhorvex,
+ 				StartedAt: p.startedAt, Outcome: slo.OutcomeEmitted,
+ 				ReplicaImpact: slo.ImpactUnmeasured,
+@@ -1489,7 +1492,7 @@ func selectionBoundEvidence(bound slo.Bound) string {
+ // terminal synchronous result. Non-zero actions are explicitly unmeasured here:
+ // a return from Actuate does not prove that asynchronous serving impact ended.
+ // Rotate is recorded by observeReadyRotations instead, when recovery is observed.
+-func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, action model.Action, minAvailableReplicas int, startedAt, observedAt time.Time, outcome slo.Outcome) {
++func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, action model.Action, minAvailableReplicas int, startedAt, observedAt time.Time, outcome slo.Outcome, policyOwner ...string) {
+ 	if m.Disruption == nil || view == nil {
+ 		return
+ 	}
+@@ -1505,9 +1508,14 @@ func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, a
+ 	if duration < 0 {
+ 		duration = 0
+ 	}
++	owner := ""
++	if len(policyOwner) == 1 {
++		owner = policyOwner[0]
++	}
+ 	m.Disruption.Record(slo.Entry{
+ 		ID:     fmt.Sprintf("%s/%s/%s/%d", tenant, view.Pod.Namespace+"/"+view.Pod.Name, action, startedAt.UnixNano()),
+ 		Tenant: tenant, Namespace: view.Pod.Namespace, Pod: view.Pod.Name,
++		PolicyOwner: owner, PodUID: view.Pod.UID, WorkloadUID: replayWorkloadUID(view),
+ 		Action: action, Cause: slo.CausePhorvex, Outcome: outcome,
+ 		Duration: duration, StartedAt: startedAt, ObservedAt: observedAt,
+ 		ReplicaImpact:        impact,
+@@ -1742,10 +1750,11 @@ func (m *Manager) observeReadyRotations(snap *sensorapi.Observation) {
+ 				outcome = slo.OutcomeRightCensored
+ 			}
+ 			m.Disruption.Record(slo.Entry{
+-				ID:                           p.ledgerID,
+-				Tenant:                       p.tenant,
+-				Namespace:                    p.view.Pod.Namespace,
+-				Pod:                          p.view.Pod.Name,
++				ID:          p.ledgerID,
++				Tenant:      p.tenant,
++				Namespace:   p.view.Pod.Namespace,
++				Pod:         p.view.Pod.Name,
++				PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
+ 				Action:                       model.ActionRotate,
+ 				Cause:                        slo.CausePhorvex,
+ 				Replicas:                     1,
+@@ -1811,6 +1820,7 @@ func (m *Manager) observeReadyRotations(snap *sensorapi.Observation) {
+ func (m *Manager) recordUnknownRotation(p pendingRotation, observedAt time.Time) {
+ 	m.Disruption.Record(slo.Entry{
+ 		ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
++		PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
+ 		Action: model.ActionRotate, Cause: slo.CausePhorvex, StartedAt: p.startedAt,
+ 		ObservedAt: observedAt, Outcome: slo.OutcomeEmitted, ReplicaImpact: slo.ImpactUnmeasured,
+ 		SelectionBoundStatus:   p.selectionBound.Status,
+@@ -2079,7 +2089,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
+ 	// inputs before the engine runs and the raw decisions right after; the recording never
+ 	// changes a decision and drops its own snapshot rather than delaying the tick.
+ 	decisions, recording, err := brain.Decide(brainapi.DecideRequest{Views: views, Policy: pol, Gate: gate,
+-		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: obs.Now}})
++		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: obs.Now, EndpointCostEvidence: m.replayCostEvidence(views, pol, e.spec, obs.Now)}})
+ 	defer recording.Close()
+ 	if ctx.Err() != nil {
+ 		return
+@@ -3261,7 +3271,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
+ 				}
+ 			}
+ 			stampDispatch(dispatchOutcome, dispatchReason)
+-			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
++			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome, pol.Owner())
+ 			if err != nil {
+ 				m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
+ 			} else if disposition == actuatorapi.NoEffectRefused {
+@@ -3356,14 +3366,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
+ 					decisionID = decisions[i].Trace.DecisionID
+ 				}
+ 				if !m.trackRotationReceipt(pol.Owner(), pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted, res, decisionID) {
+-					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
++					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted, pol.Owner())
+ 				}
+ 			} else {
+ 				outcome := slo.OutcomeEmitted
+ 				if selectionBound(decisions[i].Action).Status == slo.StatusZero {
+ 					outcome = slo.OutcomeCompleted
+ 				}
+-				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
++				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome, pol.Owner())
+ 			}
+ 		} else {
+ 			// A non-emitted result can still carry reviewed handler identity or a
+@@ -3393,7 +3403,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
+ 					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
+ 				}
+ 			}
+-			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
++			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted, pol.Owner())
+ 		}
+ 	}
+ 	return actuated, &preparation, attempted
+diff --git a/phorvex/internal/runner/mathlab_capture_test.go b/phorvex/internal/runner/mathlab_capture_test.go
+index 598cb00e459fcf628a05cda00f45adc25975b17d..433ff9688919253a610c8e7f267ad2b57144cf61 100644
+--- a/phorvex/internal/runner/mathlab_capture_test.go
++++ b/phorvex/internal/runner/mathlab_capture_test.go
+@@ -53,6 +53,7 @@ func TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick(t *testing.T) {
+ 		p.Spec.Actions.Enabled = []v1alpha1.ActionType{v1alpha1.ActionType(model.ActionRotate), v1alpha1.ActionType(model.ActionQuarantine)}
+ 		m, engine := m140BlockedTickManager(t, nil, p)
+ 		m.Calibration = nil
++		m.CaptureCostEvidence = withCapture
+ 		engine.Now = func() time.Time { return now }
+ 		var auditJSON bytes.Buffer
+ 		m.Audit = audit.New(logr.Discard(), &auditJSON)
+@@ -109,6 +110,9 @@ func TestMathLabCaptureIsNonInterferingAndReplaysTheRunnerTick(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
++	if snap.Inputs.EndpointCostEvidence == nil || snap.Inputs.EndpointCostEvidence.EndpointLossStatus != "unavailable" || snap.Inputs.EndpointCostEvidence.Schema != "phorvex.endpoint-cost-evidence.v1" {
++		t.Fatalf("manager capture did not reach recorder: %+v", snap.Inputs.EndpointCostEvidence)
++	}
+ 	rs, err := mathlab.Replay(snap, mathlab.ReplayOptions{Arms: []mathlab.Arm{{ID: "baseline"}}})
+ 	if err != nil {
+ 		t.Fatal(err)
+diff --git a/phorvex/internal/runner/rotation_observation_test.go b/phorvex/internal/runner/rotation_observation_test.go
+index 84cc8475b75c3d8eda85ee9666d297da75376f42..483a5a9217d6e450eaac0500e71455a6f1e06107 100644
+--- a/phorvex/internal/runner/rotation_observation_test.go
++++ b/phorvex/internal/runner/rotation_observation_test.go
+@@ -200,7 +200,8 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T)
+ 	m := &Manager{Local: &inprocess.Services{Optimizer: opt}, Log: logr.Discard(), Disruption: ledger}
+ 	startedAt := time.Unix(1_700_000_000, 0).UTC()
+ 	view := &model.WorkloadView{Pod: model.Pod{
+-		Namespace: "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
++		WorkloadSpec: model.WorkloadSpecObservation{Known: true, Workload: model.ObjectIdentity{UID: "deployment-uid"}},
++		Namespace:    "ns", Name: "old", UID: "old-uid", OwnerKind: "ReplicaSet", OwnerName: "api-rs",
+ 	}}
+ 	m.trackRotation(model.OwnerKey(model.OwnerKindName, "tenant-a"), "tenant-a", view, map[string]*model.WorkloadView{"ns/old": view}, startedAt)
+ 
+@@ -212,6 +213,10 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T)
+ 		t.Fatal("ledger-enabled censored rotation was retired before recovery")
+ 	}
+ 
++	frozen := ledger.SnapshotForReplay("tenant-a", "ns", model.OwnerKey(model.OwnerKindName, "tenant-a"), startedAt.Add(800*time.Second), 20)
++	if len(frozen.Entries) != 1 || !frozen.Entries[0].Censored || frozen.Entries[0].PodUID != "old-uid" || frozen.Entries[0].WorkloadUID != "deployment-uid" {
++		t.Fatalf("real censored producer lost identity: %+v", frozen)
++	}
+ 	m.observeReadyRotations(&sensorapi.Observation{Now: startedAt.Add(1200 * time.Second)})
+ 	if got := ledger.Consumed("tenant-a", startedAt); got != 1200 {
+ 		t.Fatalf("extended censored floor = %v, want 1200 replica-seconds", got)
+@@ -234,6 +239,10 @@ func TestCensoredRotationContinuesUpdatingDisruptionUntilRecovery(t *testing.T)
+ 	if len(entries) != 1 || entries[0].Censored {
+ 		t.Fatalf("final recovery did not replace censored entry: %+v", entries)
+ 	}
++	final := ledger.SnapshotForReplay("tenant-a", "ns", model.OwnerKey(model.OwnerKindName, "tenant-a"), startedAt.Add(1400*time.Second), 20)
++	if len(final.Entries) != 1 || final.Entries[0].ID != frozen.Entries[0].ID || final.Entries[0].Censored || !frozen.Entries[0].Censored || final.Entries[0].WorkloadUID != "deployment-uid" || final.HistoryComplete || final.Source != "replica-readiness" {
++		t.Fatalf("settlement changed identity/frozen evidence or claimed endpoint history: %+v / %+v", frozen, final)
++	}
+ 	if len(m.pendingRotations) != 0 {
+ 		t.Fatal("recovered disruption remained pending")
+ 	}
+diff --git a/phorvex/internal/sensorclient/parity_test.go b/phorvex/internal/sensorclient/parity_test.go
+index 570fd321954570d353a61d3f44ea2d8a3e860501..83c2984e857018e5c22bf4d23680a5816a8a9999 100644
+--- a/phorvex/internal/sensorclient/parity_test.go
++++ b/phorvex/internal/sensorclient/parity_test.go
+@@ -18,11 +18,13 @@ import (
+ 	"google.golang.org/grpc/credentials/insecure"
+ 	"google.golang.org/grpc/status"
+ 	"google.golang.org/grpc/test/bufconn"
++	appsv1 "k8s.io/api/apps/v1"
+ 	corev1 "k8s.io/api/core/v1"
+ 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+ 	"k8s.io/apimachinery/pkg/runtime"
+ 	"k8s.io/apimachinery/pkg/types"
+ 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
++	"sigs.k8s.io/controller-runtime/pkg/client"
+ 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+ 
+ 	"github.com/phorvex/phorvex/api/v1alpha1"
+@@ -304,3 +306,56 @@ func TestHelloRefusesAnotherContractOrConfiguration(t *testing.T) {
+ 		t.Fatalf("another contract version: %v", err)
+ 	}
+ }
++
++// This is the actual Kubernetes reader -> sensor adapter -> gRPC -> observation
++// path; the observed pod count must not substitute for controller spec.replicas.
++func TestWorkloadSpecThroughRealRemoteSensor(t *testing.T) {
++	local := cluster(t)
++	local.OwnershipReader = local.Client
++	replicas := int32(4)
++	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "vllm", UID: "du"}, Spec: appsv1.DeploymentSpec{Replicas: &replicas}}
++	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "vllm", UID: "ru", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}}}
++	ctx := context.Background()
++	if err := local.Client.Create(ctx, dep); err != nil {
++		t.Fatal(err)
++	}
++	if err := local.Client.Create(ctx, rs); err != nil {
++		t.Fatal(err)
++	}
++	var pod corev1.Pod
++	if err := local.Client.Get(ctx, client.ObjectKey{Namespace: "vllm", Name: "web-1"}, &pod); err != nil {
++		t.Fatal(err)
++	}
++	pod.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}
++	if err := local.Client.Update(ctx, &pod); err != nil {
++		t.Fatal(err)
++	}
++	remote := connect(t, local, local.TelemetrySource())
++	req := sensorapi.ObserveRequest{Now: time.Now().UTC(), ResolveOwners: true, Scopes: []sensorapi.Scope{{Namespace: "vllm", Selector: "app=web"}}}
++	got, err := remote.Observe(ctx, req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	seen := false
++	for _, p := range got.Pods {
++		if p.UID == string(pod.UID) {
++			seen = true
++			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "du" || p.WorkloadSpec.Controller.UID != "ru" {
++				t.Fatalf("remote lost spec: %+v", p.WorkloadSpec)
++			}
++		}
++	}
++	if !seen {
++		t.Fatal("producer fixture pod missing")
++	}
++	req.ResolveOwners = false
++	got, err = remote.Observe(ctx, req)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, p := range got.Pods {
++		if p.UID == string(pod.UID) && (p.WorkloadSpec.Known || p.WorkloadSpec.Reason != "owner-reader-unavailable") {
++			t.Fatalf("Phoenix missing-reader state hidden: %+v", p.WorkloadSpec)
++		}
++	}
++}
+diff --git a/phorvex/internal/slo/ledger.go b/phorvex/internal/slo/ledger.go
+index 85a93d7f59a2a3f4546f8d18917e251aeabdb86e..9b500f85b463de9514344bda3eb3e8f916478f6d 100644
+--- a/phorvex/internal/slo/ledger.go
++++ b/phorvex/internal/slo/ledger.go
+@@ -66,6 +66,12 @@ type Entry struct {
+ 	Cause     Cause
+ 	Outcome   Outcome
+ 
++	// Replay-only immutable identities. Older rows have these absent and cannot
++	// be attributed to a later policy/workload merely by matching display names.
++	PolicyOwner string
++	PodUID      string
++	WorkloadUID string
++
+ 	// Replicas is how many Ready serving replicas the action removed.
+ 	Replicas int
+ 	// Duration is how long they stayed removed — MEASURED, from actuation to the
+@@ -155,8 +161,9 @@ type Consumption struct {
+ // can never mistake "everything this process has seen" for "everything in the
+ // SLO window".
+ type Ledger struct {
+-	mu      sync.RWMutex
+-	byOwner map[string][]Entry
++	mu        sync.RWMutex
++	byOwner   map[string][]Entry
++	createdAt time.Time
+ 
+ 	// Retain bounds how far back entries are kept. Zero means keep everything.
+ 	Retain time.Duration
+@@ -165,7 +172,7 @@ type Ledger struct {
+ // NewLedger returns a ledger retaining entries for the given span. Pass the
+ // longest SLO window in use; entries older than that can never affect a ratio.
+ func NewLedger(retain time.Duration) *Ledger {
+-	return &Ledger{byOwner: map[string][]Entry{}, Retain: retain}
++	return &Ledger{byOwner: map[string][]Entry{}, Retain: retain, createdAt: time.Now().UTC()}
+ }
+ 
+ // Record appends an action observation. Legacy empty zero-impact records are
+diff --git a/phorvex/internal/slo/replay.go b/phorvex/internal/slo/replay.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..fceb8ad7c7aec20d6758eb61aabc7ad1c0f459f8
+--- /dev/null
++++ b/phorvex/internal/slo/replay.go
+@@ -0,0 +1,111 @@
++package slo
++
++import (
++	"container/heap"
++	"encoding/json"
++	"slices"
++	"sort"
++	"time"
++
++	"github.com/phorvex/phorvex/internal/model"
++)
++
++type recentEntries []Entry
++
++func (h recentEntries) Len() int { return len(h) }
++func earlier(a, b Entry) bool {
++	if a.ObservedAt.Equal(b.ObservedAt) {
++		return a.ID < b.ID
++	}
++	return a.ObservedAt.Before(b.ObservedAt)
++}
++func (h recentEntries) Less(i, j int) bool { return earlier(h[i], h[j]) }
++func (h recentEntries) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
++func (h *recentEntries) Push(v any)        { *h = append(*h, v.(Entry)) }
++func (h *recentEntries) Pop() any {
++	old := *h
++	value := old[len(old)-1]
++	*h = old[:len(old)-1]
++	return value
++}
++
++// SnapshotForReplay takes a coherent copy under the ledger lock. Memory is
++// bounded even if the retained ledger is large. Rows without exact policy
++// identity are counted as unavailable, never joined by display name.
++func (l *Ledger) SnapshotForReplay(tenant, namespace, owner string, at time.Time, limit int) model.ReplicaHistorySnapshot {
++	out := model.ReplicaHistorySnapshot{Source: "replica-readiness", CapturedAt: at, Entries: []model.ReplicaHistoryEntry{}}
++	if l == nil || owner == "" || namespace == "" {
++		return out
++	}
++	if limit <= 0 || limit > model.MaxReplayHistoryEntries {
++		limit = model.MaxReplayHistoryEntries
++	}
++	selected := recentEntries{}
++	l.mu.RLock()
++	out.Available, out.ProcessObservedSince, out.RetentionSeconds = true, l.createdAt, l.Retain.Seconds()
++	for _, e := range l.byOwner[tenant] {
++		if e.Namespace != namespace {
++			continue
++		}
++		if e.PolicyOwner == "" {
++			out.UnattributedEntries++
++			continue
++		}
++		if e.PolicyOwner != owner {
++			continue
++		}
++		if e.ObservedAt.After(at) {
++			out.FutureEntries++
++			continue
++		}
++		out.MatchedEntries++
++		if len(selected) < limit {
++			heap.Push(&selected, e)
++		} else if earlier(selected[0], e) {
++			selected[0] = e
++			heap.Fix(&selected, 0)
++		}
++	}
++	l.mu.RUnlock()
++	sort.Slice(selected, func(i, j int) bool { return earlier(selected[i], selected[j]) })
++	used := 0
++	for i := len(selected) - 1; i >= 0; i-- {
++		if entryTextBytes(selected[i]) > model.MaxReplayEvidenceBytes {
++			out.Truncated = true
++			continue
++		}
++		entry := replayHistoryEntry(selected[i])
++		raw, err := json.Marshal(entry)
++		if err != nil || used+len(raw) > model.MaxReplayEvidenceBytes {
++			out.Truncated = true
++			continue
++		}
++		out.Entries = append(out.Entries, entry)
++		used += len(raw)
++	}
++	slices.Reverse(out.Entries)
++	out.Truncated = out.Truncated || len(out.Entries) != out.MatchedEntries
++	return out
++}
++
++// Bound allocation before JSON escaping as well as the final encoded size.
++func entryTextBytes(e Entry) int {
++	return len(e.ID) + len(e.Tenant) + len(e.Namespace) + len(e.Pod) + len(e.Action) + len(e.Cause) + len(e.Outcome) + len(e.PolicyOwner) + len(e.PodUID) + len(e.WorkloadUID) + len(e.ReplicaImpact) + len(e.SelectionBoundStatus) + len(e.SelectionBoundEvidence)
++}
++
++// Convert the value copied under the ledger lock into the shared wire contract.
++// No mutable ledger object or dispatcher behavior crosses the service boundary.
++func replayHistoryEntry(e Entry) model.ReplicaHistoryEntry {
++	return model.ReplicaHistoryEntry{
++		ID: e.ID, Tenant: e.Tenant, Namespace: e.Namespace, Pod: e.Pod,
++		Action: e.Action, Cause: string(e.Cause), Outcome: string(e.Outcome),
++		PolicyOwner: e.PolicyOwner, PodUID: e.PodUID, WorkloadUID: e.WorkloadUID,
++		Replicas: e.Replicas, Duration: e.Duration, StartedAt: e.StartedAt, ObservedAt: e.ObservedAt,
++		Censored: e.Censored, ReplicaImpact: string(e.ReplicaImpact),
++		SelectionBoundStatus: string(e.SelectionBoundStatus), SelectionBoundFinite: e.SelectionBoundFinite,
++		SelectionBoundReplicaSeconds: e.SelectionBoundReplicaSeconds, SelectionBoundEvidence: e.SelectionBoundEvidence,
++		ReadyReplicasBefore: e.ReadyReplicasBefore, MinAvailableReplicas: e.MinAvailableReplicas,
++		AvailabilityMeasured: e.AvailabilityMeasured, AvailabilityBreachDuration: e.AvailabilityBreachDuration,
++		AvailabilityBreachStartedAt: e.AvailabilityBreachStartedAt, AvailabilityBreachObservedAt: e.AvailabilityBreachObservedAt,
++	}
++}
+diff --git a/phorvex/internal/slo/replay_test.go b/phorvex/internal/slo/replay_test.go
+new file mode 100644
+index 0000000000000000000000000000000000000000..639c7b449d4e92e36827edd5745e61905187295d
+--- /dev/null
++++ b/phorvex/internal/slo/replay_test.go
+@@ -0,0 +1,114 @@
++package slo
++
++import (
++	"bytes"
++	"encoding/json"
++
++	"github.com/phorvex/phorvex/internal/model"
++	"strings"
++	"testing"
++	"time"
++)
++
++func TestReplayHistoryRealLedgerReplacementIsolationAndImmutability(t *testing.T) {
++	at := time.Now().UTC()
++	l := NewLedger(24 * time.Hour)
++	row := Entry{ID: "move", Tenant: "tenant", Namespace: "ns", PolicyOwner: "uid\x00policy", PodUID: "pod", WorkloadUID: "workload", Replicas: 1, Duration: time.Second, StartedAt: at.Add(-time.Second), ObservedAt: at, Outcome: OutcomeRightCensored, Censored: true}
++	l.Record(row)
++	first := l.SnapshotForReplay("tenant", "ns", row.PolicyOwner, at, 20)
++	row.Outcome = OutcomeCompleted
++	row.Censored = false
++	row.ObservedAt = at.Add(time.Second)
++	row.Duration = 2 * time.Second
++	l.Record(row)
++	for i := 0; i < 4; i++ {
++		other := row
++		other.ID = string(rune('a' + i))
++		switch i {
++		case 0:
++			other.Namespace = "elsewhere"
++		case 1:
++			other.PolicyOwner = "uid\x00different"
++		case 2:
++			other.PolicyOwner = ""
++		case 3:
++			other.ObservedAt = at.Add(10 * time.Second)
++		}
++		l.Record(other)
++	}
++	second := l.SnapshotForReplay("tenant", "ns", row.PolicyOwner, at.Add(time.Second), 20)
++	if !second.Available || second.Source != "replica-readiness" || second.HistoryComplete || second.ProcessObservedSince.IsZero() || second.RetentionSeconds != 86400 || len(second.Entries) != 1 || second.UnattributedEntries != 1 || second.FutureEntries != 1 || second.MatchedEntries != 1 || second.Truncated {
++		t.Fatalf("invalid evidence: %+v", second)
++	}
++	if first.Entries[0].Outcome != string(OutcomeRightCensored) || !first.Entries[0].Censored || second.Entries[0].Outcome != string(OutcomeCompleted) || second.Entries[0].Censored {
++		t.Fatalf("open/settled observations not frozen: %+v / %+v", first, second)
++	}
++	first.Entries[0].ID = "mutated"
++	if l.SnapshotForReplay("tenant", "ns", row.PolicyOwner, at.Add(time.Second), 20).Entries[0].ID != "move" {
++		t.Fatal("export mutated ledger")
++	}
++	e := &model.ReplayCostEvidence{Workloads: []model.ReplayWorkloadSpec{{PodUID: "p"}}, ReplicaHistory: second, Missing: []string{"endpoint unavailable"}}
++	clone := e.Clone()
++	clone.Workloads[0].PodUID = "bad"
++	clone.ReplicaHistory.Entries[0].ID = "bad"
++	clone.Missing[0] = "bad"
++	if e.Workloads[0].PodUID != "p" || e.ReplicaHistory.Entries[0].ID != "move" || e.Missing[0] != "endpoint unavailable" {
++		t.Fatal("clone shares mutable data")
++	}
++}
++func TestReplayHistoryBoundsAndMissingLedger(t *testing.T) {
++	at := time.Now().UTC()
++	var missing *Ledger
++	if got := missing.SnapshotForReplay("t", "ns", "p", at, 1); got.Available || got.HistoryComplete {
++		t.Fatal(got)
++	}
++	l := NewLedger(time.Hour)
++	for i := 0; i < 5; i++ {
++		l.Record(Entry{ID: string(rune('a' + i)), Tenant: "t", Namespace: "ns", PolicyOwner: "p", Outcome: OutcomeEmitted, ObservedAt: at.Add(time.Duration(i) * time.Second)})
++	}
++	got := l.SnapshotForReplay("t", "ns", "p", at.Add(time.Minute), 2)
++	if !got.Truncated || got.MatchedEntries != 5 || len(got.Entries) != 2 || got.Entries[0].ID != "d" || got.Entries[1].ID != "e" {
++		t.Fatal(got)
++	}
++	l.Record(Entry{ID: "huge", Tenant: "t", Namespace: "ns", PolicyOwner: "p", Outcome: OutcomeEmitted, ObservedAt: at.Add(9 * time.Second), SelectionBoundEvidence: strings.Repeat("x", model.MaxReplayEvidenceBytes+1)})
++	got = l.SnapshotForReplay("t", "ns", "p", at.Add(time.Minute), 20)
++	if !got.Truncated || got.MatchedEntries != 6 || len(got.Entries) != 5 {
++		t.Fatal(got)
++	}
++}
++
++// Export is a service DTO, not the ledger's runtime Entry type. Assert every
++// JSON field against an actual recorded row so conversion cannot silently drop
++// attribution, censoring, contract bounds or separate availability evidence.
++func TestReplayHistoryDTOCarriesAllLedgerEvidence(t *testing.T) {
++	at := time.Now().UTC()
++	row := Entry{
++		ID: "move", Tenant: "tenant", Namespace: "ns", Pod: "pod-name",
++		Action: model.ActionQuarantine, Cause: CausePhorvex, Outcome: OutcomeRightCensored,
++		PolicyOwner: "uid\x00policy", PodUID: "pod", WorkloadUID: "workload",
++		Replicas: 2, Duration: 13 * time.Second, StartedAt: at.Add(-13 * time.Second), ObservedAt: at,
++		Censored: true, ReplicaImpact: ImpactMeasured,
++		SelectionBoundStatus: StatusBounded, SelectionBoundFinite: true,
++		SelectionBoundReplicaSeconds: 40, SelectionBoundEvidence: "selected-contract",
++		ReadyReplicasBefore: 3, MinAvailableReplicas: 2, AvailabilityMeasured: true,
++		AvailabilityBreachDuration:  4 * time.Second,
++		AvailabilityBreachStartedAt: at.Add(-4 * time.Second), AvailabilityBreachObservedAt: at,
++	}
++	l := NewLedger(time.Hour)
++	l.Record(row)
++	got := l.SnapshotForReplay(row.Tenant, row.Namespace, row.PolicyOwner, at, 10)
++	if !got.Available || len(got.Entries) != 1 {
++		t.Fatal(got)
++	}
++	expected, err := json.Marshal(l.Entries(row.Tenant, at.Add(-time.Minute))[0])
++	if err != nil {
++		t.Fatal(err)
++	}
++	actual, err := json.Marshal(got.Entries[0])
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !bytes.Equal(actual, expected) {
++		t.Fatalf("shared replay DTO lost ledger evidence: got %s; want %s", actual, expected)
++	}
++}
+diff --git a/workflow/operations/HANDOFFS.md b/workflow/operations/HANDOFFS.md
+index d617532f74a6a8437bd6f58a0f8a93ca000987e9..48450894d7f49b29a3b8ba08d73dbb2e8d8187e2 100644
+--- a/workflow/operations/HANDOFFS.md
++++ b/workflow/operations/HANDOFFS.md
+@@ -10,9 +10,26 @@ Report concrete contradictions if found; a separate worker proposal is not requi
+ 
+ Commit code before the final preflight. `preflight <fix>` prints the selected local
+ checks; add `--run` to execute. Python follows workflow CI (an explicit `--python`
+-environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`); Go follows
+-go.mod (`GO_BIN`/PATH). Tool absence/version mismatch is unavailable, never skipped.
+-Shared E2E, image builds and deployment do not run locally or acquire authorization.
++environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`). Current Go
++unit checks use CI's highest-version file (`build/test-harness/go.mod`), an exact
++`GO_BIN`/PATH binary and `GOTOOLCHAIN=local`, including its non-cluster environment.
++Tool absence/version mismatch is unavailable, never skipped.
++For current CI's pinned Python provisioner, local preflight verifies the full
++patch version and attests the provision script hash. If checks need both Python
++versions, set `PREFLIGHT_PYTHON_3_11` and `PREFLIGHT_PYTHON_3_12` to the matching
++interpreters (with required dependencies installed); these override `--python`
++per job. Current chart checks come from `pr-validation.yml` when legacy `ci.yml`
++is absent. Historical receipts resolve their authority and provisioner from the
++pinned commit, not the current checkout. Recipe version 2 runs all seven current
++`go-unit` module commands exactly; its informational affected-services report goes
++to the local job log instead of `$GITHUB_STEP_SUMMARY`, and uses the pinned plan
++base instead of GitHub's merge-parent `HEAD^1`. Existing extra build/vet
++checks remain for changed product modules. Historical version 1 receipts retain
++their old module-minimum Go semantics for historical validation only; they cannot
++satisfy a current submission. Unsupported CI recipes require an explicit adapter
++update rather than silently losing checks.
++The separate remote `go-envtest` job (local Kubernetes API binaries), other remote
++CI jobs, shared E2E, image builds and deployment are not executed by this preflight.
+ A local PASS is not a claim that all remote CI is green.
+ Recorded receipts are validated against their attested source and its CI recipes, even
+ when doctor runs on a newer main or PR merge checkout. Submission additionally requires
+diff --git a/workflow/tools/preflight.py b/workflow/tools/preflight.py
+index b1a39fc862fa4941e46971a96f8d949f424e4def..1f3d8984bb52bcbc8b167eb98b85577abecbcce4 100644
+--- a/workflow/tools/preflight.py
++++ b/workflow/tools/preflight.py
+@@ -4,6 +4,7 @@ from __future__ import annotations
+ import hashlib
+ import json
+ import os
++import re
+ from pathlib import Path
+ import shutil
+ import subprocess
+@@ -45,7 +46,91 @@ def worktree(repo):
+     return digest({'code_tree': code_tree(repo, 'HEAD'), 'dirty': dirty})
+ 
+ 
+-def plan(repo: Path, base: str, head: str, *, pinned: bool = False) -> dict:
++def python_setup(repo, steps, source_bytes):
++    """Resolve supported CI provisioning without executing GitHub-only setup."""
++    found = []
++    for i, step in enumerate(steps):
++        if str(step.get('uses', '')).startswith('actions/setup-python@'):
++            if step.get('if') or step.get('env'):
++                raise ValueError('conditional Python setup requires local adapter support')
++            found.append((str(step['with']['python-version']), i, None))
++        for minor in ('3.11', '3.12'):
++            expected = ('bin="$(bash tools/provision-python.sh ' + minor + ' "$RUNNER_TEMP/python")"\n'
++                        'echo "$bin" >> "$GITHUB_PATH"')
++            if step.get('run', '').strip() == expected:
++                if any(step.get(key) for key in ('if', 'env', 'shell', 'working-directory')):
++                    raise ValueError('custom pinned Python setup requires local adapter support')
++                raw = source_bytes(repo / 'tools/provision-python.sh')
++                match = re.search(r'^\s*' + re.escape(minor) + r'\) VERSION=(\d+\.\d+\.\d+) SHA256=[0-9a-f]{64} ;;$', raw.decode(), re.M)
++                if match is None or not match[1].startswith(minor + '.'):
++                    raise ValueError('pinned Python provision recipe changed: update local adapter')
++                found.append((match[1], i, hashlib.sha256(raw).hexdigest()))
++    if len(found) != 1:
++        raise ValueError('CI Python setup missing or ambiguous: update local adapter')
++    return found[0]
++
++
++GO_UNIT_MODULES = (
++    ('phorvex', '15m'), ('build/metricvalidity', '5m'), ('build/test-harness', '15m'),
++    ('build/phoenix-extended', '15m'), ('libs/logging', '5m'),
++    ('build/integrations/epss-ecr-auth-runtime', '5m'), ('farm-fixtures/agentsim', '5m'),
++)
++GO_UNIT_ENV = {'KUBECONFIG': '/dev/null', 'KUBEBUILDER_ASSETS': '',
++               'USE_EXISTING_CLUSTER': 'false', 'GOTOOLCHAIN': 'local'}
++
++
++def current_go_unit_jobs(repo, source_bytes, base):
++    """Adapt only the pinned, non-cluster go-unit authority, never other CI jobs."""
++    file = repo / '.github/workflows/pr-validation.yml'
++    raw = source_bytes(file)
++    job = yaml.safe_load(raw)['jobs']['go-unit']
++    if job.get('env') != GO_UNIT_ENV or any(job.get(k) for k in ('container', 'services', 'defaults', 'strategy', 'if')):
++        raise ValueError('Go unit CI environment changed: update local adapter')
++    steps = job['steps']
++    if any('uses' in s and not s['uses'].startswith(('actions/checkout@', 'actions/setup-go@', 'azure/setup-helm@')) for s in steps):
++        raise ValueError('new Go setup action requires explicit local adapter support')
++    if any(any(s.get(k) for k in ('if', 'env', 'shell', 'working-directory')) for s in steps):
++        raise ValueError('custom Go unit step context requires local adapter support')
++    setups = [s for s in steps if s.get('uses', '').startswith('actions/setup-go@')]
++    helms = [s for s in steps if s.get('uses', '').startswith('azure/setup-helm@')]
++    if len(setups) != 1 or len(helms) != 1:
++        raise ValueError('Go/Helm unit setup missing or ambiguous: update local adapter')
++    setup = setups[0].get('with', {})
++    version_file = setup.get('go-version-file', '')
++    if (set(setup) - {'go-version-file', 'cache-dependency-path'}
++            or not re.fullmatch(r'(?:[A-Za-z0-9_-]+/)*go\.mod', version_file)):
++        raise ValueError('Go version-file setup changed: update local adapter')
++    version_raw = source_bytes(repo / version_file)
++    versions = re.findall(r'^go (\d+\.\d+\.\d+)$', version_raw.decode(), re.M)
++    if len(versions) != 1 or set(helms[0].get('with', {})) != {'version'}:
++        raise ValueError('Go/Helm unit version recipe changed: update local adapter')
++    common = {'cwd': '.', 'tool': 'go', 'version': versions[0], 'toolchain': 'local',
++              'env': dict(GO_UNIT_ENV), 'helm_version': str(helms[0]['with']['version']),
++              'ci_sha256': hashlib.sha256(raw).hexdigest(), 'go_version_file': version_file,
++              'go_version_file_sha256': hashlib.sha256(version_raw).hexdigest()}
++    summary = 'go -C phorvex run ./tools/servicerelease affected --base HEAD^1 --markdown >> "$GITHUB_STEP_SUMMARY"'
++    tests = [f'go -C {module} test -mod=readonly -count=1 -timeout={timeout} ./...'
++             for module, timeout in GO_UNIT_MODULES]
++    expected = [tests[0], summary, *tests[1:]]
++    runs = [s['run'].strip() for s in steps if 'run' in s]
++    if runs != expected:
++        raise ValueError('Go unit CI commands changed: update local adapter explicitly')
++    jobs = []
++    for script in runs:
++        if script == summary:
++            local_script = script.split(' >> ')[0].replace('--base HEAD^1', '--base ' + base)
++            jobs.append(dict(common, id='go-affected-services', script=local_script,
++                             adaptation='GitHub informational step-summary output is captured in this job log; the pinned plan base replaces the CI merge-parent base',
++                             ci_script=script))
++        else:
++            module = script.split()[2]
++            jobs.append(dict(common, id='go-unit-' + module.replace('/', '-'), script=script))
++    return jobs
++
++
++def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_version: int = 2) -> dict:
++    if recipe_version not in (1, 2):
++        raise ValueError('unsupported preflight recipe version')
+     # A newer main must not make unrelated upstream changes look like this PR's delta.
+     base = git(repo, 'merge-base', base, head).decode().strip()
+     paths = set(git(repo, 'diff', '--name-only', base, head).decode().splitlines())
+@@ -59,37 +144,91 @@ def plan(repo: Path, base: str, head: str, *, pinned: bool = False) -> dict:
+         file = repo / '.github/workflows/workflow-harness.yml'
+         config = yaml.safe_load(source_bytes(file))
+         steps = config['jobs']['harness']['steps']
+-        version = next(str(s['with']['python-version']) for s in steps if str(s.get('uses', '')).startswith('actions/setup-python@'))
+-        runs = [s['run'].strip() for s in steps if 'run' in s]
++        version, setup_index, provision_hash = python_setup(repo, steps, source_bytes)
++        runs = [s['run'].strip() for i, s in enumerate(steps) if 'run' in s and i != setup_index]
+         if runs != ['python -m pip install -r workflow/requirements.txt', 'bash workflow/tools/check.sh']:
+             raise ValueError('workflow CI commands changed: update the local preflight adapter explicitly')
+         jobs.append({'id': 'workflow', 'cwd': '.', 'script': runs[-1], 'tool': 'python', 'version': version,
+                      'ci_sha256': hashlib.sha256(source_bytes(file)).hexdigest()})
+-    chart_paths = ('phorvex/', 'deploy/helm/', 'build/phoenix-extended/charts/', 'tools/', 'End-to-End/', '.github/workflows/ci.yml', '.github/workflows/e2e-contract.yml')
++        if provision_hash:
++            jobs[-1]['python_provision_sha256'] = provision_hash
++    chart_paths = ('phorvex/', 'deploy/helm/', 'build/phoenix-extended/charts/', 'tools/', 'End-to-End/', '.github/workflows/ci.yml', '.github/workflows/pr-validation.yml', '.github/workflows/e2e-contract.yml')
+     if any(p.startswith(chart_paths) for p in paths):
+-        file = repo / '.github/workflows/ci.yml'
+-        job = yaml.safe_load(source_bytes(file))['jobs']['chart-sync']
+-        if job.get('env') or job.get('container'): raise ValueError('chart-sync now needs CI environment setup; review adapter')
++        legacy = repo / '.github/workflows/ci.yml'
++        exists = bool(git(repo, 'ls-tree', '--name-only', head, '.github/workflows/ci.yml').strip()) if pinned else legacy.is_file()
++        file = legacy if exists else repo / '.github/workflows/pr-validation.yml'
++        job_name = 'chart-sync' if exists else 'charts'
++        raw = source_bytes(file)
++        job = yaml.safe_load(raw)['jobs'][job_name]
++        if job.get('env') or job.get('container'): raise ValueError('chart checks now need CI environment setup; review adapter')
+         steps = job['steps']
+-        if any('uses' in step and not step['uses'].startswith(('actions/checkout@', 'azure/setup-helm@')) for step in steps):
+-            raise ValueError('new chart-sync setup action requires explicit local adapter support')
++        allowed = ('actions/checkout@', 'azure/setup-helm@') if exists else ('actions/checkout@', 'azure/setup-helm@', 'actions/setup-python@')
++        if any('uses' in step and not step['uses'].startswith(allowed) for step in steps):
++            raise ValueError('new chart setup action requires explicit local adapter support')
+         version = next(str(s['with']['version']) for s in steps if str(s.get('uses', '')).startswith('azure/setup-helm@'))
++        python_version, setup_index, provision_hash = (None, None, None) if exists else python_setup(repo, steps, source_bytes)
+         for i, step in enumerate(steps):
+-            if 'run' not in step:
++            if 'run' not in step or i == setup_index:
+                 continue
+-            if '${{' in step['run'] or step.get('if') or step.get('env'):
+-                raise ValueError('chart-sync now depends on CI context; review the adapter before running')
+-            jobs.append({'id': f'chart-{i}', 'name': step.get('name'), 'cwd': step.get('working-directory', '.'),
+-                         'script': step['run'], 'tool': 'helm', 'version': version,
+-                         'ci_sha256': hashlib.sha256(source_bytes(file)).hexdigest()})
++            if any(token in step['run'] for token in ('${{', '$RUNNER_TEMP', '$GITHUB_')) or step.get('if') or step.get('env'):
++                raise ValueError('chart checks now depend on CI context; review the adapter before running')
++            item = {'id': f'chart-{i}', 'name': step.get('name'), 'cwd': step.get('working-directory', '.'),
++                    'script': step['run'], 'tool': 'helm', 'version': version,
++                    'ci_sha256': hashlib.sha256(raw).hexdigest()}
++            if python_version:
++                item['python_version'] = python_version
++                if provision_hash: item['python_provision_sha256'] = provision_hash
++            jobs.append(item)
++    affected = []
+     for module in ['phorvex', 'build/phoenix-extended']:
+         if any(p.startswith(module + '/') and p.endswith(('.go', 'go.mod', 'go.sum')) for p in paths):
++            affected.append(module)
++    legacy_exists = bool(git(repo, 'ls-tree', '--name-only', head, '.github/workflows/ci.yml').strip()) if pinned else (repo / '.github/workflows/ci.yml').is_file()
++    current_go = recipe_version == 2 and not legacy_exists and (
++        '.github/workflows/pr-validation.yml' in paths or any(
++            p.startswith(module + '/') and p.endswith(('.go', 'go.mod', 'go.sum'))
++            for p in paths for module, _ in GO_UNIT_MODULES))
++    if current_go:
++        current_jobs = current_go_unit_jobs(repo, source_bytes, base)
++        jobs.extend(current_jobs)
++        # Preserve the pre-existing additional build/vet coverage for changed
++        # product modules; current CI's seven unit commands run separately above.
++        for module in affected:
++            item = dict(current_jobs[0], id='go-build-vet-' + module.replace('/', '-'),
++                        script=f'go -C {module} build ./...\ngo -C {module} vet ./...')
++            jobs.append(item)
++    else:
++        for module in affected:
+             lines = source_bytes(repo / module / 'go.mod').decode().splitlines()
+             version = next(line.split()[1] for line in lines if line.startswith('go '))
+             jobs.append({'id': 'go-' + module.replace('/', '-'), 'cwd': module, 'tool': 'go',
+                          'version': version, 'script': 'go build ./...\ngo test ./...\ngo vet ./...'})
+-    return {'schema_version': 1, 'base_sha': base, 'head_sha': head, 'changed_paths': sorted(paths), 'jobs': jobs,
+-            'external': ['Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.']}
++    external = ['Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.']
++    if recipe_version == 2:
++        external.append('Remote go-envtest with local Kubernetes API binaries and other remote CI jobs remain separate and unexecuted here; local PASS is not all remote CI passing.')
++    return {'schema_version': recipe_version, 'base_sha': base, 'head_sha': head, 'changed_paths': sorted(paths), 'jobs': jobs,
++            'external': external}
++
++
++def python_environment(version, args, env, repo, *, imports='yaml,jsonschema'):
++    # One preflight can require both workflow Python 3.11 and chart Python 3.12.
++    minor = '.'.join(version.split('.')[:2])
++    specific = os.environ.get('PREFLIGHT_PYTHON_' + minor.replace('.', '_'))
++    binary = specific or args.python or os.environ.get('WORKFLOW_PYTHON') or shutil.which('python' + minor)
++    prefix = []
++    if binary:
++        expression = 'import platform;print(platform.python_version())' if version.count('.') == 2 else 'import sys;print(".".join(map(str,sys.version_info[:2])))'
++        got = subprocess.check_output([binary, '-c', expression], text=True, timeout=15).strip()
++        if got != version:
++            raise ValueError(f'Python {got} differs from CI {version}')
++        binary = shutil.which(binary) or binary
++        env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
++        subprocess.run([binary, '-c', 'import ' + imports], check=True, capture_output=True, timeout=15)
++    elif shutil.which('uv'):
++        prefix = ['uv', 'run', '--python', version, '--with-requirements', str(repo/'workflow/requirements.txt')]
++    else:
++        raise ValueError(f'install Python {version} with workflow/requirements.txt, or uv; no version fallback')
++    return prefix, env
+ 
+ 
+ def environment(job, repo, args):
+@@ -98,19 +237,7 @@ def environment(job, repo, args):
+     prefix = []
+     tool = job['tool']
+     if tool == 'python':
+-        binary = args.python or os.environ.get('WORKFLOW_PYTHON') or shutil.which('python' + job['version'])
+-        if binary:
+-            got = subprocess.check_output([binary, '-c', 'import sys;print(".".join(map(str,sys.version_info[:2])))'], text=True, timeout=15).strip()
+-            if got != job['version']:
+-                raise ValueError(f'Python {got} differs from CI {job["version"]}')
+-            # Both python and python3 in check.sh must use the selected environment.
+-            binary = shutil.which(binary) or binary
+-            env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
+-            subprocess.run([binary, '-c', 'import yaml,jsonschema'], check=True, capture_output=True, timeout=15)
+-        elif shutil.which('uv'):
+-            prefix = ['uv', 'run', '--python', job['version'], '--with-requirements', str(repo/'workflow/requirements.txt')]
+-        else:
+-            raise ValueError(f'install Python {job["version"]} with workflow/requirements.txt, or uv; no version fallback')
++        prefix, env = python_environment(job['version'], args, env, repo)
+     elif tool == 'helm':
+         binary = args.helm or os.environ.get('HELM_BIN') or shutil.which('helm')
+         if not binary:
+@@ -119,12 +246,29 @@ def environment(job, repo, args):
+         if got != job['version']:
+             raise ValueError(f'Helm {got} differs from CI {job["version"]}; provide the matching binary')
+         env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
++        if job.get('python_version'):
++            prefix, env = python_environment(job['python_version'], args, env, repo, imports='yaml')
+     elif tool == 'go':
+         binary = os.environ.get('GO_BIN') or shutil.which('go')
+         if not binary:
+             raise ValueError('Go required; set GO_BIN or PATH')
++        binary = shutil.which(binary) or binary
+         env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
+-        env['GOTOOLCHAIN'] = 'go' + job['version']
++        if job.get('toolchain') == 'local':
++            env.update(job['env'])
++            got = subprocess.check_output([binary, 'version'], env=env, text=True, timeout=15).strip()
++            if not got.startswith('go version go' + job['version'] + ' '):
++                raise ValueError(f'Go {got} differs from CI {job["version"]}; provide the exact binary with GO_BIN')
++            helm = args.helm or os.environ.get('HELM_BIN') or shutil.which('helm')
++            if not helm:
++                raise ValueError(f'Helm {job["helm_version"]} required by Go unit CI')
++            got = subprocess.check_output([helm, 'version', '--template', '{{.Version}}'], text=True, timeout=15).strip()
++            if got != job['helm_version']:
++                raise ValueError(f'Helm {got} differs from Go unit CI {job["helm_version"]}')
++            env['HELM_BIN'] = helm
++            env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + str(Path(helm).absolute().parent) + os.pathsep + env['PATH']
++        else:
++            env['GOTOOLCHAIN'] = 'go' + job['version']
+     return prefix, env
+ 
+ 
+@@ -177,7 +321,10 @@ def validate_receipt(repo, path, base, head, *, require_worktree=True):
+     pinned_worktree = digest({'code_tree': code_tree(repo, head), 'dirty': {}})
+     if require_worktree and worktree(repo) != pinned_worktree:
+         raise ValueError('commit code before final preflight; worktree must match the pinned implementation')
+-    selected = plan(repo, base, head, pinned=True)
++    recipe_version = receipt.get('plan', {}).get('schema_version', 1)
++    if require_worktree and recipe_version != 2:
++        raise ValueError('legacy preflight recipe cannot satisfy current submission; rerun preflight')
++    selected = plan(repo, base, head, pinned=True, recipe_version=recipe_version)
+     if (receipt.get('result') != 'PASS' or receipt.get('plan_sha256') != digest(selected)
+             or receipt.get('worktree_sha256') != pinned_worktree):
+         raise ValueError('preflight missing, failed or stale; rerun for this source/worktree')
+diff --git a/workflow/tools/tests/test_preflight.py b/workflow/tools/tests/test_preflight.py
+index 81d909f5f8f34d8fbebb5ba26941a7397a48b3f2..b2a919817d76fae3e0eb0cb2b491cdd7b234d540 100644
+--- a/workflow/tools/tests/test_preflight.py
++++ b/workflow/tools/tests/test_preflight.py
+@@ -1,16 +1,31 @@
+ from __future__ import annotations
+ import argparse
+ import json
++import hashlib
++import os
++import shutil
+ from pathlib import Path
+ import tempfile
+ import unittest
++import yaml
+ from unittest.mock import patch
+ import sys
+ 
+-from test_operations import sandbox, run, workflow as w
++from test_operations import sandbox, run, workflow as w, SOURCE_ROOT
+ import preflight
+ 
+ 
++def current_ci(repo):
++    ci = repo/'.github/workflows'; ci.mkdir(parents=True)
++    for name in ('workflow-harness.yml', 'pr-validation.yml'):
++        shutil.copy2(SOURCE_ROOT.parent/'.github/workflows'/name, ci/name)
++    for name in ('tools/provision-python.sh', 'build/test-harness/go.mod', 'phorvex/go.mod'):
++        path = repo/name
++        path.parent.mkdir(parents=True, exist_ok=True)
++        shutil.copy2(SOURCE_ROOT.parent/name, path)
++    return ci
++
++
+ class PreflightTests(unittest.TestCase):
+     def test_plan_selects_ci_versions_but_never_shared_jobs(self):
+         with sandbox() as (repo,root,baseline):
+@@ -31,11 +46,158 @@ class PreflightTests(unittest.TestCase):
+             self.assertNotIn('DO_NOT_',json.dumps(jobs))
+             pinned_head = selected['head_sha']
+             (ci/'workflow-harness.yml').write_text('invalid: later-checkout-config')
++            (ci/'ci.yml').unlink()
++            (ci/'pr-validation.yml').write_text('invalid: current-checkout-is-not-historical-authority')
+             run(['git', 'add', '.github'], repo)
+             run(['git', 'commit', '-m', 'Change CI on later main'], repo)
+             self.assertEqual(preflight.plan(repo, baseline, pinned_head, pinned=True), selected)
+ 
+ 
++    def test_current_ci_authority_retains_every_chart_check_and_pinned_setup(self):
++        with sandbox() as (repo, root, baseline):
++            ci = current_ci(repo)
++            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
++            run(['git', 'commit', '-m', 'Current source-validation authority'], repo)
++            head = run(['git', 'rev-parse', 'HEAD'], repo)
++            selected = preflight.plan(repo, baseline, head)
++            self.assertFalse((ci/'ci.yml').exists())
++            charts = [j for j in selected['jobs'] if j['id'].startswith('chart-')]
++            config = yaml.safe_load((ci/'pr-validation.yml').read_text())
++            expected = [step['run'] for step in config['jobs']['charts']['steps']
++                        if 'run' in step and 'tools/provision-python.sh' not in step['run']]
++            self.assertEqual([j['script'] for j in charts], expected)
++            self.assertTrue(charts)
++            for job in charts:
++                self.assertEqual(job['version'], 'v3.16.4')
++                self.assertEqual(job['python_version'], '3.12.15')
++                self.assertEqual(job['ci_sha256'], hashlib.sha256((ci/'pr-validation.yml').read_bytes()).hexdigest())
++                self.assertEqual(job['python_provision_sha256'], hashlib.sha256((repo/'tools/provision-python.sh').read_bytes()).hexdigest())
++            harness = next(j for j in selected['jobs'] if j['id'] == 'workflow')
++            self.assertEqual(harness['version'], '3.11.17')
++            self.assertEqual(harness['script'], 'bash workflow/tools/check.sh')
++            go_jobs = [j for j in selected['jobs'] if j['id'].startswith('go-unit-')]
++            ci_go = config['jobs']['go-unit']
++            self.assertEqual([j['script'] for j in go_jobs], [s['run'] for s in ci_go['steps']
++                             if 'run' in s and ' test ' in s['run']])
++            self.assertEqual(len(go_jobs), 7)
++            for job in go_jobs:
++                self.assertEqual(job['version'], '1.26.3')
++                self.assertEqual(job['toolchain'], 'local')
++                self.assertEqual(job['env'], ci_go['env'])
++                self.assertEqual(job['helm_version'], 'v3.16.4')
++                self.assertEqual(job['go_version_file'], 'build/test-harness/go.mod')
++                self.assertEqual(job['go_version_file_sha256'], hashlib.sha256((repo/'build/test-harness/go.mod').read_bytes()).hexdigest())
++            summary = next(j for j in selected['jobs'] if j['id'] == 'go-affected-services')
++            self.assertNotIn('$GITHUB_', summary['script'])
++            self.assertIn('$GITHUB_STEP_SUMMARY', summary['ci_script'])
++            self.assertIn('--base ' + selected['base_sha'], summary['script'])
++            self.assertNotIn('HEAD^1', summary['script'])
++            self.assertIn('go-envtest', ' '.join(selected['external']))
++            self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
++            # Both authority selection and the provision recipe come from the
++            # receipt's commit, never a different checkout's present files.
++            (ci/'pr-validation.yml').unlink()
++            (ci/'ci.yml').write_text('invalid: later-main')
++            (repo/'tools/provision-python.sh').write_text('invalid: later-provisioner')
++            (repo/'build/test-harness/go.mod').write_text('invalid: later-Go-authority')
++            self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
++
++    def test_legacy_receipt_keeps_old_go_recipe_but_cannot_satisfy_current_submission(self):
++        with sandbox() as (repo, root, baseline):
++            current_ci(repo)
++            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
++            run(['git', 'commit', '-m', 'Current CI with legacy receipt semantics'], repo)
++            head = run(['git', 'rev-parse', 'HEAD'], repo)
++            old = preflight.plan(repo, baseline, head, pinned=True, recipe_version=1)
++            self.assertEqual(next(j['version'] for j in old['jobs'] if j['id'] == 'go-phorvex'), '1.26.1')
++            self.assertFalse(any(j['id'].startswith('go-unit-') for j in old['jobs']))
++            # Synthetic receipt fixture tests historical verification, not real
++            # execution of repository commands in this miniature repository.
++            output = root/'fixes/FIX-TEST/evidence/preflight/legacy.json'
++            output.parent.mkdir(parents=True, exist_ok=True)
++            rows = []
++            for job in old['jobs']:
++                log = output.parent/(job['id'] + '.log')
++                log.write_text('synthetic historical verification fixture\n')
++                rows.append({'id':job['id'], 'log':log.name, 'result':'PASS', 'exit_code':0,
++                             'sha256':hashlib.sha256(log.read_bytes()).hexdigest()})
++            receipt = {'schema_version':1, 'plan':old, 'plan_sha256':preflight.digest(old),
++                       'worktree_sha256':preflight.worktree(repo), 'results':rows, 'result':'PASS'}
++            output.write_text(json.dumps(receipt))
++            preflight.validate_receipt(repo, output, baseline, head, require_worktree=False)
++            with self.assertRaisesRegex(ValueError, 'legacy preflight recipe'):
++                preflight.validate_receipt(repo, output, baseline, head)
++            current = preflight.plan(repo, baseline, head, pinned=True)
++            self.assertEqual(current['schema_version'], 2)
++            self.assertEqual(next(j['version'] for j in current['jobs'] if j['id']=='go-unit-phorvex'), '1.26.3')
++            # Changing only the envelope version cannot upgrade old incomplete
++            # commands into the new complete CI authority.
++            receipt['plan']['schema_version'] = 2
++            receipt['plan_sha256'] = preflight.digest(receipt['plan'])
++            output.write_text(json.dumps(receipt))
++            with self.assertRaisesRegex(ValueError, 'missing, failed or stale'):
++                preflight.validate_receipt(repo, output, baseline, head)
++
++    def test_current_go_rejects_changed_commands_context_and_nonlocal_binary(self):
++        with sandbox() as (repo, root, baseline):
++            ci = current_ci(repo)
++            file = ci/'pr-validation.yml'
++            original = yaml.safe_load(file.read_text())
++            for kind in ('command', 'environment', 'setup', 'path'):
++                config = yaml.safe_load(yaml.safe_dump(original))
++                job = config['jobs']['go-unit']
++                if kind == 'command':
++                    next(s for s in job['steps'] if 'run' in s)['run'] += ' -run SelectedOnly'
++                elif kind == 'environment':
++                    job['env']['USE_EXISTING_CLUSTER'] = 'true'
++                elif kind == 'setup':
++                    next(s for s in job['steps'] if s.get('uses','').startswith('actions/setup-go@'))['if'] = 'some condition'
++                else:
++                    next(s for s in job['steps'] if s.get('uses','').startswith('actions/setup-go@'))['with']['go-version-file'] = '../outside/go.mod'
++                file.write_text(yaml.safe_dump(config))
++                with self.assertRaisesRegex(ValueError, 'adapter'):
++                    preflight.current_go_unit_jobs(repo, lambda p: p.read_bytes(), baseline)
++            file.write_text(yaml.safe_dump(original))
++            job = preflight.current_go_unit_jobs(repo, lambda p: p.read_bytes(), baseline)[0]
++            args = argparse.Namespace(python=None, helm='/exact/helm')
++            with patch.dict(os.environ, {'GO_BIN':'/exact/go', 'GOTOOLCHAIN':'auto', 'USE_EXISTING_CLUSTER':'true'}), \
++                 patch.object(preflight.subprocess, 'check_output', side_effect=['go version go1.26.3 linux/amd64\n', 'v3.16.4']) as check:
++                _, env = preflight.environment(job, repo, args)
++                self.assertEqual(env['GOTOOLCHAIN'], 'local')
++                self.assertEqual(env['USE_EXISTING_CLUSTER'], 'false')
++                self.assertEqual(check.call_args_list[0].kwargs['env']['GOTOOLCHAIN'], 'local')
++            with patch.dict(os.environ, {'GO_BIN':'/wrong/go'}), \
++                 patch.object(preflight.subprocess, 'check_output', return_value='go version go1.26.1 linux/amd64\n'):
++                with self.assertRaisesRegex(ValueError, 'differs from CI 1.26.3'):
++                    preflight.environment(job, repo, args)
++
++    def test_current_summary_uses_full_proposal_base_after_docs_only_tip(self):
++        with sandbox() as (repo, root, baseline):
++            current_ci(repo)
++            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
++            run(['git', 'commit', '-m', 'Source and CI authority change'], repo)
++            source_commit = run(['git', 'rev-parse', 'HEAD'], repo)
++            (repo/'review-note.md').write_text('Review metadata after source commit\n')
++            run(['git', 'add', 'review-note.md'], repo)
++            run(['git', 'commit', '-m', 'Documentation only tip'], repo)
++            head = run(['git', 'rev-parse', 'HEAD'], repo)
++            selected = preflight.plan(repo, baseline, head, pinned=True)
++            summary = next(j for j in selected['jobs'] if j['id']=='go-affected-services')
++            self.assertEqual(run(['git', 'rev-parse', 'HEAD^1'], repo), source_commit)
++            self.assertNotEqual(selected['base_sha'], source_commit)
++            self.assertIn('--base ' + selected['base_sha'], summary['script'])
++            self.assertNotIn('HEAD^1', summary['script'])
++            self.assertIn('--base HEAD^1', summary['ci_script'])
++            self.assertIn('pinned plan base', summary['adaptation'])
++
++    def test_pinned_python_requires_exact_patch_and_version_specific_binary(self):
++        args = argparse.Namespace(python='/generic/python', helm=None)
++        with patch.dict(os.environ, {'PREFLIGHT_PYTHON_3_12': '/matching/python'}), \
++             patch.object(preflight.subprocess, 'check_output', return_value='3.12.14\n') as check:
++            with self.assertRaisesRegex(ValueError, 'differs from CI 3.12.15'):
++                preflight.environment({'tool':'python', 'version':'3.12.15'}, Path('/tmp'), args)
++            self.assertEqual(check.call_args.args[0][0], '/matching/python')
++
+     def test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail(self):
+         with sandbox() as (repo, root, baseline):
+             head = run(['git', 'rev-parse', 'HEAD'], repo)

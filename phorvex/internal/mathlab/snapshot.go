@@ -94,6 +94,8 @@ type Inputs struct {
 	Policy   model.Policy
 	Views    []*model.WorkloadView
 	Engine   decision.OwnerState
+	// Optional additive evidence. Its absence does not invalidate legacy replay.
+	EndpointCostEvidence *model.ReplayCostEvidence
 }
 
 // Outcome is what production computed for the tick.

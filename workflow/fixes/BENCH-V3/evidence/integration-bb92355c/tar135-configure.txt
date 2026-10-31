@@ -1,0 +1,632 @@
+checking for a BSD-compatible install... /usr/bin/install -c
+checking whether build environment is sane... yes
+checking for a race-free mkdir -p... /usr/bin/mkdir -p
+checking for gawk... no
+checking for mawk... mawk
+checking whether make sets $(MAKE)... yes
+checking whether make supports nested variables... yes
+checking whether UID '1000' is supported by ustar format... yes
+checking whether GID '1000' is supported by ustar format... yes
+checking how to create a ustar tar archive... gnutar
+checking whether make supports nested variables... (cached) yes
+checking for gcc... gcc
+checking whether the C compiler works... yes
+checking for C compiler default output file name... a.out
+checking for suffix of executables... 
+checking whether we are cross compiling... no
+checking for suffix of object files... o
+checking whether the compiler supports GNU C... yes
+checking whether gcc accepts -g... yes
+checking for gcc option to enable C11 features... none needed
+checking whether gcc understands -c and -o together... yes
+checking whether the compiler is clang... no
+checking for compiler option needed when checking for declarations... none
+checking whether make supports the include directive... yes (GNU style)
+checking dependency style of gcc... gcc3
+checking for ranlib... ranlib
+checking for bison... no
+checking for byacc... no
+checking for stdio.h... yes
+checking for stdlib.h... yes
+checking for string.h... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for strings.h... yes
+checking for sys/stat.h... yes
+checking for sys/types.h... yes
+checking for unistd.h... yes
+checking for wchar.h... yes
+checking for minix/config.h... no
+checking for fcntl.h... yes
+checking for linux/fd.h... yes
+checking for memory.h... yes
+checking for net/errno.h... no
+checking for sgtty.h... yes
+checking for sys/param.h... yes
+checking for sys/device.h... no
+checking for sys/gentape.h... no
+checking for sys/inet.h... no
+checking for sys/io/trioctl.h... no
+checking for sys/mtio.h... yes
+checking for sys/time.h... yes
+checking for sys/tprintf.h... no
+checking for sys/tape.h... no
+checking for locale.h... yes
+checking for features.h... yes
+checking for linewrap.h... no
+checking for uchar.h... yes
+checking for sys/socket.h... yes
+checking for dirent.h... yes
+checking for error.h... yes
+checking for linux/xattr.h... yes
+checking for fnmatch.h... yes
+checking for stdio_ext.h... yes
+checking for getopt.h... yes
+checking for sys/cdefs.h... yes
+checking for threads.h... yes
+checking for limits.h... yes
+checking for crtdefs.h... no
+checking for wctype.h... yes
+checking for langinfo.h... yes
+checking for xlocale.h... no
+checking for sys/mman.h... yes
+checking for priv.h... no
+checking for malloc.h... yes
+checking for selinux/selinux.h... no
+checking for stdbool.h... yes
+checking for stdckdint.h... no
+checking for sys/random.h... yes
+checking for sysexits.h... yes
+checking for utime.h... yes
+checking for netdb.h... yes
+checking for sys/wait.h... yes
+checking for pwd.h... yes
+checking for grp.h... yes
+checking whether it is safe to define __EXTENSIONS__... yes
+checking whether _XOPEN_SOURCE should be defined... no
+checking build system type... x86_64-pc-linux-gnu
+checking host system type... x86_64-pc-linux-gnu
+checking how to run the C preprocessor... gcc -E
+checking for grep that handles long lines and -e... /usr/bin/grep
+checking for egrep... /usr/bin/grep -E
+checking for Minix Amsterdam compiler... no
+checking for ar... ar
+checking for _LARGEFILE_SOURCE value needed for large files... no
+checking for gcc option to enable large file support... none needed
+checking for gcc option for timestamps after 2038... none needed
+checking for gcc option to enable large file support... (cached) none needed
+checking for gcc option for timestamps after 2038... (cached) none needed
+checking for sys/buf.h... no
+checking for sys/mkdev.h... no
+checking for sys/sysmacros.h... yes
+checking for st_fstype string in struct stat... no
+checking for sys/acl.h... no
+checking for mode_t... yes
+checking for pid_t... yes
+checking for off_t... yes
+checking for uid_t in sys/types.h... yes
+checking for major_t... no
+checking for minor_t... no
+checking for dev_t... yes
+checking for ino_t... yes
+checking for ssize_t... yes
+checking for fchmod... yes
+checking for flockfile... yes
+checking for funlockfile... yes
+checking for pathconf... yes
+checking for btowc... yes
+checking for mbrtowc... yes
+checking for mbsinit... yes
+checking for canonicalize_file_name... yes
+checking for realpath... yes
+checking for lstat... yes
+checking for chown... yes
+checking for fchown... yes
+checking for _set_invalid_parameter_handler... no
+checking for fchdir... yes
+checking for fdopendir... yes
+checking for fchmodat... yes
+checking for lchmod... yes
+checking for fcntl... yes
+checking for symlink... yes
+checking for listxattr... yes
+checking for fnmatch... yes
+checking for mbsrtowcs... yes
+checking for fstatat... yes
+checking for getdtablesize... yes
+checking for getexecname... no
+checking for gettimeofday... yes
+checking for isblank... yes
+checking for iswcntrl... yes
+checking for link... yes
+checking for readlink... yes
+checking for openat... yes
+checking for mprotect... yes
+checking for mkdirat... yes
+checking for mknod... yes
+checking for pipe... yes
+checking for iswctype... yes
+checking for renameat... yes
+checking for setenv... yes
+checking for sleep... yes
+checking for snprintf... yes
+checking for strndup... yes
+checking for strtoimax... yes
+checking for strtoumax... yes
+checking for localtime_r... yes
+checking for unlinkat... yes
+checking for vasnprintf... no
+checking for wcrtomb... yes
+checking for wcwidth... yes
+checking for mkfifo... yes
+checking for setlocale... yes
+checking for fsync... yes
+checking for sys/acl.h... (cached) no
+configure: WARNING: libacl development library was not found or not usable.
+configure: WARNING: GNU tar will be built without ACL support.
+checking for size_t... yes
+checking for working alloca.h... yes
+checking for alloca... yes
+checking for inline... inline
+checking for C/C++ restrict keyword... __restrict__
+checking for gcc options needed to detect all undeclared functions... none needed
+checking whether clearerr_unlocked is declared... yes
+checking whether feof_unlocked is declared... yes
+checking whether ferror_unlocked is declared... yes
+checking whether fflush_unlocked is declared... yes
+checking whether fgets_unlocked is declared... yes
+checking whether fputc_unlocked is declared... yes
+checking whether fputs_unlocked is declared... yes
+checking whether fread_unlocked is declared... yes
+checking whether fwrite_unlocked is declared... yes
+checking whether getc_unlocked is declared... yes
+checking whether getchar_unlocked is declared... yes
+checking whether putc_unlocked is declared... yes
+checking whether putchar_unlocked is declared... yes
+checking whether strerror_r is declared... yes
+checking whether strerror_r returns char *... yes
+checking whether the preprocessor supports include_next... yes
+checking whether source code line length is unlimited... yes
+checking for d_ino member in directory struct... yes
+checking for long file names... yes
+checking whether <wchar.h> uses 'inline' correctly... yes
+checking for nl_langinfo and CODESET... yes
+checking for a traditional french locale... none
+checking whether char8_t is correctly defined... yes
+checking whether char16_t is correctly defined... yes
+checking whether char32_t is correctly defined... yes
+checking for bit size of wchar_t... 32
+checking for mbstate_t... yes
+checking for a traditional japanese locale... none
+checking for a french Unicode locale... none
+checking for a transitional chinese locale... none
+checking whether mbrtowc handles incomplete characters... guessing yes
+checking whether mbrtowc works as well as mbtowc... guessing yes
+checking whether mbrtoc32 is declared... yes
+checking for mbrtoc32... yes
+checking whether mbrtoc32 works as well as mbrtowc... guessing yes
+checking whether malloc is ptrdiff_t safe... yes
+checking whether malloc, realloc, calloc set errno on failure... yes
+checking whether lstat correctly handles trailing slash... yes
+checking whether // is distinct from /... no
+checking whether realpath works... yes
+checking for faccessat... yes
+checking for getcwd... yes
+checking for unistd.h... (cached) yes
+checking for working chown... yes
+checking whether chown dereferences symlinks... yes
+checking whether chown honors trailing slash... yes
+checking whether chown always updates ctime... yes
+checking if environ is properly declared... yes
+checking for complete errno.h... yes
+checking for error... yes
+checking whether error_at_line is declared... yes
+checking for error_at_line... yes
+checking for working error function... yes
+checking type of array argument to getgroups... gid_t
+checking whether ctype.h defines __header_inline... no
+checking whether fchdir is declared... yes
+checking for working fcntl.h... yes
+checking for promoted mode_t type... mode_t
+checking whether fopen recognizes a trailing slash... yes
+checking whether fflush works on input streams... no
+checking whether stdin defaults to large file offsets... yes
+checking whether fseeko is declared... yes
+checking for fseeko... yes
+checking whether fflush works on input streams... (cached) no
+checking whether stat file-mode macros are broken... no
+checking for nlink_t... yes
+checking whether getcwd (NULL, 0) allocates memory for result... yes
+checking for getcwd with POSIX signature... yes
+checking whether getcwd is declared... yes
+checking whether getdelim is declared... yes
+checking whether getdtablesize is declared... yes
+checking whether getline is declared... yes
+checking for getopt.h... (cached) yes
+checking for getopt_long_only... yes
+checking whether getopt is POSIX compatible... yes
+checking for working GNU getopt function... yes
+checking for working GNU getopt_long function... yes
+checking whether timespec_get is declared... yes
+checking for timespec_get... yes
+checking for struct timeval... yes
+checking for wide-enough struct timeval.tv_sec member... yes
+checking for pthread.h... yes
+checking for pthread_kill in -lpthread... yes
+checking whether POSIX threads API is available... yes
+checking whether setlocale (LC_ALL, NULL) is multithread-safe... yes
+checking whether setlocale (category, NULL) is multithread-safe... yes
+checking whether limits.h has WORD_BIT, BOOL_WIDTH etc.... yes
+checking whether limits.h has SSIZE_MAX... yes
+checking for wint_t... yes
+checking whether wint_t is large enough... yes
+checking whether the compiler produces multi-arch binaries... no
+checking whether stdint.h conforms to C99... yes
+checking whether stdint.h works without ISO C predefines... yes
+checking whether stdint.h has UINTMAX_WIDTH etc.... yes
+checking whether INT32_MAX < INTMAX_MAX... yes
+checking whether INT64_MAX == LONG_MAX... yes
+checking whether UINT32_MAX < UINTMAX_MAX... yes
+checking whether UINT64_MAX == ULONG_MAX... yes
+checking whether iswcntrl works... yes
+checking for towlower... yes
+checking for wctype_t... yes
+checking for wctrans_t... yes
+checking whether langinfo.h defines CODESET... yes
+checking whether langinfo.h defines T_FMT_AMPM... yes
+checking whether langinfo.h defines ALTMON_1... yes
+checking whether langinfo.h defines ERA... yes
+checking whether langinfo.h defines YESEXPR... yes
+checking for O_CLOEXEC... yes
+checking for wchar_t... yes
+checking for good max_align_t... yes
+checking whether NULL can be used in arbitrary expressions... yes
+checking for unreachable... no
+checking whether locale.h defines locale_t... yes
+checking whether locale.h conforms to POSIX:2001... yes
+checking whether struct lconv is properly defined... yes
+checking whether malloc (0) returns nonnull... yes
+checking for mmap... yes
+checking for MAP_ANONYMOUS... yes
+checking whether memchr works... yes
+checking whether memrchr is declared... yes
+checking whether <limits.h> defines MIN and MAX... no
+checking whether <sys/param.h> defines MIN and MAX... yes
+checking for compiler option needed when checking for future declarations... none
+checking whether time_t is signed... yes
+checking whether alarm is declared... yes
+checking for working mktime... yes
+checking whether struct tm is in sys/time.h or time.h... time.h
+checking for struct tm.tm_zone... yes
+checking for struct tm.tm_gmtoff... yes
+checking for compound literals... yes
+checking for library containing setfilecon... no
+checking whether setenv is declared... yes
+checking for search.h... yes
+checking for tsearch... yes
+checking for sigset_t... yes
+checking for volatile sig_atomic_t... yes
+checking for sighandler_t... yes
+checking whether snprintf returns a byte count as in C99... yes
+checking whether printf supports POSIX/XSI format strings with positions... yes
+checking whether snprintf is declared... yes
+checking whether fcloseall is declared... yes
+checking whether getw is declared... yes
+checking whether putw is declared... yes
+checking which flavor of printf attribute matches inttypes macros... system
+checking whether ecvt is declared... yes
+checking whether fcvt is declared... yes
+checking whether gcvt is declared... yes
+checking whether MB_CUR_MAX is correct... guessing yes
+checking whether strdup is declared... yes
+checking whether strerror(0) succeeds... yes
+checking whether strndup is declared... yes
+checking whether strnlen is declared... yes
+checking whether strtoimax is declared... yes
+checking whether strtoumax is declared... yes
+checking for struct timespec in <time.h>... yes
+checking for TIME_UTC in <time.h>... yes
+checking whether execvpe is declared... yes
+checking whether unsetenv is declared... yes
+checking whether the utimes function works... yes
+checking for inttypes.h... yes
+checking for stdint.h... yes
+checking for intmax_t... yes
+checking whether snprintf truncates the result as in C99... yes
+checking where to find the exponent in a 'double'... word 1 bit 20
+checking for wcslen... yes
+checking for snprintf... (cached) yes
+checking for strnlen... yes
+checking for wcrtomb... (cached) yes
+checking whether _snprintf is declared... no
+checking whether vsnprintf is declared... yes
+checking whether wcsdup is declared... yes
+checking for C compiler option to allow warnings... -Wno-error
+checking for alignas and alignof... yes, <stdalign.h> macros
+checking for alloca as a compiler built-in... yes
+checking whether program_invocation_name is declared... yes
+checking whether program_invocation_short_name is declared... yes
+checking whether program_invocation_name is defined... yes
+checking whether program_invocation_short_name is defined... yes
+checking for static_assert... yes, an <assert.h> macro
+checking whether btowc(0) is correct... yes
+checking whether btowc(EOF) is correct... guessing yes
+checking whether btowc is consistent with mbrtowc in the C locale... no
+checking for __builtin_expect... yes
+checking whether calloc (0, n) and calloc (n, 0) return nonnull... yes
+checking for readlinkat... yes
+checking whether this system supports file names of any length... no
+checking whether chmod works... yes
+checking for library containing clock_gettime... none required
+checking for clock_getres... yes
+checking for clock_gettime... yes
+checking for clock_settime... yes
+checking for closedir... yes
+checking for d_ino member in directory struct... (cached) yes
+checking for dirfd... yes
+checking whether dirfd is declared... yes
+checking whether dirfd is a macro... no
+checking whether // is distinct from /... (cached) no
+checking whether dup works... yes
+checking whether dup2 works... yes
+checking for euidaccess... yes
+checking for faccessat... (cached) yes
+checking whether fchmodat works... yes
+checking for fchownat... yes
+checking whether fchownat works with AT_SYMLINK_NOFOLLOW... yes
+checking whether fchownat works with an empty file name... yes
+checking whether fcntl handles F_DUPFD correctly... yes
+checking whether fcntl understands F_DUPFD_CLOEXEC... needs runtime check
+checking whether fdopendir is declared... yes
+checking whether fdopendir works... yes
+checking for struct stat.st_blocks... yes
+checking for mempcpy... yes
+checking for flexible array member... yes
+checking whether conversion from 'int' to 'long double' works... yes
+checking for working GNU fnmatch... yes
+checking whether fopen supports the mode character 'x'... yes
+checking whether fopen supports the mode character 'e'... yes
+checking for __fpending... yes
+checking whether __fpending is declared... yes
+checking whether free is known to preserve errno... yes
+checking for fseeko... (cached) yes
+checking whether fflush works on input streams... (cached) no
+checking for _fseeki64... no
+checking whether fstatat (..., 0) works... yes
+checking for futimens... yes
+checking whether futimens works... yes
+checking whether getcwd handles long file names properly... yes
+checking for getpagesize... yes
+checking whether getcwd succeeds when 4k < cwd_length < 16k... yes
+checking for getdelim... yes
+checking for working getdelim function... yes
+checking whether getdtablesize works... yes
+checking for getgroups... yes
+checking for working getgroups... yes
+checking whether getgroups handles negative values... yes
+checking for getline... yes
+checking for working getline function... yes
+checking for getpagesize... (cached) yes
+checking whether getpagesize is declared... yes
+checking for getprogname... no
+checking whether program_invocation_name is declared... (cached) yes
+checking whether program_invocation_name is declared... (cached) yes
+checking whether program_invocation_short_name is declared... (cached) yes
+checking whether __argv is declared... no
+checking for getrandom... yes
+checking whether getrandom is compatible with its GNU+BSD signature... yes
+checking for gettimeofday with POSIX signature... yes
+checking for group_member... yes
+checking for iswblank... yes
+checking whether iswblank is declared... yes
+checking whether iswdigit is ISO C compliant... guessing yes
+checking whether iswxdigit is ISO C compliant... guessing yes
+checking for lchown... yes
+checking whether the compiler supports the __inline keyword... yes
+checking whether link obeys POSIX... yes
+checking for __xpg4... no
+checking whether link(2) dereferences a symlink... no
+checking for linkat... yes
+checking whether linkat() can link symlinks... yes
+checking whether linkat handles trailing slash correctly... yes
+checking whether localeconv works... yes
+checking whether lseek detects pipes... yes
+checking whether SEEK_DATA works but is incompatible with GNU... no
+checking whether malloc (0) returns nonnull... (cached) yes
+checking whether mbrtoc32 works on empty input... yes
+checking whether the C locale is free of encoding errors... no
+checking whether mbrtowc handles a NULL pwc argument... guessing yes
+checking whether mbrtowc handles a NULL string argument... guessing yes
+checking whether mbrtowc has a correct return value... guessing yes
+checking whether mbrtowc returns 0 when parsing a NUL character... guessing yes
+checking whether mbrtowc stores incomplete characters... guessing no
+checking whether mbrtowc works on empty input... yes
+checking whether the C locale is free of encoding errors... no
+checking whether mbsrtowcs works... guessing yes
+checking whether the C locale is free of encoding errors... (cached) no
+checking for mbtowc... yes
+checking for mempcpy... (cached) yes
+checking for memrchr... yes
+checking whether mkdir handles trailing slash... yes
+checking whether mkdir handles trailing dot... yes
+checking for mkdtemp... yes
+checking for mkfifo... yes
+checking whether mkfifo rejects trailing slashes... yes
+checking for mknodat... yes
+checking for mkfifoat... yes
+checking whether mkfifoat rejects trailing slashes... yes
+checking whether mknod can create fifo without root privileges... yes
+checking for __mktime_internal... no
+checking for nl_langinfo... yes
+checking whether YESEXPR works... yes
+checking for obstacks that work with any size object... no
+checking whether open recognizes a trailing slash... yes
+checking for opendir... yes
+checking for bison... no
+checking for struct tm.tm_zone... (cached) yes
+checking for getppriv... no
+checking whether program_invocation_name is declared... (cached) yes
+checking whether program_invocation_short_name is declared... (cached) yes
+checking for raise... yes
+checking for rawmemchr... yes
+checking for readdir... yes
+checking whether readlink signature is correct... yes
+checking whether readlink handles trailing slash correctly... yes
+checking whether readlink truncates results correctly... yes
+checking for readlinkat... (cached) yes
+checking whether readlinkat signature is correct... yes
+checking whether realloc (0, 0) returns nonnull... yes
+checking for reallocarray... yes
+checking for working re_compile_pattern... yes
+checking whether rename honors trailing slash on destination... yes
+checking whether rename honors trailing slash on source... yes
+checking whether rename manages hard links correctly... yes
+checking whether rename manages existing destinations correctly... yes
+checking for linux/fs.h... yes
+checking for renameat2... yes
+checking for linux/fs.h... (cached) yes
+checking for renameat2... (cached) yes
+checking for rewinddir... yes
+checking whether rmdir works... yes
+checking for rpmatch... yes
+checking for selinux/flask.h... no
+checking whether setenv validates arguments... yes
+checking whether setlocale (LC_ALL, NULL) is multithread-safe... (cached) yes
+checking whether setlocale (category, NULL) is multithread-safe... (cached) yes
+checking for stdint.h... (cached) yes
+checking for SIZE_MAX... yes
+checking whether sleep is declared... yes
+checking for working sleep... yes
+checking for snprintf... (cached) yes
+checking whether snprintf respects a size of 1... yes
+checking for ssize_t... (cached) yes
+checking whether stat handles trailing slashes on files... yes
+checking for struct stat.st_atim.tv_nsec... yes
+checking whether struct stat.st_atim is of type struct timespec... yes
+checking for struct stat.st_birthtimespec.tv_nsec... no
+checking for struct stat.st_birthtimensec... no
+checking for struct stat.st_birthtim.tv_nsec... no
+checking for va_copy... yes
+checking for bool, true, false... no
+checking for stpcpy... yes
+checking for strcasecmp... yes
+checking for strncasecmp... yes
+checking whether strncasecmp is declared... yes
+checking for strchrnul... yes
+checking whether strchrnul works... yes
+checking for working strerror function... yes
+checking for working strndup... yes
+checking for working strnlen... yes
+checking whether strtoimax works... yes
+checking for strtol... yes
+checking whether strtol works... no
+checking for strtoll... yes
+checking whether strtoll works... no
+checking for strtoul... yes
+checking whether strtoul works... no
+checking for strtoull... yes
+checking whether strtoull works... no
+checking whether symlink handles trailing slash correctly... yes
+checking for symlinkat... yes
+checking whether symlinkat handles trailing slash correctly... yes
+checking whether localtime_r is declared... yes
+checking whether localtime_r is compatible with its POSIX signature... yes
+checking whether localtime works even near extrema... yes
+checking for timezone_t... no
+checking for timegm... yes
+checking whether unlink honors trailing slashes... yes
+checking whether unlink of a parent directory fails as it should... guessing yes
+checking for unsetenv... yes
+checking for unsetenv() return type... int
+checking whether unsetenv obeys POSIX... yes
+checking for utime... yes
+checking whether utime handles trailing slashes on files... yes
+checking for futimes... yes
+checking for futimesat... yes
+checking for lutimes... yes
+checking for futimens... (cached) yes
+checking for utimensat... yes
+checking for utimensat... (cached) yes
+checking whether utimensat works... yes
+checking for variable-length arrays... yes
+checking for ptrdiff_t... yes
+checking for vasprintf... yes
+checking for vsnprintf... yes
+checking whether snprintf respects a size of 1... (cached) yes
+checking whether wcrtomb works in the C locale... yes
+checking whether wcrtomb return value is correct... guessing yes
+checking whether wcwidth is declared... yes
+checking whether wcwidth works reasonably in UTF-8 locales... yes
+checking for wmemchr... yes
+checking for wmempcpy... yes
+checking for stdint.h... (cached) yes
+checking for library containing setsockopt... none required
+checking for library containing setsockopt... (cached) none required
+checking for sys/mtio.h... (cached) yes
+checking which ioctl field to test for reversed bytes... mt_type
+checking whether to build rmt... yes
+checking for remote tape header files... yes
+checking for sys/buf.h... (cached) no
+checking for struct stat.st_blksize... yes
+checking for library containing gethostbyname... none required
+checking for sys/xattr.h... yes
+checking for library containing getxattr... none required
+checking for library containing fgetxattr... none required
+checking for library containing lgetxattr... none required
+checking for library containing setxattr... none required
+checking for library containing fsetxattr... none required
+checking for library containing lsetxattr... none required
+checking for library containing listxattr... none required
+checking for library containing flistxattr... none required
+checking for library containing llistxattr... none required
+checking whether getgrgid is declared... yes
+checking whether getpwuid is declared... yes
+checking whether time is declared... yes
+checking for waitpid... yes
+checking for remote shell... no
+checking for netdb.h... (cached) yes
+checking for default archive format... GNU
+checking for default archive... -
+checking for default blocking... 20
+checking for default quoting style... escape
+checking for ld used by gcc... /usr/bin/ld
+checking if the linker (/usr/bin/ld) is GNU ld... yes
+checking for shared library run path origin... done
+checking 32-bit host C ABI... no
+checking for ELF binary format... yes
+checking for the common suffixes of directories in the library search path... lib,lib,lib64
+checking for iconv... yes
+checking for working iconv... yes
+checking for iconv declaration... 
+         extern size_t iconv (iconv_t cd, char * *inbuf, size_t *inbytesleft, char * *outbuf, size_t *outbytesleft);
+checking for iconv.h... yes
+checking for iconv_t... yes
+checking for a sed that does not truncate output... /usr/bin/sed
+checking whether NLS is requested... yes
+checking for msgfmt... no
+checking for gmsgfmt... :
+checking for xgettext... no
+checking for msgmerge... no
+checking for CFPreferencesCopyAppValue... no
+checking for CFLocaleCopyPreferredLanguages... no
+checking for GNU gettext in libc... yes
+checking whether to use NLS... yes
+checking where the gettext function comes from... libc
+checking that generated files are newer than configure... done
+configure: creating ./config.status
+config.status: creating tests/Makefile
+config.status: creating tests/atlocal
+config.status: creating Makefile
+config.status: creating doc/Makefile
+config.status: creating gnu/Makefile
+config.status: creating lib/Makefile
+config.status: creating po/Makefile.in
+config.status: creating scripts/Makefile
+config.status: creating rmt/Makefile
+config.status: creating src/Makefile
+config.status: creating config.h
+config.status: executing depfiles commands
+config.status: executing po-directories commands
+config.status: creating po/POTFILES
+config.status: creating po/Makefile
+config.status: executing tests/atconfig commands

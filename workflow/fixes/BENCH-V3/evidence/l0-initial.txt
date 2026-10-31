@@ -1,0 +1,21 @@
+go: downloading github.com/spf13/pflag v1.0.6
+go: downloading github.com/blang/semver/v4 v4.0.0
+go: downloading go.etcd.io/bbolt v1.3.11
+go: downloading github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
+go: downloading k8s.io/kubelet v0.34.0
+go: downloading gomodules.xyz/jsonpatch/v2 v2.4.0
+go: downloading github.com/fsnotify/fsnotify v1.7.0
+go: downloading github.com/moby/spdystream v0.5.0
+go: downloading github.com/google/btree v1.1.3
+go: downloading golang.org/x/sync v0.16.0
+go: downloading github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f
+ok  	github.com/phorvex/phorvex/internal/ingest	3.356s
+ok  	github.com/phorvex/phorvex/internal/slo	0.050s
+ok  	github.com/phorvex/phorvex/internal/mathlab	1.720s
+--- FAIL: TestM174StartFasterBasePositiveControl (0.53s)
+    m174_scheduler_test.go:112: producer gap[1] = 68.258014ms, want >= 70ms; calls=[2026-10-31 18:21:47.943519799 +0000 UTC m=+6.479367630 2026-10-31 18:21:48.011777743 +0000 UTC m=+6.547625644 2026-10-31 18:21:48.111872461 +0000 UTC m=+6.647720380 2026-10-31 18:21:48.211977549 +0000 UTC m=+6.747825478 2026-10-31 18:21:48.312746421 +0000 UTC m=+6.848594292 2026-10-31 18:21:48.412682859 +0000 UTC m=+6.948530733]
+FAIL
+FAIL	github.com/phorvex/phorvex/internal/runner	10.313s
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.723s
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.224s
+FAIL

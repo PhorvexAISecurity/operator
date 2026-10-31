@@ -1,0 +1,17 @@
+preflight: evidence/preflight/receipt.json
+checks:
+  implementation:
+    artifact: 04-diff.patch
+    command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv bb92355cf7b6c4a696f44caf52bd5fa1268e7303 193923cc32c52269f66cb8617940b96d9d555b1e
+  l0:
+    artifact: evidence/integration-bb92355c/l0.txt
+    command: TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/ingest ./internal/slo ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient -count=1
+  l1:
+    artifact: evidence/integration-bb92355c/l1.txt
+    command: TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/ingest ./internal/slo ./internal/runner -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues' -count=1 -v
+  l2:
+    artifact: evidence/integration-bb92355c/l2.txt
+    command: TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient -run 'TestOptionalCostCapture|TestMathLabCapture|TestRemoteBrainMatchesInProcess|TestWorkloadSpecThroughRealRemoteSensor|TestRemoteSensorMatchesInProcess' -count=1 -v
+  positive_control:
+    artifact: evidence/integration-bb92355c/l1.txt
+    command: TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local /workspace/.phorvex-go/go/bin/go test -C phorvex ./internal/ingest ./internal/slo ./internal/runner -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues' -count=1 -v

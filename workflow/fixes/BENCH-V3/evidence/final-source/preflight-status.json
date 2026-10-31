@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 228887,
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "started_at": "2026-10-31T20:32:25.027848+00:00",
+  "results": [
+    {
+      "name": "coherent-preflight",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 2001.952,
+  "step": "coherent-preflight",
+  "child_pid": 228888,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T21:05:46.978977+00:00"
+}

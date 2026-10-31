@@ -1,0 +1,28 @@
+{
+  "state": "DONE",
+  "pid": 228035,
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "started_at": "2026-10-31T20:29:45.758210+00:00",
+  "results": [
+    {
+      "name": "producer-and-wire-controls",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "architecture-and-covermap",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "console-completion-controls",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 58.869,
+  "step": "console-completion-controls",
+  "child_pid": 228246,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T20:30:44.626691+00:00"
+}

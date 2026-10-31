@@ -1,0 +1,72 @@
+=== RUN   TestEveryPackageHasADomain
+--- PASS: TestEveryPackageHasADomain (0.11s)
+=== RUN   TestImportsRespectServiceBoundaries
+--- PASS: TestImportsRespectServiceBoundaries (0.11s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/archtest	0.229s
+=== RUN   TestEveryShippedActionHasExplicitClassification
+--- PASS: TestEveryShippedActionHasExplicitClassification (0.00s)
+=== RUN   TestObservedMaximumIsNeverPromotedToDeterministicBound
+--- PASS: TestObservedMaximumIsNeverPromotedToDeterministicBound (0.00s)
+=== RUN   TestOnlyStructurallyZeroActionsProduceNumericZero
+--- PASS: TestOnlyStructurallyZeroActionsProduceNumericZero (0.00s)
+=== RUN   TestServingPathAndArbitraryPayloadActionsStayUnknown
+--- PASS: TestServingPathAndArbitraryPayloadActionsStayUnknown (0.00s)
+=== RUN   TestUnknownListIncludesRotateDespiteMeasurement
+--- PASS: TestUnknownListIncludesRotateDespiteMeasurement (0.00s)
+=== RUN   TestFiniteBoundUsesOnlyEnforcedDuration
+--- PASS: TestFiniteBoundUsesOnlyEnforcedDuration (0.00s)
+=== RUN   TestAvailabilityIsServiceSpecificAndSeparate
+--- PASS: TestAvailabilityIsServiceSpecificAndSeparate (0.00s)
+=== RUN   TestLoadNeverEntersReplicaSeconds
+--- PASS: TestLoadNeverEntersReplicaSeconds (0.00s)
+=== RUN   TestContractDerivationIsDeterministicAndSelectsWorstPath
+--- PASS: TestContractDerivationIsDeterministicAndSelectsWorstPath (0.00s)
+=== RUN   TestSerialPhasesAddReplicaSecondsAndWarmupIsExcluded
+--- PASS: TestSerialPhasesAddReplicaSecondsAndWarmupIsExcluded (0.00s)
+=== RUN   TestParallelCompositeUsesLongestDeadlineAndMaximumLoss
+--- PASS: TestParallelCompositeUsesLongestDeadlineAndMaximumLoss (0.00s)
+=== RUN   TestReturnOnlyTimeoutAndMissingRecoveryStayUnknown
+--- PASS: TestReturnOnlyTimeoutAndMissingRecoveryStayUnknown (0.00s)
+=== RUN   TestIncompleteInventoryNeverProducesFiniteBound
+--- PASS: TestIncompleteInventoryNeverProducesFiniteBound (0.00s)
+=== RUN   TestStructurallyZeroContractNeedsNoDuration
+--- PASS: TestStructurallyZeroContractNeedsNoDuration (0.00s)
+=== RUN   TestPositiveDisruptionCanHaveZeroAvailabilityBreach
+--- PASS: TestPositiveDisruptionCanHaveZeroAvailabilityBreach (0.00s)
+=== RUN   TestConsumedIsReplicasTimesDuration
+--- PASS: TestConsumedIsReplicasTimesDuration (0.00s)
+=== RUN   TestConsumedRespectsTheWindowStart
+--- PASS: TestConsumedRespectsTheWindowStart (0.00s)
+=== RUN   TestConsumedCountsOnlyDurationOverlappingWindow
+--- PASS: TestConsumedCountsOnlyDurationOverlappingWindow (0.00s)
+=== RUN   TestCensoredEntriesStillConsumeBudget
+--- PASS: TestCensoredEntriesStillConsumeBudget (0.00s)
+=== RUN   TestCensoredEntryIsUpdatedInsteadOfPermanentlyUndercounted
+--- PASS: TestCensoredEntryIsUpdatedInsteadOfPermanentlyUndercounted (0.00s)
+=== RUN   TestZeroImpactEntriesAreNotRecorded
+--- PASS: TestZeroImpactEntriesAreNotRecorded (0.00s)
+=== RUN   TestPerActionBreakdown
+--- PASS: TestPerActionBreakdown (0.00s)
+=== RUN   TestRetentionEvictsBeyondTheWindow
+--- PASS: TestRetentionEvictsBeyondTheWindow (0.00s)
+=== RUN   TestCauseDefaultsToPhorvex
+--- PASS: TestCauseDefaultsToPhorvex (0.00s)
+=== RUN   TestReplicaDisruptionAndAvailabilityBreachAreSeparate
+--- PASS: TestReplicaDisruptionAndAvailabilityBreachAreSeparate (0.00s)
+=== RUN   TestAvailabilityWindowCountsOnlyOverlappingBreach
+--- PASS: TestAvailabilityWindowCountsOnlyOverlappingBreach (0.00s)
+=== RUN   TestMissingAvailabilityEvidenceIsNotReportedAsMeasuredZero
+--- PASS: TestMissingAvailabilityEvidenceIsNotReportedAsMeasuredZero (0.00s)
+=== RUN   TestCompletedStructuralZeroIsRetainedAsMeasuredZero
+--- PASS: TestCompletedStructuralZeroIsRetainedAsMeasuredZero (0.00s)
+=== RUN   TestUnknownImpactAndUnknownBoundAreNeverLaunderedToZero
+--- PASS: TestUnknownImpactAndUnknownBoundAreNeverLaunderedToZero (0.00s)
+=== RUN   TestReplayHistoryRealLedgerReplacementIsolationAndImmutability
+--- PASS: TestReplayHistoryRealLedgerReplacementIsolationAndImmutability (0.00s)
+=== RUN   TestReplayHistoryBoundsAndMissingLedger
+--- PASS: TestReplayHistoryBoundsAndMissingLedger (0.00s)
+=== RUN   TestReplayHistoryDTOCarriesAllLedgerEvidence
+--- PASS: TestReplayHistoryDTOCarriesAllLedgerEvidence (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/slo	0.051s

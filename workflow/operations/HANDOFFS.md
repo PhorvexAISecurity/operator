@@ -10,9 +10,26 @@ Report concrete contradictions if found; a separate worker proposal is not requi
 
 Commit code before the final preflight. `preflight <fix>` prints the selected local
 checks; add `--run` to execute. Python follows workflow CI (an explicit `--python`
-environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`); Go follows
-go.mod (`GO_BIN`/PATH). Tool absence/version mismatch is unavailable, never skipped.
-Shared E2E, image builds and deployment do not run locally or acquire authorization.
+environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`). Current Go
+unit checks use CI's highest-version file (`build/test-harness/go.mod`), an exact
+`GO_BIN`/PATH binary and `GOTOOLCHAIN=local`, including its non-cluster environment.
+Tool absence/version mismatch is unavailable, never skipped.
+For current CI's pinned Python provisioner, local preflight verifies the full
+patch version and attests the provision script hash. If checks need both Python
+versions, set `PREFLIGHT_PYTHON_3_11` and `PREFLIGHT_PYTHON_3_12` to the matching
+interpreters (with required dependencies installed); these override `--python`
+per job. Current chart checks come from `pr-validation.yml` when legacy `ci.yml`
+is absent. Historical receipts resolve their authority and provisioner from the
+pinned commit, not the current checkout. Recipe version 2 runs all seven current
+`go-unit` module commands exactly; its informational affected-services report goes
+to the local job log instead of `$GITHUB_STEP_SUMMARY`, and uses the pinned plan
+base instead of GitHub's merge-parent `HEAD^1`. Existing extra build/vet
+checks remain for changed product modules. Historical version 1 receipts retain
+their old module-minimum Go semantics for historical validation only; they cannot
+satisfy a current submission. Unsupported CI recipes require an explicit adapter
+update rather than silently losing checks.
+The separate remote `go-envtest` job (local Kubernetes API binaries), other remote
+CI jobs, shared E2E, image builds and deployment are not executed by this preflight.
 A local PASS is not a claim that all remote CI is green.
 Recorded receipts are validated against their attested source and its CI recipes, even
 when doctor runs on a newer main or PR merge checkout. Submission additionally requires

@@ -1,0 +1,52 @@
+{
+  "source_sha": "00eac153f3f27929907f91d4231362051664364c",
+  "cwd": "/workspace/operator-v3-capture",
+  "env": {
+    "PATH": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games",
+    "GO_BIN": "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2",
+    "HELM_BIN": "/workspace/.phorvex-tools/helm",
+    "KUBECONFIG": "/dev/null",
+    "KUBEBUILDER_ASSETS": "",
+    "USE_EXISTING_CLUSTER": "false",
+    "PREFLIGHT_PYTHON_3_11": "/workspace/.phorvex-tools/python311/python/bin/python3.11",
+    "PREFLIGHT_PYTHON_3_12": "/workspace/.phorvex-tools/python312/python/bin/python3.12"
+  },
+  "status": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/acceptance-status.json",
+  "log": "/workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/acceptance-runner.txt",
+  "description": "Worker L0/L1/L2 on committed 00eac153; exact commands and separate raw logs are in submit.yaml.",
+  "total_timeout_seconds": 3000,
+  "steps": [
+    {
+      "name": "l0",
+      "command": [
+        "bash",
+        "-c",
+        "set -o pipefail\nPATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go -C phorvex test -mod=readonly -timeout=15m ./internal/archtest ./internal/ingest ./internal/slo ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient ./tools/covermap -count=1 2>&1 | tee /workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/l0.txt"
+      ],
+      "timeout_seconds": 1000
+    },
+    {
+      "name": "l1",
+      "command": [
+        "bash",
+        "-c",
+        "set -o pipefail\nPATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go -C phorvex test -mod=readonly -timeout=15m ./internal/ingest ./internal/slo ./internal/runner -run 'TestWorkloadSpec|TestWorkloadEvidence|TestSnapshotOwner|TestReplayHistory|TestCostEvidence|TestCensoredRotationContinues' -count=1 -v 2>&1 | tee /workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/l1.txt"
+      ],
+      "timeout_seconds": 1000
+    },
+    {
+      "name": "l2",
+      "command": [
+        "bash",
+        "-c",
+        "set -o pipefail\nPATH=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin:/workspace/.phorvex-tools/tar135/bin:/workspace/.phorvex-tools:/workspace/.phorvex-tools/python312/python/bin:$PATH TMPDIR=/workspace/.phorvex-test-tmp GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 GOTOOLCHAIN=local HELM_BIN=/workspace/.phorvex-tools/helm KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go -C phorvex test -mod=readonly -timeout=15m ./internal/mathlab ./internal/runner ./internal/brainclient ./internal/sensorclient -run 'TestOptionalCostCapture|TestMathLabCapture|TestRemoteBrainMatchesInProcess|TestWorkloadSpecThroughRealRemoteSensor|TestRemoteSensorMatchesInProcess' -count=1 -v 2>&1 | tee /workspace/operator-v3-capture/workflow/fixes/BENCH-V3/evidence/final-source/l2.txt"
+      ],
+      "timeout_seconds": 1000
+    }
+  ]
+}

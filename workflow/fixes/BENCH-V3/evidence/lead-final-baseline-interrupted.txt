@@ -1,0 +1,5 @@
+BASELINE bb92355cf7b6c4a696f44caf52bd5fa1268e7303 FIXTURE_SOURCE 0435b7f57017dbb5768adf92a80d2accc87e5a33
+FIXTURE_SHA256 9762c7d8c1b3be3fbd7ff1c2ff62574d319c68c2ba85675a26df98c3bf4e8d00
+go version go1.26.3 linux/amd64
+
+COMMAND ['/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go', '-C', '/workspace/.phorvex-test-tmp/lead-bench-v3-final-h4x798o9/phorvex', 'test', '-mod=readonly', '-count=1', '-timeout=15m', './internal/ingest', '-run', '^TestWorkloadSpecRealProducerCounterexample$', '-v']

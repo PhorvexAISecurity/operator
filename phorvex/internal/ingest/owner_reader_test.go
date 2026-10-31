@@ -2,16 +2,22 @@ package ingest
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
+	"github.com/phorvex/phorvex/internal/ownership"
+	"github.com/phorvex/phorvex/internal/statefulrotation"
 	amtd "github.com/r6security/phoenix/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,5 +79,99 @@ func TestSnapshotOwnerReadsDeduplicatedAndScoped(t *testing.T) {
 		if n != 2 {
 			t.Fatalf("cache survived snapshot: %v", reader.calls)
 		}
+	}
+}
+
+// Defaults cannot expand read authority or introduce latency for owner types
+// that the existing snapshot producers never fetch.
+func TestWorkloadEvidenceUsesOnlyAlreadyObservedOwnerObjects(t *testing.T) {
+	s := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(s)
+	_ = v1alpha1.AddToScheme(s)
+	_ = amtd.AddToScheme(s)
+	n := int32(4)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "ns", UID: "d", ResourceVersion: "9"}, Spec: appsv1.DeploymentSpec{Replicas: &n}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "ns", UID: "r", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &n, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "yes"}}}}
+	sts := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "sts", Namespace: "ns", UID: "s"}, Spec: appsv1.StatefulSetSpec{Replicas: &n}}
+	mk := func(name string, owner client.Object, kind string) *corev1.Pod {
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(name), Labels: map[string]string{"app": "yes"}, OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(owner, appsv1.SchemeGroupVersion.WithKind(kind))}}}
+	}
+	// A separate direct Deployment owner never fetched by the real rotation path.
+	direct := dep.DeepCopy()
+	direct.Name = "direct"
+	direct.UID = "direct"
+	pods := []*corev1.Pod{mk("deployment", rs, "ReplicaSet"), mk("stateful", sts, "StatefulSet"), mk("direct", direct, "Deployment")}
+	objects := []client.Object{dep, rs, sts, direct}
+	for _, p := range pods {
+		objects = append(objects, p)
+	}
+	c := fake.NewClientBuilder().WithScheme(s).WithObjects(objects...).Build()
+	reference := countingOwnerReader{Reader: c, calls: map[string]int{}}
+	cached := newSnapshotOwnerReader(reference)
+	for _, p := range pods {
+		ownership.Check(context.Background(), cached, p)
+		statefulrotation.Observe(context.Background(), cached, p)
+	}
+	reader := countingOwnerReader{Reader: c, calls: map[string]int{}}
+	snap, err := CollectSnapshotForRotationTargets(context.Background(), c, time.Now(), nil, reader, func(*corev1.Pod) bool { return true })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reader.calls, reference.calls) || len(reader.calls) != 3 {
+		t.Fatalf("evidence expanded live API reads: reference=%v actual=%v", reference.calls, reader.calls)
+	}
+	for _, p := range snap.Pods {
+		if p.Name == "deployment" {
+			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "d" {
+				t.Fatal(p.WorkloadSpec)
+			}
+		} else if p.Name == "stateful" {
+			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "s" {
+				t.Fatal(p.WorkloadSpec)
+			}
+		} else if p.WorkloadSpec.Known || p.WorkloadSpec.Reason != "owner-object-not-observed" {
+			t.Fatalf("cache miss was invented: %+v", p.WorkloadSpec)
+		}
+	}
+}
+
+func TestWorkloadEvidenceCachePreservesGVKIsolation(t *testing.T) {
+	ctx := context.Background()
+	aGVK := schema.GroupVersionKind{Group: "fixture.example", Version: "v1", Kind: "FirstKind"}
+	bGVK := schema.GroupVersionKind{Group: "fixture.example", Version: "v1", Kind: "SecondKind"}
+	makeObject := func(gvk schema.GroupVersionKind, uid string) *unstructured.Unstructured {
+		o := &unstructured.Unstructured{}
+		o.SetGroupVersionKind(gvk)
+		o.SetNamespace("ns")
+		o.SetName("same")
+		o.SetUID(types.UID(uid))
+		return o
+	}
+	a, b := makeObject(aGVK, "a"), makeObject(bGVK, "b")
+	c := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).WithObjects(a, b).Build()
+	reader := countingOwnerReader{Reader: c, calls: map[string]int{}}
+	cached := newSnapshotOwnerReader(reader)
+	evidence := ownerEvidenceReader(cached)
+	key := client.ObjectKeyFromObject(a)
+	if err := cached.Get(ctx, key, makeObject(aGVK, "")); err != nil {
+		t.Fatal(err)
+	}
+	if err := evidence.Get(ctx, key, makeObject(bGVK, "")); !errors.Is(err, errOwnerObjectNotObserved) {
+		t.Fatalf("unobserved GVK reused another kind: %v", err)
+	}
+	if reader.calls[fmt.Sprintf("%T/%s", a, key)] != 1 {
+		t.Fatal("evidence issued an API read")
+	}
+	if err := cached.Get(ctx, key, makeObject(bGVK, "")); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []*unstructured.Unstructured{a, b} {
+		got := makeObject(want.GroupVersionKind(), "")
+		if err := evidence.Get(ctx, key, got); err != nil || got.GetUID() != want.GetUID() {
+			t.Fatalf("GVK cache identity lost: %v %+v", err, got)
+		}
+	}
+	if reader.calls[fmt.Sprintf("%T/%s", a, key)] != 2 {
+		t.Fatal("cache evidence added reads")
 	}
 }
