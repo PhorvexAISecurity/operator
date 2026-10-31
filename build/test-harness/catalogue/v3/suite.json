@@ -40,7 +40,7 @@
       "sourceFile": "scenarios/c2_voice_websocket_continuity.go",
       "measures": "Real WebSocket numbered synthetic media, explicit end marker, interruption, shared-route observations and replacement recovery.",
       "limits": "No paid provider calls, speech quality, model semantics, installed dispatch or generic voice drain claim.",
-      "sourceSHA256": "91fb1b4b4831ded19a91d3495f73363d74015d9c1518420a27aa9c1d4010d210"
+      "sourceSHA256": "8865f5464758c6bc6409f946c35f011642d07fe8c8e319e4fdd6f067fa521b7f"
     },
     {
       "id": "c2-nats-jetstream-durability",
