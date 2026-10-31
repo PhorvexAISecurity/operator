@@ -138,6 +138,29 @@ rules:
   resources: ["selfsubjectaccessreviews", "subjectaccessreviews"]
   verbs: ["create"]
 {{- end }}
+{{- if $attackCatalog }}
+# The reactive k8s_cluster and infra_kubernetes catalogue adapters create the trusted
+# red-team SecurityEvent AS the exact lane detector (profile.DetectorIdentity /
+# profile.creator() == system:serviceaccount:<lane>:<lane>-attacks) so the manager's
+# trustedDetectors allowlist admits a genuine reactive trigger. The attacks service
+# therefore impersonates exactly the catalogue's reviewed trusted detectors and nothing
+# else (resourceNames-pinned to phorvex.trustedDetectors). This is red-team -> red-team
+# within the same trust domain; it grants NO actuator/defender identity and no broad
+# user impersonation.
+{{- $detectors := list }}
+{{- range .Values.phorvex.trustedDetectors }}
+{{- $parts := splitList "/" . }}
+{{- if eq (len $parts) 2 }}
+{{- $detectors = append $detectors (printf "system:serviceaccount:%s:%s" (index $parts 0) (index $parts 1)) }}
+{{- end }}
+{{- end }}
+{{- if $detectors }}
+- apiGroups: [""]
+  resources: ["users"]
+  verbs: ["impersonate"]
+  resourceNames: {{ $detectors | sortAlpha | uniq | toJson }}
+{{- end }}
+{{- end }}
 {{- if not $scoped }}
 {{- include "phorvex.attackTargetRules" . }}
 {{- end }}
