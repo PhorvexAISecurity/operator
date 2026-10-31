@@ -3,68 +3,12 @@ package slo
 import (
 	"container/heap"
 	"encoding/json"
+	"slices"
 	"sort"
 	"time"
 
 	"github.com/phorvex/phorvex/internal/model"
 )
-
-const (
-	ReplayCostEvidenceSchema = "phorvex.endpoint-cost-evidence.v1"
-	MaxReplayHistoryEntries  = 2000
-	MaxReplayEvidenceBytes   = 1 << 20
-)
-
-// ReplicaHistorySnapshot is an immutable, policy-bound copy of what this
-// process observed. It is not an endpoint-loss ledger or an admission budget.
-// HistoryComplete is always false for this in-memory, partial-action producer.
-type ReplicaHistorySnapshot struct {
-	Available            bool      `json:"available"`
-	Source               string    `json:"source"`
-	CapturedAt           time.Time `json:"captured_at"`
-	ProcessObservedSince time.Time `json:"process_observed_since"`
-	RetentionSeconds     float64   `json:"retention_seconds"`
-	HistoryComplete      bool      `json:"history_complete"`
-	Entries              []Entry   `json:"entries"`
-	MatchedEntries       int       `json:"matched_entries"`
-	UnattributedEntries  int       `json:"unattributed_entries"`
-	FutureEntries        int       `json:"future_entries"`
-	Truncated            bool      `json:"truncated"`
-}
-
-type ReplayWorkloadSpec struct {
-	PodUID      string                        `json:"pod_uid"`
-	Observation model.WorkloadSpecObservation `json:"observation"`
-}
-
-// ReplayCostEvidence is diagnostic input capture, not a pricing authorization.
-// In particular, replica readiness is never relabelled endpoint loss.
-type ReplayCostEvidence struct {
-	Schema                string                 `json:"schema"`
-	CapturedAt            time.Time              `json:"captured_at"`
-	PolicyOwner           string                 `json:"policy_owner"`
-	PolicyUID             string                 `json:"policy_uid"`
-	Workloads             []ReplayWorkloadSpec   `json:"workloads"`
-	ReplicaHistory        ReplicaHistorySnapshot `json:"replica_history"`
-	EndpointLossStatus    string                 `json:"endpoint_loss_status"`
-	AdmissionLedgerStatus string                 `json:"admission_ledger_status"`
-	WorkloadsTruncated    bool                   `json:"workloads_truncated"`
-	CaptureByteLimit      bool                   `json:"capture_byte_limit"`
-	Missing               []string               `json:"missing"`
-}
-
-// Clone owns every mutable member; callers cannot mutate a retained snapshot
-// by reusing a request or the live ledger after capture.
-func (e *ReplayCostEvidence) Clone() *ReplayCostEvidence {
-	if e == nil {
-		return nil
-	}
-	out := *e
-	out.Workloads = append([]ReplayWorkloadSpec(nil), e.Workloads...)
-	out.ReplicaHistory.Entries = append([]Entry(nil), e.ReplicaHistory.Entries...)
-	out.Missing = append([]string(nil), e.Missing...)
-	return &out
-}
 
 type recentEntries []Entry
 
@@ -88,13 +32,13 @@ func (h *recentEntries) Pop() any {
 // SnapshotForReplay takes a coherent copy under the ledger lock. Memory is
 // bounded even if the retained ledger is large. Rows without exact policy
 // identity are counted as unavailable, never joined by display name.
-func (l *Ledger) SnapshotForReplay(tenant, namespace, owner string, at time.Time, limit int) ReplicaHistorySnapshot {
-	out := ReplicaHistorySnapshot{Source: "replica-readiness", CapturedAt: at, Entries: []Entry{}}
+func (l *Ledger) SnapshotForReplay(tenant, namespace, owner string, at time.Time, limit int) model.ReplicaHistorySnapshot {
+	out := model.ReplicaHistorySnapshot{Source: "replica-readiness", CapturedAt: at, Entries: []model.ReplicaHistoryEntry{}}
 	if l == nil || owner == "" || namespace == "" {
 		return out
 	}
-	if limit <= 0 || limit > MaxReplayHistoryEntries {
-		limit = MaxReplayHistoryEntries
+	if limit <= 0 || limit > model.MaxReplayHistoryEntries {
+		limit = model.MaxReplayHistoryEntries
 	}
 	selected := recentEntries{}
 	l.mu.RLock()
@@ -126,19 +70,20 @@ func (l *Ledger) SnapshotForReplay(tenant, namespace, owner string, at time.Time
 	sort.Slice(selected, func(i, j int) bool { return earlier(selected[i], selected[j]) })
 	used := 0
 	for i := len(selected) - 1; i >= 0; i-- {
-		if entryTextBytes(selected[i]) > MaxReplayEvidenceBytes {
+		if entryTextBytes(selected[i]) > model.MaxReplayEvidenceBytes {
 			out.Truncated = true
 			continue
 		}
-		raw, err := json.Marshal(selected[i])
-		if err != nil || used+len(raw) > MaxReplayEvidenceBytes {
+		entry := replayHistoryEntry(selected[i])
+		raw, err := json.Marshal(entry)
+		if err != nil || used+len(raw) > model.MaxReplayEvidenceBytes {
 			out.Truncated = true
 			continue
 		}
-		out.Entries = append(out.Entries, selected[i])
+		out.Entries = append(out.Entries, entry)
 		used += len(raw)
 	}
-	sort.Slice(out.Entries, func(i, j int) bool { return earlier(out.Entries[i], out.Entries[j]) })
+	slices.Reverse(out.Entries)
 	out.Truncated = out.Truncated || len(out.Entries) != out.MatchedEntries
 	return out
 }
@@ -146,4 +91,21 @@ func (l *Ledger) SnapshotForReplay(tenant, namespace, owner string, at time.Time
 // Bound allocation before JSON escaping as well as the final encoded size.
 func entryTextBytes(e Entry) int {
 	return len(e.ID) + len(e.Tenant) + len(e.Namespace) + len(e.Pod) + len(e.Action) + len(e.Cause) + len(e.Outcome) + len(e.PolicyOwner) + len(e.PodUID) + len(e.WorkloadUID) + len(e.ReplicaImpact) + len(e.SelectionBoundStatus) + len(e.SelectionBoundEvidence)
+}
+
+// Convert the value copied under the ledger lock into the shared wire contract.
+// No mutable ledger object or dispatcher behavior crosses the service boundary.
+func replayHistoryEntry(e Entry) model.ReplicaHistoryEntry {
+	return model.ReplicaHistoryEntry{
+		ID: e.ID, Tenant: e.Tenant, Namespace: e.Namespace, Pod: e.Pod,
+		Action: e.Action, Cause: string(e.Cause), Outcome: string(e.Outcome),
+		PolicyOwner: e.PolicyOwner, PodUID: e.PodUID, WorkloadUID: e.WorkloadUID,
+		Replicas: e.Replicas, Duration: e.Duration, StartedAt: e.StartedAt, ObservedAt: e.ObservedAt,
+		Censored: e.Censored, ReplicaImpact: string(e.ReplicaImpact),
+		SelectionBoundStatus: string(e.SelectionBoundStatus), SelectionBoundFinite: e.SelectionBoundFinite,
+		SelectionBoundReplicaSeconds: e.SelectionBoundReplicaSeconds, SelectionBoundEvidence: e.SelectionBoundEvidence,
+		ReadyReplicasBefore: e.ReadyReplicasBefore, MinAvailableReplicas: e.MinAvailableReplicas,
+		AvailabilityMeasured: e.AvailabilityMeasured, AvailabilityBreachDuration: e.AvailabilityBreachDuration,
+		AvailabilityBreachStartedAt: e.AvailabilityBreachStartedAt, AvailabilityBreachObservedAt: e.AvailabilityBreachObservedAt,
+	}
 }

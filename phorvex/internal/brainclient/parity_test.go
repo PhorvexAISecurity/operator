@@ -30,7 +30,6 @@ import (
 	"github.com/phorvex/phorvex/internal/mathlab"
 	"github.com/phorvex/phorvex/internal/model"
 	"github.com/phorvex/phorvex/internal/recon"
-	"github.com/phorvex/phorvex/internal/slo"
 	"github.com/phorvex/phorvex/internal/wire"
 )
 
@@ -313,10 +312,10 @@ func TestRemoteBrainMatchesInProcess(t *testing.T) {
 
 			views[i] = fleet()
 			committed, rec, err := s.brain.Decide(brainapi.DecideRequest{Views: views[i], Policy: pol, Gate: s.gates.gate(),
-				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now, EndpointCostEvidence: &slo.ReplayCostEvidence{
-					Schema: slo.ReplayCostEvidenceSchema, CapturedAt: now, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
+				Capture: &brainapi.Capture{Spec: spec, CapturedAt: now, EndpointCostEvidence: &model.ReplayCostEvidence{
+					Schema: model.ReplayCostEvidenceSchema, CapturedAt: now, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
 					EndpointLossStatus: "unavailable", AdmissionLedgerStatus: "not-authoritative",
-					ReplicaHistory: slo.ReplicaHistorySnapshot{Source: "replica-readiness", Entries: []slo.Entry{{ID: "move", PolicyOwner: pol.Owner(), PodUID: "pod", WorkloadUID: "workload", Outcome: slo.OutcomeRightCensored, Censored: true}}},
+					ReplicaHistory: model.ReplicaHistorySnapshot{Source: "replica-readiness", Entries: []model.ReplicaHistoryEntry{{ID: "move", PolicyOwner: pol.Owner(), PodUID: "pod", WorkloadUID: "workload", Outcome: "right_censored", Censored: true}}},
 					Missing:        []string{"endpoint-loss-intervals:not-recorded"},
 				}}})
 			decisions[i] = append(decisions[i], committed...)

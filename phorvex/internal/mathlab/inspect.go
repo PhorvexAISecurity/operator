@@ -7,7 +7,6 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/slo"
 )
 
 // Inspection is the JSON view of one snapshot for the Math Lab registry: the configured
@@ -26,7 +25,7 @@ type Inspection struct {
 	Manifest             *model.DecisionParameterManifest `json:"parameter_manifest,omitempty"`
 	Overrides            *model.EffectivePolicyOverrides  `json:"policy_overrides,omitempty"`
 	Complete             []string                         `json:"unreplayable_fields"`
-	EndpointCostEvidence *slo.ReplayCostEvidence          `json:"endpoint_cost_evidence,omitempty"`
+	EndpointCostEvidence *model.ReplayCostEvidence        `json:"endpoint_cost_evidence,omitempty"`
 	EndpointCostMissing  []string                         `json:"endpoint_cost_missing"`
 }
 

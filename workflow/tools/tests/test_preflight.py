@@ -15,6 +15,17 @@ from test_operations import sandbox, run, workflow as w, SOURCE_ROOT
 import preflight
 
 
+def current_ci(repo):
+    ci = repo/'.github/workflows'; ci.mkdir(parents=True)
+    for name in ('workflow-harness.yml', 'pr-validation.yml'):
+        shutil.copy2(SOURCE_ROOT.parent/'.github/workflows'/name, ci/name)
+    for name in ('tools/provision-python.sh', 'build/test-harness/go.mod', 'phorvex/go.mod'):
+        path = repo/name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SOURCE_ROOT.parent/name, path)
+    return ci
+
+
 class PreflightTests(unittest.TestCase):
     def test_plan_selects_ci_versions_but_never_shared_jobs(self):
         with sandbox() as (repo,root,baseline):
@@ -44,12 +55,8 @@ class PreflightTests(unittest.TestCase):
 
     def test_current_ci_authority_retains_every_chart_check_and_pinned_setup(self):
         with sandbox() as (repo, root, baseline):
-            ci = repo/'.github/workflows'; ci.mkdir(parents=True)
-            for name in ('workflow-harness.yml', 'pr-validation.yml'):
-                shutil.copy2(SOURCE_ROOT.parent/'.github/workflows'/name, ci/name)
-            (repo/'tools').mkdir()
-            shutil.copy2(SOURCE_ROOT.parent/'tools/provision-python.sh', repo/'tools/provision-python.sh')
-            run(['git', 'add', '.github', 'tools'], repo)
+            ci = current_ci(repo)
+            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
             run(['git', 'commit', '-m', 'Current source-validation authority'], repo)
             head = run(['git', 'rev-parse', 'HEAD'], repo)
             selected = preflight.plan(repo, baseline, head)
@@ -68,13 +75,120 @@ class PreflightTests(unittest.TestCase):
             harness = next(j for j in selected['jobs'] if j['id'] == 'workflow')
             self.assertEqual(harness['version'], '3.11.17')
             self.assertEqual(harness['script'], 'bash workflow/tools/check.sh')
+            go_jobs = [j for j in selected['jobs'] if j['id'].startswith('go-unit-')]
+            ci_go = config['jobs']['go-unit']
+            self.assertEqual([j['script'] for j in go_jobs], [s['run'] for s in ci_go['steps']
+                             if 'run' in s and ' test ' in s['run']])
+            self.assertEqual(len(go_jobs), 7)
+            for job in go_jobs:
+                self.assertEqual(job['version'], '1.26.3')
+                self.assertEqual(job['toolchain'], 'local')
+                self.assertEqual(job['env'], ci_go['env'])
+                self.assertEqual(job['helm_version'], 'v3.16.4')
+                self.assertEqual(job['go_version_file'], 'build/test-harness/go.mod')
+                self.assertEqual(job['go_version_file_sha256'], hashlib.sha256((repo/'build/test-harness/go.mod').read_bytes()).hexdigest())
+            summary = next(j for j in selected['jobs'] if j['id'] == 'go-affected-services')
+            self.assertNotIn('$GITHUB_', summary['script'])
+            self.assertIn('$GITHUB_STEP_SUMMARY', summary['ci_script'])
+            self.assertIn('--base ' + selected['base_sha'], summary['script'])
+            self.assertNotIn('HEAD^1', summary['script'])
+            self.assertIn('go-envtest', ' '.join(selected['external']))
             self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
             # Both authority selection and the provision recipe come from the
             # receipt's commit, never a different checkout's present files.
             (ci/'pr-validation.yml').unlink()
             (ci/'ci.yml').write_text('invalid: later-main')
             (repo/'tools/provision-python.sh').write_text('invalid: later-provisioner')
+            (repo/'build/test-harness/go.mod').write_text('invalid: later-Go-authority')
             self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
+
+    def test_legacy_receipt_keeps_old_go_recipe_but_cannot_satisfy_current_submission(self):
+        with sandbox() as (repo, root, baseline):
+            current_ci(repo)
+            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
+            run(['git', 'commit', '-m', 'Current CI with legacy receipt semantics'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            old = preflight.plan(repo, baseline, head, pinned=True, recipe_version=1)
+            self.assertEqual(next(j['version'] for j in old['jobs'] if j['id'] == 'go-phorvex'), '1.26.1')
+            self.assertFalse(any(j['id'].startswith('go-unit-') for j in old['jobs']))
+            # Synthetic receipt fixture tests historical verification, not real
+            # execution of repository commands in this miniature repository.
+            output = root/'fixes/FIX-TEST/evidence/preflight/legacy.json'
+            output.parent.mkdir(parents=True, exist_ok=True)
+            rows = []
+            for job in old['jobs']:
+                log = output.parent/(job['id'] + '.log')
+                log.write_text('synthetic historical verification fixture\n')
+                rows.append({'id':job['id'], 'log':log.name, 'result':'PASS', 'exit_code':0,
+                             'sha256':hashlib.sha256(log.read_bytes()).hexdigest()})
+            receipt = {'schema_version':1, 'plan':old, 'plan_sha256':preflight.digest(old),
+                       'worktree_sha256':preflight.worktree(repo), 'results':rows, 'result':'PASS'}
+            output.write_text(json.dumps(receipt))
+            preflight.validate_receipt(repo, output, baseline, head, require_worktree=False)
+            with self.assertRaisesRegex(ValueError, 'legacy preflight recipe'):
+                preflight.validate_receipt(repo, output, baseline, head)
+            current = preflight.plan(repo, baseline, head, pinned=True)
+            self.assertEqual(current['schema_version'], 2)
+            self.assertEqual(next(j['version'] for j in current['jobs'] if j['id']=='go-unit-phorvex'), '1.26.3')
+            # Changing only the envelope version cannot upgrade old incomplete
+            # commands into the new complete CI authority.
+            receipt['plan']['schema_version'] = 2
+            receipt['plan_sha256'] = preflight.digest(receipt['plan'])
+            output.write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(ValueError, 'missing, failed or stale'):
+                preflight.validate_receipt(repo, output, baseline, head)
+
+    def test_current_go_rejects_changed_commands_context_and_nonlocal_binary(self):
+        with sandbox() as (repo, root, baseline):
+            ci = current_ci(repo)
+            file = ci/'pr-validation.yml'
+            original = yaml.safe_load(file.read_text())
+            for kind in ('command', 'environment', 'setup', 'path'):
+                config = yaml.safe_load(yaml.safe_dump(original))
+                job = config['jobs']['go-unit']
+                if kind == 'command':
+                    next(s for s in job['steps'] if 'run' in s)['run'] += ' -run SelectedOnly'
+                elif kind == 'environment':
+                    job['env']['USE_EXISTING_CLUSTER'] = 'true'
+                elif kind == 'setup':
+                    next(s for s in job['steps'] if s.get('uses','').startswith('actions/setup-go@'))['if'] = 'some condition'
+                else:
+                    next(s for s in job['steps'] if s.get('uses','').startswith('actions/setup-go@'))['with']['go-version-file'] = '../outside/go.mod'
+                file.write_text(yaml.safe_dump(config))
+                with self.assertRaisesRegex(ValueError, 'adapter'):
+                    preflight.current_go_unit_jobs(repo, lambda p: p.read_bytes(), baseline)
+            file.write_text(yaml.safe_dump(original))
+            job = preflight.current_go_unit_jobs(repo, lambda p: p.read_bytes(), baseline)[0]
+            args = argparse.Namespace(python=None, helm='/exact/helm')
+            with patch.dict(os.environ, {'GO_BIN':'/exact/go', 'GOTOOLCHAIN':'auto', 'USE_EXISTING_CLUSTER':'true'}), \
+                 patch.object(preflight.subprocess, 'check_output', side_effect=['go version go1.26.3 linux/amd64\n', 'v3.16.4']) as check:
+                _, env = preflight.environment(job, repo, args)
+                self.assertEqual(env['GOTOOLCHAIN'], 'local')
+                self.assertEqual(env['USE_EXISTING_CLUSTER'], 'false')
+                self.assertEqual(check.call_args_list[0].kwargs['env']['GOTOOLCHAIN'], 'local')
+            with patch.dict(os.environ, {'GO_BIN':'/wrong/go'}), \
+                 patch.object(preflight.subprocess, 'check_output', return_value='go version go1.26.1 linux/amd64\n'):
+                with self.assertRaisesRegex(ValueError, 'differs from CI 1.26.3'):
+                    preflight.environment(job, repo, args)
+
+    def test_current_summary_uses_full_proposal_base_after_docs_only_tip(self):
+        with sandbox() as (repo, root, baseline):
+            current_ci(repo)
+            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
+            run(['git', 'commit', '-m', 'Source and CI authority change'], repo)
+            source_commit = run(['git', 'rev-parse', 'HEAD'], repo)
+            (repo/'review-note.md').write_text('Review metadata after source commit\n')
+            run(['git', 'add', 'review-note.md'], repo)
+            run(['git', 'commit', '-m', 'Documentation only tip'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            selected = preflight.plan(repo, baseline, head, pinned=True)
+            summary = next(j for j in selected['jobs'] if j['id']=='go-affected-services')
+            self.assertEqual(run(['git', 'rev-parse', 'HEAD^1'], repo), source_commit)
+            self.assertNotEqual(selected['base_sha'], source_commit)
+            self.assertIn('--base ' + selected['base_sha'], summary['script'])
+            self.assertNotIn('HEAD^1', summary['script'])
+            self.assertIn('--base HEAD^1', summary['ci_script'])
+            self.assertIn('pinned plan base', summary['adaptation'])
 
     def test_pinned_python_requires_exact_patch_and_version_specific_binary(self):
         args = argparse.Namespace(python='/generic/python', helm=None)

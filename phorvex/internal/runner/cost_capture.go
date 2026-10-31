@@ -7,7 +7,6 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/slo"
 )
 
 func replayWorkloadUID(view *model.WorkloadView) string {
@@ -21,12 +20,12 @@ func replayWorkloadUID(view *model.WorkloadView) string {
 // membership and Pod.ReadyAt are insufficient to manufacture move-attributed
 // endpoint-loss intervals, so this producer deliberately keeps that status
 // unavailable. Nothing in selection or admission reads this envelope.
-func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Policy, spec v1alpha1.PhorvexPolicySpec, at time.Time) *slo.ReplayCostEvidence {
+func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Policy, spec v1alpha1.PhorvexPolicySpec, at time.Time) *model.ReplayCostEvidence {
 	if !m.CaptureCostEvidence {
 		return nil
 	}
-	out := &slo.ReplayCostEvidence{
-		Schema: slo.ReplayCostEvidenceSchema, CapturedAt: at, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
+	out := &model.ReplayCostEvidence{
+		Schema: model.ReplayCostEvidenceSchema, CapturedAt: at, PolicyOwner: pol.Owner(), PolicyUID: pol.PolicyUID,
 		EndpointLossStatus: "unavailable", AdmissionLedgerStatus: "not-authoritative",
 		Missing: []string{"endpoint-loss-intervals:not-recorded", "authoritative-endpoint-budget-ledger:not-recorded",
 			"accepted-endpoint-availability-target:not-recorded", "replica-history:in-memory-and-incomplete"},
@@ -47,7 +46,7 @@ func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Poli
 			out.Missing = append(out.Missing, "workload-view:unavailable")
 			continue
 		}
-		out.Workloads = append(out.Workloads, slo.ReplayWorkloadSpec{PodUID: view.Pod.UID, Observation: view.Pod.WorkloadSpec})
+		out.Workloads = append(out.Workloads, model.ReplayWorkloadSpec{PodUID: view.Pod.UID, Observation: view.Pod.WorkloadSpec})
 		if !view.Pod.WorkloadSpec.Known {
 			reason := view.Pod.WorkloadSpec.Reason
 			if reason == "" {
@@ -56,7 +55,7 @@ func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Poli
 			out.Missing = append(out.Missing, fmt.Sprintf("workload-spec[%s]:%s", view.Pod.UID, reason))
 		}
 	}
-	out.ReplicaHistory = m.Disruption.SnapshotForReplay(pol.Tenant, pol.Namespace, pol.Owner(), at, slo.MaxReplayHistoryEntries)
+	out.ReplicaHistory = m.Disruption.SnapshotForReplay(pol.Tenant, pol.Namespace, pol.Owner(), at, model.MaxReplayHistoryEntries)
 	if !out.ReplicaHistory.Available {
 		out.Missing = append(out.Missing, "replica-history:unavailable")
 	}
@@ -81,7 +80,7 @@ func (m *Manager) replayCostEvidence(views []*model.WorkloadView, pol model.Poli
 			break
 		}
 	}
-	if raw, err := json.Marshal(out); err != nil || len(raw) > slo.MaxReplayEvidenceBytes {
+	if raw, err := json.Marshal(out); err != nil || len(raw) > model.MaxReplayEvidenceBytes {
 		out.Workloads, out.ReplicaHistory.Entries = nil, nil
 		out.WorkloadsTruncated, out.ReplicaHistory.Truncated, out.CaptureByteLimit = true, true, true
 		out.Missing = []string{"endpoint-cost-evidence:capture-byte-limit", "endpoint-loss-intervals:not-recorded", "authoritative-endpoint-budget-ledger:not-recorded"}

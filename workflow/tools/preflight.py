@@ -70,7 +70,67 @@ def python_setup(repo, steps, source_bytes):
     return found[0]
 
 
-def plan(repo: Path, base: str, head: str, *, pinned: bool = False) -> dict:
+GO_UNIT_MODULES = (
+    ('phorvex', '15m'), ('build/metricvalidity', '5m'), ('build/test-harness', '15m'),
+    ('build/phoenix-extended', '15m'), ('libs/logging', '5m'),
+    ('build/integrations/epss-ecr-auth-runtime', '5m'), ('farm-fixtures/agentsim', '5m'),
+)
+GO_UNIT_ENV = {'KUBECONFIG': '/dev/null', 'KUBEBUILDER_ASSETS': '',
+               'USE_EXISTING_CLUSTER': 'false', 'GOTOOLCHAIN': 'local'}
+
+
+def current_go_unit_jobs(repo, source_bytes, base):
+    """Adapt only the pinned, non-cluster go-unit authority, never other CI jobs."""
+    file = repo / '.github/workflows/pr-validation.yml'
+    raw = source_bytes(file)
+    job = yaml.safe_load(raw)['jobs']['go-unit']
+    if job.get('env') != GO_UNIT_ENV or any(job.get(k) for k in ('container', 'services', 'defaults', 'strategy', 'if')):
+        raise ValueError('Go unit CI environment changed: update local adapter')
+    steps = job['steps']
+    if any('uses' in s and not s['uses'].startswith(('actions/checkout@', 'actions/setup-go@', 'azure/setup-helm@')) for s in steps):
+        raise ValueError('new Go setup action requires explicit local adapter support')
+    if any(any(s.get(k) for k in ('if', 'env', 'shell', 'working-directory')) for s in steps):
+        raise ValueError('custom Go unit step context requires local adapter support')
+    setups = [s for s in steps if s.get('uses', '').startswith('actions/setup-go@')]
+    helms = [s for s in steps if s.get('uses', '').startswith('azure/setup-helm@')]
+    if len(setups) != 1 or len(helms) != 1:
+        raise ValueError('Go/Helm unit setup missing or ambiguous: update local adapter')
+    setup = setups[0].get('with', {})
+    version_file = setup.get('go-version-file', '')
+    if (set(setup) - {'go-version-file', 'cache-dependency-path'}
+            or not re.fullmatch(r'(?:[A-Za-z0-9_-]+/)*go\.mod', version_file)):
+        raise ValueError('Go version-file setup changed: update local adapter')
+    version_raw = source_bytes(repo / version_file)
+    versions = re.findall(r'^go (\d+\.\d+\.\d+)$', version_raw.decode(), re.M)
+    if len(versions) != 1 or set(helms[0].get('with', {})) != {'version'}:
+        raise ValueError('Go/Helm unit version recipe changed: update local adapter')
+    common = {'cwd': '.', 'tool': 'go', 'version': versions[0], 'toolchain': 'local',
+              'env': dict(GO_UNIT_ENV), 'helm_version': str(helms[0]['with']['version']),
+              'ci_sha256': hashlib.sha256(raw).hexdigest(), 'go_version_file': version_file,
+              'go_version_file_sha256': hashlib.sha256(version_raw).hexdigest()}
+    summary = 'go -C phorvex run ./tools/servicerelease affected --base HEAD^1 --markdown >> "$GITHUB_STEP_SUMMARY"'
+    tests = [f'go -C {module} test -mod=readonly -count=1 -timeout={timeout} ./...'
+             for module, timeout in GO_UNIT_MODULES]
+    expected = [tests[0], summary, *tests[1:]]
+    runs = [s['run'].strip() for s in steps if 'run' in s]
+    if runs != expected:
+        raise ValueError('Go unit CI commands changed: update local adapter explicitly')
+    jobs = []
+    for script in runs:
+        if script == summary:
+            local_script = script.split(' >> ')[0].replace('--base HEAD^1', '--base ' + base)
+            jobs.append(dict(common, id='go-affected-services', script=local_script,
+                             adaptation='GitHub informational step-summary output is captured in this job log; the pinned plan base replaces the CI merge-parent base',
+                             ci_script=script))
+        else:
+            module = script.split()[2]
+            jobs.append(dict(common, id='go-unit-' + module.replace('/', '-'), script=script))
+    return jobs
+
+
+def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_version: int = 2) -> dict:
+    if recipe_version not in (1, 2):
+        raise ValueError('unsupported preflight recipe version')
     # A newer main must not make unrelated upstream changes look like this PR's delta.
     base = git(repo, 'merge-base', base, head).decode().strip()
     paths = set(git(repo, 'diff', '--name-only', base, head).decode().splitlines())
@@ -119,14 +179,35 @@ def plan(repo: Path, base: str, head: str, *, pinned: bool = False) -> dict:
                 item['python_version'] = python_version
                 if provision_hash: item['python_provision_sha256'] = provision_hash
             jobs.append(item)
+    affected = []
     for module in ['phorvex', 'build/phoenix-extended']:
         if any(p.startswith(module + '/') and p.endswith(('.go', 'go.mod', 'go.sum')) for p in paths):
+            affected.append(module)
+    legacy_exists = bool(git(repo, 'ls-tree', '--name-only', head, '.github/workflows/ci.yml').strip()) if pinned else (repo / '.github/workflows/ci.yml').is_file()
+    current_go = recipe_version == 2 and not legacy_exists and (
+        '.github/workflows/pr-validation.yml' in paths or any(
+            p.startswith(module + '/') and p.endswith(('.go', 'go.mod', 'go.sum'))
+            for p in paths for module, _ in GO_UNIT_MODULES))
+    if current_go:
+        current_jobs = current_go_unit_jobs(repo, source_bytes, base)
+        jobs.extend(current_jobs)
+        # Preserve the pre-existing additional build/vet coverage for changed
+        # product modules; current CI's seven unit commands run separately above.
+        for module in affected:
+            item = dict(current_jobs[0], id='go-build-vet-' + module.replace('/', '-'),
+                        script=f'go -C {module} build ./...\ngo -C {module} vet ./...')
+            jobs.append(item)
+    else:
+        for module in affected:
             lines = source_bytes(repo / module / 'go.mod').decode().splitlines()
             version = next(line.split()[1] for line in lines if line.startswith('go '))
             jobs.append({'id': 'go-' + module.replace('/', '-'), 'cwd': module, 'tool': 'go',
                          'version': version, 'script': 'go build ./...\ngo test ./...\ngo vet ./...'})
-    return {'schema_version': 1, 'base_sha': base, 'head_sha': head, 'changed_paths': sorted(paths), 'jobs': jobs,
-            'external': ['Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.']}
+    external = ['Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.']
+    if recipe_version == 2:
+        external.append('Remote go-envtest with local Kubernetes API binaries and other remote CI jobs remain separate and unexecuted here; local PASS is not all remote CI passing.')
+    return {'schema_version': recipe_version, 'base_sha': base, 'head_sha': head, 'changed_paths': sorted(paths), 'jobs': jobs,
+            'external': external}
 
 
 def python_environment(version, args, env, repo, *, imports='yaml,jsonschema'):
@@ -171,8 +252,23 @@ def environment(job, repo, args):
         binary = os.environ.get('GO_BIN') or shutil.which('go')
         if not binary:
             raise ValueError('Go required; set GO_BIN or PATH')
+        binary = shutil.which(binary) or binary
         env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
-        env['GOTOOLCHAIN'] = 'go' + job['version']
+        if job.get('toolchain') == 'local':
+            env.update(job['env'])
+            got = subprocess.check_output([binary, 'version'], env=env, text=True, timeout=15).strip()
+            if not got.startswith('go version go' + job['version'] + ' '):
+                raise ValueError(f'Go {got} differs from CI {job["version"]}; provide the exact binary with GO_BIN')
+            helm = args.helm or os.environ.get('HELM_BIN') or shutil.which('helm')
+            if not helm:
+                raise ValueError(f'Helm {job["helm_version"]} required by Go unit CI')
+            got = subprocess.check_output([helm, 'version', '--template', '{{.Version}}'], text=True, timeout=15).strip()
+            if got != job['helm_version']:
+                raise ValueError(f'Helm {got} differs from Go unit CI {job["helm_version"]}')
+            env['HELM_BIN'] = helm
+            env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + str(Path(helm).absolute().parent) + os.pathsep + env['PATH']
+        else:
+            env['GOTOOLCHAIN'] = 'go' + job['version']
     return prefix, env
 
 
@@ -225,7 +321,10 @@ def validate_receipt(repo, path, base, head, *, require_worktree=True):
     pinned_worktree = digest({'code_tree': code_tree(repo, head), 'dirty': {}})
     if require_worktree and worktree(repo) != pinned_worktree:
         raise ValueError('commit code before final preflight; worktree must match the pinned implementation')
-    selected = plan(repo, base, head, pinned=True)
+    recipe_version = receipt.get('plan', {}).get('schema_version', 1)
+    if require_worktree and recipe_version != 2:
+        raise ValueError('legacy preflight recipe cannot satisfy current submission; rerun preflight')
+    selected = plan(repo, base, head, pinned=True, recipe_version=recipe_version)
     if (receipt.get('result') != 'PASS' or receipt.get('plan_sha256') != digest(selected)
             or receipt.get('worktree_sha256') != pinned_worktree):
         raise ValueError('preflight missing, failed or stale; rerun for this source/worktree')

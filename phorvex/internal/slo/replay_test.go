@@ -1,6 +1,10 @@
 package slo
 
 import (
+	"bytes"
+	"encoding/json"
+
+	"github.com/phorvex/phorvex/internal/model"
 	"strings"
 	"testing"
 	"time"
@@ -36,14 +40,14 @@ func TestReplayHistoryRealLedgerReplacementIsolationAndImmutability(t *testing.T
 	if !second.Available || second.Source != "replica-readiness" || second.HistoryComplete || second.ProcessObservedSince.IsZero() || second.RetentionSeconds != 86400 || len(second.Entries) != 1 || second.UnattributedEntries != 1 || second.FutureEntries != 1 || second.MatchedEntries != 1 || second.Truncated {
 		t.Fatalf("invalid evidence: %+v", second)
 	}
-	if first.Entries[0].Outcome != OutcomeRightCensored || !first.Entries[0].Censored || second.Entries[0].Outcome != OutcomeCompleted || second.Entries[0].Censored {
+	if first.Entries[0].Outcome != string(OutcomeRightCensored) || !first.Entries[0].Censored || second.Entries[0].Outcome != string(OutcomeCompleted) || second.Entries[0].Censored {
 		t.Fatalf("open/settled observations not frozen: %+v / %+v", first, second)
 	}
 	first.Entries[0].ID = "mutated"
 	if l.SnapshotForReplay("tenant", "ns", row.PolicyOwner, at.Add(time.Second), 20).Entries[0].ID != "move" {
 		t.Fatal("export mutated ledger")
 	}
-	e := &ReplayCostEvidence{Workloads: []ReplayWorkloadSpec{{PodUID: "p"}}, ReplicaHistory: second, Missing: []string{"endpoint unavailable"}}
+	e := &model.ReplayCostEvidence{Workloads: []model.ReplayWorkloadSpec{{PodUID: "p"}}, ReplicaHistory: second, Missing: []string{"endpoint unavailable"}}
 	clone := e.Clone()
 	clone.Workloads[0].PodUID = "bad"
 	clone.ReplicaHistory.Entries[0].ID = "bad"
@@ -66,9 +70,45 @@ func TestReplayHistoryBoundsAndMissingLedger(t *testing.T) {
 	if !got.Truncated || got.MatchedEntries != 5 || len(got.Entries) != 2 || got.Entries[0].ID != "d" || got.Entries[1].ID != "e" {
 		t.Fatal(got)
 	}
-	l.Record(Entry{ID: "huge", Tenant: "t", Namespace: "ns", PolicyOwner: "p", Outcome: OutcomeEmitted, ObservedAt: at.Add(9 * time.Second), SelectionBoundEvidence: strings.Repeat("x", MaxReplayEvidenceBytes+1)})
+	l.Record(Entry{ID: "huge", Tenant: "t", Namespace: "ns", PolicyOwner: "p", Outcome: OutcomeEmitted, ObservedAt: at.Add(9 * time.Second), SelectionBoundEvidence: strings.Repeat("x", model.MaxReplayEvidenceBytes+1)})
 	got = l.SnapshotForReplay("t", "ns", "p", at.Add(time.Minute), 20)
 	if !got.Truncated || got.MatchedEntries != 6 || len(got.Entries) != 5 {
 		t.Fatal(got)
+	}
+}
+
+// Export is a service DTO, not the ledger's runtime Entry type. Assert every
+// JSON field against an actual recorded row so conversion cannot silently drop
+// attribution, censoring, contract bounds or separate availability evidence.
+func TestReplayHistoryDTOCarriesAllLedgerEvidence(t *testing.T) {
+	at := time.Now().UTC()
+	row := Entry{
+		ID: "move", Tenant: "tenant", Namespace: "ns", Pod: "pod-name",
+		Action: model.ActionQuarantine, Cause: CausePhorvex, Outcome: OutcomeRightCensored,
+		PolicyOwner: "uid\x00policy", PodUID: "pod", WorkloadUID: "workload",
+		Replicas: 2, Duration: 13 * time.Second, StartedAt: at.Add(-13 * time.Second), ObservedAt: at,
+		Censored: true, ReplicaImpact: ImpactMeasured,
+		SelectionBoundStatus: StatusBounded, SelectionBoundFinite: true,
+		SelectionBoundReplicaSeconds: 40, SelectionBoundEvidence: "selected-contract",
+		ReadyReplicasBefore: 3, MinAvailableReplicas: 2, AvailabilityMeasured: true,
+		AvailabilityBreachDuration:  4 * time.Second,
+		AvailabilityBreachStartedAt: at.Add(-4 * time.Second), AvailabilityBreachObservedAt: at,
+	}
+	l := NewLedger(time.Hour)
+	l.Record(row)
+	got := l.SnapshotForReplay(row.Tenant, row.Namespace, row.PolicyOwner, at, 10)
+	if !got.Available || len(got.Entries) != 1 {
+		t.Fatal(got)
+	}
+	expected, err := json.Marshal(l.Entries(row.Tenant, at.Add(-time.Minute))[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := json.Marshal(got.Entries[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(actual, expected) {
+		t.Fatalf("shared replay DTO lost ledger evidence: got %s; want %s", actual, expected)
 	}
 }

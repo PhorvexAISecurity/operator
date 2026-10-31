@@ -25,7 +25,6 @@ import (
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/slo"
 )
 
 const (
@@ -96,7 +95,7 @@ type Inputs struct {
 	Views    []*model.WorkloadView
 	Engine   decision.OwnerState
 	// Optional additive evidence. Its absence does not invalidate legacy replay.
-	EndpointCostEvidence *slo.ReplayCostEvidence
+	EndpointCostEvidence *model.ReplayCostEvidence
 }
 
 // Outcome is what production computed for the tick.

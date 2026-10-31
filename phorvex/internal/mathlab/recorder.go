@@ -16,7 +16,6 @@ import (
 	"github.com/phorvex/phorvex/internal/actionset"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/slo"
 )
 
 // Default bounds for one snapshot and for the recorder's queue.
@@ -134,7 +133,7 @@ type TickCapture struct {
 
 // Begin records the pre-decision inputs and starts recording the gate verdicts the
 // production decision will request. Call it immediately before DecideChecked.
-func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolicySpec, views []*model.WorkloadView, pol model.Policy, capturedAt time.Time, costEvidence ...*slo.ReplayCostEvidence) *TickCapture {
+func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolicySpec, views []*model.WorkloadView, pol model.Policy, capturedAt time.Time, costEvidence ...*model.ReplayCostEvidence) *TickCapture {
 	if r == nil || ce == nil || !r.Enabled(pol.Namespace, pol.PolicyName) {
 		return nil
 	}
@@ -179,7 +178,7 @@ func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolic
 		return c
 	}
 	c.enc = gob.NewEncoder(&c.buf)
-	var evidence *slo.ReplayCostEvidence
+	var evidence *model.ReplayCostEvidence
 	if len(costEvidence) == 1 {
 		evidence = costEvidence[0].Clone()
 	}

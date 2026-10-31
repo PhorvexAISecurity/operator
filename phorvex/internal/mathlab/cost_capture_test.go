@@ -10,7 +10,6 @@ import (
 	"github.com/phorvex/phorvex/internal/cost"
 	"github.com/phorvex/phorvex/internal/decision"
 	"github.com/phorvex/phorvex/internal/model"
-	"github.com/phorvex/phorvex/internal/slo"
 )
 
 func TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged(t *testing.T) {
@@ -63,7 +62,7 @@ func TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	evidence := &slo.ReplayCostEvidence{Schema: slo.ReplayCostEvidenceSchema, EndpointLossStatus: "unavailable", Missing: []string{"endpoint-loss-intervals:not-recorded"}, ReplicaHistory: slo.ReplicaHistorySnapshot{Entries: []slo.Entry{{ID: "move", Outcome: slo.OutcomeRightCensored, Censored: true}}}}
+	evidence := &model.ReplayCostEvidence{Schema: model.ReplayCostEvidenceSchema, EndpointLossStatus: "unavailable", Missing: []string{"endpoint-loss-intervals:not-recorded"}, ReplicaHistory: model.ReplicaHistorySnapshot{Entries: []model.ReplicaHistoryEntry{{ID: "move", Outcome: "right_censored", Censored: true}}}}
 	capture := rec.Begin(ce, spec, fleet(), pol, time.Now(), evidence)
 	evidence.Missing[0] = "changed"
 	evidence.ReplicaHistory.Entries[0].ID = "changed"

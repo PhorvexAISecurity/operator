@@ -29,7 +29,7 @@ func TestCostEvidenceRealOutcomeProducerNeverQualifiesEndpointLoss(t *testing.T)
 		t.Fatal(got.ReplicaHistory)
 	}
 	row := got.ReplicaHistory.Entries[0]
-	if row.PolicyOwner != pol.Owner() || row.PodUID != "pu" || row.WorkloadUID != "wu" || row.Outcome != slo.OutcomeEmitted || row.ReplicaImpact != slo.ImpactUnmeasured {
+	if row.PolicyOwner != pol.Owner() || row.PodUID != "pu" || row.WorkloadUID != "wu" || row.Outcome != string(slo.OutcomeEmitted) || row.ReplicaImpact != string(slo.ImpactUnmeasured) {
 		t.Fatalf("real outcome producer lost provenance: %+v", row)
 	}
 	v.Pod.WorkloadSpec.Workload.UID = "changed"
@@ -57,10 +57,10 @@ func TestCostEvidenceCountAndByteLimitsRemainUnavailable(t *testing.T) {
 	if !got.WorkloadsTruncated || len(got.Missing) > 280 || got.EndpointLossStatus != "unavailable" {
 		t.Fatalf("nil views bypassed bound: %+v", got)
 	}
-	v := &model.WorkloadView{Pod: model.Pod{UID: "pod", WorkloadSpec: model.WorkloadSpecObservation{Reason: strings.Repeat("x", slo.MaxReplayEvidenceBytes)}}}
+	v := &model.WorkloadView{Pod: model.Pod{UID: "pod", WorkloadSpec: model.WorkloadSpecObservation{Reason: strings.Repeat("x", model.MaxReplayEvidenceBytes)}}}
 	got = m.replayCostEvidence([]*model.WorkloadView{v}, pol, v1alpha1.PhorvexPolicySpec{}, time.Now())
 	raw, err := json.Marshal(got)
-	if err != nil || len(raw) > slo.MaxReplayEvidenceBytes || !got.CaptureByteLimit || !got.WorkloadsTruncated || !got.ReplicaHistory.Truncated || got.EndpointLossStatus != "unavailable" || got.ReplicaHistory.HistoryComplete {
+	if err != nil || len(raw) > model.MaxReplayEvidenceBytes || !got.CaptureByteLimit || !got.WorkloadsTruncated || !got.ReplicaHistory.Truncated || got.EndpointLossStatus != "unavailable" || got.ReplicaHistory.HistoryComplete {
 		t.Fatalf("byte cap lost missing status: %+v %v", got, err)
 	}
 }
