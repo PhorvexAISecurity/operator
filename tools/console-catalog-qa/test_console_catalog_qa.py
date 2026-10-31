@@ -115,12 +115,12 @@ def strict_evidence(
             "executionMode": "active",
             "status": "COMPLETE",
             "errors": [],
-            "observedDecisionModes": ["reactive"],
+            "observedDecisionModes": ["active"],
             "metrics": [
                 {
                     "key": "selected-action",
                     "deltas": [{
-                        "labels": {"mode": "reactive"},
+                        "labels": {"mode": "active"},
                         "finalPresent": True,
                         "delta": 1,
                         "counterReset": False,
@@ -130,6 +130,15 @@ def strict_evidence(
                     "key": "accepted-actuation",
                     "deltas": [{
                         "labels": {},
+                        "finalPresent": True,
+                        "delta": 1,
+                        "counterReset": False,
+                    }],
+                },
+                {
+                    "key": "trusted-events",
+                    "deltas": [{
+                        "labels": {"trust": "trusted"},
                         "finalPresent": True,
                         "delta": 1,
                         "counterReset": False,
@@ -493,6 +502,66 @@ class DriverTest(unittest.TestCase):
         raw_verdict = evidence_events[0]["response"]["body"]["attackCatalogueResult"]["verdict"]
         self.assertEqual(raw_verdict, "DEFENDED")
         self.assertFalse(result["bindings"]["physicalOracle"])
+
+    def test_agent_action_two_sided_oracle_and_runtime_mode_pass(self) -> None:
+        evidence = strict_evidence("cat-13", IDS[0])
+        result = evidence["attackCatalogueResult"]
+        result["expectedAction"] = "agent-action-deny"
+        result["decision"]["action"] = "agent-action-deny"
+        result["actuator"]["handler"] = "agent-action-deny"
+        result["signal"]["targetUID"] = "pod-uid"
+        result["physicalValidation"] = {
+            "validated": True,
+            "kind": "app-action-denied-two-sided",
+            "oracle": "agent-action-deny-enforcement-v1",
+            "podRetained": True,
+            "podUID": "pod-uid",
+            "credentialAuthenticatedBefore": False,
+            "credentialAuthenticatedAfter": False,
+            "evidence": {
+                "schema": "agent-action-deny-enforcement-v1",
+                "validated": True,
+                "deniedBefore": False,
+                "deniedAfter": True,
+                "benignAllowedAfter": True,
+                "surgicalAllowedAfter": True,
+                "servingSetRetained": True,
+                "guardUID": "guard-uid",
+                "podUID": "pod-uid",
+                "serviceUID": "service-uid",
+            },
+            "observations": [
+                {"name": "abusive_action_blocked", "passed": True},
+                {"name": "benign_action_preserved", "passed": True},
+                {"name": "peer_unchanged", "passed": True},
+            ],
+        }
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            IDS[0], "cat-13", status("cat-13", IDS[0]), evidence
+        )
+        self.assertTrue(passed, reasons)
+        self.assertTrue(bindings["physicalOracle"])
+        self.assertTrue(bindings["prometheusEvidence"])
+
+        result["physicalValidation"]["evidence"]["deniedAfter"] = False
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            IDS[0], "cat-13", status("cat-13", IDS[0]), evidence
+        )
+        self.assertFalse(passed)
+        self.assertFalse(bindings["physicalOracle"])
+        self.assertIn("physical oracle is absent or unvalidated", reasons)
+
+    def test_reactive_prometheus_binding_requires_trusted_event_delta(self) -> None:
+        evidence = strict_evidence("run-1", IDS[0])
+        evidence["prometheusEvidence"]["metrics"] = [
+            row for row in evidence["prometheusEvidence"]["metrics"] if row["key"] != "trusted-events"
+        ]
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            IDS[0], "run-1", status("run-1", IDS[0]), evidence
+        )
+        self.assertFalse(passed)
+        self.assertFalse(bindings["prometheusEvidence"])
+        self.assertIn("Prometheus evidence is not complete, exact-mode, and positive-delta bound", reasons)
 
     def test_terminal_status_requires_separate_server_owned_modes(self) -> None:
         scenario = Scenario()
