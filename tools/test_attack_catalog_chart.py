@@ -153,6 +153,8 @@ class AttackCatalogChartTests(unittest.TestCase):
         rendered = self._render_agent(self._agent_values(image)).stdout
         docs = [doc for doc in yaml.safe_load_all(rendered) if doc]
         fixture = [doc for doc in docs if doc.get("metadata", {}).get("namespace") == "p6-demo"]
+        namespace = next(doc for doc in docs if doc["kind"] == "Namespace" and doc["metadata"]["name"] == "p6-demo")
+        self.assertEqual(namespace["metadata"]["labels"]["phorvex.ai/attack-catalog-agent-action"], "true")
         deployment = next(doc for doc in fixture if doc["kind"] == "Deployment" and doc["metadata"]["name"] == "agent-sim")
         pod = deployment["spec"]["template"]["spec"]
         container = pod["containers"][0]

@@ -76,6 +76,9 @@ metadata:
     app.kubernetes.io/managed-by: {{ $.Release.Service }}
     phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}
     phorvex.ai/cleanup-policy: Delete
+{{- if eq $family "agent-action" }}
+    phorvex.ai/attack-catalog-agent-action: "true"
+{{- end }}
     pod-security.kubernetes.io/enforce: restricted
 ---
 apiVersion: v1
