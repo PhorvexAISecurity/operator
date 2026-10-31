@@ -574,21 +574,64 @@ func TestStatefulSnapshotRotateStopsBeforeTheDispatchDeadline(t *testing.T) {
 	}
 }
 
-// After the eviction, the confirmation window is capped the same way: an unobserved
-// replacement is reported as a definite unconfirmed emission, not an expired call.
-func TestStatefulReplacementConfirmationStopsBeforeTheDispatchDeadline(t *testing.T) {
-	cluster, _, req := statefulFixture(t, statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild})
-	cluster.replace = false
-	ec := statefulEnact(cluster, nil)
-	ec.StatefulConfirmTimeout = time.Minute
-	ec.StatefulDeadlineMargin = 150 * time.Millisecond
-	ctx, cancel := context.WithTimeout(t.Context(), 700*time.Millisecond)
-	defer cancel()
-	result, err := dispatch(ctx, ec, req)
-	if err != nil || ctx.Err() != nil {
-		t.Fatalf("dispatch must return before its deadline: err=%v ctx=%v", err, ctx.Err())
-	}
-	if !result.Emitted || result.MutationKind != "forward-only" || !strings.Contains(result.Note, "before the dispatch deadline") {
-		t.Fatalf("result=%+v", result)
+// After the eviction the confirmation is capped the same way, and a late confirmation keeps
+// observing until the declared window (from the eviction) closes, then records the
+// dispatch's only outcome: a slow but healthy replacement is confirmed, not misreported.
+func TestStatefulConfirmationContinuesAfterTheDispatchDeadline(t *testing.T) {
+	for name, appears := range map[string]bool{"replacement appears after the deadline": true, "replacement never appears": false} {
+		t.Run(name, func(t *testing.T) {
+			cluster, pod, req := statefulFixture(t, statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate})
+			cluster.replace = false
+			ec := statefulEnact(cluster, nil)
+			ec.StatefulConfirmTimeout = 2 * time.Second
+			ec.StatefulDeadlineMargin = 150 * time.Millisecond
+			started := make(chan *lateConfirmation, 1)
+			previous := lateConfirmationStarted
+			lateConfirmationStarted = func(l *lateConfirmation) { started <- l }
+			t.Cleanup(func() { lateConfirmationStarted = previous })
+			confirmed := statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationConfirmed)
+			unconfirmed := statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationUnconfirmed)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 700*time.Millisecond)
+			defer cancel()
+			result, err := dispatch(ctx, ec, req)
+			if err != nil || ctx.Err() != nil {
+				t.Fatalf("dispatch must return before its deadline: err=%v ctx=%v", err, ctx.Err())
+			}
+			if !result.Emitted || result.MutationKind != "forward-only" || !strings.Contains(result.Note, "before the dispatch deadline; observation continues") {
+				t.Fatalf("result=%+v", result)
+			}
+			var late *lateConfirmation
+			select {
+			case late = <-started:
+			case <-time.After(time.Second):
+				t.Fatal("no late confirmation started")
+			}
+			if statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationConfirmed) != confirmed ||
+				statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationUnconfirmed) != unconfirmed {
+				t.Fatal("an outcome was recorded before the window closed")
+			}
+			if appears {
+				if err := cluster.Create(t.Context(), statefulPod("ns", "db-1", pod.UID+"-late", "10.0.0.7", podClaimNames(pod))); err != nil {
+					t.Fatal(err)
+				}
+			}
+			select {
+			case <-late.done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("late confirmation never finished")
+			}
+			if appears {
+				confirmed++
+			} else {
+				unconfirmed++
+			}
+			if got := statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationConfirmed); got != confirmed {
+				t.Errorf("confirmed = %v, want %v", got, confirmed)
+			}
+			if got := statefulRotationCount(t, req.Namespace, req.Action, metrics.StatefulRotationUnconfirmed); got != unconfirmed {
+				t.Errorf("unconfirmed = %v, want %v", got, unconfirmed)
+			}
+		})
 	}
 }
