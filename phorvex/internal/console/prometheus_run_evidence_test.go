@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -52,6 +53,25 @@ func TestPrometheusRangeCoverageAllowsSeriesBornAfterEmptyBaseline(t *testing.T)
 	}
 	if prometheusRangeCoversCaptures(first, last, baseline, final, true) {
 		t.Fatal("late first sample was accepted for a series present at baseline")
+	}
+}
+
+func TestPrometheusAnchoredRangeGridIncludesCaptureBoundaries(t *testing.T) {
+	baseline := time.Unix(1793462689, 743478967).UTC()
+	final := baseline.Add(2*time.Minute + 18*time.Second + 869772400*time.Nanosecond)
+	endAt := final.Add(37 * time.Millisecond)
+	start, end, step := prometheusAnchoredRange(baseline, endAt, 15*time.Second)
+	if !start.Equal(baseline.Truncate(time.Millisecond)) || !start.Before(baseline) || !end.Equal(endAt) {
+		t.Fatalf("range boundaries moved: start=%s end=%s", start, end)
+	}
+	if step <= 0 || step > 15 {
+		t.Fatalf("range step=%f", step)
+	}
+	intervals := math.Round(end.Sub(start).Seconds() / step)
+	first := float64(start.UnixNano()) / float64(time.Second)
+	last := first + intervals*step
+	if !prometheusRangeCoversCaptures(first, last, baseline, final, true) {
+		t.Fatalf("anchored grid did not cover baseline=%s final=%s: first=%f last=%f", baseline, final, first, last)
 	}
 }
 
