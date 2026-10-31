@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -9,6 +10,17 @@ import verify_committed_staging_batch as VERIFY
 
 
 class CleanupTests(unittest.TestCase):
+    def test_reconstructed_authority_must_exactly_match_committed_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            authority = Path(directory) / "authority.json"
+            value = {"schema": 1, "target": "staging-isolated"}
+            authority.write_text(json.dumps(value))
+            VERIFY.require_exact_staging_authority({"authority": value}, authority)
+            with self.assertRaisesRegex(ValueError, "differs from its exact source"):
+                VERIFY.require_exact_staging_authority(
+                    {"authority": {"schema": 1, "target": "other"}}, authority
+                )
+
     def test_prepared_shared_batch_must_remain_byte_identical(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

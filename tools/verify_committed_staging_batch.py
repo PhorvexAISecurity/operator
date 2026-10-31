@@ -68,6 +68,12 @@ def current_shared_validation_required(source_root: Path) -> bool:
     return False
 
 
+def require_exact_staging_authority(batch: dict, authority_path: Path) -> None:
+    authority = release.read_json(authority_path)
+    if batch.get("authority") != authority:
+        raise ValueError("committed staging batch authority differs from its exact source")
+
+
 def cleanup_worktrees(temporary: Path, worktrees: list[Path]) -> None:
     failures = []
     for worktree in worktrees:
@@ -99,6 +105,7 @@ def main() -> int:
     source_root = temporary / "source"
     helper = temporary / "servicerelease"
     current_helper = temporary / "current-servicerelease"
+    authority = temporary / "staging-authority.json"
     services = temporary / "services.json"
     shared_root = temporary / "shared-source"
     selection_root = temporary / "isolated-selection"
@@ -107,13 +114,15 @@ def main() -> int:
         run("git", "worktree", "add", "--detach", str(source_root), source)
         registered_worktrees.append(source_root)
         run("go", "-C", str(source_root / "phorvex"), "build", "-o", str(helper), "./tools/servicerelease")
-        # Validate the shared record at the immutable pre-selection source. A
-        # prepared/partial shared batch intentionally retains all of its pending
-        # work, while the isolated proposal owns the overlapping staging pins.
-        # Current-root validation would misinterpret those reviewed isolated
-        # pins as shared drift; byte identity plus this source-pinned validation
-        # proves that no shared state was changed instead.
-        run(str(helper), "pending", "--json", cwd=source_root)
+        # Reconstruct the full isolated authority at the immutable source. This
+        # validates the shared record without forcing the previous staging batch
+        # to render against a later, separately reviewed staging-only overlay.
+        # Exact equality binds the committed batch to that source reconstruction.
+        run(
+            str(helper), "staging-authority", "--target", "staging-isolated",
+            "--source", source, "--output", str(authority), cwd=source_root,
+        )
+        require_exact_staging_authority(batch, authority)
         if current_shared_validation_required(source_root):
             # A complete shared record may already be superseded by an isolated
             # selection. The current reviewed helper validates that compatibility

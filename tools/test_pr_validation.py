@@ -63,12 +63,14 @@ class PRValidationTests(unittest.TestCase):
             committed_verifier.index('if shared_source:'),
         )
         self.assertIn('source_root / "tools/staging_release.py"', committed_verifier)
-        self.assertIn('run(str(helper), "pending", "--json", cwd=source_root)', committed_verifier)
+        self.assertIn('str(helper), "staging-authority", "--target", "staging-isolated"',
+                      committed_verifier)
+        self.assertIn('require_exact_staging_authority(batch, authority)', committed_verifier)
         self.assertIn('current_shared_validation_required(source_root)', committed_verifier)
         self.assertIn('str(current_helper), "pending", "--json", cwd=ROOT', committed_verifier)
         self.assertIn('run(str(shared_helper), "pending", "--json", cwd=ROOT)', committed_verifier)
         self.assertLess(
-            committed_verifier.index('run(str(helper), "pending", "--json", cwd=source_root)'),
+            committed_verifier.index('require_exact_staging_authority(batch, authority)'),
             committed_verifier.index('if shared_source:'),
         )
         self.assertIn('superseding_shared=release.read_json(SHARED_BATCH)', committed_verifier)
