@@ -45,7 +45,16 @@ type kubernetesK8sCatalogueCluster struct {
 	eventKube    kubernetes.Interface
 	dynamic      dynamic.Interface
 	eventDynamic dynamic.Interface
-	reader       ctrlclient.Client
+	// cleanupKube acts as the dedicated delete-only cleanup identity (impersonated) so the
+	// removal of ACTUATOR-created quarantine artifacts never runs as the red-team attacks SA.
+	// nil when no cleanup principal is configured (then quarantine preflight fails closed).
+	cleanupKube kubernetes.Interface
+	reader      ctrlclient.Client
+	// actuatorIdentity / cleanupIdentity are the exact ServiceAccount usernames whose
+	// actuation and cleanup grants the preflight proves with SubjectAccessReview. Empty
+	// disables the catalogue (checked in Preflight) rather than silently skipping the proof.
+	actuatorIdentity string
+	cleanupIdentity  string
 }
 
 func newKubernetesK8sCatalogueCluster(cfg Config, profile k8sCatalogueProfile) (k8sCatalogueCluster, error) {
@@ -80,6 +89,17 @@ func newKubernetesK8sCatalogueCluster(cfg Config, profile k8sCatalogueProfile) (
 	if err != nil {
 		return nil, errors.New("Kubernetes catalogue detector event client is unavailable")
 	}
+	// The cleanup identity is a dedicated delete-only ServiceAccount, impersonated ONLY to
+	// undo actuator-created artifacts. The attacks SA never holds those verbs; it only holds
+	// resourceName-pinned impersonate on this one SA (NO broad or actuator impersonation).
+	var cleanupKube kubernetes.Interface
+	if cfg.AttackCatalogCleanupPrincipal != "" {
+		cleanupConfig := rest.CopyConfig(rc)
+		cleanupConfig.Impersonate = rest.ImpersonationConfig{UserName: cfg.AttackCatalogCleanupPrincipal}
+		if cleanupKube, err = kubernetes.NewForConfig(cleanupConfig); err != nil {
+			return nil, errors.New("Kubernetes catalogue cleanup identity client is unavailable")
+		}
+	}
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, networkingv1.AddToScheme, v1alpha1.AddToScheme} {
 		if err = add(scheme); err != nil {
@@ -91,26 +111,56 @@ func newKubernetesK8sCatalogueCluster(cfg Config, profile k8sCatalogueProfile) (
 		return nil, errors.New("Kubernetes catalogue authoritative reader is unavailable")
 	}
 	return &kubernetesK8sCatalogueCluster{profile: profile, kube: kube, eventKube: eventKube,
-		dynamic: dyn, eventDynamic: eventDyn, reader: reader}, nil
+		dynamic: dyn, eventDynamic: eventDyn, cleanupKube: cleanupKube, reader: reader,
+		actuatorIdentity: cfg.AttackCatalogActuatorPrincipal, cleanupIdentity: cfg.AttackCatalogCleanupPrincipal}, nil
 }
 
 type k8sCatalogueAccess struct {
-	kube      kubernetes.Interface
-	verb      string
-	group     string
-	resource  string
-	namespace string
+	// kube is the client the review is issued through (always the attacks SA, which holds
+	// self/subjectaccessreviews create). user empty => SelfSubjectAccessReview (does the
+	// attacks SA hold this?); user set => SubjectAccessReview naming that principal (does the
+	// actuator/cleanup identity hold this?), so an actuation verb is proven against the
+	// defender identity and never granted to the red-team SA.
+	kube        kubernetes.Interface
+	user        string
+	verb        string
+	group       string
+	resource    string
+	subresource string
+	namespace   string
 }
 
 func requireK8sCatalogueAccess(ctx context.Context, checks ...k8sCatalogueAccess) error {
 	for _, check := range checks {
-		review, err := check.kube.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx,
-			&authorizationv1.SelfSubjectAccessReview{Spec: authorizationv1.SelfSubjectAccessReviewSpec{
-				ResourceAttributes: &authorizationv1.ResourceAttributes{Verb: check.verb, Group: check.group,
-					Resource: check.resource, Namespace: check.namespace},
-			}}, metav1.CreateOptions{})
-		if err != nil || !review.Status.Allowed || review.Status.Denied {
-			return fmt.Errorf("Kubernetes catalogue preflight lacks %s %s/%s in %q", check.verb, check.group, check.resource, check.namespace)
+		attrs := &authorizationv1.ResourceAttributes{Verb: check.verb, Group: check.group,
+			Resource: check.resource, Subresource: check.subresource, Namespace: check.namespace}
+		var allowed, denied bool
+		var err error
+		if check.user == "" {
+			var review *authorizationv1.SelfSubjectAccessReview
+			review, err = check.kube.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx,
+				&authorizationv1.SelfSubjectAccessReview{Spec: authorizationv1.SelfSubjectAccessReviewSpec{ResourceAttributes: attrs}}, metav1.CreateOptions{})
+			if review != nil {
+				allowed, denied = review.Status.Allowed, review.Status.Denied
+			}
+		} else {
+			var review *authorizationv1.SubjectAccessReview
+			review, err = check.kube.AuthorizationV1().SubjectAccessReviews().Create(ctx,
+				&authorizationv1.SubjectAccessReview{Spec: authorizationv1.SubjectAccessReviewSpec{User: check.user, ResourceAttributes: attrs}}, metav1.CreateOptions{})
+			if review != nil {
+				allowed, denied = review.Status.Allowed, review.Status.Denied
+			}
+		}
+		if err != nil || !allowed || denied {
+			who := "attacks service"
+			if check.user != "" {
+				who = check.user
+			}
+			resource := check.resource
+			if check.subresource != "" {
+				resource += "/" + check.subresource
+			}
+			return fmt.Errorf("Kubernetes catalogue preflight: %s lacks %s %s/%s in %q", who, check.verb, check.group, resource, check.namespace)
 		}
 	}
 	return nil
@@ -120,26 +170,56 @@ func (k *kubernetesK8sCatalogueCluster) Preflight(ctx context.Context, entry att
 	if err := validateK8sCatalogueBinding(entry, profile); err != nil || profile.Key != k.profile.Key {
 		return k8sCatalogueFixture{}, errors.New("Kubernetes catalogue cluster received a substituted fixed profile")
 	}
-	checks := []k8sCatalogueAccess{
-		{k.kube, "get", "", "namespaces", ""},
-		{k.kube, "get", "", "pods", profile.Namespace},
-		{k.kube, "list", "", "pods", profile.Namespace},
-		{k.kube, "get", "apps", "deployments", profile.Namespace},
-		{k.kube, "get", "apps", "replicasets", profile.Namespace},
-		{k.kube, "get", "", "services", profile.Namespace},
-		{k.kube, "list", "discovery.k8s.io", "endpointslices", profile.Namespace},
-		{k.kube, "get", "phorvex.ai", "phorvexpolicies", profile.Namespace},
-		{k.kube, "get", k8sCatalogueSecurityEventGVR.Group, k8sCatalogueSecurityEventGVR.Resource, ""},
-		{k.kube, "delete", k8sCatalogueSecurityEventGVR.Group, k8sCatalogueSecurityEventGVR.Resource, ""},
-		{k.eventKube, "create", k8sCatalogueSecurityEventGVR.Group, k8sCatalogueSecurityEventGVR.Resource, ""},
+	// The actuation/remediation verbs are proven against the defender identities, never
+	// self-checked against the red-team attacks SA. Without a configured actuator (and, for
+	// quarantine, a configured cleanup identity) the preflight fails closed rather than
+	// silently skipping the trust-boundary proof.
+	if k.actuatorIdentity == "" {
+		return k8sCatalogueFixture{}, errors.New("Kubernetes catalogue actuator identity is not configured for the reactive remediation preflight")
 	}
+	if profile.Family == k8sCatalogueFamilyQuarantine && (k.cleanupIdentity == "" || k.cleanupKube == nil) {
+		return k8sCatalogueFixture{}, errors.New("Kubernetes catalogue quarantine cleanup identity is not configured")
+	}
+	// (1) The attacks SA's OWN fixture-lifecycle authority: reads of the fixed workload and
+	// the lane event lifecycle. It holds NO actuation verb; those are proven below.
+	checks := []k8sCatalogueAccess{
+		{kube: k.kube, verb: "get", resource: "namespaces"},
+		{kube: k.kube, verb: "get", resource: "pods", namespace: profile.Namespace},
+		{kube: k.kube, verb: "list", resource: "pods", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", group: "apps", resource: "deployments", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", group: "apps", resource: "replicasets", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", resource: "services", namespace: profile.Namespace},
+		{kube: k.kube, verb: "list", group: "discovery.k8s.io", resource: "endpointslices", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", group: "networking.k8s.io", resource: "networkpolicies", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", group: "phorvex.ai", resource: "phorvexpolicies", namespace: profile.Namespace},
+		{kube: k.kube, verb: "get", group: k8sCatalogueSecurityEventGVR.Group, resource: k8sCatalogueSecurityEventGVR.Resource},
+		{kube: k.kube, verb: "delete", group: k8sCatalogueSecurityEventGVR.Group, resource: k8sCatalogueSecurityEventGVR.Resource},
+		{kube: k.eventKube, verb: "create", group: k8sCatalogueSecurityEventGVR.Group, resource: k8sCatalogueSecurityEventGVR.Resource},
+	}
+	// (2) The defender ACTUATOR identity holds the remediation verbs the brain will dispatch.
+	switch profile.Family {
+	case k8sCatalogueFamilyQuarantine:
+		checks = append(checks,
+			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "update", resource: "pods", namespace: profile.Namespace},
+			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "create", group: "networking.k8s.io", resource: "networkpolicies", namespace: profile.Namespace},
+			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "update", resource: "configmaps", namespace: profile.Lane},
+			// The attacks SA additionally READS the lane capacity ledgers during the quarantine
+			// capacity preflight/oracle (read-only; the mutation stays on the actuator/cleanup SAs).
+			k8sCatalogueAccess{kube: k.kube, verb: "get", resource: "configmaps", namespace: profile.Lane},
+		)
+	default:
+		// The pod-rotate / controller-stop families map to a native Pod Eviction.
+		checks = append(checks,
+			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "create", resource: "pods", subresource: "eviction", namespace: profile.Namespace},
+		)
+	}
+	// (3) The dedicated delete-only CLEANUP identity holds exactly the undo verbs used after a
+	// quarantine. It can never create/isolate/evict, so it cannot itself remediate.
 	if profile.Family == k8sCatalogueFamilyQuarantine {
 		checks = append(checks,
-			k8sCatalogueAccess{k.kube, "delete", "", "pods", profile.Namespace},
-			k8sCatalogueAccess{k.kube, "get", "networking.k8s.io", "networkpolicies", profile.Namespace},
-			k8sCatalogueAccess{k.kube, "delete", "networking.k8s.io", "networkpolicies", profile.Namespace},
-			k8sCatalogueAccess{k.kube, "get", "", "configmaps", profile.Lane},
-			k8sCatalogueAccess{k.kube, "update", "", "configmaps", profile.Lane},
+			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "delete", resource: "pods", namespace: profile.Namespace},
+			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "delete", group: "networking.k8s.io", resource: "networkpolicies", namespace: profile.Namespace},
+			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "update", resource: "configmaps", namespace: profile.Lane},
 		)
 	}
 	if err := requireK8sCatalogueAccess(ctx, checks...); err != nil {
@@ -647,12 +727,18 @@ func (k *kubernetesK8sCatalogueCluster) cleanupK8sCatalogueEvent(ctx context.Con
 }
 
 func (k *kubernetesK8sCatalogueCluster) cleanupK8sQuarantineArtifacts(ctx context.Context, fixture k8sCatalogueFixture) bool {
+	// The quarantined Pod and its deny-all NetworkPolicy are ACTUATOR-created defense
+	// artifacts; they are removed through the dedicated delete-only cleanup identity, never as
+	// the red-team attacks SA. Reads below stay on the attacks SA.
+	if k.cleanupKube == nil {
+		return false
+	}
 	pod, err := k.kube.CoreV1().Pods(fixture.Namespace).Get(ctx, fixture.Target.Name, metav1.GetOptions{})
 	if err == nil && string(pod.UID) == fixture.Target.UID {
 		switch pod.Labels["phorvex.ai/quarantined"] {
 		case fixture.Target.UID:
 			uid := pod.UID
-			if err = k.kube.CoreV1().Pods(fixture.Namespace).Delete(ctx, pod.Name,
+			if err = k.cleanupKube.CoreV1().Pods(fixture.Namespace).Delete(ctx, pod.Name,
 				metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 				return false
 			}
@@ -672,7 +758,7 @@ func (k *kubernetesK8sCatalogueCluster) cleanupK8sQuarantineArtifacts(ctx contex
 			return false
 		}
 		uid := np.UID
-		if err = k.kube.NetworkingV1().NetworkPolicies(fixture.Namespace).Delete(ctx, np.Name,
+		if err = k.cleanupKube.NetworkingV1().NetworkPolicies(fixture.Namespace).Delete(ctx, np.Name,
 			metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}}); err != nil && !apierrors.IsNotFound(err) {
 			return false
 		}
@@ -790,6 +876,11 @@ type k8sSharedCapacityLedger struct {
 }
 
 func (k *kubernetesK8sCatalogueCluster) cleanupK8sQuarantineCapacity(ctx context.Context, fixture k8sCatalogueFixture, decisionID string) bool {
+	// The actuator writes the capacity-ledger records; the delete-only cleanup identity edits
+	// them back out. Reads stay on the attacks SA, but the writes require the cleanup client.
+	if k.cleanupKube == nil {
+		return false
+	}
 	return k.removeExactQuarantineCapacityRecord(ctx, fixture) && k.removeExactSharedCapacityRecord(ctx, fixture, decisionID)
 }
 
@@ -839,7 +930,7 @@ func (k *kubernetesK8sCatalogueCluster) removeExactQuarantineCapacityRecord(ctx 
 		}
 		next := cm.DeepCopy()
 		next.Data = map[string]string{"ledger": string(raw)}
-		updated, updateErr := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
+		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
 		if apierrors.IsConflict(updateErr) {
 			continue
 		} else if updateErr != nil || updated.UID != cm.UID || updated.ResourceVersion == "" || updated.ResourceVersion == cm.ResourceVersion {
@@ -897,7 +988,7 @@ func (k *kubernetesK8sCatalogueCluster) removeExactSharedCapacityRecord(ctx cont
 		}
 		next := cm.DeepCopy()
 		next.Data = map[string]string{"ledger": string(raw)}
-		updated, updateErr := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
+		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
 		if apierrors.IsConflict(updateErr) {
 			continue
 		} else if updateErr != nil || updated.UID != cm.UID || updated.ResourceVersion == "" || updated.ResourceVersion == cm.ResourceVersion {

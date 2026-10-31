@@ -26,6 +26,11 @@ import (
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+const (
+	k8sCatalogueTestActuatorIdentity = "system:serviceaccount:phorvex-staging:staging-actuator"
+	k8sCatalogueTestCleanupIdentity  = "system:serviceaccount:phorvex-staging:staging-attacks-cleanup"
+)
+
 type realK8sCatalogueTestFixture struct {
 	cluster *kubernetesK8sCatalogueCluster
 	kube    *kubernetesfake.Clientset
@@ -81,6 +86,13 @@ func newRealK8sCatalogueTestFixture(t *testing.T, family string) realK8sCatalogu
 		review.Status.Allowed = true
 		return true, review, nil
 	})
+	// The actuation/cleanup verbs are proven against the defender principals via
+	// SubjectAccessReview; the preflight issues these as the attacks SA.
+	kube.Fake.PrependReactor("create", "subjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		review := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SubjectAccessReview).DeepCopy()
+		review.Status.Allowed = true
+		return true, review, nil
+	})
 	scheme := runtime.NewScheme()
 	for _, add := range []func(*runtime.Scheme) error{corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, networkingv1.AddToScheme, v1alpha1.AddToScheme} {
 		if err = add(scheme); err != nil {
@@ -98,7 +110,8 @@ func newRealK8sCatalogueTestFixture(t *testing.T, family string) realK8sCatalogu
 		Triggers: v1alpha1.TriggersSpec{EventDriven: true, ReactiveOnly: true}, Actions: v1alpha1.ActionsSpec{Enabled: actions}}}
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	cluster := &kubernetesK8sCatalogueCluster{profile: profile, kube: kube, eventKube: kube, dynamic: dynamicClient,
-		eventDynamic: dynamicClient, reader: ctrlfake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build()}
+		eventDynamic: dynamicClient, cleanupKube: kube, reader: ctrlfake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(),
+		actuatorIdentity: k8sCatalogueTestActuatorIdentity, cleanupIdentity: k8sCatalogueTestCleanupIdentity}
 	return realK8sCatalogueTestFixture{cluster: cluster, kube: kube, dynamic: dynamicClient, entry: entry, profile: profile}
 }
 
@@ -172,7 +185,9 @@ func TestK8sCatalogueRealPreflightIsReadOnlyAndProfileBound(t *testing.T) {
 				t.Fatalf("preflight did not pin the reviewed fixture: %+v", fixture)
 			}
 			for _, action := range f.kube.Actions() {
-				if action.GetVerb() == "create" && action.GetResource().Resource == "selfsubjectaccessreviews" {
+				// Authorization reviews are non-mutating authz probes (SelfSubjectAccessReview for
+				// the attacks SA's own reads, SubjectAccessReview for the actuator/cleanup identities).
+				if action.GetVerb() == "create" && (action.GetResource().Resource == "selfsubjectaccessreviews" || action.GetResource().Resource == "subjectaccessreviews") {
 					continue
 				}
 				if action.GetVerb() == "create" || action.GetVerb() == "update" || action.GetVerb() == "patch" || action.GetVerb() == "delete" || action.GetVerb() == "delete-collection" {
@@ -201,7 +216,7 @@ func TestK8sCatalogueRealPreflightRejectsNonemptyCapacityWithoutMutation(t *test
 		t.Fatal("nonempty shared-capacity state passed quarantine preflight")
 	}
 	for _, action := range f.kube.Actions()[actionsBefore:] {
-		if action.GetVerb() == "create" && action.GetResource().Resource == "selfsubjectaccessreviews" {
+		if action.GetVerb() == "create" && (action.GetResource().Resource == "selfsubjectaccessreviews" || action.GetResource().Resource == "subjectaccessreviews") {
 			continue
 		}
 		if action.GetVerb() == "create" || action.GetVerb() == "update" || action.GetVerb() == "patch" || action.GetVerb() == "delete" {
@@ -383,5 +398,145 @@ func TestK8sCatalogueExactCapacityCleanupPreservesOtherRecords(t *testing.T) {
 	if _, exists := gotShared.Records["decision-id"]; exists || len(gotShared.Records["other-decision"].Admissions) != 1 ||
 		gotShared.Records["other-decision"].Admissions[0].Scope.Key() != scope.Key() {
 		t.Fatalf("shared cleanup removed or truncated another record: %+v", gotShared)
+	}
+}
+
+// capturedReview is one recorded authorization probe issued by the preflight.
+type capturedReview struct {
+	self                                        bool
+	user, verb, group, resource, sub, namespace string
+}
+
+// recordK8sCatalogueReviews replaces the fixture's allow-all authz reactors with
+// recording ones (still allow-all) so a test can assert WHICH identity each verb was
+// proven against. allow lets a test deny a specific principal/verb to prove gating.
+func recordK8sCatalogueReviews(f realK8sCatalogueTestFixture, out *[]capturedReview, allow func(capturedReview) bool) {
+	f.kube.Fake.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		r := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview).DeepCopy()
+		ra := r.Spec.ResourceAttributes
+		c := capturedReview{self: true, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace}
+		*out = append(*out, c)
+		r.Status.Allowed = allow == nil || allow(c)
+		return true, r, nil
+	})
+	f.kube.Fake.PrependReactor("create", "subjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		r := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SubjectAccessReview).DeepCopy()
+		ra := r.Spec.ResourceAttributes
+		c := capturedReview{user: r.Spec.User, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace}
+		*out = append(*out, c)
+		r.Status.Allowed = allow == nil || allow(c)
+		return true, r, nil
+	})
+}
+
+func isK8sCatalogueActuationVerb(c capturedReview) bool {
+	switch {
+	case c.resource == "pods" && c.sub == "eviction" && c.verb == "create":
+		return true
+	case c.resource == "pods" && (c.verb == "delete" || c.verb == "update" || c.verb == "patch"):
+		return true
+	case c.resource == "networkpolicies" && (c.verb == "create" || c.verb == "delete" || c.verb == "update" || c.verb == "patch"):
+		return true
+	case c.resource == "configmaps" && (c.verb == "update" || c.verb == "patch"):
+		return true
+	}
+	return false
+}
+
+// TestK8sCataloguePreflightProvesActuationAgainstDefenderNotAttacks is the trust-boundary
+// regression: the red-team attacks SA must NEVER be self-checked for (and so never needs) an
+// actuation/remediation verb. Every actuation verb is proven with a SubjectAccessReview naming
+// the defender actuator (remediation) or the dedicated delete-only cleanup identity (undo).
+func TestK8sCataloguePreflightProvesActuationAgainstDefenderNotAttacks(t *testing.T) {
+	for _, family := range []string{k8sCatalogueFamilyQuarantine, k8sCatalogueFamilyPodRotate, k8sCatalogueFamilyControllerStop} {
+		t.Run(family, func(t *testing.T) {
+			f := newRealK8sCatalogueTestFixture(t, family)
+			var reviews []capturedReview
+			recordK8sCatalogueReviews(f, &reviews, nil)
+			if _, err := f.cluster.Preflight(context.Background(), f.entry, f.profile); err != nil {
+				t.Fatalf("preflight failed with the defender identities configured: %v", err)
+			}
+			// The attacks SA is never even asked whether it can actuate.
+			for _, r := range reviews {
+				if r.self && isK8sCatalogueActuationVerb(r) {
+					t.Fatalf("attacks SA self-checked an actuation verb (must be proven against a defender identity): %+v", r)
+				}
+				if !r.self && isK8sCatalogueActuationVerb(r) && r.user != k8sCatalogueTestActuatorIdentity && r.user != k8sCatalogueTestCleanupIdentity {
+					t.Fatalf("actuation verb proven against an unexpected principal %q: %+v", r.user, r)
+				}
+			}
+			proven := func(user, verb, group, resource, sub, namespace string) bool {
+				for _, r := range reviews {
+					if !r.self && r.user == user && r.verb == verb && r.group == group && r.resource == resource && r.sub == sub && r.namespace == namespace {
+						return true
+					}
+				}
+				return false
+			}
+			if family == k8sCatalogueFamilyQuarantine {
+				want := []capturedReview{
+					{user: k8sCatalogueTestActuatorIdentity, verb: "update", resource: "pods", namespace: f.profile.Namespace},
+					{user: k8sCatalogueTestActuatorIdentity, verb: "create", group: "networking.k8s.io", resource: "networkpolicies", namespace: f.profile.Namespace},
+					{user: k8sCatalogueTestActuatorIdentity, verb: "update", resource: "configmaps", namespace: f.profile.Lane},
+					{user: k8sCatalogueTestCleanupIdentity, verb: "delete", resource: "pods", namespace: f.profile.Namespace},
+					{user: k8sCatalogueTestCleanupIdentity, verb: "delete", group: "networking.k8s.io", resource: "networkpolicies", namespace: f.profile.Namespace},
+					{user: k8sCatalogueTestCleanupIdentity, verb: "update", resource: "configmaps", namespace: f.profile.Lane},
+				}
+				for _, w := range want {
+					if !proven(w.user, w.verb, w.group, w.resource, w.sub, w.namespace) {
+						t.Fatalf("quarantine actuation/cleanup verb not proven against its identity: %+v", w)
+					}
+				}
+			} else if !proven(k8sCatalogueTestActuatorIdentity, "create", "", "pods", "eviction", f.profile.Namespace) {
+				t.Fatalf("%s rotate eviction not proven against the actuator identity", family)
+			}
+		})
+	}
+}
+
+// TestK8sCataloguePreflightDecoupledFromAttacksActuationGrants proves the attacks SA can be
+// fully DENIED every actuation verb and the preflight still passes: it is gated only on the
+// attacks SA's reads/event lifecycle plus the defender-identity SubjectAccessReviews.
+func TestK8sCataloguePreflightDecoupledFromAttacksActuationGrants(t *testing.T) {
+	f := newRealK8sCatalogueTestFixture(t, k8sCatalogueFamilyQuarantine)
+	var reviews []capturedReview
+	recordK8sCatalogueReviews(f, &reviews, func(c capturedReview) bool {
+		// Deny the attacks SA (self) any actuation verb; it must not need them.
+		return !(c.self && isK8sCatalogueActuationVerb(c))
+	})
+	if _, err := f.cluster.Preflight(context.Background(), f.entry, f.profile); err != nil {
+		t.Fatalf("preflight must not depend on the attacks SA holding actuation verbs: %v", err)
+	}
+}
+
+// TestK8sCataloguePreflightFailsWhenDefenderLacksActuation proves the actuation verbs are
+// genuinely gated on the defender identities: deny the actuator and the preflight fails closed.
+func TestK8sCataloguePreflightFailsWhenDefenderLacksActuation(t *testing.T) {
+	f := newRealK8sCatalogueTestFixture(t, k8sCatalogueFamilyQuarantine)
+	var reviews []capturedReview
+	recordK8sCatalogueReviews(f, &reviews, func(c capturedReview) bool {
+		return !(c.user == k8sCatalogueTestActuatorIdentity && c.resource == "networkpolicies")
+	})
+	if _, err := f.cluster.Preflight(context.Background(), f.entry, f.profile); err == nil {
+		t.Fatal("quarantine preflight passed while the actuator could not create the deny-all NetworkPolicy")
+	}
+}
+
+// TestK8sCatalogueQuarantineCleanupRequiresCleanupIdentity proves the undo of actuator-created
+// artifacts never silently runs as the attacks SA: with no cleanup identity wired, cleanup of
+// the quarantined Pod / deny-all NetworkPolicy / capacity records is not performed or verified.
+func TestK8sCatalogueQuarantineCleanupRequiresCleanupIdentity(t *testing.T) {
+	f := newRealK8sCatalogueTestFixture(t, k8sCatalogueFamilyQuarantine)
+	fixture := f.preflight(t)
+	f.installFamilyEffect(t, fixture)
+	f.cluster.cleanupKube = nil // no delete-only cleanup identity available
+	result := f.cluster.Cleanup(context.Background(), f.entry, f.profile, fixture,
+		k8sCatalogueSignal{Name: "catalog-k8s-real", UID: "event-uid", Creator: f.profile.DetectorIdentity, CreatedAt: time.Now().UTC()}, "", "k8s-test-run")
+	if result.Verified || result.MarkerDeleted {
+		t.Fatalf("quarantine cleanup must not remediate actuator artifacts without the cleanup identity: %+v", result)
+	}
+	pod, err := f.kube.CoreV1().Pods(fixture.Namespace).Get(context.Background(), fixture.Target.Name, metav1.GetOptions{})
+	if err != nil || string(pod.UID) != fixture.Target.UID {
+		t.Fatalf("quarantined Pod was deleted without the cleanup identity: err=%v", err)
 	}
 }

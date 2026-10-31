@@ -422,6 +422,13 @@ spec:
           value: "true"
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE
           value: /etc/phorvex-attack-catalog/identity-profile.json
+        # Reactive k8s_cluster/infra remediation identities. The preflight proves the actuation
+        # verbs against the ACTUATOR (never the red-team SA), and impersonates the dedicated
+        # delete-only cleanup SA to undo actuator-created quarantine artifacts.
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL
+          value: {{ printf "system:serviceaccount:%s:%s-actuator" .Release.Namespace .Release.Name | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL
+          value: {{ printf "system:serviceaccount:%s:%s-attacks-cleanup" .Release.Namespace .Release.Name | quote }}
         {{- if dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}
         {{- $agentImage := required "console.attackCatalog.agentAction.image is required" .Values.phorvex.console.attackCatalog.agentAction.image }}
         {{- $managerSA := dig "serviceAccountName" "" .Values.phorvex | default (printf "%s-phorvex-manager" .Release.Name) }}

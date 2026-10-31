@@ -367,6 +367,11 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	agentManagerPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL")
 	agentSensorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL")
 	agentActuatorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL")
+	// Reactive k8s_cluster/infra remediation identities: the defender actuator the brain is
+	// steered to (proven to hold the actuation verbs), and the dedicated delete-only cleanup
+	// identity impersonated to undo actuator artifacts. Required when the launch adapter runs.
+	catalogActuatorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL")
+	catalogCleanupPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL")
 	if attackCatalogTenant != "" && (!strings.HasPrefix(attackCatalogTenant, identityfixture.NamespacePrefix) || len(validation.IsDNS1123Label(attackCatalogTenant)) != 0) {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT must name the fixed owned identity-fixture tenant")
 	}
@@ -399,6 +404,25 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 			return fmt.Errorf("%s must be one exact in-cluster ServiceAccount principal", name)
 		}
 	}
+	// The reactive k8s_cluster/infra remediation preflight proves actuation verbs against the
+	// actuator identity and impersonates the cleanup identity; both are required wherever the
+	// launch adapter actually runs (the attacks service), and must be exact SA principals.
+	for name, principal := range map[string]string{
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL": catalogActuatorPrincipal,
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL":  catalogCleanupPrincipal,
+	} {
+		if attackCatalogEnabled && principal == "" {
+			return fmt.Errorf("%s is required when the attack catalogue launch adapter is enabled", name)
+		}
+		parts := strings.Split(principal, ":")
+		if principal != "" && (len(parts) != 4 || parts[0] != "system" || parts[1] != "serviceaccount" ||
+			len(validation.IsDNS1123Label(parts[2])) != 0 || len(validation.IsDNS1123Subdomain(parts[3])) != 0) {
+			return fmt.Errorf("%s must be one exact in-cluster ServiceAccount principal", name)
+		}
+	}
+	if attackCatalogEnabled && catalogActuatorPrincipal == catalogCleanupPrincipal {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL must be a dedicated delete-only identity, not the actuator")
+	}
 	cfg.AttackCatalogEnabled = attackCatalogEnabled
 	cfg.AttackCatalogAuthorizationTenant = attackCatalogAuthorizationTenant
 	cfg.AttackCatalogIdentityTenant = attackCatalogTenant
@@ -408,6 +432,8 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.AttackCatalogAgentManagerPrincipal = agentManagerPrincipal
 	cfg.AttackCatalogAgentSensorPrincipal = agentSensorPrincipal
 	cfg.AttackCatalogAgentActuatorPrincipal = agentActuatorPrincipal
+	cfg.AttackCatalogActuatorPrincipal = catalogActuatorPrincipal
+	cfg.AttackCatalogCleanupPrincipal = catalogCleanupPrincipal
 	runPrometheusEvidenceEnabled, err := readBool("PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED")
 	if err != nil {
 		return err

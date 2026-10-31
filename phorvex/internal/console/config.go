@@ -61,8 +61,22 @@ type Config struct {
 	AttackCatalogAgentManagerPrincipal  string
 	AttackCatalogAgentSensorPrincipal   string
 	AttackCatalogAgentActuatorPrincipal string
-	AttackCatalogRunTimeout             time.Duration
-	AttackCatalogPollInterval           time.Duration
+	// AttackCatalogActuatorPrincipal is the exact in-cluster ServiceAccount username of the
+	// defender actuator the k8s_cluster/infra reactive adapters steer the brain toward. The
+	// preflight proves (via SubjectAccessReview) that THIS identity — never the red-team attacks
+	// SA — holds the actuation/remediation verbs (quarantine: update pods, create networkpolicies,
+	// update configmaps; rotate: create pods/eviction). The red-team SA is never granted them.
+	AttackCatalogActuatorPrincipal string
+	// AttackCatalogCleanupPrincipal is the exact in-cluster ServiceAccount username of the
+	// dedicated delete-only cleanup identity the k8s_cluster adapter IMPERSONATES to remove
+	// actuator-created artifacts (the quarantined Pod, its owner-GC'd deny-all NetworkPolicy, and
+	// the quarantine/shared capacity ledger records). It holds only delete pods / delete
+	// networkpolicies / update configmaps in the lane namespace — NO create/isolate/evict power —
+	// so it can undo a defense effect but can never itself remediate. Attack-owned artifacts (the
+	// SecurityEvent, armed fixtures) stay owned and cleaned by the attacks SA.
+	AttackCatalogCleanupPrincipal string
+	AttackCatalogRunTimeout       time.Duration
+	AttackCatalogPollInterval     time.Duration
 	// RunPrometheusEvidence retains baseline-subtracted Prometheus samples beside
 	// every catalogue run. It is an explicit deployment opt-in: a configured
 	// Prometheus URL used by other console views does not silently make telemetry

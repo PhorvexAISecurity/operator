@@ -103,6 +103,10 @@ subjects:
 {{- $scoped := .Values.phorvex.console.attackNamespaces }}
 {{- $attackCatalog := dig "attackCatalog" "enabled" false .Values.phorvex.console }}
 {{- $agentActionCatalog := dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}
+{{- /* The dedicated delete-only cleanup identity the k8s_cluster adapter impersonates to
+   undo actuator-created quarantine artifacts. It is NOT the actuator (it cannot create /
+   isolate / evict), so impersonating it can never remediate. */}}
+{{- $cleanupSA := printf "%s-attacks-cleanup" .Release.Name }}
 ---
 # The attacks service fires what the console fired, so it holds the console's base
 # grants beyond reading. With console.attackNamespaces, what it and the console may exec
@@ -156,11 +160,17 @@ rules:
 {{- $detectorSANames = append $detectorSANames (index $parts 1) }}
 {{- end }}
 {{- end }}
-{{- if $detectorSANames }}
+{{- /* The adapter also impersonates the delete-only cleanup SA to remove actuator-created
+   quarantine artifacts (the quarantined Pod, its owner-GC'd deny-all NetworkPolicy, the lane
+   capacity-ledger records). That identity holds only delete pods / delete networkpolicies /
+   update configmaps in the lane (below) — it can UNDO a defense but never actuate one — so this
+   impersonation grants the red-team SA no actuator/defender power. resourceNames-pinned. */}}
+{{- $impersonatable := concat $detectorSANames (list $cleanupSA) }}
+{{- if $impersonatable }}
 - apiGroups: [""]
   resources: ["serviceaccounts"]
   verbs: ["impersonate"]
-  resourceNames: {{ $detectorSANames | sortAlpha | uniq | toJson }}
+  resourceNames: {{ $impersonatable | sortAlpha | uniq | toJson }}
 {{- end }}
 {{- end }}
 {{- if not $scoped }}
@@ -236,6 +246,19 @@ subjects:
 - kind: ServiceAccount
   name: {{ $attacksSA }}
   namespace: {{ .Release.Namespace }}
+---
+# The delete-only cleanup identity. The attacks service impersonates it (resourceName-pinned,
+# above) ONLY to remove actuator-created quarantine artifacts during exact cleanup. It holds no
+# create/isolate/evict grant, so it can never itself remediate; the per-lane Roles below bound it
+# to delete pods / delete networkpolicies / update configmaps in each attack namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $cleanupSA }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+    app.kubernetes.io/component: attacks-cleanup
 {{- end }}
 {{- range $scoped }}
 {{- if not (and $agentActionCatalog (eq . "p6-demo")) }}
@@ -289,6 +312,48 @@ subjects:
 - kind: ServiceAccount
   name: {{ $attacksSA }}
   namespace: {{ $.Release.Namespace }}
+{{- if $attackCatalog }}
+---
+# The delete-only cleanup identity's lane-bounded authority: remove the ACTUATOR-created
+# quarantine Pod and its owner-GC'd deny-all NetworkPolicy, and edit the lane capacity-ledger
+# ConfigMaps back out, during exact cleanup. These are the ONLY mutating verbs it holds, and it
+# holds them NOWHERE else — it can never create a NetworkPolicy, relabel/evict a Pod or otherwise
+# actuate a defense. The red-team attacks SA holds none of these; it impersonates this SA for the
+# undo (resourceName-pinned above). This keeps actuator-artifact cleanup off the red-team identity.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-attacks-cleanup
+  namespace: {{ . }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" $ }}-attacks-cleanup
+  namespace: {{ . }}
+  labels:
+    {{- include "phorvex.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" $ }}-attacks-cleanup
+subjects:
+- kind: ServiceAccount
+  name: {{ $cleanupSA }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
 {{- end }}
 ---
 # The console's policy edits (/api/policy/edit, the optimizer knobs), in this namespace only.
