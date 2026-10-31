@@ -322,6 +322,7 @@ func (k *kubernetesK8sCatalogueCluster) CreateSignal(ctx context.Context, entry 
 		model.ConsoleTargetPodUIDAnnotation: fixture.Target.UID,
 		"phorvex.ai/target-pod-uid":         fixture.Target.UID,
 		attackCatalogCorrelationAnnotation:  runID,
+		catalogueIDAnnotationKey:            entry.ID,
 	}
 	if profile.Family == k8sCatalogueFamilyQuarantine {
 		uidPrefix := fixture.Target.UID
@@ -345,7 +346,7 @@ func (k *kubernetesK8sCatalogueCluster) CreateSignal(ctx context.Context, entry 
 	object := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{"name": name,
-			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": entry.ID,
+			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(entry.ID),
 				"phorvex.ai/catalogue-family": profile.Family},
 			"annotations": annotations},
 		"spec": map[string]any{"description": entry.Description, "targets": []any{fixture.Namespace + "/" + fixture.Target.Name},
@@ -366,7 +367,8 @@ func (k *kubernetesK8sCatalogueCluster) CreateSignal(ctx context.Context, entry 
 		created.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] == fixture.Target.UID &&
 		created.GetAnnotations()["phorvex.ai/target-pod-uid"] == fixture.Target.UID &&
 		created.GetAnnotations()[attackCatalogCorrelationAnnotation] == runID &&
-		created.GetLabels()["phorvex.ai/catalogue-id"] == entry.ID && created.GetLabels()["phorvex.ai/catalogue-family"] == profile.Family &&
+		created.GetAnnotations()[catalogueIDAnnotationKey] == entry.ID &&
+		created.GetLabels()["phorvex.ai/catalogue-id"] == catalogueIDLabelValue(entry.ID) && created.GetLabels()["phorvex.ai/catalogue-family"] == profile.Family &&
 		slices.Equal(targets, []string{fixture.Namespace + "/" + fixture.Target.Name}) && eventType == entry.EventType &&
 		source == profile.Lane+"-attacks" && level == "critical" && description == entry.Description
 	if profile.Family == k8sCatalogueFamilyQuarantine && created.GetAnnotations()["phorvex.ai/protected-outcomes-v1"] != annotations["phorvex.ai/protected-outcomes-v1"] {
@@ -629,7 +631,8 @@ func (k *kubernetesK8sCatalogueCluster) cleanupK8sCatalogueEvent(ctx context.Con
 		}
 		if err != nil || current.GetAnnotations()[attackCatalogCorrelationAnnotation] != runID ||
 			current.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] != fixture.Target.UID ||
-			current.GetLabels()["phorvex.ai/catalogue-id"] != entry.ID || current.GetUID() == "" {
+			current.GetLabels()["phorvex.ai/catalogue-id"] != catalogueIDLabelValue(entry.ID) ||
+			current.GetAnnotations()[catalogueIDAnnotationKey] != entry.ID || current.GetUID() == "" {
 			return false
 		}
 		uid = current.GetUID()

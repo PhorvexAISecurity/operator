@@ -302,7 +302,7 @@ func (k *kubernetesInfraCatalogueRuntime) prepareNetwork(ctx context.Context, pr
 		before[edge.CIDR] = k.probeFromPod(ctx, profile.Namespace, target.Name, profile.Container, edge.URL, edge.Insecure)
 		peerBefore[edge.CIDR] = k.probeFromPod(ctx, profile.Namespace, peer.Name, profile.Container, edge.URL, edge.Insecure)
 	}
-	legitimateURL := "http://" + profile.Deployment + "." + profile.Namespace + ".svc.cluster.local/"
+	legitimateURL := legitimateServiceURL(profile)
 	legitimate := k.probeFromPod(ctx, profile.Namespace, target.Name, profile.Container, legitimateURL, false)
 	if !allMapValues(before, true) || !allMapValues(peerBefore, true) || !legitimate {
 		return infraCatalogueFixture{}, errors.New("network-edge baseline must prove target and peer forbidden edges plus legitimate/DNS egress are reachable")
@@ -313,6 +313,15 @@ func (k *kubernetesInfraCatalogueRuntime) prepareNetwork(ctx context.Context, pr
 		PolicyGeneration: policy.Generation, ReactiveOnly: policy.Spec.Triggers.ReactiveOnly, ReceiptObjects: []string{receipt},
 		State: &infraNetworkState{Edges: edges, ForbiddenBefore: before, PeerForbiddenBefore: peerBefore,
 			LegitimateBefore: legitimate, LegitimateURL: legitimateURL, MinimumAvailable: policy.Spec.SLO.MinAvailableReplicas}}, nil
+}
+
+// legitimateServiceURL is the in-cluster URL the network-edge baseline probes
+// to prove that legitimate egress to the demo-api Service is reachable. The
+// demo-api Service listens only on port 8080, so the port must be explicit:
+// without it the probe defaults to port 80 and always fails. net.JoinHostPort
+// keeps the host:port composition correct.
+func legitimateServiceURL(profile infraCatalogueProfile) string {
+	return "http://" + net.JoinHostPort(profile.Deployment+"."+profile.Namespace+".svc.cluster.local", "8080") + "/"
 }
 
 func (k *kubernetesInfraCatalogueRuntime) resolveNetworkEdges(ctx context.Context, profile infraCatalogueProfile, target *corev1.Pod) ([]infraNetworkEdge, error) {
@@ -1087,9 +1096,10 @@ func (k *kubernetesInfraCatalogueRuntime) CreateSignal(ctx context.Context, prof
 		return infraCatalogueSignal{}, errors.New("infra signal identity generation failed")
 	}
 	name := uniqueInfraSignalName(profile.ID, random)
+	annotations[catalogueIDAnnotationKey] = profile.ID
 	object := map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
-		"metadata": map[string]any{"name": name, "labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": profile.ID}, "annotations": annotations},
+		"metadata": map[string]any{"name": name, "labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(profile.ID)}, "annotations": annotations},
 		"spec": map[string]any{"description": "Authorized Console catalogue validation: " + profile.ID,
 			"targets": []any{profile.Namespace + "/" + arm.TargetName},
 			"rule":    map[string]any{"type": profile.EventType, "threatLevel": "critical", "source": profile.Lane + "-attacks"}},
@@ -1126,7 +1136,8 @@ func (k *kubernetesInfraCatalogueRuntime) cleanupEvent(ctx context.Context, prof
 			return true
 		}
 		if err != nil || candidate.GetUID() == "" || candidate.GetLabels()["phorvex.ai/redteam"] != "true" ||
-			candidate.GetLabels()["phorvex.ai/catalogue-id"] != profile.ID ||
+			candidate.GetLabels()["phorvex.ai/catalogue-id"] != catalogueIDLabelValue(profile.ID) ||
+			candidate.GetAnnotations()[catalogueIDAnnotationKey] != profile.ID ||
 			candidate.GetAnnotations()["phorvex.ai/creator-identity"] != profile.creator() ||
 			candidate.GetAnnotations()[attackCatalogCorrelationAnnotation] != signal.RunID ||
 			candidate.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] != arm.TargetUID {

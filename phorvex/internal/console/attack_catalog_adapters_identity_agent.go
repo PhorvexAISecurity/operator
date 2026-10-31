@@ -511,9 +511,10 @@ func (k *kubernetesAgentCatalogueCluster) Launch(ctx context.Context, profile id
 	object := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{"name": name,
-			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": profile.ID},
+			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(profile.ID)},
 			"annotations": map[string]any{model.ConsoleTargetPodUIDAnnotation: f.TargetPodUID,
-				attackCatalogCorrelationAnnotation: runID, agentdeny.ObservationAnnotation: string(annotation)}},
+				attackCatalogCorrelationAnnotation: runID, agentdeny.ObservationAnnotation: string(annotation),
+				catalogueIDAnnotationKey: profile.ID}},
 		"spec": map[string]any{"description": entry.Description, "targets": []any{f.Profile.Namespace + "/" + f.TargetPodName},
 			"rule": map[string]any{"type": entry.EventType, "threatLevel": "critical", "source": "console-catalogue"}},
 	}}
@@ -681,7 +682,8 @@ func (k *kubernetesAgentCatalogueCluster) deleteExactSignal(ctx context.Context,
 	}
 	if err != nil || object.GetUID() == "" || (state.signal.UID != "" && string(object.GetUID()) != state.signal.UID) ||
 		object.GetAnnotations()[attackCatalogCorrelationAnnotation] != state.runID ||
-		object.GetLabels()["phorvex.ai/catalogue-id"] != f.Profile.CatalogueID {
+		object.GetLabels()["phorvex.ai/catalogue-id"] != catalogueIDLabelValue(f.Profile.CatalogueID) ||
+		object.GetAnnotations()[catalogueIDAnnotationKey] != f.Profile.CatalogueID {
 		return false
 	}
 	uid := object.GetUID()
