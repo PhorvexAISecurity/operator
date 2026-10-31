@@ -453,3 +453,47 @@ library. No live model call, deployment or defense/SLO outcome experiment was ru
 
 Current limitations and the normalized recorded-evidence contract are documented
 in [STUDIES.md](STUDIES.md); successful synthetic execution does not resolve them.
+
+# Endpoint study and planner repair — verified 2026-10-31
+
+Bot-only source `3f3f40a81df2aeb7d74ba826d6a4b71fcc87cd07` was activated at
+19:01:16 UTC on the benchmark host and verified at 19:01:20 UTC. The release
+manifest verified 91 files. There were no pending jobs before restart; owner,
+membership and offset state were preserved, and dashboard/API/web/proxy units
+were unchanged. No operator deployment or V3 actuation occurred.
+
+* All **137 bot tests** passed on the host's Python 3.12.3. The standalone Go
+  endpoint runner passed 16 tests, including numerical positive controls,
+  duration/censoring, interval revisions, history completeness and durable state.
+* The exact original V2-A diagnostic ran to **DONE**, job `3d06412b8941`.
+  Source for that full code pipeline was `29374257e7eda47d7fee349aa3ae1e12706f1a4f`:
+  base 438 PASS/0 FAIL/2 SKIP; candidate 483 PASS/0 FAIL/2 SKIP, both exact
+  Go 1.26.10. Deployed, locally rebuilt baseline and candidate each replayed 64
+  matched snapshots without decode/version errors; baseline reproduced 64/64.
+  Changed decisions were 0/64, expected for an additive arithmetic helper.
+* A forced-context test on final source `3f3f40a8` deliberately supplied only
+  go.mod initially. The real configured model completed two repository reads
+  across three API calls and returned an in-scope diff. This test covers portable
+  conversation state; it is not relabelled as another Go/replay run. The final
+  commit changes only stateless Responses options, their test assertions and docs.
+* The actual Go V2/V3 reference completed 64 explicitly synthetic paired ticks,
+  with 7 different selections. Forecast endpoint-seconds were 26880 versus 25053;
+  these are fixture results, not measured production savings or security effects.
+* The original V3 request took the registered input-preflight path, inspected 64
+  deployed snapshots and returned **BLOCKED** with missing-input reasons. The
+  corpus lacks qualified move-attributed endpoint history and a complete candidate
+  export for new cost rules. No LLM call/build or fabricated replacement data was
+  used for this missing-input result.
+* English/Persian HTML/PDF guides and the new JSON templates were updated. Browser
+  checks passed at 320/390/768/1440px, including the embedded download buttons.
+
+Two unsuccessful pre-release probes remain retained: the prior planner repeated
+source reads until the bound, and the first conversation-history repair received
+HTTP 404 on its second API call. The final repair requests portable encrypted
+reasoning state and passes the real multi-turn control above. Neither failing
+release was activated. Probe reports used a local artifact transport and sent no
+Telegram messages.
+
+Reproducible artifacts and raw receipts for this run were retained under
+`/data/outputs/phorvex-v3-fix-20261031` in the task workspace and
+`~/phorvex-benchmark/bot-validation-20261031/v3-fix` on the benchmark host.
