@@ -27,7 +27,7 @@ class Progress:
             age, phase_age = self.clock() - self.created, self.clock() - self.phase_started
         if state == 'DONE':
             bar, icon = '■' * 10, '✓'
-        elif state in ('FAILED', 'CANCELLED', 'INTERRUPTED', 'PARTIAL'):
+        elif state in ('FAILED', 'CANCELLED', 'INTERRUPTED', 'PARTIAL', 'NEEDS_DATA'):
             bar, icon = '□' * 10, '!' if state in ('FAILED', 'PARTIAL') else '—'
         else:
             bar = ''.join('■' if (i - frame) % 10 < 3 else '□' for i in range(10))

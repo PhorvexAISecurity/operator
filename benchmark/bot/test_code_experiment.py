@@ -102,6 +102,7 @@ class CodeExperimentTest(unittest.TestCase):
                                            code_experiment.identity(self.deployed), code_experiment.identity(out),
                                            self.build('c2', cand_src, cand_commit))
         self.assertEqual(result['toolchain_fidelity'], 'DIVERGED')
+        self.assertEqual(result['state'], 'INVALID')
 
     def test_refuses_a_cohort_from_another_revision(self):
         cand_src, cand_commit = self.candidate(5)

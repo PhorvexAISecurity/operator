@@ -3,9 +3,11 @@
 A Telegram bot for benchmarking brain changes before they are merged. You
 describe a change in words, or name a parameter and values. The bot replays the
 **recorded production ticks** with the changed brain and with the deployed brain,
-and returns the comparison as a summary, `report.html` and `metrics.csv`.
+and returns the comparison as a summary, `report.html` and `metrics.csv`. It also
+accepts declarative JSON studies comparing configured Cost/History reference
+algorithms on explicit recorded or synthetic trace inputs; see [STUDIES.md](STUDIES.md).
 
-Everything is replay on recorded states. No cluster is created or touched, no
+Experiments are offline replay or labelled reference studies. No cluster is created or touched, no
 action is dispatched, nothing is merged or pushed, and the repository and the
 dashboard's data are only read. Replay measures how the decision engine
 responds to recorded states. It does not measure defense rates or SLO effects;
@@ -17,6 +19,7 @@ those need the live lab (`benchmark/run.sh`, still being built).
 |---|---|
 | `/bench [policy=ns/name] [ticks=N] [nosync] <change in words>` | The steps below. |
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
+| `/study` | Help for JSON studies: configurable reference algorithms, arms, seeds, history and trace evidence. |
 | `/guide` | Sends the English step-by-step playbook to the requesting chat as HTML and PDF attachments. |
 | `/upload` | File-submission instructions. Upload a `.md`, `.txt` or `.docx` document to execute its valid experiments automatically. |
 | `/validate` | Use as an uploaded document's caption to validate structure and values without queuing anything. |
@@ -280,3 +283,11 @@ changes decisions, end to end, from a Telegram message to the files sent back.
   replay evidence, source access and remaining limitations. A healthy
   Telegram service or a successful archived smoke test does not establish that
   the currently deployed source and snapshots are available.
+# Dynamic Cost and History studies
+
+The bot also accepts versioned JSON studies with configurable comparison arms,
+seeds, explicit trace evidence and independent history. These run reference
+algorithms without LLM code generation. Start with `/study` and the JSON examples
+from `/templates`. See [the study contract and evidence requirements](STUDIES.md).
+Synthetic examples are executable demonstrations, not production results; missing
+recorded ledgers return `NEEDS_DATA` with an explanation.

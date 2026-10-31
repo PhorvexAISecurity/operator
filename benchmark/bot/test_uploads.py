@@ -25,12 +25,12 @@ class ParserTest(unittest.TestCase):
 
     def test_all_completed_examples_parse_including_word(self):
         examples = list((HERE / 'templates').iterdir())
-        self.assertEqual(len(examples), 5)
+        self.assertGreaterEqual(len(examples), 7)
         for path in examples:
             with self.subTest(path=path.name):
                 tasks = self.parse(files.document_text(path.name, path.read_bytes()))
                 self.assertTrue(tasks)
-                self.assertTrue(all(task['kind'] in ('bench', 'param') for task in tasks))
+                self.assertTrue(all(task['kind'] in ('bench', 'param', 'study') for task in tasks))
         word = next(path for path in examples if path.suffix == '.docx')
         self.assertEqual([t['kind'] for t in self.parse(files.document_text(word.name, word.read_bytes()))], ['bench', 'param'])
 

@@ -1,0 +1,75 @@
+{
+  "schema": "phorvex-bench.study.v1",
+  "title": "History v1.1 on normalized recorded evidence",
+  "policy": "vllm/vllm-defense",
+  "seeds": [
+    7,
+    19,
+    41
+  ],
+  "history": {
+    "mode": "observed",
+    "window_seconds": 3600
+  },
+  "arms": [
+    {
+      "id": "deterministic",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "deterministic"
+      }
+    },
+    {
+      "id": "entropy",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "entropy",
+        "tau": 1,
+        "epsilon": 0.5
+      }
+    },
+    {
+      "id": "score-only",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "history",
+        "epsilon": 0.5,
+        "score_scale": 1,
+        "eta_pair": 0,
+        "eta_action": 0,
+        "eta_fact": 0,
+        "kappa_pair": 1,
+        "kappa_action": 1,
+        "q_ref": 1,
+        "x0": 0.7,
+        "a0": 0
+      }
+    },
+    {
+      "id": "history",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "history",
+        "epsilon": 0.5,
+        "score_scale": 1,
+        "eta_pair": 2,
+        "eta_action": 1,
+        "eta_fact": 0,
+        "kappa_pair": 1,
+        "kappa_action": 1,
+        "q_ref": 1,
+        "x0": 0.7,
+        "a0": 0
+      }
+    }
+  ],
+  "dataset": "recorded"
+}

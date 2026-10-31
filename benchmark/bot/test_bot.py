@@ -645,6 +645,8 @@ class BotTest(unittest.TestCase):
         bot.handle(message(OWNER, '/bench nosync change the deploy files instead of the brain'))
         bot.run_next()
         self.assertIn('the LLM step failed: no in-scope diff', self.fake.texts()[-1])
+        self.assertTrue(any(b'contextSkipped' in raw and b'next_step' in raw for raw in self.fake.documents()))
+        self.assert_no_secret_shown()
 
         (go.parent / 'fail-build').touch()
         bot.openai_transport = self.openai_returning(testkit.threshold_diff(3, 4))

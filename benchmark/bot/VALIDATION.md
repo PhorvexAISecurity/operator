@@ -231,3 +231,41 @@ asking the model or building a candidate. An archived replay
 or healthy bot transport is not evidence of current production improvement.
 Live defense and SLO outcomes additionally require the separately unfinished
 live lab; replay describes decisions on recorded states.
+# Declarative studies — local validation, 2026-10-31
+
+Implemented on `feat/benchmark-dynamic`, based on bot source
+`42f387829150ee4e6722ced81ffc1e9d9e5df71f`. This record is local development
+evidence, not a new live-deployment claim.
+
+* Python bot suite: **111 tests passed**, including 18 new study tests.
+* Python worker suite: **54 tests passed**.
+* `git diff --check`: passed.
+* Executable Cost example: COMPLETE, explicitly synthetic, 2 arms × 3 seeds.
+* Executable History example: COMPLETE, explicitly synthetic, 4 arms × 3 seeds.
+* Telegram upload/validation/queue/report delivery exercised using the real study
+  implementation and a fake Telegram transport; no LLM, dashboard, Go or cluster
+  calls are required for inline studies. Recorded-trace import/load/freeze is tested
+  with local fixtures, not an actual deployment ledger.
+* Checks cover cold/calibrated/censored duration bounds, failure bounds, quarantine
+  holds, epsilon/tie correctness, stable seeds, arm isolation, acknowledged starts,
+  identity replacement, rolling expiry, fact novelty, missing-history fallback,
+  missing budgets, mandatory/NOOP behavior, cancellation and output escaping.
+* A diverged local baseline now marks a code-replay experiment INVALID. Declined
+  code requests send sanitized context/attempt diagnostics to the requesting chat.
+
+Commands used from the implementation worktree:
+
+```sh
+python -m unittest discover -s benchmark/bot -p 'test_*.py'
+python -m unittest discover -s benchmark/worker -p 'test_*.py'
+```
+
+Python 3.11 and the existing pinned `openpyxl==3.1.5` requirement were used in an
+isolated venv. TMPDIR was on `/workspace` because this environment mounts `/tmp`
+with `noexec` and existing pipeline tests execute temporary fixture binaries.
+The workflow doctor was unavailable because PyYAML is absent; no workflow state or
+product code was changed. The new reference runner itself uses only the standard
+library. No live model call, deployment or defense/SLO outcome experiment was run.
+
+Current limitations and the normalized recorded-evidence contract are documented
+in [STUDIES.md](STUDIES.md); successful synthetic execution does not resolve them.

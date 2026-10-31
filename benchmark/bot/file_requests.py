@@ -11,7 +11,7 @@ from xml.etree import ElementTree as ET
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 256 * 1024
 MAX_EXPERIMENTS = 5
-EXTENSIONS = {'.md', '.markdown', '.txt', '.docx'}
+EXTENSIONS = {'.md', '.markdown', '.txt', '.docx', '.json'}
 POLICY = re.compile(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
 PARAMETER = re.compile(r'^P-[A-Z]{3}-[0-9]{3}$')
 NUMBER = re.compile(r'^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$')
@@ -24,7 +24,7 @@ class RequestError(ValueError):
 def document_text(filename, data):
     extension = Path(filename).suffix.lower()
     if extension not in EXTENSIONS:
-        raise RequestError('Supported files: .md, .txt and .docx. Export older .doc or Google Docs documents to .docx or UTF-8 .txt.')
+        raise RequestError('Supported files: .md, .txt, .docx and study .json. Export older documents to .docx or UTF-8 .txt.')
     if not data or len(data) > MAX_FILE_BYTES:
         raise RequestError('The file must be nonempty and at most 2 MiB.')
     if extension == '.docx':
@@ -55,7 +55,7 @@ def document_text(filename, data):
             text = data.decode('utf-16' if data.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig')
         except UnicodeError as err:
             raise RequestError('Text files must use UTF-8, or UTF-16 with a byte-order mark.') from err
-    if len(text.encode('utf-8')) > MAX_TEXT_BYTES:
+    if len(text.encode('utf-8')) > (MAX_FILE_BYTES if extension == '.json' else MAX_TEXT_BYTES):
         raise RequestError('Extracted text exceeds 256 KiB.')
     if any(ord(ch) < 32 and ch not in '\n\r\t' for ch in text):
         raise RequestError('The document contains binary/control characters; send a text or .docx file.')
@@ -157,6 +157,13 @@ def heading(line):
 
 
 def parse(text, policy='vllm/vllm-defense', ticks=500):
+    if text.lstrip().startswith('{'):
+        from study_schema import strict_json, validate
+        try:
+            request = validate(strict_json(text))
+        except (ValueError, TypeError, KeyError, RecursionError) as err:
+            raise RequestError('Study validation: %s' % err) from err
+        return [{'kind': 'study', 'text': json.dumps(request, ensure_ascii=False), 'line': 1}]
     lines = [(n, line.strip()) for n, line in enumerate(text.splitlines(), 1)
              if line.strip() and not line.strip().startswith('```')]
     if not lines:

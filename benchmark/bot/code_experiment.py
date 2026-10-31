@@ -103,7 +103,7 @@ def run(data_dir, root, request, control, base_local, candidate, timeout=3600):
         fidelity = 'EXACT'
     else:
         fidelity = 'DIVERGED'
-    if not population['control_eligible']:
+    if not population['control_eligible'] or fidelity != 'EXACT':
         state = 'INVALID'
     elif matched.get('candidate') == population['control_eligible'] == len(cohort):
         state = 'COMPLETE'

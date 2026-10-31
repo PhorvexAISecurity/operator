@@ -13,8 +13,9 @@
   /guide: the English HTML and PDF playbook in the requesting chat
   /status, /runs, /cancel, /help
 
-Both return a summary, report.html and metrics.csv in the chat; /bench also
-returns the candidate diff. Everything is replay: no cluster is touched, no
+JSON studies compare registered reference algorithms on explicit trace data.
+All paths return a summary, report.html and metrics.csv in the chat; /bench also
+returns the candidate diff. Everything is offline: no cluster is touched, no
 action is dispatched, nothing is merged or pushed, and nothing is written to
 the dashboard's data or the repository.
 
@@ -53,6 +54,7 @@ import planner  # noqa: E402
 import replay_build  # noqa: E402
 import report  # noqa: E402
 import file_requests  # noqa: E402
+import study  # noqa: E402
 from progress import Progress  # noqa: E402
 from dashboard import Dashboard, DashboardError  # noqa: E402
 from telegram import Telegram, TelegramError  # noqa: E402
@@ -60,14 +62,15 @@ from telegram import Telegram, TelegramError  # noqa: E402
 POLICY = re.compile(r'^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-a-z0-9]*[a-z0-9])?$')
 PARAMETER = re.compile(r'^P-[A-Z]{3}-\d{3}$')
 MAX_QUEUE = 5
-HELP = """Phorvex benchmark bot (replay on recorded production ticks; nothing is deployed or dispatched)
+HELP = """Phorvex benchmark bot (offline replay and labelled reference studies; nothing is deployed or dispatched)
 
 /bench [policy=ns/name] [ticks=N] [nosync] <brain change in words>
   An LLM changes the brain's Go code; the candidate is compared with the deployed brain.
 /param <P-XXX-000> <value> [value...] [policy=ns/name] [ticks=N] [nosync]
   Replays the deployed brain with each parameter value (Math Lab).
+/study    help for declarative Cost/History studies: arms, seeds and explicit trace data
 /guide    download the English step-by-step guide as HTML and PDF
-/upload   how to submit a .md, .txt or .docx experiment file
+/upload   how to submit a .md, .txt, .docx or study .json experiment file
 /validate validate an attached file without running it (use as its caption)
 /templates download completed example files
 /status   the running job and the queue
@@ -84,6 +87,7 @@ COMMANDS = [
     {'command': 'guide', 'description': 'Download the English guide (HTML and PDF)'},
     {'command': 'bench', 'description': 'Test a brain code or formula change'},
     {'command': 'param', 'description': 'Compare brain parameter values'},
+    {'command': 'study', 'description': 'Cost/History studies with explicit arms, seeds and traces'},
     {'command': 'status', 'description': 'Show the running job and queue'},
     {'command': 'runs', 'description': 'Show the five most recent runs'},
     {'command': 'check', 'description': 'Check benchmark dependencies and access'},
@@ -97,13 +101,16 @@ BOT_DESCRIPTION = ('Benchmark brain changes before release. Compare parameters, 
                    'Use /guide to download the English HTML and PDF playbook. '
                    'Authorized members only. Replay results do not deploy changes or measure live defense outcomes.')
 BOT_SHORT_DESCRIPTION = 'Brain replay benchmarks: code, formulas and parameters. Use /guide for the English HTML and PDF playbook.'
-UPLOAD_HELP = """Send a .md, .txt or .docx document in this chat.
+UPLOAD_HELP = """Send a .md, .txt, .docx or study .json document in this chat.
 Use [bench] and/or [params] sections, or a list of /bench and /param commands.
 The entire file is parsed and its options and parameter domains are validated before anything is queued.
 Valid uploads run automatically as one batch, with up to 5 independent experiments executed in order.
 Use /validate as the file caption to check structure and values without running it.
 Go tests and live replay preflight still run for each experiment. /templates sends completed examples.
-Limits: 2 MiB per document, 256 KiB extracted text. Export older .doc or Google Docs to .docx or .txt."""
+For dynamic Cost/History comparisons use a phorvex-bench.study.v1 JSON file from /templates.
+Studies run reference algorithms without an LLM, using explicit trace inputs, arms and seeds.
+Missing recorded ledgers produce NEEDS_DATA; synthetic examples are labelled synthetic.
+Limits: 2 MiB per document (including study JSON), 256 KiB extracted prose."""
 
 
 def configure_interface(telegram):
@@ -288,7 +295,7 @@ class BenchBot:
             self.say(chat_id, HELP % {'policy': self.cfg.policy, 'ticks': self.cfg.ticks})
         elif command == '/guide':
             return self.start_guide(chat_id)
-        elif command in ('/upload', '/validate'):
+        elif command in ('/upload', '/validate', '/study'):
             self.say(chat_id, UPLOAD_HELP)
         elif command == '/templates':
             return self.start_templates(chat_id)
@@ -403,9 +410,12 @@ class BenchBot:
                       'created': utc(), 'user': who, 'validation': 'STRUCTURE_AND_PARAMETER_DOMAINS_PASS',
                       'mode': 'VALIDATE_ONLY' if dry_run else 'RUN', 'experiments': tasks}
             (folder / 'VALIDATION.json').write_text(json.dumps(record, indent=2) + '\n')
-            self.say(chat_id, 'File validation PASS: %d experiment(s): %s.\n'
-                     'Structure, options and registry parameter values are valid. Go tests and replay preflight run during execution.'
-                     % (len(tasks), ', '.join(task['kind'] for task in tasks)))
+            validation_note = ('Study schema, limits and supplied trace structure are valid. '
+                               'Dataset availability and evidence completeness are checked during execution.'
+                               if tasks[0]['kind'] == 'study' else
+                               'Structure, options and registry parameter values are valid. Go tests and replay preflight run during execution.')
+            self.say(chat_id, 'File validation PASS: %d experiment(s): %s.\n%s'
+                     % (len(tasks), ', '.join(task['kind'] for task in tasks), validation_note))
             if dry_run:
                 state, phase = 'DONE', 'Validation passed; no experiments were queued'
                 self.say(chat_id, 'Validation only: nothing was run. Send the file without /validate to execute it.')
@@ -437,10 +447,11 @@ class BenchBot:
             progress = self.activity(chat_id, 'Example files', 'Preparing completed Markdown, TXT and Word examples')
             state = 'DONE'
             try:
-                self.say(chat_id, 'Examples: both sections, bench only, params only, a Word file, and a command list. '
+                self.say(chat_id, 'Examples: code/parameter requests and dynamic Cost/History JSON studies. '
+                         'The study examples contain synthetic data, not production results. '
                          'Edit an example and upload it here. Use /validate as its caption to check without running.')
                 for path in sorted((HERE / 'templates').iterdir()):
-                    if path.suffix not in ('.md', '.txt', '.docx'):
+                    if path.suffix not in ('.md', '.txt', '.docx', '.json'):
                         continue
                     progress.update('Uploading ' + path.name)
                     self.tg.send_document(chat_id, path.name, path.read_bytes(), 'Completed example: ' + path.stem)
@@ -634,7 +645,8 @@ class BenchBot:
             job.progress.start('Preparing the experiment')
         headline = ''
         try:
-            headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch}[job.kind](job)
+            headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch,
+                        'study': self.run_study}[job.kind](job)
             if job.state == 'RUNNING':
                 job.state = 'DONE'
         except JobError as err:
@@ -674,7 +686,8 @@ class BenchBot:
             results.append({'index': index, 'kind': child.kind, 'state': child.state, 'job': child.id, 'headline': headline})
         completed = sum(row['state'] == 'DONE' for row in results)
         job.state = ('CANCELLED' if job.cancel.is_set() else 'DONE' if completed == len(results)
-                     else 'PARTIAL' if completed else 'FAILED')
+                     else 'PARTIAL' if completed or any(r['state'] == 'PARTIAL' for r in results)
+                     else 'NEEDS_DATA' if any(r['state'] == 'NEEDS_DATA' for r in results) else 'FAILED')
         payload = {'batch_id': job.id, 'upload_id': job.upload_id, 'state': job.state, 'results': results,
                    'semantics': 'Independent experiments, executed sequentially; each report has its own control.'}
         raw = (json.dumps(payload, indent=2) + '\n').encode()
@@ -688,6 +701,26 @@ class BenchBot:
         summary = 'Batch %s: %d/%d experiments succeeded; state %s.' % (job.id, completed, len(results), job.state)
         self.say(job.chat_id, summary)
         return summary
+
+    def run_study(self, job):
+        self.step(job, 'validating study configuration and trace evidence')
+        try:
+            result = study.run(study.strict_json(job.text), job.dir / 'study', self.cfg.data,
+                               cancelled=job.cancel.is_set, progress=lambda text: self.step(job, text))
+        except (ValueError, OSError) as err:
+            raise JobError('study: %s' % err) from err
+        root = job.dir / 'study'
+        job.state = 'DONE' if result['state'] == 'COMPLETE' else result['state']
+        headline = ('Study %s: %s; evidence=%s, history=%s. Reference-model experiment; '
+                    'verified counterfactual coverage and realized cost are not observed.' % (
+                        job.id, result['state'], result.get('evidence', 'unavailable'),
+                        result.get('history_mode', 'unavailable')))
+        if result.get('reason'):
+            headline += '\n' + result['reason']
+        for name in ('report.html', 'metrics.csv', 'result.json', 'evidence.zip'):
+            self.send_file(job.chat_id, 'study-%s-%s' % (job.id, name), (root / name).read_bytes())
+        self.say(job.chat_id, headline)
+        return headline
 
     def free_gb(self):
         return shutil.disk_usage(self.cfg.state).free / 2 ** 30
@@ -852,6 +885,15 @@ class BenchBot:
                 '--src-repo', self.cfg.repo, '--base-commit', base, '--prompt-file', str(job.dir / 'prompt.txt'),
                 '--out-diff', str(job.dir / 'brain.diff'), '--out', str(job.dir / 'PLAN.json')]), self.openai_transport)
         except planner.PlannerError as err:
+            if err.code == 8 and (job.dir / 'PLAN.json').exists():
+                plan = json.loads((job.dir / 'PLAN.json').read_text())
+                # Share only diagnostics; never credentials, endpoint URLs or raw prompts.
+                diagnostic = {k: plan.get(k) for k in ('model', 'baseCommit', 'contextFiles', 'contextSkipped', 'attempts', 'diffFound')}
+                diagnostic['next_step'] = ('Use a bounded Go change for /bench. For supported multi-arm Cost/History '
+                                           'reference studies, use a study JSON from /templates. '
+                                           'A valid document does not guarantee a feasible code change.')
+                self.send_file(job.chat_id, 'plan-%s.json' % job.id,
+                               (json.dumps(diagnostic, indent=2)+'\n').encode())
             raise JobError('the LLM step failed: %s' % err)
 
         self.step(job, 'landing the change on a throwaway branch')

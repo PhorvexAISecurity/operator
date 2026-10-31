@@ -1,0 +1,863 @@
+{
+  "schema": "phorvex-bench.study.v1",
+  "title": "SYNTHETIC History v1.1 mechanism study",
+  "policy": "vllm/vllm-defense",
+  "seeds": [
+    7,
+    19,
+    41
+  ],
+  "history": {
+    "mode": "simulated-starts",
+    "window_seconds": 3600
+  },
+  "arms": [
+    {
+      "id": "deterministic",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "deterministic"
+      }
+    },
+    {
+      "id": "entropy",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "entropy",
+        "tau": 1,
+        "epsilon": 0.5
+      }
+    },
+    {
+      "id": "score-only",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "history",
+        "epsilon": 0.5,
+        "score_scale": 1,
+        "eta_pair": 0,
+        "eta_action": 0,
+        "eta_fact": 0,
+        "kappa_pair": 1,
+        "kappa_action": 1,
+        "q_ref": 1,
+        "x0": 0.7,
+        "a0": 0
+      }
+    },
+    {
+      "id": "history",
+      "cost": {
+        "kind": "endpoint-v1"
+      },
+      "selector": {
+        "kind": "history",
+        "epsilon": 0.5,
+        "score_scale": 1,
+        "eta_pair": 2,
+        "eta_action": 1,
+        "eta_fact": 0,
+        "kappa_pair": 1,
+        "kappa_action": 1,
+        "q_ref": 1,
+        "x0": 0.7,
+        "a0": 0
+      }
+    }
+  ],
+  "trace": {
+    "schema": "phorvex-bench.study-trace.v1",
+    "evidence": "synthetic",
+    "source_revision": "synthetic-history-v1",
+    "history_complete_from": 0,
+    "events": [],
+    "ticks": [
+      {
+        "id": "tick-0",
+        "at": 100000,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-1",
+        "at": 100030,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-2",
+        "at": 100060,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-3",
+        "at": 100090,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-4",
+        "at": 100120,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-5",
+        "at": 100150,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-6",
+        "at": 100180,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-7",
+        "at": 100210,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-8",
+        "at": 100240,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-9",
+        "at": 100270,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-10",
+        "at": 100300,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      },
+      {
+        "id": "tick-11",
+        "at": 100330,
+        "workload_uid": "synthetic-workload",
+        "selection": "optional",
+        "randomization_authorized": true,
+        "budget": {
+          "r": 5184,
+          "used": 0,
+          "held": 0
+        },
+        "candidates": [
+          {
+            "id": "pair-0",
+            "pod_uid": "synthetic-pod-0",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-1",
+            "pod_uid": "synthetic-pod-1",
+            "generation": 1,
+            "action": "rotate",
+            "value": 10,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          },
+          {
+            "id": "pair-2",
+            "pod_uid": "synthetic-pod-2",
+            "generation": 1,
+            "action": "rotate",
+            "value": 2,
+            "non_cost_admitted": true,
+            "guard_admitted": true,
+            "entropy_prior": 1,
+            "simulated_start": true,
+            "cost": {
+              "class": "stateless",
+              "k": 1,
+              "samples": [],
+              "overdue": 0
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
