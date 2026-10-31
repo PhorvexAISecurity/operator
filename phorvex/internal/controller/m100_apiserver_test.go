@@ -268,13 +268,29 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	}))
 	defer canary.Close()
 	observerClient := m100ImpersonatedClient(t, cfg, scheme, observerIdentity)
-	// Start comfortably inside a UTC second so the completed observation keeps
-	// non-zero nanoseconds while the API object's CreationTimestamp is serialized
-	// to the beginning of that same second.
-	for frac := time.Now().Nanosecond(); frac < 200_000_000 || frac > 500_000_000; frac = time.Now().Nanosecond() {
+	// Give the producer two exact sub-second timestamps after the real admission
+	// boundary. Do not make correctness depend on the API round trip completing
+	// in that same wall-clock second: an envtest API server may legitimately take
+	// longer while other suites run in parallel.
+	precisionBoundary := &admissionv1.MutatingWebhookConfiguration{}
+	if err := admin.Get(ctx, client.ObjectKey{Name: installed.Name}, precisionBoundary); err != nil {
+		t.Fatal(err)
+	}
+	producerStartedAt := precisionBoundary.CreationTimestamp.Time.Add(time.Second + 123_456_789*time.Nanosecond)
+	producerCompletedAt := precisionBoundary.CreationTimestamp.Time.Add(time.Second + 234_567_891*time.Nanosecond)
+	for time.Now().Before(producerCompletedAt.Add(10 * time.Millisecond)) {
 		time.Sleep(5 * time.Millisecond)
 	}
-	now := time.Now
+	producerTimes := []time.Time{producerStartedAt, producerCompletedAt}
+	clockCalls := 0
+	now := func() time.Time {
+		if clockCalls >= len(producerTimes) {
+			t.Fatalf("loss observer read the producer clock more than %d times", len(producerTimes))
+		}
+		value := producerTimes[clockCalls]
+		clockCalls++
+		return value
+	}
 	event, err := lossobserver.ObserveOnce(ctx, observerClient, canary.Client(), lossobserver.ObserverConfig{
 		URL: canary.URL + "/canary/v1", PolicyEpoch: model.PolicyEpoch{Namespace: "ns", Name: "policy", UID: string(policyObject.UID), Generation: policyObject.Generation},
 		TargetNamespace: "ns", TargetName: pod.Name, TargetUID: string(pod.UID),
@@ -285,6 +301,9 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if clockCalls != len(producerTimes) {
+		t.Fatalf("loss observer read the producer clock %d times, want %d", clockCalls, len(producerTimes))
+	}
 	if event.UID == "" || event.CreationTimestamp.IsZero() || event.Annotations[eventtrust.CreatorIdentityAnnotation] != observerIdentity ||
 		event.Annotations[disclosure.AdmissionContractAnnotation] != disclosure.BoundaryContract {
 		t.Fatalf("API/admission identity missing: uid=%q created=%v annotations=%v", event.UID, event.CreationTimestamp, event.Annotations)
@@ -294,9 +313,10 @@ func TestM100ActualAPIObserverAdmissionIngestAndDurableHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	admittedAt, err := time.Parse(time.RFC3339Nano, event.Annotations[disclosure.AdmissionTimeAnnotation])
-	if err != nil || !payload.Observation.CompletedAt.After(event.CreationTimestamp.Time) || admittedAt.Before(payload.Observation.CompletedAt) ||
+	if err != nil || !payload.Observation.StartedAt.Equal(producerStartedAt) || !payload.Observation.CompletedAt.Equal(producerCompletedAt) ||
+		admittedAt.Before(payload.Observation.CompletedAt) ||
 		admittedAt.Before(event.CreationTimestamp.Time) || !admittedAt.Before(event.CreationTimestamp.Add(time.Second)) {
-		t.Fatalf("same-second admission precision was not retained: completed=%v created=%v admitted=%v err=%v", payload.Observation.CompletedAt, event.CreationTimestamp, admittedAt, err)
+		t.Fatalf("producer/admission precision was not retained: started=%v wantStarted=%v completed=%v wantCompleted=%v created=%v admitted=%v err=%v", payload.Observation.StartedAt, producerStartedAt, payload.Observation.CompletedAt, producerCompletedAt, event.CreationTimestamp, admittedAt, err)
 	}
 
 	// The dedicated fail-closed hook matches OLD payloads too. Neither the

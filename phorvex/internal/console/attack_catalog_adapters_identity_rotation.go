@@ -208,9 +208,9 @@ func (k *kubernetesIdentityCatalogCluster) createIdentityRotationFamilySignal(ct
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{
 			"name":   name,
-			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": entry.ID},
+			"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(entry.ID)},
 			"annotations": map[string]any{model.ConsoleTargetPodUIDAnnotation: fixture.PodUID,
-				attackCatalogCorrelationAnnotation: runID},
+				attackCatalogCorrelationAnnotation: runID, catalogueIDAnnotationKey: entry.ID},
 		},
 		"spec": map[string]any{
 			"description": entry.Description, "targets": []any{fixture.Namespace + "/" + fixture.PodName},
@@ -230,7 +230,8 @@ func (k *kubernetesIdentityCatalogCluster) createIdentityRotationFamilySignal(ct
 	targets, _, _ := unstructured.NestedStringSlice(created.Object, "spec", "targets")
 	ruleType, _, _ := unstructured.NestedString(created.Object, "spec", "rule", "type")
 	if admitted.CreatedAt.IsZero() || created.GetName() != name || creator != eventtrust.Injector() ||
-		created.GetLabels()["phorvex.ai/catalogue-id"] != entry.ID ||
+		created.GetLabels()["phorvex.ai/catalogue-id"] != catalogueIDLabelValue(entry.ID) ||
+		created.GetAnnotations()[catalogueIDAnnotationKey] != entry.ID ||
 		created.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] != fixture.PodUID ||
 		created.GetAnnotations()[attackCatalogCorrelationAnnotation] != runID ||
 		!slices.Equal(targets, []string{fixture.Namespace + "/" + fixture.PodName}) || ruleType != entry.EventType {

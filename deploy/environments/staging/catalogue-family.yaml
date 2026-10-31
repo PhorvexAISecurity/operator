@@ -1,9 +1,12 @@
 phorvex:
-  policyNamespaces: &id001
+  policyNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
   - p6-demo
-  actuatorNamespaces: *id001
+  actuatorNamespaces:
+  - phorvex-staging-demo
+  - console-identity-shared
+  - p6-demo
   trustedDetectors:
   - phorvex-staging/staging-attacks
   - p6/p6-attacks
@@ -17,7 +20,10 @@ phorvex:
     configMapName: ''
     configMapNames: []
   console:
-    attackNamespaces: *id001
+    attackNamespaces:
+    - phorvex-staging-demo
+    - console-identity-shared
+    - p6-demo
     attackCatalog:
       enabled: true
       authorizationTenant: p6-demo
@@ -34,7 +40,7 @@ phorvex:
       agentAction:
         enabled: true
         namespace: p6-demo
-        image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:6ec1514a419a67ba7ade3dd499496b61db0c2475a1add4d2935cc8a2919fcb78
+        image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8
       prometheusEvidence:
         enabled: true
     auth:

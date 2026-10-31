@@ -169,6 +169,12 @@ func TestStagingAuthorityAllowsValidatedPreparedSharedBatch(t *testing.T) {
 	r := newBatchTestRepo(t, batchVersions())
 	r.ensureBatch()
 	r.commit("persist prepared shared batch")
+	if err := os.WriteFile(
+		filepath.Join(r.root, "deploy/environments/staging/catalogue-family.yaml"),
+		[]byte("# reviewed isolated overlay\n{}\n"), 0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
 	writeStagingAuthorityFixtures(t, r.root)
 	source := r.commit("review isolated staging authority")
 	authority, err := BuildStagingAuthority(r.root, r.releaseDir, source, StagingTargetName)

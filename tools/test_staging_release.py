@@ -299,6 +299,7 @@ class StagingTargetTests(unittest.TestCase):
             mock.patch.object(RELEASE, "expected_target", return_value={}),
             mock.patch.object(RELEASE, "verify_argocd"),
             mock.patch.object(RELEASE, "superseding_shared_services", return_value=selected),
+            mock.patch.object(RELEASE, "active_catalogue_fixture_consumers", return_value={}),
             mock.patch.object(RELEASE, "image_values", side_effect=current_values),
             mock.patch.object(RELEASE, "verify_rendered_service"),
             self.assertRaisesRegex(ValueError, "retained isolated brain pin drift"),
@@ -316,6 +317,7 @@ class StagingTargetTests(unittest.TestCase):
             mock.patch.object(RELEASE, "expected_target", return_value={}),
             mock.patch.object(RELEASE, "verify_argocd"),
             mock.patch.object(RELEASE, "superseding_shared_services", return_value=selected),
+            mock.patch.object(RELEASE, "active_catalogue_fixture_consumers", return_value={}),
             mock.patch.object(
                 RELEASE, "verify_rendered_service", side_effect=ValueError("selected shared image volume")
             ) as rendered,

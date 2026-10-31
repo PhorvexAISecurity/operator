@@ -147,7 +147,7 @@ phorvex:
     state:
       persistence:
         storageClass: gp2-csi
-        size: 2Gi
+        size: 4Gi
     # The console's and the attacks service's mTLS link to the manager's audit source.
     # The Secrets come from deploy/eks/provision-audit-mtls.sh, run for this namespace.
     auditTransport:

@@ -356,14 +356,27 @@ def ensure_tags(
     if response.get("failures") not in (None, []):
         raise RuntimeError(f"component {name} manifest lookup returned failures")
     images = response.get("images")
-    if not isinstance(images, list) or len(images) != 1:
+    if not isinstance(images, list) or not images:
         raise RuntimeError(f"component {name} manifest lookup was not exact")
-    image = images[0]
-    manifest = image.get("imageManifest")
-    media_type = image.get("imageManifestMediaType")
-    image_id = image.get("imageId", {})
-    if not isinstance(manifest, str) or media_type not in IMAGE_MEDIA_TYPES or image_id.get("imageDigest") != digest:
-        raise RuntimeError(f"component {name} manifest identity/media type is invalid")
+    manifests: set[tuple[str, str]] = set()
+    for image in images:
+        if not isinstance(image, dict):
+            raise RuntimeError(f"component {name} manifest identity/media type is invalid")
+        manifest = image.get("imageManifest")
+        media_type = image.get("imageManifestMediaType")
+        image_id = image.get("imageId", {})
+        if (
+            not isinstance(manifest, str)
+            or not isinstance(media_type, str)
+            or media_type not in IMAGE_MEDIA_TYPES
+            or not isinstance(image_id, dict)
+            or image_id.get("imageDigest") != digest
+        ):
+            raise RuntimeError(f"component {name} manifest identity/media type is invalid")
+        manifests.add((manifest, media_type))
+    if len(manifests) != 1:
+        raise RuntimeError(f"component {name} manifest lookup returned conflicting identities")
+    manifest, media_type = manifests.pop()
     manifest_digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
     if manifest_digest != digest:
         raise RuntimeError(f"component {name} manifest bytes do not match the verified digest")

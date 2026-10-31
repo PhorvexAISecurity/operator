@@ -525,9 +525,10 @@ func (k *kubernetesCredentialCatalogueCluster) createCredentialSignal(ctx contex
 	object := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{
-			"name": name, "labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": entry.ID},
+			"name": name, "labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(entry.ID)},
 			"annotations": map[string]any{model.ConsoleTargetPodUIDAnnotation: f.PodUID,
-				attackCatalogCorrelationAnnotation: runID, f.Profile.ObservationKey: string(payload)},
+				attackCatalogCorrelationAnnotation: runID, f.Profile.ObservationKey: string(payload),
+				catalogueIDAnnotationKey: entry.ID},
 		},
 		"spec": map[string]any{
 			"description": entry.Description, "targets": []any{f.Profile.Namespace + "/" + f.PodName},
@@ -543,7 +544,8 @@ func (k *kubernetesCredentialCatalogueCluster) createCredentialSignal(ctx contex
 	targets, _, _ := unstructured.NestedStringSlice(created.Object, "spec", "targets")
 	ruleType, _, _ := unstructured.NestedString(created.Object, "spec", "rule", "type")
 	if signal.Name != name || signal.UID == "" || signal.Creator != eventtrust.Injector() || signal.CreatedAt.IsZero() ||
-		created.GetLabels()["phorvex.ai/catalogue-id"] != entry.ID ||
+		created.GetLabels()["phorvex.ai/catalogue-id"] != catalogueIDLabelValue(entry.ID) ||
+		created.GetAnnotations()[catalogueIDAnnotationKey] != entry.ID ||
 		created.GetAnnotations()[model.ConsoleTargetPodUIDAnnotation] != f.PodUID ||
 		created.GetAnnotations()[attackCatalogCorrelationAnnotation] != runID ||
 		created.GetAnnotations()[f.Profile.ObservationKey] != string(payload) ||

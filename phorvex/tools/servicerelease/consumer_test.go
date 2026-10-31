@@ -187,6 +187,32 @@ func TestConsumerProbeRejectsEveryUnboundAuthoritativeWorkloadAndContainerClass(
 	}
 }
 
+func TestExactIsolatedStagingConsumerIsTheOnlyExternalConsumerAllowed(t *testing.T) {
+	consumer := ImageConsumer{
+		APIVersion: "apps/v1", Kind: "Deployment", Namespace: "p6-demo", Name: "agent-sim",
+		Section: "containers", Container: "agent-sim", FieldPath: "/spec/template/spec/containers/0/image",
+	}
+	image := ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim@sha256:" + strings.Repeat("a", 64)
+	if !exactIsolatedStagingConsumer("attacks", consumer, image) {
+		t.Fatal("exact isolated staging consumer was rejected")
+	}
+	for _, test := range []struct {
+		name, component, image string
+		consumer               ImageConsumer
+	}{
+		{"wrong component", "manager", image, consumer},
+		{"wrong namespace", "attacks", image, func() ImageConsumer { changed := consumer; changed.Namespace = "default"; return changed }()},
+		{"shared repository", "attacks", ReleaseRegistry + "/phorvex/agent-sim@sha256:" + strings.Repeat("a", 64), consumer},
+		{"mutable tag", "attacks", ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim:latest", consumer},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if exactIsolatedStagingConsumer(test.component, test.consumer, test.image) {
+				t.Fatal("non-exact isolated staging consumer was accepted")
+			}
+		})
+	}
+}
+
 func TestWorkloadImagesRejectsImageVolumes(t *testing.T) {
 	imageVolume := "volumes:\n- name: rogue\n  image:\n    reference: alternate.invalid/phorvex/brain:shared\n"
 	for _, test := range []struct {

@@ -16,10 +16,11 @@ import verify_staging_ecr as ECR
 class FakeECR:
     def __init__(self, *, mutable: set[str] | None = None, digests: dict[str, dict[str, str]] | None = None,
                  manifests: dict[str, tuple[str, str]] | None = None, registry_policy: bool = False,
-                 scan_type: str = "BASIC"):
+                 scan_type: str = "BASIC", manifest_tags: dict[str, list[str]] | None = None):
         self.mutable = mutable or set()
         self.digests = digests or {}
         self.manifests = manifests or {}
+        self.manifest_tags = manifest_tags or {}
         self.registry_policy = registry_policy
         self.scan_type = scan_type
         self.commands: list[list[str]] = []
@@ -79,8 +80,12 @@ class FakeECR:
             repository = self.option(command, "--repository-name")
             digest = self.option(command, "--image-ids").split("=", 1)[1]
             manifest, media_type = self.manifests[repository]
-            response = {"images": [{"imageId": {"imageDigest": digest}, "imageManifest": manifest,
-                                     "imageManifestMediaType": media_type}], "failures": []}
+            tags = self.manifest_tags.get(repository, [""])
+            response = {"images": [
+                {"imageId": {"imageDigest": digest, "imageTag": tag}, "imageManifest": manifest,
+                 "imageManifestMediaType": media_type}
+                for tag in tags
+            ], "failures": []}
             return subprocess.CompletedProcess(command, 0, json.dumps(response), "")
         if command[:3] == ["aws", "ecr", "put-image"]:
             repository = self.option(command, "--repository-name")
@@ -275,6 +280,53 @@ class StagingECRTests(unittest.TestCase):
         state = ECR.preflight(value, fake)
         with self.assertRaisesRegex(RuntimeError, "manifest bytes"):
             ECR.ensure_tags(value, "brain", digest, state, fake)
+
+    def test_alias_creation_accepts_exact_manifest_repeated_for_historical_tags(self):
+        value = batch()
+        contract = ECR.component(value, "brain")
+        manifest = json.dumps(
+            {"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json"},
+            separators=(",", ":"),
+        )
+        digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+        repository = contract["image"]["repository"]
+        fake = FakeECR(
+            digests={repository: {contract["image"]["tag"]: digest}},
+            manifests={repository: (manifest, "application/vnd.oci.image.manifest.v1+json")},
+            manifest_tags={repository: [contract["image"]["tag"], "historical-source-a", "historical-source-b"]},
+        )
+        state = ECR.preflight(value, fake)
+        result = ECR.ensure_tags(value, "brain", digest, state, fake)
+        self.assertEqual(result["digest"], digest)
+        self.assertEqual(set(fake.digests[repository]), set(contract["image"]["tags"]))
+
+    def test_alias_creation_rejects_conflicting_multi_tag_manifest_lookup(self):
+        value = batch()
+        contract = ECR.component(value, "brain")
+        manifest = json.dumps(
+            {"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json"},
+            separators=(",", ":"),
+        )
+        digest = "sha256:" + hashlib.sha256(manifest.encode()).hexdigest()
+        repository = contract["image"]["repository"]
+        fake = FakeECR(
+            digests={repository: {contract["image"]["tag"]: digest}},
+            manifests={repository: (manifest, "application/vnd.oci.image.manifest.v1+json")},
+            manifest_tags={repository: ["historical-source-a", "historical-source-b"]},
+        )
+        original = fake.__call__
+
+        def conflicting(command, **kwargs):
+            result = original(command, **kwargs)
+            if command[:3] == ["aws", "ecr", "batch-get-image"]:
+                response = json.loads(result.stdout)
+                response["images"][1]["imageManifest"] = "{}"
+                return subprocess.CompletedProcess(command, 0, json.dumps(response), "")
+            return result
+
+        state = ECR.preflight(value, fake)
+        with self.assertRaisesRegex(RuntimeError, "conflicting identities"):
+            ECR.ensure_tags(value, "brain", digest, state, conflicting)
 
 
 if __name__ == "__main__":

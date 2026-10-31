@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -146,13 +147,52 @@ func BuildStagingAuthority(root, dir, source, target string) (*IsolatedStagingAu
 	if err := validateStagingSource(root, source, target); err != nil {
 		return nil, err
 	}
-	pending, err := PendingReleases(root, dir, "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("shared batch authority: %w", err)
-	}
 	batch, err := readBatch(dir)
 	if err != nil {
 		return nil, fmt.Errorf("shared batch authority: %w", err)
+	}
+	var pending []Pending
+	if batch.Status == "prepared" {
+		// An untouched prepared shared batch owns no deployed pin. Later reviewed
+		// isolated staging overlays may therefore change the current render route;
+		// validate the batch against its immutable source and require its record to
+		// remain byte-identical instead of treating that overlay as shared drift.
+		if err := validateBatch(root, dir, "HEAD", batch, false, ""); err != nil {
+			return nil, fmt.Errorf("shared batch authority: %w", err)
+		}
+		batchPath, err := filepath.Rel(root, filepath.Join(dir, BatchFile))
+		if err != nil || batchPath == "." || strings.HasPrefix(batchPath, "..") {
+			return nil, fmt.Errorf("shared batch authority: release directory escapes repository")
+		}
+		batchPath = filepath.ToSlash(batchPath)
+		currentRaw, err := readRegularFile(filepath.Join(dir, BatchFile))
+		if err != nil {
+			return nil, err
+		}
+		sourceRaw, err := git(root, "show", source+":"+batchPath)
+		if err != nil || !bytes.Equal(currentRaw, []byte(sourceRaw)) {
+			return nil, fmt.Errorf("shared batch authority: prepared batch differs from the exact selected source")
+		}
+		currentVersions, err := readVersions(dir)
+		if err != nil || !mapsEqual(currentVersions, batch.Versions) {
+			return nil, fmt.Errorf("shared batch authority: prepared versions changed")
+		}
+		prepared, err := preparedSource(root, dir, "HEAD")
+		if err != nil || prepared != batch.Source {
+			return nil, fmt.Errorf("shared batch authority: prepared source changed")
+		}
+		for _, name := range batch.ExpectedComponents {
+			contract := contractByName(batch, name)
+			if contract == nil {
+				return nil, fmt.Errorf("shared batch authority: missing component %s", name)
+			}
+			pending = append(pending, *contract)
+		}
+	} else {
+		pending, err = PendingReleases(root, dir, "HEAD")
+		if err != nil {
+			return nil, fmt.Errorf("shared batch authority: %w", err)
+		}
 	}
 	batchRaw, err := readRegularFile(filepath.Join(dir, BatchFile))
 	if err != nil {
