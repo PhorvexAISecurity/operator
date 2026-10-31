@@ -61,7 +61,7 @@ func TestPrometheusAnchoredRangeGridIncludesCaptureBoundaries(t *testing.T) {
 	final := baseline.Add(2*time.Minute + 18*time.Second + 869772400*time.Nanosecond)
 	endAt := final.Add(37 * time.Millisecond)
 	start, end, step := prometheusAnchoredRange(baseline, endAt, 15*time.Second)
-	if !start.Equal(baseline) || !end.Equal(endAt) {
+	if !start.Equal(baseline.Truncate(time.Millisecond)) || !start.Before(baseline) || !end.Equal(endAt) {
 		t.Fatalf("range boundaries moved: start=%s end=%s", start, end)
 	}
 	if step <= 0 || step > 15 {

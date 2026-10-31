@@ -427,16 +427,18 @@ func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time
 	return (!baselinePresent || first <= baseline+tolerance) && last+tolerance >= final
 }
 
-// Anchor the range grid at the exact baseline and terminal capture boundaries.
-// Prometheus evaluates query_range at start+n*step, so a fixed step can skip a
-// series that exists at baseline when the grid is aligned from the run's end.
+// Anchor the range grid at the serialized baseline and terminal capture
+// boundaries. Prometheus sample timestamps are millisecond-precision, so the
+// start is truncated rather than rounded past the baseline. A fixed step aligned
+// from the run's end can otherwise skip a series that exists at baseline.
 func prometheusAnchoredRange(baselineAt, endAt time.Time, maxStep time.Duration) (time.Time, time.Time, float64) {
-	duration := endAt.Sub(baselineAt)
+	start := baselineAt.Truncate(time.Millisecond)
+	duration := endAt.Sub(start)
 	intervals := math.Ceil(duration.Seconds() / maxStep.Seconds())
 	if intervals < 1 {
 		intervals = 1
 	}
-	return baselineAt, endAt, duration.Seconds() / intervals
+	return start, endAt, duration.Seconds() / intervals
 }
 
 func prometheusRangeQueryCoversCaptures(raw, baseline, final *PrometheusResponseCapture) bool {
