@@ -685,6 +685,7 @@ func main() {
 			_ = conn.Close()
 		}()
 		rmgr.Brain = remote
+		mathLabSource = remote.SnapshotSource()
 		setupLog.Info("decision brain: remote service", "endpoint", brainEndpoint, "engine", remote.Name())
 	}
 	// The cluster is observed in this process unless --sensor-endpoint names the

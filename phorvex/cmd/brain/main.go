@@ -53,12 +53,14 @@ type config struct {
 	mathLabPolicies, mathLabDir    string
 	mathLabMaxBytes                int64
 	mathLabMaxSnapshotBytes        int
+	mathLabProducerIdentity        *mathlab.CaptureIdentity
 	shutdownGrace                  time.Duration
 	log                            logging.Options
 }
 
 func main() {
 	cfg := config{log: logging.Options{Service: "phorvex-brain", Version: buildinfo.Current().GitSHA}}
+	cfg.mathLabProducerIdentity = &mathlab.CaptureIdentity{GitSHA: buildinfo.Embedded().GitSHA, BrainImage: buildinfo.Current().BrainImage}
 	var printVersion bool
 	flag.BoolVar(&printVersion, "version", false, "Print the release version and exact Git SHA, then exit.")
 	flag.StringVar(&cfg.listen, "listen", ":9090", "Address the gRPC brain service binds to.")
@@ -130,7 +132,11 @@ func run(ctx context.Context, cfg config, lis net.Listener, logger *slog.Logger)
 		grpc.MaxSendMsgSize(wire.MaxMessageBytes),
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 10 * time.Second, PermitWithoutStream: true}),
 	)...)
-	brainpb.RegisterBrainServiceServer(server, brainsvc.NewServer(brainsvc.NewLocal(optimizer, recorder), decisionConfig.SHA256()))
+	var snapshotOptions []brainsvc.ServerOption
+	if store != nil {
+		snapshotOptions = append(snapshotOptions, brainsvc.WithSnapshotSource(store))
+	}
+	brainpb.RegisterBrainServiceServer(server, brainsvc.NewServer(brainsvc.NewLocal(optimizer, recorder), decisionConfig.SHA256(), snapshotOptions...))
 	healthServer := health.NewServer()
 	healthpb.RegisterHealthServer(server, healthServer)
 	healthServer.SetServingStatus(brainpb.BrainService_ServiceDesc.ServiceName, healthpb.HealthCheckResponse_SERVING)
@@ -186,7 +192,7 @@ func openMathLab(cfg config) (*mathlab.Recorder, *mathlab.Store, error) {
 		"flow-residual-classes": cfg.flowClasses, "recon-profile": decisionconfig.ReconProfile,
 	}
 	recorder, err := mathlab.NewRecorder(mathlab.Config{Policies: strings.Split(cfg.mathLabPolicies, ","),
-		MaxSnapshotBytes: cfg.mathLabMaxSnapshotBytes, ProcessConfig: processConfig, GPUEnvelopeMax: cfg.gpuEnvelopeMax},
+		MaxSnapshotBytes: cfg.mathLabMaxSnapshotBytes, ProcessConfig: processConfig, GPUEnvelopeMax: cfg.gpuEnvelopeMax, ProducerIdentity: cfg.mathLabProducerIdentity},
 		store, metrics.RecordMathLabCapture)
 	if err != nil {
 		return nil, nil, fmt.Errorf("math-lab capture: %w", err)

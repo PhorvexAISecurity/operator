@@ -37,6 +37,9 @@ spec:
         {{- with .Values.image.digest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "image.digest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end }}
         image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
         args:
         - --listen=:9090
         - --metrics-bind-address=:8080

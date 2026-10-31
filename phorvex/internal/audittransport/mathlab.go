@@ -17,6 +17,9 @@ import (
 // MathLabMaxSnapshotBytes bounds one snapshot read over the audit transport.
 const MathLabMaxSnapshotBytes = 64 << 20
 
+// MathLabMaxIndexBytes bounds a snapshot listing across either transport.
+const MathLabMaxIndexBytes = 32 << 20
+
 var mathLabDigest = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // MathLabSnapshotQuery narrows a snapshot listing. Zero values mean "no constraint".
@@ -35,6 +38,28 @@ type MathLabSnapshotSource interface {
 	IndexJSON(MathLabSnapshotQuery) ([]byte, error)
 	Read(digest string) ([]byte, error)
 }
+
+// ValidateMathLabSnapshotQuery applies the same bounds to remote typed reads.
+// A zero limit has the HTTP endpoint's default meaning, not an unbounded list.
+func ValidateMathLabSnapshotQuery(q MathLabSnapshotQuery) (MathLabSnapshotQuery, error) {
+	for _, value := range []string{q.PolicyUID, q.Namespace, q.Policy} {
+		if len(value) > 253 {
+			return q, errors.New("query value too long")
+		}
+	}
+	if q.Limit == 0 {
+		q.Limit = 500
+	}
+	if q.Limit < 1 || q.Limit > 5000 {
+		return q, errors.New("limit must be in [1,5000]")
+	}
+	if !q.Since.IsZero() && !q.Until.IsZero() && q.Until.Before(q.Since) {
+		return q, errors.New("until precedes since")
+	}
+	return q, nil
+}
+
+func ValidMathLabSnapshotDigest(digest string) bool { return mathLabDigest.MatchString(digest) }
 
 func parseMathLabQuery(v url.Values) (MathLabSnapshotQuery, error) {
 	q := MathLabSnapshotQuery{PolicyUID: v.Get("policyUID"), Namespace: v.Get("namespace"), Policy: v.Get("policy"), Limit: 500}

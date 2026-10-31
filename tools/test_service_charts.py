@@ -50,6 +50,7 @@ class BrainChartTests(unittest.TestCase):
         self.assertIs(pod['securityContext']['runAsNonRoot'], True)
         container = pod['containers'][0]
         self.assertEqual(container['image'], 'phorvex-brain:0.1.0')
+        self.assertEqual(next(e['value'] for e in container['env'] if e['name'] == 'PHORVEX_BRAIN_IMAGE'), container['image'])
         self.assertEqual(container['securityContext'],
                          {'allowPrivilegeEscalation': False, 'readOnlyRootFilesystem': True, 'capabilities': {'drop': ['ALL']}})
         self.assertIn('--gpu-envelope-max=0.2925', container['args'])
@@ -72,6 +73,13 @@ class BrainChartTests(unittest.TestCase):
                                  '--set', 'phorvex.mathLab.capturePolicies={defense}'], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('must be namespace/name', result.stderr)
+
+    def test_capture_process_image_is_the_actual_brain_digest(self):
+        pod = by_kind(render('phorvex-brain', 'image.repository=example/brain', 'image.tag=stage',
+            'image.digest=sha256:' + 'a' * 64, 'phorvex.mathLab.capturePolicies={stage/policy}'))['Deployment'][0]['spec']['template']['spec']
+        container = pod['containers'][0]
+        self.assertEqual(container['image'], 'example/brain:stage@sha256:' + 'a' * 64)
+        self.assertEqual(next(e['value'] for e in container['env'] if e['name'] == 'PHORVEX_BRAIN_IMAGE'), container['image'])
 
     def decision_flags(self, chart, container, *sets):
         args = [HELM, 'template', 'phorvex', str(chart), '-n', 'phorvex-system']
