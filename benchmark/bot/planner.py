@@ -404,6 +404,10 @@ def plan(args, transport):
             effort = options.pop('reasoning_effort', None)
             payload = {'model': model, 'instructions': messages[0]['content'],
                        'input': [messages[1], *conversation] if conversation else messages[1]['content'],
+                       # Context turns replay full output locally. Request the
+                       # portable reasoning payload rather than relying on a
+                       # gateway retaining server-side response item IDs.
+                       'store': False, 'include': ['reasoning.encrypted_content'],
                        'max_output_tokens': 16000, **options}
             if effort:
                 payload['reasoning'] = {'effort': effort}

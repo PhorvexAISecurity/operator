@@ -156,6 +156,9 @@ class PlannerTest(unittest.TestCase):
         transport=FakeTransport([{'status':'completed','output':output},
                                  {'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':good}]}]}])
         planner.plan(self.args(context=[self.decision]),transport)
+        for call in transport.calls:
+            self.assertIs(call['payload']['store'], False)
+            self.assertIn('reasoning.encrypted_content',call['payload']['include'])
         items=transport.calls[1]['payload']['input']
         self.assertEqual(items[1:3],output)
         self.assertIn('Repository read 1 completed',items[-1]['content'])
