@@ -202,6 +202,12 @@ type identityCatalogueCleanupObservation struct {
 	Attempted       bool
 	EventAbsent     bool
 	FixtureRestored bool
+	// RetrySafe decouples safe-to-retry cluster cleanliness from FixtureRestored.
+	// A family sets it when run-owned artifacts are absent and active mutations are
+	// restored, even if the exact prepare-time fixture identity (e.g. Pod UID) could
+	// not be reproven because the environment rolled the Pod. Families that do not
+	// set it leave retry-safety derived purely from FixtureRestored (Verified).
+	RetrySafe bool
 }
 
 // identityCatalogueFamilyBinding is the narrow product seam. Preflight is
@@ -590,13 +596,47 @@ func (a *identityFamilyCatalogueAdapter) Cleanup(ctx context.Context, _ AttackCa
 	raw, _ := json.Marshal(evidence)
 	result := AttackCatalogCleanupResult{Attempted: cleaned.Attempted, EventDeleted: cleaned.EventAbsent,
 		MarkerDeleted: cleaned.FixtureRestored, Verified: cleaned.Attempted && cleaned.EventAbsent && cleaned.FixtureRestored,
-		Evidence: raw}
+		RetrySafe: cleaned.Attempted && cleaned.RetrySafe, Evidence: raw}
 	if err != nil {
 		result.Reason = safeIdentityCatalogueStageError(a.profile.Family, "cleanup", err).Error()
 	} else if !result.Verified {
 		result.Reason = "exact identity-family cleanup could not be verified"
 	}
 	return result
+}
+
+// identityCatalogueRetryReconciler is implemented by the identity families that
+// can re-verify retry-safety read-only from their fixed profile. Only the
+// credential-revoke family currently can (identity-sa-rotate and agent-action do
+// not, so their stale unsafe runs are never cleared without an operator).
+type identityCatalogueRetryReconciler interface {
+	reconcileRetrySafety(ctx context.Context, profile identityCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error)
+}
+
+// supportsRetryReconcile lets the shared runtime treat only the families whose
+// binding can prove cleanliness read-only as reconcilable, so it never appends a
+// pointless "unresolved" record for a family it cannot verify.
+func (a *identityFamilyCatalogueAdapter) supportsRetryReconcile() bool {
+	if a == nil || a.profileErr != nil || a.binding == nil {
+		return false
+	}
+	_, ok := a.binding.(identityCatalogueRetryReconciler)
+	return ok
+}
+
+// ReconcileRetrySafety delegates to the family binding's read-only re-verification.
+// It never asserts DEFENDED; it only reports whether run-owned artifacts are absent
+// and the fixture is healthy enough to launch against again.
+func (a *identityFamilyCatalogueAdapter) ReconcileRetrySafety(ctx context.Context, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	if a == nil || a.profileErr != nil || a.binding == nil || persisted.CatalogueID != a.profile.ID {
+		return AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}, errors.New("identity-family retry reconciliation preparation is invalid")
+	}
+	reconciler, ok := a.binding.(identityCatalogueRetryReconciler)
+	if !ok {
+		return AttackCatalogRetrySafety{CheckedAt: time.Now().UTC(),
+			Reason: a.profile.ID + " family does not support automatic retry reconciliation"}, nil
+	}
+	return reconciler.reconcileRetrySafety(ctx, a.profile, persisted)
 }
 
 func (a *identityFamilyCatalogueAdapter) ValidateDefended(result AttackCatalogResult) error {

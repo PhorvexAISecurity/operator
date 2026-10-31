@@ -143,6 +143,7 @@ type RunManager struct {
 	loadErr                      error
 	functional                   map[string]cataloguev1.Job
 	natsReconciling              map[string]bool
+	attackCatalogReconciling     map[string]bool
 	natsPrincipals               map[string]Principal
 	podBoundTokenPrincipals      map[string]Principal
 	guardrailAvailabilityCancels map[string]context.CancelFunc
@@ -158,7 +159,7 @@ type RunManager struct {
 }
 
 func NewRunManager(cfg Config) *RunManager {
-	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}, attackCatalogCancels: map[string]context.CancelFunc{}}
+	rm := &RunManager{cfg: cfg, runs: map[string]*RunStatus{}, runOut: map[string]string{}, procs: map[string]*exec.Cmd{}, stopping: map[string]bool{}, pending: map[string]pendingRun{}, functional: map[string]cataloguev1.Job{}, natsReconciling: map[string]bool{}, attackCatalogReconciling: map[string]bool{}, natsPrincipals: map[string]Principal{}, podBoundTokenPrincipals: map[string]Principal{}, guardrailAvailabilityCancels: map[string]context.CancelFunc{}, attackCatalogCancels: map[string]context.CancelFunc{}}
 	rm.loadErr = rm.loadStatuses()
 	if rm.loadErr == nil {
 		rm.startupReconcile.Add(1)

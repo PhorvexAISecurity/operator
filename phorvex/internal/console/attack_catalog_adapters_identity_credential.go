@@ -197,6 +197,46 @@ func identityCredentialPrivate(prepared *identityCatalogueBindingPreparation) (*
 	return private, ok && private != nil && private.cluster != nil
 }
 
+// credentialCatalogueRetryVerifier is the read-only cleanliness oracle on the
+// fixed cluster. It is a separate optional interface so test fakes of the cluster
+// need not implement it unless they exercise reconciliation.
+type credentialCatalogueRetryVerifier interface {
+	reconcileRetrySafety(ctx context.Context, p identityCredentialServerProfile, signalName string) (AttackCatalogRetrySafety, error)
+}
+
+// reconcileRetrySafety re-verifies, read-only, that a prior credential-revoke run
+// left the cluster clean enough to launch again. It never mutates or deletes a
+// resource and never asserts DEFENDED — it only answers the retry gate.
+func (b *identityCredentialCatalogueBinding) reconcileRetrySafety(ctx context.Context, profile identityCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if profile.Family != identityCatalogueCredential || persisted.CatalogueID != profile.ID {
+		return safety, errors.New("credential-revoke retry reconciliation binding is invalid")
+	}
+	if !b.Availability(profile).Available {
+		return safety, errors.New("credential-revoke retry reconciliation is unavailable in this deployment")
+	}
+	serverProfile, ok := credentialCatalogueServerProfiles[profile.ID]
+	if !ok || validateCredentialCatalogueServerProfile(profile.ID) != nil {
+		return safety, errors.New("credential-revoke retry reconciliation server profile is unavailable")
+	}
+	cluster := b.fixedCluster
+	if cluster == nil {
+		if b.server == nil {
+			return safety, errors.New("credential-revoke retry reconciliation runtime is unavailable")
+		}
+		var err error
+		cluster, err = newKubernetesCredentialCatalogueCluster(b.cfg)
+		if err != nil {
+			return safety, err
+		}
+	}
+	verifier, ok := cluster.(credentialCatalogueRetryVerifier)
+	if !ok {
+		return safety, errors.New("credential-revoke cluster does not support read-only retry reconciliation")
+	}
+	return verifier.reconcileRetrySafety(ctx, serverProfile, persisted.Signal.Name)
+}
+
 type kubernetesCredentialCatalogueCluster struct {
 	restConfig *rest.Config
 	kube       kubernetes.Interface
@@ -630,18 +670,61 @@ func (k *kubernetesCredentialCatalogueCluster) Cleanup(ctx context.Context, f id
 	}
 	var policy v1alpha1.PhorvexPolicy
 	policyErr := k.client.Get(ctx, ctrlclient.ObjectKey{Namespace: p.Namespace, Name: p.PolicyName}, &policy)
-	result.FixtureRestored = !slices.Contains(checks, false) && podErr == nil && string(pod.UID) == f.PodUID &&
-		replicaSet != nil && string(replicaSet.UID) == f.ReplicaSetUID && deploymentErr == nil && string(deployment.UID) == f.DeploymentUID &&
-		int(deployment.Status.AvailableReplicas) >= f.MinimumAvailableReplicas && policyErr == nil &&
-		string(policy.UID) == f.PolicyUID && policy.Generation == f.PolicyGeneration
+	artifactsAbsent := !slices.Contains(checks, false)
+	deploymentIdentityOK := deploymentErr == nil && string(deployment.UID) == f.DeploymentUID
+	floorRetained := deploymentErr == nil && int(deployment.Status.AvailableReplicas) >= f.MinimumAvailableReplicas
+	policyUnmutated := policyErr == nil && string(policy.UID) == f.PolicyUID && policy.Generation == f.PolicyGeneration
+	// FixtureRestored is the full DEFENDED cleanup oracle, unchanged: run-owned
+	// objects gone AND the exact prepare-time Pod and ReplicaSet identity preserved.
+	result.FixtureRestored = artifactsAbsent && podErr == nil && string(pod.UID) == f.PodUID &&
+		replicaSet != nil && string(replicaSet.UID) == f.ReplicaSetUID && deploymentIdentityOK &&
+		floorRetained && policyUnmutated
 	if !result.FixtureRestored {
 		problems = append(problems, "credential target or run-owned fixture was not restored")
 	}
+	// RetrySafe is the weaker safe-to-retry oracle: run-owned SecurityEvent and
+	// credential artifacts (Secret/Role/RoleBinding/ServiceAccount) are absent, the
+	// Deployment is the same healthy, non-terminating fixture at its availability
+	// floor, and the PhorvexPolicy carries no leftover active mutation (same UID and
+	// generation). It deliberately does NOT require the prepare-time Pod or ReplicaSet
+	// UID, so an unrelated Pod rollout (a new, healthy Pod owned by the same
+	// Deployment) is not treated as contamination — while leftover credentials or
+	// genuine drift are.
+	result.RetrySafe = result.EventAbsent && artifactsAbsent && podErr == nil && replicaSet != nil &&
+		deploymentIdentityOK && deployment.DeletionTimestamp == nil && floorRetained && policyUnmutated
 	state.credential = ""
 	if len(problems) != 0 {
 		return result, errors.New(strings.Join(problems, "; "))
 	}
 	return result, nil
+}
+
+// reconcileRetrySafety is the read-only cleanliness oracle. It confirms the run's
+// own SecurityEvent (by name, when known) is absent and then reuses Prepare — which
+// is read-only with respect to persistent fixture state — to confirm the run-owned
+// credential artifacts (fixed names) are absent and the fixture Deployment and
+// PhorvexPolicy are the same healthy, unmutated objects. Prepare binds whatever Pod
+// is currently ready, so an environmental Pod rollout is not treated as drift; a
+// leftover credential/artifact or a genuinely altered fixture is.
+func (k *kubernetesCredentialCatalogueCluster) reconcileRetrySafety(ctx context.Context, p identityCredentialServerProfile, signalName string) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if signalName != "" {
+		_, err := k.dynamic.Resource(securityEventGVR).Get(ctx, signalName, metav1.GetOptions{})
+		if err == nil {
+			safety.Reason = "run-owned SecurityEvent " + signalName + " is still present"
+			return safety, nil
+		}
+		if !apierrors.IsNotFound(err) {
+			return safety, errors.New("credential-revoke SecurityEvent absence is unverified")
+		}
+	}
+	if _, err := k.Prepare(ctx, p); err != nil {
+		safety.Reason = "credential fixture is not clean or healthy: " + err.Error()
+		return safety, nil
+	}
+	safety.Verified, safety.RetrySafe = true, true
+	safety.Reason = "run-owned SecurityEvent and credential artifacts absent; fixture healthy"
+	return safety, nil
 }
 
 func (k *kubernetesCredentialCatalogueCluster) deleteCredentialEvent(ctx context.Context, signal identityCatalogueBindingSignal) bool {

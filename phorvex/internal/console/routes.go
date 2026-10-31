@@ -150,6 +150,7 @@ func (s *Server) apiRoutes() []route {
 		attack(control("/api/runs/stop", s.runStop, routeSpec{runQ: "id", runBody: true})),
 		attack(control("/api/runs/nats-reconcile", s.runNATSReconcile, routeSpec{runQ: "id", runBody: true})),
 		attack(control("/api/runs/voice-cleanup-reconcile", s.runVoiceCleanupReconcile, routeSpec{runQ: "id", runBody: true})),
+		attack(control("/api/runs/catalogue-reconcile", s.runCatalogueReconcile, routeSpec{runQ: "id", runBody: true})),
 		attack(read("/api/runs/list", s.runsList, routeSpec{})),
 		attack(read("/api/runs/status", s.runStatus, routeSpec{runQ: "id"})),
 		attack(read("/api/runs/stream", s.runStream, routeSpec{runQ: "id"})),
