@@ -100,7 +100,12 @@ roles:
 - name: catalogue-credential-revoke
   namespace: p4-demo
   rules:
-  - {apiGroups: [""], resources: ["serviceaccounts", "secrets"], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
+  # Verbs must cover actuator.RequiredVerbs(credential-revoke) (verbs.go): the native
+  # handler lists token Secrets for the named SA before deleting them, and updates the SA
+  # to drop the stale reference. Missing secrets:list / serviceaccounts:update previously
+  # fail-closed the actuator startup authz preflight in the credential window.
+  - {apiGroups: [""], resources: ["secrets"], verbs: ["get", "list", "delete"], readers: [actuator], writers: [actuator]}
+  - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["get", "update", "delete"], readers: [actuator], writers: [actuator]}
   - {apiGroups: ["rbac.authorization.k8s.io"], resources: ["roles", "rolebindings"], verbs: ["get", "delete"], writers: [actuator]}
 {{- else if eq $fixtureFamily "datastore" }}
 - name: catalogue-datastore-restore
