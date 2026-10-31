@@ -589,7 +589,7 @@ func (e *CoverageEngine) AssembleSet(views []*model.WorkloadView, pol model.Poli
 // selection that follows it are priced by ONE bucket rather than by two independent
 // resolutions (which, for a shadow's transient bucket, would be two different objects).
 func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Policy, tcost *cost.P1Cost,
-	mode killchain.EvalMode) (actionset.ActionSet, map[string]assetCtx, error) {
+	mode killchain.EvalMode, preparation ...*actionset.Preparation) (actionset.ActionSet, map[string]assetCtx, error) {
 	// [M-140 R1.2] A retired owner must not be priced, and must not allocate a bucket by
 	// being asked for one; costForMode reports that as a nil bucket in either mode.
 	if e.ownerAbsent(pol.Owner()) || tcost == nil {
@@ -700,6 +700,10 @@ func (e *CoverageEngine) assembleSet(views []*model.WorkloadView, pol model.Poli
 		// T1-E gate (nil when the runner has not wired it). M-163: the SHADOW arm receives the
 		// read-only collaborator; it is never the reviewing one.
 		Eligible: eligible,
+	}
+	if len(preparation) == 1 && preparation[0] != nil {
+		*preparation[0] = deps.Prepare(views, pol)
+		return actionset.ActionSet{}, ctxByKey, nil
 	}
 	as := deps.Generate(views, pol)
 	// T1-E metrics: one per capability-gate exclusion (by reason), and the fail-open
@@ -848,18 +852,7 @@ func (e *CoverageEngine) decideChecked(views []*model.WorkloadView, pol model.Po
 	// learning enters Decide — prov is a deterministic function of the real exposure/assessment.
 	floorSec := pol.ProactiveFloor.Seconds()
 	prov := func(key string) float64 {
-		if floorSec <= 0 {
-			return 1
-		}
-		ac := ctxByKey[key]
-		if ac.exposure >= floorSec || ac.assess.HasEventEvidence {
-			return 1 // genuinely due, or backed by a trusted observation => full weight
-		}
-		r := ac.exposure / floorSec
-		if r < 0 {
-			r = 0
-		}
-		return provFloor + (1-provFloor)*r // a fresh, evidence-less decoy competes at <= provFloor
+		return candidateProvenance(ctxByKey[key], floorSec)
 	}
 
 	// [reactiveOnly] When the policy is reactive-only, an asset is actionable ONLY while a REAL

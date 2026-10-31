@@ -5,10 +5,10 @@ over its existing authenticated brain connection and exposes them through the
 existing audit listener and Console authorization path. No new listener, service
 account, or write operation is introduced.
 
-Enable the brain chart's `mathLab.capturePolicies` with explicit
+Enable the brain chart's `phorvex.mathLab.capturePolicies` with explicit
 `namespace/policy` entries and configure its bounded persistent store. Capture is
 disabled when this allowlist is empty. The capture-enabled pod uses group 65532
-for volume access. Manager `mathLab.captureCostEvidence: true` adds the existing
+for volume access. Manager `phorvex.mathLab.captureCostEvidence: true` adds the existing
 bounded observational evidence to remote requests; it does not make endpoint
 interval history complete or change decisions.
 

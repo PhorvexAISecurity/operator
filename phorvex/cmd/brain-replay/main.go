@@ -46,19 +46,31 @@ type summary struct {
 
 func main() {
 	var snapshotsDir, armsPath, outPath, summaryPath string
-	var allowCross, printVersion, inspect bool
+	var allowCross, printVersion, inspect, exportStudy bool
+	var endpointStudy, endpointConfig string
 	flag.StringVar(&snapshotsDir, "snapshots", "", "Directory of *.pxms snapshot files (read-only).")
 	flag.StringVar(&armsPath, "arms", "", "JSON array of arms; the first must be the baseline with no overrides. Empty replays the baseline only.")
-	flag.StringVar(&outPath, "out", "", "Output JSON-lines path (one result per snapshot x arm).")
+	flag.StringVar(&outPath, "out", "", "Output JSON-lines path (one result per snapshot x arm); endpoint-study emits one JSON result.")
 	flag.StringVar(&summaryPath, "summary", "", "Optional summary JSON path.")
 	flag.BoolVar(&allowCross, "allow-cross-version", false, "Replay snapshots recorded by another source revision; results are flagged cross_version.")
 	flag.BoolVar(&printVersion, "version", false, "Print the build identity and exit.")
 	flag.BoolVar(&inspect, "inspect", false, "Write one inspection (configured spec, operator-resolved effective values, learned state) per snapshot instead of replaying.")
+	flag.BoolVar(&exportStudy, "export-study-candidates", false, "Export the source-pinned real pre-cost candidate universe after exact baseline replay (JSONL).")
+	flag.StringVar(&endpointStudy, "endpoint-study", "", "Explicit offline paired V2/V3 study: normalized recorded endpoint trace bound to these snapshot digests.")
+	flag.StringVar(&endpointConfig, "endpoint-study-config", "", "Optional bounded endpoint-study constants JSON; never production configuration.")
 	flag.Parse()
-	id := buildinfo.Current()
+	id := replayIdentity()
 	if printVersion {
 		_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"gitSHA": id.GitSHA, "brainImage": id.BrainImage, "snapshotSchema": mathlab.SnapshotSchema,
-			"replaySchema": mathlab.ReplaySchema, "overridableParameters": mathlab.OverridableParameters})
+			"replaySchema": mathlab.ReplaySchema, "overridableParameters": mathlab.OverridableParameters,
+			"studyCandidatesSchema": mathlab.StudyCandidatesSchema, "endpointStudyMode": "PAIRED_BRAIN_REPLAY"})
+		return
+	}
+	if exportStudy || endpointStudy != "" || endpointConfig != "" {
+		if err := runEndpointMode(snapshotsDir, outPath, summaryPath, endpointStudy, endpointConfig, exportStudy, inspect || armsPath != "", allowCross, id); err != nil {
+			fmt.Fprintln(os.Stderr, "brain-replay:", err)
+			os.Exit(1)
+		}
 		return
 	}
 	if inspect {

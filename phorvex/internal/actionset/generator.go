@@ -190,6 +190,10 @@ func GeneratableActions() []model.Action {
 //
 // The set provably changes with state and contains NO hard-constraint-violating move.
 func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet {
+	return d.generate(views, pol, nil)
+}
+
+func (d Deps) generate(views []*model.WorkloadView, pol model.Policy, prepared func(PreparedCandidate)) ActionSet {
 	// Both sides added fields to this literal: main added FactsAbsent (M-111), this branch added
 	// CostCeiling + CoverByAsset for the decision trace. Keep BOTH — they are independent.
 	out := ActionSet{FactWeights: map[string]float64{}, FactsByAsset: map[string][]recon.Fact{},
@@ -521,6 +525,12 @@ func (d Deps) Generate(views []*model.WorkloadView, pol model.Policy) ActionSet 
 					Gate: GateFeasibility, GenerationRank: generationRank, Key: key, Action: action, Reason: verdict.Reason,
 					CoverKeys: append([]string(nil), coverKeys...), FeasibilityEvaluated: true,
 				})
+				continue
+			}
+			if prepared != nil {
+				prepared(PreparedCandidate{GenerationRank: generationRank, SLOExclusions: sloExclusions,
+					Key: key, View: v, Action: action, CoverKeys: append([]string(nil), coverKeys...),
+					Resources: append([]model.ResourceConsumption(nil), resources...), RBACUnknown: rbacUnknown})
 				continue
 			}
 			// (3) Evaluate cost. A data-quality failure is a distinct fail-closed
