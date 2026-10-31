@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published actuator image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/actuator"
-  tag: "staging-0.11.0-git-8e9551c38a5bf73d8ca9220efa4204339ef54b4a"
-  digest: "sha256:066bb644bcbaac3334e548a1c8100693681a1c10246ae33e1f1a3cd4b93c10d9"
+  tag: "staging-0.11.0-git-4a44acbaaf2113ef43e796d25b333f0ee6d3a2e9"
+  digest: "sha256:a5d25957216abfd2b53c29885bf7679e5f5a6dc1148830935a4ee8e86105e3d5"
