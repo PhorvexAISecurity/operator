@@ -4,6 +4,67 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## Planner/test scope and upload-caption repair — 2026-10-31
+
+User batch `758c67a02528`, job `a517af2aad65`, failed before Go tests/replay with
+the exact `NO CHANGE POSSIBLE` planner sentinel. The V2-A request required a
+helper and new unit tests, while both the planner prompt and candidate gate
+prohibited every `_test.go` file. Its context included `economics.go` and a
+165,558-byte runner manager, omitted adjacent tests, and exhausted the budget
+for other files. The legacy sentinel did not record the model's own rationale;
+the contradictory test restriction is directly established by source and input.
+The screenshot also used `\validate`; the old caption handler treated that
+unrecognized text as permission to run.
+
+Source `e43a65fb2366ca6b01f3f12beba029fae4c6c4b8` allows new test files while
+keeping existing tests immutable, selects named-package context with adjacent
+tests and read-only module metadata, records bounded/redacted decline reasons,
+and rejects unrecognized captions before download or queueing. English/Persian
+HTML/PDF guides and README describe the updated behavior. Both PDFs now have
+23 pages, with the existing builders/navigation/mobile checks still passing.
+
+All **118 bot tests passed locally and on the host**, including regression
+checks for package context, added tests, existing-test modification/deletion,
+symlinks, model decline diagnostics and backslash/unknown captions. Local tests
+require an executable, disk-backed TMPDIR; an initial run fell back to the
+small noexec `/tmp` and failed fixture-execution/disk checks, then passed using
+`/workspace/.phorvex-test-tmp`. No production guard was lowered.
+
+The repaired bot release `bot-planner-e43a65fb` was activated at 14:06:38 UTC
+and verified at 14:06:42 UTC. All 11 overlaid file hashes matched the commit;
+the service configured its menu and began polling without startup errors.
+There were no pending jobs at restart. API/web/proxy process identities,
+dashboard `current`, and owner/member/offset state were preserved. The previous
+release and service unit are retained for rollback. Private evidence is under
+`~/phorvex-benchmark/bot-validation-20261031/planner-repair/`.
+
+The **unchanged original V2-A upload** (SHA-256
+`7461d1b84ca3fc96af45ac9bf2ffcb305675fdc46d560d057f0e1e9aead6f2a4`) was
+then exercised through the real planner/candidate/test/build/replay pipeline on
+the host, with local artifact recording instead of Telegram sends. An initial
+probe launch omitted the unit's data-directory environment and stopped before
+any model call; supplying the same non-secret runtime environment fixed the
+probe setup. The complete run `a08803bca80e` finished at 14:13:01 UTC:
+
+* Real model: one successful attempt; no decline. Context included `economics.go`,
+  `go.mod`, `economics_test.go` and same-package source/tests, not runner manager.
+* Candidate `65f61ee46f1c9099cd9fd164a650c0b533113e0c` adds only
+  `phorvex/internal/model/endpoint_seconds_v2.go` and its new `_test.go` file.
+* Go 1.26.10 targeted tests: baseline **438 pass / 0 fail / 2 skip**;
+  candidate **488 pass / 0 fail / 2 skip**, including the requested A–E cases.
+* Replay: **COMPLETE**, **EXACT** baseline fidelity, **64/64** matched ticks
+  for all three arms, **0/64** changed candidate decisions. Missing outcome
+  metrics remain unavailable, not zero.
+* The helper has no active call site: references are confined to the new source
+  declaration and its tests. This validates an isolated arithmetic helper and
+  unchanged replay; it is not completed V2 integration or a live cost improvement.
+* Reports, diff, test summaries, sanitized plan and checksums are retained in
+  `published/` and `V2A-verified-results.zip` alongside the private run evidence.
+
+No user chat message was sent by this probe; it does not add a run to the live
+bot's history. The source repository and deployed production brain were not
+modified by the throwaway candidate.
+
 ## Declarative study deployment — 2026-10-31
 
 The user explicitly requested deployment after the local implementation. Source
