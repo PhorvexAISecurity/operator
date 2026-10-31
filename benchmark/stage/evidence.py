@@ -7,6 +7,7 @@ Only an explicitly isolated dryRun fixture permits a complete calibration ledger
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import hashlib
 import json
 import math
@@ -101,6 +102,45 @@ class Journal:
             self.db.commit()
         else:
             raise EvidenceError("new journal requires a verified scope")
+        self._verify_capacity_cache()
+
+    def _verify_capacity_cache(self):
+        # A persistent counter avoids SUM(body) on every watch event. Verify it
+        # against the durable table and hash chain on each open, in one SQLite
+        # snapshot. Migration from an uncached journal is the only write here.
+        exists = self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()
+        self.db.execute("BEGIN" if exists else "BEGIN IMMEDIATE")
+        try:
+            used, count, first, last = self.db.execute(
+                "SELECT COALESCE(SUM(length(CAST(body AS BLOB))+128),0),count(*),min(seq),max(seq) FROM events").fetchone()
+            if count and (first != 1 or last != count):
+                raise EvidenceError("journal sequence has missing rows")
+            cached = self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()
+            if cached and int(cached[0]) != used:
+                raise EvidenceError("journal logical-size cache disagrees with durable records")
+            for _ in self.records(cutoff=last or 0):
+                pass
+            if not cached:
+                self.db.execute("INSERT INTO meta VALUES ('logical_bytes',?)", (str(used),))
+            self.db.commit()
+        except BaseException:
+            self.db.rollback()
+            raise
+
+    @contextmanager
+    def read_snapshot(self):
+        """Hold one read snapshot across normalization's two streaming passes.
+
+        The observer uses a separate connection and may append through WAL.
+        Those new records cannot change this frozen prefix or its provenance.
+        """
+        with self.lock:
+            self.db.execute("BEGIN")
+            try:
+                row = self.db.execute("SELECT seq,hash FROM events ORDER BY seq DESC LIMIT 1").fetchone()
+                yield {"seq": row[0] if row else 0, "hash": row[1] if row else digest(self.scope)}
+            finally:
+                self.db.rollback()
 
     def append(self, kind, data, at=None):
         if at is not None and (not isinstance(at, (int, float)) or not math.isfinite(at) or at < 0):
@@ -115,8 +155,9 @@ class Journal:
                 # serialized. Receive threads may otherwise acquire the DB in
                 # the opposite order of timestamps assigned outside the lock.
                 at = float(time.time() if at is None else at)
-                size = self.db.execute("SELECT COALESCE(SUM(length(body)+128),0) FROM events").fetchone()[0]
-                if size + len(body) + 128 > self.max_bytes:
+                size = int(self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()[0])
+                new_size = size + len(body.encode()) + 128
+                if new_size > self.max_bytes:
                     raise EvidenceError("journal capacity exhausted; capture stopped, history not evicted")
                 old = self.db.execute("SELECT seq,at,hash FROM events ORDER BY seq DESC LIMIT 1").fetchone()
                 if old and at < old[1]:
@@ -133,23 +174,28 @@ class Journal:
                 prev = old[2] if old else digest(self.scope)
                 h = digest([prev, seq, at, json.loads(body)])
                 self.db.execute("INSERT INTO events VALUES (?,?,?,?)", (seq, at, body, h))
+                self.db.execute("UPDATE meta SET value=? WHERE key='logical_bytes'", (str(new_size),))
                 self.db.commit()
             except BaseException:
                 self.db.rollback()
                 raise
         return seq
 
-    def records(self):
+    def records(self, cutoff=None):
+        if cutoff is None:
+            cutoff = self.db.execute("SELECT COALESCE(max(seq),0) FROM events").fetchone()[0]
         previous = digest(self.scope)
         expected = 1
         last_at = -1
-        for seq, at, body, h in self.db.execute("SELECT seq,at,body,hash FROM events ORDER BY seq"):
+        for seq, at, body, h in self.db.execute("SELECT seq,at,body,hash FROM events WHERE seq<=? ORDER BY seq", (cutoff,)):
             event = json.loads(body)
             if seq != expected or at < last_at or h != digest([previous, seq, at, event]):
                 raise EvidenceError("journal hash chain or clock is invalid")
             yield {"seq": seq, "at": at, "hash": h, **event}
             expected += 1
             previous, last_at = h, at
+        if expected != cutoff + 1:
+            raise EvidenceError("journal prefix is incomplete")
 
     def close(self):
         self.db.close()

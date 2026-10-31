@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+import tracemalloc
 import unittest
 from unittest import mock
 
@@ -248,6 +249,59 @@ class EvidenceTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(failures, [])
         self.assertEqual([(r["kind"], r["at"]) for r in self.journal.records()], [("fast", 10), ("slow", 20)])
+
+    def test_size_cache_is_transactional_utf8_and_verified_on_reopen(self):
+        self.journal.append("checkpoint", {"label": "مشاهده"}, at=10)
+        expected = self.journal.db.execute("SELECT SUM(length(CAST(body AS BLOB))+128) FROM events").fetchone()[0]
+        cached = int(self.journal.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()[0])
+        self.assertEqual(cached, expected)
+        reopened = Journal(self.journal.path)
+        reopened.close()
+        self.journal.db.execute("UPDATE meta SET value='0' WHERE key='logical_bytes'")
+        self.journal.db.commit()
+        with self.assertRaisesRegex(EvidenceError, "logical-size cache"):
+            Journal(self.journal.path)
+
+    def test_reopen_validates_chain_even_when_size_cache_matches(self):
+        seed(self.journal)
+        self.journal.db.execute("UPDATE events SET hash=? WHERE seq=2", ("0" * 64,))
+        self.journal.db.commit()
+        with self.assertRaisesRegex(EvidenceError, "hash chain"):
+            Journal(self.journal.path)
+
+    def test_frozen_read_prefix_excludes_concurrent_appends_in_both_passes(self):
+        seed(self.journal)
+        seal(self.journal, 400)
+        writer = Journal(self.journal.path)
+        self.addCleanup(writer.close)
+        with self.journal.read_snapshot() as prefix:
+            before = list(self.journal.records(cutoff=prefix["seq"]))
+            seal(writer, 600)
+            after = list(self.journal.records(cutoff=prefix["seq"]))
+            self.assertEqual(before, after)
+            _, metadata = normalize(self.journal.scope, lambda: self.journal.records(cutoff=prefix["seq"]),
+                                    [export(450)], .9, 300, 300, 0)
+            self.assertEqual(metadata["journal_prefix"], prefix)
+            self.assertEqual(metadata["state"], "BLOCKED")
+        self.assertGreater(len(list(self.journal.records())), len(before))
+
+    def test_large_journal_normalizes_with_bounded_streaming_memory(self):
+        seed(self.journal)
+        # 6.4 MiB is enough to discriminate materialization without creating a
+        # large test artifact or requiring a memory-heavy test process.
+        for index in range(400):
+            self.journal.append("checkpoint", {"padding": "x" * 16384}, at=11 + index)
+        seal(self.journal, 1000)
+        tracemalloc.start()
+        try:
+            with self.journal.read_snapshot() as prefix:
+                _, metadata = normalize(self.journal.scope, lambda: self.journal.records(cutoff=prefix["seq"]),
+                                        [export(450)], .9, 300, 300, 0)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(metadata["state"], "READY")
+        self.assertLess(peak, 2 << 20)
 
     def test_hash_chain_detects_tampering(self):
         seed(self.journal)

@@ -53,9 +53,17 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
     if len(producers) != 1 or not re.fullmatch(r"[0-9a-f]{40}", next(iter(producers)) or ""):
         raise EvidenceError("one exact candidate producer source revision required")
     producer_source = next(iter(producers))
-    seals = sealed_sessions(records)
+    record_source = records if callable(records) else lambda: iter(records)
+    prefix = {"seq": 0, "hash": digest(scope)}
+    def first_pass():
+        for event in record_source():
+            prefix.update(seq=event.get("seq"), hash=event.get("hash"))
+            yield event
+    seals = sealed_sessions(first_pass())
     reducer = Reducer(scope)
-    index, ticks, bindings, missing = 0, [], [], {}
+    observed = iter(record_source())
+    next_event = next(observed, None)
+    ticks, bindings, missing = [], [], {}
     for row in exports:
         expected = {"schema": "math-lab.study-candidates.v1", "snapshot_source_revision": scope["source_revision"],
                     "namespace": scope["namespace"], "policy_name": scope["policy_name"], "policy_uid": scope["policy_uid"],
@@ -69,9 +77,9 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
         at = row["at"]
         if isinstance(at, bool) or not isinstance(at, (float, int)) or not math.isfinite(at):
             raise EvidenceError("invalid source tick clock")
-        while index < len(records) and records[index]["at"] <= at:
-            reducer.apply(records[index])
-            index += 1
+        while next_event is not None and next_event["at"] <= at:
+            reducer.apply(next_event)
+            next_event = next(observed, None)
         obs = reducer.snapshot(at, seals.get(reducer.session), require_sealed=True)
         reasons = list(row.get("missing") or []) + obs["reasons"]
         if row.get("spec_replicas") != obs["spec_replicas"]:
@@ -123,6 +131,7 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
     metadata = {"schema": "phorvex-stage.normalization.v1", "state": "READY" if not missing else "BLOCKED",
                 "scope": scope, "source_revision": producer_source, "snapshot_source_revision": scope["source_revision"],
                 "cross_version": producer_source != scope["source_revision"],
+                "journal_prefix": prefix,
                 "snapshot_digests": [r["snapshot_digest"] for r in exports], "bindings": bindings,
                 "missing": missing, "study_settings": {"target": target, "window": window, "lookback": lookback, "worth_threshold": worth_threshold},
                 "measurement": scope["measurement"], "move_origin": "controlled-stage-calibration",
@@ -164,11 +173,12 @@ def main():
     parser.add_argument("--install-data-dir")
     args = parser.parse_args()
     journal = Journal(args.journal)
-    records = list(journal.records())
     if Path(args.candidates).stat().st_size > 64 << 20:
         raise EvidenceError("candidate export exceeds 64 MiB")
     exports = [json.loads(line) for line in Path(args.candidates).read_text().splitlines() if line.strip()]
-    trace, metadata = normalize(journal.scope, records, exports, args.slo_target, args.window, args.lookback, args.worth_threshold)
+    with journal.read_snapshot() as prefix:
+        trace, metadata = normalize(journal.scope, lambda: journal.records(cutoff=prefix["seq"]), exports,
+                                    args.slo_target, args.window, args.lookback, args.worth_threshold)
     output = Path(args.output_dir)
     atomic_json(output / "trace.json", trace)
     atomic_json(output / "normalization.json", metadata)

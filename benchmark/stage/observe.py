@@ -203,10 +203,11 @@ def calibration(journal, pod_name, reservation, deadline_seconds, kube=None):
     if not 1 <= deadline_seconds <= 600:
         raise EvidenceError("bounded calibration deadline required")
     reducer = Reducer(journal.scope)
-    records = list(journal.records())
-    for event in records:
+    last_record = None
+    for event in journal.records():
         reducer.apply(event)
-    if not records or records[-1]["kind"] in ("gap", "stopped") or time.time() - records[-1]["at"] > 15:
+        last_record = event
+    if last_record is None or last_record["kind"] in ("gap", "stopped") or time.time() - last_record["at"] > 15:
         raise EvidenceError("a live observer must be recording before calibration")
     if len(reducer.watermarks) != len(STREAMS) or time.time() - min(reducer.watermarks.values()) > 180:
         raise EvidenceError("API watch watermarks are stale; calibration cannot proceed")

@@ -57,6 +57,15 @@ create a new named scope/journal for a new segment. Monitor available disk and
 the `status` command. Do not copy a live SQLite file without its WAL; use
 SQLite's backup API or stop the collector before archiving all files.
 
+The capacity limit accounts for UTF-8 event bodies and a fixed per-record
+allowance; SQLite pages and WAL also consume disk. The append counter is
+transactional and is checked against the stored rows and complete hash chain
+when opening a journal. Normalization uses two streaming passes over one
+frozen SQLite read snapshot, with the cutoff sequence/hash recorded in its
+manifest. Concurrent capture cannot mix those passes. Opening/verifying a long
+journal and validating a calibration intent still require a complete linear
+scan; schedule calibrations accordingly and monitor observer health.
+
 Collection duration supports up to 366 days, and raw watches request that
 duration without a client-imposed hourly disconnect. The API server or network
 may still close a watch. A one-day/30-day history is available only when an
