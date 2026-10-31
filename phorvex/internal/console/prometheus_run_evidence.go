@@ -392,6 +392,9 @@ func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result A
 		if len(metric.Range) == 0 {
 			return fmt.Errorf("Prometheus metric %q has no raw range series", metric.Key)
 		}
+		if !prometheusRangeQueryCoversCaptures(metric.RawCapture, metric.BaselineCapture, metric.FinalCapture) {
+			return fmt.Errorf("Prometheus metric %q raw query window does not cover baseline and final", metric.Key)
+		}
 		var first, last float64
 		found := false
 		for _, series := range metric.Range {
@@ -406,21 +409,50 @@ func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result A
 			}
 		}
 		if !found || !prometheusRangeCoversCaptures(first, last,
-			metric.BaselineCapture.CapturedAt, metric.FinalCapture.CapturedAt) {
+			metric.BaselineCapture.CapturedAt, metric.FinalCapture.CapturedAt, len(metric.Baseline) > 0) {
 			return fmt.Errorf("Prometheus metric %q raw range does not cover baseline and final", metric.Key)
 		}
 	}
 	return nil
 }
 
-// Prometheus serializes sample timestamps at millisecond precision even when the
-// query boundary carries nanoseconds. Permit only that serialization loss when
-// proving that the raw range covers both instant-query captures.
-func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time.Time) bool {
+// A counter can be absent at baseline and be born during the run. In that case
+// the first returned sample is correctly after the baseline capture, even though
+// the raw query window started before it. Existing baseline series must still
+// have a sample at or before baseline, and every series must reach final.
+// Prometheus serializes sample timestamps at millisecond precision, so permit
+// only that serialization loss at either required boundary.
+func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time.Time, baselinePresent bool) bool {
 	const tolerance = float64(time.Millisecond) / float64(time.Second)
 	baseline := float64(baselineAt.UnixNano()) / float64(time.Second)
 	final := float64(finalAt.UnixNano()) / float64(time.Second)
-	return first <= baseline+tolerance && last+tolerance >= final
+	return (!baselinePresent || first <= baseline+tolerance) && last+tolerance >= final
+}
+
+func prometheusRangeQueryCoversCaptures(raw, baseline, final *PrometheusResponseCapture) bool {
+	if raw == nil || baseline == nil || final == nil || raw.Path != "/api/v1/query_range" ||
+		baseline.Path != "/api/v1/query" || final.Path != "/api/v1/query" ||
+		raw.Parameters["query"] == "" || raw.Parameters["query"] != baseline.Parameters["query"] ||
+		raw.Parameters["query"] != final.Parameters["query"] {
+		return false
+	}
+	start, startErr := strconv.ParseFloat(raw.Parameters["start"], 64)
+	end, endErr := strconv.ParseFloat(raw.Parameters["end"], 64)
+	step, stepErr := strconv.ParseFloat(raw.Parameters["step"], 64)
+	baselineQuery, baselineErr := strconv.ParseFloat(baseline.Parameters["time"], 64)
+	finalQuery, finalErr := strconv.ParseFloat(final.Parameters["time"], 64)
+	if startErr != nil || endErr != nil || stepErr != nil || baselineErr != nil || finalErr != nil ||
+		math.IsNaN(start) || math.IsNaN(end) || math.IsNaN(step) || math.IsNaN(baselineQuery) || math.IsNaN(finalQuery) ||
+		math.IsInf(start, 0) || math.IsInf(end, 0) || math.IsInf(step, 0) || math.IsInf(baselineQuery, 0) || math.IsInf(finalQuery, 0) ||
+		step <= 0 || start > end {
+		return false
+	}
+	const tolerance = float64(time.Millisecond) / float64(time.Second)
+	baselineCaptured := float64(baseline.CapturedAt.UnixNano()) / float64(time.Second)
+	finalCaptured := float64(final.CapturedAt.UnixNano()) / float64(time.Second)
+	return math.Abs(baselineQuery-baselineCaptured) <= tolerance &&
+		math.Abs(finalQuery-finalCaptured) <= tolerance &&
+		start <= baselineQuery+tolerance && end+tolerance >= finalQuery
 }
 
 func validatePrometheusResponseCapture(capture *PrometheusResponseCapture, startedAt, finishedAt time.Time) error {
