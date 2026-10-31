@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -29,6 +30,13 @@ const (
 	ledgerMaxRecords  = 512
 	ledgerMaxBytes    = 900 << 10
 	ledgerCASAttempts = 7
+	// staleDispatchAfter bounds how long a claimed eviction-based dispatch may hold
+	// capacity while its exact target remains Ready. A dispatch runs inside one manager
+	// tick (at most two minutes), and its eviction, when it happens, takes the target out
+	// of the ready endpoints at once. After this bound, a target still Ready under the same
+	// UID in every admitted Service proves that the dispatch removed no member and can no
+	// longer remove one.
+	staleDispatchAfter = 10 * time.Minute
 )
 
 type admission struct {
@@ -46,6 +54,9 @@ type record struct {
 	Action      model.Action `json:"action"`
 	Phase       string       `json:"phase"`
 	Admissions  []admission  `json:"admissions"`
+	// Since is when the record became dispatching (RFC 3339, UTC). Absent on records
+	// written before it existed; Inventory stamps those on first sight.
+	Since string `json:"since,omitempty"`
 }
 
 type ledger struct {
@@ -60,6 +71,7 @@ type Store struct {
 	client            client.Client
 	reader            client.Reader
 	operatorNamespace string
+	now               func() time.Time
 }
 
 type Request struct {
@@ -85,7 +97,22 @@ func NewStore(c client.Client, reader client.Reader, operatorNamespace string) (
 	if c == nil || reader == nil || strings.TrimSpace(operatorNamespace) == "" {
 		return nil, errors.New("shared capacity requires client, uncached reader and operator namespace")
 	}
-	return &Store{client: c, reader: reader, operatorNamespace: operatorNamespace}, nil
+	return &Store{client: c, reader: reader, operatorNamespace: operatorNamespace, now: time.Now}, nil
+}
+
+func (s *Store) clock() time.Time {
+	if s.now == nil {
+		return time.Now().UTC()
+	}
+	return s.now().UTC()
+}
+
+// evictionBased reports whether an action's only availability effect is evicting its target
+// within the dispatch: plain rotate and the stateful rotation family. Other actions (for
+// example quarantine) may remove their target later or keep it Ready while consuming
+// capacity, so they are never released as stale.
+func evictionBased(action model.Action) bool {
+	return action == model.ActionRotate || model.IsStatefulRotation(action)
 }
 
 func operationID(req Request) string {
@@ -119,6 +146,11 @@ func validateLedger(value ledger) error {
 	for key, record := range value.Records {
 		if key == "" || key != record.OperationID || len(key) > 253 || record.PolicyUID == "" || record.TargetName == "" || record.TargetUID == "" || record.Action == "" || (record.Phase != "reserved" && record.Phase != "dispatching" && record.Phase != "uncertain") || len(record.Admissions) == 0 {
 			return errors.New("shared capacity ledger record is invalid")
+		}
+		if record.Since != "" {
+			if _, err := time.Parse(time.RFC3339Nano, record.Since); err != nil {
+				return errors.New("shared capacity ledger record time is invalid")
+			}
 		}
 		seen := map[string]bool{}
 		for _, admission := range record.Admissions {
@@ -259,6 +291,13 @@ func podReady(pod *corev1.Pod) bool {
 // recovered to at least the admitted ready population. A retained reservation
 // consumes current capacity only while its target is still Ready: once the
 // target is absent, the current Ready count already reflects that removal.
+//
+// It also releases a stale eviction-based dispatch: one claimed at least
+// staleDispatchAfter ago whose exact target is still Ready in every admitted
+// Service. Such a dispatch provably removed no member (an accepted eviction
+// takes the target out of the ready endpoints at once) and its tick has long
+// ended, so holding it would block the owner for good. A dispatch that did
+// remove its target is still held until the Service recovers.
 func (s *Store) Inventory(ctx context.Context) (map[string]int, error) {
 	for attempt := 0; attempt < ledgerCASAttempts; attempt++ {
 		cm, value, err := s.read(ctx)
@@ -276,22 +315,39 @@ func (s *Store) Inventory(ctx context.Context) (map[string]int, error) {
 				changed = true
 				continue
 			}
-			recovered := true
+			now := s.clock()
+			if record.Since == "" {
+				record.Since = now.Format(time.RFC3339Nano)
+				value.Records[key] = record
+				changed = true
+			}
+			since, _ := time.Parse(time.RFC3339Nano, record.Since)
+			recovered, targetEverywhere := true, true
+			held := map[string]int{}
 			for _, admission := range record.Admissions {
 				observed, err := s.observeScope(ctx, admission.Scope, record.TargetUID)
 				if err != nil {
 					return nil, err
 				}
 				if observed.HasTarget {
-					used[admission.Scope.Key()] += admission.Units
+					held[admission.Scope.Key()] += admission.Units
+				} else {
+					targetEverywhere = false
 				}
 				if observed.HasTarget || observed.Ready < admission.ReadyBefore {
 					recovered = false
 				}
 			}
+			if !recovered && targetEverywhere && evictionBased(record.Action) && now.Sub(since) >= staleDispatchAfter {
+				recovered = true
+			}
 			if recovered {
 				delete(value.Records, key)
 				changed = true
+				continue
+			}
+			for scope, units := range held {
+				used[scope] += units
 			}
 		}
 		if !changed {
@@ -560,6 +616,7 @@ func (s *Store) Claim(ctx context.Context, reservation *Reservation) error {
 			}
 		}
 		record.Phase = "dispatching"
+		record.Since = s.clock().Format(time.RFC3339Nano)
 		value.Records[reservation.OperationID] = record
 		if _, err := s.write(ctx, cm, value); err != nil {
 			if apierrors.IsConflict(err) {

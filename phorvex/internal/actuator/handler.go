@@ -98,6 +98,7 @@ type EnactCtx struct {
 	StatefulConfirmTimeout      time.Duration
 	StatefulConfirmInterval     time.Duration
 	StatefulSnapshotTimeout     time.Duration
+	StatefulDeadlineMargin      time.Duration     // overrides statefulDeadlineMargin (stop before the dispatch deadline)
 	StatefulCheckpointTransport http.RoundTripper // fixed Pod-IP checkpoint seam; nil uses network transport
 }
 
