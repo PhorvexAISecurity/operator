@@ -98,6 +98,14 @@ spec:
         kind: CustomResourceDefinition
         jsonPointers:
         - /status
+      # The agent-action actuator owns this runtime ledger. The chart creates its
+      # clean baseline, but self-heal must not erase a deny between the accepted
+      # actuator receipt and the Console's physical oracle/cleanup transaction.
+      - kind: ConfigMap
+        name: agent-deny-guard
+        namespace: p6-demo
+        jsonPointers:
+        - /data
       # The manager chart generates its admission webhook certificate when it finds
       # none, and Argo CD renders without cluster access, so every render brings a new
       # one. The first sync installs the certificate and its CA bundle together; later
