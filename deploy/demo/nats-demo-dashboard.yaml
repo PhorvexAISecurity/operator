@@ -278,12 +278,219 @@ data:
        "description": "A replica rebuild gives the member a new volume (a new series here); a snapshot rotation keeps it."
       },
       {
+       "type": "stat",
+       "title": "Members holding DEMO",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "count(jetstream_stream_total_messages{namespace=\"phorvex-staging-demo\",stream_name=\"DEMO\"}) or vector(0)",
+         "legendFormat": "members"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "thresholds": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "red",
+            "value": null
+           },
+           {
+            "color": "green",
+            "value": 3
+           }
+          ]
+         },
+         "color": {
+          "mode": "thresholds"
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+       },
+       "id": 12,
+       "description": "Members that report a copy of DEMO at all. A member without the stream exports no series, so the per-member panels above cannot show it missing; this must stay at 3."
+      },
+      {
+       "type": "stat",
+       "title": "JetStream meta leader",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 6,
+        "y": 15,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "count by (server_name) (jetstream_stream_total_messages{namespace=\"phorvex-staging-demo\",stream_name=\"DEMO\",is_meta_leader=\"true\"})",
+         "legendFormat": "{{server_name}}"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "name"
+       },
+       "id": 13,
+       "description": "The member the leader-label sidecar marks phorvex.ai/nats-leader=true (with any stream leader); stateful-replica-rebuild never takes it."
+      },
+      {
+       "type": "stat",
+       "title": "Rotations not confirmed (24h)",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 12,
+        "y": 15,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "sum(increase(phorvex_stateful_rotations_total{environment=\"staging\",namespace=\"phorvex-staging-demo\",outcome=~\"unconfirmed|partial|error\"}[24h])) or vector(0)",
+         "legendFormat": "not confirmed"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "thresholds": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "green",
+            "value": null
+           },
+           {
+            "color": "red",
+            "value": 1
+           }
+          ]
+         },
+         "color": {
+          "mode": "thresholds"
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+       },
+       "id": 14,
+       "description": "Dispatches whose replacement or continuity was not observed (unconfirmed), that stopped after a preparatory mutation (partial), or whose effect is unknown (error)."
+      },
+      {
+       "type": "stat",
+       "title": "Stateful alerts firing",
+       "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+       },
+       "gridPos": {
+        "x": 18,
+        "y": 15,
+        "w": 6,
+        "h": 6
+       },
+       "targets": [
+        {
+         "refId": "A",
+         "expr": "count(ALERTS{alertname=~\"PhorvexStateful.*\",alertstate=\"firing\"}) or vector(0)",
+         "legendFormat": "firing"
+        }
+       ],
+       "fieldConfig": {
+        "defaults": {
+         "thresholds": {
+          "mode": "absolute",
+          "steps": [
+           {
+            "color": "green",
+            "value": null
+           },
+           {
+            "color": "red",
+            "value": 1
+           }
+          ]
+         },
+         "color": {
+          "mode": "thresholds"
+         }
+        },
+        "overrides": []
+       },
+       "options": {
+        "reduceOptions": {
+         "calcs": [
+          "lastNotNull"
+         ],
+         "fields": "",
+         "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto"
+       },
+       "id": 15,
+       "description": "PhorvexStatefulRotationNotConfirmed and PhorvexStatefulOwnerNotRecovered (the services PrometheusRule)."
+      },
+      {
        "type": "row",
        "title": "Stateful rotations",
        "collapsed": false,
        "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 21,
         "w": 24,
         "h": 1
        },
@@ -299,7 +506,7 @@ data:
        },
        "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 22,
         "w": 12,
         "h": 8
        },
@@ -348,7 +555,7 @@ data:
        },
        "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 22,
         "w": 12,
         "h": 8
        },
@@ -402,7 +609,7 @@ data:
        },
        "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 30,
         "w": 12,
         "h": 8
        },
@@ -451,7 +658,7 @@ data:
        },
        "gridPos": {
         "x": 12,
-        "y": 24,
+        "y": 30,
         "w": 12,
         "h": 8
        },

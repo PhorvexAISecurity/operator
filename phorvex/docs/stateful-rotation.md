@@ -88,6 +88,35 @@ spec:
     # ...
 ```
 
+### Leaders the application does not label
+
+Class A deletes the member's volumes, so the member must not be a leader whose state
+the others still depend on. Declare `phorvex.ai/stateful-leader-label` whenever the
+application has leaders. If it does not label them itself, label them for it. Staging
+showed why: NATS JetStream does not label its leaders. The brain rebuilt `nats-demo-1`
+while it was the JetStream meta leader. The replacement came back empty, could not
+catch up with the new meta leader (`/healthz`: "JetStream is not current with the meta
+leader"), and stayed not Ready until it was restarted 1.5 hours later. The safety
+behaviour worked as designed:
+
+- the actuator reported the dispatch `unconfirmed`;
+- with the owner below full readiness, every class on the set was refused, so the
+  other two copies were never touched;
+- a plain restart of the stuck member let it catch up.
+
+`deploy/demo/nats-demo.yaml` now runs a small leader-label sidecar. It sets
+`phorvex.ai/nats-leader=true` while the member leads the meta group or any stream, and
+the owner declares that label. A replicated leader therefore gets
+`stateful-snapshot-rotate`, which keeps its volume, and only followers are rebuilt. The
+label starts as `true` in the Pod template, and an unreadable leader view also counts
+as `true`, so a member is only rebuildable once it has been read as a follower. The
+actuator re-reads the label on its live observation immediately before mutating.
+
+If a rebuilt member stays not Ready past its declared resync time,
+`PhorvexStatefulOwnerNotRecovered` fires (see Monitoring). Check the application's own
+view of the member first. For JetStream, restarting the stuck member (its volume is
+kept) is the first remedy.
+
 The class C endpoints form an application contract. `POST <checkpoint-path>` must commit
 the state to the application's own durable store, then answer
 `{"checkpointId": "...", "sha256": "<64 hex>"}`. `GET <restore-path>` on the replacement
@@ -168,6 +197,23 @@ The actuator records exactly one outcome for every dispatch:
 | `phorvex_stateful_rotations_total` | `namespace`, `action`, `outcome` | `confirmed` (replacement Ready and class continuity observed), `unconfirmed` (evicted; not observed within the bound), `partial` (stopped after a preparatory mutation, member kept), `refused` (no effect), `error` (effect unknown) |
 | `phorvex_stateful_rotation_recovery_seconds` | `action` | seconds from the accepted Eviction to a confirmed member |
 
+The actuator creates every series at zero when it starts: the histogram per action and
+the counter per action and outcome in each `--policy-namespaces` namespace. A series
+first exported at 1 hides that dispatch from `increase()` and `rate()`.
+
+Two alerts in each environment's services `PrometheusRule` (severity `info`) cover
+outcomes that need a person:
+
+| Alert | Fires when |
+|---|---|
+| `PhorvexStatefulRotationNotConfirmed` | a dispatch in the last 30 minutes ended `unconfirmed`, `partial` or `error` |
+| `PhorvexStatefulOwnerNotRecovered` | for 15 minutes, a StatefulSet in a namespace with a rotation in the last 2 hours has had fewer Ready members than replicas (kube-state-metrics) |
+
+Both also count a series first exported within their window, including one from an
+actuator Pod replaced since. Backtested on the NATS incident above, the first alert
+fires for the `unconfirmed` rebuild. The second fires continuously while `nats-demo-1`
+was not Ready and resolves once it caught up.
+
 The brain's choices appear in the existing `phorvex_decisions_total`,
 `phorvex_candidates_excluded_total` and `phorvex_actuation_failures_total` series
 under the stateful `action` values. Each environment's "Phorvex services" dashboard
@@ -179,7 +225,13 @@ JetStream cluster declaring classes A and B, with an exporter sidecar and a seed
 it is event-driven and also proactive (floor 1h). The **"Phorvex stateful rotation —
 NATS demo"** dashboard (`nats-demo-dashboard.yaml`) shows each member's copy of `DEMO`,
 the members' volume identity (a rebuild adds a new volume, a snapshot rotation keeps
-it), and the rotations, decisions and recovery times.
+it), and the rotations, decisions and recovery times. Its health row shows:
+
+- **Members holding DEMO**: a member that lost the stream exports no series at all,
+  so the per-member panels cannot show it missing; this must stay at 3;
+- **JetStream meta leader**;
+- **Rotations not confirmed (24h)**;
+- **Stateful alerts firing**.
 
 ## Live verification
 
