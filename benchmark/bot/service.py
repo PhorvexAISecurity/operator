@@ -106,6 +106,7 @@ Use [bench] and/or [params] sections, or a list of /bench and /param commands.
 The entire file is parsed and its options and parameter domains are validated before anything is queued.
 Valid uploads run automatically as one batch, with up to 5 independent experiments executed in order.
 Use /validate as the file caption to check structure and values without running it.
+Use a forward slash: unrecognized captions (including backslash-validate) are rejected without running.
 Go tests and live replay preflight still run for each experiment. /templates sends completed examples.
 For dynamic Cost/History comparisons use a phorvex-bench.study.v1 JSON file from /templates.
 Studies run reference algorithms without an LLM, using explicit trace inputs, arms and seeds.
@@ -376,8 +377,10 @@ class BenchBot:
         if document.get('file_size', 0) > file_requests.MAX_FILE_BYTES:
             self.say(chat_id, 'File rejected: maximum document size is 2 MiB.')
             return None
-        if caption and caption[0].startswith('/') and caption[0].split('@')[0] not in ('/validate', '/upload'):
-            self.say(chat_id, 'Use an empty file caption to run, or /validate to validate without running.')
+        if caption and caption[0].split('@')[0] not in ('/validate', '/upload'):
+            self.say(chat_id, 'Caption not recognized; nothing was downloaded or queued. '
+                     'Use /validate (forward slash, not backslash) to validate without running, '
+                     'or an empty caption to run.')
             return None
         with self.lock:
             busy = chat_id in self.upload_chats or len(self.upload_chats) >= 3

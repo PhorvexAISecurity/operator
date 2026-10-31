@@ -126,6 +126,22 @@ class UploadTest(unittest.TestCase):
         self.assertFalse(bot.upload_chats)
         self.assertFalse(bot.activities)
 
+    def test_unrecognized_caption_never_downloads_or_enqueues(self):
+        bot = self.bot()
+        for caption in ('\\validate', 'validate', '/validte', 'please validate', '/bench'):
+            with self.subTest(caption=caption):
+                self.assertIsNone(self.upload(bot, '[params]\nP-FEA-006: 1.2', caption=caption))
+                self.assertEqual(bot.queue, [])
+                self.assertIn('nothing was downloaded or queued', self.fake.texts()[-1])
+        self.assertFalse(any(method == 'getFile' for method, _ in self.fake.calls))
+        self.assertFalse(list((self.tmp/'state').glob('uploads/*')))
+        self.upload(bot, '[params]\nP-FEA-006: 1.2', caption='/validate@phorvexbot')
+        self.assertEqual(bot.queue, [])
+        self.assertIn('nothing was run', self.fake.texts()[-1])
+        self.upload(bot, '[params]\nP-FEA-006: 1.2', caption='/upload')
+        self.assertEqual(len(bot.queue), 1)
+        bot.finish_activity(bot.queue[0].progress, 'CANCELLED', 'Test cleanup')
+
     def test_unauthorized_and_oversized_uploads_are_not_downloaded(self):
         bot = self.bot()
         self.assertIsNone(self.upload(bot, '[params]\nP-FEA-006: 1.2', user=kit.STRANGER))

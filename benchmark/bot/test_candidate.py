@@ -164,6 +164,33 @@ class CandidateTest(unittest.TestCase):
         record = json.loads((self.run_dir / "CANDIDATE-a1b2c3.json").read_text())
         self.assertEqual(record["changedPaths"], [{"status": "A", "path": "phorvex/internal/decision/extra.go"}])
 
+    def test_additive_tests_preserve_existing_suite_and_source_repository(self):
+        before = self.work_state()
+        path = 'phorvex/internal/decision/extra_test.go'
+        diff = f'--- /dev/null\n+++ b/{path}\n@@ -0,0 +1 @@\n+package decision\n'
+        code, _, err = self.capture(diff)
+        self.assertEqual(code, 0, err)
+        record = json.loads((self.run_dir/'CANDIDATE-a1b2c3.json').read_text())
+        self.assertEqual(record['changedPaths'], [{'status':'A', 'path':path}])
+        self.assertEqual(git(record['repo'], 'show', 'HEAD:'+self.test_file),
+                         git(self.repo, 'show', self.base+':'+self.test_file))
+        self.assertEqual(self.work_state(), before)
+
+    def test_new_test_symlink_is_refused(self):
+        path = 'phorvex/internal/decision/extra_test.go'
+        diff = (f'diff --git a/{path} b/{path}\nnew file mode 120000\n'
+                f'--- /dev/null\n+++ b/{path}\n@@ -0,0 +1 @@\n+decision_test.go\n')
+        code, _, err = self.capture(diff)
+        self.assertEqual(code, 5, err)
+        self.assertIn('regular non-executable', err)
+        self.assertFalse((self.run_dir/'candidate-src').exists())
+
+    def test_existing_test_deletion_is_refused_even_with_allow_delete(self):
+        diff = f'--- a/{self.test_file}\n+++ /dev/null\n@@ -1 +0,0 @@\n-package decision // test\n'
+        code, _, err = self.capture(diff, extra=['--allow-delete'])
+        self.assertEqual(code, 5, err)
+        self.assertFalse((self.run_dir/'candidate-src').exists())
+
     def test_new_file_outside_scope_is_refused(self):
         diff_text = textwrap.dedent("""\
             --- /dev/null
@@ -241,7 +268,8 @@ class ScopeUnitTest(unittest.TestCase):
             self.assertTrue(candidate.in_scope(path), path)
         for path in ("phorvex/tools/servicerelease/main.go", "phorvex/internal/decision/decision_test.go",
                      "deploy/docker/operator.Dockerfile", "phorvex/go.mod", "benchmark/bot/candidate.py",
-                     "phorvex/README.md", "phorvex", "go.mod"):
+                     "phorvex/README.md", "phorvex", "go.mod", 'phorvex/../outside.go',
+                     'phorvex//a.go', 'phorvex/./a.go', 'phorvex/x\\y.go'):
             self.assertFalse(candidate.in_scope(path), path)
 
 

@@ -200,7 +200,7 @@ class PlannerTest(unittest.TestCase):
         included = {c["path"] for c in record["contextFiles"]}
         # The prompt mentions "rotate"/"threshold"/"decision"; the decision file ranks in.
         self.assertIn(self.decision, included)
-        self.assertNotIn("phorvex/internal/decision/decision_test.go", included, "tests never context")
+        self.assertIn("phorvex/internal/decision/decision_test.go", included, "existing tests are read-only context")
         self.assertNotIn("phorvex/tools/gen.go", included, "tools never context")
 
     def test_context_budget_and_out_of_scope_requests_are_skipped(self):
@@ -211,8 +211,51 @@ class PlannerTest(unittest.TestCase):
         record, _ = planner.plan(args, transport)
         reasons = {s["path"]: s["reason"] for s in record["contextSkipped"]}
         self.assertEqual(reasons["phorvex/tools/gen.go"], "out of scope")
-        self.assertEqual(reasons["phorvex/internal/decision/decision_test.go"], "out of scope")
+        self.assertIn("phorvex/internal/decision/decision_test.go", {c['path'] for c in record['contextFiles']})
         self.assertEqual(reasons["phorvex/does/not/exist.go"], "absent at base commit")
+
+    def test_explicit_package_gets_module_and_adjacent_tests_not_large_runner(self):
+        self.write('phorvex/go.mod', 'module example.invalid/phorvex')
+        self.write('phorvex/internal/model/economics.go', 'package model // cost')
+        self.write('phorvex/internal/model/economics_test.go', 'package model // cost test')
+        self.write('phorvex/internal/runner/manager.go', 'cost delta error\n' * 12000)
+        git(self.repo, 'add', '-A'); git(self.repo, 'commit', '-qm', 'context')
+        self.base = git(self.repo, 'rev-parse', 'HEAD')
+        prompt = 'Inspect phorvex/internal/model/economics.go and adjacent *_test.go. Add a cost delta helper and tests returning error.'
+        paths = planner.rank_context_files(self.repo, self.base, prompt)
+        self.assertEqual(paths[:3], ['phorvex/internal/model/economics.go', 'phorvex/go.mod',
+                                    'phorvex/internal/model/economics_test.go'])
+        self.assertNotIn('phorvex/internal/runner/manager.go', paths)
+        context, skipped = planner.gather_context(self.repo, self.base, paths, 200000)
+        self.assertFalse(skipped)
+        self.assertIn('module example.invalid/phorvex', '\n'.join(c['text'] for c in context))
+        # Naming a new helper also scopes to its existing package, and the
+        # absent path is recorded rather than silently guessed away.
+        paths = planner.rank_context_files(self.repo, self.base, 'Add phorvex/internal/model/new_cost.go')
+        self.assertIn('phorvex/internal/model/economics_test.go', paths)
+        _, skipped = planner.gather_context(self.repo, self.base, paths, 200000)
+        self.assertIn({'path': 'phorvex/internal/model/new_cost.go', 'reason': 'absent at base commit'}, skipped)
+
+    def test_new_tests_allowed_but_existing_test_disguised_as_addition_rejected(self):
+        new = '--- /dev/null\n+++ b/phorvex/internal/decision/new_test.go\n@@ -0,0 +1 @@\n+package decision\n'
+        record, result = planner.plan(self.args(), FakeTransport([reply(new)]))
+        self.assertEqual(result, new)
+        existing = new.replace('new_test.go', 'decision_test.go')
+        self.assertEqual(planner.scope_violations(existing, self.repo, self.base),
+                         ['phorvex/internal/decision/decision_test.go'])
+        self.assertEqual(planner.scope_violations(new.replace('internal/decision/', 'tools/'), self.repo, self.base),
+                         ['phorvex/tools/new_test.go'])
+
+    def test_decline_records_bounded_redacted_concrete_reason(self):
+        transport = FakeTransport([reply('NO CHANGE POSSIBLE: Missing helper API. '+KEY+' https://secret.invalid/path')])
+        with self.assertRaises(planner.PlannerError):
+            planner.plan(self.args(), transport)
+        attempt = json.loads((self.tmp/'PLAN.json').read_text())['attempts'][0]
+        self.assertEqual(attempt['result'], 'model declined')
+        self.assertIn('Missing helper API', attempt['reason'])
+        self.assertNotIn(KEY, attempt['reason'])
+        self.assertNotIn('secret.invalid', attempt['reason'])
+        self.assertEqual(len(transport.calls), 1)
 
     def test_optional_params_passed_through_only_when_set(self):
         good = diff_for(self.decision, "const RotateThreshold = 3", "const RotateThreshold = 2")

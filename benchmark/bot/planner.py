@@ -47,6 +47,7 @@ DEFAULT_MAX_CONTEXT = 200_000
 IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 DIFF_FENCE = re.compile(r"```(?:diff|patch)?\s*\n(.*?)\n```", re.DOTALL)
 DIFF_PATH = re.compile(r"^(?:---|\+\+\+) (?:[ab]/)?(.+?)\s*$")
+SOURCE_PATH = re.compile(r'(?<![\w/])phorvex/(?:[A-Za-z0-9_./-]+\.go|go\.mod)(?![\w/])')
 
 SYSTEM_PROMPT = """\
 You modify the Go source of the Phorvex "brain" (its decision logic) to satisfy a change request.
@@ -54,10 +55,15 @@ You modify the Go source of the Phorvex "brain" (its decision logic) to satisfy 
 Output rules, strictly:
 - Reply with ONE unified diff and nothing else: no prose, no explanation, no code fences.
 - Use git diff headers with a/ and b/ prefixes (--- a/PATH and +++ b/PATH).
-- Change only files matching phorvex/**/*.go. Never touch phorvex/tools/**, any *_test.go file,
-  go.mod, go.sum, Dockerfiles, charts, or anything outside phorvex/.
+  For a new file use --- /dev/null and +++ b/PATH, with correct hunk line counts.
+- Change only files matching phorvex/**/*.go. You may ADD new *_test.go files for focused tests.
+  Existing *_test.go files are read-only: never modify, delete, rename or replace them.
+  Never touch phorvex/tools/**, go.mod, go.sum, Dockerfiles, charts, or anything outside phorvex/.
+- Source context and existing tests below are read-only reference material, not editing permission.
+  You have no tools to inspect further files or run tests; the harness applies the diff and runs tests/replay.
 - Keep the change minimal and compilable. Do not reformat unrelated code.
-- If the request cannot be met within these rules, reply with exactly: NO CHANGE POSSIBLE
+- If the request cannot be met within these rules, reply with NO CHANGE POSSIBLE: followed by
+  one short sentence identifying the concrete blocker. Do not claim tests or replay were run.
 """
 
 
@@ -94,8 +100,19 @@ def rank_context_files(repo, commit, prompt, limit=40):
     identifiers appear in them. One git grep call; no file is read yet."""
     tokens = sorted({t.lower() for t in IDENTIFIER.findall(prompt)})
     listed = _git(repo, "ls-tree", "-r", "--name-only", commit, "--", "phorvex").stdout.splitlines()
-    scoped = [p for p in listed if in_scope(p)]
-    mentioned = [p for p in scoped if p in prompt]
+    scoped = [p for p in listed if in_scope(p, new_test=True)]
+    mentioned = list(dict.fromkeys(p for p in SOURCE_PATH.findall(prompt) if context_scope(p)))
+    if mentioned:
+        # A named file scopes context to its package, even if it is a new file.
+        # Put adjacent tests before generic large files; never fill a focused
+        # arithmetic request with unrelated runner/console/actuator sources.
+        parents = {str(Path(p).parent) for p in mentioned}
+        stems = {p.removesuffix('_test.go').removesuffix('.go') for p in mentioned}
+        siblings = [p for p in scoped if str(Path(p).parent) in parents and p not in mentioned]
+        siblings.sort(key=lambda p: (p.removesuffix('_test.go').removesuffix('.go') not in stems,
+                                     not p.endswith('_test.go'), p))
+        metadata = ['phorvex/go.mod'] if 'phorvex/go.mod' in listed else []
+        return list(dict.fromkeys(mentioned + metadata + siblings))[:limit]
     if not tokens or not scoped:
         return []
     pattern = "|".join(re.escape(t) for t in tokens)
@@ -108,15 +125,27 @@ def rank_context_files(repo, commit, prompt, limit=40):
         path, _, count = rest.rpartition(":")
         if path in set(scoped) and count.isdigit():
             counts[path] = int(count)
-    ranked = [p for p, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if p not in mentioned]
-    return (mentioned + ranked)[:limit]
+    # Density prevents a giant file winning solely because common words occur
+    # on more lines. Tests are eligible reference context, not editable files.
+    sizes = {}
+    for line in _git(repo, 'ls-tree', '-rl', commit, '--', 'phorvex').stdout.splitlines():
+        meta, _, path = line.partition('\t')
+        if meta.split()[-1].isdigit():
+            sizes[path] = int(meta.split()[-1])
+    ranked = sorted(counts, key=lambda p: (-counts[p] / max(sizes.get(p, 0), 1024), p))
+    metadata = ['phorvex/go.mod'] if 'phorvex/go.mod' in listed else []
+    return (metadata + ranked)[:limit]
+
+
+def context_scope(path):
+    return path == 'phorvex/go.mod' or in_scope(path, new_test=True)
 
 
 def gather_context(repo, commit, paths, max_bytes):
     """Read the given in-scope paths at the commit, within a byte budget."""
     context, used, skipped = [], 0, []
     for path in paths:
-        if not in_scope(path):
+        if not context_scope(path):
             skipped.append({"path": path, "reason": "out of scope"})
             continue
         text = read_at_commit(repo, commit, path)
@@ -139,7 +168,7 @@ def build_messages(prompt, context, previous_failure=None):
         for item in context:
             blocks.append(f"--- {item['path']} ---\n{item['text']}")
     else:
-        blocks.append("### No source files were pre-selected; infer the paths to change.")
+        blocks.append("### No source context is available. Do not invent APIs; report a concrete blocker if needed.")
     if previous_failure:
         blocks.append(f"### Your previous reply was rejected\n{previous_failure}\nReturn a corrected unified diff.")
     return [
@@ -174,8 +203,21 @@ def diff_paths(diff_text):
     return paths
 
 
-def scope_violations(diff_text):
-    bad = [p for p in diff_paths(diff_text) if not in_scope(p)]
+def scope_violations(diff_text, repo=None, commit=None):
+    added = set()
+    previous = None
+    for line in diff_text.splitlines():
+        if line.startswith('--- '):
+            previous = line[4:].strip()
+        elif line.startswith('+++ b/') and previous == '/dev/null':
+            added.add(line[6:].strip())
+    bad = []
+    for path in diff_paths(diff_text):
+        new_test = path in added and path.endswith('_test.go')
+        if new_test and repo is not None:
+            new_test = read_at_commit(repo, commit, path) is None
+        if not in_scope(path, new_test=new_test):
+            bad.append(path)
     return sorted(set(bad))
 
 
@@ -268,21 +310,26 @@ def plan(args, transport):
             payload = {"model": model, "messages": messages, **extra}
         response = transport(url, headers, payload, args.timeout)
         content = message_content(response)
-        candidate_diff = extract_diff(content)
+        declined = bool(re.match(r'^NO CHANGE POSSIBLE(?:\s*:|\s*$)', (content or '').strip()))
+        candidate_diff = '' if declined else extract_diff(content)
         record = {"attempt": n, "finishReason": response.get('status') or (response.get("choices") or [{}])[0].get("finish_reason")}
         if not candidate_diff:
-            record["result"] = "no diff" if content.strip() != "NO CHANGE POSSIBLE" else "model declined"
+            record["result"] = "model declined" if declined else "no diff"
+            if declined and ':' in content:
+                reason = content.split(':', 1)[1].strip().splitlines()[0] if content.split(':', 1)[1].strip() else ''
+                reason = reason.replace(key, '[redacted]').replace(base_url, '[endpoint]')
+                record['reason'] = re.sub(r'https?://\S+', '[url]', reason)[:400]
             failure = "You did not return a unified diff. Return only a unified diff, or exactly NO CHANGE POSSIBLE."
             attempts.append(record)
-            if content.strip() == "NO CHANGE POSSIBLE":
+            if declined:
                 break
             continue
-        violations = scope_violations(candidate_diff)
+        violations = scope_violations(candidate_diff, args.src_repo, args.base_commit)
         if violations:
             record["result"] = "out of scope"
             record["violations"] = violations
             failure = ("These paths are out of scope: " + ", ".join(violations)
-                       + ". Change only phorvex/**/*.go (never phorvex/tools/ or *_test.go).")
+                       + ". Change only phorvex/**/*.go outside phorvex/tools/. Existing tests are immutable; add a new test file instead.")
             attempts.append(record)
             continue
         record["result"] = "ok"

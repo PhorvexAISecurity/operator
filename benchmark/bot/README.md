@@ -96,7 +96,9 @@ Either section can be omitted. A present empty/invalid section rejects the
 whole upload: nothing is queued until every section, option and registry value
 parses. This structural validation does not establish that proposed code
 compiles or passes tests; Go tests and runtime replay preflight remain mandatory.
-Use the `/validate` caption for structural validation only. Google Docs should
+Use the `/validate` caption (forward slash) for structural validation only.
+Unknown captions, including `\validate`, are rejected without downloading or
+queuing the file. Use an empty caption or `/upload` to run. Google Docs should
 be exported as `.docx` or text; legacy binary `.doc` is not supported.
 
 An accepted file becomes one batch of up to five independent experiments,
@@ -169,8 +171,13 @@ on the hypothesis and safety metrics.
 - **No replay of old commands.** The first start skips any waiting backlog,
   and the offset is persisted, so a restart never re-runs a command.
 - **Candidate scope** (`candidate.py`): only `phorvex/**/*.go`, never
-  `phorvex/tools/` or `_test.go`. No deletes, merges or pushes. The diff
+  `phorvex/tools/`. New `_test.go` files may be added; existing tests cannot be
+  changed, deleted or renamed. No deletes, merges or pushes. The diff
   applies to a clone, never to `BOT_REPO`.
+- **Planner context:** named Go paths prioritize their package, adjacent tests
+  and read-only `go.mod`. Existing tests are reference context, not editable
+  targets. A declined request records the model's bounded, redacted reason when
+  supplied; structural validation still does not guarantee a feasible patch.
 - **The deployed binary is checked** against its recorded sha256 before it
   is trusted. That binary's `git_sha` is the base's provenance, so the base
   commit needs no tag.

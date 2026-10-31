@@ -9,8 +9,8 @@ tag that build-image.sh can build. It never edits the working repository, never
 touches main, never merges and never pushes.
 
 What a candidate may change: only `*.go` files under `phorvex/`, excluding
-`phorvex/tools/` (release and test tooling) and `_test.go` files (so a candidate
-cannot weaken the tests). Everything else -- the Dockerfiles, charts, go.mod,
+`phorvex/tools/` (release and test tooling). New `_test.go` files are allowed;
+existing tests cannot be modified, deleted or renamed. Everything else -- the Dockerfiles, charts, go.mod,
 go.sum, deploy/, benchmark/ -- is off limits here, and build-image.sh enforces
 the same boundary again (Dockerfile drift check, `-mod=readonly`). Files may be
 added or modified; deletion is refused unless --allow-delete is given.
@@ -67,15 +67,17 @@ def sha256_text(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def in_scope(path):
+def in_scope(path, *, new_test=False):
     """True iff a candidate diff may add or modify this repo-relative path."""
     parts = path.split("/")
     return (
         parts[0] == "phorvex"
         and len(parts) > 1
+        and all(p not in ('', '.', '..') for p in parts)
+        and not any(c in path for c in ('\\', '\n', '\r', '\t', '"'))
         and parts[1] != "tools"
         and path.endswith(".go")
-        and not path.endswith("_test.go")
+        and (new_test or not path.endswith("_test.go"))
     )
 
 
@@ -179,8 +181,17 @@ def _build_candidate(args, git, clone, diff_text):
             offenders.append(f"{status} {path} (rename/copy not allowed)")
         elif status == "D" and not args.allow_delete:
             offenders.append(f"D {path} (deletion not allowed; pass --allow-delete)")
-        elif status in ("A", "M", "D") and not in_scope(path):
+        elif status not in ("A", "M", "D") or not in_scope(path, new_test=status == 'A'):
             offenders.append(f"{status} {path} (out of scope)")
+        if status == 'A' and path.endswith('_test.go'):
+            # Confirm this is a new path at the immutable base, independently of
+            # diff headers or rename detection. Existing tests remain untouched.
+            if git('cat-file', '-e', f'{args.base_commit}:{path}', check=False).returncode == 0:
+                offenders.append(f"{status} {path} (existing tests are immutable)")
+        if status in ('A', 'M'):
+            mode = git('ls-files', '--stage', '--', path).stdout.split()[0]
+            if mode != '100644':
+                offenders.append(f"{status} {path} (only regular non-executable Go files are allowed)")
         if offenders:
             raise CandidateError(5, "the proposed diff touches files it may not: " + "; ".join(offenders))
         changed.append({"status": status, "path": path})
@@ -224,7 +235,7 @@ def _build_candidate(args, git, clone, diff_text):
         "diffSha256": sha256_text(diff_text),
         "createdAt": utc_now(),
         "guardrails": {
-            "scope": "phorvex/**/*.go, excluding phorvex/tools/ and _test.go",
+            "scope": "phorvex/**/*.go, excluding phorvex/tools/; existing _test.go files are immutable; new test files allowed",
             "base": "detached clone of the working repo",
             "allowDelete": bool(args.allow_delete),
             "noMerge": True,
