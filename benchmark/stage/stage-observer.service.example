@@ -1,0 +1,19 @@
+# User-scoped service. Replace paths with the reviewed release and private state.
+# Existing journals retain gaps on restart; no continuity is fabricated.
+[Unit]
+Description=Phorvex stage endpoint observation
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -m benchmark.stage.observe watch --scope /home/hami/phorvex-benchmark/stage-observer/scope.json --journal /home/hami/phorvex-benchmark/stage-observer/evidence.db --seconds 31536000 --max-bytes 268435456
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
