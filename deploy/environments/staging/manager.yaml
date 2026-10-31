@@ -3,6 +3,6 @@
 phorvex:
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
-    tag: "staging-0.16.0-git-545fced78033317c176ffeec8351b1adf8fd541e"
-    releaseDigest: "sha256:8cdf0aa0a392458bb525cfa26b5d6504f98e66674fe5d4b70e71421b46f7b27d"
-    releaseSourceSHA: "545fced78033317c176ffeec8351b1adf8fd541e"
+    tag: "staging-0.16.0-git-5f0b28a7b87a83385df495f77067151103ec2982"
+    releaseDigest: "sha256:5a5afbc13f371a7d7f114700f504d2d466d9d44687d9812a0349a94f043b3d93"
+    releaseSourceSHA: "5f0b28a7b87a83385df495f77067151103ec2982"
