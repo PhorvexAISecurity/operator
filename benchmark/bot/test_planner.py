@@ -146,6 +146,23 @@ class PlannerTest(unittest.TestCase):
         with self.assertRaisesRegex(planner.PlannerError, 'not completed'):
             planner.message_content({'status': 'incomplete', 'output': []})
 
+    def test_responses_context_reads_preserve_assistant_history_and_reasoning(self):
+        os.environ['OPENAI_API']='responses'
+        request='REQUEST_CONTEXT: '+json.dumps({'paths':[self.decision]})
+        output=[{'type':'reasoning','id':'rs_test','summary':[],'encrypted_content':'opaque-test-state'},
+                {'type':'message','id':'msg_test','role':'assistant','phase':'final_answer','status':'completed',
+                 'content':[{'type':'output_text','text':request,'annotations':[]}]}]
+        good=diff_for(self.decision,'const RotateThreshold = 3','const RotateThreshold = 4')
+        transport=FakeTransport([{'status':'completed','output':output},
+                                 {'status':'completed','output':[{'type':'message','content':[{'type':'output_text','text':good}]}]}])
+        planner.plan(self.args(context=[self.decision]),transport)
+        items=transport.calls[1]['payload']['input']
+        self.assertEqual(items[1:3],output)
+        self.assertIn('Repository read 1 completed',items[-1]['content'])
+        self.assertIn('3 context reads remain',items[-1]['content'])
+        self.assertEqual(json.dumps(items).count('const RotateThreshold = 3'),1)
+        self.assertNotIn('opaque-test-state',(self.tmp/'PLAN.json').read_text())
+
     def test_retries_on_prose_then_succeeds(self):
         good = diff_for(self.decision, "const RotateThreshold = 3", "const RotateThreshold = 5")
         transport = FakeTransport([reply("Sure! Here is what I would change ..."), reply(good)])

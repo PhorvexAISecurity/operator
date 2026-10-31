@@ -67,6 +67,8 @@ Output rules, strictly:
   Paths may be in-scope Go files or directories. Search strings are literal Go identifiers/text.
   The harness reads the pinned commit only; it cannot run commands or tests for you.
   Up to four bounded context requests are allowed. Request only files needed for this change.
+  Source supplied below already counts as inspected. Do not request the same read again.
+  A missing NEW helper/test file is expected: create it when the request calls for a new helper.
   Large files can be read as {"path":"phorvex/internal/runner/manager.go","start":100,"end":250}.
   Never infer an implementation or telemetry is absent merely because it was not initially supplied.
 - Keep the change minimal and compilable. Do not reformat unrelated code.
@@ -124,7 +126,9 @@ def rank_context_files(repo, commit, prompt, limit=40):
         siblings.sort(key=lambda p: (p.removesuffix('_test.go').removesuffix('.go') not in stems,
                                      not p.endswith('_test.go'), p))
         metadata = ['phorvex/go.mod'] if 'phorvex/go.mod' in listed else []
-        return list(dict.fromkeys(mentioned + metadata + siblings))[:limit]
+        # A named helper does not need every unrelated model test/trace file.
+        # Broader context remains available through explicit package/file reads.
+        return list(dict.fromkeys(mentioned + metadata + siblings[:8]))[:limit]
     if not tokens or not scoped:
         return []
     pattern = "|".join(re.escape(t) for t in tokens)
@@ -391,19 +395,20 @@ def plan(args, transport):
         extra["temperature"] = float(os.environ["OPENAI_TEMPERATURE"])
 
     attempts, failure, diff_text, context_reads = [], None, "", []
-    read_notes = None
+    read_notes, conversation = None, []
     while len(attempts) < args.max_attempts:
         n = len(attempts) + 1
         messages = build_messages(prompt, context, failure, inventory, read_notes)
         if api == 'responses':
             options = dict(extra)
             effort = options.pop('reasoning_effort', None)
-            payload = {'model': model, 'instructions': messages[0]['content'], 'input': messages[1]['content'],
+            payload = {'model': model, 'instructions': messages[0]['content'],
+                       'input': [messages[1], *conversation] if conversation else messages[1]['content'],
                        'max_output_tokens': 16000, **options}
             if effort:
                 payload['reasoning'] = {'effort': effort}
         else:
-            payload = {"model": model, "messages": messages, **extra}
+            payload = {"model": model, "messages": messages + conversation, **extra}
         response = transport(url, headers, payload, args.timeout)
         content = message_content(response)
         if (content or '').strip().startswith('REQUEST_CONTEXT:'):
@@ -430,6 +435,19 @@ def plan(args, transport):
             except ValueError as err:
                 read_notes = {'error': str(err)}
                 context_reads.append({'read': len(context_reads)+1, 'error': str(err)})
+            # Preserve the model's previous request, including Responses output
+            # items (reasoning/phase), instead of starting a fresh conversation
+            # that repeats the same request. Source bodies stay consolidated in
+            # the bounded first user message, not copied once per read round.
+            previous = response.get('output') if api == 'responses' else None
+            conversation.extend(previous or [{'role':'assistant','content':content}])
+            conversation.append({'role':'user','content':
+                'Repository read %d completed. Requested source available within the current context budget is in the source sections above. '
+                'Diagnostics below distinguish absent files and budget limits. Do not repeat completed reads. '
+                'A requested new file being absent is not a blocker to creating it. '
+                '%d context reads remain. Return the implementation diff once sufficient source is available.\n%s' % (
+                    len(context_reads), MAX_CONTEXT_READS-len(context_reads),
+                    json.dumps({'files': context_reads[-1].get('files', []), **read_notes}, ensure_ascii=False))})
             continue
         declined = bool(re.match(r'^NO CHANGE POSSIBLE(?:\s*:|\s*$)', (content or '').strip()))
         candidate_diff = '' if declined else extract_diff(content)

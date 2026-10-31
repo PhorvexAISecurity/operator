@@ -333,3 +333,5 @@ recorded ledgers return `NEEDS_DATA` with an explanation.
 See [ENDPOINT-V3.md](ENDPOINT-V3.md). Upload `endpoint-v3-synthetic.json` for the labelled 64-tick Go reference test, or `endpoint-v3-recorded.json` for qualified recorded inputs. Missing recorded telemetry returns BLOCKED with artifacts before model/build work. A successful synthetic study does not establish readiness of historical production data. Build and include `benchmark/endpointv3/bin/endpoint-v3` and `BUILD.json` in each bot release.
 
 The code planner can request bounded file, package and line-range reads plus literal source searches from the pinned baseline commit. Four read rounds are separate from patch retries. Missing source context is resolved from the repository when available; actual missing telemetry remains an explicit blocker.
+
+Context reads preserve the prior assistant requests and complete Responses output items across turns, following the [OpenAI conversation-state guidance](https://developers.openai.com/api/docs/guides/conversation-state). Source is consolidated within the configured byte cap; a completed read is not restarted as a new stateless request.
