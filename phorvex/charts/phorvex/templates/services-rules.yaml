@@ -42,4 +42,28 @@ spec:
       labels: {severity: info, environment: {{ $environment | quote }}}
       annotations:
         summary: A Pod in {{ .Release.Namespace }} restarted more than twice in 15 minutes.
+    # Stateful rotation (docs/stateful-rotation.md). The actuator never claims a
+    # replacement it did not observe; these surface the dispatches that left a member
+    # unproven and an owner that did not return to fully Ready. Each also counts a
+    # series first exported within its window (last_over_time ... unless ... offset),
+    # which increase() cannot see, including one from an actuator Pod since replaced.
+    - alert: PhorvexStatefulRotationNotConfirmed
+      expr: >-
+        (sum by (namespace, action, outcome) (increase(phorvex_stateful_rotations_total{ {{- $e -}} ,outcome=~"unconfirmed|partial|error"}[30m])) > 0)
+        or (sum by (namespace, action, outcome) ((last_over_time(phorvex_stateful_rotations_total{ {{- $e -}} ,outcome=~"unconfirmed|partial|error"}[30m])
+        unless phorvex_stateful_rotations_total{ {{- $e -}} ,outcome=~"unconfirmed|partial|error"} offset 30m) > 0) > 0)
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: A stateful rotation in {{ $environment }} ended unconfirmed, partial or in error; check the owner's members.
+    - alert: PhorvexStatefulOwnerNotRecovered
+      expr: >-
+        max by (namespace, statefulset) (kube_statefulset_replicas - kube_statefulset_status_replicas_ready) > 0
+        and on (namespace) (
+        (sum by (namespace) (increase(phorvex_stateful_rotations_total{ {{- $e -}} }[2h])) > 0)
+        or (sum by (namespace) ((last_over_time(phorvex_stateful_rotations_total{ {{- $e -}} }[2h])
+        unless phorvex_stateful_rotations_total{ {{- $e -}} } offset 2h) > 0) > 0))
+      for: 15m
+      labels: {severity: info, environment: {{ $environment | quote }}}
+      annotations:
+        summary: A StatefulSet that {{ $environment }} rotated has had a member not Ready for 15 minutes; every stateful class on it stays refused until it recovers.
 {{- end }}

@@ -5,6 +5,14 @@
 # member is Ready only once its streams are current. The exporter sidecar publishes each
 # member's own view of the DEMO stream, which is how the dashboard shows that no message
 # is lost across rotations.
+#
+# JetStream does not label its leaders, so the leader-label sidecar does: every member
+# carries phorvex.ai/nats-leader, "true" while it leads the meta group or any stream
+# (and from creation until its first reading, so an unread member is never rebuilt).
+# The owner declares that label as its leader, so stateful-replica-rebuild never wipes a
+# leader's storage, and the brain picks stateful-snapshot-rotate for it instead, keeping
+# its volume. On staging, a member rebuilt while it was the meta leader came back empty
+# and was never caught up until it was restarted (docs/stateful-rotation.md).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -32,6 +40,44 @@ data:
       ]
     }
     lame_duck_duration: "30s"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nats-demo
+  labels:
+    app.kubernetes.io/name: nats-demo
+    app.kubernetes.io/part-of: phorvex-demo
+automountServiceAccountToken: false
+---
+# The leader-label sidecar may read and label exactly the three members, nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: nats-demo-leader-label
+  labels:
+    app.kubernetes.io/name: nats-demo
+    app.kubernetes.io/part-of: phorvex-demo
+rules:
+- apiGroups: [""]
+  resources: [pods]
+  resourceNames: [nats-demo-0, nats-demo-1, nats-demo-2]
+  verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: nats-demo-leader-label
+  labels:
+    app.kubernetes.io/name: nats-demo
+    app.kubernetes.io/part-of: phorvex-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nats-demo-leader-label
+subjects:
+- kind: ServiceAccount
+  name: nats-demo
 ---
 apiVersion: v1
 kind: Service
@@ -86,6 +132,7 @@ metadata:
   annotations:
     phorvex.ai/stateful-quorum: "2"
     phorvex.ai/stateful-replica-rebuild: peer-resync
+    phorvex.ai/stateful-leader-label: phorvex.ai/nats-leader=true
     phorvex.ai/stateful-snapshot-class: ebs-csi-snapclass
     phorvex.ai/stateful-recovery-seconds: "180"
     phorvex.ai/stateful-resync-seconds: "300"
@@ -102,7 +149,9 @@ spec:
         app.kubernetes.io/name: nats-demo
         app.kubernetes.io/part-of: phorvex-demo
         data-class: restricted
+        phorvex.ai/nats-leader: "true"
     spec:
+      serviceAccountName: nats-demo
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 45
       securityContext:
@@ -149,9 +198,59 @@ spec:
           readOnlyRootFilesystem: true
           capabilities:
             drop: ["ALL"]
+      - name: leader-label
+        image: docker.io/natsio/nats-box:0.14.5@sha256:0784ab710aefaf6ef037ed797ee7dcde613c6ad208c4dbff1945fc7c1b5b5375
+        env:
+        - name: POD_NAME
+          valueFrom: {fieldRef: {fieldPath: metadata.name}}
+        - name: POD_NAMESPACE
+          valueFrom: {fieldRef: {fieldPath: metadata.namespace}}
+        command:
+        - sh
+        - -c
+        - |
+          # Leader = this member leads the meta group or any stream. An unreadable
+          # /jsz counts as leader (fail closed). Patch only on change; the projected
+          # token is re-read every time because the kubelet rotates it.
+          sa=/var/run/secrets/kubernetes.io/serviceaccount
+          last=""
+          while true; do
+            role=true
+            if jsz="$(curl -sf --max-time 2 'http://localhost:8222/jsz?streams=true')"; then
+              role="$(printf '%s' "$jsz" | jq -r --arg n "$POD_NAME" \
+                '(.meta_cluster.leader == $n) or ([.account_details[]?.stream_detail[]?.cluster.leader] | any(. == $n))' \
+                2>/dev/null || echo true)"
+            fi
+            if [ "$role" != "$last" ] && curl -sf --max-time 5 --cacert "$sa/ca.crt" \
+                -H "Authorization: Bearer $(cat "$sa/token")" -H 'Content-Type: application/merge-patch+json' \
+                -X PATCH "https://kubernetes.default.svc/api/v1/namespaces/$POD_NAMESPACE/pods/$POD_NAME" \
+                -d "{\"metadata\":{\"labels\":{\"phorvex.ai/nats-leader\":\"$role\"}}}" > /dev/null; then
+              echo "phorvex.ai/nats-leader=$role"
+              last="$role"
+            fi
+            sleep 2
+          done
+        resources:
+          requests: {cpu: 5m, memory: 16Mi}
+          limits: {memory: 32Mi}
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        volumeMounts:
+        - {name: kube-api, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
       volumes:
       - name: config
         configMap: {name: nats-demo-config}
+      # Only the leader-label sidecar mounts the API credential.
+      - name: kube-api
+        projected:
+          sources:
+          - serviceAccountToken: {path: token, expirationSeconds: 3600}
+          - configMap:
+              name: kube-root-ca.crt
+              items: [{key: ca.crt, path: ca.crt}]
   # Spelled out as the API server stores it, so Argo CD's diff of the template is clean.
   volumeClaimTemplates:
   - apiVersion: v1
