@@ -144,11 +144,8 @@ func TestOpenRefusesPreexistingStreamAndConsumerWithoutMutation(t *testing.T) {
 			if _, err := js.PublishMsg(t.Context(), msg); err != nil {
 				t.Fatal(err)
 			}
+			beforeConsumer := waitForConsumerPending(t, consumer, 1, cfg.RequestTimeout)
 			beforeStream, err := stream.Info(t.Context())
-			if err != nil {
-				t.Fatal(err)
-			}
-			beforeConsumer, err := consumer.Info(t.Context())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -194,10 +191,7 @@ func TestDistinctStorageCheckRefusesPreexistingConsumerWithoutMutation(t *testin
 			if err != nil {
 				t.Fatal(err)
 			}
-			before, err := consumer.Info(t.Context())
-			if err != nil {
-				t.Fatal(err)
-			}
+			before := waitForConsumerPending(t, consumer, 1, cfg.RequestTimeout)
 			if _, err := probe.ConsumeStoredWithFreshConsumer(t.Context(), name, message, ack.Sequence); err == nil || !strings.Contains(err.Error(), "refusing preexisting distinct consumer") {
 				t.Fatalf("preexisting distinct consumer accepted: %v", err)
 			}
@@ -479,6 +473,26 @@ func startServer(t *testing.T) *server.Server {
 		srv.WaitForShutdown()
 	})
 	return srv
+}
+
+func waitForConsumerPending(t *testing.T, consumer jetstream.Consumer, want uint64, timeout time.Duration) *jetstream.ConsumerInfo {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), timeout)
+	defer cancel()
+	for {
+		info, err := consumer.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.NumPending == want {
+			return info
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatalf("consumer pending=%d, want %d before timeout", info.NumPending, want)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 }
 
 func testConfig(url string) Config {
