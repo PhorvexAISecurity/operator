@@ -21,7 +21,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-from .evidence import EvidenceError, Journal, MAX_EVENT_BYTES, Reducer, STREAMS, SCOPE_SCHEMA, validate_scope, stage_namespace
+from .evidence import EvidenceError, Journal, MAX_EVENT_BYTES, Reducer, STREAMS, SCOPE_SCHEMA, ENCODINGS, validate_scope, stage_namespace
 from .normalize import atomic_json
 
 
@@ -256,7 +256,8 @@ def main():
     watch_parser.add_argument("--scope", required=True)
     watch_parser.add_argument("--journal", required=True)
     watch_parser.add_argument("--seconds", type=int, required=True)
-    watch_parser.add_argument("--max-bytes", type=int, help="immutable journal capacity on creation; default 256 MiB, range 1 MiB..2 GiB")
+    watch_parser.add_argument("--max-bytes", type=int, help="immutable accounted encoded capacity; default 256 MiB, plain ceiling2 GiB, compressed ceiling4 GiB")
+    watch_parser.add_argument("--encoding", choices=ENCODINGS, help="immutable new-journal encoding; default plain-v1, existing format is detected")
     rotate_parser = commands.add_parser("rotate", help="perform ONE explicit UID-preconditioned stage calibration deletion")
     rotate_parser.add_argument("--journal", required=True)
     rotate_parser.add_argument("--pod", required=True)
@@ -264,27 +265,30 @@ def main():
     rotate_parser.add_argument("--deadline-seconds", type=int, required=True)
     status_parser = commands.add_parser("status", help="inspect journal provenance and current observation gaps")
     status_parser.add_argument("--journal", required=True)
+    for command in (watch_parser, rotate_parser, status_parser):
+        command.add_argument("--scan-timeout", type=float, help="full decoded scan timeout seconds, 1..1800; default env STAGE_JOURNAL_SCAN_TIMEOUT_SECONDS or120")
     args = parser.parse_args()
     if args.command == "discover":
         scope = discover(Kube(args.context), args.namespace, args.policy, args.deployment, args.service, args.source, args.image_digest)
         atomic_json(args.output, scope)
         print(json.dumps(scope))
     elif args.command == "watch":
-        if args.max_bytes is not None and not 1 << 20 <= args.max_bytes <= 2 << 30:
-            raise EvidenceError("journal capacity must be 1 MiB..2 GiB")
-        journal = Journal(args.journal, json.loads(Path(args.scope).read_text()), max_bytes=args.max_bytes)
+        journal = Journal(args.journal, json.loads(Path(args.scope).read_text()), max_bytes=args.max_bytes,
+                          encoding=args.encoding, scan_timeout=args.scan_timeout)
         stop = threading.Event()
         signal.signal(signal.SIGTERM, lambda *_: stop.set())
         signal.signal(signal.SIGINT, lambda *_: stop.set())
         collect(journal, args.seconds, stop)
     elif args.command == "rotate":
-        print(json.dumps(calibration(Journal(args.journal), args.pod, args.reservation, args.deadline_seconds)))
+        print(json.dumps(calibration(Journal(args.journal, scan_timeout=args.scan_timeout), args.pod, args.reservation, args.deadline_seconds)))
     else:
-        journal = Journal(args.journal)
+        journal = Journal(args.journal, scan_timeout=args.scan_timeout)
         reducer = Reducer(journal.scope)
         for event in journal.records():
             reducer.apply(event)
-        print(json.dumps(reducer.snapshot(reducer.at), sort_keys=True))
+        result = reducer.snapshot(reducer.at)
+        result["storage"] = journal.storage_status()
+        print(json.dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":

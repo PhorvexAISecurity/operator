@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import fcntl
 import hashlib
 import json
 import math
@@ -36,6 +37,31 @@ def atomic_json(path, value):
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def pricing_needed(candidate, worth_threshold):
+    """Only a demonstrated existing veto makes a missing price irrelevant.
+
+    This reads the source's fact weights without changing them. It follows the
+    kernel's sorted, deduplicated sum solely to recognize V<=theta; invalid or
+    unknown values cannot establish a known worth rejection.
+    """
+    if candidate.get("gates_known") and candidate.get("gates"):
+        return False
+    if candidate.get("containment") or not candidate.get("facts_known"):
+        return True
+    weights = {}
+    for fact in candidate.get("facts") or []:
+        key, weight = fact.get("id"), fact.get("weight")
+        if not key or isinstance(weight, bool) or not isinstance(weight, (int, float)) or not math.isfinite(weight) or weight < 0:
+            return True
+        if key in weights and weights[key] != weight:
+            return True
+        weights[key] = weight
+    value = 0.0
+    for key in sorted(weights):
+        value += weights[key]
+    return not math.isfinite(value) or value > worth_threshold
 
 
 def normalize(scope, records, exports, target, window, lookback, worth_threshold):
@@ -114,6 +140,12 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
             candidate["history_known"] = full
             candidate["samples"] = copy.deepcopy(obs["samples"])
             candidate["worth_threshold"] = worth_threshold
+            if action == "quarantine" and candidate["k"] != 0 and pricing_needed(candidate, worth_threshold):
+                cap = candidate.get("hold_cap")
+                # Explicit zero is a known budget refusal in the shared kernel;
+                # missing/invalid caps are unavailable evidence, not zero.
+                if isinstance(cap, bool) or not isinstance(cap, (int, float)) or not math.isfinite(cap) or cap < 0:
+                    reasons.append("candidates[" + candidate["id"] + "].hold_cap: QUARANTINE_HOLD_CAP_NOT_CONFIGURED")
         if reasons:
             missing[row["snapshot_digest"]] = sorted(set(reasons))
         ticks.append({"id": row["snapshot_digest"], "at": at, "workload_uid": scope["workload_uid"],
@@ -134,6 +166,11 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
                 "journal_prefix": prefix,
                 "snapshot_digests": [r["snapshot_digest"] for r in exports], "bindings": bindings,
                 "missing": missing, "study_settings": {"target": target, "window": window, "lookback": lookback, "worth_threshold": worth_threshold},
+                # Reducer.snapshot retains the complete as-of move/sample
+                # history and original interval bounds. W/L filtering happens
+                # only in the kernel, allowing evidence-bounded request changes.
+                "retention": {"schema": "phorvex-stage.retained-history.v1", "moves": "all-observed",
+                              "samples": "all-observed", "interval_clipping": False},
                 "measurement": scope["measurement"], "move_origin": "controlled-stage-calibration",
                 "authoritative_admission": False, "counterfactual_actual_charges": None,
                 "limitations": ["Observed Service ready-backend intervals use collector serialized observation time; they are not measured application outages.",
@@ -143,21 +180,42 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
     return trace, metadata
 
 
-def install(trace, metadata, data_dir, producer):
+def install(trace, metadata, data_dir, producer, before_publish=None, max_generation_bytes=512 << 20):
     if metadata["state"] != "READY" or metadata["missing"]:
         raise EvidenceError("incomplete observed inputs cannot be installed as a qualified recorded trace")
     scope = metadata["scope"]
     policy = scope["namespace"] + "/" + scope["policy_name"]
     target = Path(data_dir) / "mathlab/endpoint-traces" / (policy + ".json")
-    # Two atomic files fail closed on a crash between replacements because the
-    # consumer verifies the manifest's trace digest before using the dataset.
-    atomic_json(target, trace)
+    payload = (canonical(trace) + "\n").encode()
+    if len(payload) > 64 << 20:
+        raise EvidenceError("qualified trace exceeds 64 MiB")
+    if type(max_generation_bytes) is not int or not 1 << 20 <= max_generation_bytes <= 2 << 30:
+        raise EvidenceError("generation capacity must be 1 MiB..2 GiB")
+    trace_hash = hashlib.sha256(payload).hexdigest()
+    generation = target.with_name(target.stem + "." + trace_hash + ".trace.json")
     manifest = {"schema": "phorvex-stage.endpoint-manifest.v1", "policy": policy, "policy_uid": scope["policy_uid"],
                 "producer": producer, "source_revision": trace["source_revision"], "snapshot_source_revision": scope["source_revision"],
                 "repository": scope["repository"],
-                "image_digest": scope["image_digest"], "trace_sha256": sha(target),
+                "image_digest": scope["image_digest"], "trace_sha256": trace_hash, "trace_file": generation.name,
                 "snapshot_digests": metadata["snapshot_digests"], "normalization": metadata}
-    atomic_json(target.with_suffix(".manifest.json"), manifest)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # Writers serialize per policy. Readers hold an immutable generation name
+    # from one atomically replaced manifest; no active generation is deleted.
+    with open(target.with_suffix(".install.lock"), "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if generation.exists():
+            if generation.is_symlink() or sha(generation) != trace_hash:
+                raise EvidenceError("immutable trace generation changed")
+        else:
+            owned = list(target.parent.glob(target.stem + ".*.trace.json"))
+            if any(path.is_symlink() for path in owned):
+                raise EvidenceError("trace generation ownership is invalid")
+            if sum(path.stat().st_size for path in owned) + len(payload) > max_generation_bytes:
+                raise EvidenceError("trace generation capacity exhausted; archive during an explicit reader maintenance window")
+            atomic_json(generation, trace)
+        if before_publish:
+            before_publish()
+        atomic_json(target.with_suffix(".manifest.json"), manifest)
     return manifest
 
 

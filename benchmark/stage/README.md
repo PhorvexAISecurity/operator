@@ -49,22 +49,59 @@ regression ends qualified collection. A new session cannot bridge the gap.
 
 For persistent capture, adapt `stage-observer.service.example` to the reviewed
 checkout and private state paths. An automatic restart records a new session
-and a real coverage gap. The default journal capacity is 256 MiB; set
-`--max-bytes` at creation to an explicit value between 1 MiB and 2 GiB. Capacity
-is immutable for that journal. The collector stops when full; it does not
+and a real coverage gap. The default journal capacity is 256 MiB with plain
+encoding. For a new persistent journal, select the reviewed compressed format
+and its explicit capacity:
+
+```sh
+python3 -m benchmark.stage.observe watch \
+  --scope /private/stage-observer/scope.json \
+  --journal /private/stage-observer/compressed-evidence.db \
+  --seconds 31536000 --encoding zlib-v1 --max-bytes 4294967296
+```
+
+`--max-bytes` is an accounted encoded-byte limit: 1 MiB..2 GiB for `plain-v1`,
+or 1 MiB..4 GiB for `zlib-v1`. Encoding and capacity are immutable. Existing
+plain journals remain readable without rewriting events, adding encoding or
+compressed counters, or recompressing history. Starting a compressed journal
+starts a new observation segment; it never bridges an earlier gap. The
+collector stops when full; it does not
 delete history and then claim completeness. Archive the complete journal and
 create a new named scope/journal for a new segment. Monitor available disk and
 the `status` command. Do not copy a live SQLite file without its WAL; use
 SQLite's backup API or stop the collector before archiving all files.
 
-The capacity limit accounts for UTF-8 event bodies and a fixed per-record
-allowance; SQLite pages and WAL also consume disk. The append counter is
-transactional and is checked against the stored rows and complete hash chain
-when opening a journal. Normalization uses two streaming passes over one
+Compressed journals store one lossless level-1 zlib stream per canonical UTF-8
+event. The hash chain still covers the exact decoded event, scope, order and
+serialized clock. Each decoded event has a hard 4 MiB limit; truncated streams,
+trailing bytes, multiple streams, invalid UTF-8 and noncanonical JSON are
+rejected. Encoded and decoded byte counters include a fixed 128-byte allowance
+per event and are updated in the same transaction as the event. Opening the
+journal verifies both counters against all stored rows and the decoded hash
+chain. Plain journals retain their original logical counter; an ancient plain
+journal with no transactional counter stays readable, but cannot be appended
+to without starting a new journal.
+
+SQLite pages, WAL and other benchmark data consume additional disk. Creation
+and each append preserve at least 4 GiB free on the journal's filesystem, with
+an additional allowance for the pending write; this guard cannot guarantee
+space against unrelated concurrent writers. `observe status` includes both
+accounted counters, actual DB/WAL/SHM sizes, free disk, reserve and measured
+verification time. Its rate-based capacity/disk headroom estimates are labelled
+estimates and are separate from observed history coverage; changed event rates,
+WAL amplification or other users can exhaust storage sooner.
+
+Normalization uses two streaming passes over one
 frozen SQLite read snapshot, with the cutoff sequence/hash recorded in its
 manifest. Concurrent capture cannot mix those passes. Opening/verifying a long
 journal and validating a calibration intent still require a complete linear
-scan; schedule calibrations accordingly and monitor observer health.
+decoded scan. Every scan defaults to a 120-second runtime limit; a timeout
+produces no completeness result. `--scan-timeout` on observation commands or
+`STAGE_JOURNAL_SCAN_TIMEOUT_SECONDS` for all Journal consumers can explicitly
+set 1..1800 seconds. The refresher's total runtime budget remains a separate
+bound. Measure representative scan runtime before choosing longer windows;
+long intent scans can also delay concurrent observation writers. Schedule
+calibrations accordingly and monitor observer health.
 
 Collection duration supports up to 366 days, and raw watches request that
 duration without a client-imposed hourly disconnect. The API server or network
@@ -131,19 +168,74 @@ containment from the engine. It fills only qualified endpoint/history inputs
 and explicit study settings. It rejects a different source/cohort/policy,
 incomplete candidates or a baseline mismatch. `trace.json` and
 `normalization.json` explain readiness; an incomplete trace is never installed.
+An otherwise eligible quarantine also requires an explicitly configured finite,
+nonnegative `hold_cap`; zero is an explicit budget refusal and this collector
+never invents a missing cap. A known non-cost
+veto or the existing worth rejection can make pricing unnecessary. The initial
+live fixture is rotate-only; unsupported action bounds remain unavailable.
 The installed manifest binds the trace hash, image, both source SHAs, ordered
 snapshot digests, candidate-export hashes and journal evidence.
 
 The bot must use the manifest's frozen snapshot cohort and the pinned actual
-brain study binary. Its lookback must match normalization's declared lookback.
+brain study binary. Custom study settings may change W/L only within genuinely
+retained continuous evidence; they cannot create missing history.
 The standalone `endpoint-v3` CLI is a synthetic/reference control using the
 same pure kernel; its result alone is not a recorded brain benchmark.
 Counterfactual realized charges and verified effects remain unavailable.
 
+## Refresh the installed dataset
+
+After stage pinning, reviewed study-engine installation and continuous
+observation, run the read-only refresh command periodically:
+
+```sh
+python3 benchmark/worker/endpoint_refresh.py \
+  --data /private/stage-data --repo /opt/operator-refactored \
+  --policy phorvex-staging-demo/stage-bench-defense \
+  --journal /private/stage-observer/evidence.db \
+  --slo-target .9 --window 600 --lookback 600 --worth-threshold 0 \
+  --ticks 64 --timeout 900
+```
+
+The command synchronizes actual image/UID/source-matched snapshots, selects
+the newest requested ticks inside one continuous observed segment, freezes
+and verifies their bytes, verifies both the captured-image and reviewed local
+base replay, and exports the candidate set with its true study-engine source.
+One frozen SQLite prefix covers both selection and normalization. Later API
+bookmarks seal earlier ticks without applying future object state to them.
+The running image, policy UID, installed pin and reviewed engine are checked
+again immediately before publication.
+
+Each qualified trace is an immutable content-addressed generation. The bot
+reads one atomic `POLICY.manifest.json` pointer first, then the named generation
+and its hash. A failed refresh preserves the last good pointer; its current
+reason and phase are written to `mathlab/endpoint-refresh/NAMESPACE/POLICY.status.json`.
+An old dataset is still historical: the status file identifies whether the
+latest refresh succeeded. Missing windows remain unavailable.
+
+Default bounds are 64 ticks (maximum 256), 900 seconds (maximum 1800), 512 MiB
+temporary work, 512 MiB immutable generations per policy and 2 GiB snapshot
+cache per policy. API observation seals must be no older than 600 seconds
+by default (`--max-observation-age`, bounded to 60..3600 seconds).
+The snapshot cache retains the newest 256 managed snapshots plus the current
+manifest cohort. Only snapshots downloaded by this refresh path with the exact
+current source, image, policy UID and recorder-process stamp are eligible for
+pruning. A shared policy lock protects consumers until their verified run copy
+is complete; pruning and pointer publication hold its exclusive counterpart.
+Unowned and older-source files count against the capacity but are preserved;
+if they fill the cache, move them only through an explicit archival procedure.
+Generations are never removed while readers may hold them;
+an exhausted generation quota requires explicit archival during a reader
+maintenance window. Journals, frozen run cohorts and results have separate
+retention and are never removed by refresh. A process supervisor may invoke
+this command every few minutes; overlapping refreshes for one policy are
+rejected by a local lock. A source/image change requires a new verified pin
+and a new genuine observation segment before publication can resume.
+
 ## Verification and cleanup
 
 ```sh
-python3 -m unittest benchmark.stage.test_evidence benchmark.stage.test_observe
+python3 -m unittest benchmark.stage.test_evidence benchmark.stage.test_observe benchmark.stage.test_storage
 python3 -m benchmark.stage.observe status --journal /private/stage-observer/evidence.db
 ```
 

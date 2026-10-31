@@ -334,6 +334,92 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result["normalization"]["move_origin"], "controlled-stage-calibration")
         self.assertIsNone(result["normalization"]["counterfactual_actual_charges"])
 
+    def test_quarantine_requires_explicit_cap_only_when_price_is_required(self):
+        seed(self.journal)
+        seal(self.journal, 400)
+        row = export()
+        row["candidates"][0]["action"] = "quarantine"
+        trace, metadata = normalize(self.journal.scope, list(self.journal.records()), [row], .9, 300, 300, 0)
+        self.assertEqual(metadata["state"], "BLOCKED")
+        self.assertIn("candidates[candidate-1].hold_cap: QUARANTINE_HOLD_CAP_NOT_CONFIGURED", metadata["missing"][row["snapshot_digest"]])
+        with self.assertRaisesRegex(EvidenceError, "incomplete"):
+            install(trace, metadata, Path(self.temp.name) / "blocked", "test")
+        for adjustment in ({"hold_cap": 0}, {"hold_cap": 10}, {"gates": ["PDB"]}, {"facts": []}):
+            with self.subTest(adjustment=adjustment):
+                modified = copy.deepcopy(row)
+                modified["candidates"][0].update(adjustment)
+                _, metadata = normalize(self.journal.scope, list(self.journal.records()), [modified], .9, 300, 300, 0)
+                self.assertEqual(metadata["state"], "READY")
+        for cap in (-1, True, None):
+            with self.subTest(cap=cap):
+                modified = copy.deepcopy(row)
+                modified['candidates'][0]['hold_cap'] = cap
+                _, metadata = normalize(self.journal.scope, self.journal.records, [modified], .9, 300, 300, 0)
+                self.assertEqual(metadata['state'], 'BLOCKED')
+        for cap in (float('nan'), float('inf')):
+            with self.subTest(cap=cap), self.assertRaisesRegex(ValueError, 'JSON compliant'):
+                modified = copy.deepcopy(row)
+                modified['candidates'][0]['hold_cap'] = cap
+                normalize(self.journal.scope, self.journal.records, [modified], .9, 300, 300, 0)
+
+    def test_immutable_generations_keep_prior_readers_and_last_good_pointer(self):
+        seed(self.journal)
+        seal(self.journal, 1000)
+        data = Path(self.temp.name)/"data"
+        trace, metadata = normalize(self.journal.scope, self.journal.records, [export(650)], .9, 300, 300, 0)
+        first = install(trace, metadata, data, "test")
+        pointer = data/"mathlab/endpoint-traces/phorvex-staging-demo/stage-bench-defense.manifest.json"
+        original = pointer.parent/first["trace_file"]
+        saved = original.read_bytes(), pointer.read_bytes()
+        other, second_meta = normalize(self.journal.scope, self.journal.records, [export(750)], .9, 300, 300, 0)
+        def changed_pin():
+            raise EvidenceError("source pin changed")
+        with self.assertRaisesRegex(EvidenceError, "source pin changed"):
+            install(other, second_meta, data, "test", before_publish=changed_pin)
+        self.assertEqual(saved, (original.read_bytes(), pointer.read_bytes()))
+        second = install(other, second_meta, data, "test")
+        self.assertNotEqual(first["trace_file"], second["trace_file"])
+        self.assertEqual(original.read_bytes(), saved[0])
+        self.assertEqual(json.loads(pointer.read_text()), second)
+        self.assertFalse(pointer.with_suffix(".json").with_name("stage-bench-defense.json").exists())
+
+    def test_generation_corruption_and_capacity_fail_without_replacing_pointer(self):
+        seed(self.journal)
+        seal(self.journal, 1000)
+        data = Path(self.temp.name)/"data"
+        trace, metadata = normalize(self.journal.scope, self.journal.records, [export(650)], .9, 300, 300, 0)
+        first = install(trace, metadata, data, "test")
+        pointer = data/"mathlab/endpoint-traces/phorvex-staging-demo/stage-bench-defense.manifest.json"
+        before = pointer.read_bytes()
+        original = pointer.parent/first["trace_file"]
+        original.write_bytes(original.read_bytes()+b" ")
+        with self.assertRaisesRegex(EvidenceError, "immutable"):
+            install(trace, metadata, data, "test")
+        self.assertEqual(pointer.read_bytes(), before)
+        (pointer.parent/("stage-bench-defense."+"f"*64+".trace.json")).write_bytes(b"x"*(1 << 20))
+        other, second_meta = normalize(self.journal.scope, self.journal.records, [export(750)], .9, 300, 300, 0)
+        with self.assertRaisesRegex(EvidenceError, "capacity"):
+            install(other, second_meta, data, "test", max_generation_bytes=1 << 20)
+        self.assertEqual(pointer.read_bytes(), before)
+
+    def test_retained_history_contract_keeps_moves_samples_and_untrimmed_intervals(self):
+        seed(self.journal)
+        rotate(self.journal)
+        seal(self.journal, 1000)
+        trace, metadata = normalize(self.journal.scope, self.journal.records, [export(650)], .9, 300, 300, 0)
+        self.assertEqual(metadata['state'], 'READY')
+        self.assertEqual(metadata['retention'], {'schema': 'phorvex-stage.retained-history.v1',
+            'moves': 'all-observed', 'samples': 'all-observed', 'interval_clipping': False})
+        tick = trace['ticks'][0]
+        # The physical move predates the declared 300s window. It must still be
+        # retained so a later request can recompute a covered 600s W/L window.
+        self.assertLess(tick['ledger']['moves'][0]['intervals'][0]['start'], 350)
+        self.assertEqual(tick['ledger']['moves'][0]['intervals'],
+                         [{'endpoint_uid': 'service-uid:p1', 'start': 23, 'end': 30}])
+        self.assertEqual(tick['candidates'][0]['samples'][0]['at'], 30)
+        self.assertEqual(tick['ledger']['complete_from'], 10)
+        self.assertGreaterEqual(metadata['bindings'][0]['sealed_until'], tick['at'])
+
     def test_normalizer_rejects_cross_source_and_cross_policy(self):
         seed(self.journal)
         seal(self.journal, 400)

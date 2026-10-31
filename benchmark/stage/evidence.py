@@ -14,15 +14,21 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import threading
 import time
+import zlib
 
 SCHEMA = "phorvex-stage.observation.v1"
 SCOPE_SCHEMA = "phorvex-stage.scope.v1"
 STREAMS = ("deployment", "replicasets", "pods", "service", "endpointslices", "policy")
 MAX_EVENT_BYTES = 4 << 20
 MAX_JOURNAL_BYTES = 256 << 20
+MAX_ENCODED_EVENT_BYTES = MAX_EVENT_BYTES + (64 << 10)
+MIN_FREE_BYTES = 4 << 30
+ENCODINGS = ("plain-v1", "zlib-v1")
+DEFAULT_SCAN_TIMEOUT = 120
 
 
 class EvidenceError(ValueError):
@@ -73,59 +79,137 @@ class Journal:
     SQLite serializes the observer and optional calibration command. History is
     bounded by refusing new writes; it is never silently evicted into completeness.
     """
-    def __init__(self, path, scope=None, max_bytes=None):
+    def __init__(self, path, scope=None, max_bytes=None, encoding=None, scan_timeout=None):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self.scan_timeout = float(scan_timeout if scan_timeout is not None else
+                                  os.environ.get("STAGE_JOURNAL_SCAN_TIMEOUT_SECONDS", DEFAULT_SCAN_TIMEOUT))
+        if not math.isfinite(self.scan_timeout) or not 1 <= self.scan_timeout <= 1800:
+            raise EvidenceError("journal full-scan timeout must be 1..1800 seconds")
+        if encoding is not None and encoding not in ENCODINGS:
+            raise EvidenceError("unsupported journal encoding")
+        new = not self.path.exists()
+        if new:
+            if scope is None:
+                raise EvidenceError("new journal requires a verified scope")
+            validate_scope(copy.deepcopy(scope))
+            capacity = MAX_JOURNAL_BYTES if max_bytes is None else max_bytes
+            ceiling = (4 if encoding == "zlib-v1" else 2) << 30
+            if type(capacity) is not int or not 1 << 20 <= capacity <= ceiling:
+                raise EvidenceError("journal capacity must be 1 MiB..%d GiB for this encoding" % (ceiling >> 30))
+            self._free_reserve(256 << 10)
         self.db = sqlite3.connect(self.path, timeout=10, check_same_thread=False)
-        os.chmod(self.path, 0o600)
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=FULL")
-        self.db.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
-        self.db.execute("CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY, at REAL NOT NULL, body TEXT NOT NULL, hash TEXT NOT NULL)")
-        self.db.commit()
-        capacity = self.db.execute("SELECT value FROM meta WHERE key='max_bytes'").fetchone()
-        self.max_bytes = int(capacity[0]) if capacity else (MAX_JOURNAL_BYTES if max_bytes is None else max_bytes)
-        if max_bytes is not None and max_bytes != self.max_bytes:
-            raise EvidenceError("journal capacity is immutable; archive and create a new explicit observation segment")
-        if not capacity:
-            self.db.execute("INSERT INTO meta VALUES ('max_bytes',?)", (str(self.max_bytes),))
-            self.db.commit()
-        found = self.db.execute("SELECT value FROM meta WHERE key='scope'").fetchone()
-        if found:
+        try:
+            os.chmod(self.path, 0o600)
+            if new:
+                self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=FULL")
+            if new:
+                self.scope = validate_scope(copy.deepcopy(scope))
+                self.encoding = encoding or "plain-v1"
+                self.max_bytes = MAX_JOURNAL_BYTES if max_bytes is None else max_bytes
+                ceiling = (4 if self.encoding == "zlib-v1" else 2) << 30
+                if type(self.max_bytes) is not int or not 1 << 20 <= self.max_bytes <= ceiling:
+                    raise EvidenceError("journal capacity must be 1 MiB..%d GiB for this encoding" % (ceiling >> 30))
+                self.db.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+                self.db.execute("CREATE TABLE events (seq INTEGER PRIMARY KEY, at REAL NOT NULL, body BLOB NOT NULL, hash TEXT NOT NULL)")
+                initial = {"scope": canonical(self.scope), "max_bytes": str(self.max_bytes), "encoding": self.encoding}
+                initial.update({"encoded_bytes": "0", "decoded_bytes": "0"} if self.encoding == "zlib-v1" else {"logical_bytes": "0"})
+                self.db.executemany("INSERT INTO meta VALUES (?,?)", initial.items())
+                self.db.commit()
+            found = self.db.execute("SELECT value FROM meta WHERE key='scope'").fetchone()
+            if not found:
+                raise EvidenceError("existing journal has no scope; it cannot be initialized or migrated implicitly")
             self.scope = validate_scope(json.loads(found[0]))
             if scope is not None and canonical(scope) != canonical(self.scope):
                 raise EvidenceError("journal belongs to a different source/scope")
-        elif scope is not None:
-            self.scope = validate_scope(copy.deepcopy(scope))
-            self.db.execute("INSERT INTO meta VALUES ('scope',?)", (canonical(self.scope),))
-            self.db.commit()
+            stored_encoding = self.db.execute("SELECT value FROM meta WHERE key='encoding'").fetchone()
+            self.encoding = stored_encoding[0] if stored_encoding else "plain-v1"
+            if self.encoding not in ENCODINGS or encoding is not None and encoding != self.encoding:
+                raise EvidenceError("journal encoding is immutable or unsupported; create a new explicit observation segment")
+            capacity = self.db.execute("SELECT value FROM meta WHERE key='max_bytes'").fetchone()
+            if not capacity:
+                raise EvidenceError("existing journal has no immutable capacity")
+            self.max_bytes = int(capacity[0])
+            ceiling = (4 if self.encoding == "zlib-v1" else 2) << 30
+            if not 1 << 20 <= self.max_bytes <= ceiling or max_bytes is not None and max_bytes != self.max_bytes:
+                raise EvidenceError("journal capacity is immutable or invalid; create a new explicit observation segment")
+            self._verify_capacity_cache()
+        except BaseException:
+            self.db.close()
+            raise
+
+    def _free_reserve(self, anticipated_bytes):
+        if shutil.disk_usage(self.path.parent).free - anticipated_bytes < MIN_FREE_BYTES:
+            raise EvidenceError("journal host free-space reserve is below 4 GiB; capture stopped without eviction")
+
+    @staticmethod
+    def _json(raw):
+        def unique(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate JSON key")
+                result[key] = value
+            return result
+        def invalid(_value):
+            raise ValueError("nonfinite JSON value")
+        try:
+            event = json.loads(raw.decode("utf-8"), object_pairs_hook=unique, parse_constant=invalid)
+            if (not isinstance(event, dict) or set(event) != {"schema", "kind", "data"} or event["schema"] != SCHEMA or
+                    canonical(event).encode() != raw):
+                raise ValueError("noncanonical observation event")
+            return event
+        except (ValueError, UnicodeError, RecursionError) as exc:
+            raise EvidenceError("journal hash chain input is not canonical UTF-8 observation JSON") from exc
+
+    def _decode(self, body):
+        if self.encoding == "plain-v1":
+            if not isinstance(body, str):
+                raise EvidenceError("plain journal record has an invalid storage type")
+            raw = body.encode()
         else:
-            raise EvidenceError("new journal requires a verified scope")
-        self._verify_capacity_cache()
+            if not isinstance(body, bytes) or len(body) > MAX_ENCODED_EVENT_BYTES:
+                raise EvidenceError("compressed journal record exceeds its encoded bound or storage type")
+            try:
+                decoder = zlib.decompressobj()
+                # Never call flush(): its size argument is not a hard output
+                # limit. Exactly one complete zlib stream must fit this call.
+                raw = decoder.decompress(body, MAX_EVENT_BYTES + 1)
+                if len(raw) > MAX_EVENT_BYTES or decoder.unconsumed_tail:
+                    raise EvidenceError("compressed journal event exceeds decoded bound")
+                if not decoder.eof or decoder.unused_data:
+                    raise EvidenceError("compressed journal event is truncated or has trailing/multiple streams")
+            except zlib.error as exc:
+                raise EvidenceError("compressed journal event is malformed") from exc
+        if len(raw) > MAX_EVENT_BYTES:
+            raise EvidenceError("journal event exceeds decoded bound")
+        return self._json(raw), len(raw)
 
     def _verify_capacity_cache(self):
-        # A persistent counter avoids SUM(body) on every watch event. Verify it
-        # against the durable table and hash chain on each open, in one SQLite
-        # snapshot. Migration from an uncached journal is the only write here.
-        exists = self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()
-        self.db.execute("BEGIN" if exists else "BEGIN IMMEDIATE")
+        # Verification never rewrites an old journal or adds new-format metadata.
+        # Both compressed counters are derived from the same decoded hash scan.
+        started = time.monotonic()
+        self.db.execute("BEGIN")
         try:
-            used, count, first, last = self.db.execute(
-                "SELECT COALESCE(SUM(length(CAST(body AS BLOB))+128),0),count(*),min(seq),max(seq) FROM events").fetchone()
-            if count and (first != 1 or last != count):
-                raise EvidenceError("journal sequence has missing rows")
-            cached = self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()
-            if cached and int(cached[0]) != used:
-                raise EvidenceError("journal logical-size cache disagrees with durable records")
-            for _ in self.records(cutoff=last or 0):
+            totals = {"encoded": 0, "decoded": 0}
+            for _ in self._records(totals=totals):
                 pass
-            if not cached:
-                self.db.execute("INSERT INTO meta VALUES ('logical_bytes',?)", (str(used),))
-            self.db.commit()
-        except BaseException:
+            names = {"encoded_bytes": "encoded", "decoded_bytes": "decoded"} if self.encoding == "zlib-v1" else {"logical_bytes": "decoded"}
+            self.has_counter = True
+            for key, field in names.items():
+                cached = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+                if not cached and self.encoding == "plain-v1":
+                    self.has_counter = False  # Ancient plain records remain readable, without migration.
+                elif not cached or int(cached[0]) != totals[field]:
+                    raise EvidenceError("journal %s-size cache disagrees with durable records" % key.split("_")[0])
+            if totals["encoded"] > self.max_bytes:
+                raise EvidenceError("journal retained bytes exceed its immutable capacity")
+            self.verified_totals = totals
+            self.verification_seconds = time.monotonic() - started
+        finally:
             self.db.rollback()
-            raise
 
     @contextmanager
     def read_snapshot(self):
@@ -146,8 +230,11 @@ class Journal:
         if at is not None and (not isinstance(at, (int, float)) or not math.isfinite(at) or at < 0):
             raise EvidenceError("invalid observation clock")
         body = canonical({"schema": SCHEMA, "kind": kind, "data": data})
-        if len(body.encode()) > MAX_EVENT_BYTES:
+        raw = body.encode()
+        if len(raw) > MAX_EVENT_BYTES:
             raise EvidenceError("event exceeds bounded journal input")
+        encoded = zlib.compress(raw, level=1) if self.encoding == "zlib-v1" else body
+        encoded_length = len(encoded) if isinstance(encoded, bytes) else len(raw)
         with self.lock:
             self.db.execute("BEGIN IMMEDIATE")
             try:
@@ -155,10 +242,16 @@ class Journal:
                 # serialized. Receive threads may otherwise acquire the DB in
                 # the opposite order of timestamps assigned outside the lock.
                 at = float(time.time() if at is None else at)
-                size = int(self.db.execute("SELECT value FROM meta WHERE key='logical_bytes'").fetchone()[0])
-                new_size = size + len(body.encode()) + 128
+                if not self.has_counter:
+                    raise EvidenceError("legacy journal lacks a transactional counter; preserve it and create a new journal")
+                counter = "encoded_bytes" if self.encoding == "zlib-v1" else "logical_bytes"
+                size = int(self.db.execute("SELECT value FROM meta WHERE key=?", (counter,)).fetchone()[0])
+                new_size = size + encoded_length + 128
                 if new_size > self.max_bytes:
                     raise EvidenceError("journal capacity exhausted; capture stopped, history not evicted")
+                # Conservatively budget three copies plus SQLite page overhead
+                # before every append; DB/WAL growth never spends the host guard.
+                self._free_reserve(encoded_length * 3 + (64 << 10))
                 old = self.db.execute("SELECT seq,at,hash FROM events ORDER BY seq DESC LIMIT 1").fetchone()
                 if old and at < old[1]:
                     raise EvidenceError("observation clock regressed; capture stopped")
@@ -173,8 +266,11 @@ class Journal:
                 seq = old[0] + 1 if old else 1
                 prev = old[2] if old else digest(self.scope)
                 h = digest([prev, seq, at, json.loads(body)])
-                self.db.execute("INSERT INTO events VALUES (?,?,?,?)", (seq, at, body, h))
-                self.db.execute("UPDATE meta SET value=? WHERE key='logical_bytes'", (str(new_size),))
+                self.db.execute("INSERT INTO events VALUES (?,?,?,?)", (seq, at, encoded, h))
+                self.db.execute("UPDATE meta SET value=? WHERE key=?", (str(new_size), counter))
+                if self.encoding == "zlib-v1":
+                    decoded = int(self.db.execute("SELECT value FROM meta WHERE key='decoded_bytes'").fetchone()[0])
+                    self.db.execute("UPDATE meta SET value=? WHERE key='decoded_bytes'", (str(decoded + len(raw) + 128),))
                 self.db.commit()
             except BaseException:
                 self.db.rollback()
@@ -182,20 +278,64 @@ class Journal:
         return seq
 
     def records(self, cutoff=None):
+        yield from self._records(cutoff)
+
+    def _records(self, cutoff=None, totals=None):
+        deadline = time.monotonic() + self.scan_timeout
         if cutoff is None:
             cutoff = self.db.execute("SELECT COALESCE(max(seq),0) FROM events").fetchone()[0]
         previous = digest(self.scope)
         expected = 1
         last_at = -1
-        for seq, at, body, h in self.db.execute("SELECT seq,at,body,hash FROM events WHERE seq<=? ORDER BY seq", (cutoff,)):
-            event = json.loads(body)
+        # Do not fetch an unbounded corrupt BLOB into Python merely to reject it.
+        query = "SELECT seq,at,CASE WHEN length(CAST(body AS BLOB))<=? THEN body ELSE NULL END,hash,length(CAST(body AS BLOB)) FROM events WHERE seq<=? ORDER BY seq"
+        for seq, at, body, h, encoded_length in self.db.execute(query, (MAX_ENCODED_EVENT_BYTES, cutoff)):
+            if time.monotonic() > deadline:
+                raise EvidenceError("journal full-scan runtime limit exceeded; no completeness result produced")
+            if body is None:
+                raise EvidenceError("journal event exceeds encoded bound")
+            event, decoded_length = self._decode(body)
             if seq != expected or at < last_at or h != digest([previous, seq, at, event]):
                 raise EvidenceError("journal hash chain or clock is invalid")
+            if totals is not None:
+                totals["encoded"] += encoded_length + 128
+                totals["decoded"] += decoded_length + 128
             yield {"seq": seq, "at": at, "hash": h, **event}
             expected += 1
             previous, last_at = h, at
         if expected != cutoff + 1:
             raise EvidenceError("journal prefix is incomplete")
+
+    def storage_status(self):
+        """Verified accounting plus physical disk and explicitly estimated rates."""
+        with self.read_snapshot():
+            oldest = self.db.execute("SELECT at FROM events ORDER BY seq LIMIT 1").fetchone()
+            newest = self.db.execute("SELECT seq,at FROM events ORDER BY seq DESC LIMIT 1").fetchone()
+            count, first, last = (newest[0], oldest[0], newest[1]) if newest else (0, None, None)
+            if self.has_counter:
+                meta = dict(self.db.execute("SELECT key,value FROM meta WHERE key IN ('encoded_bytes','decoded_bytes','logical_bytes')"))
+                encoded = int(meta["encoded_bytes"] if self.encoding == "zlib-v1" else meta["logical_bytes"])
+                decoded = int(meta["decoded_bytes"] if self.encoding == "zlib-v1" else meta["logical_bytes"])
+            else:
+                encoded, decoded = self.verified_totals["encoded"], self.verified_totals["decoded"]
+        files = {name: Path(str(self.path) + suffix).stat().st_size if Path(str(self.path) + suffix).exists() else 0
+                 for name, suffix in (("database_bytes", ""), ("wal_bytes", "-wal"), ("shm_bytes", "-shm"))}
+        free = shutil.disk_usage(self.path.parent).free
+        duration = last-first if count and last > first else None
+        encoded_rate = encoded/duration if duration else None
+        physical_rate = (files["database_bytes"]+files["wal_bytes"])/duration if duration else None
+        available = max(0, free-MIN_FREE_BYTES)
+        return {"schema": "phorvex-stage.journal-storage.v1", "encoding": self.encoding, "events": count,
+                "encoded_accounted_bytes": encoded, "decoded_accounted_bytes": decoded,
+                "accounting_allowance_per_event": 128, "capacity_encoded_bytes": self.max_bytes,
+                "capacity_remaining_bytes": max(0, self.max_bytes-encoded), **files,
+                "free_disk_bytes": free, "protected_free_bytes": MIN_FREE_BYTES, "disk_above_reserve_bytes": available,
+                "verification_seconds": self.verification_seconds, "scan_timeout_seconds": self.scan_timeout,
+                "estimates": {"classification": "observed-mean-rate estimate, not a retention or continuity guarantee",
+                              "event_clock_span_seconds": duration, "encoded_bytes_per_second": encoded_rate,
+                              "capacity_headroom_seconds": (self.max_bytes-encoded)/encoded_rate if encoded_rate else None,
+                              "disk_headroom_seconds": available/physical_rate if physical_rate else None,
+                              "limitations": "Mean includes gaps; event rate, SQLite/WAL amplification and other disk users can change. Full decoded scans and actual continuous coverage are still required."}}
 
     def close(self):
         self.db.close()

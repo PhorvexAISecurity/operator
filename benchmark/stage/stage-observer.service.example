@@ -1,5 +1,8 @@
 # User-scoped service. Replace paths with the reviewed release and private state.
-# Existing journals retain gaps on restart; no continuity is fabricated.
+# A NEW compressed journal starts a new segment; it does not bridge old history.
+# Restarts retain gaps. Capacity/rate estimates never prove 30-day continuity.
+# Every full decoded scan defaults to 120s; measure before raising its bounded
+# STAGE_JOURNAL_SCAN_TIMEOUT_SECONDS setting (1..1800). Refresh has its own budget.
 [Unit]
 Description=Phorvex stage endpoint observation
 After=network-online.target
@@ -8,7 +11,7 @@ After=network-online.target
 Type=simple
 WorkingDirectory=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/bin/python3 -m benchmark.stage.observe watch --scope /home/hami/phorvex-benchmark/stage-observer/scope.json --journal /home/hami/phorvex-benchmark/stage-observer/evidence.db --seconds 31536000 --max-bytes 268435456
+ExecStart=/usr/bin/python3 -m benchmark.stage.observe watch --scope /home/hami/phorvex-benchmark/stage-observer/scope.json --journal /home/hami/phorvex-benchmark/stage-observer/compressed-evidence.db --seconds 31536000 --encoding zlib-v1 --max-bytes 4294967296
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=30
