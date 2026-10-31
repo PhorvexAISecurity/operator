@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -233,6 +234,82 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
                     and item["metadata"].get("namespace") == "p5-demo"}
         self.assertEqual(services["rate-target"]["spec"]["selector"], {"app": "rate-admission"})
         self.assertEqual(services["rate-target-backend"]["spec"]["selector"], {"app": "rate-target"})
+
+    @classmethod
+    def render_chart(cls, chart: Path, family: str, values: dict | None = None, check: bool = True):
+        values = values or configured_values(family)
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml") as override:
+            yaml.safe_dump(values, override, sort_keys=False)
+            override.flush()
+            return subprocess.run(
+                [HELM, "template", "staging", str(chart), "--namespace", "phorvex-staging",
+                 "-f", str(ATTACKS), "-f", override.name],
+                check=check, text=True, capture_output=True,
+            )
+
+    def test_sensitive_output_fixture_source_is_populated_and_wired(self):
+        docs = objects(self.render("sensitive-output").stdout)
+        source = next(item for item in docs if item.get("kind") == "ConfigMap"
+                      and item["metadata"]["name"] == "sensitive-output-fixture-source")
+        self.assertEqual(set(source["data"]), {"proxy.py", "support.py", "bootstrap.py"})
+        for name, body in source["data"].items():
+            self.assertTrue(body.strip(), f"{name} rendered empty")
+        # The proxy must carry the exact two-sided oracle surface, not a stub.
+        self.assertIn("phorvex.support-case-response.v1", source["data"]["proxy.py"])
+        self.assertIn("[REDACTED-BY-OUTPUT-POLICY]", source["data"]["proxy.py"])
+        self.assertIn("internalAuditMarker", source["data"]["proxy.py"])
+        self.assertIn("activation.json", source["data"]["bootstrap.py"])
+        self.assertIn("ownerReferences", source["data"]["bootstrap.py"])
+
+        pods = {item["metadata"]["name"]: item for item in docs if item.get("kind") == "Pod"
+                and item["metadata"].get("namespace") == "p6-demo"}
+        self.assertEqual(set(pods), {"gfx-t0069", "gfx-t0069-001", "gfx-t0069-002"})
+        for name, pod in pods.items():
+            self.assertEqual(pod["metadata"]["labels"]["app"], "guardrail-fixture")
+            volumes = {volume["name"]: volume for volume in pod["spec"]["volumes"]}
+            # Optional policy volume lets the Pod start before bootstrap provisions
+            # the ConfigMap; readiness then gates on the mounted activation.
+            self.assertTrue(volumes["policy"]["configMap"]["optional"])
+            self.assertEqual(volumes["policy"]["configMap"]["name"], "phorvex-output-policy-" + name)
+            proxy = next(c for c in pod["spec"]["containers"] if c["name"] == "guardrail-proxy")
+            self.assertEqual(proxy["command"], ["python3", "-I", "/fixture/proxy.py"])
+            self.assertEqual(proxy["readinessProbe"]["httpGet"]["path"], "/healthz")
+
+        job = next(item for item in docs if item.get("kind") == "Job"
+                   and item["metadata"]["name"] == "sensitive-output-bootstrap")
+        env = {entry["name"]: entry.get("value")
+               for entry in job["spec"]["template"]["spec"]["containers"][0]["env"]}
+        self.assertEqual(env["POD_NAMESPACE"], "p6-demo")
+        self.assertEqual(env["FIXTURE_PODS"], "gfx-t0069,gfx-t0069-001,gfx-t0069-002")
+        for key, filename in (("PROXY_SOURCE_SHA256", "proxy.py"), ("SUPPORT_SOURCE_SHA256", "support.py")):
+            digest = env[key]
+            self.assertRegex(digest, r"^[0-9a-f]{64}$")
+            expected = hashlib.sha256(
+                (CHART / "files/sensitive-output" / filename).read_bytes()).hexdigest()
+            self.assertEqual(digest, expected, f"{key} must digest the rendered {filename}")
+
+    def test_sensitive_output_empty_or_missing_source_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            chart = Path(directory) / "phorvex-attacks"
+            shutil.copytree(CHART, chart)
+            # Control: the faithful copy still renders.
+            self.assertEqual(self.render_chart(chart, "sensitive-output").returncode, 0)
+            sources = chart / "files/sensitive-output"
+            mutations = [
+                ("blank proxy.py", lambda: (sources / "proxy.py").write_text("")),
+                ("blank support.py", lambda: (sources / "support.py").write_text("")),
+                ("blank bootstrap.py", lambda: (sources / "bootstrap.py").write_text("")),
+                ("missing proxy.py", lambda: (sources / "proxy.py").unlink()),
+            ]
+            originals = {path.name: path.read_text() for path in sources.glob("*.py")}
+            for label, mutate in mutations:
+                with self.subTest(mutation=label):
+                    mutate()
+                    result = self.render_chart(chart, "sensitive-output", check=False)
+                    self.assertNotEqual(result.returncode, 0, result.stdout)
+                    self.assertIn("sensitive-output fixture requires a non-empty", result.stderr)
+                    for name, body in originals.items():
+                        (sources / name).write_text(body)
 
     def test_agent_action_is_immutable_scoped_and_has_no_command_surface(self):
         docs = objects(self.render("agent-action").stdout)
