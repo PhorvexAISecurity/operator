@@ -4,6 +4,42 @@ The bot runs on `87.106.63.105` as the `hami` user service
 `phorvex-benchmark-bot`. Its release is independent of the dashboard's `current`
 symlink. No workload, cluster configuration or AWS infrastructure was changed.
 
+## Declarative study deployment — 2026-10-31
+
+The user explicitly requested deployment after the local implementation. Source
+`bb22a9bdda4e3c9b7a13cd0d1c358ea8c052b4fc` is now active as
+`~/phorvex-benchmark/releases/bot-dynamic-bb22a9bd`. Activation occurred at
+06:57:42 UTC; post-deployment verification completed at 06:58:41 UTC.
+
+All 17 existing bot Python files matched the reviewed base before staging. The
+release preserves the previous release's worker/registry dependencies and guide
+assets, and overlays the 18 committed changed/new files; all 18 hashes matched
+after deployment. The initial staging test found a missing deployment-unit test
+fixture; including the previous release's `benchmark/deploy` directory resolved
+it, and all **111 bot tests passed on the server**. Preflight passed for Telegram,
+authorization, private state, dashboard, current replay/source, disk, Go and model
+access. No completion-generating model call was made.
+
+Both reference-study examples completed on the host: Cost with 2 arms × 3 seeds,
+History with 4 arms × 3 seeds. These are explicitly **synthetic**, not observed
+production coverage or SLO outcomes. The normalized recorded History dataset is
+not yet installed; a recorded study correctly requires that evidence.
+
+There were no queued/running jobs before the switch. Only the bot unit's working
+directory changed. The running process uses the new release and had no restarts
+or startup errors at verification. Telegram read-back confirmed `/study` and the
+full 13-command menu for default, English and Persian locales; polling started.
+Verification sent no Telegram chat messages. API, web and proxy process identities
+and uptime, dashboard `current`, owner, membership and update offset were preserved.
+
+Private evidence and the original service unit are retained under
+`~/phorvex-benchmark/bot-validation-20261031/dynamic-bb22a9bd/`:
+`baseline.json`, `preflight.log`, `host-bot-tests.log`, both study outputs,
+`activation.json`, `verification.json`, and `previous-bot.service`.
+The previous release `bot-ebc3dbce` remains available. Rollback consists of restoring
+the saved service unit, running `systemctl --user daemon-reload`, and restarting
+`phorvex-benchmark-bot.service`; it does not require changing persisted bot state.
+
 ## Playbook refresh — 2026-10-28
 
 Documentation commit `1f04c275` synchronizes the Persian and English playbooks
