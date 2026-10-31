@@ -40,6 +40,30 @@ The previous release `bot-ebc3dbce` remains available. Rollback consists of rest
 the saved service unit, running `systemctl --user daemon-reload`, and restarting
 `phorvex-benchmark-bot.service`; it does not require changing persisted bot state.
 
+## Dynamic-study playbooks — 2026-10-31
+
+The English and Persian HTML/PDF playbooks now explain all three workflows,
+Cost/History JSON configuration, synthetic versus recorded evidence, history
+semantics, input limits, report artifacts, missing-data/fallback statuses and
+planner-decline diagnostics. Each HTML edition has 12 chapters and an offline
+JSON download builder using the three actual bundled study templates. The PDF
+editions were rendered from the updated HTML: English 23 pages, Persian 22.
+
+Local verification:
+
+* All six default browser downloads exactly matched their bundled JSON templates.
+* Eighteen downloaded/custom/embedded requests passed the actual request parser.
+* Both languages passed checks for custom settings, invalid/duplicate seeds,
+  invalid epsilon/window/policy, 12 working navigation targets, no duplicate IDs,
+  no JavaScript errors, and no page overflow at 320, 390, 768 and 1440 px.
+* Existing command builders still produce both `/bench` and `/param` commands.
+* PDFs contain the new schema and status explanations, have no empty pages,
+  and expand FAQ answers. Persian text and JSON wrapping were visually checked.
+* All five existing guide-delivery tests passed with a fake Telegram transport;
+  no chat messages or benchmark jobs were sent by these checks.
+* `git diff --check` passed. These are documentation/browser checks, not new
+  production Cost/History outcome measurements.
+
 ## Playbook refresh — 2026-10-28
 
 Documentation commit `1f04c275` synchronizes the Persian and English playbooks

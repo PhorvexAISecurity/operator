@@ -21,9 +21,9 @@ those need the live lab (`benchmark/run.sh`, still being built).
 | `/param <P-XXX-000> <value> [value...] [policy=...] [ticks=N] [nosync]` | A Math Lab parameter experiment, run by the dashboard: the deployed brain replayed with each value. Comparison status `MATCHED_REPLAY`. |
 | `/study` | Help for JSON studies: configurable reference algorithms, arms, seeds, history and trace evidence. |
 | `/guide` | Sends the English step-by-step playbook to the requesting chat as HTML and PDF attachments. |
-| `/upload` | File-submission instructions. Upload a `.md`, `.txt` or `.docx` document to execute its valid experiments automatically. |
+| `/upload` | File-submission instructions. Upload a JSON study or a `.md`, `.txt` or `.docx` code/parameter document to execute its valid experiments automatically. |
 | `/validate` | Use as an uploaded document's caption to validate structure and values without queuing anything. |
-| `/templates` | Download five completed examples, covering both sections, single sections, Word and command lists. |
+| `/templates` | Download eight examples: five code/parameter files and three Cost/History JSON studies. |
 | `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
 | `/invite` | Owner only, in private chat: a one-use member invitation valid for 24 hours. |
 
@@ -37,20 +37,37 @@ while a download is in progress. Upload failures are reported in English and
 can be retried. Releases include [guide-en.html](guide-en.html) and
 [guide-en.pdf](guide-en.pdf); the PDF is rendered from that HTML before release,
 so serving the guide needs no browser or PDF generator on the host. Update both
-files together after editing the guide. The HTML's Print / PDF button provides
+English and Persian HTML/PDF files together after editing the guides. The HTML's Print / PDF button provides
 the print layout, including expanded FAQ answers.
 
-The complete playbooks cover file uploads, `/validate` captions, `/templates`,
-batch summaries and activity cards in both languages:
+The complete playbooks cover all three workflows, file uploads, `/validate`
+captions, `/templates`, study evidence/statuses, batch summaries and activity
+cards in both languages. The offline HTML includes a command builder and a
+JSON study file builder with the three bundled templates, editable policy,
+seeds, epsilon and history window, and download-time input checks:
 
 - English: [HTML](guide-en.html), [PDF](guide-en.pdf).
 - Persian: [HTML](guide-fa.html), [PDF](guide-fa.pdf).
+
+Keep the embedded study examples in both HTML files synchronized with
+`templates/study-*.json`; validate downloaded files with the actual request
+parser and render both PDFs again after HTML changes.
 
 The bot's `/guide` command delivers the English pair. The Persian edition is a
 separate reading aid; keep command names, document keys and numeric digits in
 the examples as written.
 
 ## Uploading experiment files
+
+For Cost/History studies, upload a complete JSON request using the three study
+templates or the guide's file builder. `/study` displays help; the attachment
+starts the experiment. `/validate` as the attachment caption checks structure
+without running it. JSON may also be saved as UTF-8 `.txt`; do not mix JSON with
+the legacy sections below. Recorded studies require a normalized dataset;
+passing validation or `/check` does not prove that dataset is available. See
+[STUDIES.md](STUDIES.md) for inputs, limits and result interpretation.
+
+The rest of this section describes legacy code/parameter files.
 
 Upload a document directly into the chat. An authorized account can use either
 `[bench]` / `[params]` sections (also `## Bench` / `## Params` headings), or a
@@ -90,7 +107,8 @@ reported and independent remaining experiments continue. `/cancel` cancels the
 current batch and skips its remaining experiments. The batch finishes with
 JSON/CSV summaries and `DONE`, `PARTIAL`, `FAILED` or `CANCELLED` status.
 
-Uploads are capped at 2 MiB and extracted text at 256 KiB. DOCX extraction reads
+Uploads and `.json` study text are capped at 2 MiB; text extracted from other
+extensions, including JSON saved as `.txt`, is capped at 256 KiB. DOCX extraction reads
 paragraphs from the main document only, without loading external links or
 executing macros. ZIP expansion and XML declarations are bounded/rejected.
 Originals and normalized `VALIDATION.json` records remain privately under
@@ -283,7 +301,7 @@ changes decisions, end to end, from a Telegram message to the files sent back.
   replay evidence, source access and remaining limitations. A healthy
   Telegram service or a successful archived smoke test does not establish that
   the currently deployed source and snapshots are available.
-# Dynamic Cost and History studies
+## Dynamic Cost and History studies
 
 The bot also accepts versioned JSON studies with configurable comparison arms,
 seeds, explicit trace evidence and independent history. These run reference
