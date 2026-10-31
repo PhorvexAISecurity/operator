@@ -529,15 +529,9 @@ func TestRemainingVLLMHandlersProduceOnlyTypedNonbehavioralRecords(t *testing.T)
 			if err := json.Unmarshal(response.Body.Bytes(), &reply); err != nil || reply.AttackID == "" {
 				t.Fatalf("missing attack record identity: %v body=%s", err, response.Body.String())
 			}
-			deadline := time.Now().Add(time.Second)
-			var record *attackRecord
-			for time.Now().Before(deadline) {
-				record = attackSnapshotByID(reply.AttackID)
-				if record != nil && record.Status != "running" {
-					break
-				}
-				time.Sleep(time.Millisecond)
-			}
+			// Assert the watcher result after its cleanup and persistence finish.
+			s.attackWatchers.Wait()
+			record := attackSnapshotByID(reply.AttackID)
 			if record == nil || record.Actuated || record.Containment != "" || record.DwellSec != 0 || record.DwellOngoing || record.StimulusEvidence == nil || !record.StimulusEvidence.Observed || record.StimulusEvidence.BehavioralExecuted {
 				t.Fatalf("nonbehavioral flow manufactured verdict: %+v", record)
 			}
