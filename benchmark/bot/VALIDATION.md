@@ -64,6 +64,20 @@ Local verification:
 * `git diff --check` passed. These are documentation/browser checks, not new
   production Cost/History outcome measurements.
 
+The four guide assets from commit `d909d052f629ed3d94801dc588d280749cb80039`
+were published into the active `bot-dynamic-bb22a9bd` release and verified at
+10:04:24 UTC. Every active file matched its source hash; all five guide-delivery
+tests also passed on the host with fake Telegram transport. No real chat message
+was sent. The bot reads guide files on each `/guide` request, so this update
+required no restart. Bot/API/web/proxy process identities and uptime, dashboard
+`current`, and owner/member/offset state hashes remained unchanged.
+
+Private evidence, source manifest and all four previous assets are retained at
+`~/phorvex-benchmark/bot-validation-20261031/guide-refresh-d909d052/`.
+The `/guide` command continues to serve the English pair; the Persian pair is a
+separate reading aid. This asset update does not change runtime algorithms or
+provide the still-missing normalized recorded History dataset.
+
 ## Playbook refresh — 2026-10-28
 
 Documentation commit `1f04c275` synchronizes the Persian and English playbooks
