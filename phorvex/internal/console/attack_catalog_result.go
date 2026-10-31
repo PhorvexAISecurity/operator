@@ -105,16 +105,33 @@ type AttackCatalogPhysicalResult struct {
 }
 
 type AttackCatalogCleanupResult struct {
-	CatalogueID   string          `json:"catalogueID,omitempty"`
-	RunID         string          `json:"runID,omitempty"`
-	Family        string          `json:"family,omitempty"`
-	Attempted     bool            `json:"attempted"`
-	EventDeleted  bool            `json:"eventDeleted"`
-	MarkerDeleted bool            `json:"markerDeleted"`
-	Verified      bool            `json:"verified"`
-	CompletedAt   *time.Time      `json:"completedAt,omitempty"`
-	Reason        string          `json:"reason,omitempty"`
-	Evidence      json.RawMessage `json:"evidence,omitempty"`
+	CatalogueID   string `json:"catalogueID,omitempty"`
+	RunID         string `json:"runID,omitempty"`
+	Family        string `json:"family,omitempty"`
+	Attempted     bool   `json:"attempted"`
+	EventDeleted  bool   `json:"eventDeleted"`
+	MarkerDeleted bool   `json:"markerDeleted"`
+	Verified      bool   `json:"verified"`
+	// RetrySafe is the authoritative "no run-owned SecurityEvents/artifacts remain
+	// and no active mutation persists" signal. It is strictly weaker than Verified:
+	// Verified additionally proves the full family cleanup oracle (e.g. the exact
+	// prepare-time fixture identity, pod and ReplicaSet UIDs). RetrySafe only clears
+	// the single-active-run retry gate and NEVER contributes to a DEFENDED verdict.
+	// An environmental Pod rollout can leave a run RetrySafe but not Verified; a
+	// fully Verified cleanup is always RetrySafe (see attackCatalogCleanupRetrySafe).
+	RetrySafe   bool            `json:"retrySafe,omitempty"`
+	CompletedAt *time.Time      `json:"completedAt,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	Evidence    json.RawMessage `json:"evidence,omitempty"`
+}
+
+// attackCatalogCleanupRetrySafe reports whether a prior run left the cluster safe
+// to launch against again. Full DEFENDED-grade cleanup (Verified) always implies
+// retry-safety; the weaker authoritative RetrySafe signal (run-owned artifacts
+// absent, active mutations restored, fixture healthy even after an environmental
+// Pod rollout) also clears the retry gate without ever asserting DEFENDED.
+func attackCatalogCleanupRetrySafe(c AttackCatalogCleanupResult) bool {
+	return c.Verified || c.RetrySafe
 }
 
 // AttackCatalogResult keeps every claim stage independent. ExpectedAction is
@@ -316,7 +333,11 @@ func (r *AttackCatalogResult) finishVerdict(adapter AttackCatalogAdapter, reason
 		r.Reason = adapter.DefendedReason()
 		return
 	}
-	if !r.Cleanup.Verified {
+	// Retry-safety is decoupled from the DEFENDED cleanup oracle: a run whose
+	// run-owned artifacts are gone and whose active mutations are restored is safe
+	// to retry even if the full oracle (exact prepare-time fixture identity) could
+	// not be reproven — e.g. after an unrelated Pod rollout.
+	if !attackCatalogCleanupRetrySafe(r.Cleanup) {
 		r.UnsafeToRetry = true
 	}
 	if r.Actuator.ReceiptObserved && !r.PhysicalValidation.Validated {

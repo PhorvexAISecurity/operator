@@ -19,7 +19,7 @@ var attackRoutes = []string{
 	"/api/ai-surface", "/api/reports", "/api/benchmark-sim",
 	"/api/attack-results", "/api/attack-monitoring", "/api/availability-arms", "/api/workload/attacks",
 	"/api/runs/start", "/api/runs/scenario", "/api/runs/functional", "/api/runs/functional/admission", "/api/runs/stop",
-	"/api/runs/nats-reconcile", "/api/runs/voice-cleanup-reconcile", "/api/runs/list", "/api/runs/status",
+	"/api/runs/nats-reconcile", "/api/runs/voice-cleanup-reconcile", "/api/runs/catalogue-reconcile", "/api/runs/list", "/api/runs/status",
 	"/api/runs/stream", "/api/runs/evidence",
 	"/api/vllm/attack", "/api/voice/live/fire", "/api/voice/agency/live/fire", voiceOutputRoute, voiceAdmissionRoute,
 	"/api/voice/mcp/live/fire", "/api/litellm/live/fire", "/api/litellm/output/fire", crmLiveRoute,

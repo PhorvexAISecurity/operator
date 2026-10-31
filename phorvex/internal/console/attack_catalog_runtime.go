@@ -453,12 +453,20 @@ func (s *Server) finalizeAttackCatalogueRun(id string, adapter AttackCatalogAdap
 	if st == nil {
 		return
 	}
+	retrySafe := attackCatalogCleanupRetrySafe(result.Cleanup)
 	st.Finished = tsNow()
 	st.Outcome = result.Verdict
-	st.UnsafeToRetry = result.UnsafeToRetry || !result.Cleanup.Verified
-	if result.Cleanup.Verified {
+	// UnsafeToRetry and the "reconcile before retry" partial state are gated on
+	// retry-safety (run-owned artifacts/mutations absent), NOT the full DEFENDED
+	// cleanup oracle. DEFENDED itself still requires result.Cleanup.Verified via
+	// persistAttackCatalogRunArtifacts, so this never weakens a defended claim.
+	st.UnsafeToRetry = result.UnsafeToRetry || !retrySafe
+	switch {
+	case result.Cleanup.Verified:
 		st.CleanupStatus = "verified"
-	} else {
+	case retrySafe:
+		st.CleanupStatus = "retry-safe"
+	default:
 		st.CleanupStatus = "unverified"
 	}
 	stopping := rm.stopping[id]
@@ -467,10 +475,15 @@ func (s *Server) finalizeAttackCatalogueRun(id string, adapter AttackCatalogAdap
 	case artifactErr != nil:
 		st.State, st.UnsafeToRetry, st.Outcome = "partial", true, ""
 		st.Error = "catalogue terminal evidence missing or invalid: " + artifactErr.Error()
-	case !result.Cleanup.Verified:
+	case !retrySafe:
 		st.State, st.Error = "partial", "catalogue postflight is unverified; reconcile before retry"
 	case stopping:
-		st.State, st.Error = "stopped", "stopped by operator after verified cleanup"
+		st.State = "stopped"
+		if result.Cleanup.Verified {
+			st.Error = "stopped by operator after verified cleanup"
+		} else {
+			st.Error = "stopped by operator; cleanup confirmed retry-safe but not fully verified"
+		}
 	case result.Verdict == "ERROR":
 		st.State, st.Error = "error", result.Reason
 	case prometheusErr != nil:

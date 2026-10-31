@@ -109,6 +109,24 @@ func NewServer(cfg Config) *Server {
 	s := &Server{cfg: cfg, runs: NewRunManager(cfg)}
 	s.attackCatalogAdapters = newAttackCatalogAdapterRegistry(s, cfg)
 	s.runs.attackCatalogAdapters = s.attackCatalogAdapters
+	// Startup reconciliation of catalogue runs left unsafe by an earlier process
+	// (e.g. an environmental Pod rollout that failed the exact fixture-identity
+	// oracle, or a run interrupted mid-flight). It re-verifies read-only and appends
+	// a superseding status record; it cannot run until the adapter registry above is
+	// wired, which is why it lives here rather than in NewRunManager.
+	if cfg.servesAttacks() && cfg.StateDir != "" && s.runs.loadErr == nil {
+		// Bind the goroutine to the exact RunManager whose WaitGroup took the Add,
+		// mirroring NewRunManager's own functional reconcile. Reading s.runs inside
+		// the closure would instead resolve the field at Done() time, so a later
+		// s.runs reassignment (a pattern some tests use) would Done a different,
+		// un-Added WaitGroup and drive its counter negative.
+		rm := s.runs
+		rm.startupReconcile.Add(1)
+		go func() {
+			defer rm.startupReconcile.Done()
+			rm.reconcileInterruptedAttackCatalog()
+		}()
+	}
 	if cfg.Service == ServiceConsole {
 		s.attacks = newAttacksProxy(cfg.AttacksURL)
 	}
@@ -839,6 +857,19 @@ func (s *Server) runVoiceCleanupReconcile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, 200, map[string]string{"status": "verified_read_only_separate_history", "id": id})
+}
+
+// runCatalogueReconcile re-verifies one interrupted unsafe catalogue run read-only
+// under the same run-ID and dual-tenant authorization boundary as status and stop.
+// On success it appends a superseding status record clearing the retry gate; the
+// original terminal record is never rewritten and no DEFENDED claim is made.
+func (s *Server) runCatalogueReconcile(w http.ResponseWriter, r *http.Request) {
+	id := runIDOf(r)
+	if err := s.runs.ReconcileAttackCatalogRun(id, principalKey(principalOf(r))); err != nil {
+		writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "verified_read_only", "id": id})
 }
 
 func (s *Server) runStatus(w http.ResponseWriter, r *http.Request) {
