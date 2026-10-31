@@ -108,6 +108,13 @@ class ManifestTests(unittest.TestCase):
         self.assertLessEqual({('', 'Secret'), ('admissionregistration.k8s.io', 'MutatingWebhookConfiguration'),
                               ('admissionregistration.k8s.io', 'ValidatingWebhookConfiguration')}, ignored)
 
+    def test_agent_deny_runtime_ledger_survives_gitops_self_heal(self):
+        ignored = next(i for i in TEMPLATE['spec']['ignoreDifferences']
+                       if i.get('kind') == 'ConfigMap' and i.get('name') == 'agent-deny-guard')
+        self.assertEqual(ignored.get('namespace'), 'p6-demo')
+        self.assertEqual(ignored.get('jsonPointers'), ['/data'])
+        self.assertIn('RespectIgnoreDifferences=true', TEMPLATE['spec']['syncPolicy']['syncOptions'])
+
 
 @unittest.skipUnless(HELM or os.environ.get('GITHUB_ACTIONS'), 'helm is not installed')
 class EnvironmentRenderTests(unittest.TestCase):
