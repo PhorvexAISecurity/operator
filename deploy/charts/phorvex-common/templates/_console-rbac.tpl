@@ -258,6 +258,17 @@ rules:
 - apiGroups: ["discovery.k8s.io"]
   resources: ["endpointslices"]
   verbs: ["get", "list"]
+# The k8s_cluster preflight GETs the exact-name quarantine NetworkPolicy to prove the
+# target is clean before a rotate/quarantine, and the quarantine capacity preflight +
+# physical oracle READ the lane's NetworkPolicies and capacity ConfigMaps. Read-only and
+# lane-scoped; the actuation verbs (create/delete networkpolicies, update configmaps,
+# delete pods) remain denied to the red-team SA and are proven against the actuator.
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
   verbs: ["patch"]
