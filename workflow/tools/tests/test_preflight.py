@@ -1,13 +1,17 @@
 from __future__ import annotations
 import argparse
 import json
+import hashlib
+import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
+import yaml
 from unittest.mock import patch
 import sys
 
-from test_operations import sandbox, run, workflow as w
+from test_operations import sandbox, run, workflow as w, SOURCE_ROOT
 import preflight
 
 
@@ -31,10 +35,54 @@ class PreflightTests(unittest.TestCase):
             self.assertNotIn('DO_NOT_',json.dumps(jobs))
             pinned_head = selected['head_sha']
             (ci/'workflow-harness.yml').write_text('invalid: later-checkout-config')
+            (ci/'ci.yml').unlink()
+            (ci/'pr-validation.yml').write_text('invalid: current-checkout-is-not-historical-authority')
             run(['git', 'add', '.github'], repo)
             run(['git', 'commit', '-m', 'Change CI on later main'], repo)
             self.assertEqual(preflight.plan(repo, baseline, pinned_head, pinned=True), selected)
 
+
+    def test_current_ci_authority_retains_every_chart_check_and_pinned_setup(self):
+        with sandbox() as (repo, root, baseline):
+            ci = repo/'.github/workflows'; ci.mkdir(parents=True)
+            for name in ('workflow-harness.yml', 'pr-validation.yml'):
+                shutil.copy2(SOURCE_ROOT.parent/'.github/workflows'/name, ci/name)
+            (repo/'tools').mkdir()
+            shutil.copy2(SOURCE_ROOT.parent/'tools/provision-python.sh', repo/'tools/provision-python.sh')
+            run(['git', 'add', '.github', 'tools'], repo)
+            run(['git', 'commit', '-m', 'Current source-validation authority'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            selected = preflight.plan(repo, baseline, head)
+            self.assertFalse((ci/'ci.yml').exists())
+            charts = [j for j in selected['jobs'] if j['id'].startswith('chart-')]
+            config = yaml.safe_load((ci/'pr-validation.yml').read_text())
+            expected = [step['run'] for step in config['jobs']['charts']['steps']
+                        if 'run' in step and 'tools/provision-python.sh' not in step['run']]
+            self.assertEqual([j['script'] for j in charts], expected)
+            self.assertTrue(charts)
+            for job in charts:
+                self.assertEqual(job['version'], 'v3.16.4')
+                self.assertEqual(job['python_version'], '3.12.15')
+                self.assertEqual(job['ci_sha256'], hashlib.sha256((ci/'pr-validation.yml').read_bytes()).hexdigest())
+                self.assertEqual(job['python_provision_sha256'], hashlib.sha256((repo/'tools/provision-python.sh').read_bytes()).hexdigest())
+            harness = next(j for j in selected['jobs'] if j['id'] == 'workflow')
+            self.assertEqual(harness['version'], '3.11.17')
+            self.assertEqual(harness['script'], 'bash workflow/tools/check.sh')
+            self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
+            # Both authority selection and the provision recipe come from the
+            # receipt's commit, never a different checkout's present files.
+            (ci/'pr-validation.yml').unlink()
+            (ci/'ci.yml').write_text('invalid: later-main')
+            (repo/'tools/provision-python.sh').write_text('invalid: later-provisioner')
+            self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
+
+    def test_pinned_python_requires_exact_patch_and_version_specific_binary(self):
+        args = argparse.Namespace(python='/generic/python', helm=None)
+        with patch.dict(os.environ, {'PREFLIGHT_PYTHON_3_12': '/matching/python'}), \
+             patch.object(preflight.subprocess, 'check_output', return_value='3.12.14\n') as check:
+            with self.assertRaisesRegex(ValueError, 'differs from CI 3.12.15'):
+                preflight.environment({'tool':'python', 'version':'3.12.15'}, Path('/tmp'), args)
+            self.assertEqual(check.call_args.args[0][0], '/matching/python')
 
     def test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail(self):
         with sandbox() as (repo, root, baseline):

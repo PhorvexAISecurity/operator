@@ -18,11 +18,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
@@ -302,5 +304,58 @@ func TestHelloRefusesAnotherContractOrConfiguration(t *testing.T) {
 		&sensorpb.HelloRequest{ContractVersion: sensorapi.ContractVersion + 1, ConfigSha256: testConfig.SHA256()})
 	if status.Code(err) != codes.FailedPrecondition {
 		t.Fatalf("another contract version: %v", err)
+	}
+}
+
+// This is the actual Kubernetes reader -> sensor adapter -> gRPC -> observation
+// path; the observed pod count must not substitute for controller spec.replicas.
+func TestWorkloadSpecThroughRealRemoteSensor(t *testing.T) {
+	local := cluster(t)
+	local.OwnershipReader = local.Client
+	replicas := int32(4)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "dep", Namespace: "vllm", UID: "du"}, Spec: appsv1.DeploymentSpec{Replicas: &replicas}}
+	rs := &appsv1.ReplicaSet{ObjectMeta: metav1.ObjectMeta{Name: "rs", Namespace: "vllm", UID: "ru", OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(dep, appsv1.SchemeGroupVersion.WithKind("Deployment"))}}, Spec: appsv1.ReplicaSetSpec{Replicas: &replicas, Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "web"}}}}
+	ctx := context.Background()
+	if err := local.Client.Create(ctx, dep); err != nil {
+		t.Fatal(err)
+	}
+	if err := local.Client.Create(ctx, rs); err != nil {
+		t.Fatal(err)
+	}
+	var pod corev1.Pod
+	if err := local.Client.Get(ctx, client.ObjectKey{Namespace: "vllm", Name: "web-1"}, &pod); err != nil {
+		t.Fatal(err)
+	}
+	pod.OwnerReferences = []metav1.OwnerReference{*metav1.NewControllerRef(rs, appsv1.SchemeGroupVersion.WithKind("ReplicaSet"))}
+	if err := local.Client.Update(ctx, &pod); err != nil {
+		t.Fatal(err)
+	}
+	remote := connect(t, local, local.TelemetrySource())
+	req := sensorapi.ObserveRequest{Now: time.Now().UTC(), ResolveOwners: true, Scopes: []sensorapi.Scope{{Namespace: "vllm", Selector: "app=web"}}}
+	got, err := remote.Observe(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := false
+	for _, p := range got.Pods {
+		if p.UID == string(pod.UID) {
+			seen = true
+			if !p.WorkloadSpec.Known || p.WorkloadSpec.SpecReplicas != 4 || p.WorkloadSpec.Workload.UID != "du" || p.WorkloadSpec.Controller.UID != "ru" {
+				t.Fatalf("remote lost spec: %+v", p.WorkloadSpec)
+			}
+		}
+	}
+	if !seen {
+		t.Fatal("producer fixture pod missing")
+	}
+	req.ResolveOwners = false
+	got, err = remote.Observe(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range got.Pods {
+		if p.UID == string(pod.UID) && (p.WorkloadSpec.Known || p.WorkloadSpec.Reason != "owner-reader-unavailable") {
+			t.Fatalf("Phoenix missing-reader state hidden: %+v", p.WorkloadSpec)
+		}
 	}
 }

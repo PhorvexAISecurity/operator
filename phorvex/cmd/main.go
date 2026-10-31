@@ -163,6 +163,7 @@ func main() {
 		mathLabCaptureDir              string
 		mathLabCaptureMaxBytes         int64
 		mathLabMaxSnapshotBytes        int
+		mathLabCostEvidence            bool
 		brainEndpoint                  string
 		serviceTLS                     grpctlsconfig.Config
 		sensorFlags                    sensorconfig.Flags
@@ -233,6 +234,7 @@ func main() {
 	flag.StringVar(&mathLabCaptureDir, "math-lab-capture-dir", "", "[math-lab-capture-policies] private directory for the bounded snapshot store (for example on the audit volume).")
 	flag.Int64Var(&mathLabCaptureMaxBytes, "math-lab-capture-max-bytes", 1<<30, "[math-lab-capture-policies] byte bound of the snapshot store; the oldest snapshots are evicted first.")
 	flag.IntVar(&mathLabMaxSnapshotBytes, "math-lab-capture-max-snapshot-bytes", mathlab.DefaultMaxSnapshotBytes, "[math-lab-capture-policies] uncompressed bound of one snapshot; larger ticks are dropped and counted.")
+	flag.BoolVar(&mathLabCostEvidence, "math-lab-capture-cost-evidence", false, "Include bounded, explicitly partial workload-spec and replica-impact history in Math Lab captures. Does not enable endpoint pricing, admission or actuation; requires the brain capture allowlist.")
 	flag.StringVar(&brainEndpoint, "brain-endpoint", "", "gRPC address of the brain service (ADR-0001). Empty (default) runs the decision engine in this process. The connection is mutual TLS with --grpc-tls-cert, else plaintext: restrict the brain with a NetworkPolicy.")
 	flag.DurationVar(&brainConnectTimeout, "brain-connect-timeout", 2*time.Minute, "[brain-endpoint] how long startup waits for the brain service to accept the handshake.")
 	flag.DurationVar(&brainCallTimeout, "brain-call-timeout", 5*time.Second, "[brain-endpoint] deadline of each brain call other than an evaluation.")
@@ -462,6 +464,7 @@ func main() {
 		os.Exit(1)
 	}
 	rmgr := runner.New(mgr.GetClient(), ctrl.Log, local)
+	rmgr.CaptureCostEvidence = mathLabCostEvidence
 	rmgr.OwnershipReader = mgr.GetAPIReader()
 	rmgr.VocabularyReader = mgr.GetAPIReader()
 	// The manager acts in this process unless --actuator-endpoint names the actuator

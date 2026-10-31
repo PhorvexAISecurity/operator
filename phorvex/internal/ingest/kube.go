@@ -193,8 +193,10 @@ func collectSnapshot(ctx context.Context, c client.Client, now time.Time, assetV
 		}
 		if relevant == nil || relevant(&podList.Items[i]) {
 			p.RotationOwnership = ownership.Check(ctx, ownerReader, &podList.Items[i])
+			p.WorkloadSpec = workloadSpecObservation(ctx, ownerEvidenceReader(ownerReader), &podList.Items[i], now)
 		} else {
 			p.RotationOwnership.Reason = "outside-rotation-targets"
+			p.WorkloadSpec = model.WorkloadSpecObservation{Reason: "outside-observation-targets", ObservedAt: now, PodUID: p.UID}
 		}
 		ownerKey := p.Namespace + "/" + p.OwnerKind + "/" + p.OwnerName
 		if p.OwnerName != "" {

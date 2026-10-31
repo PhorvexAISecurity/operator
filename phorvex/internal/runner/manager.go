@@ -284,6 +284,8 @@ type Manager struct {
 	// structural-zero actions, explicit unknown-impact outcomes, and measured or
 	// censored rotation disruption. Nil disables recording; it observes and never gates.
 	Disruption *slo.Ledger
+	// Default-off bounded replay evidence capture; never a pricing/admission switch.
+	CaptureCostEvidence bool
 
 	// Decision trace is observational. Build identity is resolved once at
 	// startup; disabling the trace is used only for non-interference tests.
@@ -983,6 +985,7 @@ func (m *Manager) closePendingForOwner(ev lifecycleEvent) int {
 			// which would assert a floor we never measured.
 			m.Disruption.Record(slo.Entry{
 				ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+				PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
 				Action: model.ActionRotate, Cause: slo.CausePhorvex,
 				StartedAt: p.startedAt, Outcome: slo.OutcomeEmitted,
 				ReplicaImpact: slo.ImpactUnmeasured,
@@ -1489,7 +1492,7 @@ func selectionBoundEvidence(bound slo.Bound) string {
 // terminal synchronous result. Non-zero actions are explicitly unmeasured here:
 // a return from Actuate does not prove that asynchronous serving impact ended.
 // Rotate is recorded by observeReadyRotations instead, when recovery is observed.
-func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, action model.Action, minAvailableReplicas int, startedAt, observedAt time.Time, outcome slo.Outcome) {
+func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, action model.Action, minAvailableReplicas int, startedAt, observedAt time.Time, outcome slo.Outcome, policyOwner ...string) {
 	if m.Disruption == nil || view == nil {
 		return
 	}
@@ -1505,9 +1508,14 @@ func (m *Manager) recordActionOutcome(tenant string, view *model.WorkloadView, a
 	if duration < 0 {
 		duration = 0
 	}
+	owner := ""
+	if len(policyOwner) == 1 {
+		owner = policyOwner[0]
+	}
 	m.Disruption.Record(slo.Entry{
 		ID:     fmt.Sprintf("%s/%s/%s/%d", tenant, view.Pod.Namespace+"/"+view.Pod.Name, action, startedAt.UnixNano()),
 		Tenant: tenant, Namespace: view.Pod.Namespace, Pod: view.Pod.Name,
+		PolicyOwner: owner, PodUID: view.Pod.UID, WorkloadUID: replayWorkloadUID(view),
 		Action: action, Cause: slo.CausePhorvex, Outcome: outcome,
 		Duration: duration, StartedAt: startedAt, ObservedAt: observedAt,
 		ReplicaImpact:        impact,
@@ -1742,10 +1750,11 @@ func (m *Manager) observeReadyRotations(snap *sensorapi.Observation) {
 				outcome = slo.OutcomeRightCensored
 			}
 			m.Disruption.Record(slo.Entry{
-				ID:                           p.ledgerID,
-				Tenant:                       p.tenant,
-				Namespace:                    p.view.Pod.Namespace,
-				Pod:                          p.view.Pod.Name,
+				ID:          p.ledgerID,
+				Tenant:      p.tenant,
+				Namespace:   p.view.Pod.Namespace,
+				Pod:         p.view.Pod.Name,
+				PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
 				Action:                       model.ActionRotate,
 				Cause:                        slo.CausePhorvex,
 				Replicas:                     1,
@@ -1811,6 +1820,7 @@ func (m *Manager) observeReadyRotations(snap *sensorapi.Observation) {
 func (m *Manager) recordUnknownRotation(p pendingRotation, observedAt time.Time) {
 	m.Disruption.Record(slo.Entry{
 		ID: p.ledgerID, Tenant: p.tenant, Namespace: p.view.Pod.Namespace, Pod: p.view.Pod.Name,
+		PolicyOwner: p.owner, PodUID: p.view.Pod.UID, WorkloadUID: replayWorkloadUID(&p.view),
 		Action: model.ActionRotate, Cause: slo.CausePhorvex, StartedAt: p.startedAt,
 		ObservedAt: observedAt, Outcome: slo.OutcomeEmitted, ReplicaImpact: slo.ImpactUnmeasured,
 		SelectionBoundStatus:   p.selectionBound.Status,
@@ -2079,7 +2089,7 @@ func (m *Manager) processTenantObserved(ctx context.Context, obs *sensorapi.Obse
 	// inputs before the engine runs and the raw decisions right after; the recording never
 	// changes a decision and drops its own snapshot rather than delaying the tick.
 	decisions, recording, err := brain.Decide(brainapi.DecideRequest{Views: views, Policy: pol, Gate: gate,
-		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: obs.Now}})
+		Capture: &brainapi.Capture{Spec: e.spec, CapturedAt: obs.Now, EndpointCostEvidence: m.replayCostEvidence(views, pol, e.spec, obs.Now)}})
 	defer recording.Close()
 	if ctx.Err() != nil {
 		return
@@ -3261,7 +3271,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 				}
 			}
 			stampDispatch(dispatchOutcome, dispatchReason)
-			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
+			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome, pol.Owner())
 			if err != nil {
 				m.Log.Error(err, "actuate failed", "pod", decisions[i].Namespace+"/"+decisions[i].Pod)
 			} else if disposition == actuatorapi.NoEffectRefused {
@@ -3356,14 +3366,14 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					decisionID = decisions[i].Trace.DecisionID
 				}
 				if !m.trackRotationReceipt(pol.Owner(), pol.Tenant, v, tickViewByKey, pol.MinAvailableReplicas, actuationStarted, res, decisionID) {
-					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted)
+					m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeEmitted, pol.Owner())
 				}
 			} else {
 				outcome := slo.OutcomeEmitted
 				if selectionBound(decisions[i].Action).Status == slo.StatusZero {
 					outcome = slo.OutcomeCompleted
 				}
-				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome)
+				m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), outcome, pol.Owner())
 			}
 		} else {
 			// A non-emitted result can still carry reviewed handler identity or a
@@ -3393,7 +3403,7 @@ func (m *Manager) actuatePreparedModeWithCapacity(ctx context.Context, e *policy
 					appendDispatchReason(&decisions[i], "shared-capacity-unknown-retention-unconfirmed")
 				}
 			}
-			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted)
+			m.recordActionOutcome(pol.Tenant, v, decisions[i].Action, pol.MinAvailableReplicas, actuationStarted, time.Now(), slo.OutcomeNotEmitted, pol.Owner())
 		}
 	}
 	return actuated, &preparation, attempted

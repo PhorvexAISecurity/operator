@@ -547,6 +547,8 @@ type PodBoundKubeAPIAuthProjection struct {
 }
 
 type Pod struct {
+	// WorkloadSpec is additive replay evidence, never an admission input.
+	WorkloadSpec      WorkloadSpecObservation
 	RotationOwnership RotationOwnership
 	// ServiceAvailability contains one row for every Service whose selector
 	// matches this Pod. Empty or incomplete rows cannot authorize a
