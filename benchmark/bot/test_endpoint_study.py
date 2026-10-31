@@ -45,6 +45,16 @@ class EndpointStudyTest(unittest.TestCase):
         for name in ('evidence.zip', 'result.json', 'metrics.csv', 'report.html'):
             self.assertTrue((self.tmp/'missing'/name).is_file())
 
+    def test_nested_input_errors_are_rejected_before_queueing(self):
+        for field,value in [('k','1'),('facts_known',1),('samples',[{'duration':'bad'}]),('gates',['ok',False]),('typo',1)]:
+            req=example(); req['trace']['ticks'][0]['candidates'][0][field]=value
+            with self.subTest(field=field), self.assertRaises(file_requests.RequestError):
+                file_requests.parse(json.dumps(req))
+        req=example();req['trace']['ticks'][0]['ledger']['moves'][0]['intervals'][0]['end']='later'
+        with self.assertRaises(file_requests.RequestError): file_requests.parse(json.dumps(req))
+        req=example();req['trace']['ticks'][0]['ledger']=None
+        self.assertEqual(file_requests.parse(json.dumps(req))[0]['kind'],'endpoint')
+
     def test_install_manifest_fails_closed_on_changed_data(self):
         trace = example()['trace']; trace['evidence'] = 'recorded'; trace['source_revision'] = 'a'*40
         source = self.tmp/'input.json'; source.write_text(json.dumps(trace))

@@ -33,6 +33,46 @@ REQUIRED = [
     {'field': 'ticks[].slo', 'reason': 'Accepted SLO or explicitly labelled study assumptions; neither creates missing history or admission authority.'},
 ]
 
+# Validate the complete JSON shape before queuing. Missing observational values
+# are allowed as null/absent and become BLOCKED evidence, but misspelled fields
+# and wrong types are request errors, not failed benchmark jobs.
+SHAPES = {
+    'slo': {'target':'number','window':'number','accepted':'bool','study_assumption':'bool'},
+    'ledger': {'at':'number','complete_from':'number?','authoritative':'bool','measurement':'str','moves':'move[]'},
+    'move': {'id':'str','revision':'int','workload_uid':'str','policy_uid':'str','action':'str','containment':'bool',
+             'state':'str','observed_at':'number','attributed':'bool','measured':'bool','intervals':'interval[]','reservation':'number?','overdue':'bool'},
+    'interval': {'endpoint_uid':'str','start':'number','end':'number'},
+    'candidate': {'id':'str','pod_uid':'str','action':'str','facts':'fact[]','facts_known':'bool','gates':'str[]',
+                  'gates_known':'bool','worth_threshold':'number?','containment':'bool','k':'int?','class':'str',
+                  'history_known':'bool','samples':'sample[]','hold_cap':'number?','documented_bound':'bound?'},
+    'sample': {'id':'str','workload_uid':'str','action':'str','at':'number','duration':'number?',
+               'censored':'bool','overdue':'bool','suspect':'bool'},
+    'fact': {'id':'str','weight':'number'},
+    'bound': {'source':'str','approved':'bool','mid':'number','upper':'number','failure_upper':'number'},
+}
+ARRAY_LIMITS = {'moves':10000,'intervals':1000,'facts':512,'samples':2000,'gates':128}
+
+
+def typed(value, kind, path):
+    if kind.endswith('?'):
+        if value is None: return
+        kind = kind[:-1]
+    if kind.endswith('[]'):
+        if value is None: return  # Go nil slices; knowledge flags remain separate.
+        if not isinstance(value,list) or len(value)>ARRAY_LIMITS[path.rsplit('.',1)[-1]]:
+            raise ValueError(path+' must be a bounded array')
+        for item in value: typed(item,kind[:-2],path+'[]')
+    elif kind == 'number': number(value,path)
+    elif kind == 'int':
+        if type(value) is not int or not -(2**31)<=value<2**31: raise ValueError(path+' must be a bounded integer')
+    elif kind == 'bool':
+        if type(value) is not bool: raise ValueError(path+' must be boolean')
+    elif kind == 'str':
+        if not isinstance(value,str) or len(value)>2000: raise ValueError(path+' must be a short string')
+    else:
+        shape=SHAPES[kind]; fields(value,shape)
+        for key,item in value.items(): typed(item,shape[key],path+'.'+key)
+
 
 def legacy_request(prompt, policy, ticks):
     """Recognize only the exact reviewed upload, never fuzzy-map arbitrary prose."""
@@ -98,10 +138,17 @@ def validate_trace(trace):
             integer(tick['spec_replicas'], 'spec_replicas', 0, 1000000)
         if not isinstance(tick['candidates'], list) or len(tick['candidates']) > 256:
             raise ValueError('maximum 256 candidates per tick')
+        for key in ('slo','ledger'):
+            if tick.get(key) is not None: typed(tick[key],key,'tick.'+key)
+        if 'mandatory_id' in tick: typed(tick['mandatory_id'],'str','tick.mandatory_id')
+        for c in tick['candidates']:
+            typed(c,'candidate','tick.candidate')
+            if any(not c.get(k) for k in ('id','pod_uid','action')):
+                raise ValueError('candidate id, pod_uid and action are required')
     if sum(len(t['candidates']) for t in ticks) > 100000:
         raise ValueError('maximum 100000 candidate rows')
-    # The Go binary performs the complete typed contract/gate validation. JSON
-    # validation here establishes bounded structure, never empirical readiness.
+    # The Go binary independently validates this shape and the contract/gates.
+    # Structure validation never establishes empirical readiness.
 
 
 def sha(path):
