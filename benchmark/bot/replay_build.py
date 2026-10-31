@@ -55,14 +55,19 @@ def deployed_toolchain(binary, go='go'):
     return match.group(1)
 
 
-def go_environment(src, toolchain=TOOLCHAIN):
+def go_environment(src, toolchain=TOOLCHAIN, cache_dir=None):
     """Use the host's Go caches, but give tested code no service/cloud credentials."""
     home = Path(src).parent / 'go-home'
     home.mkdir(exist_ok=True, mode=0o700)
+    if cache_dir is not None:
+        cache_dir = Path(cache_dir)
+        if cache_dir.is_symlink():
+            raise BuildError('managed Go cache must not be a symlink')
+        cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     return {
         'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'),
         'HOME': str(home), 'LANG': 'C.UTF-8',
-        'GOCACHE': os.environ.get('GOCACHE', str(Path.home() / '.cache/go-build')),
+        'GOCACHE': str(cache_dir) if cache_dir is not None else os.environ.get('GOCACHE', str(Path.home() / '.cache/go-build')),
         'GOPATH': os.environ.get('GOPATH', str(Path.home() / 'go')),
         'GOMODCACHE': os.environ.get('GOMODCACHE', str(Path.home() / 'go/pkg/mod')),
         'GOTOOLCHAIN': toolchain, 'GOFLAGS': '-mod=readonly -buildvcs=false',
@@ -72,7 +77,7 @@ def go_environment(src, toolchain=TOOLCHAIN):
     }
 
 
-def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLCHAIN):
+def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLCHAIN, cache_dir=None):
     """Run uncached unit tests; return counts and preserve the complete JSON log."""
     src = Path(src)
     if _git(src, 'rev-parse', 'HEAD') != commit or _git(src, 'status', '--porcelain'):
@@ -84,7 +89,7 @@ def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLC
            '-ldflags=-X %s=%s' % (LDFLAG, commit), *packages]
     timed_out = False
     try:
-        result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=go_environment(src, toolchain),
+        result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=go_environment(src, toolchain, cache_dir),
                                 text=True, capture_output=True, timeout=timeout)
         output, returncode = result.stdout + result.stderr, result.returncode
     except subprocess.TimeoutExpired as err:
@@ -110,7 +115,7 @@ def test(src, commit, packages, go='go', timeout=1800, log=None, toolchain=TOOLC
             'status': 'PASS' if returncode == 0 and completed else ('TIMEOUT' if timed_out else 'FAIL')}
 
 
-def build(src, commit, out, go='go', toolchain=TOOLCHAIN, timeout=1800, log=None):
+def build(src, commit, out, go='go', toolchain=TOOLCHAIN, timeout=1800, log=None, cache_dir=None):
     """Compile <src>/phorvex/cmd/brain-replay at `commit` into `out`; return its sha256."""
     src, out = Path(src), Path(out)
     head = _git(src, 'rev-parse', 'HEAD')
@@ -120,7 +125,7 @@ def build(src, commit, out, go='go', toolchain=TOOLCHAIN, timeout=1800, log=None
     if dirty:
         raise BuildError('%s has uncommitted changes; a build must be the commit alone' % src)
     out.parent.mkdir(parents=True, exist_ok=True)
-    env = go_environment(src, toolchain)
+    env = go_environment(src, toolchain, cache_dir)
     cmd = [go, 'build', '-p=2', '-trimpath', '-ldflags=-s -w -X %s=%s' % (LDFLAG, commit), '-o', str(out), './cmd/brain-replay']
     result = subprocess.run(cmd, cwd=str(src / 'phorvex'), env=env, text=True, capture_output=True, timeout=timeout)
     if log is not None:

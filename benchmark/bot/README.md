@@ -185,6 +185,14 @@ on the hypothesis and safety metrics.
   `BOT_MIN_FREE_GB` (default 4). It needs two checkouts and a Go build, and it
   must never fill the host. Clones use `--shared`, so objects are borrowed
   from `BOT_REPO` rather than copied.
+- **Build-cache retention:** bot builds use `BOT_STATE_DIR/go-build-cache`,
+  separate from the account's global Go cache. Before and after a code job,
+  the single worker removes oldest disposable cache entries to retain at most
+  2 GiB and, when possible, recover the configured free-space minimum. This is
+  a retention limit between jobs, not an in-progress filesystem quota. A cold
+  build may use more space, and other services can still exhaust the disk.
+  Reports, replay evidence, modules, SDKs and unrelated caches are retained.
+  Cleanup counters are stored as `storage-before.json` and `storage-after.json`.
 - **Isolated replay.** `brain-replay` runs with no credentials (Math Lab's
   `run_isolated`), and it has no network or Kubernetes client.
 - **Unit-test environment.** Builds and tests use a separate home directory,
@@ -195,7 +203,10 @@ on the hypothesis and safety metrics.
   and the OpenAI key are never logged or sent. The tests check this.
 - **Job directories** (`BOT_STATE_DIR/jobs/<id>`, mode 700) keep the prompt,
   the diff, `PLAN.json`, `CANDIDATE.json`, the build logs and the full Math Lab
-  evidence (`experiment/evidence.zip`). The clones are deleted after each job.
+  evidence (`experiment/evidence.zip`). The clones and temporary Go home are
+  deleted after each job. A model's recorded decline reason is also shown in
+  the failure message; a missing implementation or input is not a successful
+  benchmark merely because the file's structure passed validation.
 
 ## Launching it on the jump host
 

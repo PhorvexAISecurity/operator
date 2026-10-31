@@ -55,6 +55,7 @@ import replay_build  # noqa: E402
 import report  # noqa: E402
 import file_requests  # noqa: E402
 import study  # noqa: E402
+import storage  # noqa: E402
 from progress import Progress  # noqa: E402
 from dashboard import Dashboard, DashboardError  # noqa: E402
 from telegram import Telegram, TelegramError  # noqa: E402
@@ -184,6 +185,7 @@ class Config:
         self.admins = self.allowed - {0}
         self.allowed.update(row['id'] for row in read_members(self.state) if row['invited_by'] in self.admins)
         self.repo = env.get('BOT_REPO') or None
+        self.go_cache = self.state / 'go-build-cache'
         self.data = env.get('MATHLAB_DATA_DIR') or None
         self.policy = env.get('BOT_DEFAULT_POLICY', 'vllm/vllm-defense')
         self.ticks = int(env.get('BOT_MAX_TICKS', '500'))
@@ -664,8 +666,10 @@ class BenchBot:
             self.say(job.chat_id, '[%s] failed during "%s" (%s); details are in %s/error.txt on the host.'
                      % (job.id, job.step, type(err).__name__, job.dir))
         finally:
-            for clone in ('candidate-src', 'base-src'):
+            for clone in ('candidate-src', 'base-src', 'go-home'):
                 shutil.rmtree(job.dir / clone, ignore_errors=True)
+            if job.kind == 'bench':
+                self.maintain_storage(job, 'after')
             with open(self.cfg.state / 'history.jsonl', 'a') as f:
                 f.write(json.dumps({'id': job.id, 'kind': job.kind, 'user': job.user, 'state': job.state,
                                     'created': job.created, 'finished': utc(), 'request': job.text[:300],
@@ -727,6 +731,18 @@ class BenchBot:
 
     def free_gb(self):
         return shutil.disk_usage(self.cfg.state).free / 2 ** 30
+
+    def maintain_storage(self, job, phase):
+        try:
+            result = storage.trim_cache(self.cfg.go_cache, min_free_bytes=int(self.cfg.min_free_gb * 2**30))
+        except (OSError, ValueError) as err:
+            result = {'warning': type(err).__name__ + ': managed cache cleanup unavailable'}
+            log('job %s: %s' % (job.id, result['warning']))
+        try:
+            (job.dir / ('storage-' + phase + '.json')).write_text(json.dumps(result, indent=2) + '\n')
+        except OSError:
+            log('job %s: could not persist storage cleanup record' % job.id)
+        return result
 
     def need_dashboard(self):
         if self.dashboard is None:
@@ -843,11 +859,13 @@ class BenchBot:
             raise JobError('describe the brain change in words, for example: /bench raise the rotate threshold for vllm')
         if not self.cfg.repo or not self.cfg.data:
             raise JobError('the bot needs BOT_REPO (an operator clone) and MATHLAB_DATA_DIR for /bench')
+        self.maintain_storage(job, 'before')
         # Two checkouts and a Go build: never let a job fill the host's disk.
         free = self.free_gb()
         if free < self.cfg.min_free_gb:
             raise JobError('only %.1f GB is free on the host and /bench needs %.1f GB (BOT_MIN_FREE_GB); '
-                           'free some space first' % (free, self.cfg.min_free_gb))
+                           'free some space first; this request has not reached the model, tests or replay'
+                           % (free, self.cfg.min_free_gb))
         if opts['sync']:
             self.sync(job, opts['policy'])
         ns, name = opts['policy'].split('/')
@@ -897,7 +915,12 @@ class BenchBot:
                                            'A valid document does not guarantee a feasible code change.')
                 self.send_file(job.chat_id, 'plan-%s.json' % job.id,
                                (json.dumps(diagnostic, indent=2)+'\n').encode())
-            raise JobError('the LLM step failed: %s' % err)
+            detail = ''
+            if err.code == 8 and (job.dir / 'PLAN.json').exists():
+                attempts = json.loads((job.dir / 'PLAN.json').read_text()).get('attempts') or []
+                if attempts and attempts[-1].get('reason'):
+                    detail = '\nReason: ' + attempts[-1]['reason']
+            raise JobError('the LLM step failed: %s%s' % (err, detail))
 
         self.step(job, 'landing the change on a throwaway branch')
         try:
@@ -920,7 +943,8 @@ class BenchBot:
                 selected = [p for p in packages if (Path(src) / 'phorvex' / p).is_dir()]
                 self.step(job, 'running Go unit tests: %s (%s; %s)' % (arm, ', '.join(selected), toolchain))
                 tests[arm] = replay_build.test(src, commit, selected, go=self.cfg.go,
-                                               log=job.dir / ('tests-%s.jsonl' % arm), toolchain=toolchain)
+                                               log=job.dir / ('tests-%s.jsonl' % arm), toolchain=toolchain,
+                                               cache_dir=self.cfg.go_cache)
                 (job.dir / 'TESTS.json').write_text(json.dumps(tests, indent=2) + '\n')
                 if tests[arm]['status'] != 'PASS':
                     self.send_file(job.chat_id, 'tests-%s-%s.jsonl' % (arm, job.id),
@@ -929,9 +953,9 @@ class BenchBot:
                                    % (arm, tests[arm]['status']))
             self.step(job, 'building brain-replay from the deployed commit and from the candidate')
             replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go,
-                               log=job.dir / 'build-base.log', toolchain=toolchain)
+                               log=job.dir / 'build-base.log', toolchain=toolchain, cache_dir=self.cfg.go_cache)
             replay_build.build(cand['repo'], cand['candidateCommit'], job.dir / 'bin' / 'candidate', go=self.cfg.go,
-                               log=job.dir / 'build-candidate.log', toolchain=toolchain)
+                               log=job.dir / 'build-candidate.log', toolchain=toolchain, cache_dir=self.cfg.go_cache)
             base_local = code_experiment.identity(job.dir / 'bin' / 'base-local')
             cand_id = code_experiment.identity(job.dir / 'bin' / 'candidate')
         except replay_build.BuildError as err:

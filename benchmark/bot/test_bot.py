@@ -628,6 +628,11 @@ class BotTest(unittest.TestCase):
         job = self.history()[-1]
         self.assertEqual(job['state'], 'DONE')
         self.assertIn('changed decisions 33.3%', job['headline'])
+        folder = self.tmp/'state/jobs'/job['id']
+        self.assertTrue((folder/'storage-before.json').exists())
+        self.assertTrue((folder/'storage-after.json').exists())
+        self.assertFalse((folder/'go-home').exists())
+        self.assertTrue((folder/'report.html').exists())
         jobdir = self.tmp / 'state/jobs' / job['id']
         self.assertFalse((jobdir / 'candidate-src').exists())
         self.assertFalse((jobdir / 'base-src').exists())
@@ -692,6 +697,16 @@ class BotTest(unittest.TestCase):
         summary = next(t for t in self.fake.texts() if t.startswith('Code experiment'))
         self.assertIn('base: %s' % base[:12], summary)
         self.assertIn('candidate    33.3%', summary)
+
+    def test_decline_reason_is_visible_without_opening_plan_attachment(self):
+        repo, base, data, go = self.bench_setup()
+        bot = self.bot(None, self.openai_returning('NO CHANGE POSSIBLE: BLOCKED: missing measured endpoint ledger.'),
+                       BOT_REPO=str(repo), MATHLAB_DATA_DIR=str(data), BOT_GO=str(go))
+        bot.handle(message(OWNER, '/bench nosync implement a new arithmetic helper'))
+        bot.run_next()
+        self.assertIn('Reason: BLOCKED: missing measured endpoint ledger.', self.fake.texts()[-1])
+        folder = self.tmp/'state/jobs'/self.history()[-1]['id']
+        self.assertTrue((folder/'storage-after.json').exists())
 
     def test_bench_refuses_when_the_disk_is_short(self):
         repo, base, data, go = self.bench_setup()
