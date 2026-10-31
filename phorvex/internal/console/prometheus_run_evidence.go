@@ -405,12 +405,22 @@ func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result A
 				found = true
 			}
 		}
-		if !found || first > float64(metric.BaselineCapture.CapturedAt.UnixNano())/1e9 ||
-			last < float64(metric.FinalCapture.CapturedAt.UnixNano())/1e9 {
+		if !found || !prometheusRangeCoversCaptures(first, last,
+			metric.BaselineCapture.CapturedAt, metric.FinalCapture.CapturedAt) {
 			return fmt.Errorf("Prometheus metric %q raw range does not cover baseline and final", metric.Key)
 		}
 	}
 	return nil
+}
+
+// Prometheus serializes sample timestamps at millisecond precision even when the
+// query boundary carries nanoseconds. Permit only that serialization loss when
+// proving that the raw range covers both instant-query captures.
+func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time.Time) bool {
+	const tolerance = float64(time.Millisecond) / float64(time.Second)
+	baseline := float64(baselineAt.UnixNano()) / float64(time.Second)
+	final := float64(finalAt.UnixNano()) / float64(time.Second)
+	return first <= baseline+tolerance && last+tolerance >= final
 }
 
 func validatePrometheusResponseCapture(capture *PrometheusResponseCapture, startedAt, finishedAt time.Time) error {

@@ -26,6 +26,22 @@ func TestPrometheusTimePreservesSubMillisecondCaptureBoundary(t *testing.T) {
 	}
 }
 
+func TestPrometheusRangeCoverageAllowsOnlyMillisecondSerializationLoss(t *testing.T) {
+	baseline := time.Unix(1761766259, 435498645).UTC()
+	final := baseline.Add(3*time.Minute + 17*time.Millisecond)
+	first := float64(baseline.Truncate(time.Millisecond).UnixNano()) / float64(time.Second)
+	last := float64(final.Truncate(time.Millisecond).UnixNano()) / float64(time.Second)
+	if !prometheusRangeCoversCaptures(first, last, baseline, final) {
+		t.Fatal("millisecond Prometheus timestamps did not cover nanosecond capture boundaries")
+	}
+	if prometheusRangeCoversCaptures(first, last-2*float64(time.Millisecond)/float64(time.Second), baseline, final) {
+		t.Fatal("range ending more than one millisecond before final capture was accepted")
+	}
+	if prometheusRangeCoversCaptures(first+2*float64(time.Millisecond)/float64(time.Second), last, baseline, final) {
+		t.Fatal("range starting more than one millisecond after baseline capture was accepted")
+	}
+}
+
 func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) {
 	var mu sync.Mutex
 	instantCalls := map[string]int{}
