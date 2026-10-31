@@ -170,6 +170,26 @@ func stepReason(step, refusal string) string {
 	return step + ": " + refusal
 }
 
+// statefulDeadlineMargin is how long before its caller's deadline a stateful dispatch stops
+// waiting. The manager runs a dispatch inside one tick (40s on a 10s base interval), shorter
+// than an EBS snapshot (~60-70s) or a slow replacement. Stopping early turns what would be an
+// expired call with an unknown outcome into a definite partial or unconfirmed result.
+const statefulDeadlineMargin = 5 * time.Second
+
+// statefulWaitDeadline is now+bound, capped at the dispatch's own deadline less the margin;
+// capped reports whether the dispatch deadline is the binding one.
+func statefulWaitDeadline(ctx context.Context, ec EnactCtx, bound time.Duration) (deadline time.Time, capped bool) {
+	deadline = time.Now().Add(bound)
+	margin := statefulDeadlineMargin
+	if ec.StatefulDeadlineMargin > 0 {
+		margin = ec.StatefulDeadlineMargin
+	}
+	if d, ok := ctx.Deadline(); ok && d.Add(-margin).Before(deadline) {
+		return d.Add(-margin), true
+	}
+	return deadline, false
+}
+
 // awaitStatefulReplacement observes, within a bounded window, the StatefulSet's replacement
 // for the evicted ordinal (same name, new UID) become Ready, then the class's continuity
 // property. It never mutates; an expired window is reported as unconfirmed.
@@ -184,7 +204,7 @@ func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOper
 	if declared := time.Duration(op.obs.Contract.RecoverySeconds) * time.Second; declared > 0 && declared < timeout {
 		timeout = declared
 	}
-	deadline := time.Now().Add(timeout)
+	deadline, capped := statefulWaitDeadline(ctx, ec, timeout)
 	last := "replacement not observed Ready"
 	for {
 		replacement := &corev1.Pod{}
@@ -197,6 +217,9 @@ func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOper
 			last = fmt.Sprintf("replacement %s Ready but continuity unconfirmed: %s", replacement.UID, detail)
 		}
 		if !time.Now().Before(deadline) {
+			if capped {
+				return last + " before the dispatch deadline", false
+			}
 			return fmt.Sprintf("%s within %s", last, timeout), false
 		}
 		select {

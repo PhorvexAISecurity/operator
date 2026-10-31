@@ -44,6 +44,7 @@ type statefulCluster struct {
 	refusePDB       bool
 	replace         bool
 	snapshotFailure string
+	snapshotPending bool
 	realEvictionErr error
 	evictions       []*policyv1.Eviction
 	claimDeletes    []types.UID
@@ -127,7 +128,7 @@ func (s *statefulCluster) get(ctx context.Context, c client.WithWatch, key clien
 	if u, ok := obj.(*unstructured.Unstructured); ok && u.GroupVersionKind() == statefulrotation.VolumeSnapshotGVK {
 		if s.snapshotFailure != "" {
 			_ = unstructured.SetNestedField(u.Object, s.snapshotFailure, "status", "error", "message")
-		} else {
+		} else if !s.snapshotPending {
 			_ = unstructured.SetNestedField(u.Object, true, "status", "readyToUse")
 		}
 	}
@@ -546,5 +547,48 @@ func TestStatefulRotationRecordsOneOutcomePerDispatch(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A dispatch runs inside the manager's tick deadline, which is shorter than an EBS snapshot.
+// The wait must end before that deadline so the manager receives a definite partial result
+// (member retained, snapshot kept for the next attempt) instead of an expired call whose
+// unknown outcome holds the owner's capacity.
+func TestStatefulSnapshotRotateStopsBeforeTheDispatchDeadline(t *testing.T) {
+	cluster, pod, req := statefulFixture(t, statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate})
+	cluster.snapshotPending = true
+	ec := statefulEnact(cluster, nil)
+	ec.StatefulSnapshotTimeout = time.Minute
+	ec.StatefulDeadlineMargin = 150 * time.Millisecond
+	ctx, cancel := context.WithTimeout(t.Context(), 700*time.Millisecond)
+	defer cancel()
+	result, err := dispatch(ctx, ec, req)
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("dispatch must return before its deadline: err=%v ctx=%v", err, ctx.Err())
+	}
+	if !result.Emitted || result.MutationKind != "partial" || !strings.Contains(result.Note, "before the dispatch deadline; retained for the next attempt") {
+		t.Fatalf("result=%+v", result)
+	}
+	if slices.Contains(cluster.events, "eviction") || !podExists(t, cluster, pod.UID) || result.RollbackRef == "" {
+		t.Fatalf("member must be retained behind its kept snapshot: events=%v result=%+v", cluster.events, result)
+	}
+}
+
+// After the eviction, the confirmation window is capped the same way: an unobserved
+// replacement is reported as a definite unconfirmed emission, not an expired call.
+func TestStatefulReplacementConfirmationStopsBeforeTheDispatchDeadline(t *testing.T) {
+	cluster, _, req := statefulFixture(t, statefulFixtureOptions{action: model.ActionStatefulReplicaRebuild})
+	cluster.replace = false
+	ec := statefulEnact(cluster, nil)
+	ec.StatefulConfirmTimeout = time.Minute
+	ec.StatefulDeadlineMargin = 150 * time.Millisecond
+	ctx, cancel := context.WithTimeout(t.Context(), 700*time.Millisecond)
+	defer cancel()
+	result, err := dispatch(ctx, ec, req)
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("dispatch must return before its deadline: err=%v ctx=%v", err, ctx.Err())
+	}
+	if !result.Emitted || result.MutationKind != "forward-only" || !strings.Contains(result.Note, "before the dispatch deadline") {
+		t.Fatalf("result=%+v", result)
 	}
 }

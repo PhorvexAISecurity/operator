@@ -166,6 +166,24 @@ Failure outcomes:
 - **Replacement or continuity not observed in the window**: the result says
   `unconfirmed`. It never claims success.
 
+The manager runs a dispatch inside one tick: 40s on the default 10s base interval. That
+is shorter than an EBS snapshot (about 60–70s) and sometimes shorter than a replacement.
+Every stateful wait (snapshot readiness, replacement confirmation) therefore also ends 5s
+before the dispatch's own deadline. The manager then receives a definite `partial` or
+`unconfirmed` result instead of an expired call with an unknown outcome. A snapshot left
+pending is kept, and the next dispatch for that member reuses it once it is ready.
+
+Each dispatch holds one "unavailable ready replica" unit of its owner's capacity (in the
+`phorvex-shared-capacity` ledger) until the outcome is known or the member set has
+recovered. For eviction-based actions (`rotate` and this family), an unknown outcome
+whose exact target is still Ready under the same UID 10 minutes after the claim is
+released. An accepted eviction takes its target out of the ready endpoints at once, so a
+target still Ready proves that the dispatch removed nothing, and the tick that ran it has
+long ended. On staging (2026-10-31), a `stateful-snapshot-rotate` cut off by the tick
+deadline held the StatefulSet's only unit, and the owner received no rotation for over
+two hours. An unknown dispatch that did remove its target is still held until its
+Service recovers.
+
 Repeated actions on the same member are damped by the pod-identity anti-over-rotation
 clock. That clock is per Pod, so it does not stop the brain from moving straight on to a
 sibling. A readiness probe also does not prove that a rebuilt member has caught up with

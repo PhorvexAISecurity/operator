@@ -82,7 +82,9 @@ func (replicaRebuildClass) confirm(ctx context.Context, ec EnactCtx, op *statefu
 // statefulSnapshotTimeout bounds the wait for every pre-rotation snapshot to be readyToUse.
 // Measured on EKS (ebs.csi.aws.com, 1Gi gp2 volumes, 2026-10-29): created within 1s, ready
 // after ~60-70s. A slower snapshot stops the dispatch as partial with the member retained; a
-// retried dispatch reuses the same snapshot and proceeds once it is ready.
+// retried dispatch reuses the same snapshot and proceeds once it is ready. The wait also ends
+// statefulDeadlineMargin before the dispatch's own deadline (staging, 2026-10-31: a 40s tick
+// cut the wait off and left the outcome unknown).
 const statefulSnapshotTimeout = 120 * time.Second
 
 type snapshotRotateClass struct{}
@@ -129,7 +131,7 @@ func (snapshotRotateClass) prepare(ctx context.Context, ec EnactCtx, op *statefu
 	if ec.StatefulConfirmInterval > 0 {
 		interval = ec.StatefulConfirmInterval
 	}
-	deadline := time.Now().Add(timeout)
+	deadline, capped := statefulWaitDeadline(ctx, ec, timeout)
 	for _, claim := range op.obs.Claims {
 		name := statefulSnapshotName(string(op.pod.UID), claim.UID)
 		for {
@@ -142,6 +144,10 @@ func (snapshotRotateClass) prepare(ctx context.Context, ec EnactCtx, op *statefu
 			}
 			if !time.Now().Before(deadline) {
 				why := "snapshot " + name + " not ready within " + timeout.String()
+				if capped {
+					// The snapshot is retained; a later dispatch reuses it once it is ready.
+					why = "snapshot " + name + " not ready before the dispatch deadline; retained for the next attempt"
+				}
 				if readErr != nil {
 					why += " (last read error: " + readErr.Error() + ")"
 				}
