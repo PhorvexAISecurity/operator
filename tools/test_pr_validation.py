@@ -203,12 +203,15 @@ class PRValidationTests(unittest.TestCase):
 
     def test_no_workflow_reaches_live_infrastructure(self):
         # This repository is not a deployer: the legacy pipeline stays in
-        # PhorvexSecurity/operator. A deploy workflow lands only with its own reviewed change;
-        # the two that have, release.yml and staging-isolated-release.yml, are held
-        # to their exact shapes by their dedicated workflow test classes.
-        # Every job runs on a GitHub-hosted runner, never on a runner with live access.
+        # PhorvexSecurity/operator. A workflow that reaches live AWS lands only with its own
+        # reviewed change; the three that have — release.yml, staging-isolated-release.yml and
+        # staging-phorvex-fixture.yml — are each held to their exact shapes by a dedicated
+        # workflow test class (ReleaseWorkflowTests, StagingIsolatedReleaseWorkflowTests,
+        # StagingPhorvexFixtureWorkflowTests). Every other workflow runs on a GitHub-hosted
+        # runner with no AWS reach at all.
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):
-            if path.name in {'release.yml', 'staging-isolated-release.yml'}:
+            if path.name in {'release.yml', 'staging-isolated-release.yml',
+                             'staging-phorvex-fixture.yml'}:
                 continue
             raw = path.read_text()
             doc = yaml.load(raw, Loader=yaml.BaseLoader)
@@ -366,6 +369,114 @@ class StagingIsolatedReleaseWorkflowTests(unittest.TestCase):
 
     def test_every_privileged_action_is_commit_pinned(self):
         references = re.findall(r'^\s*- uses: ([^\s#]+)(?:\s+#\s*([^\s]+))?$', STAGING_RELEASE_RAW, re.M)
+        self.assertTrue(references)
+        for reference, version_comment in references:
+            owner, sha = reference.split('@', 1)
+            self.assertEqual(sha, RELEASE_ACTIONS[owner])
+            self.assertRegex(version_comment, r'^v[0-9]')
+
+
+STAGING_FIXTURE_PATH = ROOT / '.github/workflows/staging-phorvex-fixture.yml'
+STAGING_FIXTURE_RAW = STAGING_FIXTURE_PATH.read_text()
+STAGING_FIXTURE = yaml.load(STAGING_FIXTURE_RAW, Loader=yaml.BaseLoader)
+
+
+class StagingPhorvexFixtureWorkflowTests(unittest.TestCase):
+    """The phorvex catalogue fixture-image publish workflow reaches ECR, so — exactly like
+    staging-isolated-release.yml — it is pinned to a manual, source-gated, reproduce-before-push,
+    deploy-free shape. It publishes a standalone image consumed only by digest and must never
+    touch the eight-component batch, open a deployment PR, or sync Argo."""
+
+    def test_lane_is_manual_source_pinned_and_staging_scoped(self):
+        self.assertEqual(set(STAGING_FIXTURE['on']), {'workflow_dispatch'})
+        source = STAGING_FIXTURE['on']['workflow_dispatch']['inputs']['source']
+        self.assertEqual(source['required'], 'true')
+        self.assertEqual(source['type'], 'string')
+        self.assertEqual(STAGING_FIXTURE['permissions'], {'contents': 'read'})
+        self.assertEqual(STAGING_FIXTURE['concurrency'], {
+            'group': 'staging-phorvex-fixture', 'cancel-in-progress': 'false',
+        })
+        self.assertEqual(STAGING_FIXTURE['env']['AWS_REGION'], 'us-east-2')
+        self.assertEqual(set(STAGING_FIXTURE['jobs']), {'publish'})
+        job = STAGING_FIXTURE['jobs']['publish']
+        self.assertEqual(job['runs-on'], BUILD_RUNNER)
+        self.assertNotIn('container', job)
+        self.assertEqual(job['environment'], 'staging-release')
+        # Exactly the two scopes an ECR publish needs: read the source and mint the OIDC
+        # token. No contents:write / pull-requests / actions, so it cannot open a deployment
+        # PR, push a branch, or dispatch another workflow — unlike staging-isolated-release.
+        self.assertEqual(job['permissions'], {'contents': 'read', 'id-token': 'write'})
+        checkout = next(s for s in job['steps'] if s.get('uses', '').startswith('actions/checkout@'))
+        self.assertEqual(checkout['with']['ref'], '${{ github.sha }}')
+        self.assertEqual(checkout['with']['persist-credentials'], 'false')
+        self.assertEqual(checkout['with']['fetch-depth'], '0')
+
+    def test_exact_reviewed_main_source_is_proved_before_any_source_is_consumed(self):
+        job = STAGING_FIXTURE['jobs']['publish']
+        source_gate = next(i for i, s in enumerate(job['steps'])
+                           if s.get('name') == 'Require one exact reviewed main source')
+        first_consumer = next(i for i, s in enumerate(job['steps'])
+                              if s.get('uses', '').startswith('actions/setup-go@'))
+        self.assertLess(source_gate, first_consumer)
+        gate = job['steps'][source_gate]['run']
+        self.assertIn('[[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]', gate)
+        self.assertIn('[ "$EVENT_REF" = refs/heads/main ]', gate)
+        self.assertIn('[ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]', gate)
+        self.assertIn('tools/verify-git-build-identity.sh "$REQUESTED_SOURCE"', gate)
+        self.assertIn('[ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]', gate)
+        self.assertIn('gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha', gate)
+        self.assertIn('[ "$remote_main" = "$REQUESTED_SOURCE" ]', gate)
+        self.assertIn('[ -z "$(git status --porcelain --untracked-files=all)" ]', gate)
+
+    def test_reviewed_authority_and_immutable_repository_precede_the_build(self):
+        runs = '\n'.join(s.get('run', '') for s in STAGING_FIXTURE['jobs']['publish']['steps'])
+        # The immutable-repo + identity authority is resolved from the pinned reviewed file.
+        self.assertIn('release/staging-phorvex-fixture.json', runs)
+        self.assertIn('aws ecr describe-repositories', runs)
+        for control in ('IMMUTABLE', 'scanOnPush', 'AES256'):
+            self.assertIn(control, runs)
+        self.assertLess(runs.index('aws ecr describe-repositories'),
+                        runs.index('docker buildx build'))
+
+    def test_reproduces_and_verifies_identity_before_publishing(self):
+        runs = '\n'.join(s.get('run', '') for s in STAGING_FIXTURE['jobs']['publish']['steps'])
+        self.assertIn('image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea', runs)
+        self.assertIn('verify_phorvex_fixture_image.py reproduce', runs)
+        self.assertIn('verify_phorvex_fixture_image.py inspect', runs)
+        self.assertIn('--phorvex-image', runs)
+        self.assertLess(runs.index('verify_phorvex_fixture_image.py reproduce'),
+                        runs.index('docker push "$image"'))
+        self.assertLess(runs.index('verify_phorvex_fixture_image.py inspect'),
+                        runs.index('docker push "$image"'))
+        cleanup = next(s['run'] for s in STAGING_FIXTURE['jobs']['publish']['steps']
+                       if s.get('name') == 'Remove the fixture builder')
+        self.assertIn('docker buildx rm "$FIXTURE_BUILDER"', cleanup)
+
+    def test_role_is_checked_before_it_is_assumed(self):
+        steps = STAGING_FIXTURE['jobs']['publish']['steps']
+        names = [s.get('name') or s.get('uses', '') for s in steps]
+        check = names.index('Require the release role')
+        assume = next(i for i, n in enumerate(names)
+                      if n.startswith('aws-actions/configure-aws-credentials@'))
+        self.assertLess(check, assume)
+        self.assertIn('PHORVEX_RELEASE_ROLE_ARN', steps[check]['run'])
+        role = next(s for s in steps if s.get('uses', '').startswith('aws-actions/configure-aws-credentials@'))
+        self.assertEqual(role['with']['role-to-assume'], '${{ vars.PHORVEX_RELEASE_ROLE_ARN }}')
+
+    def test_it_never_writes_the_batch_opens_a_pr_or_deploys(self):
+        # It is not a deployer: no executable step writes the eight-component batch, runs its
+        # authority tool, opens/merges a PR, pins a staging deployment or touches a cluster.
+        # (The checks run against the step `run` scripts, not the header comment, which may
+        # legitimately name release/staging-batch.json to document what it does NOT touch.)
+        runs = '\n'.join(s.get('run', '') for s in STAGING_FIXTURE['jobs']['publish']['steps'])
+        for forbidden in ('staging_release.py', 'pin-fixtures', 'release/staging-batch.json',
+                          'git commit', 'git push', 'pull-request', 'gh pr merge',
+                          'kubectl ', 'argocd ', 'deploy/environments/', '|| true'):
+            self.assertNotIn(forbidden, runs)
+        self.assertNotIn('continue-on-error', STAGING_FIXTURE_RAW)
+
+    def test_every_privileged_action_is_commit_pinned(self):
+        references = re.findall(r'^\s*- uses: ([^\s#]+)(?:\s+#\s*([^\s]+))?$', STAGING_FIXTURE_RAW, re.M)
         self.assertTrue(references)
         for reference, version_comment in references:
             owner, sha = reference.split('@', 1)

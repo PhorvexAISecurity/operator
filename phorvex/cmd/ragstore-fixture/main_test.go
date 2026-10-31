@@ -98,6 +98,25 @@ func TestDumpListsServedIDsAndHash(t *testing.T) {
 	}
 }
 
+// TestRateTargetBackendStaysReadyWithoutDatastoreClient proves the serving-rate
+// rate-target use of this image: with no in-cluster identity the store reader fails
+// closed, yet /healthz still returns 200 so the pod is a live HTTP backend (deployable)
+// instead of crash-looping.
+func TestRateTargetBackendStaysReadyWithoutDatastoreClient(t *testing.T) {
+	degraded := func(context.Context) ([]byte, error) {
+		return nil, errors.New("datastore API client unavailable")
+	}
+	server := newTestServer(t, degraded)
+	resp, body := get(t, server.URL, "/healthz", nil)
+	if resp.StatusCode != http.StatusOK || body["status"] != "ok" {
+		t.Fatalf("/healthz without a datastore client = %d %v, want 200 ok", resp.StatusCode, body)
+	}
+	resp, _ = get(t, server.URL, datastore.ReadbackPath, nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("readback without a datastore client = %d, want 503", resp.StatusCode)
+	}
+}
+
 func TestStoreUnavailableFailsClosed(t *testing.T) {
 	server := newTestServer(t, func(context.Context) ([]byte, error) {
 		return nil, errors.New("configmap unavailable")

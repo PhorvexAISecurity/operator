@@ -142,6 +142,39 @@ class PhorvexFixtureRenderTests(unittest.TestCase):
         self.assertEqual(state["sourceSHA256"], PHORVEX_SHA)
         self.assertEqual(state["proxyImage"], PHORVEX_IMAGE)
 
+    def test_serving_rate_admission_env_and_command_match_the_parameterized_contract(self):
+        # The admission proxy must receive its namespace and Pod UID from the downward API
+        # and forward to the p5-demo rate-target backend — the exact env the parameterized
+        # /cost-admission binary resolves, with the backend in its own namespace so the
+        # binary's cross-namespace guard accepts it.
+        docs = self._render("serving-rate")
+        admission = next(
+            c for ns, name, _, c in pod_containers(docs)
+            if ns == "p5-demo" and name == "rate-admission"
+        )
+        self.assertEqual(admission["command"], ["/cost-admission"])
+        self.assertEqual(admission["image"], PHORVEX_IMAGE)
+        env = {e["name"]: e for e in admission.get("env", [])}
+        self.assertEqual(
+            env["POD_NAMESPACE"].get("valueFrom", {}).get("fieldRef", {}).get("fieldPath"),
+            "metadata.namespace",
+        )
+        self.assertEqual(
+            env["POD_UID"].get("valueFrom", {}).get("fieldRef", {}).get("fieldPath"),
+            "metadata.uid",
+        )
+        backend = env["PHORVEX_THROTTLE_BACKEND"].get("value")
+        self.assertEqual(backend, "http://rate-target-backend.p5-demo.svc:8080")
+        # Backend host is <service>.<namespace>.svc inside the admission pod's own namespace.
+        self.assertEqual(backend.split("//", 1)[1].split(":")[0].split("."), ["rate-target-backend", "p5-demo", "svc"])
+        # The backend workload (rate-target) runs the fixture HTTP server off the same image.
+        target = next(
+            c for ns, name, _, c in pod_containers(docs)
+            if ns == "p5-demo" and name == "rate-target"
+        )
+        self.assertEqual(target["command"], ["/ragstore-fixture"])
+        self.assertEqual(target["image"], PHORVEX_IMAGE)
+
     def _render_docs(self, profile, python_image=None):
         return self._render(profile, python_image)
 
