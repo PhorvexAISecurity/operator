@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published sensor image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor"
-  tag: "staging-0.11.0-git-5f0b28a7b87a83385df495f77067151103ec2982"
-  digest: "sha256:812baa9d5bcef6e44a277ac9596caa78583f3c70ca598b2a887113ebb665017c"
+  tag: "staging-0.11.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303"
+  digest: "sha256:8482def957338866c5c0aa29b147caa562d71d1df88e99c8d6bc1de81cef8be7"
