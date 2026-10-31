@@ -55,6 +55,7 @@ class BrainChartTests(unittest.TestCase):
         self.assertIn('--gpu-envelope-max=0.2925', container['args'])
         self.assertFalse([a for a in container['args'] if a.startswith(('--math-lab', '--engine', '--flow-residual-classes'))])
         self.assertNotIn('volumes', pod)
+        self.assertNotIn('fsGroup', pod['securityContext'])
 
     def test_math_lab_capture_gets_a_volume(self):
         pod = by_kind(render('phorvex-brain', 'phorvex.mathLab.capturePolicies={vllm/defense}', 'mathLabStore.existingClaim=brain-math-lab'))['Deployment'][0]['spec']['template']['spec']
@@ -63,6 +64,14 @@ class BrainChartTests(unittest.TestCase):
         self.assertIn('--math-lab-capture-dir=/var/lib/phorvex/math-lab', args)
         self.assertIn('--math-lab-capture-max-bytes=1073741824', args)
         self.assertEqual(pod['volumes'], [{'name': 'math-lab', 'persistentVolumeClaim': {'claimName': 'brain-math-lab'}}])
+        self.assertEqual(pod['securityContext']['fsGroup'], 65532)
+        self.assertEqual(pod['securityContext']['fsGroupChangePolicy'], 'OnRootMismatch')
+
+    def test_capture_rejects_an_unscoped_policy(self):
+        result = subprocess.run([HELM, 'template', 'phorvex', str(CHARTS / 'phorvex-brain'),
+                                 '--set', 'phorvex.mathLab.capturePolicies={defense}'], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('must be namespace/name', result.stderr)
 
     def decision_flags(self, chart, container, *sets):
         args = [HELM, 'template', 'phorvex', str(chart), '-n', 'phorvex-system']
@@ -482,6 +491,18 @@ class ManagerRemoteModeTests(unittest.TestCase):
         self.assertEqual([a for a in remote if a.startswith('--math-lab')], [])
         brain = by_kind(helm_template(CHARTS / 'phorvex-brain', *capture))['Deployment'][0]['spec']['template']['spec']['containers'][0]['args']
         self.assertIn('--math-lab-capture-policies=vllm/vllm-defense', brain)
+
+    def test_cost_observation_is_explicit_and_works_without_local_capture(self):
+        for remote in ([], REMOTE):
+            for audit in ('true', 'false'):
+                with self.subTest(remote=bool(remote), audit=audit):
+                    settings = ['--set', 'phorvex.audit.enabled=' + audit, *remote]
+                    default = manager_pod(helm_template(MANAGER_CHART, *settings))['containers'][0]['args']
+                    self.assertNotIn('--math-lab-capture-cost-evidence=true', default)
+                    enabled = manager_pod(helm_template(MANAGER_CHART, *settings,
+                        '--set', 'phorvex.mathLab.captureCostEvidence=true'))['containers'][0]['args']
+                    self.assertEqual([arg for arg in enabled if arg.startswith('--math-lab')],
+                                     ['--math-lab-capture-cost-evidence=true'])
 
     def test_code_exec_admission_needs_the_in_process_actuator(self):
         result = subprocess.run([HELM, 'template', 'phorvex', str(MANAGER_CHART), '-n', 'phorvex-system',

@@ -25,6 +25,10 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        {{- if $v.mathLab.capturePolicies }}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
@@ -46,6 +50,11 @@ spec:
         - --log-level={{ .Values.log.level }}
         - --log-format={{ .Values.log.format }}
         {{- with $v.mathLab.capturePolicies }}
+        {{- range . }}
+        {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-.a-z0-9]*[a-z0-9])?$" .) }}
+        {{- fail (printf "phorvex.mathLab.capturePolicies entry %q must be namespace/name" .) }}
+        {{- end }}
+        {{- end }}
         - --math-lab-capture-policies={{ join "," . }}
         - --math-lab-capture-dir=/var/lib/phorvex/math-lab
         - --math-lab-capture-max-bytes={{ $v.mathLab.captureMaxBytes | int64 }}

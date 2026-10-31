@@ -253,6 +253,9 @@ spec:
         - --math-lab-capture-max-bytes={{ $.Values.phorvex.mathLab.captureMaxBytes | int64 }}
         {{- end }}
         {{- end }}
+        {{- if .Values.phorvex.mathLab.captureCostEvidence }}
+        - --math-lab-capture-cost-evidence=true
+        {{- end }}
         {{- if .Values.phorvex.globalKillSwitch }}
         - --global-kill-switch=true
         {{- end }}
