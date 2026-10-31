@@ -76,7 +76,7 @@ HTTP success, event creation, `dispatchOutcome=emitted`, or even a Console
 - a validated physical oracle;
 - verified cleanup with no unsafe-to-retry flag; and
 - complete, error-free Prometheus evidence for the same IDs and modes, including
-  positive reactive selected-action and accepted-actuation deltas.
+  positive trusted-event, active selected-action, and accepted-actuation deltas.
 
 The Console's raw verdict is retained unchanged. The driver adds a separate
 `localVerdict` and a list of failed bindings.

@@ -534,6 +534,55 @@ def positive_prometheus_delta(metric: dict[str, Any], *, mode: str | None = None
     return False
 
 
+def physical_oracle_valid(physical: Any, signal_row: Any) -> bool:
+    if not isinstance(physical, dict) or physical.get("validated") is not True or len(physical) <= 1:
+        return False
+    if "podUID" in physical and not (
+        isinstance(signal_row, dict)
+        and bool(physical.get("podUID"))
+        and physical.get("podUID") == signal_row.get("targetUID")
+    ):
+        return False
+
+    if physical.get("kind") == "app-action-denied-two-sided":
+        detail = physical.get("evidence")
+        observations = physical.get("observations")
+        return (
+            physical.get("oracle") == "agent-action-deny-enforcement-v1"
+            and physical.get("podRetained") is True
+            and isinstance(detail, dict)
+            and detail.get("schema") == "agent-action-deny-enforcement-v1"
+            and detail.get("validated") is True
+            and detail.get("deniedBefore") is False
+            and detail.get("deniedAfter") is True
+            and detail.get("benignAllowedAfter") is True
+            and detail.get("surgicalAllowedAfter") is True
+            and detail.get("servingSetRetained") is True
+            and all(bool(detail.get(key)) for key in ("guardUID", "podUID", "serviceUID"))
+            and detail.get("podUID") == physical.get("podUID")
+            and isinstance(observations, list)
+            and len(observations) >= 3
+            and all(isinstance(row, dict) and row.get("passed") is True for row in observations)
+            and {"abusive_action_blocked", "benign_action_preserved", "peer_unchanged"}
+            <= {row.get("name") for row in observations}
+        )
+
+    if "oldServiceAccountUID" in physical or "newServiceAccountUID" in physical:
+        if not (
+            bool(physical.get("oldServiceAccountUID"))
+            and bool(physical.get("newServiceAccountUID"))
+            and physical.get("oldServiceAccountUID") != physical.get("newServiceAccountUID")
+        ):
+            return False
+    if "credentialAuthenticatedBefore" in physical and physical.get("credentialAuthenticatedBefore") is not True:
+        return False
+    if "credentialAuthenticatedAfter" in physical and physical.get("credentialAuthenticatedAfter") is not False:
+        return False
+    if "podRetained" in physical and physical.get("podRetained") is not True:
+        return False
+    return True
+
+
 def evaluate_strict_pass(
     catalogue_id: str,
     run_id: str,
@@ -626,27 +675,7 @@ def evaluate_strict_pass(
         and actuator.get("handler") == expected_action
     ):
         reasons.append("exact signal, selected decision, and actuator receipt chain is incomplete")
-    physical = result.get("physicalValidation")
-    physical_ok = isinstance(physical, dict) and physical.get("validated") is True and len(physical) > 1
-    if physical_ok and "podUID" in physical:
-        physical_ok = (
-            isinstance(signal_row, dict)
-            and bool(physical.get("podUID"))
-            and physical.get("podUID") == signal_row.get("targetUID")
-        )
-    if physical_ok and ("oldServiceAccountUID" in physical or "newServiceAccountUID" in physical):
-        physical_ok = (
-            bool(physical.get("oldServiceAccountUID"))
-            and bool(physical.get("newServiceAccountUID"))
-            and physical.get("oldServiceAccountUID") != physical.get("newServiceAccountUID")
-        )
-    if physical_ok and "credentialAuthenticatedBefore" in physical:
-        physical_ok = physical.get("credentialAuthenticatedBefore") is True
-    if physical_ok and "credentialAuthenticatedAfter" in physical:
-        physical_ok = physical.get("credentialAuthenticatedAfter") is False
-    if physical_ok and "podRetained" in physical:
-        physical_ok = physical.get("podRetained") is True
-    if physical_ok:
+    if physical_oracle_valid(result.get("physicalValidation"), signal_row):
         bindings["physicalOracle"] = True
     else:
         reasons.append("physical oracle is absent or unvalidated")
@@ -674,6 +703,10 @@ def evaluate_strict_pass(
             (metric for metric in metrics or [] if isinstance(metric, dict) and metric.get("key") == "accepted-actuation"),
             {},
         )
+        trusted = next(
+            (metric for metric in metrics or [] if isinstance(metric, dict) and metric.get("key") == "trusted-events"),
+            {},
+        )
         prom_ok = (
             prometheus.get("schema") == "phorvex.prometheus-run-evidence.v1"
             and prometheus.get("runID") == run_id
@@ -682,9 +715,10 @@ def evaluate_strict_pass(
             and prometheus.get("executionMode") == EXECUTION_MODE
             and prometheus.get("status") == "COMPLETE"
             and prometheus.get("errors") in (None, [])
-            and prometheus.get("observedDecisionModes") == [TRIGGER_MODE]
-            and positive_prometheus_delta(selected, mode=TRIGGER_MODE)
+            and prometheus.get("observedDecisionModes") == [EXECUTION_MODE]
+            and positive_prometheus_delta(selected, mode=EXECUTION_MODE)
             and positive_prometheus_delta(accepted)
+            and positive_prometheus_delta(trusted)
         )
         if prom_ok:
             bindings["prometheusEvidence"] = True
