@@ -80,19 +80,52 @@ func (h statefulRotationHandler) Enact(ctx context.Context, ec EnactCtx, req Req
 	if ec.DryRun {
 		return HandlerResult{}, errDryRunGuard
 	}
-	result, outcome, recovery, err := h.enact(ctx, ec, req)
+	result, outcome, recovery, late, err := h.enact(ctx, ec, req)
+	if late != nil {
+		// The dispatch deadline cut the confirmation short: the result goes back now and the
+		// outcome is recorded once the declared window, measured from the eviction, closes.
+		lateConfirmationStarted(late)
+		go late.finish(req.Namespace, string(h.class.action()))
+		return result, err
+	}
 	metrics.RecordStatefulRotation(req.Namespace, string(h.class.action()), outcome, recovery)
 	return result, err
 }
 
-func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, error) {
+// lateConfirmation continues one dispatch's replacement observation after the dispatch
+// returned, until the declared window closes, and then records that dispatch's only outcome.
+// It only reads; the dispatch result has already reported the eviction as unconfirmed.
+type lateConfirmation struct {
+	ec       EnactCtx
+	op       *statefulOperation
+	class    statefulClass
+	evicted  time.Time
+	deadline time.Time
+	done     chan struct{} // closed once the outcome is recorded
+}
+
+func (l *lateConfirmation) finish(namespace, action string) {
+	defer close(l.done)
+	ctx, cancel := context.WithDeadline(context.Background(), l.deadline)
+	defer cancel()
+	outcome, recovery := metrics.StatefulRotationUnconfirmed, time.Duration(0)
+	if _, confirmed, _ := awaitStatefulReplacementUntil(ctx, l.ec, l.op, l.class, l.deadline, false); confirmed {
+		outcome, recovery = metrics.StatefulRotationConfirmed, time.Since(l.evicted)
+	}
+	metrics.RecordStatefulRotation(namespace, action, outcome, recovery)
+}
+
+// lateConfirmationStarted lets tests wait for a late confirmation; production ignores it.
+var lateConfirmationStarted = func(*lateConfirmation) {}
+
+func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Request) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, *lateConfirmation, error) {
 	action := h.class.action()
-	refuse := func(reason string) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, error) {
+	refuse := func(reason string) (HandlerResult, metrics.StatefulRotationOutcome, time.Duration, *lateConfirmation, error) {
 		disposition := NoEffectRefused
 		if reason == "target-already-gone" {
 			disposition = NoEffectSatisfied
 		}
-		return HandlerResult{NoEffect: disposition, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, metrics.StatefulRotationRefused, 0, nil
+		return HandlerResult{NoEffect: disposition, Note: fmt.Sprintf("Stateful rotation (%s) not performed: %s", action, reason)}, metrics.StatefulRotationRefused, 0, nil, nil
 	}
 	pod, refusal := readEvictionTarget(ctx, ec, req)
 	if refusal != "" {
@@ -108,24 +141,34 @@ func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Req
 	}
 	if refusal, err := evictBounded(ctx, ec, req, grant, true); refusal != "" || err != nil {
 		if err != nil {
-			return HandlerResult{}, metrics.StatefulRotationError, 0, fmt.Errorf("%s eviction dry run %s/%s: %w", action, req.Namespace, req.Pod, err)
+			return HandlerResult{}, metrics.StatefulRotationError, 0, nil, fmt.Errorf("%s eviction dry run %s/%s: %w", action, req.Namespace, req.Pod, err)
 		}
 		return refuse(refusal)
 	}
 
 	op := &statefulOperation{req: req, pod: pod, obs: obs}
 	if refusal, err := h.class.prepare(ctx, ec, op); refusal != "" || err != nil {
-		return op.stopped(action, stepReason("preparation", refusal), err)
+		res, outcome, recovery, err := op.stopped(action, stepReason("preparation", refusal), err)
+		return res, outcome, recovery, nil, err
 	}
 	if refusal, err := evictBounded(ctx, ec, req, grant, false); refusal != "" || err != nil {
-		return op.stopped(action, stepReason("eviction", refusal), err)
+		res, outcome, recovery, err := op.stopped(action, stepReason("eviction", refusal), err)
+		return res, outcome, recovery, nil, err
 	}
 	op.touch("Pod", req.Pod)
 	evicted := time.Now()
-	confirmation, confirmed := awaitStatefulReplacement(ctx, ec, op, h.class)
+	window := statefulConfirmWindow(ec, op)
+	deadline, capped := statefulWaitDeadline(ctx, ec, window)
+	confirmation, confirmed, last := awaitStatefulReplacementUntil(ctx, ec, op, h.class, deadline, capped)
 	outcome, recovery := metrics.StatefulRotationUnconfirmed, time.Duration(0)
-	if confirmed {
+	var late *lateConfirmation
+	switch {
+	case confirmed:
 		outcome, recovery = metrics.StatefulRotationConfirmed, time.Since(evicted)
+	case capped && time.Now().Before(evicted.Add(window)):
+		late = &lateConfirmation{ec: ec, op: op, class: h.class, evicted: evicted, deadline: evicted.Add(window), done: make(chan struct{})}
+		confirmation = last + " before the dispatch deadline; observation continues until " + window.String() +
+			" after the eviction and the stateful rotation metric records the final outcome"
 	}
 	return HandlerResult{
 		Emitted: true, MutationKind: "forward-only",
@@ -134,7 +177,7 @@ func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Req
 		GracefulTermination: grant.receipt(req.Namespace),
 		Note: fmt.Sprintf("%s: Pod Eviction accepted with policy grace cap %ds and effective grace %ds; %s; %s",
 			action, grant.policyCap, grant.effectiveGrace, strings.Join(op.notes, "; "), confirmation),
-	}, outcome, recovery, nil
+	}, outcome, recovery, late, nil
 }
 
 // stopped reports a stop after admission. Before any preparatory mutation it is a clean
@@ -190,21 +233,29 @@ func statefulWaitDeadline(ctx context.Context, ec EnactCtx, bound time.Duration)
 	return deadline, false
 }
 
-// awaitStatefulReplacement observes, within a bounded window, the StatefulSet's replacement
-// for the evicted ordinal (same name, new UID) become Ready, then the class's continuity
-// property. It never mutates; an expired window is reported as unconfirmed.
-func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOperation, class statefulClass) (string, bool) {
-	timeout, interval := statefulConfirmTimeout, statefulConfirmInterval
+// statefulConfirmWindow is the replacement observation window measured from the eviction: the
+// declared recovery bound, capped at statefulConfirmTimeout.
+func statefulConfirmWindow(ec EnactCtx, op *statefulOperation) time.Duration {
+	timeout := statefulConfirmTimeout
 	if ec.StatefulConfirmTimeout > 0 {
 		timeout = ec.StatefulConfirmTimeout
-	}
-	if ec.StatefulConfirmInterval > 0 {
-		interval = ec.StatefulConfirmInterval
 	}
 	if declared := time.Duration(op.obs.Contract.RecoverySeconds) * time.Second; declared > 0 && declared < timeout {
 		timeout = declared
 	}
-	deadline, capped := statefulWaitDeadline(ctx, ec, timeout)
+	return timeout
+}
+
+// awaitStatefulReplacementUntil observes, until deadline, the StatefulSet's replacement for
+// the evicted ordinal (same name, new UID) become Ready, then the class's continuity
+// property. It never mutates; an expired deadline is reported as unconfirmed, and capped
+// says the dispatch deadline rather than the window set it. It returns the note, whether
+// the replacement was confirmed, and the last observation.
+func awaitStatefulReplacementUntil(ctx context.Context, ec EnactCtx, op *statefulOperation, class statefulClass, deadline time.Time, capped bool) (string, bool, string) {
+	interval := statefulConfirmInterval
+	if ec.StatefulConfirmInterval > 0 {
+		interval = ec.StatefulConfirmInterval
+	}
 	last := "replacement not observed Ready"
 	for {
 		replacement := &corev1.Pod{}
@@ -212,19 +263,19 @@ func awaitStatefulReplacement(ctx context.Context, ec EnactCtx, op *statefulOper
 		if err == nil && replacement.UID != op.pod.UID && replacement.DeletionTimestamp.IsZero() && statefulrotation.PodReady(replacement) {
 			detail, ok := class.confirm(ctx, ec, op, replacement)
 			if ok {
-				return fmt.Sprintf("replacement %s Ready and confirmed: %s", replacement.UID, detail), true
+				return fmt.Sprintf("replacement %s Ready and confirmed: %s", replacement.UID, detail), true, last
 			}
 			last = fmt.Sprintf("replacement %s Ready but continuity unconfirmed: %s", replacement.UID, detail)
 		}
 		if !time.Now().Before(deadline) {
 			if capped {
-				return last + " before the dispatch deadline", false
+				return last + " before the dispatch deadline", false, last
 			}
-			return fmt.Sprintf("%s within %s", last, timeout), false
+			return fmt.Sprintf("%s within %s", last, statefulConfirmWindow(ec, op)), false, last
 		}
 		select {
 		case <-ctx.Done():
-			return "replacement unconfirmed: observation cancelled", false
+			return "replacement unconfirmed: observation cancelled", false, last
 		case <-time.After(interval):
 		}
 	}

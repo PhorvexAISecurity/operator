@@ -171,7 +171,14 @@ is shorter than an EBS snapshot (about 60–70s) and sometimes shorter than a re
 Every stateful wait (snapshot readiness, replacement confirmation) therefore also ends 5s
 before the dispatch's own deadline. The manager then receives a definite `partial` or
 `unconfirmed` result instead of an expired call with an unknown outcome. A snapshot left
-pending is kept, and the next dispatch for that member reuses it once it is ready.
+pending is kept, and the next dispatch for that member reuses it once it is ready. When the
+deadline cuts a replacement confirmation short, the dispatch still returns at once, as an
+unconfirmed emission. The actuator, read-only, keeps observing the replacement until the
+declared window (measured from the eviction) closes. `phorvex_stateful_rotations_total`
+then records that dispatch's final outcome, still exactly once: `confirmed` with its real
+recovery time, or `unconfirmed`. On staging, NATS replacements take 30–50s to become Ready,
+and before this change every one of them was counted `unconfirmed`, which fired
+`PhorvexStatefulRotationNotConfirmed` falsely.
 
 Each dispatch holds one "unavailable ready replica" unit of its owner's capacity (in the
 `phorvex-shared-capacity` ledger) until the outcome is known or the member set has
