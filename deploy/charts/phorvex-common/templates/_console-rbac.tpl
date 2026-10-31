@@ -144,21 +144,23 @@ rules:
 # profile.creator() == system:serviceaccount:<lane>:<lane>-attacks) so the manager's
 # trustedDetectors allowlist admits a genuine reactive trigger. The attacks service
 # therefore impersonates exactly the catalogue's reviewed trusted detectors and nothing
-# else (resourceNames-pinned to phorvex.trustedDetectors). This is red-team -> red-team
-# within the same trust domain; it grants NO actuator/defender identity and no broad
-# user impersonation.
-{{- $detectors := list }}
+# else (resourceNames-pinned to the ServiceAccount names in phorvex.trustedDetectors).
+# This is red-team -> red-team within the same trust domain; it grants NO actuator/
+# defender identity and no broad impersonation. ServiceAccount impersonation requires the
+# `serviceaccounts` resource verb (a username-form `users` grant is rejected by the
+# impersonation authorizer for system:serviceaccount:* principals).
+{{- $detectorSANames := list }}
 {{- range .Values.phorvex.trustedDetectors }}
 {{- $parts := splitList "/" . }}
 {{- if eq (len $parts) 2 }}
-{{- $detectors = append $detectors (printf "system:serviceaccount:%s:%s" (index $parts 0) (index $parts 1)) }}
+{{- $detectorSANames = append $detectorSANames (index $parts 1) }}
 {{- end }}
 {{- end }}
-{{- if $detectors }}
+{{- if $detectorSANames }}
 - apiGroups: [""]
-  resources: ["users"]
+  resources: ["serviceaccounts"]
   verbs: ["impersonate"]
-  resourceNames: {{ $detectors | sortAlpha | uniq | toJson }}
+  resourceNames: {{ $detectorSANames | sortAlpha | uniq | toJson }}
 {{- end }}
 {{- end }}
 {{- if not $scoped }}
