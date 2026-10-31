@@ -226,6 +226,13 @@ rules:
 - apiGroups: [""]
   resources: ["pods", "services"]
   verbs: ["get", "list"]
+# The attack-catalogue k8s_cluster preflight (quarantine/pod-rotate/controller-stop)
+# lists EndpointSlices to confirm the demo-api baseline is fully represented by Ready
+# Service endpoints before a rotate/quarantine. Scoped to this attack namespace and
+# read-only; it is the lane-local analog of the cluster read already on the console role.
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list"]
 - apiGroups: ["phorvex.ai"]
   resources: ["phorvexpolicies"]
   verbs: ["patch"]
