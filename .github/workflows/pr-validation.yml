@@ -208,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [operator, console, brain, sensor, actuator, attacks]
+        image: [operator, console, brain, sensor, actuator, attacks, phorvex-fixture]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -227,8 +227,16 @@ jobs:
             console) docker build --file "deploy/docker/$IMAGE.Dockerfile" --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "CONSOLE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
             # The attacks service is a stage of the console's Dockerfile.
             attacks) docker build --file deploy/docker/console.Dockerfile --target attacks --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "CONSOLE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
+            # The catalogue fixture image bundles the three Go fixture binaries from
+            # the phorvex module; it builds from the same repo-root context.
+            phorvex-fixture) docker build --file deploy/docker/phorvex-fixture.Dockerfile --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "SOURCE_DATE_EPOCH=0" --tag "$TAG" . ;;
             *) docker build --file deploy/docker/service.Dockerfile --build-arg "SERVICE=$IMAGE" --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --tag "$TAG" . ;;
           esac
+          if [ "$IMAGE" = phorvex-fixture ]; then
+            python3 tools/verify_phorvex_fixture_image.py inspect --image "$TAG" --git-sha "$reviewed_sha" --release-version "$RELEASE_VERSION"
+            docker image rm "$TAG"
+            exit 0
+          fi
           service="$IMAGE"
           [ "$service" != operator ] || service=manager
           case "$service" in

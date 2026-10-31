@@ -1,0 +1,94 @@
+{
+  "schema": 1,
+  "name": "staging-phorvex-fixture",
+  "environment": "staging",
+  "note": "Reviewed authority for the phorvex catalogue FIXTURE image. This artifact is NOT part of the locked eight-component staging-isolated-release batch (release/staging-target.json / release/staging-batch.json): it lives in its own immutable repository and is consumed only by digest through tools/render_catalogue_staging_values.py --phorvex-image, so the shared isolated-release consumer/authority contract is unchanged.",
+  "accountId": "753556437180",
+  "region": "us-east-2",
+  "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
+  "repository": "phorvex/staging/phorvex-fixture",
+  "repositoryControls": {
+    "imageTagMutability": "IMMUTABLE",
+    "scanOnPush": true,
+    "encryptionType": "AES256",
+    "resourcePolicy": "IAM_ONLY",
+    "registryPolicy": "ABSENT",
+    "registryPolicyScope": "V2",
+    "basicScanTypeVersion": "AWS_NATIVE",
+    "registryScanType": "BASIC",
+    "tags": {
+      "campaign": "console-reactive-qa-192",
+      "environment": "staging",
+      "isolation": "staging-only",
+      "managed-by": "PhorvexSecurity/operator-refactored",
+      "project": "phorvex"
+    }
+  },
+  "build": {
+    "dockerfile": "deploy/docker/phorvex-fixture.Dockerfile",
+    "context": ".",
+    "sourceDateEpoch": 0,
+    "args": [
+      "GIT_SHA",
+      "RELEASE_VERSION",
+      "SOURCE_DATE_EPOCH"
+    ]
+  },
+  "version": "staging-fixture-v1",
+  "tagScheme": {
+    "canonical": "staging-${version}-git-${source}",
+    "aliases": [
+      "staging-${version}-git-${source}",
+      "staging-git-${source}"
+    ],
+    "immutable": true,
+    "pinnedBy": "digest"
+  },
+  "identity": {
+    "platform": "linux/amd64",
+    "user": "65532:65532",
+    "entrypoint": [
+      "/ragstore-fixture"
+    ],
+    "commands": [
+      "/ragstore-fixture",
+      "/cost-admission",
+      "/cost-load-detector"
+    ],
+    "commandSources": {
+      "/ragstore-fixture": "phorvex/cmd/ragstore-fixture",
+      "/cost-admission": "phorvex/cmd/cost-admission",
+      "/cost-load-detector": "phorvex/cmd/cost-load-detector"
+    },
+    "labels": [
+      "org.opencontainers.image.revision",
+      "org.opencontainers.image.version",
+      "ai.phorvex.fixture.commands"
+    ]
+  },
+  "consumers": {
+    "renderFlag": "--phorvex-image",
+    "renderTool": "tools/render_catalogue_staging_values.py",
+    "valuesPath": [
+      "phorvex",
+      "console",
+      "attackCatalog",
+      "familyFixtures",
+      "images",
+      "phorvex"
+    ],
+    "families": {
+      "datastore": [
+        "/ragstore-fixture"
+      ],
+      "serving-rate": [
+        "/ragstore-fixture",
+        "/cost-admission",
+        "/cost-load-detector"
+      ],
+      "serving-kv": [
+        "/ragstore-fixture"
+      ]
+    }
+  }
+}

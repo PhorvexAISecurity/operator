@@ -60,6 +60,17 @@ func main() {
 		return []byte(cm.Data[key]), nil
 	}
 
+	srv := &http.Server{Addr: getenv("LISTEN", ":8080"), Handler: newStoreMux(readStore), ReadHeaderTimeout: 3 * time.Second}
+	if err := srv.ListenAndServe(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// newStoreMux builds the fixture's HTTP surface over an injectable store reader so the
+// readiness probe (/healthz) and the datastore oracle endpoints can be exercised in a
+// unit test without an in-cluster Kubernetes API. The chart's rag-store readinessProbe
+// targets /healthz on the http (8080) port.
+func newStoreMux(readStore func(ctx context.Context) ([]byte, error)) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -120,9 +131,5 @@ func main() {
 		sha, _ := datastore.CanonicalSHA(raw)
 		writeJSON(w, http.StatusOK, map[string]any{"ids": st.IDs(), "sha256": sha, "count": len(st.Records)})
 	})
-
-	srv := &http.Server{Addr: getenv("LISTEN", ":8080"), Handler: mux, ReadHeaderTimeout: 3 * time.Second}
-	if err := srv.ListenAndServe(); err != nil {
-		os.Exit(1)
-	}
+	return mux
 }
