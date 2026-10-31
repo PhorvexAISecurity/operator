@@ -131,3 +131,47 @@ All tests are in-tree and run in CI. They map to the shared acceptance matrix as
 | `cmd/brain-replay.TestReplayCommandReproducesAndRefusesForeignRevisions` | V-01 (version mismatch), inspection |
 | `audittransport.TestMathLabEndpointsAreReadOnlyBoundedAndContentAddressed` | read-only transport |
 | `actionset.TestEveryGeneratedExclusionNamesItsGate` (AST guard) | D gate attribution completeness |
+
+### Optional cost-input evidence (observability prerequisite)
+
+The manager flag `--math-lab-capture-cost-evidence` defaults to `false`. When
+explicitly enabled it attaches `phorvex.endpoint-cost-evidence.v1` to the capture
+request. Existing policy allowlisting and snapshot storage remain required. In
+remote mode, enable the new flag on the **manager** and the existing
+`--math-lab-capture-policies=namespace/name` and storage flags on the **brain**.
+This proposal does not change chart defaults or activate collection in a cluster.
+The manager, brain, and sensor (when remote) must all run compatible code; older
+components can omit the additive fields, and old snapshots keep them absent.
+
+`model.Pod.WorkloadSpec` records an exact UID-checked controller `spec.replicas`
+observation with resource version, generation, and sensor observation time. A
+Deployment is resolved through its ReplicaSet; standalone ReplicaSets,
+StatefulSets and ReplicationControllers can also supply already-observed replica specs. The
+evidence helper never issues additional API reads: it sees only the existing
+snapshot owner cache after the existing rotation and stateful-rotation producers.
+Objects they do not read, such as direct-Deployment owners, remain
+`owner-object-not-observed`. Cache identity includes type, GVK and object key. Zero is a known
+value. Missing readers, stale or ambiguous identities and unsupported controllers
+remain unknown. In particular, Phoenix observations that do not request owner
+resolution keep `owner-reader-unavailable`; enabling this flag does not broaden
+sensor API reads. Existing `DesiredReplicas` and admission behavior are unchanged.
+
+Inspection exposes `endpoint_cost_evidence` and `endpoint_cost_missing`. The
+optional envelope contains at most 256 workload observations and 2,000 matching
+ledger observations, bounded to 1 MiB. Truncation and attribution gaps are explicit.
+Ledger export is an immutable copy filtered by exact policy owner and namespace;
+rows preserve their observation ID, emitted/censored/completed status and known
+pod/workload UIDs. `process_observed_since` is this ledger instance's creation time,
+not a promise of uninterrupted monitoring. History is in-memory and
+`history_complete` remains false, including after restart.
+
+The exported ledger source is **replica-readiness**: its duration runs from
+actuation to observed replacement Pod readiness. The current EndpointSlice
+producer records point membership, without durable, move-attributed transition
+intervals. Therefore `endpoint_loss_status` is always `unavailable` and
+`admission_ledger_status` is `not-authoritative` for this producer. These records
+cannot activate endpoint pricing, reconstruct an authoritative endpoint budget,
+or supply a complete paired V2/V3 dataset. Accepted endpoint availability targets
+and move-attributed endpoint-loss intervals require a separate producer. Old
+snapshots report `endpoint_cost_evidence:not-recorded` while legacy replay still
+works; no historical observations are invented.

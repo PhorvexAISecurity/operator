@@ -12,6 +12,13 @@ Commit code before the final preflight. `preflight <fix>` prints the selected lo
 checks; add `--run` to execute. Python follows workflow CI (an explicit `--python`
 environment or uv); Helm must match CI exactly (`--helm`/`HELM_BIN`); Go follows
 go.mod (`GO_BIN`/PATH). Tool absence/version mismatch is unavailable, never skipped.
+For current CI's pinned Python provisioner, local preflight verifies the full
+patch version and attests the provision script hash. If checks need both Python
+versions, set `PREFLIGHT_PYTHON_3_11` and `PREFLIGHT_PYTHON_3_12` to the matching
+interpreters (with required dependencies installed); these override `--python`
+per job. Current chart checks come from `pr-validation.yml` when legacy `ci.yml`
+is absent. Historical receipts resolve their authority and provisioner from the
+pinned commit, not the current checkout.
 Shared E2E, image builds and deployment do not run locally or acquire authorization.
 A local PASS is not a claim that all remote CI is green.
 Recorded receipts are validated against their attested source and its CI recipes, even

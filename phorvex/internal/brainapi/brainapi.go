@@ -11,6 +11,7 @@ import (
 
 	"github.com/phorvex/phorvex/api/v1alpha1"
 	"github.com/phorvex/phorvex/internal/model"
+	"github.com/phorvex/phorvex/internal/slo"
 )
 
 // ErrOwnerRetired is returned when a decision arrives for a policy identity whose lifecycle
@@ -42,8 +43,9 @@ type Gate struct {
 // Capture marks a committing evaluation the brain may record for offline replay
 // (Math Lab), subject to the brain's own allowlist.
 type Capture struct {
-	Spec       v1alpha1.PhorvexPolicySpec
-	CapturedAt time.Time
+	Spec                 v1alpha1.PhorvexPolicySpec
+	CapturedAt           time.Time
+	EndpointCostEvidence *slo.ReplayCostEvidence
 }
 
 // DecideRequest is one tenant tick.
