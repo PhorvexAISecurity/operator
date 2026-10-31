@@ -128,6 +128,39 @@ def current_go_unit_jobs(repo, source_bytes, base):
     return jobs
 
 
+def chart_benchmark_setup(repo, steps, source_bytes):
+    """Recognize the exact additional tool contract; old chart plans stay unchanged."""
+    setups = [s for s in steps if s.get('uses', '').startswith('actions/setup-go@')]
+    if not setups:
+        if any('benchmark-test-requirements.txt' in s.get('run', '') for s in steps):
+            raise ValueError('chart benchmark Go setup missing: update local adapter')
+        return {}
+    expected = {'go-version-file': 'build/test-harness/go.mod', 'cache-dependency-path': 'phorvex/go.sum'}
+    if (len(setups) != 1 or setups[0].get('with') != expected
+            or any(setups[0].get(k) for k in ('if', 'env', 'shell', 'working-directory'))):
+        raise ValueError('chart benchmark Go setup changed: update local adapter')
+    runs = [s.get('run', '').strip() for s in steps]
+    required = ('python -m pip install PyYAML==6.0.2 -r tools/benchmark-test-requirements.txt',
+                "python -m unittest discover -s tools -p 'test_*.py' -v")
+    if any(command not in runs for command in required):
+        raise ValueError('chart benchmark gating command missing: update local adapter')
+    version_file = expected['go-version-file']
+    raw = source_bytes(repo / version_file)
+    versions = re.findall(r'^go (\d+\.\d+\.\d+)$', raw.decode(), re.M)
+    if len(versions) != 1:
+        raise ValueError('chart benchmark Go version changed: update local adapter')
+    requirements = source_bytes(repo / 'tools/benchmark-test-requirements.txt')
+    if requirements.decode().splitlines() != ['openpyxl==3.1.5', 'et_xmlfile==2.0.0']:
+        raise ValueError('chart benchmark Python dependency recipe changed: update local adapter')
+    wrapper = source_bytes(repo / 'tools/test_benchmark_regressions.py')
+    if not wrapper.strip():
+        raise ValueError('chart benchmark gating wrapper missing: update local adapter')
+    return {'benchmark_go_version': versions[0], 'benchmark_go_version_file': version_file,
+            'benchmark_go_version_file_sha256': hashlib.sha256(raw).hexdigest(),
+            'benchmark_requirements_sha256': hashlib.sha256(requirements).hexdigest(),
+            'benchmark_wrapper_sha256': hashlib.sha256(wrapper).hexdigest()}
+
+
 def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_version: int = 2) -> dict:
     if recipe_version not in (1, 2):
         raise ValueError('unsupported preflight recipe version')
@@ -162,11 +195,12 @@ def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_versi
         job = yaml.safe_load(raw)['jobs'][job_name]
         if job.get('env') or job.get('container'): raise ValueError('chart checks now need CI environment setup; review adapter')
         steps = job['steps']
-        allowed = ('actions/checkout@', 'azure/setup-helm@') if exists else ('actions/checkout@', 'azure/setup-helm@', 'actions/setup-python@')
+        allowed = ('actions/checkout@', 'azure/setup-helm@') if exists else ('actions/checkout@', 'azure/setup-helm@', 'actions/setup-python@', 'actions/setup-go@')
         if any('uses' in step and not step['uses'].startswith(allowed) for step in steps):
             raise ValueError('new chart setup action requires explicit local adapter support')
         version = next(str(s['with']['version']) for s in steps if str(s.get('uses', '')).startswith('azure/setup-helm@'))
         python_version, setup_index, provision_hash = (None, None, None) if exists else python_setup(repo, steps, source_bytes)
+        benchmark_setup = {} if exists else chart_benchmark_setup(repo, steps, source_bytes)
         for i, step in enumerate(steps):
             if 'run' not in step or i == setup_index:
                 continue
@@ -178,6 +212,7 @@ def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_versi
             if python_version:
                 item['python_version'] = python_version
                 if provision_hash: item['python_provision_sha256'] = provision_hash
+            item.update(benchmark_setup)
             jobs.append(item)
     affected = []
     for module in ['phorvex', 'build/phoenix-extended']:
@@ -248,6 +283,17 @@ def environment(job, repo, args):
         env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
         if job.get('python_version'):
             prefix, env = python_environment(job['python_version'], args, env, repo, imports='yaml')
+        if job.get('benchmark_go_version'):
+            binary = os.environ.get('GO_BIN') or shutil.which('go')
+            if not binary:
+                raise ValueError('Go required by chart benchmark integrations; set GO_BIN or PATH')
+            binary = shutil.which(binary) or binary
+            env['GOTOOLCHAIN'] = 'local'
+            got = subprocess.check_output([binary, 'version'], env=env, text=True, timeout=15).strip()
+            if not got.startswith('go version go' + job['benchmark_go_version'] + ' '):
+                raise ValueError(f'Go {got} differs from chart CI {job["benchmark_go_version"]}')
+            env['GO_BIN'] = binary
+            env['PATH'] = str(Path(binary).absolute().parent) + os.pathsep + env['PATH']
     elif tool == 'go':
         binary = os.environ.get('GO_BIN') or shutil.which('go')
         if not binary:

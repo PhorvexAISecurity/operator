@@ -270,6 +270,61 @@ class StreamingAndSyncTest(unittest.TestCase):
             self.assertEqual((record['already_held'], record['downloaded']), (1, 0))
 
 
+class SnapshotRetentionTest(unittest.TestCase):
+    def test_index_reads_only_the_header_not_the_snapshot_payload(self):
+        import io
+        from unittest.mock import patch
+        from mathlab import snapshots
+        header = {'schema': 'math-lab.snapshot.v1', 'capturedAt': '2026-10-28T00:00:00Z',
+                  'namespace': 'vllm', 'policyName': 'vllm-defense'}
+        encoded = json.dumps(header).encode()
+        raw = b'PXMLSNP1' + struct.pack('>I', len(encoded)) + encoded + b'x' * (2 << 20)
+        class HeaderOnly(io.BytesIO):
+            def read(self, size=-1):
+                if size < 0 or self.tell() + size > 12 + len(encoded):
+                    raise AssertionError('indexing must not read snapshot payload bytes')
+                return super().read(size)
+        with patch('builtins.open', return_value=HeaderOnly(raw)):
+            self.assertEqual(snapshots.read_header('snapshot.pxms'), header)
+        self.assertEqual(snapshots.read_header(raw), header)
+
+    def test_short_or_oversized_header_is_a_value_error(self):
+        from mathlab import snapshots
+        for raw in (b'PXMLSNP1', b'PXMLSNP1' + struct.pack('>I', (1 << 20) + 1),
+                    b'PXMLSNP1' + struct.pack('>I', 100) + b'{}'):
+            with self.subTest(raw=raw[:12]), self.assertRaises(ValueError):
+                snapshots.read_header(raw)
+
+    def test_missing_blob_is_recorded_while_valid_ticks_are_downloaded(self):
+        import io
+        import hashlib
+        from mathlab import snapshots
+        from urllib.parse import urlsplit, parse_qs
+        header = json.dumps({'schema': 'math-lab.snapshot.v1', 'capturedAt': '2026-10-28T00:00:00Z',
+                             'namespace': 'vllm', 'policyName': 'vllm-defense'}).encode()
+        raw = b'PXMLSNP1' + struct.pack('>I', len(header)) + header
+        digest = hashlib.sha256(raw).hexdigest()
+        class Failure(Exception):
+            def __init__(self, status): self.status = status
+        class FakeConsole:
+            status = 404
+            def request(self, path): return {'entries': [{'digest': DIGEST_A}, {'digest': digest}]}
+            def open(self, path, timeout):
+                if parse_qs(urlsplit(path).query)['digest'][0] == DIGEST_A:
+                    raise Failure(self.status)
+                return io.BytesIO(raw)
+        console = FakeConsole()
+        with tempfile.TemporaryDirectory() as tmp:
+            record = snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
+            self.assertEqual(record['downloaded'], 1)
+            self.assertEqual(record['rejected'], [{'digest': DIGEST_A, 'reason': 'snapshot no longer available (HTTP 404)'}])
+            self.assertEqual((Path(tmp) / 'mathlab/snapshots/vllm/vllm-defense' / (digest + '.pxms')).read_bytes(), raw)
+        for status in (401, 403, 500):
+            console.status = status
+            with tempfile.TemporaryDirectory() as tmp, self.assertRaises(Failure):
+                snapshots.sync(tmp, 'vllm', 'vllm-defense', console)
+
+
 class CohortSpacingTest(unittest.TestCase):
     def test_even_spacing_spans_the_window(self):
         with tempfile.TemporaryDirectory() as tmp:

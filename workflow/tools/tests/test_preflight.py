@@ -19,7 +19,8 @@ def current_ci(repo):
     ci = repo/'.github/workflows'; ci.mkdir(parents=True)
     for name in ('workflow-harness.yml', 'pr-validation.yml'):
         shutil.copy2(SOURCE_ROOT.parent/'.github/workflows'/name, ci/name)
-    for name in ('tools/provision-python.sh', 'build/test-harness/go.mod', 'phorvex/go.mod'):
+    for name in ('tools/provision-python.sh', 'tools/benchmark-test-requirements.txt',
+                 'tools/test_benchmark_regressions.py', 'build/test-harness/go.mod', 'phorvex/go.mod'):
         path = repo/name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SOURCE_ROOT.parent/name, path)
@@ -72,6 +73,9 @@ class PreflightTests(unittest.TestCase):
                 self.assertEqual(job['python_version'], '3.12.15')
                 self.assertEqual(job['ci_sha256'], hashlib.sha256((ci/'pr-validation.yml').read_bytes()).hexdigest())
                 self.assertEqual(job['python_provision_sha256'], hashlib.sha256((repo/'tools/provision-python.sh').read_bytes()).hexdigest())
+                self.assertEqual(job['benchmark_go_version'], '1.26.3')
+                self.assertEqual(job['benchmark_go_version_file_sha256'], hashlib.sha256((repo/'build/test-harness/go.mod').read_bytes()).hexdigest())
+                self.assertEqual(job['benchmark_wrapper_sha256'], hashlib.sha256((repo/'tools/test_benchmark_regressions.py').read_bytes()).hexdigest())
             harness = next(j for j in selected['jobs'] if j['id'] == 'workflow')
             self.assertEqual(harness['version'], '3.11.17')
             self.assertEqual(harness['script'], 'bash workflow/tools/check.sh')
@@ -197,6 +201,73 @@ class PreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'differs from CI 3.12.15'):
                 preflight.environment({'tool':'python', 'version':'3.12.15'}, Path('/tmp'), args)
             self.assertEqual(check.call_args.args[0][0], '/matching/python')
+
+    def test_chart_benchmark_rejects_missing_recipe_and_pins_wrapper_hash(self):
+        with sandbox() as (repo, root, baseline):
+            ci = current_ci(repo)
+            original = yaml.safe_load((ci/'pr-validation.yml').read_text())['jobs']['charts']['steps']
+            read = lambda p: p.read_bytes()
+            want = preflight.chart_benchmark_setup(repo, original, read)
+            for kind in ('setup', 'command', 'version-file', 'dependency', 'wrapper'):
+                steps = yaml.safe_load(yaml.safe_dump(original))
+                dependencies = (repo/'tools/benchmark-test-requirements.txt').read_bytes()
+                wrapper = (repo/'tools/test_benchmark_regressions.py').read_bytes()
+                try:
+                    if kind == 'setup':
+                        steps = [s for s in steps if not s.get('uses', '').startswith('actions/setup-go@')]
+                    elif kind == 'command':
+                        steps = [s for s in steps if s.get('run') != "python -m unittest discover -s tools -p 'test_*.py' -v"]
+                    elif kind == 'version-file':
+                        next(s for s in steps if s.get('uses', '').startswith('actions/setup-go@'))['with']['go-version-file'] = 'phorvex/go.mod'
+                    elif kind == 'dependency':
+                        (repo/'tools/benchmark-test-requirements.txt').write_text('openpyxl>=3.1\n')
+                    else:
+                        (repo/'tools/test_benchmark_regressions.py').write_bytes(b'')
+                    with self.assertRaisesRegex(ValueError, 'adapter'):
+                        preflight.chart_benchmark_setup(repo, steps, read)
+                finally:
+                    (repo/'tools/benchmark-test-requirements.txt').write_bytes(dependencies)
+                    (repo/'tools/test_benchmark_regressions.py').write_bytes(wrapper)
+            (repo/'tools/test_benchmark_regressions.py').write_bytes(wrapper + b'\n# changed wrapper\n')
+            changed = preflight.chart_benchmark_setup(repo, original, read)
+            self.assertNotEqual(want['benchmark_wrapper_sha256'], changed['benchmark_wrapper_sha256'])
+
+    def test_chart_benchmark_requires_exact_local_go(self):
+        job = {'tool': 'helm', 'version': 'v3.16.4', 'benchmark_go_version': '1.26.3'}
+        args = argparse.Namespace(python=None, helm='/exact/helm')
+        with patch.dict(os.environ, {'GO_BIN': '/exact/go', 'GOTOOLCHAIN': 'auto'}), \
+             patch.object(preflight.subprocess, 'check_output', side_effect=['v3.16.4', 'go version go1.26.3 linux/amd64']) as check:
+            _, env = preflight.environment(job, Path('/tmp'), args)
+            self.assertEqual(env['GOTOOLCHAIN'], 'local')
+            self.assertEqual(env['GO_BIN'], '/exact/go')
+            self.assertEqual(check.call_args_list[-1].kwargs['env']['GOTOOLCHAIN'], 'local')
+        with patch.dict(os.environ, {'GO_BIN': '/wrong/go'}), \
+             patch.object(preflight.subprocess, 'check_output', side_effect=['v3.16.4', 'go version go1.26.1 linux/amd64']):
+            with self.assertRaisesRegex(ValueError, 'differs from chart CI 1.26.3'):
+                preflight.environment(job, Path('/tmp'), args)
+
+    def test_historical_chart_without_benchmark_setup_retains_its_plan(self):
+        with sandbox() as (repo, root, baseline):
+            ci = current_ci(repo)
+            file = ci/'pr-validation.yml'
+            current = file.read_bytes()
+            old = yaml.safe_load(current)
+            old['jobs']['charts']['steps'] = [s for s in old['jobs']['charts']['steps']
+                                              if not s.get('uses', '').startswith('actions/setup-go@')]
+            for step in old['jobs']['charts']['steps']:
+                if 'benchmark-test-requirements.txt' in step.get('run', ''):
+                    step['run'] = 'python -m pip install PyYAML==6.0.2'
+            file.write_text(yaml.safe_dump(old))
+            run(['git', 'add', '.github', 'tools', 'build', 'phorvex'], repo)
+            run(['git', 'commit', '-m', 'Historical chart authority'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            selected = preflight.plan(repo, baseline, head, pinned=True)
+            self.assertTrue([j for j in selected['jobs'] if j['tool'] == 'helm'])
+            self.assertFalse(any('benchmark_go_version' in j for j in selected['jobs']))
+            file.write_bytes(current)
+            self.assertEqual(preflight.plan(repo, baseline, head, pinned=True), selected)
+            updated = preflight.plan(repo, baseline, head)
+            self.assertTrue(any(j.get('benchmark_go_version') == '1.26.3' for j in updated['jobs']))
 
     def test_pinned_receipt_survives_new_checkout_but_submission_and_tampering_fail(self):
         with sandbox() as (repo, root, baseline):

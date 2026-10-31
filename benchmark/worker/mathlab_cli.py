@@ -41,15 +41,16 @@ def refresh_binary(data_dir):
     return identity
 
 
-def inspect_latest(data_dir, namespace, policy, identity):
-    entries = snapshots.local_index(data_dir, namespace, policy)
-    if not entries or not identity:
+def inspect_latest(data_dir, namespace, policy, identity, expected_header=None):
+    if not identity:
         return None
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
-        latest = entries[-1]
-        src = data_root(data_dir) / 'snapshots' / namespace / policy / (latest['digest'] + '.pxms')
-        os.symlink(src, Path(tmp) / src.name)
+        with snapshots.cache_lock(data_dir, namespace, policy):
+            entries = snapshots.local_index(data_dir, namespace, policy, expected_header)
+            if not entries:
+                return None
+            snapshots.freeze_cohort(data_dir, namespace, policy, [entries[-1]], tmp)
         out = Path(tmp) / 'inspect.jsonl'
         binary.run_isolated([identity['path'], '-inspect', '-snapshots', tmp, '-out', str(out)], timeout=120)
         lines = [json.loads(l) for l in out.read_text().splitlines() if l.strip()]
