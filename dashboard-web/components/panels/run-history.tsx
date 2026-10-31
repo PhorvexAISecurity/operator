@@ -217,6 +217,8 @@ function EvidenceDetail({ id, lens, runErr, runConfig, unsafeToRetry }: { id: st
 }
 
 const armLabel = (def: string) => def === "d-phorvex" ? "Phorvex" : def === "d-nomtd" ? "Without Phorvex" : def.replace("d-r6blindtimer", "Without Phorvex (blind)").replace("d-", "");
+const normalizeLocalTarget = (target: string) => target === "in-cluster" || target === "default" ? "default" : target;
+const sameTarget = (left: string, right: string) => !!left && !!right && normalizeLocalTarget(left) === normalizeLocalTarget(right);
 
 // Post-attack report history: every live attack you launched, newest first, with its date and
 // the real with/without-Phorvex metrics. Polls so it refreshes as runs finish.
@@ -227,7 +229,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
   const sel = useSelectedTarget(); // SCOPE the report list to the selected provider
   const previousStates = React.useRef<Map<string, RunStatus["state"]> | null>(null);
   const matchesSelectedScope = React.useCallback((run: RunStatus) => {
-    if (run.target) return !!sel.context && run.target === sel.context;
+    if (run.target) return sameTarget(run.target, sel.context);
     return !sel.provider || (run.provider || "") === sel.provider;
   }, [sel.context, sel.provider]);
   React.useEffect(() => {
@@ -325,7 +327,7 @@ export function RunHistoryPanel({ lens }: { lens: Lens }) {
                       <tr className={cn("cursor-pointer border-t border-border/40 hover:bg-elevated/40", open === r.id && "bg-primary/[0.04]")} onClick={() => {
                         const next = open === r.id ? "" : r.id;
                         setOpen(next);
-                        if (next && r.target && r.target === sel.context) selectLiveRecord({ kind: "run", id: r.id, lens, context: sel.context });
+                        if (next && sameTarget(r.target || "", sel.context)) selectLiveRecord({ kind: "run", id: r.id, lens, context: sel.context });
                         else if (!next) clearLiveSelection(lens, sel.context);
                       }}>
                         <td className="px-2 py-2 tabular text-muted-foreground"><span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" />{r.date || r.started}</span></td>

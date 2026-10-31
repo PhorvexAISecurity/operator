@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -323,6 +324,31 @@ func TestConsoleRunPaginationAuthorizationAndAppend(t *testing.T) {
 	rows, page = get(page.NextCursor)
 	if len(rows) != 1 || rows[0].ID != "run-1" || page.Total != 2 {
 		t.Fatalf("runs snapshot shifted: %+v %+v", rows, page)
+	}
+}
+
+func TestConsoleRunPaginationMatchesLocalClusterAliases(t *testing.T) {
+	cfg := Config{StateDir: t.TempDir()}
+	rm := NewRunManager(cfg)
+	rm.runs = map[string]*RunStatus{
+		"cat-14": {ID: "cat-14", Config: "AML.T0086", Target: defaultTargetID, ScopeTarget: defaultTargetID, ScopeTenant: "acme", State: "done"},
+	}
+	s := &Server{cfg: cfg, runs: rm}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/runs/list?context="+inClusterTargetID+"&q=cat-14&limit=20", nil)
+	s.runsList(w, withTestPrincipal(r, testOperatorPrincipal("acme")))
+	if w.Code != http.StatusOK {
+		t.Fatalf("runs status=%d %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Runs []RunStatus    `json:"runs"`
+		Page collectionPage `json:"page"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Runs) != 1 || response.Runs[0].ID != "cat-14" || response.Page.Total != 1 {
+		t.Fatalf("local alias hid the retained run: runs=%+v page=%+v", response.Runs, response.Page)
 	}
 }
 

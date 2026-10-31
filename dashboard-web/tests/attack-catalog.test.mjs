@@ -35,4 +35,6 @@ test("persisted catalogue evidence remains reviewable from run history", () => {
   assert.match(panel, /export function AttackCatalogueResultPanel/);
   assert.match(history, /ev\.attackCatalogueResult/);
   assert.match(history, /<AttackCatalogueResultPanel result=\{ev\.attackCatalogueResult\}/);
+  assert.match(history, /normalizeLocalTarget/);
+  assert.match(history, /sameTarget\(run\.target, sel\.context\)/);
 });
