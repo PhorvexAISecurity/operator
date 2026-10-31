@@ -1152,3 +1152,20 @@ artifacts:
   positive_control_for: null
   retention: git
   sensitivity: null
+- id: check-patch_equivalence
+  path: evidence/delivery-equivalence.json
+  sha256: 2c5b463535e045589318feb226aad95cffaf3457be112f52eaa9d9c162837e7e
+  bytes: 2426
+  producer: bench-v3-lead
+  created_at: '2026-10-31T21:14:52+00:00'
+  source_sha: 00eac153f3f27929907f91d4231362051664364c
+  command: preflight.code_tree(repo, 00eac153f3f27929907f91d4231362051664364c) ==
+    preflight.code_tree(repo, b31b87d9ecb6c98871ce7afa438645c5aafee9c3); git merge-tree
+    --write-tree 00eac153f3f27929907f91d4231362051664364c e8674419bdab387e740128ce1284fad11f6267fc;
+    exact receipt/worktree validation
+  evidence_class: EQUIVALENCE
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
