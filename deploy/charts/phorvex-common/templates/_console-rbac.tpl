@@ -50,6 +50,13 @@ rules:
 - apiGroups: ["apps"]
   resources: ["statefulsets", "deployments", "replicasets", "daemonsets"]
   verbs: ["get", "list"]
+# The attack-catalogue k8s preflight lists EndpointSlices to confirm the demo-api
+# baseline is fully represented by Ready Service endpoints before a quarantine.
+# Mirrors the cluster-wide pods/services read above (EndpointSlices are the modern
+# analog of the Endpoints the console already resolves through Services).
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list"]
 - apiGroups: [""]
   resources: ["pods/log"]
   verbs: ["get"]
