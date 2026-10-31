@@ -198,6 +198,21 @@ jobs:
           persist-credentials: false
       - name: Rebuild each fixture twice and compare complete OCI identities
         run: python3 tools/verify_fixture_reproducibility.py --source-date-epoch 0
+      # The phorvex catalogue fixture image bundles the three Go fixture binaries from the
+      # phorvex module (repo-root context). It is built and identity-verified from candidate
+      # source here, exactly like the service images, but it is NOT one of the eight release
+      # components, so it stays out of the `images` matrix (TestComponentsBuildWhatTheirImagesBuild
+      # keeps that matrix == the components). Nothing is pushed; its reproducible publish-by-digest
+      # lives in the dedicated staging-phorvex-fixture.yml workflow.
+      - name: Build and identity-verify the phorvex catalogue fixture image without pushing
+        env:
+          TAG: operator-refactored-phorvex-fixture:ci-${{ github.run_id }}-${{ github.run_attempt }}
+          RELEASE_VERSION: 0.0.0-ci
+        run: |
+          reviewed_sha="$(tools/verify-git-build-identity.sh "$GITHUB_SHA")"
+          docker build --file deploy/docker/phorvex-fixture.Dockerfile --build-arg "GIT_SHA=$reviewed_sha" --build-arg "RELEASE_VERSION=$RELEASE_VERSION" --build-arg "SOURCE_DATE_EPOCH=0" --tag "$TAG" .
+          python3 tools/verify_phorvex_fixture_image.py inspect --image "$TAG" --git-sha "$reviewed_sha" --release-version "$RELEASE_VERSION"
+          docker image rm "$TAG"
 
   # The release images must keep building from candidate source: a shared lib or
   # replace target missing from a Dockerfile only fails at `go mod download` in the

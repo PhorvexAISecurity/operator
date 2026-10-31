@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"strings"
@@ -38,28 +39,44 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 }
 
 func main() {
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		os.Exit(1)
-	}
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		os.Exit(1)
-	}
-	ns := getenv("POD_NAMESPACE", "default")
-	cmName := getenv("STORE_CONFIGMAP", datastore.StoreConfigMapName)
-	key := getenv("STORE_KEY", datastore.StoreKey)
-
 	// readStore does a FRESH API Get per call (never a cached informer) so the served content
-	// always reflects the authoritative ConfigMap the actuator CASes.
-	readStore := func(ctx context.Context) ([]byte, error) {
-		cm, e := clientset.CoreV1().ConfigMaps(ns).Get(ctx, cmName, metav1.GetOptions{})
-		if e != nil {
-			return nil, e
+	// always reflects the authoritative ConfigMap the actuator CASes. When there is no
+	// in-cluster identity it fails closed (store endpoints 503) while /healthz stays 200.
+	readStore := func(context.Context) ([]byte, error) {
+		return nil, errors.New("datastore API client unavailable")
+	}
+	// The datastore (rag-store) pod mounts a ServiceAccount token and reads its content
+	// ConfigMap. The serving-rate rate-target reuses this same image purely as an HTTP
+	// backend with automountServiceAccountToken:false, so no in-cluster config is present:
+	// serve the HTTP surface anyway instead of crash-looping.
+	if cfg, err := rest.InClusterConfig(); err == nil {
+		clientset, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			os.Exit(1)
 		}
-		return []byte(cm.Data[key]), nil
+		ns := getenv("POD_NAMESPACE", "default")
+		cmName := getenv("STORE_CONFIGMAP", datastore.StoreConfigMapName)
+		key := getenv("STORE_KEY", datastore.StoreKey)
+		readStore = func(ctx context.Context) ([]byte, error) {
+			cm, e := clientset.CoreV1().ConfigMaps(ns).Get(ctx, cmName, metav1.GetOptions{})
+			if e != nil {
+				return nil, e
+			}
+			return []byte(cm.Data[key]), nil
+		}
 	}
 
+	srv := &http.Server{Addr: getenv("LISTEN", ":8080"), Handler: newStoreMux(readStore), ReadHeaderTimeout: 3 * time.Second}
+	if err := srv.ListenAndServe(); err != nil {
+		os.Exit(1)
+	}
+}
+
+// newStoreMux builds the fixture's HTTP surface over an injectable store reader so the
+// readiness probe (/healthz) and the datastore oracle endpoints can be exercised in a
+// unit test without an in-cluster Kubernetes API. The chart's rag-store readinessProbe
+// targets /healthz on the http (8080) port.
+func newStoreMux(readStore func(ctx context.Context) ([]byte, error)) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -120,9 +137,5 @@ func main() {
 		sha, _ := datastore.CanonicalSHA(raw)
 		writeJSON(w, http.StatusOK, map[string]any{"ids": st.IDs(), "sha256": sha, "count": len(st.Records)})
 	})
-
-	srv := &http.Server{Addr: getenv("LISTEN", ":8080"), Handler: mux, ReadHeaderTimeout: 3 * time.Second}
-	if err := srv.ListenAndServe(); err != nil {
-		os.Exit(1)
-	}
+	return mux
 }

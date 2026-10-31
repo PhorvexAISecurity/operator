@@ -1,0 +1,189 @@
+name: Staging phorvex fixture image
+
+# Build, reproduce and publish the phorvex catalogue FIXTURE image (the three Go
+# binaries /ragstore-fixture, /cost-admission and /cost-load-detector) to its own
+# immutable ECR repository, then report the exact repository@digest for the operator
+# to pass to `render_catalogue_staging_values.py --phorvex-image` when it switches the
+# catalogue window to the datastore, serving-rate or serving-kv family.
+#
+# This workflow NEVER touches the locked eight-component staging-isolated-release batch
+# (release/staging-batch.json), its authority files or the service/ApplicationSet
+# routes: the fixture image is a separate artifact, referenced only by digest. It does
+# not open a deployment PR and does not sync Argo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: Exact reviewed main merge SHA to build and publish the fixture image from
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-phorvex-fixture
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  GOTOOLCHAIN: local
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: staging-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Require one exact reviewed main source
+        env:
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          [ "$EVENT_REF" = refs/heads/main ]
+          [ "$EVENT_SHA" = "$REQUESTED_SOURCE" ]
+          reviewed_sha="$(tools/verify-git-build-identity.sh "$REQUESTED_SOURCE")"
+          [ "$reviewed_sha" = "$REQUESTED_SOURCE" ]
+          [ "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE" ]
+          remote_main="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          [ "$remote_main" = "$REQUESTED_SOURCE" ]
+          [ -z "$(git status --porcelain --untracked-files=all)" ]
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache: false
+      - name: Provision pinned Python 3.12
+        run: |
+          bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Resolve the reviewed fixture image contract
+        run: |
+          set -euo pipefail
+          authority=release/staging-phorvex-fixture.json
+          jq -e '.schema == 1 and .name == "staging-phorvex-fixture"
+            and .build.dockerfile == "deploy/docker/phorvex-fixture.Dockerfile"
+            and .build.context == "." and .build.sourceDateEpoch == 0
+            and .repositoryControls.imageTagMutability == "IMMUTABLE"
+            and .identity.user == "65532:65532"
+            and .identity.commands == ["/ragstore-fixture","/cost-admission","/cost-load-detector"]' \
+            "$authority" > /dev/null
+          {
+            echo "REGISTRY=$(jq -er '.registry' "$authority")"
+            echo "REPOSITORY=$(jq -er '.repository' "$authority")"
+            echo "VERSION=$(jq -er '.version' "$authority")"
+          } >> "$GITHUB_ENV"
+      - name: Require the release role
+        env:
+          ROLE: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$ROLE" =~ ^arn:aws:iam::753556437180:role/[A-Za-z0-9+=,.@_/-]+$ ]] || {
+            echo "::error::set PHORVEX_RELEASE_ROLE_ARN"; exit 1;
+          }
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          role-to-assume: ${{ vars.PHORVEX_RELEASE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+      - name: Preflight the immutable fixture repository controls
+        run: |
+          set -euo pipefail
+          described="$(aws ecr describe-repositories --region "$AWS_REGION" \
+            --repository-names "$REPOSITORY" --query 'repositories[0]' --output json)"
+          [ "$(jq -r '.imageTagMutability' <<< "$described")" = IMMUTABLE ]
+          [ "$(jq -r '.imageScanningConfiguration.scanOnPush' <<< "$described")" = true ]
+          [ "$(jq -r '.encryptionConfiguration.encryptionType' <<< "$described")" = AES256 ]
+      - name: Start the pinned fixture BuildKit builder
+        run: |
+          set -euo pipefail
+          name="phorvex-fixture-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker buildx create --name "$name" --driver docker-container \
+            --driver-opt image=moby/buildkit:v0.33.1@sha256:cec9f139f45e93c5c69c60f8b07cfad9f43f4ef6b6a6cd917527fea5ff2e3dea \
+            --bootstrap
+          echo "FIXTURE_BUILDER=$name" >> "$GITHUB_ENV"
+      - name: Reproduce the fixture image twice and compare complete OCI identities
+        env:
+          SOURCE: ${{ inputs.source }}
+        run: >-
+          python3 tools/verify_phorvex_fixture_image.py reproduce
+          --git-sha "$SOURCE" --release-version "$VERSION" --source-date-epoch 0
+          --builder "$FIXTURE_BUILDER"
+      - name: Build, verify, push by immutable digest and report the render pin
+        env:
+          SOURCE: ${{ inputs.source }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY_FULL: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          remote_main="$(gh api "repos/$REPOSITORY_FULL/git/ref/heads/main" --jq .object.sha)"
+          [ "$remote_main" = "$SOURCE" ]
+          tag="staging-${VERSION}-git-${SOURCE}"
+          alias="staging-git-${SOURCE}"
+          image="$REGISTRY/$REPOSITORY:$tag"
+          digest=''
+          if existing="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$REPOSITORY" \
+              --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null)" \
+             && [[ "$existing" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "immutable tag already published; reusing $existing"
+            digest="$existing"
+          else
+            docker buildx build --builder "$FIXTURE_BUILDER" --pull \
+              --file deploy/docker/phorvex-fixture.Dockerfile \
+              --platform linux/amd64 --provenance=false --sbom=false \
+              --build-arg SOURCE_DATE_EPOCH=0 --build-arg "GIT_SHA=$SOURCE" --build-arg "RELEASE_VERSION=$VERSION" \
+              --load --tag "$image" .
+            python3 tools/verify_phorvex_fixture_image.py inspect \
+              --image "$image" --git-sha "$SOURCE" --release-version "$VERSION"
+            docker tag "$image" "$REGISTRY/$REPOSITORY:$alias"
+            docker push "$image" < /dev/null
+            docker push "$REGISTRY/$REPOSITORY:$alias" < /dev/null
+            for attempt in 1 2 3 4 5 6; do
+              if digest="$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$REPOSITORY" \
+                  --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text 2>/dev/null)" \
+                 && [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                break
+              fi
+              digest=''
+              sleep 5
+            done
+          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          pin="$REGISTRY/$REPOSITORY@$digest"
+          {
+            echo "## Phorvex catalogue fixture image published"
+            echo
+            echo "Exact source: \`$SOURCE\`"
+            echo
+            echo "Immutable pin for \`render_catalogue_staging_values.py --phorvex-image\`:"
+            echo
+            echo '```'
+            echo "$pin"
+            echo '```'
+            echo
+            echo 'Use with `--profile datastore|serving-rate|serving-kv`. This image is not part of'
+            echo 'the eight-component staging-isolated-release batch and no deployment PR was opened.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "published $pin"
+      - name: Remove the fixture builder
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -n "${FIXTURE_BUILDER:-}" ]; then
+            docker buildx rm "$FIXTURE_BUILDER"
+          fi

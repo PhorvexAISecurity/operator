@@ -47,6 +47,7 @@ var stages = []buildStage{
 	{"deploy/docker/service.Dockerfile", "phorvex"},
 	{"deploy/docker/console.Dockerfile", "phorvex"},
 	{"deploy/docker/console.Dockerfile", "build/test-harness"},
+	{"deploy/docker/phorvex-fixture.Dockerfile", "phorvex"},
 }
 
 var (
