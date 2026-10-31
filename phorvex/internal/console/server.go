@@ -670,7 +670,7 @@ func (s *Server) runsList(w http.ResponseWriter, r *http.Request) {
 			if seqOf(st.ID) > cursor.Snapshot || !runVisibleTo(p, runOwnershipOf(&st)) {
 				continue
 			}
-			if contextFilter != "" && st.Target != contextFilter && !(st.Target == "" && providerFilter != "" && st.Provider == providerFilter) {
+			if contextFilter != "" && normalizeTargetID(st.Target) != normalizeTargetID(contextFilter) && !(st.Target == "" && providerFilter != "" && st.Provider == providerFilter) {
 				continue
 			}
 			if contextFilter == "" && providerFilter != "" && (st.Target != "" || st.Provider != providerFilter) {
