@@ -103,13 +103,18 @@ func (k *kubernetesIdentityCatalogCluster) Prepare(ctx context.Context) (identit
 		return identityCatalogFixture{}, errors.New("identity fixture must have exactly one selected Pod")
 	}
 	pod := &pods.Items[0]
-	observed, err := identityfixture.ObserveKubernetes(ctx, k.client, p, pod.Name, string(pod.UID), false)
+	// Bind this run to the generation the pinned-UID policy actually reports now, rather than a
+	// static profile pin that drifts on every re-apply. wantGeneration==0 accepts the live, fully
+	// reconciled generation; boundGeneration then pins the rest of the run (marker + physical).
+	observed, err := identityfixture.ObserveKubernetesAt(ctx, k.client, p, pod.Name, string(pod.UID), false, 0)
 	if err != nil {
 		return identityCatalogFixture{}, err
 	}
+	boundGeneration := observed.Observation.PolicyGeneration
 	var policy v1alpha1.PhorvexPolicy
 	if err = k.client.Get(ctx, ctrlclient.ObjectKey{Namespace: p.Namespace, Name: p.PolicyName}, &policy); err != nil ||
-		string(policy.UID) != p.PolicyUID || policy.Generation != p.PolicyGeneration ||
+		string(policy.UID) != p.PolicyUID || policy.Generation != boundGeneration ||
+		policy.Status.ObservedGeneration != policy.Generation ||
 		policy.Spec.EffectiveMode() != v1alpha1.ModeActive || !policy.Spec.Triggers.EventDriven {
 		return identityCatalogFixture{}, errors.New("identity fixture policy is not the pinned active event-driven policy")
 	}
@@ -129,7 +134,7 @@ func (k *kubernetesIdentityCatalogCluster) Prepare(ctx context.Context) (identit
 	}
 	return identityCatalogFixture{Namespace: p.Namespace, PodName: pod.Name, PodUID: string(pod.UID),
 		ServiceAccountName: observed.Observation.ServiceAccountName, ServiceAccountUID: observed.Observation.ServiceAccountUID,
-		PolicyName: p.PolicyName, PolicyUID: p.PolicyUID, PolicyGeneration: p.PolicyGeneration,
+		PolicyName: p.PolicyName, PolicyUID: p.PolicyUID, PolicyGeneration: boundGeneration,
 		ReactiveOnly: policy.Spec.Triggers.ReactiveOnly, Credential: token.Status.Token, Username: username}, nil
 }
 
@@ -153,7 +158,9 @@ func (k *kubernetesIdentityCatalogCluster) CreateMarker(ctx context.Context, f i
 	if err != nil || created.UID == "" {
 		return "", errors.New("identity fixture positive-control marker creation failed")
 	}
-	if _, err = identityfixture.ObserveKubernetes(ctx, k.client, k.profile, f.PodName, f.PodUID, true); err != nil {
+	// Enforce the generation captured at preflight: a policy edit between preflight and the stolen
+	// bearer landing invalidates the positive-control marker instead of silently re-binding.
+	if _, err = identityfixture.ObserveKubernetesAt(ctx, k.client, k.profile, f.PodName, f.PodUID, true, f.PolicyGeneration); err != nil {
 		uid := created.UID
 		_ = k.kube.CoreV1().ConfigMaps(f.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
 		return "", errors.New("identity fixture marker did not satisfy the reviewed observation contract")

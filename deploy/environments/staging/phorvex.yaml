@@ -68,7 +68,12 @@ phorvex:
       namespaceUID: fe759ca8-6039-4899-be8c-14e45b0b0613
       policyName: console-id-fixture
       policyUID: ac3a6044-a88f-42b0-abe0-fc5a0fbdadcc
-      policyGeneration: 2
+      # 0 = bind to the live, fully-reconciled generation of the pinned-UID policy.
+      # A hard-pinned generation drifts the moment the policy is re-applied or
+      # re-reconciled (this pin read 2 while the live policy was generation 3,
+      # which failed every identity-sa-rotate observation); the identity name is
+      # still pinned by policyName + policyUID above.
+      policyGeneration: 0
       eksCluster: phorvex-dev-eks
       awsRegion: us-east-2
   # Admission webhooks and policies are cluster-wide: staging's would also admit
