@@ -23,7 +23,7 @@ those need the live lab (`benchmark/run.sh`, still being built).
 | `/guide` | Sends the English step-by-step playbook to the requesting chat as HTML and PDF attachments. |
 | `/upload` | File-submission instructions. Upload a JSON study or a `.md`, `.txt` or `.docx` code/parameter document to execute its valid experiments automatically. |
 | `/validate` | Use as an uploaded document's caption to validate structure and values without queuing anything. |
-| `/templates` | Download eight examples: five code/parameter files and three Cost/History JSON studies. |
+| `/templates` | Download ten examples: five code/parameter files, three Cost/History studies and two paired endpoint V2/V3 requests. |
 | `/status`, `/runs`, `/cancel`, `/check`, `/help` | The running job and queue, the last results, stop after the current step, dependency checks, usage. |
 | `/invite` | Owner only, in private chat: a one-use member invitation valid for 24 hours. |
 
@@ -327,3 +327,9 @@ algorithms without LLM code generation. Start with `/study` and the JSON example
 from `/templates`. See [the study contract and evidence requirements](STUDIES.md).
 Synthetic examples are executable demonstrations, not production results; missing
 recorded ledgers return `NEEDS_DATA` with an explanation.
+
+## Paired endpoint-cost V2/V3
+
+See [ENDPOINT-V3.md](ENDPOINT-V3.md). Upload `endpoint-v3-synthetic.json` for the labelled 64-tick Go reference test, or `endpoint-v3-recorded.json` for qualified recorded inputs. Missing recorded telemetry returns BLOCKED with artifacts before model/build work. A successful synthetic study does not establish readiness of historical production data. Build and include `benchmark/endpointv3/bin/endpoint-v3` and `BUILD.json` in each bot release.
+
+The code planner can request bounded file, package and line-range reads plus literal source searches from the pinned baseline commit. Four read rounds are separate from patch retries. Missing source context is resolved from the repository when available; actual missing telemetry remains an explicit blocker.

@@ -30,7 +30,7 @@ class ParserTest(unittest.TestCase):
             with self.subTest(path=path.name):
                 tasks = self.parse(files.document_text(path.name, path.read_bytes()))
                 self.assertTrue(tasks)
-                self.assertTrue(all(task['kind'] in ('bench', 'param', 'study') for task in tasks))
+                self.assertTrue(all(task['kind'] in ('bench', 'param', 'study', 'endpoint') for task in tasks))
         word = next(path for path in examples if path.suffix == '.docx')
         self.assertEqual([t['kind'] for t in self.parse(files.document_text(word.name, word.read_bytes()))], ['bench', 'param'])
 

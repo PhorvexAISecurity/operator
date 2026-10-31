@@ -246,6 +246,50 @@ class PlannerTest(unittest.TestCase):
         self.assertEqual(planner.scope_violations(new.replace('internal/decision/', 'tools/'), self.repo, self.base),
                          ['phorvex/tools/new_test.go'])
 
+    def test_basename_resolves_real_source_before_keyword_density(self):
+        self.write('phorvex/internal/model/economics.go', 'package model // endpoint cost')
+        git(self.repo, 'add', '-A'); git(self.repo, 'commit', '-qm', 'economics')
+        self.base = git(self.repo, 'rev-parse', 'HEAD')
+        paths = planner.rank_context_files(self.repo, self.base, 'Inspect economics.go before changing the decision cost model')
+        self.assertEqual(paths[0], 'phorvex/internal/model/economics.go')
+
+    def test_model_can_read_omitted_package_then_emit_patch(self):
+        self.write('phorvex/internal/actionset/generator.go', 'package actionset\nfunc Generate() {}')
+        git(self.repo, 'add', '-A'); git(self.repo, 'commit', '-qm', 'generator')
+        self.base = git(self.repo, 'rev-parse', 'HEAD')
+        good = diff_for(self.decision, 'const RotateThreshold = 3', 'const RotateThreshold = 8')
+        transport = FakeTransport([reply('REQUEST_CONTEXT: {"paths":["phorvex/internal/actionset/"]}'), reply(good)])
+        record, diff = planner.plan(self.args(context=[self.decision], max_attempts=1), transport)
+        self.assertEqual(diff, good)
+        self.assertEqual(len(record['attempts']), 1)
+        self.assertEqual(len(record['contextReads']), 1)
+        self.assertIn('func Generate()', transport.calls[1]['payload']['messages'][1]['content'])
+        self.assertNotIn('func Generate()', transport.calls[0]['payload']['messages'][1]['content'])
+
+    def test_context_search_and_line_range_are_pinned_and_bounded(self):
+        inventory = planner.source_inventory(self.repo, self.base)
+        request = 'REQUEST_CONTEXT: '+json.dumps({'paths':[{'path':self.decision,'start':1,'end':1}], 'search':['MaxRotate']})
+        self.write(self.decision, 'UNCOMMITTED SOURCE MUST NOT LEAK')
+        blocks, notes, hits = planner.context_request(request, self.repo, self.base, inventory, 1000)
+        self.assertIn('1: const RotateThreshold = 3', blocks[0]['text'])
+        self.assertNotIn('UNCOMMITTED', str(blocks))
+        self.assertTrue(any('MaxRotate' in hit for hit in hits))
+        self.assertLessEqual(sum(x['bytes'] for x in blocks), 1000)
+        for bad in ({'paths':['../secret.go']}, {'paths':['phorvex/../../secret.go']}, {'commands':['cat /secret']},
+                    {'paths':[{'path':self.decision,'start':0,'end':5}]}, {'search':['a\nb']}):
+            with self.assertRaises(ValueError):
+                planner.context_request('REQUEST_CONTEXT: '+json.dumps(bad), self.repo, self.base, inventory, 1000)
+
+    def test_context_reads_cannot_loop_forever(self):
+        request = reply('REQUEST_CONTEXT: {"paths":["phorvex/internal/absent/"]}')
+        transport = FakeTransport([request]*5)
+        with self.assertRaises(planner.PlannerError):
+            planner.plan(self.args(max_attempts=1), transport)
+        self.assertEqual(len(transport.calls), 5)
+        record = json.loads((self.tmp/'PLAN.json').read_text())
+        self.assertEqual(len(record['contextReads']), 4)
+        self.assertEqual(record['attempts'][0]['result'], 'context read limit reached')
+
     def test_decline_records_bounded_redacted_concrete_reason(self):
         transport = FakeTransport([reply('NO CHANGE POSSIBLE: Missing helper API. '+KEY+' https://secret.invalid/path')])
         with self.assertRaises(planner.PlannerError):

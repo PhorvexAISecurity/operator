@@ -24,6 +24,8 @@ fail() { echo "install: $*" >&2; exit 1; }
 [[ $(stat -c %a "$ENV_FILE") == 600 ]] || fail "$ENV_FILE must be mode 600 (chmod 600 $ENV_FILE)"
 [[ -x $BASE/runtime/python/bin/python ]] || fail "$BASE/runtime/python is missing; install the dashboard first"
 [[ -f $BOT_DIR/service.py ]] || fail "$RELEASE does not contain benchmark/bot"
+(cd "$BOT_DIR" && "$BASE/runtime/python/bin/python" -B -c 'import endpoint_study; endpoint_study.binary_identity()') \
+  || fail 'Build benchmark/endpointv3/build.py and ship its source, bin/endpoint-v3 and BUILD.json together'
 for key in TELEGRAM_BOT_TOKEN BOT_ALLOWED_USER_IDS; do
   grep -qE "^$key=.+" "$ENV_FILE" || fail "$key is empty in $ENV_FILE"
 done

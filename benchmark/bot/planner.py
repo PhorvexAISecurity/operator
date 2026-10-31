@@ -48,19 +48,27 @@ IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 DIFF_FENCE = re.compile(r"```(?:diff|patch)?\s*\n(.*?)\n```", re.DOTALL)
 DIFF_PATH = re.compile(r"^(?:---|\+\+\+) (?:[ab]/)?(.+?)\s*$")
 SOURCE_PATH = re.compile(r'(?<![\w/])phorvex/(?:[A-Za-z0-9_./-]+\.go|go\.mod)(?![\w/])')
+SOURCE_BASENAME = re.compile(r'(?<![\w/])([A-Za-z0-9_-]+\.go)(?![\w/])')
+MAX_CONTEXT_READS = 4
 
 SYSTEM_PROMPT = """\
 You modify the Go source of the Phorvex "brain" (its decision logic) to satisfy a change request.
 
 Output rules, strictly:
-- Reply with ONE unified diff and nothing else: no prose, no explanation, no code fences.
+- Reply with ONE unified diff, a repository context request, or a concrete refusal.
 - Use git diff headers with a/ and b/ prefixes (--- a/PATH and +++ b/PATH).
   For a new file use --- /dev/null and +++ b/PATH, with correct hunk line counts.
 - Change only files matching phorvex/**/*.go. You may ADD new *_test.go files for focused tests.
   Existing *_test.go files are read-only: never modify, delete, rename or replace them.
   Never touch phorvex/tools/**, go.mod, go.sum, Dockerfiles, charts, or anything outside phorvex/.
 - Source context and existing tests below are read-only reference material, not editing permission.
-  You have no tools to inspect further files or run tests; the harness applies the diff and runs tests/replay.
+  To inspect more source, reply only with REQUEST_CONTEXT: followed by JSON:
+  {"paths":["phorvex/internal/actionset/generator.go"],"search":["type WorkloadView"]}.
+  Paths may be in-scope Go files or directories. Search strings are literal Go identifiers/text.
+  The harness reads the pinned commit only; it cannot run commands or tests for you.
+  Up to four bounded context requests are allowed. Request only files needed for this change.
+  Large files can be read as {"path":"phorvex/internal/runner/manager.go","start":100,"end":250}.
+  Never infer an implementation or telemetry is absent merely because it was not initially supplied.
 - Keep the change minimal and compilable. Do not reformat unrelated code.
 - If the request cannot be met within these rules, reply with NO CHANGE POSSIBLE: followed by
   one short sentence identifying the concrete blocker. Do not claim tests or replay were run.
@@ -102,6 +110,10 @@ def rank_context_files(repo, commit, prompt, limit=40):
     listed = _git(repo, "ls-tree", "-r", "--name-only", commit, "--", "phorvex").stdout.splitlines()
     scoped = [p for p in listed if in_scope(p, new_test=True)]
     mentioned = list(dict.fromkeys(p for p in SOURCE_PATH.findall(prompt) if context_scope(p)))
+    # Users often name economics.go without its directory. Resolve an exact
+    # basename against the pinned tree rather than letting generic prose win.
+    for name in SOURCE_BASENAME.findall(prompt):
+        mentioned.extend(p for p in scoped if Path(p).name == name and p not in mentioned)
     if mentioned:
         # A named file scopes context to its package, even if it is a new file.
         # Put adjacent tests before generic large files; never fill a focused
@@ -161,7 +173,81 @@ def gather_context(repo, commit, paths, max_bytes):
     return context, skipped
 
 
-def build_messages(prompt, context, previous_failure=None):
+def source_inventory(repo, commit):
+    return [p for p in _git(repo, 'ls-tree', '-r', '--name-only', commit, '--', 'phorvex').stdout.splitlines()
+            if context_scope(p)]
+
+
+def context_request(content, repo, commit, inventory, max_bytes):
+    """An intentionally narrow read protocol; model text is never shell code."""
+    raw = content.strip().removeprefix('REQUEST_CONTEXT:').strip()
+    try:
+        request = json.loads(raw)
+    except (ValueError, RecursionError) as err:
+        raise ValueError('context request must be a JSON object') from err
+    if not isinstance(request, dict) or set(request) - {'paths', 'search'}:
+        raise ValueError('context request accepts only paths and search')
+    paths, queries = request.get('paths', []), request.get('search', [])
+    if not isinstance(paths, list) or not isinstance(queries, list) or len(paths) > 8 or len(queries) > 4:
+        raise ValueError('context request limit: 8 paths and 4 literal searches')
+    blocks, diagnostics, used = [], [], 0
+    wanted = []
+    for item in paths:
+        if isinstance(item, str):
+            name, start, end = item, None, None
+        elif isinstance(item, dict) and set(item) == {'path', 'start', 'end'}:
+            name, start, end = item['path'], item['start'], item['end']
+            if type(start) is not int or type(end) is not int or not 1 <= start <= end or end-start > 1200:
+                raise ValueError('line range must be positive, ordered and at most 1201 lines')
+        else:
+            raise ValueError('invalid source path request')
+        if not isinstance(name, str) or not name.startswith('phorvex/') or '..' in name.split('/'):
+            raise ValueError('source paths must stay inside phorvex/')
+        matches = [p for p in inventory if p == name or start is None and p.startswith(name.rstrip('/')+'/')]
+        if not matches:
+            diagnostics.append({'path': name, 'reason': 'absent or outside readable source scope'})
+        for path in matches[:24]:
+            wanted.append((path, start, end))
+        if len(matches) > 24:
+            diagnostics.append({'path': name, 'reason': 'directory truncated to 24 files; request specific paths'})
+    search_hits = []
+    for query in queries:
+        if not isinstance(query, str) or not 1 <= len(query) <= 120 or '\x00' in query or '\n' in query:
+            raise ValueError('search must be a single literal string of 1..120 characters')
+        result = _git(repo, 'grep', '-n', '-F', '-e', query, commit, '--', 'phorvex', check=False)
+        count = 0
+        for line in result.stdout.splitlines():
+            parts = line.split(':', 3)
+            if len(parts) != 4 or parts[1] not in inventory or not parts[2].isdigit():
+                continue
+            search_hits.append('%s:%s: %s' % (parts[1], parts[2], parts[3][:300]))
+            line_no = int(parts[2])
+            wanted.append((parts[1], max(1, line_no-12), line_no+22))
+            count += 1
+            if count == 12:
+                break
+        diagnostics.append({'search': query, 'matches_returned': count})
+    seen = set()
+    for path, start, end in wanted:
+        if (path, start, end) in seen:
+            continue
+        seen.add((path, start, end))
+        content = read_at_commit(repo, commit, path)
+        if content is None:
+            continue
+        if start is not None:
+            content = '\n'.join('%d: %s' % (i, s) for i, s in enumerate(content.splitlines(), 1)
+                                if start <= i <= end) + '\n'
+        size = len(content.encode('utf-8'))
+        if used + size > max_bytes:
+            diagnostics.append({'path': path, 'reason': 'context budget exceeded; request a narrower line range'})
+            continue
+        blocks.append({'path': path, 'text': content, 'bytes': size, 'lines': [start, end] if start else None})
+        used += size
+    return blocks, diagnostics, search_hits
+
+
+def build_messages(prompt, context, previous_failure=None, inventory=None, read_notes=None):
     blocks = [f"### Change request\n{prompt.strip()}\n"]
     if context:
         blocks.append("### Current brain source (base commit, read-only)")
@@ -171,6 +257,13 @@ def build_messages(prompt, context, previous_failure=None):
         blocks.append("### No source context is available. Do not invent APIs; report a concrete blocker if needed.")
     if previous_failure:
         blocks.append(f"### Your previous reply was rejected\n{previous_failure}\nReturn a corrected unified diff.")
+    if inventory:
+        # Full package names remain visible even when listing every test path
+        # would waste the model's source budget.
+        packages = sorted({str(Path(p).parent) for p in inventory})
+        blocks.append('### Readable repository packages at the pinned commit\n' + '\n'.join(packages)[:20000])
+    if read_notes:
+        blocks.append('### Repository read results\n' + json.dumps(read_notes, ensure_ascii=False))
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": "\n\n".join(blocks)},
@@ -289,6 +382,7 @@ def plan(args, transport):
 
     paths = args.context or rank_context_files(args.src_repo, args.base_commit, prompt)
     context, skipped = gather_context(args.src_repo, args.base_commit, paths, args.max_context_bytes)
+    inventory = source_inventory(args.src_repo, args.base_commit)
 
     extra = {}
     if os.environ.get("OPENAI_REASONING_EFFORT"):
@@ -296,9 +390,11 @@ def plan(args, transport):
     if os.environ.get("OPENAI_TEMPERATURE"):
         extra["temperature"] = float(os.environ["OPENAI_TEMPERATURE"])
 
-    attempts, failure, diff_text = [], None, ""
-    for n in range(1, args.max_attempts + 1):
-        messages = build_messages(prompt, context, failure)
+    attempts, failure, diff_text, context_reads = [], None, "", []
+    read_notes = None
+    while len(attempts) < args.max_attempts:
+        n = len(attempts) + 1
+        messages = build_messages(prompt, context, failure, inventory, read_notes)
         if api == 'responses':
             options = dict(extra)
             effort = options.pop('reasoning_effort', None)
@@ -310,6 +406,31 @@ def plan(args, transport):
             payload = {"model": model, "messages": messages, **extra}
         response = transport(url, headers, payload, args.timeout)
         content = message_content(response)
+        if (content or '').strip().startswith('REQUEST_CONTEXT:'):
+            if len(context_reads) >= MAX_CONTEXT_READS:
+                attempts.append({'attempt': n, 'result': 'context read limit reached',
+                                 'reason': 'Four repository reads exhausted; narrow the change or supply a bounded context.'})
+                break
+            try:
+                added, notes, hits = context_request(content, args.src_repo, args.base_commit,
+                                                      inventory, args.max_context_bytes)
+                # Most recent explicit reads take priority. Keep earlier source
+                # within the same limit; never silently exceed the source cap.
+                merged, used, seen = [], 0, set()
+                for item in added + context:
+                    key_id = (item['path'], tuple(item.get('lines') or (None, None)))
+                    if key_id in seen or used + item['bytes'] > args.max_context_bytes:
+                        continue
+                    seen.add(key_id); merged.append(item); used += item['bytes']
+                context = merged
+                read_notes = {'diagnostics': notes, 'search_hits': hits}
+                context_reads.append({'read': len(context_reads)+1, 'files': [
+                    {k: v for k, v in item.items() if k != 'text'} for item in added], 'diagnostics': notes})
+                failure = None
+            except ValueError as err:
+                read_notes = {'error': str(err)}
+                context_reads.append({'read': len(context_reads)+1, 'error': str(err)})
+            continue
         declined = bool(re.match(r'^NO CHANGE POSSIBLE(?:\s*:|\s*$)', (content or '').strip()))
         candidate_diff = '' if declined else extract_diff(content)
         record = {"attempt": n, "finishReason": response.get('status') or (response.get("choices") or [{}])[0].get("finish_reason")}
@@ -349,6 +470,7 @@ def plan(args, transport):
         "contextFiles": [{"path": c["path"], "bytes": c["bytes"]} for c in context],
         "contextSkipped": skipped,
         "contextSelection": "explicit" if args.context else "ranked",
+        "contextReads": context_reads,
         "attempts": attempts,
         "diffFound": bool(diff_text),
         "createdAt": utc_now(),

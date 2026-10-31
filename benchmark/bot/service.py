@@ -56,6 +56,7 @@ import report  # noqa: E402
 import file_requests  # noqa: E402
 import study  # noqa: E402
 import storage  # noqa: E402
+import endpoint_study  # noqa: E402
 from progress import Progress  # noqa: E402
 from dashboard import Dashboard, DashboardError  # noqa: E402
 from telegram import Telegram, TelegramError  # noqa: E402
@@ -69,7 +70,7 @@ HELP = """Phorvex benchmark bot (offline replay and labelled reference studies; 
   An LLM changes the brain's Go code; the candidate is compared with the deployed brain.
 /param <P-XXX-000> <value> [value...] [policy=ns/name] [ticks=N] [nosync]
   Replays the deployed brain with each parameter value (Math Lab).
-/study    help for declarative Cost/History studies: arms, seeds and explicit trace data
+/study    help for Cost/History studies and paired V2/V3 endpoint-cost studies
 /guide    download the English step-by-step guide as HTML and PDF
 /upload   how to submit a .md, .txt, .docx or study .json experiment file
 /validate validate an attached file without running it (use as its caption)
@@ -112,6 +113,8 @@ Go tests and live replay preflight still run for each experiment. /templates sen
 For dynamic Cost/History comparisons use a phorvex-bench.study.v1 JSON file from /templates.
 Studies run reference algorithms without an LLM, using explicit trace inputs, arms and seeds.
 Missing recorded ledgers produce NEEDS_DATA; synthetic examples are labelled synthetic.
+For paired V2/V3 adaptive lambda use endpoint-v3-recorded.json or endpoint-v3-synthetic.json.
+These run the offline Go reference on explicit inputs. Missing qualified recorded inputs produce BLOCKED with an evidence report, before LLM/build work.
 Limits: 2 MiB per document (including study JSON), 256 KiB extracted prose."""
 
 
@@ -417,7 +420,7 @@ class BenchBot:
             (folder / 'VALIDATION.json').write_text(json.dumps(record, indent=2) + '\n')
             validation_note = ('Study schema, limits and supplied trace structure are valid. '
                                'Dataset availability and evidence completeness are checked during execution.'
-                               if tasks[0]['kind'] == 'study' else
+                               if tasks[0]['kind'] in ('study', 'endpoint') else
                                'Structure, options and registry parameter values are valid. Go tests and replay preflight run during execution.')
             self.say(chat_id, 'File validation PASS: %d experiment(s): %s.\n%s'
                      % (len(tasks), ', '.join(task['kind'] for task in tasks), validation_note))
@@ -651,7 +654,7 @@ class BenchBot:
         headline = ''
         try:
             headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch,
-                        'study': self.run_study}[job.kind](job)
+                        'study': self.run_study, 'endpoint': self.run_endpoint}[job.kind](job)
             if job.state == 'RUNNING':
                 job.state = 'DONE'
         except JobError as err:
@@ -694,6 +697,8 @@ class BenchBot:
         completed = sum(row['state'] == 'DONE' for row in results)
         job.state = ('CANCELLED' if job.cancel.is_set() else 'DONE' if completed == len(results)
                      else 'PARTIAL' if completed or any(r['state'] == 'PARTIAL' for r in results)
+                     else 'FAILED' if any(r['state'] == 'FAILED' for r in results)
+                     else 'BLOCKED' if any(r['state'] == 'BLOCKED' for r in results)
                      else 'NEEDS_DATA' if any(r['state'] == 'NEEDS_DATA' for r in results) else 'FAILED')
         payload = {'batch_id': job.id, 'upload_id': job.upload_id, 'state': job.state, 'results': results,
                    'semantics': 'Independent experiments, executed sequentially; each report has its own control.'}
@@ -726,6 +731,25 @@ class BenchBot:
             headline += '\n' + result['reason']
         for name in ('report.html', 'metrics.csv', 'result.json', 'evidence.zip'):
             self.send_file(job.chat_id, 'study-%s-%s' % (job.id, name), (root / name).read_bytes())
+        self.say(job.chat_id, headline)
+        return headline
+
+    def run_endpoint(self, job, request=None):
+        if request is None:
+            request = endpoint_study.strict_json(job.text)
+        self.step(job, 'preflighting paired V2/V3 endpoint-cost inputs')
+        try:
+            result = endpoint_study.run(request, job.dir / 'endpoint', self.cfg.data,
+                                        progress=lambda s: self.step(job, s), cancelled=job.cancel.is_set)
+        except (ValueError, OSError) as err:
+            raise JobError('endpoint study: %s' % err) from err
+        job.state = 'DONE' if result['state'] == 'COMPLETE' else result['state']
+        headline = 'Endpoint V2/V3: %s; %s comparable ticks; evidence=%s. Offline Go reference experiment.' % (
+            result['state'], result.get('comparable_ticks', 0), result.get('evidence', 'unavailable'))
+        if result.get('reason'):
+            headline += '\n' + result['reason']
+        for name in ('report.html', 'metrics.csv', 'result.json', 'evidence.zip'):
+            self.send_file(job.chat_id, 'endpoint-%s-%s' % (job.id, name), (job.dir / 'endpoint' / name).read_bytes())
         self.say(job.chat_id, headline)
         return headline
 
@@ -855,6 +879,11 @@ class BenchBot:
     def run_bench(self, job):
         opts, words = parse_options(job.text.split(), self.cfg)
         prompt = ' '.join(words).strip()
+        registered = endpoint_study.legacy_request(prompt, opts['policy'], opts['ticks'])
+        if registered is not None:
+            if opts['sync']:
+                self.sync(job, opts['policy'])
+            return self.run_endpoint(job, registered)
         if len(prompt) < 10:
             raise JobError('describe the brain change in words, for example: /bench raise the rotate threshold for vllm')
         if not self.cfg.repo or not self.cfg.data:

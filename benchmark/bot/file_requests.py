@@ -160,7 +160,12 @@ def parse(text, policy='vllm/vllm-defense', ticks=500):
     if text.lstrip().startswith('{'):
         from study_schema import strict_json, validate
         try:
-            request = validate(strict_json(text))
+            request = strict_json(text)
+            if request.get('schema') == 'phorvex-bench.endpoint-study.v1':
+                import endpoint_study
+                request = endpoint_study.validate(request)
+                return [{'kind': 'endpoint', 'text': json.dumps(request, ensure_ascii=False), 'line': 1}]
+            request = validate(request)
         except (ValueError, TypeError, KeyError, RecursionError) as err:
             raise RequestError('Study validation: %s' % err) from err
         return [{'kind': 'study', 'text': json.dumps(request, ensure_ascii=False), 'line': 1}]
