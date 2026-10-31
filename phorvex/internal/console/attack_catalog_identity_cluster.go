@@ -174,8 +174,8 @@ func (k *kubernetesIdentityCatalogCluster) CreateSignal(ctx context.Context, ent
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{
 			"name":        name,
-			"labels":      map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": entry.ID},
-			"annotations": map[string]any{model.ConsoleTargetPodUIDAnnotation: f.PodUID, attackCatalogCorrelationAnnotation: runID},
+			"labels":      map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(entry.ID)},
+			"annotations": map[string]any{model.ConsoleTargetPodUIDAnnotation: f.PodUID, attackCatalogCorrelationAnnotation: runID, catalogueIDAnnotationKey: entry.ID},
 		},
 		"spec": map[string]any{
 			"description": entry.Description, "targets": []any{f.Namespace + "/" + f.PodName},

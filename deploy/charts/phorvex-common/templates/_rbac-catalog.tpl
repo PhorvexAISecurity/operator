@@ -136,7 +136,13 @@ roles:
 - name: output-policy-activation
   namespace: {{ $namespace | quote }}
   rules:
-  - {apiGroups: [""], resources: ["configmaps"], resourceNames: {{ toJson $names }}, verbs: ["get", "update"], writers: [actuator]}
+  # Verbs must cover actuator.RequiredVerbs(sensitive-output-policy-activate) (verbs.go): UNNAMED
+  # configmaps get+update. The activated policy ConfigMap names are deployment-supplied
+  # (outputPolicy.configMapNames), so verbs.go carries no resourceName and the actuator boot
+  # SSAR is namespace-wide; a resourceNames pin fail-closes the actuator startup authz preflight
+  # once a policy enables this action (cf. the credential-revoke fix). The $names validation above
+  # still guards fixture config sanity.
+  - {apiGroups: [""], resources: ["configmaps"], verbs: ["get", "update"], writers: [actuator]}
 {{- end }}
 {{- if $v.litellmClientRevoke.enabled }}
 {{- if not $nativeOrHybrid }}{{- fail "litellmClientRevoke requires native or hybrid actuator" }}{{- end }}
@@ -210,8 +216,12 @@ defaults and the library probe render unchanged (tools/test_service_charts.py).
 - name: identity-rotate
   namespace: {{ $idNamespace | quote }}
   rules:
-  - {apiGroups: [""], resources: ["serviceaccounts"], resourceNames: [{{ $idServiceAccount | quote }}], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
-  - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["create"], writers: [actuator]}
+  # Verbs must cover actuator.RequiredVerbs(identity-rotate) (verbs.go): UNNAMED serviceaccounts
+  # get/create/delete. The exact SA name is only resolved at dispatch by IdentityRotationVerbs; the
+  # actuator boot preflight reviews the unnamed base set, so a resourceNames pin on get/delete
+  # fail-closes the actuator startup authz preflight once a policy enables identity-rotate (and k8s
+  # cannot resourceName-restrict create anyway).
+  - {apiGroups: [""], resources: ["serviceaccounts"], verbs: ["get", "create", "delete"], readers: [actuator], writers: [actuator]}
   - {apiGroups: [""], resources: ["secrets"], verbs: ["get", "delete"], readers: [actuator], writers: [actuator]}
 # The sensor's observation of the fixture (identityfixture.Observe): the pinned
 # ServiceAccount, the namespace's Secrets, and the Deployment/ReplicaSet behind it. Pods,

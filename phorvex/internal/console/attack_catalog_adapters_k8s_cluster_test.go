@@ -275,6 +275,12 @@ func TestK8sCatalogueRealSignalAdmissionAndExactDeletion(t *testing.T) {
 				object.GetAnnotations()[attackCatalogCorrelationAnnotation] != "k8s-real-signal-run" {
 				t.Fatalf("admitted event lost exact target/run binding: object=%+v err=%v", object, err)
 			}
+			if got := object.GetLabels()["phorvex.ai/catalogue-id"]; got != catalogueIDLabelValue(f.entry.ID) {
+				t.Fatalf("catalogue-id label = %q, want sanitised %q for id %q", got, catalogueIDLabelValue(f.entry.ID), f.entry.ID)
+			}
+			if got := object.GetAnnotations()[catalogueIDAnnotationKey]; got != f.entry.ID {
+				t.Fatalf("catalogue-id annotation = %q, want raw id %q", got, f.entry.ID)
+			}
 			if family == k8sCatalogueFamilyQuarantine && object.GetAnnotations()["phorvex.ai/protected-outcomes-v1"] == "" {
 				t.Fatal("quarantine signal has no reviewed protected-outcome assertion")
 			}

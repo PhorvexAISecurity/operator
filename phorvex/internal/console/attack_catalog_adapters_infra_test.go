@@ -253,6 +253,17 @@ func TestInfraCatalogueExecutionCompletesEachFamily(t *testing.T) {
 	}
 }
 
+func TestLegitimateServiceURLTargetsDemoAPIPort8080(t *testing.T) {
+	profile := infraCatalogueProfile{Deployment: "demo-api", Namespace: "p1-demo"}
+	url := legitimateServiceURL(profile)
+	if !strings.HasSuffix(url, ":8080/") {
+		t.Fatalf("legitimateServiceURL(%+v) = %q, want it to end in \":8080/\"", profile, url)
+	}
+	if want := "http://demo-api.p1-demo.svc.cluster.local:8080/"; url != want {
+		t.Fatalf("legitimateServiceURL = %q, want %q", url, want)
+	}
+}
+
 func TestInfraCatalogueCleanupIsDelegatedAndRetrySafe(t *testing.T) {
 	profile := infraTestProfile(t, infraFamilyDatastore)
 	runtime := infraTestRuntimeFor(t, profile)
@@ -281,8 +292,9 @@ func TestInfraCatalogueCleanupReconcilesLostEventCreateAcknowledgement(t *testin
 		event := &unstructured.Unstructured{Object: map[string]any{
 			"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 			"metadata": map[string]any{"name": state.signal.Name,
-				"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": profile.ID},
+				"labels": map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(profile.ID)},
 				"annotations": map[string]any{"phorvex.ai/creator-identity": profile.creator(),
+					catalogueIDAnnotationKey:           profile.ID,
 					attackCatalogCorrelationAnnotation: correlation, model.ConsoleTargetPodUIDAnnotation: state.arm.TargetUID}},
 			"spec": map[string]any{"targets": []any{state.fixture.Namespace + "/" + state.arm.TargetName},
 				"rule": map[string]any{"type": profile.EventType}},

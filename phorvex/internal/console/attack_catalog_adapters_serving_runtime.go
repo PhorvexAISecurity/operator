@@ -274,11 +274,12 @@ func createServingSignal(ctx context.Context, p *servingCatalogueKubePreparation
 	for key, value := range annotations {
 		allAnnotations[key] = value
 	}
+	allAnnotations[catalogueIDAnnotationKey] = profile.CatalogueID
 	object := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
 		"metadata": map[string]any{
 			"name":        name,
-			"labels":      map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": profile.CatalogueID},
+			"labels":      map[string]any{"phorvex.ai/redteam": "true", "phorvex.ai/catalogue-id": catalogueIDLabelValue(profile.CatalogueID)},
 			"annotations": allAnnotations,
 		},
 		"spec": map[string]any{
