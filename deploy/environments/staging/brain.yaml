@@ -2,5 +2,5 @@
 # The release (phase 5c) writes the published brain image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
-  tag: "staging-0.10.0-git-5f0b28a7b87a83385df495f77067151103ec2982"
-  digest: "sha256:d786a965b604bed59e3821334638184b743189535840be0e2b9fcf1d9b59a020"
+  tag: "staging-0.10.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303"
+  digest: "sha256:2030cf72807ffc12670b889f6ad9dca99efeba05254c8e498891c3b78325e98c"
