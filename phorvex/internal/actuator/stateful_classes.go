@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -183,6 +184,60 @@ const (
 
 // statefulSnapshotName is deterministic per (Pod UID, claim UID) so a retry reuses the
 // snapshot instead of multiplying them.
+// statefulSnapshotRetain is how many Phorvex pre-rotation snapshots of one claim are kept:
+// the rollback point of the rotation just made and the one before it. Every snapshot-rotate
+// otherwise keeps its snapshot forever (an hourly-rotated leader: 24 EBS snapshots a day).
+const statefulSnapshotRetain = 2
+
+// retain prunes, after the member's eviction was accepted, the claim's older Phorvex
+// pre-rotation snapshots beyond statefulSnapshotRetain. It only considers snapshots labelled
+// by this family whose source is the same claim, never the one this dispatch made. It is
+// best effort: without list/delete rights or on any error it reports why and keeps them;
+// the snapshot controller defers deleting a snapshot that is a restore source.
+func (snapshotRotateClass) retain(ctx context.Context, ec EnactCtx, op *statefulOperation) string {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(statefulrotation.VolumeSnapshotGVK.GroupVersion().WithKind("VolumeSnapshotList"))
+	if err := ec.Reader.List(ctx, list, client.InNamespace(op.req.Namespace),
+		client.MatchingLabels{labelStatefulRotation: string(model.ActionStatefulSnapshotRotate)}); err != nil {
+		return "snapshot retention skipped: " + retentionReason(err)
+	}
+	pruned := 0
+	for _, claim := range op.obs.Claims {
+		current := statefulSnapshotName(string(op.pod.UID), claim.UID)
+		var older []unstructured.Unstructured
+		for _, snap := range list.Items {
+			source, _, _ := unstructured.NestedString(snap.Object, "spec", "source", "persistentVolumeClaimName")
+			if source == claim.Name && snap.GetName() != current && snap.GetDeletionTimestamp() == nil {
+				older = append(older, snap)
+			}
+		}
+		sort.Slice(older, func(i, j int) bool {
+			ti, tj := older[i].GetCreationTimestamp(), older[j].GetCreationTimestamp()
+			if !ti.Equal(&tj) {
+				return tj.Before(&ti)
+			}
+			return older[i].GetName() < older[j].GetName()
+		})
+		for _, snap := range older[min(len(older), statefulSnapshotRetain-1):] {
+			snap := snap
+			if err := ec.Client.Delete(ctx, &snap, client.Preconditions{UID: ptrUID(snap.GetUID())}); err != nil && !apierrors.IsNotFound(err) {
+				return fmt.Sprintf("snapshot retention pruned %d, then stopped: %s", pruned, retentionReason(err))
+			}
+			pruned++
+		}
+	}
+	return fmt.Sprintf("snapshot retention kept the newest %d per claim, pruned %d", statefulSnapshotRetain, pruned)
+}
+
+func retentionReason(err error) string {
+	if apierrors.IsForbidden(err) {
+		return "list/delete of VolumeSnapshots not granted"
+	}
+	return err.Error()
+}
+
+func ptrUID(uid types.UID) *types.UID { return &uid }
+
 func statefulSnapshotName(podUID, claimUID string) string {
 	sum := sha256.Sum256([]byte(podUID + "/" + claimUID))
 	return "phorvex-pre-rotate-" + hex.EncodeToString(sum[:8])

@@ -180,7 +180,7 @@ roles:
   labelled: true
   rules:
   - {apiGroups: [""], resources: ["persistentvolumeclaims"], verbs: ["get", "delete"], writers: [actuator], readers: [sensor, actuator]}
-  - {apiGroups: ["snapshot.storage.k8s.io"], resources: ["volumesnapshots"], verbs: ["get", "create"], writers: [actuator], readers: [actuator]}
+  - {apiGroups: ["snapshot.storage.k8s.io"], resources: ["volumesnapshots"], verbs: ["get", "list", "create", "delete"], writers: [actuator], readers: [actuator]}
 {{- end }}
 {{- end }}
 {{- if $v.endpointLease.enabled }}

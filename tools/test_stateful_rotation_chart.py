@@ -26,7 +26,7 @@ class StatefulRotationChartTests(unittest.TestCase):
         access = grants(manager_rbac(ENABLED))
         self.assertEqual(stateful(access), {
             CLAIMS + ('get',), CLAIMS + ('delete',),
-            SNAPSHOTS + ('get',), SNAPSHOTS + ('create',),
+            SNAPSHOTS + ('get',), SNAPSHOTS + ('list',), SNAPSHOTS + ('create',), SNAPSHOTS + ('delete',),
             CLASSES + ('get',),
         })
 
@@ -42,7 +42,8 @@ class StatefulRotationChartTests(unittest.TestCase):
         actuator = stateful(grants(library_rbac('actuator', ENABLED)))
         dispatcher = stateful(grants(library_rbac('dispatcher', ENABLED)))
         self.assertEqual(sensor, {CLAIMS + ('get',), CLASSES + ('get',)})
-        self.assertEqual({g for g in actuator if g[4] not in ('get',)}, {CLAIMS + ('delete',), SNAPSHOTS + ('create',)})
+        self.assertEqual({g for g in actuator if g[4] not in ('get',)},
+                         {CLAIMS + ('delete',), SNAPSHOTS + ('list',), SNAPSHOTS + ('create',), SNAPSHOTS + ('delete',)})
         self.assertEqual(dispatcher, set())
         self.assertEqual(sensor | actuator, stateful(grants(manager_rbac(ENABLED))))
 

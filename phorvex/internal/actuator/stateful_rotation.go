@@ -157,6 +157,11 @@ func (h statefulRotationHandler) enact(ctx context.Context, ec EnactCtx, req Req
 	}
 	op.touch("Pod", req.Pod)
 	evicted := time.Now()
+	if r, ok := h.class.(interface {
+		retain(context.Context, EnactCtx, *statefulOperation) string
+	}); ok {
+		op.notes = append(op.notes, r.retain(ctx, ec, op))
+	}
 	window := statefulConfirmWindow(ec, op)
 	deadline, capped := statefulWaitDeadline(ctx, ec, window)
 	confirmation, confirmed, last := awaitStatefulReplacementUntil(ctx, ec, op, h.class, deadline, capped)

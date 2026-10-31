@@ -100,6 +100,14 @@ func (s *statefulCluster) subResourceCreate(ctx context.Context, c client.Client
 }
 
 func (s *statefulCluster) delete(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+	if u, ok := obj.(*unstructured.Unstructured); ok && u.GroupVersionKind() == statefulrotation.VolumeSnapshotGVK {
+		deleteOpts := &client.DeleteOptions{}
+		deleteOpts.ApplyOptions(opts)
+		if deleteOpts.Preconditions == nil || deleteOpts.Preconditions.UID == nil {
+			return errors.New("snapshot delete without UID precondition")
+		}
+		s.record("snapshot-delete:" + u.GetName())
+	}
 	if pvc, ok := obj.(*corev1.PersistentVolumeClaim); ok {
 		deleteOpts := &client.DeleteOptions{}
 		deleteOpts.ApplyOptions(opts)
@@ -633,5 +641,59 @@ func TestStatefulConfirmationContinuesAfterTheDispatchDeadline(t *testing.T) {
 				t.Errorf("unconfirmed = %v, want %v", got, unconfirmed)
 			}
 		})
+	}
+}
+
+// After an accepted eviction, snapshot-rotate keeps its own rollback point and the newest
+// earlier Phorvex snapshot of the same claim, and prunes older ones (UID-preconditioned).
+// Another claim's snapshots and snapshots not made by this family are never touched.
+func TestStatefulSnapshotRotatePrunesOlderPreRotateSnapshots(t *testing.T) {
+	cluster, _, req := statefulFixture(t, statefulFixtureOptions{action: model.ActionStatefulSnapshotRotate})
+	now := time.Now()
+	snapshot := func(name, claim string, age time.Duration, family bool) {
+		snap := &unstructured.Unstructured{}
+		snap.SetGroupVersionKind(statefulrotation.VolumeSnapshotGVK)
+		snap.SetNamespace("ns")
+		snap.SetName(name)
+		snap.SetUID(types.UID(name + "-uid"))
+		snap.SetCreationTimestamp(metav1.NewTime(now.Add(-age)))
+		if family {
+			snap.SetLabels(map[string]string{labelStatefulRotation: string(model.ActionStatefulSnapshotRotate)})
+		}
+		_ = unstructured.SetNestedField(snap.Object, claim, "spec", "source", "persistentVolumeClaimName")
+		if err := cluster.Create(t.Context(), snap); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot("old-1h", "data-db-1", time.Hour, true)
+	snapshot("old-2h", "data-db-1", 2*time.Hour, true)
+	snapshot("old-3h", "data-db-1", 3*time.Hour, true)
+	snapshot("other-claim", "data-db-2", 5*time.Hour, true)
+	snapshot("operator-made", "data-db-1", 6*time.Hour, false)
+	cluster.events = nil
+
+	result, err := dispatch(t.Context(), statefulEnact(cluster, nil), req)
+	if err != nil || !result.Emitted || result.MutationKind != "forward-only" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	var deleted []string
+	for _, e := range cluster.events {
+		if name, ok := strings.CutPrefix(e, "snapshot-delete:"); ok {
+			deleted = append(deleted, name)
+		}
+	}
+	slices.Sort(deleted)
+	if want := []string{"old-2h", "old-3h"}; !slices.Equal(deleted, want) {
+		t.Fatalf("pruned %v, want %v (events %v)", deleted, want, cluster.events)
+	}
+	if !strings.Contains(result.Note, "snapshot retention kept the newest 2 per claim, pruned 2") {
+		t.Fatalf("note: %s", result.Note)
+	}
+	for _, kept := range []string{statefulSnapshotName("db-1-uid", "claim-uid"), "old-1h", "other-claim", "operator-made"} {
+		snap := &unstructured.Unstructured{}
+		snap.SetGroupVersionKind(statefulrotation.VolumeSnapshotGVK)
+		if err := cluster.Get(t.Context(), client.ObjectKey{Namespace: "ns", Name: kept}, snap); err != nil {
+			t.Errorf("%s must be kept: %v", kept, err)
+		}
 	}
 }

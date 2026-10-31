@@ -129,7 +129,7 @@ data and only compares them.
    namespace listed in `phorvex.actuatorNamespaces`.
 2. Set `phorvex.statefulRotation.enabled: true` in the manager chart (or in the actuator
    and sensor service charts). This grants PersistentVolumeClaim get/delete and
-   VolumeSnapshot get/create per actuator namespace, plus cluster VolumeSnapshotClass get.
+   VolumeSnapshot get/list/create/delete per actuator namespace (list and delete only prune the family's own older snapshots), plus cluster VolumeSnapshotClass get.
    Enable it before any policy enables a stateful action, or startup preflight refuses to
    start.
 3. Add the actions you accept to the policy's `spec.actions.enabled`.
@@ -171,7 +171,12 @@ is shorter than an EBS snapshot (about 60–70s) and sometimes shorter than a re
 Every stateful wait (snapshot readiness, replacement confirmation) therefore also ends 5s
 before the dispatch's own deadline. The manager then receives a definite `partial` or
 `unconfirmed` result instead of an expired call with an unknown outcome. A snapshot left
-pending is kept, and the next dispatch for that member reuses it once it is ready. When the
+pending is kept, and the next dispatch for that member reuses it once it is ready. After an
+accepted eviction, snapshot-rotate keeps its own snapshot and the newest earlier one of each
+claim. It deletes (UID-preconditioned) the family's older snapshots of that claim. It never
+touches another claim's snapshots or snapshots it did not make, and the snapshot controller
+defers deleting one that is a restore source. Pruning is best effort: without list/delete
+rights it is skipped and noted. When the
 deadline cuts a replacement confirmation short, the dispatch still returns at once, as an
 unconfirmed emission. The actuator, read-only, keeps observing the replacement until the
 declared window (measured from the eviction) closes. `phorvex_stateful_rotations_total`

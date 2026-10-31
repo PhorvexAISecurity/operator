@@ -313,7 +313,9 @@ subjects:
 ---
 # Stateful rotation: replica-rebuild releases one member's claims (UID-preconditioned delete;
 # pvc-protection keeps them attached until the member's Eviction); snapshot-rotate takes the
-# pre-rotation VolumeSnapshots. Claims and snapshots are read for admission and confirmation.
+# pre-rotation VolumeSnapshots and prunes the family's own older ones beyond the newest two
+# per claim (list + UID-preconditioned delete). Claims and snapshots are read for admission
+# and confirmation.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -327,7 +329,7 @@ rules:
   verbs: ["get", "delete"]
 - apiGroups: ["snapshot.storage.k8s.io"]
   resources: ["volumesnapshots"]
-  verbs: ["get", "create"]
+  verbs: ["get", "list", "create", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
