@@ -18,7 +18,16 @@ const Label = "phorvex.ai/console-identity-fixture"
 const Image = "docker.io/library/python@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce"
 const Mount = "/var/run/secrets/kubernetes.io/serviceaccount"
 
-var Command = []string{"python3", "-c", "import time; time.sleep(1800)"}
+// Command keeps the fixture workload alive indefinitely. It MUST NOT exit on its
+// own: ObserveKubernetes requires the container's restartCount to be 0 (a
+// freshly-admitted, never-restarted credential). The previous 30-minute sleep
+// terminated the container every 30 minutes, so kubelet restarted it and
+// restartCount drifted off 0 — the fixture became permanently unobservable
+// after its first restart (and no batch of the 13 IDs fits inside one window).
+// A single ~68-year sleep never returns within any fixture's lifetime, so the
+// pod is rolled for a fresh credential only when the operator deliberately rolls
+// the Deployment, never as an unobserved side effect of the workload exiting.
+var Command = []string{"python3", "-c", "import time; time.sleep(2147483647)"}
 
 // This root-owned deployment input must be mounted into both Console and the
 // operator. A namespace label, request body or tenant ConfigMap cannot enable it.
@@ -29,6 +38,15 @@ type Profile struct {
 	NamespaceUID     string `json:"namespaceUID"`
 	PolicyName       string `json:"policyName"`
 	PolicyUID        string `json:"policyUID"`
+	// PolicyGeneration pins the exact PhorvexPolicy generation the observer
+	// requires. A value of 0 means "bind to the live policy actually in force":
+	// the observer accepts whatever generation the pinned-UID policy currently
+	// reports, provided it is fully reconciled (status.observedGeneration ==
+	// metadata.generation). 0 is the recommended deployment value — a hard-pinned
+	// generation drifts the moment the policy is re-applied or re-reconciled
+	// (observed live: a committed pin of 2 against a live generation of 3), which
+	// fails the observation for a reason unrelated to the attack. A positive value
+	// is still honored for callers that must assert one exact generation.
 	PolicyGeneration int64  `json:"policyGeneration"`
 	Cluster          string `json:"eksCluster"`
 	Region           string `json:"awsRegion"`
@@ -64,7 +82,7 @@ func LoadFile(path string) (Profile, error) {
 }
 func (p Profile) Validate() error {
 	if !strings.HasPrefix(p.Namespace, NamespacePrefix) || len(validation.IsDNS1123Label(p.Namespace)) != 0 ||
-		p.NamespaceUID == "" || p.PolicyUID == "" || p.PolicyGeneration <= 0 || len(validation.IsDNS1123Subdomain(p.PolicyName)) != 0 || p.PolicyName == "" ||
+		p.NamespaceUID == "" || p.PolicyUID == "" || p.PolicyGeneration < 0 || len(validation.IsDNS1123Subdomain(p.PolicyName)) != 0 || p.PolicyName == "" ||
 		p.JournalNamespace == "" || p.JournalNamespace == p.Namespace || p.Cluster == "" || p.Region == "" || strings.HasPrefix(p.Cluster, "-") || strings.HasPrefix(p.Region, "-") {
 		return errors.New("exact owned Console/test namespace, policy and EKS pins required")
 	}

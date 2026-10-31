@@ -115,9 +115,12 @@ automountServiceAccountToken: false
 YAML
 
   # 3. fixture Deployment — the EXACT identityfixture.Observe contract (byte-identical to the
-  #    staging console-id-fixture): 1 "workload" container, pinned python image, sleep command,
-  #    1 projected "api" volume (600s default-audience token + ca.crt + namespace), 1 readOnly
-  #    mount at the default SA path, replicas 1.
+  #    staging console-id-fixture): 1 "workload" container, pinned python image, a non-terminating
+  #    sleep command (NEVER a bounded sleep — the observer requires restartCount==0, so a workload
+  #    that exits and is restarted makes the fixture permanently unobservable), 1 projected "api"
+  #    volume (600s default-audience token + ca.crt + namespace), 1 readOnly mount at the default
+  #    SA path, replicas 1. strategy=Recreate so a rollout never briefly runs two pods (the observer
+  #    admits exactly one consumer Pod) and the old host-network IP is freed before the new pod.
   log "Deployment $FNS/$FIX"
   cat <<YAML | apply
 apiVersion: apps/v1
@@ -128,6 +131,7 @@ metadata:
   labels: {${FLABEL}: $FIX}
 spec:
   replicas: 1
+  strategy: {type: Recreate}
   selector:
     matchLabels: {${FLABEL}: $FIX}
   template:
@@ -145,7 +149,7 @@ spec:
       containers:
       - name: workload
         image: $IMAGE
-        command: ["python3", "-c", "import time; time.sleep(1800)"]
+        command: ["python3", "-c", "import time; time.sleep(2147483647)"]
         volumeMounts:
         - name: api
           mountPath: /var/run/secrets/kubernetes.io/serviceaccount
@@ -231,7 +235,11 @@ YAML
   NSUID=$(kubectl get ns "$FNS" -o jsonpath='{.metadata.uid}')
   POLUID=$(kubectl -n "$FNS" get phorvexpolicy "$FIX" -o jsonpath='{.metadata.uid}')
   POLGEN=$(kubectl -n "$FNS" get phorvexpolicy "$FIX" -o jsonpath='{.metadata.generation}')
-  log "Profile CM $OPNS/$PROFILE_CM (nsUID=$NSUID polUID=$POLUID gen=$POLGEN)"
+  log "Profile CM $OPNS/$PROFILE_CM (nsUID=$NSUID polUID=$POLUID liveGen=$POLGEN pin=bind-to-live)"
+  # policyGeneration=0 binds the observer to the live, fully-reconciled generation of the
+  # pinned-UID policy. Writing the live generation here (as this script used to) is race-prone:
+  # any later re-apply or re-reconcile bumps .metadata.generation and the pinned profile would
+  # then reject the real policy. The policy identity is still pinned by policyName + policyUID.
   local PROFILE_JSON
   PROFILE_JSON=$(cat <<JSON
 {
@@ -240,7 +248,7 @@ YAML
   "namespaceUID": "$NSUID",
   "policyName": "$FIX",
   "policyUID": "$POLUID",
-  "policyGeneration": $POLGEN,
+  "policyGeneration": 0,
   "eksCluster": "$CLUSTER",
   "awsRegion": "$REGION"
 }

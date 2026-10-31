@@ -38,8 +38,27 @@ func Observe(ctx context.Context, r client.Reader, cfg Profile, name, uid string
 // ObserveKubernetes applies the existing bounded fixture's Kubernetes-object oracle without the
 // external EKS federation query. It is used by the Console producer for preflight and physical
 // validation; the sensor still calls Observe and therefore admits no decision observation unless
-// the independent federation oracle also passes.
+// the independent federation oracle also passes. The policy generation gate is taken from the
+// profile (cfg.PolicyGeneration): 0 binds to the live, fully-reconciled generation, a positive
+// value pins one exact generation. Callers that have already bound a run to one live generation
+// (the Console preflight) use ObserveKubernetesAt to carry it forward unchanged.
 func ObserveKubernetes(ctx context.Context, r client.Reader, cfg Profile, name, uid string, active bool) (Snapshot, error) {
+	return ObserveKubernetesAt(ctx, r, cfg, name, uid, active, cfg.PolicyGeneration)
+}
+
+// ObserveKubernetesAt is ObserveKubernetes with an explicit run-bound policy generation.
+//
+//	wantGeneration == 0 binds the observation to whatever generation the pinned-UID policy
+//	  currently reports — the policy actually in force — and additionally requires it to be
+//	  fully reconciled (status.observedGeneration == metadata.generation), so a policy caught
+//	  mid-edit is never observed. The live generation is returned in Observation.PolicyGeneration.
+//	wantGeneration > 0 keeps the above reconciled requirement and ALSO pins the generation to the
+//	  exact value captured earlier in the same run, so a policy change between preflight and a
+//	  later marker/physical observation invalidates the run instead of silently re-binding.
+//
+// In both modes the generation is never read from a static deployment pin, which is what drifted
+// (committed 2 vs live 3) and blocked every identity-sa-rotate ID.
+func ObserveKubernetesAt(ctx context.Context, r client.Reader, cfg Profile, name, uid string, active bool, wantGeneration int64) (Snapshot, error) {
 	var out Snapshot
 	fail := func() (Snapshot, error) {
 		return out, errors.New("Console/test dedicated identity fixture evidence unavailable or changed")
@@ -143,7 +162,9 @@ func ObserveKubernetes(ctx context.Context, r client.Reader, cfg Profile, name, 
 		}
 	}
 	var pol v1alpha1.PhorvexPolicy
-	if r.Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: cfg.PolicyName}, &pol) != nil || string(pol.UID) != cfg.PolicyUID || pol.Generation != cfg.PolicyGeneration || pol.DeletionTimestamp != nil || pol.Spec.IsDryRun() || !pol.Spec.ActionEnabled(v1alpha1.ActionType(model.ActionIdentityRotate)) {
+	if r.Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: cfg.PolicyName}, &pol) != nil || string(pol.UID) != cfg.PolicyUID ||
+		pol.Generation <= 0 || pol.Status.ObservedGeneration != pol.Generation || (wantGeneration > 0 && pol.Generation != wantGeneration) ||
+		pol.DeletionTimestamp != nil || pol.Spec.IsDryRun() || !pol.Spec.ActionEnabled(v1alpha1.ActionType(model.ActionIdentityRotate)) {
 		return fail()
 	}
 	selector, err := metav1.LabelSelectorAsSelector(&pol.Spec.Selector)
@@ -163,6 +184,6 @@ func ObserveKubernetes(ctx context.Context, r client.Reader, cfg Profile, name, 
 	out.Pod = &pod
 	out.Account = &sa
 	out.Projection = &model.PodBoundKubeAPIAuthProjection{PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), VolumeName: "api", MountedContainer: "workload", AudienceSource: "kube-apiserver-default", EvidenceSource: "admitted-pod-and-serviceaccount"}
-	out.Observation = &model.IdentityRotationObservation{Namespace: cfg.Namespace, NamespaceUID: cfg.NamespaceUID, PodName: name, PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), ServiceAccountResourceVersion: sa.ResourceVersion, PodInventoryVersion: pods.ResourceVersion, PolicyName: cfg.PolicyName, PolicyUID: cfg.PolicyUID, PolicyGeneration: cfg.PolicyGeneration, DedicatedServiceAccount: true, ExternalTokenTheftOnly: true, FederatedIdentityAbsent: false, LegacyTokenInventoryComplete: true, LegacyTokenSecrets: legacy, EvidenceSource: "validated-dedicated-sa-credential"}
+	out.Observation = &model.IdentityRotationObservation{Namespace: cfg.Namespace, NamespaceUID: cfg.NamespaceUID, PodName: name, PodUID: uid, PodResourceVersion: pod.ResourceVersion, ServiceAccountName: run, ServiceAccountUID: string(sa.UID), ServiceAccountResourceVersion: sa.ResourceVersion, PodInventoryVersion: pods.ResourceVersion, PolicyName: cfg.PolicyName, PolicyUID: cfg.PolicyUID, PolicyGeneration: pol.Generation, DedicatedServiceAccount: true, ExternalTokenTheftOnly: true, FederatedIdentityAbsent: false, LegacyTokenInventoryComplete: true, LegacyTokenSecrets: legacy, EvidenceSource: "validated-dedicated-sa-credential"}
 	return out, nil
 }
