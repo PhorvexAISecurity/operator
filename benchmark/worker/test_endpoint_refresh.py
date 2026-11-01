@@ -53,6 +53,38 @@ if '-summary' in args: pathlib.Path(opt('-summary')).write_text('{}')
 '''
 
 
+class DecisionClockTests(unittest.TestCase):
+    def test_rfc3339nano_preserves_integer_nanoseconds_and_go_conversion_order(self):
+        # Integer reference values, also checked against Go time.Parse(RFC3339Nano)
+        # and float64(UnixNano())/1e9 in the independent real exporter control.
+        cases = [
+            ('1970-01-01T00:00:00Z', 0),
+            ('1970-01-01T00:00:01.000000001Z', 1000000001),
+            ('1969-12-31T23:59:59.999999999Z', -1),
+            ('2026-10-31T23:50:13Z', 1793490613000000000),
+            ('2026-10-31T23:50:13.0944622Z', 1793490613094462200),
+            ('2026-10-31T23:50:13.09446222Z', 1793490613094462220),
+            ('2026-10-31T23:50:13.094462223Z', 1793490613094462223),
+            ('2026-11-01T03:20:13.094462223+03:30', 1793490613094462223),
+            ('2026-10-31T19:50:13.094462223-04:00', 1793490613094462223),
+            ('1970-01-01T00:00:00.1+00:01', -59900000000),
+        ]
+        for value, nanoseconds in cases:
+            with self.subTest(value=value):
+                self.assertEqual(refresh.clock(value), float(nanoseconds)/1e9)
+        actual = '2026-10-31T23:50:13.094462223Z'
+        self.assertNotEqual(refresh.clock(actual), datetime.fromisoformat(actual.replace('Z','+00:00')).timestamp())
+
+    def test_invalid_or_unrepresentable_clock_is_not_coerced(self):
+        for value in (None, 123, '', '2026-10-31T23:50:13', '2026-10-31 23:50:13Z',
+                      '2026-10-31T23:50:13.1234567891Z', '2026-10-31T23:50:13+24:00',
+                      '2026-10-31T23:50:13+00:60', '2026-02-30T00:00:00Z',
+                      '2026-10-31T23:59:60Z', '9999-01-01T00:00:00Z', '1677-01-01T00:00:00Z',
+                      '۲۰۲۶-10-31T23:50:13Z'):
+            with self.subTest(value=value), self.assertRaisesRegex(refresh.RefreshBlocked,'DECISION_CLOCK_INVALID'):
+                refresh.clock(value)
+
+
 class RefreshTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -197,6 +229,37 @@ class RefreshTests(unittest.TestCase):
         result=self.run_refresh()
         self.assertEqual(result['state'],'READY',result)
         self.assertFalse(set(extras)&set(result['snapshot_digests']))
+
+    def test_fractional_window_start_and_api_seal_gate_actual_decision_time(self):
+        # All pre-existing whole ticks are outside this narrow interval. A
+        # floored clock would either discard valid ticks or admit a future tick.
+        before=self.snapshot(650.125)
+        lower=self.snapshot(650.25)
+        middle=self.snapshot(650.375)
+        upper=self.snapshot(650.5)
+        after=self.snapshot(650.75)
+        observed_segment={'complete_from':10.25,'sealed_until':650.5}
+        entries=refresh.select_entries(self.data,self.pin,self.policy,observed_segment,640,640,3)
+        self.assertEqual([entry['digest'] for entry in entries],[lower,middle,upper])
+        self.assertFalse({before,after}&{entry['digest'] for entry in entries})
+        self.assertEqual([entry['at'] for entry in entries],[650.25,650.375,650.5])
+
+    def test_nanosecond_export_matches_exactly_and_different_clock_preserves_last_good(self):
+        timestamp='1970-01-01T00:16:39.123456789Z'
+        expected=float(999123456789)/1e9
+        good=self.snapshot(expected,decidedAt=timestamp)
+        result=self.run_refresh(ticks=1)
+        self.assertEqual(result['state'],'READY',result)
+        manifest=read_json(self.pointer())
+        trace=read_json(self.pointer().parent/manifest['trace_file'])
+        self.assertEqual(trace['ticks'][0]['at'],expected)
+        before=self.pointer().read_bytes()
+        self.snapshot(float(999223456789)/1e9+.000001,decidedAt='1970-01-01T00:16:39.223456789Z')
+        result=self.run_refresh(ticks=1)
+        self.assertEqual(result['state'],'BLOCKED',result)
+        self.assertEqual(result['reason'],'CANDIDATE_EXPORT_DECISION_CLOCK_MISMATCH')
+        self.assertEqual(self.pointer().read_bytes(),before)
+        self.assertTrue((self.folder/(good+'.pxms')).is_file())
 
     def test_hash_tamper_blocks_copy_and_keeps_last_good(self):
         self.assertEqual(self.run_refresh()['state'],'READY')

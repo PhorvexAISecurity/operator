@@ -16,6 +16,7 @@ import math
 import os
 from pathlib import Path
 import resource
+import re
 import shutil
 import signal
 import subprocess
@@ -54,11 +55,27 @@ def wall_limit(seconds):
 
 def clock(value):
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            raise ValueError("missing timezone")
-        # The actual candidate exporter uses Header.DecidedAt.Unix().
-        return math.floor(parsed.timestamp())
+        # datetime.fromisoformat() discards fractional digits beyond microseconds.
+        # Parse RFC3339Nano with integer arithmetic first, then use the exporter's
+        # exact operation order: float64(Header.DecidedAt.UnixNano()) / 1e9.
+        match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})", value, flags=re.ASCII)
+        if match is None:
+            raise ValueError("invalid RFC3339Nano clock")
+        year, month, day, hour, minute, second = map(int, match.groups()[:6])
+        delta = datetime(year, month, day, hour, minute, second) - datetime(1970, 1, 1)
+        seconds = delta.days * 86400 + delta.seconds
+        zone = match[8]
+        if zone != "Z":
+            zone_hour, zone_minute = int(zone[1:3]), int(zone[4:6])
+            if zone_hour > 23 or zone_minute > 59:
+                raise ValueError("invalid RFC3339 offset")
+            seconds -= (1 if zone[0] == "+" else -1) * (zone_hour * 3600 + zone_minute * 60)
+        nanoseconds = seconds * 1_000_000_000 + int((match[7] or "").ljust(9, "0"))
+        # Outside this range Go UnixNano is undefined for a time.Time; these
+        # cannot be accepted as exact source-clock evidence.
+        if not -(1 << 63) <= nanoseconds < (1 << 63):
+            raise ValueError("decision clock exceeds UnixNano range")
+        return float(nanoseconds) / 1e9
     except (AttributeError, TypeError, ValueError, OverflowError) as exc:
         raise RefreshBlocked("SNAPSHOT_DECISION_CLOCK_INVALID") from exc
 
