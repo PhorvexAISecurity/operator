@@ -1,0 +1,5 @@
+{
+  "path": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-initial-artifacts-review.json",
+  "sha256": "482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907",
+  "verdict": "PASS_INITIAL_BOT_PARAMETER_REPLAY_AND_TRUTHFUL_ORIGINAL_REFUSAL"
+}

@@ -1,0 +1,121 @@
+{
+  "schema": "phorvex-bench.round-evidence-prepared-review.v1",
+  "observed_at": "2026-11-01T21:57:34.398390+00:00",
+  "verdict": "PASS_FOR_PREPARED_TEN_ENTRIES",
+  "manifest_path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/manifest.yaml",
+  "manifest_bytes": 6251,
+  "manifest_sha256": "be8649240d06411cb19225c201d8b4f296d57de1bac7596dca9880f33867aa48",
+  "schema_sha256": "b297d7816d2c960a00ee15bf5d43e03fc9c0cfbf62958a5c19390ad6d842c8a5",
+  "schema_and_formats": "PASS",
+  "artifacts": [
+    {
+      "id": "initial-bot-archive",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/bot-initial-b1ef-r5-artifacts.tar.gz",
+      "bytes": 8117005,
+      "sha256": "246dc36f3bdff698d9916e836e61dcdd165e2881e252b6738fd7cd92129839e1",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-b1ef-r5-artifacts.tar.gz",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "fixture-bot-archive",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/bot-fixture-b1ef-r5-artifacts.tar.gz",
+      "bytes": 20469218,
+      "sha256": "912074c2930b7f307ee1275a92e2b2231704bb810fe0065ff69927f777d30984",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-fixture-b1ef-r5-artifacts.tar.gz",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "native-baseline-proof",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/native-baselines-current.json",
+      "bytes": 132550,
+      "sha256": "339d85a1faf3f21c7e8041e0f98aea2e8b7b1e1e72c2c0fc0624daef1bab38f6",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-baselines-current.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "native-baseline-verdict",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/native-prerequisite-verdict.json",
+      "bytes": 4795,
+      "sha256": "61e28a053dcc60acc148195155f3dd00ccafdc14d6e39906ea447b5e988c8088",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-prerequisite-verdict.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "fixture-ready64-proof",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/ready64-verification.json",
+      "bytes": 32335,
+      "sha256": "3ecae52a96b331981a5b1fcbab9e2889090f0e7adaed17a9f0d7e1709bfec1d8",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef/ready64-verification.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "initial-bot-review",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/round5-initial-artifacts-review.json",
+      "bytes": 5862,
+      "sha256": "482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-initial-artifacts-review.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "initial-delivery-review",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/round5-delivered-report-addendum.json",
+      "bytes": 528,
+      "sha256": "a4af65e65ebe4ee3e623e7d464eaa467ba49c518f4fb6a6242ade423c51857ab",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-delivered-report-addendum.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "runtime-install-proof",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/runtime-install-receipt-225877.json",
+      "bytes": 10178,
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "capture-rollout-proof",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/capture-v8-rollout-1.json",
+      "bytes": 30424,
+      "sha256": "7b5e280c414a2c03938717aaf606fd57e50f63ec1eea4582075787f95cdbdc5e",
+      "created_at": "2026-11-01T21:56:11.738153+00:00",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v8-rollout-1.json",
+      "copy_byte_identical": true,
+      "index_time_is_not_execution_time": true
+    },
+    {
+      "id": "round5-preregistered-baseline-control",
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/baseline-control.json",
+      "bytes": 1055,
+      "sha256": "a4d5dfc79560b097f6eefca293f95517798829389409565d3a5265d0f2662611",
+      "created_at": "2026-11-01T21:05:08.665174+00:00",
+      "scope": "Declared original historical baseline instrument control, not current64tick readiness."
+    }
+  ],
+  "unique_ids": 10,
+  "scoped_nonsymlink_artifacts": 10,
+  "exact_original_reference_copies": 9,
+  "separate_original_baseline_controls": 1,
+  "manifest_stable_across_verification": true,
+  "product_tracked_worktree_changes": [],
+  "limits": [
+    "Review binds only this exact ten-entry prepared manifest. Future appended fixture-review artifact requires a separate check.",
+    "No final overall metadata freeze or numerical/causal/efficacy acceptance is made; separate reviewer owns actual fixture numerical verification.",
+    "No source or live mutation, calibration, deployment, CI rerun/cancel or original artifact edit."
+  ]
+}

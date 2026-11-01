@@ -1,0 +1,65 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "files": [
+    {
+      "path": "final-source-jobs.json",
+      "bytes": 31435,
+      "sha256": "46f2b1dbf58b6c8179780376b746f29876979811a1770651d885428ddb9141eb"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 4711,
+      "sha256": "21495b9724afd5bda9dc5aac0f9f3149944c7fe46e500b46230a56a7bcdbc831"
+    },
+    {
+      "path": "harness-failure-diagnosis.json",
+      "bytes": 2823,
+      "sha256": "fb9c57ce9470f29096f93a9d86690be4768c0c3af7b83320ead530a11decf2b5"
+    },
+    {
+      "path": "harness-failure.excerpt.log",
+      "bytes": 12091,
+      "sha256": "caeafe61f02bbd77fdc245582dee25ba839447cf258f9160139f7da660d8ab5b"
+    },
+    {
+      "path": "harness-failure.provenance.json",
+      "bytes": 568,
+      "sha256": "a627161dd364d10038c0354748b2f04643797dcf89ed6f28f4d22c88e9a07eca"
+    },
+    {
+      "path": "harness-job.json",
+      "bytes": 1982,
+      "sha256": "fefa68a43ccbfc743bc53a3ac38b7c3cde8ef24526688159f776813ce0373821"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 8851,
+      "sha256": "9f61cc5f6646e000ec38dd81722c9efa36400a06054ee333c0ee809df9444891"
+    },
+    {
+      "path": "latest-status.json",
+      "bytes": 9580,
+      "sha256": "ba88ef524d5d370439c7dee19f2a67d9dbb05f69dd82a85292cb260ea0db5efa"
+    },
+    {
+      "path": "merge-ref-source.json",
+      "bytes": 589,
+      "sha256": "fa18df8f3b22c80f9001f5a25eea988569fd20723814938d458d4199550039b5"
+    },
+    {
+      "path": "source-validation-checkout.excerpt.log",
+      "bytes": 1239,
+      "sha256": "e93177e2a51a07cc248442af05b1e3c67eda973eb5d96a42626f45e0ffe73572"
+    },
+    {
+      "path": "source-validation-checkout.provenance.json",
+      "bytes": 482,
+      "sha256": "f4137ec70576156676428b9f6bde403f53a54ec84df753d27e8273e08b6ca79b"
+    },
+    {
+      "path": "status-transitions.json",
+      "bytes": 22761,
+      "sha256": "8fd16141e60622bf524375a352deca82794b93689a6a8a538b4663c71b2d322f"
+    }
+  ]
+}

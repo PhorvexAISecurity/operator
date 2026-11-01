@@ -1,0 +1,46 @@
+{
+  "verdict": "PASS_SCHEMA_LOCAL_PATHS_BYTE_IDENTICAL_RETENTION",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:36:28.094517+00:00",
+  "manifest": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml",
+  "manifest_sha256": "324ab641c98a244e9ea1da5f92f3a8c1305606d0b37c8073880fc561b5fb46b6",
+  "prior_manifest_sha256": "79b5297a70c0dafda141cc57b32591eb7c58e4c09e8991cdcd34d5093912b53c",
+  "schema_sha256": "b297d7816d2c960a00ee15bf5d43e03fc9c0cfbf62958a5c19390ad6d842c8a5",
+  "retained_originals_unchanged_against_HEAD": true,
+  "copies": [
+    {
+      "original": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz",
+      "copy": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-artifacts.tar.gz",
+      "sha256": "95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539",
+      "bytes": 53615
+    },
+    {
+      "original": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json",
+      "copy": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-collection-verdict.json",
+      "sha256": "afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53",
+      "bytes": 825
+    },
+    {
+      "original": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json",
+      "copy": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/capture-during-initial-225877.json",
+      "sha256": "d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89",
+      "bytes": 18466
+    },
+    {
+      "original": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json",
+      "copy": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/runtime-install-receipt-225877.json",
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15",
+      "bytes": 10178
+    },
+    {
+      "original": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json",
+      "copy": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/manifest.json",
+      "sha256": "a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8",
+      "bytes": 2194
+    }
+  ],
+  "limits": [
+    "Only current manifest schema/path indexing and byte-identical copies change; no original execution outcome/source/signed receipt changes.",
+    "Historical round4 failed acceptance remains failed; this metadata correction creates no current readiness claim."
+  ]
+}

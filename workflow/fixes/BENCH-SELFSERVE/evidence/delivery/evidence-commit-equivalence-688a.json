@@ -1,0 +1,10 @@
+{
+  "at": "2026-11-01T21:28:00.372890+00:00",
+  "source_reviewed": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "evidence_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "changed_paths": 920,
+  "all_changes_under_workflow": true,
+  "all_product_test_build_chart_files_byte_identical": true,
+  "commit_message": "Record reviewed stage benchmark remediation and live evidence",
+  "validation_scope": "Source287 remains exact independently reviewed/tested product.688 adds current evidence/records only. Captured raw CSV/log bytes retain original whitespace; the source diff check passed at287."
+}

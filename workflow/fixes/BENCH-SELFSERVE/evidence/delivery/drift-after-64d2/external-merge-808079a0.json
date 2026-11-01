@@ -1,0 +1,96 @@
+{
+  "pr": {
+    "number": 198,
+    "state": "closed",
+    "merged": true,
+    "merged_at": "2026-11-01T22:01:01Z",
+    "merge_commit_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "updated_at": "2026-11-01T22:01:01Z",
+    "merged_by": "hamihoriyat",
+    "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  },
+  "merge": {
+    "sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+    "tree_sha": "dd3c109605910e33a957bbf4a051c01cedee0025",
+    "parents": [
+      "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "64d2aaf9b63208bed10e62207cccd101b53b1029"
+    ],
+    "message": "Merge pull request #198 from PhorvexSecurity/fix/benchmark-selfserve\n\nKeep stage benchmarks source-aligned and report missing prerequisites",
+    "committer_date": "2026-11-01T22:01:00Z",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/commit/808079a03728b3ac5f449ba268bb91b20e95c93d"
+  },
+  "diff": {
+    "status": "ahead",
+    "ahead_by": 1,
+    "behind_by": 0,
+    "total_commits": 1,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/compare/64d2aaf9b63208bed10e62207cccd101b53b1029...808079a03728b3ac5f449ba268bb91b20e95c93d",
+    "changed_paths": []
+  },
+  "runs": [
+    {
+      "id": 41354937898,
+      "name": "PR source validation",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    },
+    {
+      "id": 41354937815,
+      "name": "E2E harness contracts",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937815",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    },
+    {
+      "id": 41354937806,
+      "name": "Benchmark dashboard",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937806",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    },
+    {
+      "id": 41354937807,
+      "name": "Workflow harness",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937807",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    },
+    {
+      "id": 41354937804,
+      "name": "Native RBAC contract",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937804",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    },
+    {
+      "id": 41354937810,
+      "name": "Release",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810",
+      "event": "push",
+      "created_at": "2026-11-01T22:01:04Z"
+    }
+  ],
+  "observed_at": "2026-11-01T22:01:43.552530+00:00"
+}

@@ -1,0 +1,55 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "files": [
+    {
+      "path": "final-source-jobs.json",
+      "bytes": 31410,
+      "sha256": "e7bf8b5048edb12181aeae733af98ee5b6b292967bbf2685a0ec8d531ff99d1b"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 4354,
+      "sha256": "6b7e6a27617dda7c076a0df7949e024287b0c1de2e1c3e06d8d6a0d87e91e89a"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 10124,
+      "sha256": "860424c137ad7be529029258732f9c699d6a2df6aeccee2ae5e971c3a1617eb9"
+    },
+    {
+      "path": "latest-status.json",
+      "bytes": 10676,
+      "sha256": "0fd874cf1092a51e978e576ef93647ca3edba80f0f0f6a4f4b52ddde68cf230f"
+    },
+    {
+      "path": "release-failure.excerpt.log",
+      "bytes": 1573,
+      "sha256": "67af4d8b16a84b98f83484115f8c7e747e29b3e588c7e1b18bc543e50850b158"
+    },
+    {
+      "path": "release-failure.provenance.json",
+      "bytes": 561,
+      "sha256": "6fe17cb7a8a4ae6216070e501ba960d81db3e17b222b1af09982d8b9c3b6dc72"
+    },
+    {
+      "path": "release-jobs.json",
+      "bytes": 3550,
+      "sha256": "8b593dd6c32311d061b0da60528a8eee430e3cfd2fd7f074d1fc2cac039811d6"
+    },
+    {
+      "path": "source-validation-checkout.excerpt.log",
+      "bytes": 467,
+      "sha256": "7c6cf3d98d257ca6b3a656c3ec9ecfadc1087b66fc72a1d6e918f9283061823f"
+    },
+    {
+      "path": "source-validation-checkout.provenance.json",
+      "bytes": 481,
+      "sha256": "aafff04320a30058abcc55c2dec182bad3fd31e90f3dcf21945027d344b2ec93"
+    },
+    {
+      "path": "status-transitions.json",
+      "bytes": 28260,
+      "sha256": "85908b64048006c655c9bbe70020c906214dae6fb22c9cdc2d5d8dec5b09d120"
+    }
+  ]
+}

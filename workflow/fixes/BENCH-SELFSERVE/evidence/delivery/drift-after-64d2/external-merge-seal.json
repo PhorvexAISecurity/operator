@@ -1,0 +1,17 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "frozen_at": "2026-11-01T22:04:15.550871+00:00",
+  "scope": "Immutable external user/account merge provenance and exact reviewed/tested/main tree equivalence only. Mutable latest.json/transitions.json explicitly excluded.",
+  "files": [
+    {
+      "path": "external-merge-808079a0.json",
+      "bytes": 3565,
+      "sha256": "219bcb37078d76598abe0fe94c9122c670afa108b1366314fd55239d6e63e008"
+    },
+    {
+      "path": "actual-main-tree-equivalence.json",
+      "bytes": 460,
+      "sha256": "7e9e6b2cd65919e1d90f6a85d66635875b55c36d36fd91dd01eee84784f6a641"
+    }
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "observed_at": "2026-11-01T22:05:24.396780+00:00",
+  "jobs": [
+    {
+      "id": 124992875598,
+      "name": "pending",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810/job/124992875598",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:01:48Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:09Z"
+        },
+        {
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:09Z",
+          "completed_at": "2026-11-01T22:01:13Z"
+        },
+        {
+          "name": "Run actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:13Z",
+          "completed_at": "2026-11-01T22:01:28Z"
+        },
+        {
+          "name": "Run azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:01:28Z",
+          "completed_at": "2026-11-01T22:01:29Z"
+        },
+        {
+          "name": "Persist and validate the prepared batch source",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 5,
+          "started_at": "2026-11-01T22:01:29Z",
+          "completed_at": "2026-11-01T22:01:46Z"
+        },
+        {
+          "name": "Post Run actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9,
+          "started_at": "2026-11-01T22:01:46Z",
+          "completed_at": "2026-11-01T22:01:46Z"
+        },
+        {
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-01T22:01:46Z",
+          "completed_at": "2026-11-01T22:01:46Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-01T22:01:46Z",
+          "completed_at": "2026-11-01T22:01:46Z"
+        }
+      ]
+    },
+    {
+      "id": 124993070801,
+      "name": "publish",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810/job/124993070801",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:49Z",
+      "completed_at": "2026-11-01T22:01:48Z",
+      "steps": []
+    },
+    {
+      "id": 124993071131,
+      "name": "release-pr",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810/job/124993071131",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:49Z",
+      "completed_at": "2026-11-01T22:01:48Z",
+      "steps": []
+    }
+  ]
+}

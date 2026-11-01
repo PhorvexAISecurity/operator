@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-11-01T22:11:39.893033+00:00",
+  "job_id": 124992876241,
+  "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876241",
+  "original_log_bytes": 210712,
+  "original_log_sha256": "25362bf5ad89f0e61b0dfea420ce447ded2ea5d5ff207ce89abe0feaca4ffa45",
+  "excerpt_sha256": "7c6cf3d98d257ca6b3a656c3ec9ecfadc1087b66fc72a1d6e918f9283061823f",
+  "actual_checked_out_main": "808079a03728b3ac5f449ba268bb91b20e95c93d"
+}

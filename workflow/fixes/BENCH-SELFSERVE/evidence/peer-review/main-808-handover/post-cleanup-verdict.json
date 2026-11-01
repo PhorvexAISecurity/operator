@@ -1,0 +1,115 @@
+{
+  "verdict": "PASS_OBSERVED_MAIN808_HANDOVER_AND_TEMPORARY_PIN_CLEANUP",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T22:16:04.293586+00:00",
+  "observation_start": "2026-11-01T22:13:33.126254+00:00",
+  "observation_end": "2026-11-01T22:14:35.344558+00:00",
+  "main": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "actual_brain_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "installed_runtime": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "apps": {
+    "app-brain": {
+      "revisions": [
+        "808079a03728b3ac5f449ba268bb91b20e95c93d",
+        "808079a03728b3ac5f449ba268bb91b20e95c93d"
+      ],
+      "health": "Healthy",
+      "operation": "Succeeded",
+      "sync_status": "Synced",
+      "preexisting_prune_only_rbac": 0
+    },
+    "app-manager": {
+      "revisions": [
+        "808079a03728b3ac5f449ba268bb91b20e95c93d",
+        "808079a03728b3ac5f449ba268bb91b20e95c93d"
+      ],
+      "health": "Healthy",
+      "operation": "Succeeded",
+      "sync_status": "OutOfSync",
+      "preexisting_prune_only_rbac": 14
+    },
+    "app-console": {
+      "revisions": [
+        "808079a03728b3ac5f449ba268bb91b20e95c93d",
+        "808079a03728b3ac5f449ba268bb91b20e95c93d"
+      ],
+      "health": "Healthy",
+      "operation": "Succeeded",
+      "sync_status": "OutOfSync",
+      "preexisting_prune_only_rbac": 22
+    }
+  },
+  "appset": {
+    "name": "phorvex-services",
+    "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+    "generation": 21,
+    "resourceVersion": "103601611"
+  },
+  "temporary_pin_removed": true,
+  "protected_state_unchanged": true,
+  "observer_supervisor_pid": 1648552,
+  "observer_child_pid": 1705633,
+  "bot_pid": 1735737,
+  "refresh_at_observation": "RUNNING",
+  "checks": [
+    "Full AppSet spec unchanged except approved two refs to main; all six app source resolutions808.",
+    "Three deployments retain exact UID/generation/image/args/volumes and complete health; both policy modes/UID/generation, workloads and Service identity/selectors retained.",
+    "Persistent capture both policies, PVC, manager cost evidence, exact closed-family grants plus investor preserved.",
+    "Fresh actual embedded B1 runtime observation matches unchanged atomic pin/native replay hash; no claim main808 is the running brain image.",
+    "Observer supervisor/child and bot PIDs continuous; maintenance timers enabled/active; private protected hashes, unrelated services, source checkout and current symlink preserved."
+  ],
+  "limits": [
+    "Read-only sampled post-state, not atomic global freeze or guarantee across future external changes.",
+    "Manager/console retain exact preexisting prune-only RBAC OutOfSync resources; no prune authorized or performed.",
+    "Automatic refresh RUNNING at sample, so this receipt does not claim that new refresh finished. Prior actual READY64 and paired results remain separately bound.",
+    "Prior original ten-day request remains BLOCKED; no physical calibration/security efficacy or long-history guarantee.",
+    "Historical Release workflow failure is separately retained; no all-workflows-green or new brain-image publication claim."
+  ],
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-read-1.json",
+      "sha256": "fabd99ca6a4d94306e6a81ae0526b1055f336082159983ac2f2ae700c15f69d5",
+      "bytes": 126390
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/read-post-cleanup.py",
+      "sha256": "3684b69d78dc17bd7e313b4a62eabc3c646172ff9b864a104176fc8eb8766277",
+      "bytes": 5158
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/source-equivalence.json",
+      "sha256": "6ad4b804db4c758e9c1ae1c8d518383724599692e721eca175f700089c970fc5",
+      "bytes": 1085
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/operational-verdict.json",
+      "sha256": "aa90fb2a6908d7956f2dc8d3687c4fcb0b5b14aabcdc5144b15b4d6182bdcdae",
+      "bytes": 4923
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/main-808-cleanup-apply.json",
+      "sha256": "0206378d96fd0e55dd620ba1137ab2a1fdfdd57ea9267e95b4e6b48dbc0d6185",
+      "bytes": 584
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-main-808/preconditions.json",
+      "sha256": "c05da25c8bdc56bbecdecb2df1dc81ae8b17f9e367633881a630cd8c92578016",
+      "bytes": 18492
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v8-rollout-1.json",
+      "sha256": "7b5e280c414a2c03938717aaf606fd57e50f63ec1eea4582075787f95cdbdc5e",
+      "bytes": 30424
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json",
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15",
+      "bytes": 10178
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/verify-post-cleanup.py",
+      "sha256": "c951373ccbd77ad7067ed703fef6cbed387a4103592355e89a3e1d393971cb9e",
+      "bytes": 7430
+    }
+  ]
+}

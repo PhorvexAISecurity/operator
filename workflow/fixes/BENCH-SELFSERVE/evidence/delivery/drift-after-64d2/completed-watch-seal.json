@@ -1,0 +1,17 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "frozen_at": "2026-11-01T22:05:57.624115+00:00",
+  "scope": "Bounded30second read-only identity polling ended normally. Main/PR external merge observed; no remote mutation by observer. External-merge-seal.json remains independently frozen.",
+  "files": [
+    {
+      "path": "latest.json",
+      "bytes": 358,
+      "sha256": "078b4985a1ef8c90da68c6676c29d1fc0750026b0b4ebeaaed7a8c935d66ce44"
+    },
+    {
+      "path": "transitions.json",
+      "bytes": 760,
+      "sha256": "bddfd9c5601a2c5f57a6c13804c1b0a35bade742c502c5943a924aac60445006"
+    }
+  ]
+}

@@ -2,4 +2,146 @@ schema_version: 2
 subject:
   kind: campaign
   id: 2026-11-01-stage-selfserve
-artifacts: []
+artifacts:
+- id: initial-bot-archive
+  path: evidence/references/bot-initial-b1ef-r5-artifacts.tar.gz
+  bytes: 8117005
+  sha256: 246dc36f3bdff698d9916e836e61dcdd165e2881e252b6738fd7cd92129839e1
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-b1ef-r5-artifacts.tar.gz
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: fixture-bot-archive
+  path: evidence/references/bot-fixture-b1ef-r5-artifacts.tar.gz
+  bytes: 20469218
+  sha256: 912074c2930b7f307ee1275a92e2b2231704bb810fe0065ff69927f777d30984
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-fixture-b1ef-r5-artifacts.tar.gz
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: native-baseline-proof
+  path: evidence/references/native-baselines-current.json
+  bytes: 132550
+  sha256: 339d85a1faf3f21c7e8041e0f98aea2e8b7b1e1e72c2c0fc0624daef1bab38f6
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-baselines-current.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: native-baseline-verdict
+  path: evidence/references/native-prerequisite-verdict.json
+  bytes: 4795
+  sha256: 61e28a053dcc60acc148195155f3dd00ccafdc14d6e39906ea447b5e988c8088
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-prerequisite-verdict.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: fixture-ready64-proof
+  path: evidence/references/ready64-verification.json
+  bytes: 32335
+  sha256: 3ecae52a96b331981a5b1fcbab9e2889090f0e7adaed17a9f0d7e1709bfec1d8
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef/ready64-verification.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: initial-bot-review
+  path: evidence/references/round5-initial-artifacts-review.json
+  bytes: 5862
+  sha256: 482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-initial-artifacts-review.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: initial-delivery-review
+  path: evidence/references/round5-delivered-report-addendum.json
+  bytes: 528
+  sha256: a4af65e65ebe4ee3e623e7d464eaa467ba49c518f4fb6a6242ade423c51857ab
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-delivered-report-addendum.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: runtime-install-proof
+  path: evidence/references/runtime-install-receipt-225877.json
+  bytes: 10178
+  sha256: fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: capture-rollout-proof
+  path: evidence/references/capture-v8-rollout-1.json
+  bytes: 30424
+  sha256: 7b5e280c414a2c03938717aaf606fd57e50f63ec1eea4582075787f95cdbdc5e
+  producer: bench-v3-lead (retained unchanged copy; original producer is inside artifact)
+  created_at: '2026-11-01T21:56:11.738153+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v8-rollout-1.json
+  description: created_at is the manifest indexing/copy time, not a new execution.
+    Source, original times, failures, missing data and outcome limits remain unchanged.
+- id: round5-preregistered-baseline-control
+  path: evidence/baseline-control.json
+  bytes: 1055
+  sha256: a4d5dfc79560b097f6eefca293f95517798829389409565d3a5265d0f2662611
+  producer: bench-v3-lead
+  created_at: '2026-11-01T21:05:08.665174+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  description: Pre-mutation instrument control only; current64tick readiness is not
+    inferred from this historical control.
+- id: fixture-bot-independent-review
+  path: evidence/references/fixture-artifact-review.json
+  bytes: 6644
+  sha256: 640fd3bc548cb9e1dd3c6b5c080bafdb6ccbe28dbf123cb0cd5aa335aad395a1
+  producer: stage-review (unchanged retained copy)
+  created_at: '2026-11-01T21:57:47.292722+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/artifact-review.json
+  description: Indexing/copy time only; actual review/receipt/source/outcomes are
+    in the unchanged artifact.
+- id: actual-main-handover-independent-review
+  path: evidence/references/main-handover-verdict.json
+  bytes: 5129
+  sha256: cf4005a2bb6baa63138b39afc0dee6d21a88edf9fc517dfddd8c3e2f0043ec12
+  producer: stage-review (unchanged retained copy)
+  created_at: '2026-11-01T22:19:12.955111+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-verdict.json
+  description: Indexing/copy time only; actual main resolution, source/identity/health/protected-state
+    observations and limits are retained unchanged.
+- id: final-administrative-cleanup
+  path: evidence/references/administrative-cleanup.json
+  bytes: 841
+  sha256: 17d392bd7d7d8cb7be766ace3073cb30aa0ced349b1cb1616b400ae1192dfea2
+  producer: bench-v3-lead
+  created_at: '2026-11-01T22:31:11.760383+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/delivery/administrative-cleanup.json
+  description: Actual task credential-file absence, not a credential value; intended
+    installed host source helper preserved.

@@ -1,0 +1,26 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "scope": "Frozen source-equivalence and committed-provenance evidence; later actual688 CI is recorded separately in ci/.",
+  "files": [
+    {
+      "path": "changed-workflow-paths.json",
+      "bytes": 272619,
+      "sha256": "73b873e6c5d03876df07402c6ae3e90e85074b133e57b7cbaa0a0ca2f44e9590"
+    },
+    {
+      "path": "committed-provenance.json",
+      "bytes": 6345,
+      "sha256": "b3fe867918fd8b5b575079426e6ceed42e25fc4c7d3466f9bc5758e70b9d9740"
+    },
+    {
+      "path": "initial-remote-status.json",
+      "bytes": 7678,
+      "sha256": "71314d42c4b8d6ab6d4c0141946c2af36668772a2c98605e446333a327737151"
+    },
+    {
+      "path": "source-equivalence.json",
+      "bytes": 3974,
+      "sha256": "62a1c79b6718a06304ced65b023caf64b9815c3ef86f610f6ebe1f95ba28688b"
+    }
+  ]
+}

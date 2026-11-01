@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 30
+revision: 40
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -92,11 +92,26 @@ checks:
     source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
     at: '2026-11-01T21:23:40+00:00'
     incident_sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+  patch_equivalence:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/delivery/ci-64d2/source-equivalence.json
+    sha256: 52e6fbd5bf364686e0595ef73205e9716756846120c30188009dbfa773ad06ed
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:57:26+00:00'
+  l3:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/l3/main-handover.md
+    sha256: 30597728d48863337de2d4bc2f6593fa39f99ac9b51ddd2428763edddd1ee69c
+    source_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+    at: '2026-11-01T22:19:13+00:00'
+    deployment_digest: sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
 fix_id: BENCH-SELFSERVE
 issues: []
 title: Durable stage benchmark readiness for requested policies and release changes
 profile: standard
-state: IN_PR
+state: MERGED
 roles:
   human_owner: hamihoriyat
   proposer: bench-v3-lead
@@ -124,15 +139,15 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator-refactored/pull/198
-  reviewed_head: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
-  merge_sha: null
+  reviewed_head: 64d2aaf9b63208bed10e62207cccd101b53b1029
+  merge_sha: 808079a03728b3ac5f449ba268bb91b20e95c93d
   checks: PASS
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
-  image: null
-  digest: null
-  git_sha: null
-  rolled_out_at: null
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
+  digest: sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
+  git_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  rolled_out_at: '2026-11-01T21:12:35+00:00'
 verification:
   required:
   - L0
@@ -145,7 +160,7 @@ verification:
   l0: PASS
   l1: PASS
   l2: PASS
-  l3: pending
+  l3: PASS
   l4: pending
   positive_control: PASS
 synchronization:
@@ -157,10 +172,11 @@ dependencies: []
 blockers: []
 residuals: []
 next_action:
-  owner: live_verifier
-  action: Continue current native and real bot controls; retain source reviewed PR198;
-    main merge requires explicit authorization
-updated_at: '2026-11-01T21:26:13+00:00'
+  owner: coordinator
+  action: Publish independently reviewed live evidence for externally merged PR198
+    and completed main handover. Original10d data remains unavailable; actual component
+    pins and separate release/anatomy synchronization remain explicit.
+updated_at: '2026-11-01T22:21:23+00:00'
 follow_up_to: BENCH-STAGE
 configuration_history:
 - at: '2026-11-01T17:25:14+00:00'
@@ -239,6 +255,34 @@ configuration_history:
   fields:
   - next_action
   - pull_request
+  approval_ref: null
+- at: '2026-11-01T21:30:38+00:00'
+  by: bench-v3-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-11-01T21:56:34+00:00'
+  by: bench-v3-lead
+  fields:
+  - deployment
+  - next_action
+  - pull_request
+  approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+- at: '2026-11-01T22:00:18+00:00'
+  by: bench-v3-lead
+  fields:
+  - next_action
+  approval_ref: null
+- at: '2026-11-01T22:07:42+00:00'
+  by: bench-v3-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+- at: '2026-11-01T22:21:23+00:00'
+  by: bench-v3-lead
+  fields:
+  - next_action
   approval_ref: null
 transitions:
 - from: TRIAGED
@@ -330,6 +374,16 @@ transitions:
   note: Current source P3 and all required source checks passed; actual live obligations
     remain open
   approval_ref: operations/AUTONOMY.md
+  forced: false
+- from: IN_PR
+  to: MERGED
+  at: '2026-11-01T22:08:20+00:00'
+  by: bench-v3-lead
+  artifact: evidence/delivery/drift-after-64d2/external-merge-808079a0.json
+  note: 'Records the observed owner action: GitHub merged_by hamihoriyat at22:01:01Z.
+    No agent merge or general future-merge permission inferred; actualmain tree equals
+    tested PR tree.'
+  approval_ref: fixes/BENCH-SELFSERVE/evidence/delivery/drift-after-64d2/external-merge-808079a0.json
   forced: false
 check_history:
 - check: decision
@@ -487,6 +541,21 @@ check_history:
   source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
   at: '2026-11-01T21:00:49+00:00'
   incident_sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+- check: patch_equivalence
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/delivery/equivalence-688a/source-equivalence.json
+  sha256: 62a1c79b6718a06304ced65b023caf64b9815c3ef86f610f6ebe1f95ba28688b
+  source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+  at: '2026-11-01T21:30:38+00:00'
+- check: l3
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/l3/verdict.md
+  sha256: 0eb13798242b1d2b4c5ac81c78eb70155840943a13ac4576a93a767189c7cba4
+  source_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  at: '2026-11-01T21:57:27+00:00'
+  deployment_digest: sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
 handoff:
   id: BENCH-SELFSERVE:28:review
   from: bench-v3-lead

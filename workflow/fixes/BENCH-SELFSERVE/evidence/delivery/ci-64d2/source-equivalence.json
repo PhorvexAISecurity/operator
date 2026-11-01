@@ -1,0 +1,63 @@
+{
+  "schema": "phorvex-bench.reviewed-delta-equivalence.v1",
+  "observed_at": "2026-11-01T21:41:12.189340+00:00",
+  "result": "PASS",
+  "commit": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+  "sole_parent": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "exact_six_files_match_review": true,
+  "review_sha256": "3b0a13b6f8b8083d20ca250e56062cc343abcdced3092daf886138ef7823ca1e",
+  "files": [
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml",
+      "bytes": 3532,
+      "sha256": "324ab641c98a244e9ea1da5f92f3a8c1305606d0b37c8073880fc561b5fb46b6"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-artifacts.tar.gz",
+      "bytes": 53615,
+      "sha256": "95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-collection-verdict.json",
+      "bytes": 825,
+      "sha256": "afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/capture-during-initial-225877.json",
+      "bytes": 18466,
+      "sha256": "d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/runtime-install-receipt-225877.json",
+      "bytes": 10178,
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/manifest.json",
+      "bytes": 2194,
+      "sha256": "a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8"
+    }
+  ],
+  "all_non_workflow_root_objects_unchanged": true,
+  "unchanged_root_entries": {
+    ".dockerignore": "100644 blob d76e42f6b7248e754c6f3b8b2531fa43cf1fe3df",
+    ".gitattributes": "100644 blob 163f2d202c8b81a6d0117c9bf52e3317000f266d",
+    ".github": "040000 tree 3c6ccbb9cdb3cefd9c09e7b520e58143e7dd6fc2",
+    ".gitignore": "100644 blob bd685343ac34f421315e1274d9b543f35d21456e",
+    "AGENTS.md": "100644 blob 3693df05f19f8f93461e1884079daff7f0c9b434",
+    "CHECKLIST.md": "100644 blob 60c776c28c09dbe80a978bbd1ab05e3ee0b5a11b",
+    "End-to-End": "040000 tree 55d8df9996abcd37d5f7f0f549835ce09458648b",
+    "README.md": "100644 blob c2cec087f54d6473609a84fed0795f651c03ba30",
+    "benchmark": "040000 tree 524ce3adb752abaebafec168a0818fcc9f69eea1",
+    "build": "040000 tree e25b6dc075aad8432c2dde5e508552b6c5a71845",
+    "dashboard-web": "040000 tree be48134a42405cf78eea2a57d554192443917c80",
+    "deploy": "040000 tree 8e8a26bc2337e6ce88ca1ce9b154d2560f052911",
+    "docs": "040000 tree b9221970fe627db34e830b524eb9b2c3867179b6",
+    "farm-fixtures": "040000 tree e2d9a9111f95ef4b472702368e541d76e041011e",
+    "libs": "040000 tree c4ccb527ebf7a34f5bafb063ad28830ce9e06a4a",
+    "phorvex": "040000 tree 25f3316201042bb20003bc1e38d4dd812b983057",
+    "release": "040000 tree 2c9016bc8094c78e8a3cdd22c32c5c975b02fc00",
+    "tools": "040000 tree 5efbbd4563ad33f8ed09f28f70e299af4c611f35"
+  },
+  "scope": "Only reviewed manifest metadata and five byte-identical retained copies committed; exact product/build/chart/test/config content unchanged. No assertion of new CI success or live efficacy."
+}

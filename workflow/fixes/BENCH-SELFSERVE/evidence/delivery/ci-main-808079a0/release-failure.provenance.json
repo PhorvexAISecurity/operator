@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-11-01T22:05:25.322539+00:00",
+  "job_id": 124992875598,
+  "run_id": 41354937810,
+  "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810/job/124992875598",
+  "original_log_bytes": 51105,
+  "original_log_sha256": "66db253d237a3f6733f4f2705f6f4fd34c4d7efe8b54ad009c8fb925b171c29d",
+  "excerpt_sha256": "67af4d8b16a84b98f83484115f8c7e747e29b3e588c7e1b18bc543e50850b158",
+  "scope": "Actual main808 Release pending failure; publish and release-pr jobs skipped. No rerun or cancellation by observer."
+}

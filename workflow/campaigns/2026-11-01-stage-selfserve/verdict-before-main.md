@@ -1,0 +1,11 @@
+# Independent campaign assessment
+
+**Scoped PASS for current-source native replay, truthful admission and the actual round5 bot controls. The full durable-main claim is UNAVAILABLE and campaign closure is NOT READY.**
+
+The detailed claim crosswalk, actual sources and evidence hashes are in `round5-review.md`. Campaign H1 is supported for the expressly rebaselined actual B1 deployment; the original 61e wording is historical, not a claim that 61e is still running. Campaign H2 passes as an honest negative control: the exact 10-day request remains BLOCKED with required policy/windows preserved and no LLM/build/replay work. Campaign H3 passes the two declared fixture controls on 64 sealed current-source ticks each. Campaign H4 has passing reviewed generation/render evidence and passing actual drift detection/same-source reconciliation; survival of a future merged-main release has not been observed.
+
+Bounded product L3 may truthfully identify the actual B1 brain OCI digest, installed 225 runtime and287 chart/capture revision separately and attest these concrete observations. It cannot attest a287 brain image, guaranteed future readiness, complete active-policy10-day history, positive-burn lambda adaptation, calibrated duration prediction, measured counterfactual cost or security efficacy. The fixture controls share one cohort and are not 128 independent trials.
+
+Temporary V8 capture and source override remain intentionally installed pending merge approval. No main merge is authorized by this review. Service restoration completed; final temporary override/credential/transient cleanup is a separate pending obligation. In particular, cleanup must use exact owned-value/UID/resourceVersion guards and reviewed current-main semantics, must not reopen an obsolete quarantine window, and must not overwrite another actor's replacement. Intended observer/reconciler/refresh services and retained evidence are not disposable campaign scratch.
+
+Earlier aborted rounds and round4 failed acceptance remain failures, with byte-identical evidence retained. The campaign should not be represented as closed or as an unconditional pass of every original hypothesis. A future durable-main observation and completed cleanup/handover can resolve the remaining scope without changing these historical results.

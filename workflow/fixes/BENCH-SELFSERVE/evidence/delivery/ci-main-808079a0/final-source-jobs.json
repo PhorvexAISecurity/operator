@@ -1,0 +1,953 @@
+{
+  "observed_at": "2026-11-01T22:11:38.599763+00:00",
+  "jobs": [
+    {
+      "id": 124992875984,
+      "name": "go-envtest",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992875984",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:09:12Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:10Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:10Z",
+          "completed_at": "2026-11-01T22:01:14Z"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:14Z",
+          "completed_at": "2026-11-01T22:01:36Z"
+        },
+        {
+          "name": "Provision pinned Python 3.12 (SHA256-verified, relocatable)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:01:36Z",
+          "completed_at": "2026-11-01T22:01:40Z"
+        },
+        {
+          "name": "Run azure/setup-helm@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-01T22:01:40Z",
+          "completed_at": "2026-11-01T22:01:41Z"
+        },
+        {
+          "name": "Provision pinned envtest v1.34.0 binaries (SHA256-verified)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:01:41Z",
+          "completed_at": "2026-11-01T22:01:43Z"
+        },
+        {
+          "name": "Provision pinned kube-controller-manager v1.34.0 (SHA256-verified)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:01:43Z",
+          "completed_at": "2026-11-01T22:01:46Z"
+        },
+        {
+          "name": "Local API/controller test packages (seven complete suites; required controls)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-01T22:01:46Z",
+          "completed_at": "2026-11-01T22:09:05Z"
+        },
+        {
+          "name": "Retain raw envtest JSON evidence",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-01T22:09:05Z",
+          "completed_at": "2026-11-01T22:09:07Z"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-11-01T22:09:07Z",
+          "completed_at": "2026-11-01T22:09:07Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-11-01T22:09:07Z",
+          "completed_at": "2026-11-01T22:09:08Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-11-01T22:09:08Z",
+          "completed_at": "2026-11-01T22:09:08Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876166,
+      "name": "go-unit",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876166",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:10:29Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:07Z",
+          "completed_at": "2026-11-01T22:01:09Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:09Z",
+          "completed_at": "2026-11-01T22:01:13Z"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:13Z",
+          "completed_at": "2026-11-01T22:02:15Z"
+        },
+        {
+          "name": "Run azure/setup-helm@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:02:15Z",
+          "completed_at": "2026-11-01T22:02:16Z"
+        },
+        {
+          "name": "Phorvex unit tests (not live E2E or envtest)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-01T22:02:16Z",
+          "completed_at": "2026-11-01T22:07:59Z"
+        },
+        {
+          "name": "Services this change affects",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:07:59Z",
+          "completed_at": "2026-11-01T22:08:06Z"
+        },
+        {
+          "name": "Shared measurement-validity contract unit tests (stdlib only, no cluster)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:08:06Z",
+          "completed_at": "2026-11-01T22:08:07Z"
+        },
+        {
+          "name": "Attack-harness unit tests (fake clients, not live E2E or envtest)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-01T22:08:07Z",
+          "completed_at": "2026-11-01T22:10:14Z"
+        },
+        {
+          "name": "Extended Phoenix operator module unit tests (fake clients, no cluster)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-01T22:10:14Z",
+          "completed_at": "2026-11-01T22:10:24Z"
+        },
+        {
+          "name": "Shared library unit tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-01T22:10:24Z",
+          "completed_at": "2026-11-01T22:10:24Z"
+        },
+        {
+          "name": "EPSS ECR auth helper unit tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-01T22:10:24Z",
+          "completed_at": "2026-11-01T22:10:25Z"
+        },
+        {
+          "name": "Agent-sim fixture unit tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-01T22:10:25Z",
+          "completed_at": "2026-11-01T22:10:25Z"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-11-01T22:10:25Z",
+          "completed_at": "2026-11-01T22:10:26Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24,
+          "started_at": "2026-11-01T22:10:26Z",
+          "completed_at": "2026-11-01T22:10:26Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25,
+          "started_at": "2026-11-01T22:10:26Z",
+          "completed_at": "2026-11-01T22:10:26Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876178,
+      "name": "images (sensor)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876178",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:06Z",
+      "completed_at": "2026-11-01T22:03:56Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:11Z"
+        },
+        {
+          "name": "Build the sensor image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:11Z",
+          "completed_at": "2026-11-01T22:03:55Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:03:55Z",
+          "completed_at": "2026-11-01T22:03:55Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:03:55Z",
+          "completed_at": "2026-11-01T22:03:55Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876188,
+      "name": "fixture-images",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876188",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:04:34Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:09Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:09Z",
+          "completed_at": "2026-11-01T22:01:12Z"
+        },
+        {
+          "name": "Rebuild each fixture twice and compare complete OCI identities",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:12Z",
+          "completed_at": "2026-11-01T22:02:20Z"
+        },
+        {
+          "name": "Build and identity-verify the phorvex catalogue fixture image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:02:20Z",
+          "completed_at": "2026-11-01T22:04:31Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-01T22:04:31Z",
+          "completed_at": "2026-11-01T22:04:32Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-01T22:04:32Z",
+          "completed_at": "2026-11-01T22:04:32Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876232,
+      "name": "images (attacks)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876232",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:06:36Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:12Z"
+        },
+        {
+          "name": "Build the attacks image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:12Z",
+          "completed_at": "2026-11-01T22:06:34Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:06:34Z",
+          "completed_at": "2026-11-01T22:06:34Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:06:34Z",
+          "completed_at": "2026-11-01T22:06:34Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876241,
+      "name": "charts",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876241",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:06Z",
+      "completed_at": "2026-11-01T22:05:30Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:13Z"
+        },
+        {
+          "name": "Provision pinned Python 3.12 (SHA256-verified, relocatable)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:13Z",
+          "completed_at": "2026-11-01T22:01:15Z"
+        },
+        {
+          "name": "Run azure/setup-helm@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:01:15Z",
+          "completed_at": "2026-11-01T22:01:16Z"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-01T22:01:16Z",
+          "completed_at": "2026-11-01T22:01:28Z"
+        },
+        {
+          "name": "Run python -m pip install PyYAML==6.0.2 -r tools/benchmark-test-requirements.txt",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:01:28Z",
+          "completed_at": "2026-11-01T22:01:31Z"
+        },
+        {
+          "name": "Current chart consistency and render",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:01:31Z",
+          "completed_at": "2026-11-01T22:01:32Z"
+        },
+        {
+          "name": "Reconstruct any committed staging batch from its exact source",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-01T22:01:32Z",
+          "completed_at": "2026-11-01T22:01:42Z"
+        },
+        {
+          "name": "Tracked paths portable to case-insensitive checkouts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-01T22:01:42Z",
+          "completed_at": "2026-11-01T22:01:42Z"
+        },
+        {
+          "name": "Run python -m unittest discover -s tools -p 'test_*.py' -v",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-01T22:01:42Z",
+          "completed_at": "2026-11-01T22:05:09Z"
+        },
+        {
+          "name": "Run python -m unittest discover -s deploy/detectors/adapter-inventory -p 'test_*.py' -v",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-01T22:05:09Z",
+          "completed_at": "2026-11-01T22:05:09Z"
+        },
+        {
+          "name": "Recipe and fixture tests (offline)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-01T22:05:09Z",
+          "completed_at": "2026-11-01T22:05:27Z"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-11-01T22:05:27Z",
+          "completed_at": "2026-11-01T22:05:27Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24,
+          "started_at": "2026-11-01T22:05:27Z",
+          "completed_at": "2026-11-01T22:05:27Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25,
+          "started_at": "2026-11-01T22:05:27Z",
+          "completed_at": "2026-11-01T22:05:27Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876243,
+      "name": "lint",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876243",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:06Z",
+      "completed_at": "2026-11-01T22:02:54Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:07Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:12Z"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:12Z",
+          "completed_at": "2026-11-01T22:01:45Z"
+        },
+        {
+          "name": "Changed Go files are gofmt-clean",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:01:45Z",
+          "completed_at": "2026-11-01T22:01:45Z"
+        },
+        {
+          "name": "Vet every Go module",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-01T22:01:45Z",
+          "completed_at": "2026-11-01T22:02:46Z"
+        },
+        {
+          "name": "Service contracts lint and their generated code is current",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:02:46Z",
+          "completed_at": "2026-11-01T22:02:52Z"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-01T22:02:52Z",
+          "completed_at": "2026-11-01T22:02:52Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-01T22:02:52Z",
+          "completed_at": "2026-11-01T22:02:52Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-01T22:02:52Z",
+          "completed_at": "2026-11-01T22:02:52Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876248,
+      "name": "images (console)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876248",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:06Z",
+      "completed_at": "2026-11-01T22:05:56Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:11Z"
+        },
+        {
+          "name": "Build the console image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:11Z",
+          "completed_at": "2026-11-01T22:05:54Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:05:54Z",
+          "completed_at": "2026-11-01T22:05:54Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:05:54Z",
+          "completed_at": "2026-11-01T22:05:54Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876318,
+      "name": "images (brain)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876318",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:03:35Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:07Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:11Z"
+        },
+        {
+          "name": "Build the brain image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:11Z",
+          "completed_at": "2026-11-01T22:03:33Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:03:33Z",
+          "completed_at": "2026-11-01T22:03:33Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:03:33Z",
+          "completed_at": "2026-11-01T22:03:33Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876326,
+      "name": "images (actuator)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876326",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:04:38Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:12Z"
+        },
+        {
+          "name": "Build the actuator image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:12Z",
+          "completed_at": "2026-11-01T22:04:36Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:04:36Z",
+          "completed_at": "2026-11-01T22:04:36Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:04:36Z",
+          "completed_at": "2026-11-01T22:04:36Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876351,
+      "name": "images (operator)",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876351",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:04:53Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:07Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:12Z"
+        },
+        {
+          "name": "Build the operator image without pushing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:12Z",
+          "completed_at": "2026-11-01T22:04:51Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:04:51Z",
+          "completed_at": "2026-11-01T22:04:51Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-01T22:04:51Z",
+          "completed_at": "2026-11-01T22:04:51Z"
+        }
+      ]
+    },
+    {
+      "id": 124992876374,
+      "name": "frontend",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124992876374",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:01:07Z",
+      "completed_at": "2026-11-01T22:01:55Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:01:07Z",
+          "completed_at": "2026-11-01T22:01:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:01:08Z",
+          "completed_at": "2026-11-01T22:01:11Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:01:11Z",
+          "completed_at": "2026-11-01T22:01:18Z"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-01T22:01:18Z",
+          "completed_at": "2026-11-01T22:01:24Z"
+        },
+        {
+          "name": "Run npx --no-install tsc --noEmit --incremental false",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-01T22:01:24Z",
+          "completed_at": "2026-11-01T22:01:31Z"
+        },
+        {
+          "name": "Run npm run build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-01T22:01:31Z",
+          "completed_at": "2026-11-01T22:01:52Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-01T22:01:52Z",
+          "completed_at": "2026-11-01T22:01:52Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-01T22:01:52Z",
+          "completed_at": "2026-11-01T22:01:52Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-01T22:01:52Z",
+          "completed_at": "2026-11-01T22:01:52Z"
+        }
+      ]
+    },
+    {
+      "id": 124995355131,
+      "name": "PR validation",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898/job/124995355131",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "started_at": "2026-11-01T22:10:32Z",
+      "completed_at": "2026-11-01T22:10:35Z",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-01T22:10:33Z",
+          "completed_at": "2026-11-01T22:10:33Z"
+        },
+        {
+          "name": "Require every source check to succeed",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-01T22:10:33Z",
+          "completed_at": "2026-11-01T22:10:33Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-01T22:10:33Z",
+          "completed_at": "2026-11-01T22:10:34Z"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+339: 2026-11-01T22:01:13.3560578Z ##[endgroup]
+340: 2026-11-01T22:01:13.3608023Z [command]/usr/bin/git log -1 --format=%H
+341: 2026-11-01T22:01:13.3642285Z 808079a03728b3ac5f449ba268bb91b20e95c93d
+342: 2026-11-01T22:01:13.3648635Z ##[group]Removing auth
+343: 2026-11-01T22:01:13.3651683Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+344: 2026-11-01T22:01:13.3685825Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+540: 2026-11-01T22:01:29.2462556Z ##[endgroup]
+541: 2026-11-01T22:01:29.2609272Z go: downloading gopkg.in/yaml.v3 v3.0.1
+542: 2026-11-01T22:01:44.2705164Z HEAD is now at 76fe5b21 Merge pull request #119 from PhorvexSecurity/release/next
+543: 2026-11-01T22:01:45.0697009Z Previous HEAD position was 76fe5b21 Merge pull request #119 from PhorvexSecurity/release/next
+544: 2026-11-01T22:01:45.0702824Z Switched to a new branch 'release-record'
+545: 2026-11-01T22:01:45.0841641Z Preparing worktree (detached HEAD b7630de2)
+546: 2026-11-01T22:01:45.3856266Z HEAD is now at b7630de2 release: pin batch source 76fe5b2118fa
+547: 2026-11-01T22:01:46.3539001Z servicerelease: component manager deployment chart/values consumer drifted from pinned source
+548: 2026-11-01T22:01:46.3556329Z ##[error]Process completed with exit code 1.
+549: 2026-11-01T22:01:46.3628290Z Post job cleanup.
+550: 2026-11-01T22:01:46.4222551Z [command]/usr/bin/git version
+551: 2026-11-01T22:01:46.4276221Z git version 2.56.0

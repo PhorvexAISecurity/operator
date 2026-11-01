@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-bench.round-evidence-incremental-review.v1",
+  "observed_at": "2026-11-01T21:59:12.981785+00:00",
+  "verdict": "PASS_FOR_ELEVENTH_APPEND",
+  "prior_review_sha256": "0e8ee0df8fb97a33e9dafa0640d64eaacb25dd2f490b29e3550fa0f400afcdf2",
+  "prior_ten_entry_manifest_exact_byte_prefix_unchanged": true,
+  "all_ten_prior_artifact_hashes_still_match": true,
+  "new_manifest_path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/manifest.yaml",
+  "new_manifest_bytes": 6798,
+  "new_manifest_sha256": "04fd5e6eb11918af2b858994b4cc405c8b78f9973aa5f125efbfc4ae0512d527",
+  "full_eleven_entry_schema_and_formats": "PASS",
+  "unique_ids": 11,
+  "new_artifact": {
+    "id": "fixture-bot-independent-review",
+    "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/fixture-artifact-review.json",
+    "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/artifact-review.json",
+    "bytes": 6644,
+    "sha256": "640fd3bc548cb9e1dd3c6b5c080bafdb6ccbe28dbf123cb0cd5aa335aad395a1",
+    "byte_identical_original": true,
+    "scoped_nonsymlink_path": true
+  },
+  "product_tracked_worktree_changes": [],
+  "scope": "Structural/retention incremental review only; independently sealed fixture numerical verdict remains owned by stage_review. Does not freeze final overall metadata or perform new execution."
+}

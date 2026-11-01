@@ -1,0 +1,93 @@
+{
+  "reviewer": "stage-review",
+  "at": "2026-11-01T22:17:10.155042+00:00",
+  "verdict": "PASS_OBSERVED_MAIN808_HANDOVER_AND_TEMPORARY_PIN_CLEANUP",
+  "source_main": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "brain_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "reviewed_paths": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/operational-verdict.json",
+      "sha256": "aa90fb2a6908d7956f2dc8d3687c4fcb0b5b14aabcdc5144b15b4d6182bdcdae",
+      "bytes": 4923
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-history.json",
+      "sha256": "a2bff2d362441be4fb72c26ff97d71d5f83259e5d0a149efbeb3eb771837eccb",
+      "bytes": 2137
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-history.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-read-1.json",
+      "sha256": "fabd99ca6a4d94306e6a81ae0526b1055f336082159983ac2f2ae700c15f69d5",
+      "bytes": 126390
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-read-1.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-cleanup-verdict.json",
+      "sha256": "cf4005a2bb6baa63138b39afc0dee6d21a88edf9fc517dfddd8c3e2f0043ec12",
+      "bytes": 5129
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-main-cleanup-addendum.md",
+      "sha256": "24d53bb3630088a07f0e4801da8695463df9f10840d62cfbc447de524b3ed871",
+      "bytes": 4843
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/read-post-cleanup-history.py",
+      "sha256": "59d8d76bc19b2e02d4f025b696ae78f855788522ae3ad604dd32d6ae0b53ff6f",
+      "bytes": 2810
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/read-post-cleanup.py",
+      "sha256": "3684b69d78dc17bd7e313b4a62eabc3c646172ff9b864a104176fc8eb8766277",
+      "bytes": 5158
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/review-operation.py",
+      "sha256": "a9ae4813b1b0366603335a2b1ced93a80f5182ea0578492dd787b57404a97388",
+      "bytes": 7464
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/reviewer-assertion-note.txt",
+      "sha256": "d44b534df56badccdf9a524939a40ffcecadae4799eaf9fb1b3aec4f11f32881",
+      "bytes": 411
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/source-equivalence.json",
+      "sha256": "6ad4b804db4c758e9c1ae1c8d518383724599692e721eca175f700089c970fc5",
+      "bytes": 1085
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/verify-post-cleanup.initial.py",
+      "sha256": "24a4961f9010953f1b2ad48d5233fdf99fc1038e8e48e255381a73797fa0957f",
+      "bytes": 7362
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/verify-post-cleanup.py",
+      "sha256": "c951373ccbd77ad7067ed703fef6cbed387a4103592355e89a3e1d393971cb9e",
+      "bytes": 7430
+    }
+  ],
+  "earlier_reviews_preserved": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/round5-review.md",
+      "sha256": "ed0233333e1e373930dfc1a03231cda91f4cebacc341015dd935087c021439c6"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/campaign-verdict.md",
+      "sha256": "d33029e4965c56ea13216bccf02b6e8994a2a356981d56c8ec93223ed94cb34a"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/review-manifest.json",
+      "sha256": "1b9e9728674e414e910d2dacd32e36a4e7fc1afaa4f0238cc98fd613e41c10ee"
+    }
+  ]
+}

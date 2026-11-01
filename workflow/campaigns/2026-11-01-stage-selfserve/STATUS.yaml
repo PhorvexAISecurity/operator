@@ -3,11 +3,11 @@ campaign_id: 2026-11-01-stage-selfserve
 profile: workflow-v2
 question: Verify durable stage capture and real bot requests across source/policy
   readiness
-state: RUNNING
+state: CLOSED
 owner: hamihoriyat
 approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
 created_at: '2026-11-01T17:25:57+00:00'
-updated_at: '2026-11-01T21:09:59+00:00'
+updated_at: '2026-11-01T22:31:12+00:00'
 scope:
   environment: phorvex-dev-eks:phorvex-staging,phorvex-staging-demo; jh benchmark
     host
@@ -28,7 +28,7 @@ safety:
     violation
   phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
   unresolved: []
-  cleanup: pending
+  cleanup: PASS
 positive_control: PASS
 rounds:
 - id: round-1
@@ -40,20 +40,21 @@ rounds:
 - id: round-4
   state: ABORTED
 - id: round-5
-  state: RUNNING
+  state: COMPLETE
 findings: []
 verdict:
-  result: pending
+  result: PASS
   artifact: verdict.md
-  reviewer: null
+  reviewer: stage-review
 roles:
   campaign_lead: bench-v3-lead
   independent_reviewer: stage-review
   coordinator: bench-v3-lead
 next_action:
-  owner: campaign-lead
-  action: Apply independently reviewed V8 under fresh guards, reconcile actual b1ef
-    and execute exact original/parameter/fixture bot controls
+  owner: hamihoriyat
+  action: Use the delivered benchmark templates/results; original10d still requires
+    qualified active-policy attribution and real history. Evidence PR is separate
+    from already merged product PR198.
 transitions:
 - from: DRAFT
   to: APPROVED
@@ -196,4 +197,34 @@ transitions:
   phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
   note: Current main closure be676 changes only composition; actual image b1ef and
     original requests preserved; installed225 runtime unchanged
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-11-01T21:59:26+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-5/review.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: REVIEWED
+  at: '2026-11-01T21:59:54+00:00'
+  by: bench-v3-lead
+  artifact: verdict.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Scoped bounded current-source controls PASS; durable-main survival UNAVAILABLE
+    and campaign closure NOT READY as stated in independent verdict
+  forced: false
+- from: REVIEWED
+  to: CLOSED
+  at: '2026-11-01T22:31:12+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-5/cleanup.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Concrete current-source controls and observed merged-main handover independently
+    PASS; local credential files removed, retained source helper intentional, no physical
+    action/calibration, no original10d success or universal readiness claim.
   forced: false

@@ -1,0 +1,5 @@
+next_action:
+  owner: coordinator
+  action: Deliver reviewed source and verified actual result package; main merge awaits
+    explicit user approval. Preserve exact component pins, unavailable10d data and
+    pending override cleanup.

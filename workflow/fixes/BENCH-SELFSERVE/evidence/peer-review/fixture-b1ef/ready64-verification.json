@@ -1,0 +1,856 @@
+{
+  "verdict": "PASS_CURRENT_FIXTURE_READY64_SEALED_ASOF_HISTORY",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:47:43.043541+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "pin_sha256": "a5f4f0909efe81b3277ddea029550eab970f5ff107fa4bc1738b90ed89173bcb",
+  "status_sha256": "2563dac17c9e6852f98c22dce23a90a2570a8e7db72342abcdf86aa87f3cdc3b",
+  "dataset_manifest_sha256": "e336efede565f979046f88c250386c0376f4919fd70585d016ff0193569951dd",
+  "trace_sha256": "2e0a59c7d9caffab4e91127c3aafd9ffe3e6c94674d3393eec4005c8b26718fa",
+  "journal_prefix": {
+    "hash": "41f0ff9cdefcd432cda1a5e6f86559f0ec9aaef3c28dafc49c1bac1573b4fb60",
+    "seq": 638
+  },
+  "scope": {
+    "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "deployment_name": "stage-bench-api",
+    "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+    "measurement": "watch-observed-service-ready-backends",
+    "mode": "isolated-calibration",
+    "namespace": "phorvex-staging-demo",
+    "policy_name": "stage-bench-defense",
+    "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "repository": "PhorvexSecurity/operator-refactored",
+    "schema": "phorvex-stage.scope.v1",
+    "selector": {
+      "app.kubernetes.io/name": "stage-bench-api"
+    },
+    "service_name": "stage-bench-api",
+    "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+    "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+  },
+  "study_settings": {
+    "lookback": 600.0,
+    "target": 0.9,
+    "window": 600.0,
+    "worth_threshold": 0.0
+  },
+  "refresh_receipt": {
+    "base_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+    "baseline_exact_count": 64,
+    "candidate_export_sha256": "248008359543c602dcedd6337081b3ee128d57eb25453f11189e108cbedc7691",
+    "capture_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+    "observed_segment": {
+      "complete_from": 1793568462.225789,
+      "journal_prefix": {
+        "hash": "41f0ff9cdefcd432cda1a5e6f86559f0ec9aaef3c28dafc49c1bac1573b4fb60",
+        "seq": 638
+      },
+      "sealed_until": 1793569504.700788,
+      "session": "7e41c5c8f25040bdb699dc87bb8ed4b5"
+    },
+    "schema": "phorvex-stage.endpoint-refresh.v1",
+    "study_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e"
+  },
+  "actual_live_observation": {
+    "brain": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+      "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "container": "brain",
+      "pods": [
+        {
+          "name": "staging-brain-586ccc7d47-mlrnj",
+          "uid": "3eaa3f61-855d-49e7-a471-c0996f268fab"
+        }
+      ],
+      "embedded_version": {
+        "service": "brain",
+        "version": "0.10.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "manager": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+      "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-phorvex",
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "container": "manager",
+      "pods": [
+        {
+          "name": "staging-phorvex-947f858bf-nlp4n",
+          "uid": "750d0653-81e4-4dba-b719-b8ad29498972"
+        }
+      ],
+      "embedded_version": {
+        "service": "manager",
+        "version": "0.16.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "capture": {
+      "enabled": true,
+      "policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "directory": "/var/lib/phorvex/math-lab",
+      "persistent_claim": "staging-brain-mathlab",
+      "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "cost_evidence": true
+    },
+    "policies": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "workload_generation": 3,
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140"
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "generation": 1,
+        "mode": "dryRun",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "stage-bench-api"
+          }
+        },
+        "workload_name": "stage-bench-api",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "workload_generation": 1,
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+      }
+    }
+  },
+  "tick_checks": [
+    {
+      "snapshot_digest": "2eaa75ec5832c11e5a84af18e78142adf8bc6c5d44e9473c176d2b0535133a16",
+      "at": 1793569184.5128338,
+      "journal_seq": 431,
+      "journal_hash": "1a862eb05a532458ab90c950ed9ffaaf0b02a7bc1448093fb7a8820acf5f986f",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e24a21e5db45a1b2d2ff6774d4ee650992ac680c250839085f2e4e9c1dadc9b9",
+      "at": 1793569189.3778665,
+      "journal_seq": 434,
+      "journal_hash": "72ea108beb790284cd795926a30f12bbdb1722967a87221f5ac33ff4c928e9e3",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "acbf9ea15d0c4fdc3b15f2be80c0b6728bcedbdcc2589c8cd07f6a9b2f5ca6ab",
+      "at": 1793569194.641734,
+      "journal_seq": 436,
+      "journal_hash": "fea604297ca7fb28cd0ced36149ca2b6c1e2e10e2dc97c91d6544ecb640a9bf6",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "546bd929043e21d7bdd226ee49f70ebef69b5e60317841d589159db3aebfa9e8",
+      "at": 1793569199.3823311,
+      "journal_seq": 440,
+      "journal_hash": "daef947cb3acaaf533c37a429ec2a4031b9aeb20d385090c9e40a7c4e5ac740c",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "2601a2363694a09290f01c1b0592f8200bfb4e260bb7c3e7b70e036b139ef341",
+      "at": 1793569204.5865016,
+      "journal_seq": 443,
+      "journal_hash": "a8e168ec84ed780f68e579578ae963b1d6af27dc9b1487fdccfd8dbf5c9272b5",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e160eff866f78f8e35e447e21a8947afdfa2b5383faefe54a5326de4b351e16a",
+      "at": 1793569209.3618937,
+      "journal_seq": 446,
+      "journal_hash": "e3d214a6c6fdba373e4098c26588c10460ba2b2e898dd2402257e5eb0a86d940",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "0a1ab9bc0af83a72c5d4214995fb66b5d342cc596702ddd10f5a4cfdad91ccd5",
+      "at": 1793569214.397344,
+      "journal_seq": 448,
+      "journal_hash": "446db5cf3d9c4cbedf5f0b1ffe0f82ba89a6556a9d3f15a839e0e782eb67d4e2",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "3fd9177c74310edfdb900621102282e9eedb5e728775bd5577b07f2ade4ef1a7",
+      "at": 1793569219.4900212,
+      "journal_seq": 451,
+      "journal_hash": "e12f2ab14e223a7e71f4b2e5b9c40cb1de0fda0c829cd6dffae06944731921f5",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "221160f6778b3878c76639f03e4c5c5f9ceecf19d518a4b57d9776a7d76975a5",
+      "at": 1793569224.4699478,
+      "journal_seq": 454,
+      "journal_hash": "6edb03aadf4a17ac2a9e8f995600784a3ba8772e815ec4ae834a607627b94510",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "6f23a90416262f886d460e861eedc554e0c4a8207cd01e90a40a9f2c821a90ad",
+      "at": 1793569229.3627028,
+      "journal_seq": 457,
+      "journal_hash": "745ea29eeb8a87334d58839fcad27ef4a04f9b692783538ba4a5c874db80bf4c",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "42924be3e01b3071a8a9926c69e457ab659e5959bbd0fdbd7097001aadf6cd50",
+      "at": 1793569234.6440594,
+      "journal_seq": 460,
+      "journal_hash": "38bc20a510a77f3163b50b46368515c1de53df5885eaad5705a5db47cc1a0fa3",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e877780cba5ab410f6f4b1b46be241e0d0eee23e35f08055acf56b0469187706",
+      "at": 1793569239.4352896,
+      "journal_seq": 463,
+      "journal_hash": "97c513f06e76ab982034414cb8193e8f57cf6170ed34ada36ee3a99cc384639d",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "acfcce8076b3458fe6c38bcf0db1f4e72b6aa2d73d34fab6c6d349f1c024804f",
+      "at": 1793569244.446029,
+      "journal_seq": 466,
+      "journal_hash": "a91a89af5fc3d10036a7eaf75e7988cac1eb0015cff216962e57994534273841",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "48fb2f0770100e6cee1aee189096e0d843ab47c49cf975e7d723e6067ff748e8",
+      "at": 1793569249.3430161,
+      "journal_seq": 469,
+      "journal_hash": "319b2a180241ca8a0263df0a544bebfbd98a291fc8cba0d96d03d7e1810373a0",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "29266fa39e956b11ed3010b4b1523e92390ccfdba8b7f4b74c4e5165e76edb4a",
+      "at": 1793569254.3752677,
+      "journal_seq": 471,
+      "journal_hash": "c133425ec431a15d8258341b738e826e9c4212fe4924ca2c4933bdfd0ee21315",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "96667293bd20aba0277dbd2493f7ff534802be20ba170d626086d26dbe557ac2",
+      "at": 1793569259.397689,
+      "journal_seq": 475,
+      "journal_hash": "6cea6f3d625fbb68aead41d4b75fe2607a8f5c7fb25b5c7e0606ac1972cccaae",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "5899648f4ff40594cdde44101c2c8daf3cc3adb671e311372777d241d2d569e3",
+      "at": 1793569264.6220298,
+      "journal_seq": 478,
+      "journal_hash": "500fafbf0b911aeb90796c2064400e84b06132b41a277698a5debd92e4afa566",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b6ba249d72b57d1a59e0733c0632fa336d6b8f5e2a7f9aa3740adeff25f00e17",
+      "at": 1793569269.3635883,
+      "journal_seq": 481,
+      "journal_hash": "1191586fc35d80ad604cf5e0493224cbd4405e877f02682469cc19217e76e444",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "d3896f5ca9efc8e3c06cac0387537caa26b429bc3542dafeca73828e52957c8c",
+      "at": 1793569274.3691492,
+      "journal_seq": 483,
+      "journal_hash": "6199331f34b7ed1a943096e3f839b6e3ae7c912c894423e2280e0e5e4ca37f67",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "c88d3280aa4a3aa649e57ee5537f813e3917e56f7a58ce9e8fbeab511a94595a",
+      "at": 1793569279.4565744,
+      "journal_seq": 487,
+      "journal_hash": "5ea02b61b8eb0f577e4830f0bf31eff872091f7fda682b99b99d1a99a592f68c",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "65a10ff3faaf0d19b901a7c4bafdc754d20ba760050c74fbf1a9b0993d68f86f",
+      "at": 1793569284.3906097,
+      "journal_seq": 490,
+      "journal_hash": "8da88644a7d68163c04a0cca3b9d9b6ed5d3e8f59e6d89d2f831962c38148edb",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e57a5b15711348b4607bb27c6dccbc896c5b7f864882e4a0884d11f4cbfe9295",
+      "at": 1793569289.3141427,
+      "journal_seq": 493,
+      "journal_hash": "2645b4f86762a90cf897fd112facec41b50b393c0d4555520a6a11a3b2133b24",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "6fe651b4ff022eb957fb9fea23e78791b35870c573bd0b0dba992d5ed92f4d1f",
+      "at": 1793569294.4701974,
+      "journal_seq": 496,
+      "journal_hash": "70331693ccabddfb4da59151c4fd83feccc67704ae4434e1b4d40f6dda879b84",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "222cc0e76ad10d8add112e2b8366a733dde426ae7a150e46b8cef04f3d55cf63",
+      "at": 1793569299.4038482,
+      "journal_seq": 499,
+      "journal_hash": "bdb80f3ec6aee22e7dd979ca6adce6f79d5a43eef8a9fbd8a0a1ecadfe70a257",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "d8dca0bc9bf422774e9aeca56869b30acac9d639fecbb4927b9da7040ef9fce2",
+      "at": 1793569304.2986016,
+      "journal_seq": 502,
+      "journal_hash": "ca46fd44246e558cd6a8c5744e787982531555aa1bf060794e2f883c5cef5d22",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "783350348bd5fb53be33e5bc6f85dae4bc10624fe54bfce31c728d43c48da64d",
+      "at": 1793569309.4486759,
+      "journal_seq": 504,
+      "journal_hash": "1e8352c4267052c97ffdc84aa7be8974d4b3ae3b66d9f831bfd4cb825f6cdd4f",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "4b0354fc95db9bbd826d8e51731a4cd4a7bc6fb586c1d158240af8123e30a6c4",
+      "at": 1793569314.4269898,
+      "journal_seq": 507,
+      "journal_hash": "ac176324784c8281e2cc85997bb22362f676ab27f0ceeeecd16dde1305a88e22",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "7f6dff54c9200e7380dd666e5be49a2c9e2f87c1a477536dfcfb76dac0fb929c",
+      "at": 1793569319.397471,
+      "journal_seq": 510,
+      "journal_hash": "ac6ab543e44a9a1cd1f5d6f7b4d9820ab1161383dc8a7c42889620a0413d6b91",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "cf83b65849a87218a61fc4bfddcfdbe87cebb9f565087c08dc87af1e38309670",
+      "at": 1793569324.6839666,
+      "journal_seq": 513,
+      "journal_hash": "855acc0bf895289bf794452867539e7ecd95393f41084c3d0ecf6c2e51d9d43b",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "9c47c18f7daf474fecf00be4ba12c0580e014e0262905ea821ec26d7346376f6",
+      "at": 1793569329.3897781,
+      "journal_seq": 516,
+      "journal_hash": "bf8b7ff17178b944e8c6b950a8f83b56ccb0dcc290b5240d0b8f0530b5ed46e5",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "bdb113e0b731c930ffc355dc6ae38a49e4fc2a8a04f4475c908a7b365881b895",
+      "at": 1793569334.4200108,
+      "journal_seq": 518,
+      "journal_hash": "0eb28a3da29c24599742ad41448adaf3bb17d800f93cfedf93b97b135a0f28de",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "d1facc9b07074c2324e731d5c52e24986d5e197ec4a3b79af73d66f90b986927",
+      "at": 1793569339.5394893,
+      "journal_seq": 522,
+      "journal_hash": "9457ad1f5b1023a725263b6b951cbcd657804758068764a507325c876d7e2ece",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "68a7aed715538cd07a8ff6f48ca9f8eee412f0f404a4a5b8a7c2c704e41de5b3",
+      "at": 1793569344.3796601,
+      "journal_seq": 525,
+      "journal_hash": "9a1d9dac34bf2530b6997cdb75836d0c9b268c6c6fca6e40456b0e90712c673e",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "d55159c6bd7321766004581920687f21271f17a88ea365e3b39391a7686d939d",
+      "at": 1793569349.3427732,
+      "journal_seq": 528,
+      "journal_hash": "b82747abda3dc133396ebc7085d89d6c8d9617356cdf7d1cee25e9c87f2c57a7",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "896818b038d33ca4c724818e06b0e74694b620b6bbacc1d7e1b0b0fc775f3842",
+      "at": 1793569354.3782127,
+      "journal_seq": 531,
+      "journal_hash": "eec9ccbd4930f663d9b97ab361d5c1ae59d0343f767f72f523e1c10d97210d39",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "8b87c257fc5d917c0ecc01e6c7eaa78d74747db7472949c72553f9ea879c402a",
+      "at": 1793569359.3567374,
+      "journal_seq": 534,
+      "journal_hash": "16bed991796cb57740f29b5dfb4b0dd1419c3d6800d0106d6d986776ec318569",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "f04debca53bcbb48eaf7148f9a556a8c6239d81f931cf3a760a43a1affd2249d",
+      "at": 1793569364.3479204,
+      "journal_seq": 537,
+      "journal_hash": "54798fa3df4f066c30ee66f4dc431b5351a8accacf063c02fe0c78a7476afac9",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "3e33bef11814c43846e158be0b5241f6df62e3e4e20d99a2594bce89747c1c5c",
+      "at": 1793569369.344086,
+      "journal_seq": 540,
+      "journal_hash": "c26473ea99c7c2f552be561b2d073f468d62b9269781105bed4d104c89bc8306",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "cfa1a975487b3ffd34dc555b9a7674fc3155c195df4ee1444121058589180c38",
+      "at": 1793569374.2574413,
+      "journal_seq": 542,
+      "journal_hash": "ab2c16564436b8ff76f83f5f820b9078f6e4cb2d12cb30863427e41be6ef3ef1",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "c69ea9d2ec4486dbd7fdd48e9683c9893d27d16491b7a16425acb83850443ae4",
+      "at": 1793569379.3934171,
+      "journal_seq": 546,
+      "journal_hash": "6baf916e636ab69d0e607e61398a6054ecb2a3d0c5304d1cfd24e599954cc3c6",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "7e465664b749e7ee57657c44f95f23c85e2657495b48f3a78ab891eaf50b974b",
+      "at": 1793569384.3197134,
+      "journal_seq": 549,
+      "journal_hash": "e58444f281513789e44618a6fb93ce6b3584667f06bbc6879e41090513fbbce2",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b4292fc0ad33379479f83e874b4c7a7a222ed8b68c30929d964b17f80022975a",
+      "at": 1793569389.3550534,
+      "journal_seq": 552,
+      "journal_hash": "58a4750aeff2551fde4ee264b1128989afbcd076f0d473ef68d1226387545c65",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "1826f72a44ccb0d7054ad4ba1130198c77a708f63ecdad96f51ae4d407825a2e",
+      "at": 1793569394.619363,
+      "journal_seq": 554,
+      "journal_hash": "e787532d2b7b64299c8402a456284e062e06b712db4c07a40cc93de3b8406032",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b82e296d6809af51d44133ff08a73d11a6c33f9efc1cd1816e06db8ac6be37e0",
+      "at": 1793569399.380838,
+      "journal_seq": 558,
+      "journal_hash": "ed6c7cb37a3ce345cb8dfea5ecfbda3c20a1b33f1c245cc57cd410bcd4d335db",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "21676a6f2665ac3e412fda189aa7badaabd13aff7ef2a38e1d0c46f423ea30b9",
+      "at": 1793569404.683391,
+      "journal_seq": 561,
+      "journal_hash": "3df2d7ff7da62f134b9e4af0034bce790a23b50c81e29b5bfe329b28919d85b7",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b10853815d804054785193beb2a598b6e0dfbfa9bd57ebfb78cba3b16e8432b8",
+      "at": 1793569409.5813472,
+      "journal_seq": 564,
+      "journal_hash": "e99c62b4f9f11856f83bf1475190bca156cb7e56fd1d3484bb0ecd625e9611e7",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "ac4268fd0f370b69010d143689c959caef41636d035b6f19beed753ffe47da9f",
+      "at": 1793569414.6266086,
+      "journal_seq": 567,
+      "journal_hash": "bb88eaefad5d7177c2f0ea02544d6c16f59c43c5714e807d440ab62317283aa8",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "5ee5701c4e0fb90b5774173110d5bdf255b88f6f9c7d76566148da5666ab9fc6",
+      "at": 1793569419.3675141,
+      "journal_seq": 570,
+      "journal_hash": "d52cf5bbebee8eea5af9cdf8771d6a12bdfe208486181e09517fc5c6cc03b967",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "56b120fc8c2207c2bcea13980c9e8e3bd26859affad470641df06e9a6cc87ce6",
+      "at": 1793569424.406095,
+      "journal_seq": 573,
+      "journal_hash": "e4633079f67bf0fc0990b90651c4105a64ad8ce602a48069e9190179002dc7b4",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "4db4cb5eea67ef3f402857224d42e71713113a0444930d26b67f96a5a2a0c293",
+      "at": 1793569429.49612,
+      "journal_seq": 576,
+      "journal_hash": "08576264c81a93b41cbef05df0c23755c11c53a838450a132206e680533770b4",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "293023dab071b5588973537810502a9d0b853d2f4bc2617d17f6e7fe3692a350",
+      "at": 1793569434.52422,
+      "journal_seq": 578,
+      "journal_hash": "5ea031c1172bfdfebce30d24aa2f2551c6031c06404dc7dc555c2037372cb398",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b0b73b0d11ba568da20607c39c727d63c2abeac826d4276dc5295881d4c4b1ff",
+      "at": 1793569439.407729,
+      "journal_seq": 581,
+      "journal_hash": "6ea67366fd14f9c57712d8ddd6d9bc8916bdc6488384f839bbda3ccf0e1ceee3",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "1b2b1b8f1e770c2b4a3a5a0b2febcab30d5613cd15fbdd5841611a2d969b44e5",
+      "at": 1793569444.5253518,
+      "journal_seq": 584,
+      "journal_hash": "59c0fd1e02556bef02535cd3cb7eaebaa63d048104530aef023c59c5cdae5eeb",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "b6e4dbe6a3b12c88f10a3ef67b1428e37ab1186417c8488b5be1aed74bd72965",
+      "at": 1793569449.5319984,
+      "journal_seq": 587,
+      "journal_hash": "456694d3336764c938730ddf0c8636429bc0483331d04dfc220590d9a0ea42fb",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "af141d144d9639deac87db8b6b472ab83430cdc767837ead6e94e0e53f1908f8",
+      "at": 1793569454.6209419,
+      "journal_seq": 589,
+      "journal_hash": "d9934785872be92dace99a73f22410fe7820f7cdc281d316de436472d3907d88",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e5dc570fcebb021f0884be318ec0ee375acc1adc75d96208a4de8f1f50d25eea",
+      "at": 1793569460.079891,
+      "journal_seq": 593,
+      "journal_hash": "0ce5301a6fba0239b25be588449f052cd0ba7535ded15787095a5fd9db70b06d",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "c0fa23579010a30e6fd078d54de84b1624222e8fac46e901b494a63b4b7dc964",
+      "at": 1793569465.0856855,
+      "journal_seq": 596,
+      "journal_hash": "69cb0aa46353821f0532f4bd2020cb1863ce51ceb2c1bd451d0b9f0bb444a2c2",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "a1ab2a7015b89c0283c80ed3f4e49dc3d502af4c29bf8162370080d639b4d4d4",
+      "at": 1793569470.0793579,
+      "journal_seq": 599,
+      "journal_hash": "113bf5560a46eedc17b7e3b1298b6689702c36cdcf496da6803fce988b1b1de6",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "e6bb3ed8d144c5b7914a81687f89c3d1eece5d9936f1bd3d23bb51e4a3839c56",
+      "at": 1793569475.0749145,
+      "journal_seq": 602,
+      "journal_hash": "085a4f1123e8375632b063a85f3f0d43ea7408b851768b00b59502c8aec21752",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "9551321ec8d955888f7b53968954570881b9c5f8fbb2a3fd4a341b71b2c8514c",
+      "at": 1793569479.9322252,
+      "journal_seq": 605,
+      "journal_hash": "0d735d555abf840631af9a1eb770aa15a07ded512755902c6b4de3cf6920b999",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "9dacb6c18c7bc7feaabcadd6cae897680e4fafbb3fce8b41c48e645198bf3c74",
+      "at": 1793569484.769845,
+      "journal_seq": 608,
+      "journal_hash": "781df5661c7dd64bda904b62fb8a5911fb7fb19a0fd748859e04e38813719e93",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "2d00a3b1551f58bfee77b32e19abcea8c1e882004cc0413562a7ae133303b5a9",
+      "at": 1793569489.6369948,
+      "journal_seq": 611,
+      "journal_hash": "a1b5307e78335aeee4e1f77cab19e124ed351f2f9647986dc090a32fa09e0965",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "4fdf06df14295458d93ea1fe799c9656a41994782cb1747d18ac385e74993d37",
+      "at": 1793569494.8233714,
+      "journal_seq": 614,
+      "journal_hash": "a4d75f359b9beca39aee12a00fb9879254d851389a02970a45881f5e561fb86b",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    },
+    {
+      "snapshot_digest": "8e6ff10afc26521c7cb29c28c74d389be990d46c0ce788e7b8c9b8b0e00a9e59",
+      "at": 1793569499.8042874,
+      "journal_seq": 617,
+      "journal_hash": "6f480b56107d0fdf73fcd6a3b02b88cb4787e27148e0fe7390d3ef85d7eeb32b",
+      "complete_from": 1793568462.225789,
+      "sealed_until": 1793569504.700788,
+      "moves": 0,
+      "samples": 0,
+      "candidate_count": 3
+    }
+  ],
+  "limits": [
+    "Read-only current live identity and actual retained prefix/header/hash/clock/as-of comparison. No replay or job launched.",
+    "Refresh metadata retains64 exact baseline checks; this review does not re-execute them or imply endpoint paired output already completed.",
+    "Observed fixture ledger and experimental SLO/window are not active-policy attributed history or measured application outage. No ten-day or efficacy claim."
+  ]
+}

@@ -1,0 +1,1096 @@
+[
+  {
+    "observed_at": "2026-11-01T21:41:36.363286+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (actuator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "lint",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "fixture-images",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "e2e-contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "contract",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:42:22.868101+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (actuator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "lint",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "fixture-images",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "e2e-contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "contract",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:43:08.873658+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (actuator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "e2e-contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "contract",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:43:55.059670+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (actuator)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "e2e-contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "contract",
+        "status": "in_progress",
+        "conclusion": null
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:44:41.156216+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:45:27.346868+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:46:13.432548+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:48:31.952854+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T21:49:18.097831+00:00",
+    "main": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "pr_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "merge_ref_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "checks": [
+      {
+        "name": "PR validation",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "runs": [
+      {
+        "id": 41353242451,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242447,
+        "name": "Workflow harness",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242409,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242421,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41353242438,
+        "name": "PR source validation",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  }
+]

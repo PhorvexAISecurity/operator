@@ -1,0 +1,94 @@
+{
+  "verdict": "PASS_CURRENT_B1EF_NATIVE_BASELINE_PREREQUISITE",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:27:34.665111+00:00",
+  "actual_live_verified_at": "2026-11-01T21:26:40.635722+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "capture_chart_source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "actual_brain_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "actual_brain_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "native_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+  "pin_sha256": "a5f4f0909efe81b3277ddea029550eab970f5ff107fa4bc1738b90ed89173bcb",
+  "actual_baseline_ticks": {
+    "phorvex-staging-demo/demo-api-defense": 64,
+    "phorvex-staging-demo/stage-bench-defense": 64
+  },
+  "checks": [
+    "ActualKube source/images/deploymentUID/policygeneration/workloadService/capture matchedinstalledpin underexistingreadonlySH lease, withpinbytesunchangedaftercheck.",
+    "Exactnativebinary version/capabilities/hash andtwo immutablebaselinereceipthashes verified.",
+    "All128retainedPXMSfilehashes, finalizedsource/policyheaders andactualreplayrowsOK/reproducedverified;64uniquehasheseach.",
+    "First18/64BLOCKED preserved. Unmodifiedtimer retried21:19:49 andpublishedREADY64+64at21:25:07; nopeer retrydispatch orlivewrite.",
+    "V8historicalrollout andround4failedreport/archive/delivery/restoration separatelyverified andretained."
+  ],
+  "remaining": [
+    "Actualb1efinitialbot result/parameter64positive/original10dcorrectrefusal/delivery/restoration mustbeverified.",
+    "Freshsource-boundcontinuousfixture600/customendpointcoverage andterminalresults mustbeverified.",
+    "Laterstagechanges invalidatecurrentreadiness; oldnativeproof mustnot be silentlyreused ascurrent."
+  ],
+  "limits": [
+    "This is baselinefidelity/currentprerequisite acceptance, notfullL3/campaign completion,endpointcoverage,ten-day success,securityefficacy orindependenttick sampling.",
+    "Runtimeinstalledorigin remains225877; all169files areidentical287fd, butsource labels are notinterchanged."
+  ],
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/capture-rollout-review.json",
+      "sha256": "a503d2425ff9ae8a9ce70299fe8fd6b350985ce808b29bf8677a7000b9639c31",
+      "bytes": 936
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round4-artifacts-review.json",
+      "sha256": "de080abcbc224a4c079b736d607d0e45dadb1ad37b8937d69ca243d1e916ea85",
+      "bytes": 4754
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/review-round4.py",
+      "sha256": "8e57b026cfec75171cf0bbd9f647fcc877c958defe90ecab30e53d367ae21298",
+      "bytes": 5018
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/validation-byte-reconstruction-note.txt",
+      "sha256": "f588fe5d2d337e09a46c4b37051c4bcdf575946dcf45c180fccddd8be5e2e62e",
+      "bytes": 331
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/bounded-observation-manifest.json",
+      "sha256": "e3ddad5357bbd6bbab1073118f5354d14b2567951836c4b56cc972d69287fc44",
+      "bytes": 5128
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-08.json",
+      "sha256": "849401935a4177d1854ee81b9b92d2bfd8391c8fa227f4b702e85d09c7be2f39",
+      "bytes": 864
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-09.json",
+      "sha256": "3654b8d5953e5b6771945b9b1582db2756074093fcfc035afde35371d78a3144",
+      "bytes": 864
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/progress-01.json",
+      "sha256": "5255e162d2601cb0859e4317f6326ecb9d45e63c5d7f6a9499f6c61fe5faa921",
+      "bytes": 704
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/progress-readonly.py",
+      "sha256": "c63bab3b52233b356dfb9a64852472bf9b5821ffed4a23e73354d2733b379595",
+      "bytes": 2107
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/verify-native-readonly.py",
+      "sha256": "24562a63f4e80f521898b73cea138ae7f9061217b9216f70071be470315682d0",
+      "bytes": 4780
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-baselines-current.json",
+      "sha256": "339d85a1faf3f21c7e8041e0f98aea2e8b7b1e1e72c2c0fc0624daef1bab38f6",
+      "bytes": 132550
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/native-baselines-stderr.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

@@ -1,13 +1,9 @@
-# Summary
+Valid benchmark uploads failed when their policy was absent from the installed capture pin, when a stage release changed source identity, or when maintenance held the pin lease. This change keeps both approved stage policies in durable capture configuration, reconciles native replay against the actual deployed image, and reports explicit prerequisite BLOCKED results before model/build/replay. It also accepts independent endpoint history windows and preserves the exact supplied ten-day request through a strict, hash-bound compatibility conversion.
 
-## Problem
+The bot and worker preserve source, policy, workload and Service identity, observed history gaps, missing measurements, and the last valid dataset. Scoped Console read access defaults empty outside the stage overlay. Maintenance uses bounded storage and leases; ordinary reconciliation preserves the observer. Persian/English instructions and ready-to-upload examples are updated.
 
-## Behavioral change
+Validation: coherent eight-check local preflight, dedicated82 regression controls, independent incident reproduction and source review. All169 installed bot/worker files match reviewed product287fd; metadata-only follow-ups preserve product trees. Current PR CI is observed separately from historical green runs.
 
-## Tests and evidence
+Actual stage acceptance: two64-tick native baselines reproduced; the original demo parameter request completed64 baseline plus three64-row variants (256 OK), with independently checked raw snapshots, CSV, Excel, ZIP and real outbound Telegram receipts. All decisions in that cohort were non-attack NOOP, so this is execution evidence, not an efficacy claim. Exact original ten-day bytes remain BLOCKED for missing move-attributed endpoint data; no model/build/replay was attempted. Separate dryRun endpoint controls completed64 comparable ticks each: W600/L600/s0.9/theta0 and W240/L300/s0.95/theta0.25/delta2. Independent raw output/arithmetic/coverage/delivery review and service restoration passed.
 
-## Risk and compatibility
-
-## Rollout and live verification
-
-## Rollback
+Installed runtime225877 is distinct from actual brain/manager sourceB1 and reviewed capture/chart source287fd. Existing production services, policy modes, physical actuation and calibration are unchanged. PR198 was merged by account hamihoriyat to main808; allthree applications now resolve merged main after exact-owned-value cleanup, with the existing images, capture and continuous observation preserved. Ten-day active-policy history is not synthesized or replaced by fixture results. Storage bounds and current data coverage do not guarantee future thirty-day retention.

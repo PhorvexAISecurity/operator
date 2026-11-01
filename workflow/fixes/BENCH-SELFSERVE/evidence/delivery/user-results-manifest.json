@@ -1,0 +1,234 @@
+{
+  "at": "2026-11-01T22:20:54.083361+00:00",
+  "package_path": "/workspace/artifacts/phorvex-benchmark-results-2026-11-01.zip",
+  "package_bytes": 13348561,
+  "package_sha256": "3312f2068f06d0cae2d566eb66c46e1afebc0faa2cede65e2bd54347ae534ddb",
+  "contents": {
+    "created_at": "2026-11-01T22:20:54.083361+00:00",
+    "files": [
+      {
+        "path": "README-fa.txt",
+        "bytes": 3286,
+        "sha256": "ba38e73e3dc8c85b66489706874a63be1ba060d63f4387dcb725663036c8ee29"
+      },
+      {
+        "path": "SUMMARY-fa.txt",
+        "bytes": 5191,
+        "sha256": "1d6d0e900917b98865f1eddd90cc7a8bc4bb2718fd4019f6296ffd7ccfcb6fa3"
+      },
+      {
+        "path": "demo-parameter-64.txt",
+        "bytes": 100,
+        "sha256": "5034774d648ca710f765e2e574e946901a4999ac6065b3ae5c69bca20f6c842d"
+      },
+      {
+        "path": "endpoint-600s-results/evidence.zip",
+        "bytes": 5135833,
+        "sha256": "edffd04ba0f504127a6267dbd7682169647e28eac1ddbf7a403eca3b62d5fd9d"
+      },
+      {
+        "path": "endpoint-600s-results/metrics.csv",
+        "bytes": 122741,
+        "sha256": "731fb0a1bbf8cc41fb7d7f22862e3bf8fd6bf8f0d551e5185301b9c67f0d0d76"
+      },
+      {
+        "path": "endpoint-600s-results/report.html",
+        "bytes": 51469,
+        "sha256": "549bc719affa32825b3b45ab21683054eea4a27b07db9737b1ea214fba4c56e5"
+      },
+      {
+        "path": "endpoint-600s-results/request.json",
+        "bytes": 367,
+        "sha256": "0a9ac43b50a96f01bc4d814ab510be8809458b92364df30ad6d8e0877ec01e0a"
+      },
+      {
+        "path": "endpoint-600s-results/result.json",
+        "bytes": 387726,
+        "sha256": "b4cc5f1c555afcbbf093519bf3549b8427881b2a76731f08052bf0cd7580376c"
+      },
+      {
+        "path": "endpoint-custom-results/evidence.zip",
+        "bytes": 5136119,
+        "sha256": "ae57f525012daa31773416df180177c05047ee71dd1b6f7d8cf3ffb366020a39"
+      },
+      {
+        "path": "endpoint-custom-results/metrics.csv",
+        "bytes": 124789,
+        "sha256": "f6beb8cadc2ab182eb0ddc155ed5cb40e83c0c761bd5fb0c466ddf57d4e0d8e7"
+      },
+      {
+        "path": "endpoint-custom-results/report.html",
+        "bytes": 52137,
+        "sha256": "508daab8b2a3d498fadc930d394ba3be5aa3951f87eff3b3789f1465d8b4652c"
+      },
+      {
+        "path": "endpoint-custom-results/request.json",
+        "bytes": 368,
+        "sha256": "6f18845d0acc35db440bea373c56db8e6f9134e2e4c149a27135d5d4165cb9ca"
+      },
+      {
+        "path": "endpoint-custom-results/result.json",
+        "bytes": 400351,
+        "sha256": "a2990992d44b558a9a4b75073e07fd4f638d4ef4bfbc4169a70f0a28d3a65da2"
+      },
+      {
+        "path": "endpoint-v3-10d.txt",
+        "bytes": 309,
+        "sha256": "a9d64d343190e74845954a3f8080b866959f08f1e771cffa985ba4d55c4ff10e"
+      },
+      {
+        "path": "endpoint-v3-fixture-600s-actual.txt",
+        "bytes": 259,
+        "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667"
+      },
+      {
+        "path": "endpoint-v3-fixture-600s.txt",
+        "bytes": 259,
+        "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667"
+      },
+      {
+        "path": "endpoint-v3-fixture-custom.txt",
+        "bytes": 260,
+        "sha256": "ce579a1c7b6d49efaaf771e0e086a96ea59eb098786848a4c4b1495ca49e8777"
+      },
+      {
+        "path": "guide-fa.pdf",
+        "bytes": 647477,
+        "sha256": "4293767162e5c3bec62d46111c7970922a7927afcc8f601e33f1006c0b484f68"
+      },
+      {
+        "path": "original-10d-blocked/SHA256SUMS.json",
+        "bytes": 629,
+        "sha256": "453f8eb8fdac140acff08d0f38c87e68d5ba064093d116f90f7dece8438a8a52"
+      },
+      {
+        "path": "original-10d-blocked/compatibility-conversion.json",
+        "bytes": 1292,
+        "sha256": "485bce5201c8dbc50ccb5100e9de3eccbea09cfe8cb0278780c1c9020eb98b76"
+      },
+      {
+        "path": "original-10d-blocked/evidence.zip",
+        "bytes": 14704,
+        "sha256": "614f5e1e749804df378e332189bcfc8ee301ed16cd26b94d7a06ca7ded9bf1a5"
+      },
+      {
+        "path": "original-10d-blocked/metrics.csv",
+        "bytes": 746,
+        "sha256": "8d7b5fb9b280a29206889ac6feae8960eb549594eaa16a0f1dbcbcbac1318e49"
+      },
+      {
+        "path": "original-10d-blocked/original-request.txt",
+        "bytes": 13522,
+        "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3"
+      },
+      {
+        "path": "original-10d-blocked/readiness.json",
+        "bytes": 6020,
+        "sha256": "b56839c700e93060d417a9e8083e2fd12b89d2b3c110794d878b998bb41149a3"
+      },
+      {
+        "path": "original-10d-blocked/report.html",
+        "bytes": 3631,
+        "sha256": "9b6ca1a923167640e7dbad765624b3189542f99f5547930d064ffedafa08674a"
+      },
+      {
+        "path": "original-10d-blocked/request.json",
+        "bytes": 459,
+        "sha256": "1a596fe82ac28ff08a9ed7dc3c88d33e638a9839d2e0581370a895f4747895ce"
+      },
+      {
+        "path": "original-10d-blocked/result.json",
+        "bytes": 8232,
+        "sha256": "790fd4da21cd7493f44e44c505b1468d10bb7d53fe822ffe938edfec0e202727"
+      },
+      {
+        "path": "parameter-results/Phorvex_Math_Lab_Results.xlsx",
+        "bytes": 1638007,
+        "sha256": "bccc685e58b5326b7349321be2372150058986bf70d0212ef10e82efc6d68692"
+      },
+      {
+        "path": "parameter-results/bot-metrics.csv",
+        "bytes": 22865,
+        "sha256": "1d2324d87482ae70dc472fa37a400b60e426653e4b5eaa1aac17d922b57ad227"
+      },
+      {
+        "path": "parameter-results/bot-report.html",
+        "bytes": 2733,
+        "sha256": "c6f96181ba710ccae3dbb2db8d7b753f171741f2ddefe8ef622b1fa7a8d8ff22"
+      },
+      {
+        "path": "parameter-results/candidate_gate_trace.csv",
+        "bytes": 7386318,
+        "sha256": "fc72dcf871351d5d45d7433d301c71142dd70fc402b0ac8f3e570c1ea79b77ff"
+      },
+      {
+        "path": "parameter-results/cost_truth.csv",
+        "bytes": 316703,
+        "sha256": "b05162916c6b811e622c5b8ff3f1d842d50073eac160f6d3293daf11b90fe65e"
+      },
+      {
+        "path": "parameter-results/decision_funnel.csv",
+        "bytes": 373314,
+        "sha256": "d719f01b7a7857ec055c29ddc8035d0f28c797843cd77bc2f20544c3c4bc1896"
+      },
+      {
+        "path": "parameter-results/evidence.zip",
+        "bytes": 1642592,
+        "sha256": "ec1e8d767d353292cf4309de960bfa81bbca9a7102d452373898b17e016b8e73"
+      },
+      {
+        "path": "parameter-results/experiment_manifest.json",
+        "bytes": 21090,
+        "sha256": "19c29378a6f42791dc3a908bf86930d3da78511c38b3e823f2a534266faaed52"
+      },
+      {
+        "path": "parameter-results/replay-summary.json",
+        "bytes": 391,
+        "sha256": "2bbec9af3f23075d9d4db7b0581bb47b22d5a87f16b04e9c42cc1117f85cce98"
+      },
+      {
+        "path": "parameter-results/report.md",
+        "bytes": 3707,
+        "sha256": "03365fba8f8fd7921e4629f7974988152f937b248d2db19e5c47056270cf936f"
+      },
+      {
+        "path": "parameter-results/request.json",
+        "bytes": 8980,
+        "sha256": "e6325ee6eabec7392b8eb1992cf05d56bfdc9a7e069e89ef6658c6a636b9b3bf"
+      },
+      {
+        "path": "parameter-results/sweep_results.csv",
+        "bytes": 46812,
+        "sha256": "22c4bd242af8cdf454e7fd6890a905d4584327858eb34670aba9c2d574face84"
+      },
+      {
+        "path": "verification/endpoint-review.json",
+        "bytes": 6644,
+        "sha256": "640fd3bc548cb9e1dd3c6b5c080bafdb6ccbe28dbf123cb0cd5aa335aad395a1"
+      },
+      {
+        "path": "verification/main-handover-review.md",
+        "bytes": 4843,
+        "sha256": "24d53bb3630088a07f0e4801da8695463df9f10840d62cfbc447de524b3ed871"
+      },
+      {
+        "path": "verification/parameter-and-original-review.json",
+        "bytes": 5862,
+        "sha256": "482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907"
+      },
+      {
+        "path": "verification/request-provenance-review.json",
+        "bytes": 790,
+        "sha256": "d3042c517073b422754d77552510c6027c29360fb492db3700f8370a9c9064e8"
+      }
+    ],
+    "main": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+    "limits": [
+      "Original10d remains BLOCKED; no missing history fabricated.",
+      "Fixture costs are offline forecasts with explicit priors, not actual charges/security effects.",
+      "Actual main/configuration handover passed; no claim of808brainimage or universal future readiness.",
+      "Separate historical Release prepared-batch failure is retained; no image publication inferred."
+    ]
+  },
+  "reconstruction": "Raw reports and requests unchanged from retained initial/fixture archives; guide/templates reviewed runtime. Only delivery summary/manifest and actual main handover proof updated after external merge. Previous delivered package retained with before-main suffix."
+}

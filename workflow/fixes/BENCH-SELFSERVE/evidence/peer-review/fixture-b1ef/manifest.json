@@ -1,0 +1,105 @@
+{
+  "schema": "phorvex-peer-evidence-bundle.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:48:13.987772+00:00",
+  "verdict": "PASS_CURRENT_FIXTURE_READY64_PREREQUISITE",
+  "artifacts": [
+    {
+      "path": "poll-readonly.py",
+      "bytes": 1366,
+      "sha256": "6ce2851db3c2aa29965d3a6c3b7e5db018782a55b84ae54f8a2940840cfd08ec"
+    },
+    {
+      "path": "history-readonly.py",
+      "bytes": 2810,
+      "sha256": "59d8d76bc19b2e02d4f025b696ae78f855788522ae3ad604dd32d6ae0b53ff6f"
+    },
+    {
+      "path": "verify-ready-readonly.py",
+      "bytes": 7962,
+      "sha256": "845a37dea1f9d4e2791ce0f254aaac71e8d5a653ff6f101fb84efd894df7f81f"
+    },
+    {
+      "path": "history-01.json",
+      "bytes": 2132,
+      "sha256": "d049cf826422c1935a6fd0179f5eaa17da0243a8d7d41af0dd1f9b421c11dd27"
+    },
+    {
+      "path": "history-01-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "ready64-verification.json",
+      "bytes": 32335,
+      "sha256": "3ecae52a96b331981a5b1fcbab9e2889090f0e7adaed17a9f0d7e1709bfec1d8"
+    },
+    {
+      "path": "ready64-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-01.json",
+      "bytes": 78109,
+      "sha256": "f6d9a95b3ec3ea288a1496d9b6768183ff5ea45533a5230f12fa8e85ae7c7c12"
+    },
+    {
+      "path": "poll-01-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-02.json",
+      "bytes": 78109,
+      "sha256": "ee38e4917526ba28f0260345f87cb9bc7c2e2b8bed8a773773162ea7c235ca7f"
+    },
+    {
+      "path": "poll-02-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-03.json",
+      "bytes": 70468,
+      "sha256": "d579aaa44882a9cd79ab6bb038d902221cb978e971cccc3ab9e90721fa8e62c1"
+    },
+    {
+      "path": "poll-03-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-04.json",
+      "bytes": 64598,
+      "sha256": "25e012dc0b02b09635ad7f06bc63bf9bac98e813ea1e704c004b0bd7d3316c44"
+    },
+    {
+      "path": "poll-04-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-05.json",
+      "bytes": 64598,
+      "sha256": "cd6e775ec02cbf61862aa3605e7496396bcc5c4d1eeaf6c3c54ddf9f76e62665"
+    },
+    {
+      "path": "poll-05-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "poll-06.json",
+      "bytes": 85650,
+      "sha256": "bcfee475e622b510387ff0202b97e1b11d1c7d3d3e96cd174eb48bb048808a96"
+    },
+    {
+      "path": "poll-06-stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "Read-only native B1 fixture readiness/history observation and independent all64 as-of verification; no job dispatch or source/service mutation.",
+  "boundary": "Paired endpoint result and final campaign cleanup remain separate obligations."
+}

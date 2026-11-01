@@ -1,0 +1,165 @@
+{
+  "schema": "phorvex-bench.evidence-commit-provenance.v1",
+  "observed_at": "2026-11-01T21:29:36.071341+00:00",
+  "commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "workflow_state": "IN_PR",
+  "revision": 30,
+  "implementation": {
+    "branch": "fix/benchmark-selfserve",
+    "base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+    "stacked_on": []
+  },
+  "pull_request": {
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "reviewed_head": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+    "merge_sha": null,
+    "checks": "PASS",
+    "patch_equivalence": "pending"
+  },
+  "current_check_artifact_hashes": [
+    {
+      "name": "decision",
+      "result": "PASS",
+      "source_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+      "artifact": "03-decision.md",
+      "expected_sha256": "db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c",
+      "actual_sha256": "db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c",
+      "matches": true
+    },
+    {
+      "name": "red",
+      "result": "PASS",
+      "source_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+      "artifact": "evidence/baseline-red.md",
+      "expected_sha256": "a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3",
+      "actual_sha256": "a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3",
+      "matches": true
+    },
+    {
+      "name": "base_review",
+      "result": "PASS",
+      "source_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "artifact": "evidence/upstream-be676/base-review.md",
+      "expected_sha256": "a2e4c7bdd5a13bc3ded53e369356532d743bc5dc10c25d77a768ebca7faee0d0",
+      "actual_sha256": "a2e4c7bdd5a13bc3ded53e369356532d743bc5dc10c25d77a768ebca7faee0d0",
+      "matches": true
+    },
+    {
+      "name": "preflight",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/upstream-be676/preflight/receipt.json",
+      "expected_sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3",
+      "actual_sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3",
+      "matches": true
+    },
+    {
+      "name": "implementation",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "04-diff.patch",
+      "expected_sha256": "46724a4b57658efee5cbfe1169eddffe7339068ef4bc69a05766ad5bf8b53af2",
+      "actual_sha256": "46724a4b57658efee5cbfe1169eddffe7339068ef4bc69a05766ad5bf8b53af2",
+      "matches": true
+    },
+    {
+      "name": "l0",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/upstream-be676/preflight/receipt.json",
+      "expected_sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3",
+      "actual_sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3",
+      "matches": true
+    },
+    {
+      "name": "l1",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/upstream-be676/l1.txt",
+      "expected_sha256": "02065d9fa05fa94f90e3b9fafa6fbdac2a52af061596f889705fb86914db8b01",
+      "actual_sha256": "02065d9fa05fa94f90e3b9fafa6fbdac2a52af061596f889705fb86914db8b01",
+      "matches": true
+    },
+    {
+      "name": "l2",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/upstream-be676/l2.txt",
+      "expected_sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa",
+      "actual_sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa",
+      "matches": true
+    },
+    {
+      "name": "positive_control",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/upstream-be676/l2.txt",
+      "expected_sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa",
+      "actual_sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa",
+      "matches": true
+    },
+    {
+      "name": "incident",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/incident.md",
+      "expected_sha256": "f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a",
+      "actual_sha256": "f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a",
+      "matches": true
+    },
+    {
+      "name": "p3",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "artifact": "evidence/p3/verdict.md",
+      "expected_sha256": "e31b15c828bdff2b31be92bf45b61f0817a522069a886f55e952daee6a17cb73",
+      "actual_sha256": "e31b15c828bdff2b31be92bf45b61f0817a522069a886f55e952daee6a17cb73",
+      "matches": true
+    }
+  ],
+  "committed_ci_manifest_sha256": "c3d3173da95337dbfa5d6410eb1c252a0b0a6eaa24e9ffb44a4331d4a17f719f",
+  "committed_ci_files_verified": [
+    "actual-checkout.excerpt.log",
+    "actual-checkout.provenance.json",
+    "final-source-jobs.json",
+    "findings.json",
+    "go-envtest-m168.excerpt.log",
+    "go-envtest-m168.provenance.json",
+    "go-unit-servicerelease.excerpt.log",
+    "go-unit-servicerelease.provenance.json",
+    "initial-source-jobs.json",
+    "initial-status.json",
+    "latest-status.json",
+    "merge-ref-source.json",
+    "source-validation-checkout.excerpt.log",
+    "source-validation-checkout.provenance.json",
+    "status-transitions.json"
+  ],
+  "recorded_ci_source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "recorded_ci_result": "SUCCESS",
+  "recorded_ci_checks": {
+    "total": 16,
+    "success": 16,
+    "failure": 0,
+    "pending": 0
+  },
+  "live_verification": {
+    "required": [
+      "L0",
+      "L1",
+      "L2",
+      "L3"
+    ],
+    "live_required": true,
+    "soak_required": false,
+    "p3": "PASS",
+    "l0": "PASS",
+    "l1": "PASS",
+    "l2": "PASS",
+    "l3": "pending",
+    "l4": "pending",
+    "positive_control": "PASS"
+  },
+  "interpretation": "Current workflow approvals and source checks remain explicitly pinned to287fd.688 adds their exact evidence bytes; equal non-workflow trees extend content equivalence only. New688 CI and live acceptance remain independent."
+}

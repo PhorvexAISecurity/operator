@@ -1,0 +1,246 @@
+{
+  "at": "2026-11-01T20:50:16.537720+00:00",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "state": "INSTALLED_PENDING_LIVE_ACCEPTANCE",
+  "stage_before": {
+    "brain": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+      "digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "container": "brain",
+      "pods": [
+        {
+          "name": "staging-brain-bcdbb8659-6xrzw",
+          "uid": "0d715b88-16d9-42fd-b830-f83de2741e86"
+        }
+      ],
+      "embedded_version": {
+        "service": "brain",
+        "version": "0.10.0",
+        "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+      }
+    },
+    "manager": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+      "digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "image_digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+      "deployment": "staging-phorvex",
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "container": "manager",
+      "pods": [
+        {
+          "name": "staging-phorvex-78765c65cc-f2nj6",
+          "uid": "0a2ba0d7-a337-46bb-9b1c-2314c63dc9b3"
+        }
+      ],
+      "embedded_version": {
+        "service": "manager",
+        "version": "0.16.0",
+        "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+      }
+    },
+    "capture": {
+      "enabled": true,
+      "policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "directory": "/var/lib/phorvex/math-lab",
+      "persistent_claim": "staging-brain-mathlab",
+      "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "cost_evidence": true
+    },
+    "policies": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "workload_generation": 3,
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140"
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "generation": 1,
+        "mode": "dryRun",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "stage-bench-api"
+          }
+        },
+        "workload_name": "stage-bench-api",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "workload_generation": 1,
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+      }
+    }
+  },
+  "units_before": {
+    "phorvex-stage-reconcile.service": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "UnitFileState": "static"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1465133",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1465130",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+      "ActiveState": "failed",
+      "SubState": "failed",
+      "UnitFileState": "static"
+    }
+  },
+  "protected_before": {
+    "/home/hami/phorvex-benchmark/config/bot.env": "fb8ffda397d37c8807989a7ab38bf2b3b3c52728e1237bb3a00fc1cc9ff55d36",
+    "/home/hami/phorvex-benchmark/bot/owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+    "/home/hami/phorvex-benchmark/bot/members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81",
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11",
+    "/home/hami/phorvex-benchmark/operator-refactored/.git/config": "3ea0c65e774a30545a2716e0e88c2a1488fc0ba7c1b7ec03bda10f2a06c092ba"
+  },
+  "unrelated_before": {
+    "phorvex-benchmark-api.service": {
+      "MainPID": "3936630",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/api",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-proxy.service": {
+      "MainPID": "3936645",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/config",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-web.service": {
+      "MainPID": "3936644",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/web",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    }
+  },
+  "checkout_before": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "current_link_before": "/home/hami/phorvex-benchmark/releases/20261028-header-reader-54417066",
+  "idle_before": {
+    "pending": 0,
+    "terminal_records": 66
+  },
+  "observer_continuity": "Owned observer restart closes the old segment. All journals retained; qualify fresh continuous history after restart.",
+  "proposed_unit_hashes": {
+    "phorvex-stage-reconcile.service": "3b02eaacf9561b3e293f4b7eceffd1529167f028a22eca924c4b332627adfc3f",
+    "phorvex-stage-reconcile.timer": "61a408ab2e4a0a1827bc55dfd8a0ea54754a249afad2e7e36f65843c430074c1",
+    "phorvex-stage-endpoint-refresh.timer": "f128a13ebf3160841a2a937194c2c4228760ec8774f9b1cd594bf0be0e3f9ab2",
+    "phorvex-benchmark-bot.service": "0516247f8386fe05626e46331e7ccf5d8340f4719412f9c02accef9f9fea1ce2",
+    "phorvex-stage-observer.service": "c1e24d6395910ef0163f83ed97cc8132b9f9a5bc38c3cd44156d6a6d1a7df107",
+    "phorvex-stage-endpoint-refresh.service": "7d9888b0d7d800d1a0bba2bc3e61d31da4578e310235c5167f4d7d0b1cf73929"
+  },
+  "idle_before_stop": {
+    "pending": 0,
+    "terminal_records": 66
+  },
+  "idle_after_stop": {
+    "pending": 0,
+    "terminal_records": 66
+  },
+  "observer_stopped_at": "2026-11-01T20:50:33.308509+00:00",
+  "units_after": {
+    "phorvex-stage-reconcile.service": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "UnitFileState": "static"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1648554",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1648552",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "failed",
+      "SubState": "failed",
+      "UnitFileState": "static"
+    }
+  },
+  "protected_after": {
+    "/home/hami/phorvex-benchmark/config/bot.env": "fb8ffda397d37c8807989a7ab38bf2b3b3c52728e1237bb3a00fc1cc9ff55d36",
+    "/home/hami/phorvex-benchmark/bot/owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+    "/home/hami/phorvex-benchmark/bot/members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81",
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11",
+    "/home/hami/phorvex-benchmark/operator-refactored/.git/config": "3ea0c65e774a30545a2716e0e88c2a1488fc0ba7c1b7ec03bda10f2a06c092ba"
+  },
+  "finished_at": "2026-11-01T20:50:52.929035+00:00"
+}

@@ -1,0 +1,7 @@
+pull_request:
+  merge_sha: 808079a03728b3ac5f449ba268bb91b20e95c93d
+next_action:
+  owner: live_verifier
+  action: Finish guarded current-main configuration handover after observed external
+    owner merge; keep actual B1 image and225 runtime identities distinct and original10d
+    unavailable.

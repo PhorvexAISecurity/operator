@@ -1,0 +1,98 @@
+{
+  "schema": "phorvex-bench.metadata-fix-review.v1",
+  "observed_at": "2026-11-01T21:37:28.847123+00:00",
+  "verdict": "PASS",
+  "baseline_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "schema_path": "workflow/schemas/evidence-manifest.schema.json",
+  "schema_sha256": "b297d7816d2c960a00ee15bf5d43e03fc9c0cfbf62958a5c19390ad6d842c8a5",
+  "schema_validation": "PASS using actual validator and format checker",
+  "scope": "Exactly one manifest plus five immutable retained copies; other working-tree metadata is outside this review and must not be included in the six-file commit.",
+  "files": [
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml",
+      "bytes": 3532,
+      "sha256": "324ab641c98a244e9ea1da5f92f3a8c1305606d0b37c8073880fc561b5fb46b6"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-artifacts.tar.gz",
+      "bytes": 53615,
+      "sha256": "95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-collection-verdict.json",
+      "bytes": 825,
+      "sha256": "afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/capture-during-initial-225877.json",
+      "bytes": 18466,
+      "sha256": "d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/runtime-install-receipt-225877.json",
+      "bytes": 10178,
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/manifest.json",
+      "bytes": 2194,
+      "sha256": "a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8"
+    }
+  ],
+  "copies": [
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-artifacts.tar.gz",
+      "bytes": 53615,
+      "sha256": "95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539",
+      "id": "round4-retained-1-95c96a874646",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz",
+      "original_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+      "original_bytes_unchanged": true,
+      "declared_created_at_semantics": "index/copy time, not original execution time"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/bot-initial-225877-collection-verdict.json",
+      "bytes": 825,
+      "sha256": "afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53",
+      "id": "round4-retained-2-afc75b6d92a8",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json",
+      "original_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+      "original_bytes_unchanged": true,
+      "declared_created_at_semantics": "index/copy time, not original execution time"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/capture-during-initial-225877.json",
+      "bytes": 18466,
+      "sha256": "d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89",
+      "id": "round4-retained-3-d5e8baac237a",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json",
+      "original_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+      "original_bytes_unchanged": true,
+      "declared_created_at_semantics": "index/copy time, not original execution time"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/runtime-install-receipt-225877.json",
+      "bytes": 10178,
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15",
+      "id": "round4-retained-4-fdd4698ba485",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json",
+      "original_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+      "original_bytes_unchanged": true,
+      "declared_created_at_semantics": "index/copy time, not original execution time"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/references/manifest.json",
+      "bytes": 2194,
+      "sha256": "a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8",
+      "id": "round4-retained-5-a0854d1db4b3",
+      "original_path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json",
+      "original_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+      "original_bytes_unchanged": true,
+      "declared_created_at_semantics": "index/copy time, not original execution time"
+    }
+  ],
+  "all_five_originals_equal_committed688_bytes": true,
+  "product_worktree_changes": [],
+  "semantics": "Indexed created_at is explicitly a retained-copy indexing time. Original source/execution/outcome stays in unchanged artifact bytes; historical failed acceptance is not relabelled.",
+  "limits": "Independent narrow schema/path/hash/byte-copy review. No source or live changes or test/workflow rerun by reviewer; current688 harness remains FAILED until new repaired source is actually checked."
+}

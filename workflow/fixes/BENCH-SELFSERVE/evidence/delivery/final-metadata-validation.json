@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-01T22:33:11.667877+00:00",
+  "result": "PASS",
+  "checks": [
+    {
+      "command": [
+        "/workspace/.phorvex-workflow-venv/bin/python",
+        "workflow/tools/check_private_settings.py"
+      ],
+      "output": "",
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "/workspace/.phorvex-workflow-venv/bin/python",
+        "workflow/tools/workflow.py",
+        "sync-index",
+        "--check"
+      ],
+      "output": "fix index: PASS",
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "/workspace/.phorvex-workflow-venv/bin/python",
+        "workflow/tools/workflow.py",
+        "render-issues",
+        "--check"
+      ],
+      "output": "issues render: PASS",
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "/workspace/.phorvex-workflow-venv/bin/python",
+        "workflow/tools/workflow.py",
+        "doctor"
+      ],
+      "exit_code": 0,
+      "log": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/final-metadata-doctor.log",
+      "sha256": "1ecc632b9025156353027b390da2e5614a9ec5215220c4d629a072737bb85d93"
+    }
+  ],
+  "scope": "Workflow/evidence metadata only; actual source/CI/live proofs remain independently retained."
+}

@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/review-artifacts.py", line 134, in <module>
+    assert sha((json.dumps(traces[0],sort_keys=True,separators=(',',':'))+'\n').encode())==ready['trace_sha256']
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

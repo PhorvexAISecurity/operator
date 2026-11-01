@@ -1,0 +1,141 @@
+{
+  "verdict": "PASS_INITIAL_BOT_PARAMETER_REPLAY_AND_TRUTHFUL_ORIGINAL_REFUSAL",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:39:23.460801+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "captured_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "captured_image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "native_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+  "archive_sha256": "246dc36f3bdff698d9916e836e61dcdd165e2881e252b6738fd7cd92129839e1",
+  "artifact_manifest_sha256": "668ae0b16013429a819b1785f9ad0b10612397c63df748703f9eed24da151fbf",
+  "retained_files_verified": 120,
+  "raw_snapshots": 64,
+  "replay_rows": 256,
+  "arm_values": {
+    "control": 1.2,
+    "v1.0": 1.0,
+    "v1.2": 1.2,
+    "v1.5": 1.5
+  },
+  "exact_control_reproductions": 64,
+  "all_arm_rows_OK_and_same_source": true,
+  "changed_decisions": 0,
+  "all_decisions_noop_reason": "REACTIVE_ONLY_NOT_ATTACK_BACKED",
+  "csv_raw_detail_rows_verified": {
+    "candidate_gate_trace.csv": 18432,
+    "decision_funnel.csv": 768,
+    "cost_truth.csv": 768,
+    "candidates.csv": 768
+  },
+  "metric_rows_verified": 131,
+  "xlsx_rows_verified_against_csv": {
+    "Metrics": 131,
+    "Candidates": 768,
+    "Decisions": 768,
+    "Costs": 768,
+    "Gates": 18432
+  },
+  "experiment_zip_members_byte_exact": true,
+  "original_request_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+  "original_required_windows": {
+    "budget_seconds": 864000,
+    "burn_seconds": 86400
+  },
+  "original_refusal_codes": [
+    "MOVE_ATTRIBUTION_UNAVAILABLE",
+    "ENDPOINT_DATASET_UNAVAILABLE"
+  ],
+  "original_model_test_build_replay_activity": false,
+  "original_unknown_outcomes_remain_null": true,
+  "restoration": "PASS",
+  "protected_files_and_observer_unchanged": true,
+  "outbound_messages": 29,
+  "outbound_documents": [
+    {
+      "name": "validation-0662d4282241.json",
+      "bytes": 8877,
+      "sha256": "e809355ab593e28764c2cd7bbcbdcec6d2985b385f6d313f05618b23f1ee6a4e",
+      "verified_by": "byte_exact_reconstruction_from_retained_prequeue_validation_or_batch"
+    },
+    {
+      "name": "blocked-52c619e5c9d8-report.html",
+      "bytes": 3631,
+      "sha256": "9b6ca1a923167640e7dbad765624b3189542f99f5547930d064ffedafa08674a",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "blocked-52c619e5c9d8-result.json",
+      "bytes": 8232,
+      "sha256": "790fd4da21cd7493f44e44c505b1468d10bb7d53fe822ffe938edfec0e202727",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "blocked-52c619e5c9d8-metrics.csv",
+      "bytes": 746,
+      "sha256": "8d7b5fb9b280a29206889ac6feae8960eb549594eaa16a0f1dbcbcbac1318e49",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "blocked-52c619e5c9d8-evidence.zip",
+      "bytes": 14704,
+      "sha256": "614f5e1e749804df378e332189bcfc8ee301ed16cd26b94d7a06ca7ded9bf1a5",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "batch-ce9e3ee08a1c.json",
+      "bytes": 1023,
+      "sha256": "e05e234c9a6ac12d95a731331a574a91e5ca83c8e1dfecb722036535de27ea83",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "batch-ce9e3ee08a1c.csv",
+      "bytes": 80,
+      "sha256": "08f8d92c861717b9b2f51559e82adfd2ca9ff749d4a8b47f3110ecdef0a7ca99",
+      "verified_by": "byte_exact_reconstruction_from_retained_prequeue_validation_or_batch"
+    },
+    {
+      "name": "validation-4a4cf6a10529.json",
+      "bytes": 5255,
+      "sha256": "99494cf8b3d646e804c3cbac776072e1cf585d6e3c8f6959f5e84e962aa84818",
+      "verified_by": "byte_exact_reconstruction_from_retained_prequeue_validation_or_batch"
+    },
+    {
+      "name": "report-18e300921b28.html",
+      "bytes": 2733,
+      "sha256": "c6f96181ba710ccae3dbb2db8d7b753f171741f2ddefe8ef622b1fa7a8d8ff22",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "metrics-18e300921b28.csv",
+      "bytes": 22865,
+      "sha256": "1d2324d87482ae70dc472fa37a400b60e426653e4b5eaa1aac17d922b57ad227",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "math-lab-report-18e300921b28.md",
+      "bytes": 3707,
+      "sha256": "03365fba8f8fd7921e4629f7974988152f937b248d2db19e5c47056270cf936f",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "batch-518953591ee8.json",
+      "bytes": 367,
+      "sha256": "531dd30d6c3d13e2d1f63c3170080bd3819980fbd930a397a5cd393197256137",
+      "verified_by": "retained_raw_file"
+    },
+    {
+      "name": "batch-518953591ee8.csv",
+      "bytes": 74,
+      "sha256": "7caafac0c5ff5c704d0ab605e14a8e7133811f9fa8a622f62035b87443123de7",
+      "verified_by": "byte_exact_reconstruction_from_retained_prequeue_validation_or_batch"
+    }
+  ],
+  "limits": [
+    "Operator-supplied document bytes entered actual receive_document, parser, queue, readiness, replay and report. No incoming Telegram update is claimed; outbound receipts are real.",
+    "Nine actual document payloads match retained raw files; two validation JSON and two batch CSV payloads are byte-exact reconstructions matching actual delivery hashes.",
+    "Parameter XLSX and full experiment ZIP were generated and independently verified, but were not selected by existing run_param Telegram delivery. Do not claim these two files were delivered.",
+    "All arms produced no selected moves in a non-attack cohort. This demonstrates pipeline/override/fidelity, not defense efficacy or causal SLO benefit; ticks need not be independent.",
+    "Original10d remains BLOCKED, with W864000 and L86400 unchanged. Short fixture endpoint coverage and paired endpoint results are still separate pending acceptance.",
+    "This is historical actual-run verification, not a new current cluster readiness assertion; no live mutation or new replay was performed."
+  ]
+}

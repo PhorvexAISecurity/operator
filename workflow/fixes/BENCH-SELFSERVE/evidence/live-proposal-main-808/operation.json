@@ -1,0 +1,21 @@
+{
+  "kind": "ApplicationSet",
+  "namespace": "argocd",
+  "name": "phorvex-services",
+  "expected_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "test_fresh_resourceVersion": true,
+  "expected_existing_templatePatch": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 287fd2e4cd97c1ef8a0475b16316b04c6938b518\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 287fd2e4cd97c1ef8a0475b16316b04c6938b518\n{{- end }}",
+  "operation": "replace only two owned targetRevision refs with main",
+  "value": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: main\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: main\n{{- end }}",
+  "chart_source": "main",
+  "values_source": "main",
+  "values_reviewed_at": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "prune": false,
+  "temporary_source_pin": false,
+  "owner": "bench-v3-lead",
+  "reason": "External owner merge PR19822:01:01Z; full tree matches reviewed/tested64d2. Retain external conditional structure and closed-family/currentB1images; remove only our temporary source pins.",
+  "prior_templatePatch_sha256": "bf3a66c31a2468fad2a2afea721ca3a3970281b075be770eb855583e22df256b",
+  "target_templatePatch_sha256": "f75b4b057b322ebe45e113600203e7dc14c9f1d0fbff5f44e78090de887fa854",
+  "authorization_ref": "fixes/BENCH-SELFSERVE/AUTHORIZATION.md",
+  "abort_on_main_change": true
+}
