@@ -211,7 +211,7 @@ func (r AttackCatalogResult) releaseEvidenceRequirements() error {
 	}
 	if r.Signal.CreatedAt == nil || r.Signal.ObservedAt == nil || r.Decision.ObservedAt == nil ||
 		r.Actuator.AcceptedAt == nil || r.PhysicalValidation.ObservedAt == nil || r.Cleanup.CompletedAt == nil ||
-		r.Signal.CreatedAt.Before(r.StartedAt) ||
+		!attackCatalogSignalCreationTimeValid(*r.Signal.CreatedAt, r.StartedAt) ||
 		r.Signal.ObservedAt.Before(*r.Signal.CreatedAt) || r.Decision.ObservedAt.Before(*r.Signal.ObservedAt) ||
 		r.Actuator.AcceptedAt.Before(*r.Decision.ObservedAt) || r.PhysicalValidation.ObservedAt.Before(*r.Actuator.AcceptedAt) ||
 		r.Cleanup.CompletedAt.Before(*r.PhysicalValidation.ObservedAt) {
@@ -248,6 +248,14 @@ func (r AttackCatalogResult) releaseEvidenceRequirements() error {
 		return errors.New("postflight typed inventory is incomplete or rebound")
 	}
 	return nil
+}
+
+// Kubernetes creationTimestamp is serialized at whole-second precision while
+// the Console run start retains nanoseconds. A signal launched during the run
+// can therefore appear fractionally older than StartedAt. Accept only the same
+// UTC second (or later); an object from any earlier second remains stale.
+func attackCatalogSignalCreationTimeValid(createdAt, startedAt time.Time) bool {
+	return !createdAt.Before(startedAt.Truncate(time.Second))
 }
 
 func (r AttackCatalogResult) identityDefendedRequirements() error {
