@@ -716,6 +716,78 @@ func (k *kubernetesK8sCatalogueCluster) Cleanup(ctx context.Context, entry attac
 	return result
 }
 
+// ReconcileRetrySafety is deliberately read-only. It proves that the prior
+// run's exact SecurityEvent and family artifacts are absent, that quarantine
+// ledgers are globally empty, and that the fixed workload is healthy enough for
+// another run. It does not repair anything and cannot upgrade the old verdict.
+func (k *kubernetesK8sCatalogueCluster) ReconcileRetrySafety(ctx context.Context, entry attackcatalog.Entry, profile k8sCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if err := validateK8sCatalogueBinding(entry, profile); err != nil || k == nil || profile.Key != k.profile.Key ||
+		persisted.CatalogueID != entry.ID || persisted.Family != profile.Family || persisted.RunID == "" ||
+		persisted.Signal.Name == "" || persisted.Signal.TargetUID == "" {
+		return safety, errors.New("Kubernetes catalogue retry reconciliation identity is incomplete")
+	}
+	var physical k8sCataloguePhysicalEvidence
+	if err := decodeStrictK8sCatalogueEvidence(persisted.PhysicalValidation.Evidence, &physical); err != nil {
+		return safety, fmt.Errorf("Kubernetes catalogue retry physical evidence: %w", err)
+	}
+	if physical.Schema != k8sCataloguePhysicalSchema || physical.CatalogueID != entry.ID || physical.Profile != profile.Key ||
+		physical.Family != profile.Family || physical.Lane != profile.Lane || physical.Namespace != profile.Namespace ||
+		physical.TargetName == "" || physical.TargetUID == "" || physical.TargetUID != persisted.Signal.TargetUID ||
+		physical.PolicyName != profile.PolicyName || physical.PolicyUID == "" || physical.DeploymentUID == "" || physical.ServiceUID == "" {
+		return safety, errors.New("Kubernetes catalogue retry physical identity differs from the fixed profile")
+	}
+	if _, err := k.dynamic.Resource(k8sCatalogueSecurityEventGVR).Get(ctx, persisted.Signal.Name, metav1.GetOptions{}); err == nil {
+		safety.Reason = "run-owned SecurityEvent is still present"
+		return safety, nil
+	} else if !apierrors.IsNotFound(err) {
+		return safety, errors.New("run-owned SecurityEvent absence is unverified")
+	}
+
+	// Preflight is itself read-only. In addition to workload and policy health it
+	// proves that quarantine capacity ledgers contain zero records.
+	fresh, err := k.Preflight(ctx, entry, profile)
+	if err != nil {
+		safety.Reason = "fixed Kubernetes fixture is not clean: " + err.Error()
+		return safety, nil
+	}
+	if fresh.ExecutionMode != AttackCatalogExecutionActive || !fresh.ReactiveOnly {
+		safety.Reason = "fixed Kubernetes fixture is not active reactive"
+		return safety, nil
+	}
+
+	prior := fresh
+	prior.Target = k8sCataloguePodIdentity{Name: physical.TargetName, UID: physical.TargetUID}
+	prior.NetworkPolicyName = k8sQuarantineNetworkPolicyName(physical.TargetUID)
+	if profile.Family == k8sCatalogueFamilyQuarantine {
+		if physical.NetworkPolicyName != prior.NetworkPolicyName {
+			return safety, errors.New("Kubernetes catalogue retry NetworkPolicy identity differs from the exact target")
+		}
+		pod, podErr := k.kube.CoreV1().Pods(profile.Namespace).Get(ctx, physical.TargetName, metav1.GetOptions{})
+		if podErr != nil && !apierrors.IsNotFound(podErr) {
+			return safety, errors.New("prior quarantine target absence is unverified")
+		}
+		if podErr == nil && string(pod.UID) == physical.TargetUID && (pod.DeletionTimestamp != nil ||
+			pod.Labels["phorvex.ai/quarantined"] != "" || pod.Annotations["phorvex.ai/quarantine-snapshot"] != "" || noControllerOwner(pod.OwnerReferences)) {
+			safety.Reason = "prior target still carries a quarantine mutation"
+			return safety, nil
+		}
+		if _, npErr := k.kube.NetworkingV1().NetworkPolicies(profile.Namespace).Get(ctx, prior.NetworkPolicyName, metav1.GetOptions{}); npErr == nil {
+			safety.Reason = "prior target quarantine NetworkPolicy is still present"
+			return safety, nil
+		} else if !apierrors.IsNotFound(npErr) {
+			return safety, errors.New("prior quarantine NetworkPolicy absence is unverified")
+		}
+	} else if !k.rotationCleanupSafe(ctx, prior) {
+		safety.Reason = "prior target termination state remains unresolved"
+		return safety, nil
+	}
+
+	safety.Verified, safety.RetrySafe = true, true
+	safety.Reason = "prior Kubernetes catalogue identities are absent and the fixed active-reactive fixture is clean"
+	return safety, nil
+}
+
 func (k *kubernetesK8sCatalogueCluster) cleanupK8sCatalogueEvent(ctx context.Context, entry attackcatalog.Entry, fixture k8sCatalogueFixture, signal k8sCatalogueSignal, runID string) bool {
 	if signal.Name == "" {
 		return true
@@ -1045,3 +1117,4 @@ func validK8sSharedCapacityAdmissions(admissions []k8sSharedCapacityAdmission) b
 }
 
 var _ k8sCatalogueCluster = (*kubernetesK8sCatalogueCluster)(nil)
+var _ k8sCatalogueRetryVerifier = (*kubernetesK8sCatalogueCluster)(nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,6 +198,34 @@ func TestK8sCatalogueRealPreflightIsReadOnlyAndProfileBound(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestK8sCatalogueRetryReconcileIsReadOnlyAndFailsClosed(t *testing.T) {
+	f := newRealK8sCatalogueTestFixture(t, k8sCatalogueFamilyQuarantine)
+	fixture := f.preflight(t)
+	physical := k8sCatalogueTestPhysical(f.entry, f.profile, fixture, true)
+	persisted := AttackCatalogResult{CatalogueID: f.entry.ID, RunID: "cat-retry", Family: f.profile.Family,
+		Signal:             AttackCatalogSignalResult{Name: "catalog-retry-event", UID: "event-uid", TargetUID: fixture.Target.UID},
+		PhysicalValidation: physical}
+
+	safety, err := f.cluster.ReconcileRetrySafety(context.Background(), f.entry, f.profile, persisted)
+	if err != nil || !safety.Verified || !safety.RetrySafe {
+		t.Fatalf("clean fixture was not retry-safe: safety=%+v err=%v", safety, err)
+	}
+	event := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "amtd.r6security.com/v1beta1", "kind": "SecurityEvent",
+		"metadata": map[string]any{"name": persisted.Signal.Name, "uid": persisted.Signal.UID},
+	}}
+	if _, err = f.dynamic.Resource(k8sCatalogueSecurityEventGVR).Create(context.Background(), event, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	safety, err = f.cluster.ReconcileRetrySafety(context.Background(), f.entry, f.profile, persisted)
+	if err != nil || safety.RetrySafe || !strings.Contains(safety.Reason, "SecurityEvent") {
+		t.Fatalf("live run-owned event was not held unsafe: safety=%+v err=%v", safety, err)
+	}
+	if _, err = f.dynamic.Resource(k8sCatalogueSecurityEventGVR).Get(context.Background(), persisted.Signal.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("read-only reconciliation mutated the event: %v", err)
 	}
 }
 

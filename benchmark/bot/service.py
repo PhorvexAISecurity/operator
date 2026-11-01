@@ -30,7 +30,7 @@ authorization persists privately in the state directory. Secrets
 """
 import json
 import csv
-from contextlib import nullcontext
+from contextlib import nullcontext, ExitStack
 import html
 import io
 import hashlib
@@ -675,6 +675,8 @@ class BenchBot:
     def prerequisite_report(self, job, readiness, endpoint_request=None):
         root = job.dir / ('endpoint' if endpoint_request else 'preflight')
         root.mkdir(exist_ok=True)
+        if endpoint_request:
+            self.endpoint_provenance(job, root)
         (root / 'readiness.json').write_text(json.dumps(readiness, indent=2) + '\n')
         started = any(job.activity.values())
         work_note = ('Stopped during %s. Earlier work is retained in this job; token/build/replay costs are not inferred.' % job.step
@@ -689,7 +691,7 @@ class BenchBot:
             (root / 'request.json').write_text(json.dumps(endpoint_request, indent=2) + '\n')
             endpoint_study.export(root, result)
         else:
-            result = {'state': 'BLOCKED', 'requested_mode': 'SOURCE_PINNED_BRAIN_REPLAY',
+            result = {'state': 'BLOCKED', 'requested_mode': readiness.get('requested_mode', 'SOURCE_PINNED_BRAIN_REPLAY'),
                       'requested_policy': readiness['requested_policy'], 'requested_ticks': readiness['requested_ticks'],
                       'requested_sync': readiness['requested_sync'], 'readiness': readiness,
                       'both_arms_executed': None if job.activity['replay_started'] else False,
@@ -763,7 +765,33 @@ class BenchBot:
             if job.cancel.is_set():
                 raise JobError('cancelled before prerequisite checks')
             guard = stage_scope.pin_lock(self.cfg.data) if self.cfg.data and job.kind != 'batch' else nullcontext()
-            with guard:
+            with ExitStack() as leases:
+                wait_started = time.monotonic()
+                try:
+                    leases.enter_context(guard)
+                except stage_scope.StageLeaseBusy as err:
+                    if job.cancel.is_set():
+                        raise JobError('cancelled while waiting for the stage pin lease') from err
+                    # The actual acquisition timeout is already evidence. A
+                    # later successful probe cannot erase this attempt's cause.
+                    requested = request_readiness.descriptor(
+                        {'kind': job.kind, 'text': job.text}, self.cfg.policy, self.cfg.ticks)
+                    readiness = {'schema': 'phorvex-bench.request-readiness.v1', 'syntax': 'VALID',
+                        'status': 'BLOCKED', 'requested_kind': requested['kind'],
+                        'requested_policy': requested['policy'], 'requested_ticks': requested['ticks'],
+                        'requested_sync': requested['sync'], 'snapshot_count': None,
+                        'available_policies': None, 'baseline_validation': 'NOT_RUN', 'reasons': [],
+                        'phase': 'LEASE', 'lease_wait_seconds': round(time.monotonic()-wait_started, 3)}
+                    request = endpoint_study.validate(requested['request']) if job.kind == 'endpoint' else None
+                    if request:
+                        readiness.update(endpoint_study.request_context(request))
+                    elif job.kind == 'study':
+                        readiness.update(requested_mode='REFERENCE_STUDY', requested_request=requested['request'])
+                    request_readiness.reason(readiness, 'STAGE_PIN_LEASE_BUSY', str(err),
+                        'Retry this unchanged request after the current stage job or reconciliation completes.')
+                    job.step = 'stage pin lease'
+                    headline = self.prerequisite_report(job, readiness, request)
+                    return headline
                 headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch,
                             'study': self.run_study, 'endpoint': self.run_endpoint}[job.kind](job)
             if job.state == 'RUNNING':
@@ -865,12 +893,8 @@ class BenchBot:
         self.say(job.chat_id, headline)
         return headline
 
-    def run_endpoint(self, job, request=None):
-        if request is None:
-            request = endpoint_study.strict_json(job.text)
-        request = endpoint_study.validate(request)
-        root = job.dir / 'endpoint'
-        root.mkdir(exist_ok=True)
+    def endpoint_provenance(self, job, root):
+        """Keep converted source bytes with both early refusals and execution."""
         if getattr(job, 'conversion', None):
             conversion = dict(job.conversion)
             if getattr(job, 'parent', None):
@@ -883,6 +907,14 @@ class BenchBot:
                 (root / 'original-request.txt').write_text(job.original_request)
                 conversion['original_source_sha256'] = hashlib.sha256(job.original_request.encode()).hexdigest()
             (root / 'compatibility-conversion.json').write_text(json.dumps(conversion, indent=2) + '\n')
+
+    def run_endpoint(self, job, request=None):
+        if request is None:
+            request = endpoint_study.strict_json(job.text)
+        request = endpoint_study.validate(request)
+        root = job.dir / 'endpoint'
+        root.mkdir(exist_ok=True)
+        self.endpoint_provenance(job, root)
         blocked = self.check_prerequisites(job, request)
         if blocked is not None:
             return blocked

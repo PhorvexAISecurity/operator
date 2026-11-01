@@ -258,6 +258,13 @@ type k8sCatalogueCluster interface {
 	Cleanup(context.Context, attackcatalog.Entry, k8sCatalogueProfile, k8sCatalogueFixture, k8sCatalogueSignal, string, string) AttackCatalogCleanupResult
 }
 
+// k8sCatalogueRetryVerifier is the read-only cluster oracle used only to release
+// a stale single-active-run gate. It never mutates cleanup state and never
+// contributes to a DEFENDED verdict.
+type k8sCatalogueRetryVerifier interface {
+	ReconcileRetrySafety(context.Context, attackcatalog.Entry, k8sCatalogueProfile, AttackCatalogResult) (AttackCatalogRetrySafety, error)
+}
+
 type k8sCataloguePreparation struct {
 	entry      attackcatalog.Entry
 	profile    k8sCatalogueProfile
@@ -429,6 +436,29 @@ func (a *k8sAttackCatalogAdapter) Cleanup(ctx context.Context, run AttackCatalog
 		return AttackCatalogCleanupResult{Attempted: true, Reason: fmt.Sprintf("%s exact cleanup state changed", a.entry.ID)}
 	}
 	return p.cluster.Cleanup(ctx, a.entry, a.profile, p.fixture, p.signal, p.decisionID, run.RunID)
+}
+
+func (a *k8sAttackCatalogAdapter) supportsRetryReconcile() bool {
+	return a != nil && a.clusterFactory != nil && validateK8sCatalogueBinding(a.entry, a.profile) == nil
+}
+
+// ReconcileRetrySafety independently re-reads the fixed Kubernetes fixture and
+// the prior run's exact identities. A clean answer only releases the retry gate;
+// the historical verdict and evidence remain unchanged.
+func (a *k8sAttackCatalogAdapter) ReconcileRetrySafety(ctx context.Context, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if !a.supportsRetryReconcile() || persisted.CatalogueID != a.entry.ID || persisted.Family != a.profile.Family || persisted.RunID == "" {
+		return safety, errors.New("Kubernetes catalogue retry reconciliation binding is invalid")
+	}
+	cluster, err := a.clusterFactory(a.profile)
+	if err != nil {
+		return safety, err
+	}
+	verifier, ok := cluster.(k8sCatalogueRetryVerifier)
+	if !ok {
+		return safety, errors.New("Kubernetes catalogue cluster has no read-only retry verifier")
+	}
+	return verifier.ReconcileRetrySafety(ctx, a.entry, a.profile, persisted)
 }
 
 func (a *k8sAttackCatalogAdapter) ValidateDefended(result AttackCatalogResult) error {
@@ -611,4 +641,5 @@ func decodeStrictK8sCatalogueEvidence(raw json.RawMessage, into any) error {
 }
 
 var _ AttackCatalogAdapter = (*k8sAttackCatalogAdapter)(nil)
+var _ AttackCatalogRetryReconciler = (*k8sAttackCatalogAdapter)(nil)
 var _ AttackCatalogPreparation = (*k8sCataloguePreparation)(nil)
