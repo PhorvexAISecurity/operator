@@ -23,12 +23,18 @@ jobs:
     # These are isolated regression tests, not a live-cluster E2E verdict.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      GOTOOLCHAIN: local
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
           # Evidence tests resolve reviewed release commits through git history.
           fetch-depth: 0
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: build/test-harness/go.mod
+          cache-dependency-path: build/test-harness/go.sum
       - name: Provision pinned Python 3.12 (SHA256-verified, relocatable)
         run: |
           bin="$(bash tools/provision-python.sh 3.12 "$RUNNER_TEMP/python")"
