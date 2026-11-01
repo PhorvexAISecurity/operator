@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-01T00:47:06.103484+00:00",
+  "result": "PASS automaticnextgeneration",
+  "first_hash": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+  "second_hash": "aff38a220edee5dae0a70df94ca89e5969d684dc25e113d823c4e17a8ed0aab7",
+  "overlap_snapshots": 0,
+  "first_latest_tick": 1793493520.043176,
+  "second_latest_tick": 1793493845.2143216,
+  "files": [
+    {
+      "name": "trace.json",
+      "bytes": 251494,
+      "sha256": "aff38a220edee5dae0a70df94ca89e5969d684dc25e113d823c4e17a8ed0aab7"
+    },
+    {
+      "name": "manifest.json",
+      "bytes": 42548,
+      "sha256": "827b756453b1dd247e08a24e822627ec14a8141599643535d0c14f8b81887a93"
+    },
+    {
+      "name": "status.json",
+      "bytes": 16096,
+      "sha256": "99714c66778f490b2e03bc4121601c1919446f81175fddec9ce75707fb2e8f23"
+    }
+  ]
+}

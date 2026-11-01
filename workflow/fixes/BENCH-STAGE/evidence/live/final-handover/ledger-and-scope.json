@@ -1,0 +1,408 @@
+{
+  "at": "2026-11-01T01:24:53.101782+00:00",
+  "ledger_path": "/home/hami/phorvex-benchmark/stage-data/mutations.jsonl",
+  "ledger_sha256": "38b736cf3e86e1746cdffd9bfe33b5225280a243ef16f204f7322810af69673e",
+  "ledger_bytes": 4265,
+  "rows": 10,
+  "record_keys": [
+    [
+      "at",
+      "operation",
+      "sha256",
+      "state"
+    ],
+    [
+      "at",
+      "error",
+      "exit",
+      "operation",
+      "output",
+      "state"
+    ],
+    [
+      "at",
+      "operation",
+      "resources_file",
+      "state"
+    ],
+    [
+      "at",
+      "error",
+      "exit",
+      "operation",
+      "output",
+      "state"
+    ],
+    [
+      "at",
+      "chart_source",
+      "image_source",
+      "operation",
+      "patch_file",
+      "state"
+    ],
+    [
+      "at",
+      "error",
+      "exit",
+      "operation",
+      "output",
+      "state"
+    ],
+    [
+      "action",
+      "at",
+      "brain_issued",
+      "deadline_seconds",
+      "namespace",
+      "pod",
+      "pod_uid",
+      "reservation",
+      "result"
+    ],
+    [
+      "action",
+      "at",
+      "images",
+      "review_sha256",
+      "source"
+    ],
+    [
+      "action",
+      "at",
+      "brain_issued",
+      "deadline_seconds",
+      "namespace",
+      "pod",
+      "pod_uid",
+      "reservation",
+      "result",
+      "source"
+    ],
+    [
+      "action",
+      "at",
+      "receipt",
+      "round"
+    ]
+  ],
+  "actions": [
+    {
+      "at": "2026-10-31T22:37:20.480312+00:00"
+    },
+    {
+      "at": "2026-10-31T22:37:23.490355+00:00"
+    },
+    {
+      "at": "2026-10-31T22:54:04.626522+00:00"
+    },
+    {
+      "at": "2026-10-31T22:54:08.176588+00:00"
+    },
+    {
+      "at": "2026-10-31T22:54:08.177782+00:00"
+    },
+    {
+      "at": "2026-10-31T22:54:09.990206+00:00"
+    },
+    {
+      "at": "2026-10-31T23:01:56.230031+00:00",
+      "action": "controlled-stage-calibration",
+      "namespace": "phorvex-staging-demo",
+      "pod": "stage-bench-api-f9b895d7-9g4nd",
+      "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+      "result": {
+        "http_status": 200,
+        "acknowledged": true,
+        "returned_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+        "response_kind": "Pod",
+        "reason": null,
+        "resource_version": "102312682",
+        "deletion_timestamp": "2026-10-31T23:02:26Z",
+        "id": "calibration-46866ef1e9d4439ba1976903c0ec3057",
+        "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+        "operation": "uid-preconditioned-delete"
+      }
+    },
+    {
+      "at": "2026-10-31T23:48:23.431570+00:00",
+      "action": "reviewed-stage-relay-appset-patch",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "images": {
+        "brain": {
+          "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+          "digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+          "archive_sha256": "abcc1ed14a4e8a18f5ecc93a2d4c2c8c413eeea11a5246f7b40ab1b85ea34180"
+        },
+        "manager": {
+          "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+          "digest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+          "archive_sha256": "5e3a1ac1262774cf7139484a2c4a7c4cead22a94fb24e5e602c4d67fc04eac07"
+        }
+      },
+      "review_sha256": "265e952f828ff1453e7b775be63b7c19270195ebccb41403a1713c3ae6a1d3d0"
+    },
+    {
+      "at": "2026-10-31T23:57:12.675912+00:00",
+      "action": "controlled-stage-calibration",
+      "namespace": "phorvex-staging-demo",
+      "pod": "stage-bench-api-f9b895d7-tjfh6",
+      "pod_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "result": {
+        "http_status": 200,
+        "acknowledged": true,
+        "returned_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+        "response_kind": "Pod",
+        "reason": null,
+        "resource_version": "102362321",
+        "deletion_timestamp": "2026-10-31T23:57:42Z",
+        "id": "calibration-508855b5cb284d1399cf80ef35d440e7",
+        "pod_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+        "operation": "uid-preconditioned-delete"
+      }
+    },
+    {
+      "at": "2026-11-01T00:29:10.889173+00:00",
+      "action": "controlled-stage-calibration",
+      "receipt": {
+        "http_status": 200,
+        "acknowledged": true,
+        "returned_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+        "response_kind": "Pod",
+        "reason": null,
+        "resource_version": "102392682",
+        "deletion_timestamp": "2026-11-01T00:29:40Z",
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+        "operation": "uid-preconditioned-delete"
+      }
+    }
+  ],
+  "phorvexpolicy": {
+    "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "generation": 1,
+    "spec": {
+      "actions": {
+        "enabled": [
+          "rotate"
+        ]
+      },
+      "assetValue": {
+        "blastRadiusFromGraph": true,
+        "fromLabels": {
+          "data-class": {
+            "internal": "0.4",
+            "public": "0.1",
+            "restricted": "1.0"
+          }
+        },
+        "weightSecrets": "0.8"
+      },
+      "budget": {
+        "antiOverRotationWindow": "30s",
+        "maxGracePeriodSeconds": 30,
+        "maxMovesPerTick": 1,
+        "proactiveFloor": "60s",
+        "tickInterval": "5s"
+      },
+      "mode": "dryRun",
+      "objective": {
+        "costWeights": {
+          "flowDisruption": "0.6",
+          "normSparsity": "0.4"
+        },
+        "disruptionAversion": "1",
+        "lambda": "0"
+      },
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      },
+      "slo": {
+        "costCeiling": "1.2",
+        "minAvailableReplicas": 2
+      },
+      "tenant": "stage-brain-benchmark",
+      "triggers": {
+        "eventAgeHorizon": "1h",
+        "eventDriven": true,
+        "reactiveOnly": false
+      }
+    },
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-10-31T22:37:23Z",
+          "message": "policy accepted",
+          "observedGeneration": 1,
+          "reason": "Valid",
+          "status": "False",
+          "type": "ValidationError"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:24Z",
+          "message": "spec.tenant \"stage-brain-benchmark\" resolves to exactly one policy-owned economic unit",
+          "observedGeneration": 1,
+          "reason": "UniqueOwner",
+          "status": "False",
+          "type": "TenantCollision"
+        },
+        {
+          "lastTransitionTime": "2026-11-01T00:19:02Z",
+          "message": "emission count covers the full trailing window; emission is not confirmed effect",
+          "observedGeneration": 1,
+          "reason": "CompleteWindow",
+          "status": "True",
+          "type": "EmissionHistory"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "PHORVEXSEC-208 interim: no qualified exposure lacked a selected containing move this tick; not a safety claim",
+          "observedGeneration": 1,
+          "reason": "NoUncontainableDecision",
+          "status": "False",
+          "type": "ExistentialUncontainable"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "no unresolved scope in supplied outcome inventory; not a completeness or safety claim",
+          "observedGeneration": 1,
+          "reason": "NoUnresolvedScope",
+          "status": "True",
+          "type": "ExistentialScopeComplete"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "phorvex is ingesting, scoring and logging decisions",
+          "observedGeneration": 1,
+          "reason": "Ticking",
+          "status": "True",
+          "type": "Ready"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "policy dry-run mode suppresses new actuation",
+          "observedGeneration": 1,
+          "reason": "PolicyDryRun",
+          "status": "True",
+          "type": "DryRun"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "all enabled actions have matching capabilities in the selected fleet",
+          "observedGeneration": 1,
+          "reason": "AllEnabledActionsSupported",
+          "status": "True",
+          "type": "ActionsSupported"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "native=missing (native policy binding is absent); mutation prohibited by PolicyDryRun; standing route configuration only; no defense effect is claimed",
+          "observedGeneration": 1,
+          "reason": "BrakedWithDrift",
+          "status": "False",
+          "type": "StandingPolicy"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "standing actuator route prepared or observed this tick",
+          "observedGeneration": 1,
+          "reason": "Prepared",
+          "status": "True",
+          "type": "ActuationPrepared"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "PhorvexPolicy action enum observed at 2026-11-01T01:24:45Z (CRD UID 4f0ae75d-8bf9-4c96-ac0c-85e133babaee, resourceVersion 99463085); 0 known actions absent",
+          "observedGeneration": 1,
+          "reason": "SchemaObserved",
+          "status": "True",
+          "type": "PolicyActionVocabulary"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "telemetry source answering",
+          "observedGeneration": 1,
+          "reason": "Healthy",
+          "status": "False",
+          "type": "TelemetryDegraded"
+        },
+        {
+          "lastTransitionTime": "2026-10-31T22:37:25Z",
+          "message": "actuation is permitted; the dynamic sentinel is absent",
+          "observedGeneration": 1,
+          "reason": "SentinelAbsent",
+          "status": "False",
+          "type": "KillSwitch"
+        }
+      ],
+      "killSwitchEngaged": false,
+      "lastTickTime": "2026-11-01T01:24:55Z",
+      "observedGeneration": 1,
+      "selectedPods": 3,
+      "tenant": "stage-brain-benchmark"
+    }
+  },
+  "service": {
+    "uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+    "generation": null,
+    "spec": {
+      "clusterIP": "10.100.143.182",
+      "clusterIPs": [
+        "10.100.143.182"
+      ],
+      "internalTrafficPolicy": "Cluster",
+      "ipFamilies": [
+        "IPv4"
+      ],
+      "ipFamilyPolicy": "SingleStack",
+      "ports": [
+        {
+          "name": "http",
+          "port": 8080,
+          "protocol": "TCP",
+          "targetPort": "http"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "stage-bench-api"
+      },
+      "sessionAffinity": "None",
+      "type": "ClusterIP"
+    },
+    "status": {
+      "loadBalancer": {}
+    }
+  },
+  "poddisruptionbudget": {
+    "uid": "41140f0f-830c-4322-93c2-b8805889f8bf",
+    "generation": 1,
+    "spec": {
+      "minAvailable": 2,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      }
+    },
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-11-01T01:08:26Z",
+          "message": "",
+          "observedGeneration": 1,
+          "reason": "SufficientPods",
+          "status": "True",
+          "type": "DisruptionAllowed"
+        }
+      ],
+      "currentHealthy": 3,
+      "desiredHealthy": 2,
+      "disruptionsAllowed": 1,
+      "expectedPods": 3,
+      "observedGeneration": 1
+    }
+  }
+}

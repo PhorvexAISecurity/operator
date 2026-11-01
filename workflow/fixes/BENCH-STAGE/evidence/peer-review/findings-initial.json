@@ -1,0 +1,33 @@
+{
+  "schema": "phorvex-bench.independent-review-findings.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T22:56:59.568037+00:00",
+  "source_head": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc",
+  "source_state": "uncommitted integration under review; not a final source verdict",
+  "files": {
+    "phorvex/internal/cost/endpoint/run.go": "971c1f1ae11535b866f5eb7564d70a3ff732a61afb141a6d6a30c90861a1f9bf",
+    "phorvex/internal/cost/endpoint/cost.go": "caf70f0e19b4ea23fce52c4c9c626aa9245f4305ee0c047c566965fa234cc488",
+    "benchmark/stage/normalize.py": "5424394f8bb84a89d182215319f92ecc19b62a9a2a48c2bc7dfe335ddf36755f",
+    "benchmark/bot/code_experiment.py": "196fa2d9fddd02e6345bc5ac40aac075caaba0ef68654ace9cf99078ef892337",
+    "benchmark/worker/mathlab/experiment.py": "6dc240b600231e9f5195e112e69cb72c556ffa260fdf9cd57bca274213819b6b",
+    "benchmark/endpointv3/bin/endpoint-v3": "b4d6100b3238ad1f7cd141ff65237089f063c6cd015cc0be8190977dc52bc031"
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "high",
+      "status": "confirmed; repair assigned",
+      "summary": "Otherwise eligible candidates missing duration/action-specific price bounds can falsely yield COMPLETE with comparable_ticks=1 and empty missing_reasons.",
+      "controls": "price-missing-controls/{positive,censored,quarantine-cap-missing,unsupported-bound}.{trace,result}.json",
+      "expected": "Positive remains COMPLETE; unknown-price otherwise eligible population must BLOCKED/PARTIAL with exact missing reasons; known hard veto and budget refusal stay comparable."
+    },
+    {
+      "id": "R2",
+      "severity": "medium",
+      "status": "static confirmed; repair requested",
+      "summary": "Code and parameter replay guard checks depend on existence of stage.json, so a stage-tagged request whose pin disappears after freeze silently skips stage validation.",
+      "expected": "Stage provenance implies mandatory stage pin validation even when file missing; preserve generic worker compatibility only for truly non-stage requests."
+    }
+  ],
+  "scope": "Non-author source review and local synthetic executable controls only; no live verification yet."
+}

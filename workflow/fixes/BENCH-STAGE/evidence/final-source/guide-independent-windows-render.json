@@ -1,0 +1,36 @@
+{
+  "environment": {
+    "FONTCONFIG_FILE": "/workspace/.phorvex-tools/browser-libs/fonts.conf",
+    "LD_LIBRARY_PATH": "/workspace/.phorvex-tools/browser-libs/root/usr/lib/x86_64-linux-gnu:/workspace/.phorvex-tools/browser-libs/root/lib/x86_64-linux-gnu"
+  },
+  "results": [
+    {
+      "language": "en",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-en.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-en.html"
+      ],
+      "pages": 25,
+      "html_sha256": "9bfd4dd147725e1a0888024f10c781fd5a3c355167458a934dc83bea2f249e72",
+      "pdf_sha256": "a080be19b80997728b206cec427d6266d2d12ecac4d5945eec751749aec06e94"
+    },
+    {
+      "language": "fa",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-fa.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-fa.html"
+      ],
+      "pages": 24,
+      "html_sha256": "28596747b419bc49d726790ae133370c78e876b2200646dfc815b2e19059ca8d",
+      "pdf_sha256": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183"
+    }
+  ]
+}

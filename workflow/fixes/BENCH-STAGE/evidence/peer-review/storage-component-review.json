@@ -1,0 +1,48 @@
+{
+  "schema": "phorvex-bench.independent-storage-component-review.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:51:45.727503+00:00",
+  "result": "PASS_STORAGE_COMPONENT_FOR_NEW_STAGE_SEGMENT",
+  "source_manifest": "workflow/fixes/BENCH-STAGE/evidence/storage-controls/source-manifest.json",
+  "source_manifest_sha256": "f0a3834a4e24284e0728a00eb0ce7c876e47cf19ebb71049d07da34e4a79903a",
+  "sources": {
+    "benchmark/stage/README.md": "4319b7a8f549afa66727e6d319fef591b54674404762ba988868b8d0e523c26a",
+    "benchmark/stage/evidence.py": "20dafaa390ffd45bef96d6735729de3efe209e79b8693630b49361beee983008",
+    "benchmark/stage/observe.py": "1cfe6f63747468babaf054a94106aa80f5f7f489d0c9bed3b25750fd5647c747",
+    "benchmark/stage/stage-observer.service.example": "8ac8ae9afe0fb1abab4790410da7b9c2499bd82220c716770f650e9d9c44e57d",
+    "benchmark/stage/test_storage.py": "4f518591094c89f4c27fa1d4c740ed27321c55e83072accecb318fac46244099"
+  },
+  "tests": {
+    "passed": 59,
+    "skipped": 0,
+    "command": "TMPDIR=/workspace/.phorvex-test-tmp /workspace/.phorvex-workflow-venv/bin/python -m unittest benchmark.stage.test_evidence benchmark.stage.test_observe benchmark.stage.test_storage benchmark.worker.test_endpoint_refresh -v",
+    "log": "workflow/fixes/BENCH-STAGE/evidence/peer-review/storage-independent-tests.log",
+    "sha256": "33ed0932919ae708710810d1fc1980dc8dd2e06151c0781d3d61450c74a7d1cf",
+    "breakdown": {
+      "stage": 45,
+      "refresh_api": 14
+    }
+  },
+  "evidence": {
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/storage-real-backup-independent.json": "e31a87e8b19585d57d47e8d0384866106f44d75660071321528afc22489a1640",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/storage-measurement-binding.json": "b4013103dcda1ffc66cc418560c15b60306ef073024e039db59896a5ef582cf9",
+    "workflow/fixes/BENCH-STAGE/evidence/storage-controls/real-compression-control.json": "f54211ed4a730e66a0302da58ebbcab8af86bd1c6c9b4852b964a31dbb00faf8"
+  },
+  "findings": [
+    "Explicit immutable zlib-v1 encoding and actual encoded quota preserve the canonical decoded scope/event/order/time hash chain and separate verified decoded/encoded counters.",
+    "Decoder enforces hard encoded/decoded sizes, exactly one complete stream, strict UTF-8 canonical JSON and no unbounded flush; malformed/corrupt/counter mismatch cases fail closed.",
+    "Both counters and each event commit atomically; concurrent writer clocks and rollback on a failed counter update have executable controls.",
+    "Old plain journal bytes and metadata remain unchanged on open; format/capacity changes are refused, and uncached ancient journals are readable without implicit migration.",
+    "Free-space checks use the journal filesystem with the existing four-GiB reserve, bounded scans fail without completeness claims, and status reports physical DB/WAL plus labelled estimates.",
+    "Persistent service example now names a NEW compressed journal and explicitly passes --encoding zlib-v1 --max-bytes 4294967296.",
+    "Reviewer independently re-encoded all 1,079 actual historical control events, performed an SQLite backup while open, reopened and verified exact records/chain/counters, and matched every event-clock reducer state. Physical backup is 2,916,352 bytes; original evidence is unchanged."
+  ],
+  "limitations": [
+    "This verdict accepts lossless bounded storage for a newly started source-bound stage segment; it cannot connect the old control journal to a new source/session.",
+    "No actual 30-day history or continuity exists. Same-rate physical SQLite projection is about 4.106 GB plus WAL; actual host reserve/cache/generation headroom must be maintained.",
+    "At the measured rate and scan cost, a 30-day full pass projects about 18 minutes; current multi-pass refresh within its <=1,800-second total timeout does not establish original-30d operational readiness.",
+    "Actual fresh ef94 journal/capture/baseline/bot acceptance and final integrated source checks remain pending."
+  ],
+  "reviewer_live_mutations": false,
+  "overall_benchmark_delivery_accepted": false
+}

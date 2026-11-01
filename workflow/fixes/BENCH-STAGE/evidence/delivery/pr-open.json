@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T02:12:13.272848+00:00",
+  "url": "https://github.com/PhorvexSecurity/operator-refactored/pull/183",
+  "number": 183,
+  "state": "open",
+  "draft": false,
+  "head": "a2a0dcedc9aa5b7c2bd5b7e94967bc9aed4f39b0",
+  "base": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "reviewed_source": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "remote_ci": "not yet inspected",
+  "metadata_source_equivalence": "metadata-source-equivalence-a2a0.json"
+}

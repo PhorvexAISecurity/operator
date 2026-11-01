@@ -90,6 +90,19 @@ func finishExistential(d *model.ExistentialDecision, set actionset.ActionSet, ke
 // chooseRound is the production bounded-greedy comparison seam, also replayed by
 // the ruling's exact numeric counterexamples.
 func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDecision, covered, selected, attack map[string]bool, costCoefficient float64, prov func(string) float64, evaluated map[string]float64, capacity ...*resourceState) (int, float64, bool) {
+	return chooseRoundWithRule(set, states, covered, selected, attack, costCoefficient, prov, evaluated, nil, capacity...)
+}
+
+// roundRule is used only by explicit offline endpoint studies. The same
+// structural/reactive/containment/resource checks below apply to both paths.
+// A nil rule is the unchanged legacy positive-gain comparator.
+type roundRule struct {
+	admit  func(actionset.Candidate) bool
+	gain   func(actionset.Candidate, float64) float64
+	prefer func(actionset.Candidate, float64, int, float64) bool
+}
+
+func chooseRoundWithRule(set actionset.ActionSet, states map[string]*model.ExistentialDecision, covered, selected, attack map[string]bool, costCoefficient float64, prov func(string) float64, evaluated map[string]float64, rule *roundRule, capacity ...*resourceState) (int, float64, bool) {
 	bestIdx := -1
 	bestActive, bestSafe := false, false
 	bestGain, bestMarginal := 0.0, 0.0
@@ -114,6 +127,9 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		if len(c.SLOExclusions) > 0 && (!active || !states[c.Key].MayBreachSLO) {
 			continue
 		}
+		if rule != nil && !rule.admit(c) {
+			continue
+		}
 		marginal := 0.0
 		for _, k := range c.CoverKeys {
 			if !covered[k] {
@@ -122,8 +138,16 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		}
 		candidateKey := traceCandidateKey(c.Key, c.Action)
 		evaluated[candidateKey] = marginal
-		gain := marginal*prov(c.Key) - candidatePenalty(c, costCoefficient)
-		if preferExistential(active, len(c.SLOExclusions) == 0, gain, bestActive, bestSafe, bestGain, bestIdx >= 0) {
+		gain := 0.0
+		prefer := false
+		if rule == nil {
+			gain = marginal*prov(c.Key) - candidatePenalty(c, costCoefficient)
+			prefer = preferExistential(active, len(c.SLOExclusions) == 0, gain, bestActive, bestSafe, bestGain, bestIdx >= 0)
+		} else {
+			gain = rule.gain(c, marginal*prov(c.Key))
+			prefer = rule.prefer(c, gain, bestIdx, bestGain)
+		}
+		if prefer {
 			bestActive, bestSafe = active, len(c.SLOExclusions) == 0
 			bestGain = gain
 			bestIdx = i
@@ -131,7 +155,7 @@ func chooseRound(set actionset.ActionSet, states map[string]*model.ExistentialDe
 		}
 	}
 
-	if bestIdx < 0 || (!bestActive && !strictPositiveGain(bestGain)) {
+	if bestIdx < 0 || (rule == nil && !bestActive && !strictPositiveGain(bestGain)) {
 		return -1, 0, false
 	}
 	return bestIdx, bestMarginal, bestActive

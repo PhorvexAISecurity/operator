@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/phorvex/phorvex/internal/audittransport"
 	"github.com/phorvex/phorvex/internal/brainapi"
 	"github.com/phorvex/phorvex/internal/brainpb"
 	"github.com/phorvex/phorvex/internal/model"
@@ -27,6 +28,7 @@ type Server struct {
 
 	brain        brainapi.Brain
 	configSHA256 string
+	snapshots    audittransport.MathLabSnapshotSource
 	now          func() time.Time
 
 	mu         sync.Mutex
@@ -47,8 +49,12 @@ var _ brainpb.BrainServiceServer = (*Server)(nil)
 
 // NewServer serves brain. configSHA256 is this process's DecisionConfig hash; a
 // client presenting another is refused.
-func NewServer(brain brainapi.Brain, configSHA256 string) *Server {
-	return &Server{brain: brain, configSHA256: configSHA256, now: time.Now, recordings: map[string]heldRecording{}}
+func NewServer(brain brainapi.Brain, configSHA256 string, options ...ServerOption) *Server {
+	s := &Server{brain: brain, configSHA256: configSHA256, now: time.Now, recordings: map[string]heldRecording{}}
+	for _, option := range options {
+		option(s)
+	}
+	return s
 }
 
 func (s *Server) Hello(_ context.Context, req *brainpb.HelloRequest) (*brainpb.HelloResponse, error) {
@@ -66,6 +72,7 @@ func (s *Server) Hello(_ context.Context, req *brainpb.HelloRequest) (*brainpb.H
 		LearnsRotationCost:          s.brain.LearnsRotationCost(),
 		PersistenceObservations:     s.brain.PersistenceObservations(),
 		ScopedOutcomeProcessEpochId: s.brain.ScopedOutcomeProcessEpochID(),
+		SnapshotsEnabled:            s.snapshots != nil,
 	}, nil
 }
 

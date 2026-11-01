@@ -1,0 +1,11 @@
+{
+  "reviewer": "stage_review",
+  "source_sha": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "control": "Current CI recipe installed in real temporary Git repository; only benchmark/bot/service.py changed after the baseline.",
+  "changed_path": "benchmark/bot/service.py",
+  "planned_jobs": [
+    "diff"
+  ],
+  "benchmark_wrapper_scheduled": false,
+  "finding": "Local preflight chart_paths omits benchmark/, so a benchmark-only future change schedules no bot/worker/stage gating test even though remote charts executes them."
+}

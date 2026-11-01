@@ -1,0 +1,21 @@
+{
+  "private_temp": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n",
+  "inputs": [
+    {
+      "path": "phorvex/cmd/endpoint-v3/main.go",
+      "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+      "formatted_sha256": "70299a772ddd53caff1389d439996cc90102d722858a71b33cad4618a9eb0ad2",
+      "before_file": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go",
+      "formatted_file": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/after-0.go"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go",
+      "before_sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+      "formatted_sha256": "f021ae9b944f21af6174cd35b45c4e13e521587cbf13e914eb1ff8e1f1bbca8b",
+      "before_file": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-1.go",
+      "formatted_file": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/after-1.go"
+    }
+  ],
+  "grouped_product_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce",
+  "gofmt_d_exit_note": "Exact Go1.26.3 gofmt -d exits1 when a formatting diff exists; this is expected, not parser failure."
+}

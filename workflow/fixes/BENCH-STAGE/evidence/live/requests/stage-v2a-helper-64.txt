@@ -1,0 +1,25 @@
+[bench]
+policy: phorvex-staging-demo/stage-bench-defense
+ticks: 64
+sync: true
+change:
+V2-A ONLY. Implement a pure Go arithmetic helper for the experimental endpoint-second cost model and focused tests. Do not integrate it into the active Brain yet. Do not change security gain, selection, lambda, SLO admission, production configuration, or safety gates. The active 64-tick replay must remain behaviorally unchanged.
+
+Before editing, inspect only the actual relevant model/economics package and adjacent *_test.go files. Use the repository's existing module name, package names, error conventions, and Go formatting. Do not guess nonexistent APIs. The likely starting file is phorvex/internal/model/economics.go, but confirm its package and whether a small new helper file in that package is more appropriate. If these files are absent or unavailable, report the exact blocking path; do not modify unrelated files.
+
+Implement an exported or package-private function named EstimateEndpointSecondsV2 (or a conventionally named equivalent) accepting explicit k, D, delta, T_rb, H_tail, T_mid, p_f, and returning rho, C_flow, C_norm, E and error. All durations are in seconds; outputs are endpoint-seconds. Use exactly:
+rho = k*(D+delta+T_rb)+H_tail
+C_flow = k*T_mid
+C_norm = p_f*(k*(D-T_mid+delta+T_rb)+H_tail)
+E = C_flow+C_norm
+
+This helper does not derive k, duration bounds, history quantiles, censoring, or p_f. Those are later V2 tasks. Require finite nonnegative inputs, k an integer, 0<=p_f<=1, D>=T_mid, and finite nonnegative outputs. Return errors, not clamped or fabricated values. Do not change old cost behavior.
+
+Add Go unit tests:
+A: k=1 D=43 delta=30 T_rb=43 H_tail=43 T_mid=43 p_f=1 -> rho=159 C_flow=43 C_norm=116 E=159.
+B: same but p_f=0 -> rho=159 C_flow=43 C_norm=0 E=43.
+C: k=2 D=50 delta=30 T_rb=50 H_tail=100 T_mid=40 p_f=0.25 -> rho=360 C_flow=80 C_norm=70 E=150.
+D: k=0 D=43 delta=30 T_rb=43 H_tail=0 T_mid=43 p_f=1 -> all 0.
+E: negative duration, invalid p_f, NaN/Inf, or D<T_mid -> error.
+
+Scope: only one relevant Go source file and one test file, except minimal changes required to compile. Run focused Go tests, then the benchmark replay. Report actual changed paths, full diff, test results, and whether the helper was invoked by replay (expected NO). An unchanged replay is expected and is not evidence of a completed V2 implementation. If the model cannot make an executable diff, report the precise cause and stop; do not produce comment-only edits or claim V2 completed.

@@ -1,0 +1,41 @@
+{
+  "base_source": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "created_at": "2026-11-01T00:08:39.130980+00:00",
+  "scope": "R7 independent W/L guide correction and R8 source-attested benchmark-only local CI dispatch; no runtime product changes; parent-requested literal-only parameter progress label names pinned stage brain",
+  "files": {
+    "benchmark/bot/guide-en.html": {
+      "sha256": "9bfd4dd147725e1a0888024f10c781fd5a3c355167458a934dc83bea2f249e72",
+      "bytes": 200110
+    },
+    "benchmark/bot/guide-en.pdf": {
+      "sha256": "a080be19b80997728b206cec427d6266d2d12ecac4d5945eec751749aec06e94",
+      "bytes": 549299
+    },
+    "benchmark/bot/guide-fa.html": {
+      "sha256": "28596747b419bc49d726790ae133370c78e876b2200646dfc815b2e19059ca8d",
+      "bytes": 226227
+    },
+    "benchmark/bot/guide-fa.pdf": {
+      "sha256": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183",
+      "bytes": 631997
+    },
+    "workflow/tools/preflight.py": {
+      "sha256": "6ec658adf23701b810b13580024347834367c76e6faf240c65e49f2d43f04928",
+      "bytes": 24777
+    },
+    "workflow/tools/tests/test_preflight.py": {
+      "sha256": "0e43311b1985727a604bd5726bc745828ef83918f79d93814a228918b29a3bea",
+      "bytes": 25477
+    },
+    "benchmark/bot/service.py": {
+      "sha256": "a34e209d06375f735b29a55af15660d2575e76924479640fe954250b7ddf5fe2",
+      "bytes": 67261
+    }
+  },
+  "author_checks": {
+    "benchmark-path-adapter-tests.txt": "4aec4207a280f7608c132ad965680a0b1c9e308af35a880d2cba2c1eb230ba7d",
+    "guide-independent-windows-delivery-test.txt": "6474b8442d567dd75a91b5d67dcb620850837653d8744aed6cc87422f3c51b2f",
+    "guide-independent-windows-render.json": "4905e117aacbc67a3b360b8d6cc47492f9371f6646fee973dff7839a068b57e8",
+    "stage-parameter-progress-test.txt": "3077adefb79962d1b23e7f99e43c97c06153f0c582f6c76f63b118ee409506b0"
+  }
+}

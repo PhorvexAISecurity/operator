@@ -45,6 +45,7 @@ type Header struct {
 	DecidedAt             time.Time         `json:"decidedAt"`
 	GitSHA                string            `json:"gitSHA"`
 	BrainImage            string            `json:"brainImage"`
+	CaptureIdentitySource string            `json:"captureIdentitySource,omitempty"`
 	TickID                string            `json:"tickID"`
 	Tenant                string            `json:"tenant"`
 	Namespace             string            `json:"namespace"`

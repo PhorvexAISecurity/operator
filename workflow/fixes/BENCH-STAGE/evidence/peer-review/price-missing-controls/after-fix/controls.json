@@ -1,0 +1,75 @@
+{
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:01:40.429964+00:00",
+  "binary_sha256": "167f65164c59b7d697ef6906393979dad7ed78ad4563ec17e3558bd2b8cc9d20",
+  "results": [
+    {
+      "label": "positive",
+      "state": "COMPLETE",
+      "comparable_ticks": 1,
+      "missing_reasons": {},
+      "both_arms_executed": true,
+      "input_sha256": "f3b0973c7dd176b9ade0cdac762ff401e78e935426668564e84a8f1ece6a8948"
+    },
+    {
+      "label": "censored",
+      "state": "BLOCKED",
+      "comparable_ticks": 0,
+      "missing_reasons": {
+        "BOUND_MISSING: censored or invalid upper estimate": 1
+      },
+      "both_arms_executed": true,
+      "input_sha256": "f9f3f0a96468c3bbda9718b254cd3d1532a7b88630efb2fb23b3fb9e076b85fa"
+    },
+    {
+      "label": "quarantine-cap-missing",
+      "state": "BLOCKED",
+      "comparable_ticks": 0,
+      "missing_reasons": {
+        "BOUND_MISSING: quarantine hold cap or remaining budget": 1
+      },
+      "both_arms_executed": true,
+      "input_sha256": "fdfd36f0eafd1113b3aba6765c48e609b6fd86e9d3594ae1be4b8b4b8e0f1e82"
+    },
+    {
+      "label": "unsupported-bound",
+      "state": "BLOCKED",
+      "comparable_ticks": 0,
+      "missing_reasons": {
+        "BOUND_MISSING: no approved action-specific duration bound (including kv-reset)": 1
+      },
+      "both_arms_executed": true,
+      "input_sha256": "b6525c4e1baf82e03687aa533a560eab5bc2f5a1565d50100d2f30a464a81db1"
+    },
+    {
+      "label": "known-veto",
+      "state": "COMPLETE",
+      "comparable_ticks": 1,
+      "missing_reasons": {},
+      "input_sha256": "36f302ccf997d8cc17d345319e046690173ca8a868f636fcc43ccf11bf8a0559"
+    },
+    {
+      "label": "below-worth",
+      "state": "COMPLETE",
+      "comparable_ticks": 1,
+      "missing_reasons": {},
+      "input_sha256": "fb92062386970630299a069d82794470399cd5b1fdb2ecdd25ca0c166061c010"
+    },
+    {
+      "label": "known-budget",
+      "state": "COMPLETE",
+      "comparable_ticks": 1,
+      "missing_reasons": {},
+      "input_sha256": "7d05a668c24479d62e3fce7c6a1a90e6d7fd6284cbc1b4c7254a66114010a92a"
+    },
+    {
+      "label": "mixed",
+      "state": "PARTIAL",
+      "comparable_ticks": 1,
+      "missing_reasons": {
+        "BOUND_MISSING: censored or invalid upper estimate": 1
+      },
+      "input_sha256": "29f18d0d866e0ceeca6efa488eeb5d1efcf8b553fcbefb5113d480623cb77a53"
+    }
+  ]
+}

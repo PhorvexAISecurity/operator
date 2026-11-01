@@ -1,0 +1,29 @@
+{
+  "schema": "phorvex-bench.component-review.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:12:26.182781+00:00",
+  "component": "custom study settings, R1 zero-cap consistency, R2, source/image corpus qualification",
+  "result": "PASS",
+  "files_sha256": {
+    "benchmark/bot/endpoint_study.py": "36b6fd86ac6916f38d1d5e8f59bb91fdfbf73f304e32025b5d486c7bba2e3400",
+    "benchmark/worker/mathlab/stage_scope.py": "dae33e911ca12a4c83e80bb770b09b86c990e4cb7263d1a5abe93a8666b22c52",
+    "benchmark/worker/mathlab/experiment.py": "b5b32f09a128a58749975870c562ef0b9ae2be4ba3a2ca306271ef6e0706e54f",
+    "benchmark/bot/code_experiment.py": "6ad8159f499838d434939c235f9fae380587c96cfeb9774c18f6f4df3f6e5a24",
+    "benchmark/stage/normalize.py": "8590dba4fdf7118bb0b58cecf8036326f2e54e48703e2c7fb1b527daabc770ab",
+    "benchmark/stage/test_evidence.py": "85158ce74859043f366a67cc0d99e4adad08c3c5198d8cea326b68a73f179305"
+  },
+  "tests": {
+    "run": 9,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0
+  },
+  "environment": "workflow venv with pinned openpyxl3.1.5; first system-Python attempt had3 missing-dependency import errors, preserved separately",
+  "observations": [
+    "Expanded W/L requires sealed coverage and explicit full retention; 30d unavailable remains BLOCKED.",
+    "Overrides preserve grounded facts, gates and measured intervals; assumptions exported separately.",
+    "Missing stage pin and sameSHA differentimage/legacy provenance fail closed.",
+    "Zero hold cap is a known budget refusal; missing cap remains unavailable."
+  ],
+  "excluded": "Old-image remote-page starvation finding remains open; relay/producer source fixes and live claims are separately reviewed."
+}

@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 3728773,
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "started_at": "2026-10-31T23:40:04.928640+00:00",
+  "results": [
+    {
+      "name": "compose-and-verify-archives",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 60.959,
+  "step": "compose-and-verify-archives",
+  "child_pid": 3728774,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:41:05.887374+00:00"
+}

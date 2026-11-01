@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 297529,
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "started_at": "2026-10-31T23:20:07.135643+00:00",
+  "results": [
+    {
+      "name": "compile-reviewed-stage-binaries",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 610.632,
+  "step": "compile-reviewed-stage-binaries",
+  "child_pid": 297532,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:30:17.767961+00:00"
+}

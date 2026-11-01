@@ -1,0 +1,26 @@
+{
+  "schema": "phorvex-bench.component-review.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:19:20.260021+00:00",
+  "component": "local OCI composition recipe",
+  "result": "PASS_STATIC_RECIPE",
+  "file_sha256": "1b520488dad2e2375eadf113bf469bde583804300875a2f7ed2197527d405460",
+  "file": "workflow/fixes/BENCH-STAGE/evidence/compose-stage-relay-images.py",
+  "checks": [
+    "Explicit linux/amd64 immutable base; base configuration and platform digest recorded",
+    "Tar layer hash binds the build receipt",
+    "crane validate without the fast flag",
+    "Expected entrypoint, user, working directory and labels; preserved environment",
+    "Rootfs retains base diffID prefix plus exactly one appended layer",
+    "Exported filesystem hashes match all binary files in the build receipt"
+  ],
+  "external_primary_source": {
+    "url": "https://raw.githubusercontent.com/google/go-containerregistry/v0.22.1/cmd/crane/cmd/mutate.go",
+    "support": "Lines 149-163: explicit output uses local Save; Push occurs only in the else branch. This recipe does not publish."
+  },
+  "pending": [
+    "Record local image manifest digest via crane digest --tarball before publication and compare remote/runtime digests.",
+    "Actual build/OCI artifacts and final source still need independent verification."
+  ],
+  "scope": "Static review only, no image or deployment verdict."
+}

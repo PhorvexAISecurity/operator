@@ -1,0 +1,16 @@
+{
+  "reviewer": "stage_review",
+  "result": "REPRODUCED_COMMITTED_REAL_CLOCK_MISMATCH",
+  "committed_source": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+  "source_file_sha256": "f8c735a3ca619ab782089832e7482efe31f5740c52f87e8ffaf8f45dabd28b29",
+  "control_method": "The exact clock function and exception class were loaded from the committed Git object after the author fixed the shared working tree during the first replay. Export is from the actual recorded snapshot and candidate binary.",
+  "snapshot_digest": "1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+  "decided_at": "2026-10-31T23:50:13.094462223Z",
+  "old_refresh_clock_at": 1793490613,
+  "actual_export_at": 1793490613.0944622,
+  "clock_delta_seconds": 0.09446215629577637,
+  "baseline_reproduced": true,
+  "candidate_set_complete": true,
+  "actual_export_sha256": "b5c5ba55b411c9491690bff8c6ec189e77e0eff7d4eeaa9b20f2707b7d08ef4c",
+  "candidate_binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857"
+}

@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-11-01T00:22:33.185496+00:00",
+  "producer": "bench-v3-worker",
+  "binary": "/workspace/.phorvex-test-tmp/stage-study-engines/candidate-brain-replay",
+  "binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857",
+  "binary_source_sha": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "snapshot_source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "result": "PASS",
+  "controls": [
+    {
+      "snapshot_local_source": "/workspace/.phorvex-test-tmp/stage-study-engines/1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab.pxms",
+      "snapshot_digest": "1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+      "snapshot_bytes": 79254,
+      "reproduction_copy_directory": "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+      "command": [
+        "/workspace/.phorvex-test-tmp/stage-study-engines/candidate-brain-replay",
+        "--snapshots",
+        "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+        "--export-study-candidates",
+        "--allow-cross-version",
+        "--out",
+        "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/actual-candidate-export.jsonl"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "retained_export": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-candidate-export.jsonl",
+      "export_sha256": "b5c5ba55b411c9491690bff8c6ec189e77e0eff7d4eeaa9b20f2707b7d08ef4c",
+      "export_bytes": 1024263,
+      "result": "EXACT_REPRODUCTION"
+    },
+    {
+      "snapshot_local_source": "/workspace/.phorvex-test-tmp/stage-study-engines/7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a.pxms",
+      "snapshot_digest": "7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a",
+      "snapshot_bytes": 79525,
+      "reproduction_copy_directory": "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a",
+      "command": [
+        "/workspace/.phorvex-test-tmp/stage-study-engines/candidate-brain-replay",
+        "--snapshots",
+        "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a",
+        "--export-study-candidates",
+        "--allow-cross-version",
+        "--out",
+        "/workspace/.phorvex-test-tmp/r9-retention-reproduce-h4claicl/actual-failed-cohort-export.jsonl"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "retained_export": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-failed-cohort-export.jsonl",
+      "export_sha256": "0f7d5c9802e7d110fdab24cbc63846f87b6060c5a99e09669a84246ff7c768bd",
+      "export_bytes": 1023924,
+      "result": "EXACT_REPRODUCTION"
+    }
+  ],
+  "note": "Read-only actual snapshot export reproduction. Raw source snapshots and regenerated outputs remain local-original; no cluster writes or fabricated input."
+}

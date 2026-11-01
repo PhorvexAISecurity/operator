@@ -1,0 +1,6 @@
+test_guide_delivers_both_release_files_without_queuing_a_benchmark (benchmark.bot.test_bot.BotTest.test_guide_delivers_both_release_files_without_queuing_a_benchmark) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.055s
+
+OK

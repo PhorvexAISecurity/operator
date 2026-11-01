@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-01T01:29:11.133920+00:00",
+  "reviewer": "stage-review",
+  "read_only": true,
+  "path_absence": {
+    "/home/hami/phorvex-benchmark/runtime/stage-github-auth": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/4b8171ea3c83/candidate-src": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/4b8171ea3c83/base-src": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/4b8171ea3c83/go-home": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/candidate-src": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/base-src": true,
+    "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/go-home": true
+  },
+  "transient_units": {
+    "phorvex-stage-code-retry-3e11.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-endpoint-bot-acceptance-3e11.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-refresh-300-control.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    }
+  },
+  "receipt_hashes": {
+    "transient-cleanup.json": "84c5fe60197c02ac8c2d2d4849d67196678c84c50e693cae7fc28b30d556413d",
+    "remote-auth-cleanup.json": "d017f93495946f1c7313ce2af9e8def67dfa98180fb446a2dbc555fc112edc45"
+  },
+  "retained_bundle": {
+    "path": "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/candidate.git.bundle",
+    "sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+    "bytes": 2517
+  },
+  "limits": [
+    "Checks are restricted to known task-owned paths and named acceptance/control units. No claim to inventory unrelated user processes or original credentials.",
+    "Local delivery-only authentication remains the lead responsibility until final branch/PR publication; it is not a retained bot runtime dependency."
+  ],
+  "result": "PASS_REMOTE_OWNED_TRANSIENT_CLEANUP_AND_SOURCE_RETENTION"
+}

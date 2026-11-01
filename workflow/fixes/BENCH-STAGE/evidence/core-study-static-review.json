@@ -1,0 +1,37 @@
+{
+  "reviewer": "bench-v3-lead",
+  "at": "2026-10-31T23:26:24.571157+00:00",
+  "result": "PASS_STATIC_COMPONENT",
+  "source_files": {
+    "phorvex/internal/actionset/generator.go": "d894d8b2ce589172d7a1aee4b5a68d4797c5b7492189e80db17beb2d2d56d63d",
+    "phorvex/internal/actionset/preparation.go": "54e5d768291156288b06cab590f0960031f0d7f0bf677b970bea1f218507d796",
+    "phorvex/internal/actionset/preparation_test.go": "0a3301dda244e56639aada42a9cbfe3ec11908883a68df589bca3f3711ec32d9",
+    "phorvex/internal/decision/coverage.go": "8e4eb5c920fc50426a5395b5981fa3923d0d4f5021303c5a7bb6414a8fd1b5d2",
+    "phorvex/internal/decision/existential.go": "e8c5c66605576607034d8666c7dc174e9cb7c7d83a2cd7111cb8494b4353a5a4",
+    "phorvex/internal/decision/study.go": "98fd2dc4bd767f120e3a4012235035d7a4e20d112d1a048611a9d1149778f715",
+    "phorvex/internal/decision/study_test.go": "b86f79dd87317ea0bd6ec74bed28302a7aaaa5fe905f1f299db53313cd37489c",
+    "phorvex/internal/mathlab/endpoint_study.go": "016ab08653559c8e3d0a595db89fbb974988e69bf63dc360030dc4a36658aa90",
+    "phorvex/internal/mathlab/endpoint_study_test.go": "665acd14c865b6c1e70ffa33fd14da5e210c746d9cba37c3436faabba683e7a9",
+    "phorvex/cmd/brain-replay/main.go": "408ec65cd5418915e1d511cd515b370fcb1ddca86fb1b549540973408a97c9dd",
+    "phorvex/cmd/brain-replay/main_test.go": "3f78a3fc607a38643e6af5d29a5ae7ad96ad60c9b6d668c284c59e74c3fd658e",
+    "phorvex/cmd/brain-replay/endpoint_study.go": "e96b099da525d8da76b96593603a930f06c9e0a876d8511473706723fb4ccada",
+    "phorvex/cmd/brain-replay/endpoint_study_test.go": "e78e1e22bff4a8894ec8d4119b44c35ba182e40f3aecb4a0121d09b4ed8a9bcc",
+    "docs/math-lab/ENDPOINT_STUDY.md": "f9dd8bf8157228937f9f0013b308bf18938c2c638540bb13592bdd39e769d3cf",
+    "docs/math-lab/SNAPSHOT_AND_REPLAY.md": "520f286fd74b56ea5cf13c87f45d9937fd9b6fa23acb04c892498cf113e50ee0"
+  },
+  "scope": "Static review only; final integrated execution, exact source preflight and live stage paired run remain required.",
+  "reviewed_properties": [
+    "Legacy Generate still calls shared generator without preparation callback; cost/CHi path unchanged by default.",
+    "Shared preparation returns before legacy pricing, retains real first non-cost veto and full source facts; does not invent zero cost.",
+    "Study restricts one workload/policy and B1, validates real baseline on every snapshot, replays recorded impure collaborator verdicts and rejects missing playback.",
+    "Study source identity is separately embedded and explicit cross-source replay is observational; no capture source relabeling.",
+    "Normalization cannot replace source candidate identities, facts, class, containment or gates: engine re-exports and compares exact population before execution.",
+    "Shared brain chooser independently recomputes the result of both kernel arms, including unpriced V-worth, negative finite J, deterministic ties, hard resource/reactive/containment predicates.",
+    "Actual measurements stay common observed calibration evidence; selected offline choices do not create executed moves or verified effects."
+  ],
+  "pending": [
+    "Independent final frozen source executable controls.",
+    "Actual recorded stage64tick baseline and V2/V3 reports.",
+    "Full preflight and final independent P3."
+  ]
+}

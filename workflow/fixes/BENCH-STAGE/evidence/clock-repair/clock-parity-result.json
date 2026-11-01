@@ -1,0 +1,102 @@
+{
+  "actual_exact_match": true,
+  "actual_export_at": 1793490613.0944622,
+  "actual_export_sha256": "b5c5ba55b411c9491690bff8c6ec189e77e0eff7d4eeaa9b20f2707b7d08ef4c",
+  "actual_header_decided_at": "2026-10-31T23:50:13.094462223Z",
+  "baseline_reproduced": true,
+  "candidate_set_complete": true,
+  "comparison": "exact binary64 equality; no epsilon, rounding or floor",
+  "go_cases": [
+    {
+      "at": 0,
+      "exact_float_bits_match": true,
+      "float_bits": 0,
+      "go_version": "go1.26.3",
+      "python_at": 0.0,
+      "timestamp": "1970-01-01T00:00:00Z",
+      "unix_ns": 0
+    },
+    {
+      "at": 1.000000001,
+      "exact_float_bits_match": true,
+      "float_bits": 4607182418804521008,
+      "go_version": "go1.26.3",
+      "python_at": 1.000000001,
+      "timestamp": "1970-01-01T00:00:01.000000001Z",
+      "unix_ns": 1000000001
+    },
+    {
+      "at": -1e-09,
+      "exact_float_bits_match": true,
+      "float_bits": 13695778570484766357,
+      "go_version": "go1.26.3",
+      "python_at": -1e-09,
+      "timestamp": "1969-12-31T23:59:59.999999999Z",
+      "unix_ns": -1
+    },
+    {
+      "at": 1793490613,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252845830144,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0,
+      "timestamp": "2026-10-31T23:50:13Z",
+      "unix_ns": 1793490613000000000
+    },
+    {
+      "at": 1793490613.0944622,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252846226347,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0944622,
+      "timestamp": "2026-10-31T23:50:13.0944622Z",
+      "unix_ns": 1793490613094462200
+    },
+    {
+      "at": 1793490613.0944622,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252846226347,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0944622,
+      "timestamp": "2026-10-31T23:50:13.09446222Z",
+      "unix_ns": 1793490613094462220
+    },
+    {
+      "at": 1793490613.0944622,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252846226347,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0944622,
+      "timestamp": "2026-10-31T23:50:13.094462223Z",
+      "unix_ns": 1793490613094462223
+    },
+    {
+      "at": 1793490613.0944622,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252846226347,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0944622,
+      "timestamp": "2026-11-01T03:20:13.094462223+03:30",
+      "unix_ns": 1793490613094462223
+    },
+    {
+      "at": 1793490613.0944622,
+      "exact_float_bits_match": true,
+      "float_bits": 4745309252846226347,
+      "go_version": "go1.26.3",
+      "python_at": 1793490613.0944622,
+      "timestamp": "2026-10-31T19:50:13.094462223-04:00",
+      "unix_ns": 1793490613094462223
+    },
+    {
+      "at": -59.9,
+      "exact_float_bits_match": true,
+      "float_bits": 13856999029716759347,
+      "go_version": "go1.26.3",
+      "python_at": -59.9,
+      "timestamp": "1970-01-01T00:00:00.1+00:01",
+      "unix_ns": -59900000000
+    }
+  ],
+  "schema": "phorvex-stage.decision-clock-parity.v1"
+}

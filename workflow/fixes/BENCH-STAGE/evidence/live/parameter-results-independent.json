@@ -1,0 +1,217 @@
+{
+  "at": "2026-11-01T00:35:07.376786+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS",
+  "interpretation": "Actual frozen real bot parameter results: replay/provenance/counts checked independently. Flat benign cohort has zero changed decisions; no discriminating security efficacy claim. Reported Wilson CI assumes independent ticks and shouldnotbe interpreted as established independence. Underlyingreplay_binary notAvailable image label isnotcapture identity; actualcapture image/header separatelypinned.",
+  "jobs": [
+    {
+      "job": "83014231aae7",
+      "parameter": {
+        "class": "CONFIGURABLE_NOW",
+        "config_key": "spec.slo.costCeiling",
+        "name": "CHi cost ceiling",
+        "param_id": "P-FEA-006",
+        "protected": true,
+        "replay_override": {
+          "domain": {
+            "max": 1000,
+            "max_inclusive": true,
+            "min": 0,
+            "min_inclusive": false
+          },
+          "target": "policy.costCeiling",
+          "unset_allowed": false
+        },
+        "symbol": "c_bar",
+        "warnings": [
+          "protected: loosening needs SRE/security approval (safe direction: lower)",
+          "experiment knob: REPLAY only; no production write path from the dashboard",
+          "configured value <= 0 or unparseable resolves to 1.2 (the generator's c_bar <= 0 skip is unreachable through the spec)",
+          "independent of the economics mode: costPreferences never change which candidates pass",
+          "at w = 0.4/0.6 every rotate in an uncertain regime (missing-load, draining, unknown-phase) has CHi >= 1.6 and mig-rebind CHi = 1.7: always excluded at 1.2",
+          "warm GPU rotate at the RLS prior: CHi 1.2655 > 1.2 (excluded)",
+          "only cost-gate eligibility is monotone in the ceiling; realized security is not",
+          "retained and tagged (not excluded) for RetainSLO assets (mayBreachSLO + qualified outcome)"
+        ]
+      },
+      "state": "COMPLETE",
+      "exact_baseline": 64,
+      "distinct_source_bound_snapshots": 64,
+      "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "capture_identity_source": "recorder-process",
+      "brain_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "arms": [
+        {
+          "id": "control",
+          "value": "1.2",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v1.0",
+          "value": "1.0",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v1.2",
+          "value": "1.2",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v1.5",
+          "value": "1.5",
+          "changed": 0,
+          "matched": 64
+        }
+      ],
+      "input_hashes": {
+        "metrics.csv": "aec726b604cec7bbd13c71e3deb6e4d1353a7e85f499f642301cfa31371668e8",
+        "mathlab/result.json": "0b843fa417288c2aa72648bf32e1b15348a18a8913bd4d9fbc4fe5489367349c",
+        "mathlab/provenance.json": "c9dad5fae6bed04dc3652183b938f4ef3aa037217346a30558b7585436a81458"
+      }
+    },
+    {
+      "job": "32f795de4856",
+      "parameter": {
+        "class": "CONFIGURABLE_NOW",
+        "config_key": "spec.budget.proactiveFloor",
+        "name": "Proactive floor (hygiene cadence)",
+        "param_id": "P-FEA-005",
+        "protected": false,
+        "replay_override": {
+          "domain": {
+            "integer": true,
+            "max": 604800,
+            "max_inclusive": true,
+            "min": 1,
+            "min_inclusive": true
+          },
+          "requires": "an operator release with PR #452 (brain-replay -version lists P-FEA-005)",
+          "target": "policy.proactiveFloor + policy.exposurePressureScale",
+          "unset_allowed": false
+        },
+        "symbol": "T_cad",
+        "warnings": [
+          "coupled roles: cadence, provenance ramp, exposure pressure",
+          "experiment knob: REPLAY only; no production write path from the dashboard",
+          "coupled override: the arm sets both T_cad (the G6 proactive-cadence law) and T_exp (exposure pressure in context, recon belief and hazard), because buildPolicy derives both from this one field",
+          "moves backed by a fresh trusted event bypass the cadence law; the floor caps hygiene moves only",
+          "a lower floor admitting more hygiene moves is decision sensitivity only, not evidence of better defense or acceptable disruption",
+          "values are whole seconds; live vllm-defense runs 15m (900 s)"
+        ]
+      },
+      "state": "COMPLETE",
+      "exact_baseline": 64,
+      "distinct_source_bound_snapshots": 64,
+      "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "capture_identity_source": "recorder-process",
+      "brain_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "arms": [
+        {
+          "id": "control",
+          "value": "60.0",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v300",
+          "value": "300.0",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v900",
+          "value": "900.0",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v1800",
+          "value": "1800.0",
+          "changed": 0,
+          "matched": 64
+        }
+      ],
+      "input_hashes": {
+        "metrics.csv": "6949b6cd01d32dba4b8363e3ccbadd4658d57f0a8428d20ed88a2035fef3e6b0",
+        "mathlab/result.json": "659120b3ce05e1fa135b051699ed20300d832fd8e5b5ad34d43ddb7f919bd012",
+        "mathlab/provenance.json": "f65deae0c9f8ac88e3546ce45d1733bb098812ee55273a388e52824b6f12abe6"
+      }
+    },
+    {
+      "job": "29c3cdd547cd",
+      "parameter": {
+        "class": "CONFIGURABLE_NOW",
+        "config_key": "spec.objective.disruptionAversion",
+        "name": "Fixed disruption aversion",
+        "param_id": "P-OBJ-003",
+        "protected": false,
+        "replay_override": {
+          "domain": {
+            "max": 10,
+            "max_inclusive": true,
+            "min": 0,
+            "min_inclusive": true
+          },
+          "target": "policy.disruptionAversion",
+          "unset_allowed": true,
+          "unset_semantics": "legacy runtime lambda (or costPreferences when configured)"
+        },
+        "symbol": "beta",
+        "warnings": [
+          "experiment knob: REPLAY only; no production write path from the dashboard",
+          "unset = legacy runtime lambda (live 2026-10-09: every defense policy runs legacy lambda); explicit '0' = fixed-beta mode with coefficient 0 (different economics version / trace fields)",
+          "mutually exclusive with costPreferences (CRD CEL, webhook, Upsert, Economics)",
+          "git declares costPreferences but live policies run legacy lambda (Argo phorvex-policies OutOfSync)",
+          "objective-only: does not move the CHi gate",
+          "decision.EvaluateSensitivity('economics.fixed-beta') errors on a policy that has costPreferences"
+        ]
+      },
+      "state": "COMPLETE",
+      "exact_baseline": 64,
+      "distinct_source_bound_snapshots": 64,
+      "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "capture_identity_source": "recorder-process",
+      "brain_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "arms": [
+        {
+          "id": "control",
+          "value": "1",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "unset",
+          "value": "",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v0",
+          "value": "0.0",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v1.2",
+          "value": "1.2",
+          "changed": 0,
+          "matched": 64
+        },
+        {
+          "id": "v10",
+          "value": "10.0",
+          "changed": 0,
+          "matched": 64
+        }
+      ],
+      "input_hashes": {
+        "metrics.csv": "ea38add86baa10d5a577e40db6db67bd9fd0addead81c79f205ccc99be41a223",
+        "mathlab/result.json": "95a48615aeacbccfac46f9f9edf07ff26b61c58eee0c1dc86fa6f11f0973aa14",
+        "mathlab/provenance.json": "713c1fa7c9d721accd1a61d1262ca062422cc3bdb1311e8f9f80f548ec7712f8"
+      }
+    }
+  ]
+}

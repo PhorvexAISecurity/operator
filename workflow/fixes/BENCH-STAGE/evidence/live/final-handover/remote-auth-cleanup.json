@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T01:27:16.220647+00:00",
+  "result": "PASS",
+  "removed_task_owned_directory": "/home/hami/phorvex-benchmark/runtime/stage-github-auth",
+  "files": [
+    "token",
+    "askpass"
+  ],
+  "directory_absent": true,
+  "preserved": "existing SSH helper, private bot config, original authentication, legacy data and retained evidence",
+  "note": "Temporary delivery authentication only; bot replays clone from the source-pinned local repository and do not use these helpers."
+}

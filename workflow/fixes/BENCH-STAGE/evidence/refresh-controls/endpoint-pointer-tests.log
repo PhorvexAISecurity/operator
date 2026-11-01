@@ -1,0 +1,18 @@
+test_exact_reviewed_prompt_routes_before_llm_and_storage_guards (test_endpoint_study.EndpointBotTest.test_exact_reviewed_prompt_routes_before_llm_and_storage_guards) ... ok
+test_recorded_upload_reaches_batch_blocked_and_sends_evidence (test_endpoint_study.EndpointBotTest.test_recorded_upload_reaches_batch_blocked_and_sends_evidence) ... ok
+test_custom_observed_settings_preserve_facts_and_all_retained_history (test_endpoint_study.EndpointStudyTest.test_custom_observed_settings_preserve_facts_and_all_retained_history) ... ok
+test_custom_study_settings_reach_real_shared_go_kernel (test_endpoint_study.EndpointStudyTest.test_custom_study_settings_reach_real_shared_go_kernel) ... ok
+test_expanded_window_requires_proven_retention_and_sealed_coverage (test_endpoint_study.EndpointStudyTest.test_expanded_window_requires_proven_retention_and_sealed_coverage) ... ok
+test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data) ... ok
+test_missing_recorded_inputs_produce_blocked_artifacts_without_runner (test_endpoint_study.EndpointStudyTest.test_missing_recorded_inputs_produce_blocked_artifacts_without_runner) ... ok
+test_missing_telemetry_is_not_a_comparable_zero_effect (test_endpoint_study.EndpointStudyTest.test_missing_telemetry_is_not_a_comparable_zero_effect) ... ok
+test_nested_input_errors_are_rejected_before_queueing (test_endpoint_study.EndpointStudyTest.test_nested_input_errors_are_rejected_before_queueing) ... ok
+test_real_go_64_ticks_both_arms_adaptive_state_and_determinism (test_endpoint_study.EndpointStudyTest.test_real_go_64_ticks_both_arms_adaptive_state_and_determinism) ... ok
+test_strict_custom_study_settings_and_templates_validate_before_queue (test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+test_unqualified_json_install_is_rejected_and_changed_manifest_fails_closed (test_endpoint_study.EndpointStudyTest.test_unqualified_json_install_is_rejected_and_changed_manifest_fails_closed) ... ok
+test_validation_does_not_invent_recorded_authority (test_endpoint_study.EndpointStudyTest.test_validation_does_not_invent_recorded_authority) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 6.902s
+
+OK

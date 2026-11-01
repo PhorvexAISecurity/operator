@@ -1,0 +1,13 @@
+{
+  "phorvex": {
+    "image": {
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+      "tag": "benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "releaseDigest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "releaseSourceSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+    },
+    "mathLab": {
+      "captureCostEvidence": true
+    }
+  }
+}

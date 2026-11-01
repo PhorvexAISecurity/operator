@@ -1,0 +1,62 @@
+{
+  "at": "2026-11-01T00:49:53.100154+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS",
+  "cases": [
+    {
+      "job": "f4f05c4d2de3",
+      "state": "COMPLETE",
+      "comparable_ticks": 64,
+      "same_normalized_generation": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+      "settings": {
+        "slo_target": 0.9,
+        "window": 600,
+        "worth_threshold": 0
+      },
+      "lookback": 600,
+      "baseline_exact_count": 64,
+      "noop": {
+        "v2": 0,
+        "v3": 0
+      },
+      "changed_choices": 0,
+      "result_sha256": "4b0bed9cadf69119064cf27273294ca433d3fba70dadd2a8914932f19397f66e"
+    },
+    {
+      "job": "d024b2f8a9fd",
+      "state": "COMPLETE",
+      "comparable_ticks": 64,
+      "same_normalized_generation": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+      "settings": {
+        "slo_target": 0.95,
+        "window": 240,
+        "worth_threshold": 0.25
+      },
+      "lookback": 300,
+      "baseline_exact_count": 64,
+      "noop": {
+        "v2": 64,
+        "v3": 64
+      },
+      "changed_choices": 0,
+      "result_sha256": "a189769fbb6d36b066cf6547a7b273ed3584b28b09f2701b6c52554d92fe25cd"
+    },
+    {
+      "job": "5aeb716b562f",
+      "state": "BLOCKED",
+      "comparable_ticks": 0,
+      "same_normalized_generation": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+      "settings": {
+        "slo_target": 0.999,
+        "window": 2592000,
+        "worth_threshold": 0
+      },
+      "lookback": 86400,
+      "baseline_exact_count": null,
+      "noop": null,
+      "changed_choices": null,
+      "result_sha256": "5d138a7ab3de050bbcae1fd439478dd5dff61b86bdbcf9e673801c030e54d1e7"
+    }
+  ],
+  "interpretation": "Two realintegratedbrain replaycases withsupportedcustomsettingsand one original30dnegativecontrol; parameteroutcomechanged but no betweenarmchoicechange. Offlineconditionalforecasts, explicitclasspriors and studySLO; noactualcounterfactualcost/securityeffect/productionactingauthority."
+}

@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-01T01:09:37.213714+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS exactsinglearchivechange",
+  "reviewed_runtime_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "final_packaging_source": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "changed_paths": [
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz"
+  ],
+  "archive_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+  "unchanged_runtime_tree_objects": {
+    "benchmark": "973061bf152b5f9de84d65a56e77554301c327b7",
+    "phorvex": "5fe0bc926902e9090f196f70592d4ebe400f4eb0"
+  },
+  "limits": "Fullnewheadpreflightstillrequired; existinglivecomponentidentitiesunchanged andnotrelabeled."
+}

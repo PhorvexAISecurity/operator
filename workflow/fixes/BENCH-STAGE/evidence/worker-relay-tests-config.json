@@ -1,0 +1,58 @@
+{
+  "source_sha": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc + relay working diff",
+  "description": "Relay component implementation checks in integrated working tree; source manifest recorded separately; not final acceptance. Go1.26.3 local.",
+  "cwd": "/workspace/operator-benchmark-stage/phorvex",
+  "env": {
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2"
+  },
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/worker-relay-tests.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/worker-relay-tests-status.json",
+  "total_timeout_seconds": 900,
+  "steps": [
+    {
+      "name": "real-recorder-rpc-http-relay-and-rollout",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=180s",
+        "./internal/brainclient",
+        "./internal/brainsvc",
+        "./internal/audittransport",
+        "./cmd/brain"
+      ],
+      "timeout_seconds": 450
+    },
+    {
+      "name": "producer-identity-and-baseline-parity",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=120s",
+        "./internal/mathlab",
+        "-run",
+        "TestRecorder(ProcessIdentity|RejectsUnproven)"
+      ],
+      "timeout_seconds": 240
+    },
+    {
+      "name": "architecture",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=120s",
+        "./internal/archtest"
+      ],
+      "timeout_seconds": 240
+    }
+  ]
+}

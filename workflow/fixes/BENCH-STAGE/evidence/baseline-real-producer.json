@@ -1,0 +1,21 @@
+{
+  "observed_at_utc": "2026-10-31T22:33:46.291469+00:00",
+  "main": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "stage_source": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303",
+  "stage_brain_digest": "sha256:2030cf72807ffc12670b889f6ad9dca99efeba05254c8e498891c3b78325e98c",
+  "stage_brain_capture_flags": [],
+  "stage_brain_snapshot_mount": null,
+  "legacy_bot_source": "3f3f40a81df2aeb7d74ba826d6a4b71fcc87cd07",
+  "legacy_repo": "PhorvexSecurity/operator",
+  "legacy_replay": "0058a3edd2eb1e9801d9295d6ebbf8b3320dd8ec",
+  "independent_real_producer_probe": {
+    "transport": "owned localhost kubectl port-forward to stage Console svc80; short10m OIDC e2e serviceaccount token, never retained",
+    "namespace": "phorvex-staging-demo",
+    "policy": "demo-api-defense",
+    "http_status": 403,
+    "error": "tenant phorvex-staging-demo is outside this identity's tenant scope",
+    "cleanup": "owned forward terminated"
+  },
+  "control": "Stagekubectl read succeeds, actual runningbrain Ready1/1; GitHub maincontainsPR181; selectedpolicyexists. PublicALB redirectlogin is not a snapshot response.",
+  "conclusion": "Merged source alone does not activate capture, fix stale stage auth scopes, change legacy bot source, or create missing endpoint history."
+}

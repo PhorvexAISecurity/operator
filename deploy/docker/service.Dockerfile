@@ -44,7 +44,14 @@ RUN --mount=type=cache,id=phvx-service-gomod-${TARGETARCH},target=/go/pkg/mod,sh
     CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath \
       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA} -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=${RELEASE_VERSION}" \
-      -o /service ./cmd/${SERVICE}
+      -o /service ./cmd/${SERVICE} && \
+    mkdir /companions && \
+    if [ "${SERVICE}" = brain ]; then \
+      CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+      go build -trimpath \
+        -ldflags="-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=${GIT_SHA} -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=${RELEASE_VERSION}" \
+        -o /companions/brain-replay ./cmd/brain-replay; \
+    fi
 
 # Distroless nonroot, matching the charts' runAsNonRoot + readOnlyRootFilesystem.
 FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
@@ -52,6 +59,7 @@ ARG GIT_SHA
 ARG RELEASE_VERSION=dev
 WORKDIR /
 COPY --from=builder /service /service
+COPY --from=builder /companions/ /
 LABEL org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.version="${RELEASE_VERSION}"
 USER 65532:65532

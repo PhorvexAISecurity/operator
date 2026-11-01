@@ -1,0 +1,34 @@
+{
+  "result": "CURRENT_SOURCE_MATCHES",
+  "reviewer": "stage_review",
+  "snapshot_path": "/workspace/.phorvex-test-tmp/stage-study-engines/1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab.pxms",
+  "snapshot_digest": "1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+  "snapshot_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "snapshot_brain_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+  "decided_at": "2026-10-31T23:50:13.094462223Z",
+  "actual_export_at": 1793490613.0944622,
+  "refresh_clock_at": 1793490613.0944622,
+  "strict_equal": true,
+  "baseline_reproduced": true,
+  "candidate_set_complete": true,
+  "export_source": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "snapshot_export_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "candidate_binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857",
+  "candidate_version": {
+    "brainImage": "notAvailable",
+    "endpointStudyMode": "PAIRED_BRAIN_REPLAY",
+    "gitSHA": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+    "overridableParameters": [
+      "P-FEA-006",
+      "P-FEA-005",
+      "P-OBJ-003"
+    ],
+    "replaySchema": "math-lab.replay.v1",
+    "snapshotSchema": "math-lab.snapshot.v1",
+    "studyCandidatesSchema": "math-lab.study-candidates.v1"
+  },
+  "refresh_source_sha256": "c8254c93ef1d0c9905b0db927c657a906305f5e2346c23fa8ddad1e96c90f4db",
+  "export_sha256": "b5c5ba55b411c9491690bff8c6ec189e77e0eff7d4eeaa9b20f2707b7d08ef4c",
+  "clock_delta_seconds": 0.0,
+  "boundary": "Actual stage-recorded snapshot and existing committed candidate brain executable; no final status or exported clock mocked."
+}

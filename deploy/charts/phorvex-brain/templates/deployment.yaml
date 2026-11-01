@@ -25,6 +25,10 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        {{- if $v.mathLab.capturePolicies }}
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       terminationGracePeriodSeconds: 30
@@ -33,6 +37,9 @@ spec:
         {{- with .Values.image.digest }}{{ if not (regexMatch "^sha256:[0-9a-f]{64}$" .) }}{{ fail "image.digest must be sha256:<64 lowercase hex>" }}{{ end }}{{ end }}
         image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
+        env:
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}{{ with .Values.image.digest }}@{{ . }}{{ end }}"
         args:
         - --listen=:9090
         - --metrics-bind-address=:8080
@@ -46,6 +53,11 @@ spec:
         - --log-level={{ .Values.log.level }}
         - --log-format={{ .Values.log.format }}
         {{- with $v.mathLab.capturePolicies }}
+        {{- range . }}
+        {{- if not (regexMatch "^[a-z0-9]([-a-z0-9]*[a-z0-9])?/[a-z0-9]([-.a-z0-9]*[a-z0-9])?$" .) }}
+        {{- fail (printf "phorvex.mathLab.capturePolicies entry %q must be namespace/name" .) }}
+        {{- end }}
+        {{- end }}
         - --math-lab-capture-policies={{ join "," . }}
         - --math-lab-capture-dir=/var/lib/phorvex/math-lab
         - --math-lab-capture-max-bytes={{ $v.mathLab.captureMaxBytes | int64 }}

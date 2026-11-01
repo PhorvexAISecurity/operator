@@ -1,0 +1,8 @@
+{
+  "schema": "phorvex-bench.endpoint-study.v1",
+  "title": "V2 versus adaptive V3 on qualified recorded inputs",
+  "policy": "phorvex-staging-demo/demo-api-defense",
+  "ticks": 64,
+  "config": {},
+  "dataset": "recorded"
+}

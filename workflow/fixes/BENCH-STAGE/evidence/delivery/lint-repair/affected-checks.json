@@ -1,0 +1,75 @@
+{
+  "producer": "bench-v3-worker",
+  "recorded_at": "2026-11-01T02:18:53.624767+00:00",
+  "delivery_source_sha": "1ae0beeda781e7063782bc7d07718f6ce64015a7",
+  "reviewed_implementation_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "go_version": "go version go1.26.3 linux/amd64",
+  "result": "PASS",
+  "checks": [
+    {
+      "name": "changed-file-format",
+      "command": [
+        "python3",
+        "tools/check-go-format.py",
+        "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40"
+      ],
+      "started_at": "2026-11-01T02:18:50.307770+00:00",
+      "seconds": 0.267,
+      "exit_code": 0,
+      "log": "changed-file-format.log",
+      "log_sha256": "3f298f8e6a7eef2e2a070f1bdf93d219b626bdf25e0d2d75b549c1f748e1fd78"
+    },
+    {
+      "name": "endpoint-tests",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "-C",
+        "phorvex",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=5m",
+        "./internal/cost/endpoint",
+        "./cmd/endpoint-v3"
+      ],
+      "started_at": "2026-11-01T02:18:50.575279+00:00",
+      "seconds": 1.225,
+      "exit_code": 0,
+      "log": "endpoint-tests.log",
+      "log_sha256": "932a20f1a2e41a26d7e7dc8b9c624cc7db2d97f8fedf5dd28744deea20799ec0"
+    },
+    {
+      "name": "endpoint-build",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "-C",
+        "phorvex",
+        "build",
+        "-mod=readonly",
+        "-trimpath",
+        "-o",
+        "/workspace/.phorvex-test-tmp/bench-stage-lint-repair/endpoint-v3",
+        "./cmd/endpoint-v3"
+      ],
+      "started_at": "2026-11-01T02:18:51.800896+00:00",
+      "seconds": 1.226,
+      "exit_code": 0,
+      "log": "endpoint-build.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "raw_clock_reproduction": {
+    "input_sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "original_output_sha256": "9a68e2323463eb47b1643df561f96e09ad488b43c374b7be66aa7b8d094bc606",
+    "actual_output_sha256": "9a68e2323463eb47b1643df561f96e09ad488b43c374b7be66aa7b8d094bc606",
+    "cases": 10,
+    "byte_equal": true,
+    "command": [
+      "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+      "run",
+      "/workspace/.phorvex-test-tmp/bench-stage-lint-repair/clock-parity.go"
+    ]
+  },
+  "binary_sha256": "575c4f4f519ec21a5186d4be4d11cc3e6a9abbc8413ff53f78c3328837623806",
+  "scope": "Affected formatter/tests/build and unchanged raw clock reproduction only. Existing full preflight and live results keep their original source pins; independent formal patch equivalence is separate."
+}

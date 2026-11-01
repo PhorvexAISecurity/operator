@@ -1,0 +1,26 @@
+{
+  "stage_service_namespace": "phorvex-staging",
+  "fixture_namespace": "phorvex-staging-demo",
+  "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+  "runtime_brain_version": {
+    "service": "brain",
+    "version": "0.10.0",
+    "gitSHA": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303"
+  },
+  "runtime_image_digest": "sha256:2030cf72807ffc12670b889f6ad9dca99efeba05254c8e498891c3b78325e98c",
+  "availability": "1/1",
+  "fixture_review": {
+    "sha256": "66d80dc62cd610893bc62817265e2e5bf340a35d1fbf081923caaf260519f78f",
+    "server_dry_run": "PASS all4objects",
+    "mode": "dryRun",
+    "replicas": 3,
+    "maxMovesPerTick": 1,
+    "objects": [
+      "Deployment/stage-bench-api",
+      "Service/stage-bench-api",
+      "PodDisruptionBudget/stage-bench-api",
+      "PhorvexPolicy/stage-bench-defense"
+    ]
+  },
+  "purpose": "Preparation/control round only. Currentcaptureabsent; imageupdateandactualreplayacceptance remainpending."
+}

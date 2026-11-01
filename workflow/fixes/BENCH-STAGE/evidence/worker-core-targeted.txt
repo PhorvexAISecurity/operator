@@ -1,0 +1,8 @@
+ok  	github.com/phorvex/phorvex/internal/actionset	0.054s
+ok  	github.com/phorvex/phorvex/internal/decision	0.484s
+ok  	github.com/phorvex/phorvex/internal/mathlab	4.921s
+--- FAIL: TestEndpointCLIRejectsMixedSnapshotSources (0.12s)
+    endpoint_study_test.go:84: mixed source accepted: <nil>
+FAIL
+FAIL	github.com/phorvex/phorvex/cmd/brain-replay	0.583s
+FAIL

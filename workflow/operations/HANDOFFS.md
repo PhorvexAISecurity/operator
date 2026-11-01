@@ -31,6 +31,11 @@ update rather than silently losing checks.
 The separate remote `go-envtest` job (local Kubernetes API binaries), other remote
 CI jobs, shared E2E, image builds and deployment are not executed by this preflight.
 A local PASS is not a claim that all remote CI is green.
+Current chart checks also attest the benchmark wrapper, its pinned Python
+dependencies and the exact Go version-file used by the shared-kernel integration
+tests. Set `GO_BIN` to the matching local binary for these checks as well. The
+wrapper runs bot, worker and stage suites without skipped tests. Historical
+chart plans that predate this setup keep their original dependency contract.
 Recorded receipts are validated against their attested source and its CI recipes, even
 when doctor runs on a newer main or PR merge checkout. Submission additionally requires
 the current code worktree to match the pinned implementation; that check is not waived.

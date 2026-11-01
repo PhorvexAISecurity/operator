@@ -1,0 +1,80 @@
+{
+  "origin": "operator-submitted acceptance jobs using the actual BenchBot queue/execution and real Telegram delivery; no Telegram incoming update is claimed",
+  "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "state": "PASS",
+  "jobs": [
+    {
+      "request": "stage-endpoint-600.json",
+      "request_sha256": "846d0651ee2bdd2386a4bc73cccd7aec8bf483b7c21ed6069463eb99c5ef4efe",
+      "id": "180d1e5b1ee9",
+      "state": "DONE",
+      "origin": "operator acceptance, not Telegram ingestion",
+      "batch": {
+        "batch_id": "180d1e5b1ee9",
+        "upload_id": "operator-submitted-846d0651ee2b",
+        "state": "DONE",
+        "results": [
+          {
+            "index": 1,
+            "kind": "endpoint",
+            "state": "DONE",
+            "job": "f4f05c4d2de3",
+            "headline": "Endpoint V2/V3: COMPLETE; 64 comparable ticks; evidence=recorded. Source-pinned stage brain replay; reviewed experimental source, cross-version observational comparison."
+          }
+        ],
+        "semantics": "Independent experiments, executed sequentially; each report has its own control."
+      }
+    },
+    {
+      "request": "stage-endpoint-custom.json",
+      "request_sha256": "ee9a3a631d625aede89880e40bc303c798d7bf7800f6298db42c09d2077bdc55",
+      "id": "74240aadda51",
+      "state": "DONE",
+      "origin": "operator acceptance, not Telegram ingestion",
+      "batch": {
+        "batch_id": "74240aadda51",
+        "upload_id": "operator-submitted-ee9a3a631d62",
+        "state": "DONE",
+        "results": [
+          {
+            "index": 1,
+            "kind": "endpoint",
+            "state": "DONE",
+            "job": "d024b2f8a9fd",
+            "headline": "Endpoint V2/V3: COMPLETE; 64 comparable ticks; evidence=recorded. Source-pinned stage brain replay; reviewed experimental source, cross-version observational comparison."
+          }
+        ],
+        "semantics": "Independent experiments, executed sequentially; each report has its own control."
+      }
+    },
+    {
+      "request": "stage-endpoint-30d-negative.json",
+      "request_sha256": "2146ac19393bb0670c72598460c1ff41f79492966c1257f55b15303ab6e833d6",
+      "id": "84fcf64f961b",
+      "state": "BLOCKED",
+      "origin": "operator acceptance, not Telegram ingestion",
+      "batch": {
+        "batch_id": "84fcf64f961b",
+        "upload_id": "operator-submitted-2146ac19393b",
+        "state": "BLOCKED",
+        "results": [
+          {
+            "index": 1,
+            "kind": "endpoint",
+            "state": "BLOCKED",
+            "job": "5aeb716b562f",
+            "headline": "Endpoint V2/V3: BLOCKED; 0 comparable ticks; evidence=recorded. Source-pinned stage brain replay.\nRequested study windows are not supported by the retained observed evidence."
+          }
+        ],
+        "semantics": "Independent experiments, executed sequentially; each report has its own control."
+      }
+    }
+  ],
+  "expected_states": {
+    "stage-endpoint-600.json": "DONE",
+    "stage-endpoint-custom.json": "DONE",
+    "stage-endpoint-30d-negative.json": "BLOCKED"
+  },
+  "finished_at": "2026-11-01T00:43:35.904789+00:00"
+}

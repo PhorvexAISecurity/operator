@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-10-31T23:28:52.678617+00:00",
+  "live_changes": false,
+  "ownership": "stage_observer: refresh worker/tests, stage normalize/generation/tests/README; narrow initial bot dataset reader and pointer test. stage_bot owns remaining bot/worker consumer locks and sync.",
+  "remaining": "Independent reviewer acceptance; canonical integrated commit; root-owned stage/bot deployment and live acceptance. Stage bot may add exact verified stage-sync registry hook in its stage_cli ownership; no observer source edits planned.",
+  "schema": "phorvex-bench.refresh-implementation-controls.v1",
+  "scope": "local implementation controls; no live stage execution or deployment",
+  "sources": {
+    "benchmark/bot/endpoint_study.py": "176d77e0e3a368a8b7abb4ef2ca18da9f18f3bb2857ae6512c0cae53e95eb39d",
+    "benchmark/bot/test_endpoint_study.py": "1fb481a2ff921545aa28efb4b46b2fc1d0af297bf6ca3acfdb98090d560f1535",
+    "benchmark/stage/README.md": "f454bc1f4d21a2c39f6f4c19837abbe80e80b5e7773f9fa1c929d835a822d7ff",
+    "benchmark/stage/normalize.py": "fb48cccb44cb4aea122d57f44239479d94419b5ed8804f20270105950d4ab083",
+    "benchmark/stage/test_evidence.py": "4a1bb36e024c21563ca17e7010606f21aa66a5115ed6a115d22495a4d943eba1",
+    "benchmark/worker/endpoint_refresh.py": "f8c735a3ca619ab782089832e7482efe31f5740c52f87e8ffaf8f45dabd28b29",
+    "benchmark/worker/test_endpoint_refresh.py": "b3de3a949863bf2128063b5e098879dc2329f8fc954545858c0366085b404eea"
+  },
+  "test_boundary": "Real SQLite journal/Kubernetes producer-object fixtures, content-addressed snapshot headers and executable scripted replay transport. Actual brain Recorder/export semantics are covered separately by core Go tests. No final READY or coverage flag mocked.",
+  "tests": {
+    "endpoint-pointer-tests.log": {
+      "passed": 13,
+      "sha256": "722e842c4eb682dca52bb7daaa42b80ef0393a41360e42b0d0d6ab5f9d607e80",
+      "skipped": 0
+    },
+    "endpoint-refresh-tests.log": {
+      "passed": 14,
+      "sha256": "76413c5649774b173194eba0abf9cdd8482a01e1d8432cbed3367a91052226ee",
+      "skipped": 0
+    },
+    "endpoint-stage-install-tests.log": {
+      "passed": 31,
+      "sha256": "f1f7a8106113182375115b20d5b7956063ddb47d6ae9966983f7f09e854ec302",
+      "skipped": 0
+    }
+  }
+}

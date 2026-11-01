@@ -1,0 +1,19 @@
+{
+  "command": [
+    "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+    "test",
+    "-mod=readonly",
+    "-count=1",
+    "-timeout=180s",
+    "./internal/brainclient",
+    "./internal/brainsvc",
+    "./internal/audittransport",
+    "./cmd/brain",
+    "./internal/mathlab",
+    "-run",
+    "Snapshot|Recorder|MathLab"
+  ],
+  "cwd": "/workspace/.phorvex-test-tmp/bench-stage-relay-component-3mv8wkro/phorvex",
+  "manifest_sha256": "6b29c1792aa302cc5261489c753a3450521fb5305972f71341fc9bec7363e2c5",
+  "exit_code": 0
+}

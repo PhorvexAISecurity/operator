@@ -1,0 +1,58 @@
+{
+  "at": "2026-11-01T00:59:22.882542+00:00",
+  "by": "bench-v3-lead",
+  "test_result": "PASS realbase+candidateunchangeddeadline",
+  "tests": {
+    "base-local": {
+      "commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "toolchain": "go1.26.10",
+      "packages": [
+        "./cmd/brain-replay",
+        "./internal/decision",
+        "./internal/model"
+      ],
+      "counts": {
+        "pass": 465,
+        "fail": 0,
+        "skip": 2
+      },
+      "returncode": 0,
+      "status": "PASS"
+    },
+    "candidate": {
+      "commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+      "toolchain": "go1.26.10",
+      "packages": [
+        "./cmd/brain-replay",
+        "./internal/decision",
+        "./internal/model"
+      ],
+      "counts": {
+        "pass": 509,
+        "fail": 0,
+        "skip": 2
+      },
+      "returncode": 0,
+      "status": "PASS"
+    }
+  },
+  "deadline_control": {
+    "base-local": {
+      "Time": "2026-11-01T00:54:43.228618493Z",
+      "Action": "pass",
+      "Package": "github.com/phorvex/phorvex/internal/decision",
+      "Test": "TestExactRuntimeMatrix",
+      "Elapsed": 8.23
+    },
+    "candidate": {
+      "Time": "2026-11-01T00:57:54.522522942Z",
+      "Action": "pass",
+      "Package": "github.com/phorvex/phorvex/internal/decision",
+      "Test": "TestExactRuntimeMatrix",
+      "Elapsed": 7.64
+    }
+  },
+  "candidate_diff_sha256": "a92ebd74b1bb3e88cf265f6891c3236865acdf2e6ccbbcbcd3b9b3abc342b4b9",
+  "independent_static_scope": "Reviewed actual2newfiles: pure endpoint-second arithmetic plus table/error cases; existing selector/test files unchanged. Helper is not invoked by active brain selection.",
+  "limits": "Build/replaystillpending; twoinheritedoptinskipsheavyenumeration andexternalMILPexportnotassertion. Passingretrydoesnotestablishwhyfirsthostrunfailed."
+}

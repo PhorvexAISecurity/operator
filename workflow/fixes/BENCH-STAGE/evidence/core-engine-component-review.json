@@ -1,0 +1,40 @@
+{
+  "reviewer": "bench-v3-lead",
+  "result": "PASS_COMPONENT",
+  "at": "2026-10-31T23:36:42.733100+00:00",
+  "files": {
+    "benchmark/endpointv3/.gitignore": "9d4d8b4b5a4eb4b8688df1a1d6b5e5c6ad260ae74b2ac1f8263ec96bf870b2fc",
+    "benchmark/endpointv3/build.py": "3323694e87239235b8b823ba348b7676d0f49037ddb5a5b2bfe59e2f2dd8fa57",
+    "docs/math-lab/ENDPOINT_STUDY.md": "f9dd8bf8157228937f9f0013b308bf18938c2c638540bb13592bdd39e769d3cf",
+    "docs/math-lab/REMOTE_CAPTURE.md": "a5a00870feba919b8e1f0343714b3e55b9ef488d36e1dfcf2026da9729dd2fa5",
+    "docs/math-lab/SNAPSHOT_AND_REPLAY.md": "520f286fd74b56ea5cf13c87f45d9937fd9b6fa23acb04c892498cf113e50ee0",
+    "phorvex/cmd/brain-replay/endpoint_study.go": "e96b099da525d8da76b96593603a930f06c9e0a876d8511473706723fb4ccada",
+    "phorvex/cmd/brain-replay/endpoint_study_test.go": "e78e1e22bff4a8894ec8d4119b44c35ba182e40f3aecb4a0121d09b4ed8a9bcc",
+    "phorvex/cmd/brain-replay/main.go": "408ec65cd5418915e1d511cd515b370fcb1ddca86fb1b549540973408a97c9dd",
+    "phorvex/cmd/brain-replay/main_test.go": "3f78a3fc607a38643e6af5d29a5ae7ad96ad60c9b6d668c284c59e74c3fd658e",
+    "phorvex/cmd/endpoint-v3/main.go": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+    "phorvex/cmd/endpoint-v3/main_test.go": "c40af00df25c81ba4be5e6297e13d3f76683c40a1e1020efbb39c06c31b2d362",
+    "phorvex/internal/actionset/generator.go": "d894d8b2ce589172d7a1aee4b5a68d4797c5b7492189e80db17beb2d2d56d63d",
+    "phorvex/internal/actionset/preparation.go": "54e5d768291156288b06cab590f0960031f0d7f0bf677b970bea1f218507d796",
+    "phorvex/internal/actionset/preparation_test.go": "0a3301dda244e56639aada42a9cbfe3ec11908883a68df589bca3f3711ec32d9",
+    "phorvex/internal/cost/endpoint/cost.go": "caf70f0e19b4ea23fce52c4c9c626aa9245f4305ee0c047c566965fa234cc488",
+    "phorvex/internal/cost/endpoint/endpoint_test.go": "19ae63636bdcc3a6770d6857615d8d726f3e60ffef84c12c15927be8b2af6f29",
+    "phorvex/internal/cost/endpoint/lambda.go": "95eccc744be18de8176ee953cd6d7f800e9ef59ab1b5ba7a66d8954cf26e7c25",
+    "phorvex/internal/cost/endpoint/ledger.go": "64a1621fa581ab43349015c9df2fa1f6c73aaeb284dd48774949307fbd161b89",
+    "phorvex/internal/cost/endpoint/run.go": "12323cf21ed9ee4f29ac527d0ccf6b05ed52c65ba30d362bb2e7767ca4c0f431",
+    "phorvex/internal/cost/endpoint/types.go": "34e05e771a0662c137a1da792d2aa51db9a46db4acc8de62d785b59b3951d067",
+    "phorvex/internal/decision/coverage.go": "8e4eb5c920fc50426a5395b5981fa3923d0d4f5021303c5a7bb6414a8fd1b5d2",
+    "phorvex/internal/decision/existential.go": "e8c5c66605576607034d8666c7dc174e9cb7c7d83a2cd7111cb8494b4353a5a4",
+    "phorvex/internal/decision/study.go": "98fd2dc4bd767f120e3a4012235035d7a4e20d112d1a048611a9d1149778f715",
+    "phorvex/internal/decision/study_test.go": "b86f79dd87317ea0bd6ec74bed28302a7aaaa5fe905f1f299db53313cd37489c",
+    "phorvex/internal/mathlab/endpoint_study.go": "016ab08653559c8e3d0a595db89fbb974988e69bf63dc360030dc4a36658aa90",
+    "phorvex/internal/mathlab/endpoint_study_test.go": "665acd14c865b6c1e70ffa33fd14da5e210c746d9cba37c3436faabba683e7a9"
+  },
+  "evidence": {
+    "core-study-static-review.json": "e02917510ff58f106b0484a20e6aa9d4e4c3aac90a06875792ab9366fd0497e8",
+    "lead-integrated-engine-independent-tests.txt": "b4d1ed41f65e7ca24837942438244ec08fb963e7d8680f5851f451d474fc051d",
+    "worker-integrated-core-full-status.json": "6839e09df1fb68332164865ba95563f42dc73eea228c555cd6dc871038a1b13c",
+    "peer-review/r1-component-review.json": "51c087475985d87b46f9e760e3c6ec6583efeec717a3267ad3ab1fca3a9aab50"
+  },
+  "scope": "Reviewed offline experimental engine source. Root independently ran real producer/selection/CLI tests covering exact baseline, provenance/gate/source tamper, explicit cross-version, no backdated history, missing-price comparability, containment, negative-J worth and embedded identity. Full final source preflight and actual stage64tick acceptance remain pending; no live V3 actuation authorized."
+}

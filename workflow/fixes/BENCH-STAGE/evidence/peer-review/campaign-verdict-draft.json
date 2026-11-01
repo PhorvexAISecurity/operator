@@ -1,0 +1,79 @@
+{
+  "result": "DRAFT_ACCEPT_EVIDENCE_PENDING_FINAL_GATES",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T01:15:44.670240+00:00",
+  "campaign": "2026-10-31-stage-brain-benchmark",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "last_runtime_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "source_delta_binding": {
+    "paths": [
+      "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz"
+    ],
+    "archive_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+    "meaning": "Only independently accepted generated archive changed after runtime3e11; no runtime source semantic delta."
+  },
+  "hypotheses": {
+    "H1": {
+      "result": "SUPPORTED",
+      "scope": "Real stage source/image/process-identity-bound snapshots; exact64baseline for parameter and endpoint requests, plus actualcode control/local-base/candidate64match. Foreign namespace/source/missing-pin refusal covered by independent component boundary controls."
+    },
+    "H2": {
+      "result": "SUPPORTED",
+      "scope": "Three actualparameter experiments and a separate fresh LLMcode retry pass; exactsource/candidatebundle/testgates/three-armreplay/Telegramdelivery bound. Firstfailedcodeattempt retained. Purehelper notinvokedbyactivepicker."
+    },
+    "H3": {
+      "result": "SUPPORTED_FOR_DECLARED_SHORT_WINDOW",
+      "scope": "Frozen600journalprefix and all64 rawsnapshot/clocks/ledgers rederived; settledUID-boundcalibration3; integratedpairedbrainarms600/default andcustomW240/L300 complete64, original30dblockedbeforeexecution. ActualwrongUID409 and environmental gap preservation are separate negative controls."
+    }
+  },
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-parameter-review.json",
+      "sha256": "f2b1be426bc3dbde96d7de3067877e3884ff77b1b6b67b090d81cd3fed7b98a7"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-round2-invalidation-review.json",
+      "sha256": "6c6e6266a3fcaf06708c53834add85d6e3c5f62f2b2a045153a520c8059fe578"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-endpoint-result-review.json",
+      "sha256": "039fa39e5cf0f5e2927dcd2773698b74dd955f291d6cd0c2e3c3deb60bcbfee0"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-300/component-review.json",
+      "sha256": "00c90d6a03b14c6c001e4b1a8534d481d6534965af180ea24fedb4f9bf99b980"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-600/component-review.json",
+      "sha256": "69ae78c351b1b81fd17743924489139d29477aaa1bc361cc6afe4d220e0a1372"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/replay-delivery-review.json",
+      "sha256": "61990fee5f7d781aefd5e2b26f733b4317587469e34377748a223374e5e38507"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/packaging/component-review.json",
+      "sha256": "67a8fb3e9db59b3503c54d1e094d7b00dd8351907b8a0b0d3e704992ece7e4e8"
+    }
+  ],
+  "required_before_final_acceptance": [
+    {
+      "gate": "coherent_final_source_preflight",
+      "condition": "Complete required exact ec310 current-CI preflight receipt, with all required checks and immutable source binding; prior3e11 archive failures remain retained."
+    },
+    {
+      "gate": "cleanup_and_persistent_handover",
+      "condition": "Independent readback of retained live source/UID and bot/observer/refresher status, fresh postretry refresh, bounded disk/quotas, restored timers, removed owned transients/auth and source clones, retained exactcandidatebundle/rawjournals/results; campaign mutation ledger and cleanup table reconcile all actual changes."
+    }
+  ],
+  "claims_not_accepted": [
+    "Guaranteed absence of future benchmark failures or automatic support for missing history or unsupported parameters.",
+    "Original30day/one-day completeness or proven long-horizon scan/refresh performance.",
+    "DeployedproductionV3, security efficacy, counterfactual realized endpoint cost, application outage, or acceptedtenantSLO.",
+    "V3 ranking advantage on this campaign: effective lambda remained0atfloor; distinct/nonzero-lambda controls are synthetic and separate.",
+    "One calibration is enough to establish duration quantiles: default uses studyprior43s with n1; customW240uses knownhistory n0classprior.",
+    "Retry success explains the first timeout: contention remains an unproved hypothesis.",
+    "IncomingTelegram upload path testedlive: acceptance jobs were submitted to realqueue byoperator, actualTelegramoutboundreceipts verified."
+  ],
+  "handover_deviation": "Preregisteredround3 endpoint-acceptance wording was not achieved before handover; preserved addendum explicitly admits it, and independent newhistory now establishes endpointacceptance without bridging oldgaps."
+}

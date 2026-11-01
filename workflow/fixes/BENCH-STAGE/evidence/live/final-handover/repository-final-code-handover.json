@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-01T01:11:40.085682+00:00",
+  "repo_origin": "https://github.com/PhorvexSecurity/operator-refactored.git",
+  "before": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "checked_out": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "clean": true,
+  "runtime_release_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "runtime_equivalence": "ec310 differs solely byreviewedvendoredchart archive; runtimebenchmark/phorvextreesidentical",
+  "active_services": {
+    "phorvex-benchmark-bot.service": "active",
+    "phorvex-stage-observer.service": "active",
+    "phorvex-stage-endpoint-refresh.timer": "active"
+  }
+}

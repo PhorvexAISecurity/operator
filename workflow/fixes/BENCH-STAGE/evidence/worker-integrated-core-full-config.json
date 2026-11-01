@@ -1,0 +1,39 @@
+{
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4 + frozen core and endpoint kernel working diff",
+  "description": "Integrated full brain/core suites after reviewed relay and missing-price repair. Not final committed-source acceptance.",
+  "cwd": "/workspace/operator-benchmark-stage/phorvex",
+  "env": {
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2"
+  },
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/worker-integrated-core-full.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/worker-integrated-core-full-status.json",
+  "total_timeout_seconds": 1200,
+  "steps": [
+    {
+      "name": "full-integrated-core-and-transport",
+      "command": [
+        "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+        "test",
+        "-mod=readonly",
+        "-count=1",
+        "-timeout=15m",
+        "./internal/actionset",
+        "./internal/decision",
+        "./internal/mathlab",
+        "./cmd/brain-replay",
+        "./internal/cost/endpoint",
+        "./cmd/endpoint-v3",
+        "./internal/brainclient",
+        "./internal/brainsvc",
+        "./cmd/brain",
+        "./internal/archtest",
+        "./tools/covermap"
+      ],
+      "timeout_seconds": 1200
+    }
+  ]
+}

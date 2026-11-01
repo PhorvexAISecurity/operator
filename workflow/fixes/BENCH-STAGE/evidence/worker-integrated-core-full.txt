@@ -1,0 +1,14 @@
+Integrated full brain/core suites after reviewed relay and missing-price repair. Not final committed-source acceptance.
+START full-integrated-core-and-transport
+ok  	github.com/phorvex/phorvex/internal/actionset	0.107s
+ok  	github.com/phorvex/phorvex/internal/decision	66.270s
+ok  	github.com/phorvex/phorvex/internal/mathlab	6.515s
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.814s
+ok  	github.com/phorvex/phorvex/internal/cost/endpoint	0.094s
+ok  	github.com/phorvex/phorvex/cmd/endpoint-v3	0.012s
+ok  	github.com/phorvex/phorvex/internal/brainclient	1.626s
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.081s
+ok  	github.com/phorvex/phorvex/cmd/brain	0.119s
+ok  	github.com/phorvex/phorvex/internal/archtest	1.172s
+ok  	github.com/phorvex/phorvex/tools/covermap	1.408s
+END full-integrated-core-and-transport exit=0

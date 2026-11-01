@@ -1,0 +1,65 @@
+schema_version: 1
+intake_id: RPT-20261101-005202-stage-runtime-deadline
+kind: OBSERVATION
+title: Stage code-benchmark candidate hit unchanged runtime deadline
+state: VERIFIED
+reporter: bench-v3-lead
+approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+created_at: '2026-11-01T00:52:25+00:00'
+updated_at: '2026-11-01T00:53:26+00:00'
+pins:
+  source_main_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  source_release: 348c1c7a64256e945f10077b3eb8e2a6cca107ea
+  deployed_image: null
+  deployed_digest: null
+  deployed_git_sha: ef94fad362dabb51469211388ef80cdfa6eee1d4
+  environment: jump-host-stage-benchmark
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: pending
+  candidates: []
+  determination: null
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: null
+  fix_id: null
+  approval_ref: null
+roles:
+  human_owner: human-owner
+  investigator: bench-v3-lead
+  coordinator: bench-v3-lead
+next_action:
+  owner: bench-v3-lead
+  action: Reconcile evidence and covered remediation in BENCH-STAGE reviewed PR; no
+    additional product fix
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-11-01T00:53:21+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-11-01T00:53:23+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-11-01T00:53:26+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+revision: 3

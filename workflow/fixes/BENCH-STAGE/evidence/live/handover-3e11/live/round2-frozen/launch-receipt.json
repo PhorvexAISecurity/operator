@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-31T23:54:42.794147+00:00",
+  "pid": 3753173,
+  "collector_source": "1a70c2b1167e0725b90f7b0219488ca315abaa26",
+  "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "archive_sha256": "eec8567fa9aa99354fb220feeded6e9fa0b09ac2ce78723acfaca097a6611cc7",
+  "review_sha256": "4d1f78b1d4047b13811a1da05697545732d01c0e7bb2dc2c66dea5c5c9ae6ff7",
+  "release": "/home/hami/phorvex-benchmark/releases/stage-observer-1a70c2b1",
+  "journal": "/home/hami/phorvex-benchmark/stage-data/observer/ef94-1a70/compressed-evidence.db",
+  "duration_seconds": 1800,
+  "encoding": "zlib-v1",
+  "max_bytes": 4294967296
+}

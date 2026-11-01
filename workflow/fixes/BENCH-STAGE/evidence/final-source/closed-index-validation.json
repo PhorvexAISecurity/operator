@@ -1,0 +1,14 @@
+{
+  "producer": "bench-v3-worker",
+  "recorded_at": "2026-11-01T02:06:56.715795+00:00",
+  "result": "PASS",
+  "source_head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "fix_artifacts_including_this_receipt": 526,
+  "formal_check_rows_preserved": 11,
+  "campaign_round_manifests_unchanged": 4,
+  "campaign_intake_inventory_files_verified": 68,
+  "intake_manifests_indexed": 3,
+  "doctor_result": "PASS",
+  "current_preflight_revalidated_require_worktree": true,
+  "note": "Final doctor ran once after closed signoffs and initial indexing. Its completed log/result and lead credential scan were then indexed, and every retained hash plus manifest schema was validated. Formal check rows and all four reviewed campaign manifests were preserved. Original untracked protobuf generation script is attributed to its worker author; no payload changed. No broad test rerun and no source repin."
+}

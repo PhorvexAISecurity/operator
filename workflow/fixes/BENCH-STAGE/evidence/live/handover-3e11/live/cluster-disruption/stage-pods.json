@@ -1,0 +1,2917 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/restartedAt": "2026-10-27T19:57:16Z"
+        },
+        "creationTimestamp": "2026-11-01T00:22:29Z",
+        "generateName": "staging-actuator-6d4cf757d4-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "actuator",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/managed-by": "Helm",
+          "app.kubernetes.io/name": "phorvex-actuator",
+          "app.kubernetes.io/part-of": "phorvex",
+          "app.kubernetes.io/version": "0.1.0",
+          "pod-template-hash": "6d4cf757d4",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-actuator-6d4cf757d4-gxzdw",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-actuator-6d4cf757d4",
+            "uid": "46831b6c-077f-432d-b49a-bd903128a01e"
+          }
+        ],
+        "resourceVersion": "102386254",
+        "uid": "0cca146f-47b6-4ac1-9ef0-56e9e40d23e7"
+      },
+      "spec": {
+        "automountServiceAccountToken": true,
+        "containers": [
+          {
+            "args": [
+              "--listen=:9090",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--shutdown-grace=20s",
+              "--log-level=info",
+              "--log-format=json",
+              "--policy-namespaces=phorvex-staging-demo,console-identity-shared,p6-demo",
+              "--max-retained-quarantines-per-namespace=1",
+              "--serving-security-mode=secure-required",
+              "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+              "--persistence-observer-identity=",
+              "--persistence-observer-namespaces=",
+              "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+              "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+              "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+              "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+            ],
+            "env": [
+              {
+                "name": "POD_NAMESPACE",
+                "valueFrom": {
+                  "fieldRef": {
+                    "apiVersion": "v1",
+                    "fieldPath": "metadata.namespace"
+                  }
+                }
+              },
+              {
+                "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_INJECTOR_IDENTITY",
+                "value": "phorvex-staging/staging-attacks"
+              },
+              {
+                "name": "PHORVEX_ACTUATOR",
+                "value": "native"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_SOURCE_SHA256",
+                "value": "edb20620c6c6b7e347379e21b431efcc140b92759afab702bb24dff089fe5625"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_PROXY_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3ed1756b0596d95014312d4599ff45fcc4b9bafb3e34b7e259ac00463ea38619"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/actuator:staging-0.11.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303@sha256:00f0ec6717d657a6e6346c29eed75a8bdd981efd94db639e15e1b8c1eb51a82a",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "actuator",
+            "ports": [
+              {
+                "containerPort": 9090,
+                "name": "grpc",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-bz49p",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-47-45.us-east-2.compute.internal",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 65532,
+          "runAsNonRoot": true,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "staging-actuator",
+        "serviceAccountName": "staging-actuator",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "grpc-tls",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-actuator-grpc-tls"
+            }
+          },
+          {
+            "name": "kube-api-access-bz49p",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:30Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:29Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:32Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:32Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:29Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "100m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://98bfcda306c40ab094381f1a2da8e3deb31414a8204b51008e682e40dde78614",
+            "image": "sha256:c816935a20d74bf2a92bc3c007bbf876d7cb3b6ecb355e88b7f8f6ad4a44b450",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/actuator@sha256:00f0ec6717d657a6e6346c29eed75a8bdd981efd94db639e15e1b8c1eb51a82a",
+            "lastState": {},
+            "name": "actuator",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-01T00:22:31Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-bz49p",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.47.45",
+        "hostIPs": [
+          {
+            "ip": "172.27.47.45"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.35.20",
+        "podIPs": [
+          {
+            "ip": "172.27.35.20"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "memory": "1Gi"
+          },
+          "requests": {
+            "cpu": "79m",
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-11-01T00:22:29Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "checksum/console-grants": "f1eb0e31d6765ec877e3f03b3da31dba35745f774e3a5b53d1e1f6121fb2c1fd",
+          "kubectl.kubernetes.io/restartedAt": "2026-10-29T05:11:20Z"
+        },
+        "creationTimestamp": "2026-10-31T20:59:33Z",
+        "generateName": "staging-attacks-846dc4c95b-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "attacks",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/name": "phorvex-attacks",
+          "pod-template-hash": "846dc4c95b",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-attacks-846dc4c95b-nfcbf",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-attacks-846dc4c95b",
+            "uid": "251a7743-f2be-47f2-b5eb-44d6c0c465c4"
+          }
+        ],
+        "resourceVersion": "102204989",
+        "uid": "0a147712-6ef6-45af-8d14-a67ee7629ca8"
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "-root=/data",
+              "-addr=:8090",
+              "-state-dir=/var/lib/phorvex-console",
+              "-audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445",
+              "-audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc",
+              "-audit-source-client-cert=/etc/audit-client/tls.crt",
+              "-audit-source-client-key=/etc/audit-client/tls.key",
+              "-audit-source-ca=/etc/audit-client/ca.crt",
+              "-metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+              "-auth-grants=/etc/phorvex-console/grants.json"
+            ],
+            "env": [
+              {
+                "name": "PHORVEX_INJECTOR_IDENTITY",
+                "value": "phorvex-staging/staging-attacks"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_SWEEP_NAMESPACES",
+                "value": "phorvex-staging-demo,console-identity-shared,p6-demo"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_MAX_BYTES",
+                "value": "2147483648"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES",
+                "value": "536870912"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS",
+                "value": "0"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT",
+                "value": "p6-demo"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT",
+                "value": "console-identity-shared"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE",
+                "value": "/etc/phorvex-attack-catalog/identity-profile.json"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL",
+                "value": "system:serviceaccount:phorvex-staging:staging-actuator"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL",
+                "value": "system:serviceaccount:phorvex-staging:staging-attacks-cleanup"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_MANAGER_PRINCIPAL",
+                "value": "system:serviceaccount:phorvex-staging:staging-phorvex-manager"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_SENSOR_PRINCIPAL",
+                "value": "system:serviceaccount:phorvex-staging:staging-sensor"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL",
+                "value": "system:serviceaccount:phorvex-staging:staging-actuator"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED",
+                "value": "true"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_RUN_PROMETHEUS_ENVIRONMENT",
+                "value": "staging"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_LITELLM_OUTPUT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_ADMISSION_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_CRM_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_PROM_URL",
+                "value": "http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_SIGNER_ARN",
+                "value": "arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-stagingp-140f47b908/42ff0e6e1afd5c83"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_ISSUER",
+                "value": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_CLIENT_ID",
+                "value": "5njtljkiehde7iesciehr6a562"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_REGION",
+                "value": "us-east-2"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_ISSUER",
+                "value": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_AUDIENCE",
+                "value": "phorvex-staging-console"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_JWKS_URL",
+                "value": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_TRUSTED_ORIGINS",
+                "value": "https://staging-console.phorvex.ai"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/attacks:staging-0.11.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303@sha256:615d753b2eecd84eecbb9a2881804d01bc019eef7c2d622f5a1391a67019e699",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/api/health",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 20,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "attacks",
+            "ports": [
+              {
+                "containerPort": 8090,
+                "name": "http",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/api/health",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "startupProbe": {
+              "failureThreshold": 720,
+              "httpGet": {
+                "path": "/api/health",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 5,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/audit-client",
+                "name": "audit-client",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/tmp",
+                "name": "console-tmp"
+              },
+              {
+                "mountPath": "/var/lib/phorvex-console",
+                "name": "console-state"
+              },
+              {
+                "mountPath": "/etc/phorvex-attack-catalog/identity-profile.json",
+                "name": "attack-catalog-identity-fixture",
+                "readOnly": true,
+                "subPath": "profile.json"
+              },
+              {
+                "mountPath": "/etc/phorvex-console",
+                "name": "console-grants",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-f5hg4",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ip-172-27-11-194.us-east-2.compute.internal"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 65532,
+          "runAsNonRoot": true
+        },
+        "serviceAccount": "staging-attacks",
+        "serviceAccountName": "staging-attacks",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "emptyDir": {},
+            "name": "console-tmp"
+          },
+          {
+            "name": "console-state",
+            "persistentVolumeClaim": {
+              "claimName": "staging-attacks-state"
+            }
+          },
+          {
+            "configMap": {
+              "defaultMode": 288,
+              "items": [
+                {
+                  "key": "profile.json",
+                  "path": "profile.json"
+                }
+              ],
+              "name": "staging-attacks-identity-fixture"
+            },
+            "name": "attack-catalog-identity-fixture"
+          },
+          {
+            "name": "audit-client",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-phorvex-audit-client"
+            }
+          },
+          {
+            "configMap": {
+              "defaultMode": 288,
+              "name": "staging-attacks-grants"
+            },
+            "name": "console-grants"
+          },
+          {
+            "name": "kube-api-access-f5hg4",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "10m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T20:59:43Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T20:59:33Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T20:59:49Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T20:59:49Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T20:59:33Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "10m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://8d080d742678c5f4138a4b4ff484e91abbe48efbf85d9baa1b9181a974cbaaa8",
+            "image": "sha256:6c265bb65f0f4ac995ab08810338513fc42ab11ef39a5601d599284aab877a57",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/attacks@sha256:615d753b2eecd84eecbb9a2881804d01bc019eef7c2d622f5a1391a67019e699",
+            "lastState": {},
+            "name": "attacks",
+            "ready": true,
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-31T20:59:45Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/audit-client",
+                "name": "audit-client",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/tmp",
+                "name": "console-tmp"
+              },
+              {
+                "mountPath": "/var/lib/phorvex-console",
+                "name": "console-state"
+              },
+              {
+                "mountPath": "/etc/phorvex-attack-catalog/identity-profile.json",
+                "name": "attack-catalog-identity-fixture",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/etc/phorvex-console",
+                "name": "console-grants",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-f5hg4",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.11.194",
+        "hostIPs": [
+          {
+            "ip": "172.27.11.194"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.11.90",
+        "podIPs": [
+          {
+            "ip": "172.27.11.90"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "requests": {
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-10-31T20:59:33Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-11-01T00:22:29Z",
+        "generateName": "staging-brain-b4d544d55-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "brain",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/managed-by": "Helm",
+          "app.kubernetes.io/name": "phorvex-brain",
+          "app.kubernetes.io/part-of": "phorvex",
+          "app.kubernetes.io/version": "0.1.0",
+          "pod-template-hash": "b4d544d55",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2b"
+        },
+        "name": "staging-brain-b4d544d55-kc9sz",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-brain-b4d544d55",
+            "uid": "20c2953f-72c3-4ccf-980e-874a35acc218"
+          }
+        ],
+        "resourceVersion": "102386521",
+        "uid": "e1b7f2cb-7fe1-4dfa-9943-a1ff99c274de"
+      },
+      "spec": {
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "args": [
+              "--listen=:9090",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--gpu-envelope-max=0.2925",
+              "--shutdown-grace=20s",
+              "--log-level=info",
+              "--log-format=json",
+              "--math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense",
+              "--math-lab-capture-dir=/var/lib/phorvex/math-lab",
+              "--math-lab-capture-max-bytes=1073741824",
+              "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+              "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+              "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+              "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+            ],
+            "env": [
+              {
+                "name": "PHORVEX_BRAIN_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "brain",
+            "ports": [
+              {
+                "containerPort": 9090,
+                "name": "grpc",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/lib/phorvex/math-lab",
+                "name": "math-lab"
+              },
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-62-45.us-east-2.compute.internal",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "runAsNonRoot": true,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "staging-brain",
+        "serviceAccountName": "staging-brain",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "math-lab",
+            "persistentVolumeClaim": {
+              "claimName": "staging-brain-mathlab"
+            }
+          },
+          {
+            "name": "grpc-tls",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-brain-grpc-tls"
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:47Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:29Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:50Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:50Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:22:29Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "100m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://61602836ee8fe290e389a49be6685b232cdf88c02659c4e233d74834cb8a622a",
+            "image": "sha256:f1291812f32fc31eda63fb86d51a492cd842bf1812b59510b9bc8d2c28ca9de3",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+            "lastState": {},
+            "name": "brain",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-01T00:22:48Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/lib/phorvex/math-lab",
+                "name": "math-lab"
+              },
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.62.45",
+        "hostIPs": [
+          {
+            "ip": "172.27.62.45"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.51.144",
+        "podIPs": [
+          {
+            "ip": "172.27.51.144"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "memory": "1Gi"
+          },
+          "requests": {
+            "cpu": "79m",
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-11-01T00:22:29Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-10-25T04:04:43Z",
+        "generateName": "staging-persistence-observer-8b9f94cbb-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/name": "phorvex-persistence-observer",
+          "pod-template-hash": "8b9f94cbb",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-persistence-observer-8b9f94cbb-xg52z",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-persistence-observer-8b9f94cbb",
+            "uid": "358ffc94-a9e3-4437-b2ca-bb9abc361776"
+          }
+        ],
+        "resourceVersion": "94137162",
+        "uid": "0a9e24e3-984a-4df9-8cc9-2e6c038f552c"
+      },
+      "spec": {
+        "automountServiceAccountToken": true,
+        "containers": [
+          {
+            "args": [
+              "--namespaces=rev5-live-20261024-persistence",
+              "--operator-namespace=phorvex-staging",
+              "--identity=system:serviceaccount:phorvex-staging:staging-persistence-observer",
+              "--interval=2s",
+              "--scan-timeout=10s"
+            ],
+            "command": [
+              "/persistence-observer"
+            ],
+            "env": [
+              {
+                "name": "POD_NAMESPACE",
+                "valueFrom": {
+                  "fieldRef": {
+                    "apiVersion": "v1",
+                    "fieldPath": "metadata.namespace"
+                  }
+                }
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager:ctlstop-615116dc",
+            "imagePullPolicy": "IfNotPresent",
+            "name": "persistence-observer",
+            "resources": {
+              "limits": {
+                "cpu": "250m",
+                "memory": "192Mi"
+              },
+              "requests": {
+                "cpu": "25m",
+                "memory": "64Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-4z45j",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "staging-persistence-observer",
+        "serviceAccountName": "staging-persistence-observer",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-4z45j",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "25m",
+          "memory": "64Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-25T04:04:44Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-25T04:04:43Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-25T04:04:46Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-25T04:04:46Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-25T04:04:43Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "25m",
+              "memory": "64Mi"
+            },
+            "containerID": "containerd://cd1a3b8e75079b60a5743fe7bfd04f410f102e1482a7ae950f72dcf8f2272cba",
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager:ctlstop-615116dc",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/manager@sha256:21573937a8e431d55c164408ee3fcd9a5a18c4c3fb42add8bc3b53e0fcc21ba4",
+            "lastState": {},
+            "name": "persistence-observer",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "cpu": "250m",
+                "memory": "192Mi"
+              },
+              "requests": {
+                "cpu": "25m",
+                "memory": "64Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-25T04:04:46Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-4z45j",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.11.194",
+        "hostIPs": [
+          {
+            "ip": "172.27.11.194"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.11.182",
+        "podIPs": [
+          {
+            "ip": "172.27.11.182"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "cpu": "250m",
+            "memory": "192Mi"
+          },
+          "requests": {
+            "memory": "64Mi"
+          }
+        },
+        "startTime": "2026-10-25T04:04:43Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/restartedAt": "2026-10-27T19:57:16Z",
+          "phorvex.ai/release-source-sha": "0eeb7f255846b2a96e69983ebbd8a3c093d05b1e"
+        },
+        "creationTimestamp": "2026-11-01T00:17:47Z",
+        "generateName": "staging-phorvex-58695ffd75-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "manager",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/managed-by": "Helm",
+          "app.kubernetes.io/name": "phorvex",
+          "app.kubernetes.io/part-of": "phorvex",
+          "pod-template-hash": "58695ffd75",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-phorvex-58695ffd75-5vq2j",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-phorvex-58695ffd75",
+            "uid": "50204e63-b1a9-4987-bb07-0f80133ae185"
+          }
+        ],
+        "resourceVersion": "102381403",
+        "uid": "b0da8699-621f-4422-bfec-9ccce8deefd0"
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "--base-interval=10s",
+              "--actions-supported-debounce=3",
+              "--calibration-shadow=true",
+              "--calibration-sample=5m",
+              "--calibration-refresh=30m",
+              "--calibration-lookback=168h",
+              "--calibration-export-dir=/var/run/phorvex-calibration",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--leader-elect=true",
+              "--brain-endpoint=staging-brain:9090",
+              "--sensor-endpoint=staging-sensor:9090",
+              "--actuator-endpoint=staging-actuator:9090",
+              "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+              "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+              "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+              "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+              "--policy-namespaces=phorvex-staging-demo,console-identity-shared,p6-demo",
+              "--max-retained-quarantines-per-namespace=1",
+              "--serving-security-mode=secure-required",
+              "--gpu-envelope-max=0.2925",
+              "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+              "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+              "--persistence-observer-identity=",
+              "--persistence-observer-namespaces=",
+              "--audit-json=/audit/live.jsonl",
+              "--audit-max-bytes=268435456",
+              "--audit-max-backups=4",
+              "--audit-source-addr=:8445",
+              "--audit-source-cert=/etc/audit-server/tls.crt",
+              "--audit-source-key=/etc/audit-server/tls.key",
+              "--audit-source-ca=/etc/audit-server/ca.crt",
+              "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc",
+              "--math-lab-capture-cost-evidence=true"
+            ],
+            "env": [
+              {
+                "name": "POD_NAMESPACE",
+                "valueFrom": {
+                  "fieldRef": {
+                    "apiVersion": "v1",
+                    "fieldPath": "metadata.namespace"
+                  }
+                }
+              },
+              {
+                "name": "PHORVEX_BRAIN_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e"
+              },
+              {
+                "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_INJECTOR_IDENTITY",
+                "value": "phorvex-staging/staging-attacks"
+              },
+              {
+                "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+                "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+              },
+              {
+                "name": "PHORVEX_ACTUATOR",
+                "value": "native"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_SOURCE_SHA256",
+                "value": "edb20620c6c6b7e347379e21b431efcc140b92759afab702bb24dff089fe5625"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_PROXY_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3ed1756b0596d95014312d4599ff45fcc4b9bafb3e34b7e259ac00463ea38619"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": 8081,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 15,
+              "periodSeconds": 20,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "manager",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8445,
+                "name": "audit-tls",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": 8081,
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 5,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "startupProbe": {
+              "failureThreshold": 42,
+              "httpGet": {
+                "path": "/healthz",
+                "port": 8081,
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/audit",
+                "name": "audit"
+              },
+              {
+                "mountPath": "/etc/audit-server",
+                "name": "audit-server",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/phorvex-calibration",
+                "name": "calibration-evidence"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-zhrhr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 65532,
+          "fsGroupChangePolicy": "OnRootMismatch",
+          "runAsNonRoot": true
+        },
+        "serviceAccount": "staging-phorvex-manager",
+        "serviceAccountName": "staging-phorvex-manager",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "grpc-tls",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-dispatcher-grpc-tls"
+            }
+          },
+          {
+            "name": "audit",
+            "persistentVolumeClaim": {
+              "claimName": "staging-phorvex-audit"
+            }
+          },
+          {
+            "name": "audit-server",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-phorvex-audit-server"
+            }
+          },
+          {
+            "emptyDir": {},
+            "name": "calibration-evidence"
+          },
+          {
+            "name": "kube-api-access-zhrhr",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "50m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:18:00Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:17:47Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:18:10Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:18:10Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-01T00:17:47Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "50m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://038afe53e65da9b05f5521f859b6e24cb9d5c44e62c5d320e9fb1795d434bf5e",
+            "image": "sha256:aa514655e121ffeb4a2ba71b4521403db3964d560b85714e06339b637a26ef12",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+            "lastState": {},
+            "name": "manager",
+            "ready": true,
+            "resources": {
+              "requests": {
+                "cpu": "50m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-01T00:18:04Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/audit",
+                "name": "audit"
+              },
+              {
+                "mountPath": "/etc/audit-server",
+                "name": "audit-server",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/phorvex-calibration",
+                "name": "calibration-evidence"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-zhrhr",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.11.194",
+        "hostIPs": [
+          {
+            "ip": "172.27.11.194"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.11.88",
+        "podIPs": [
+          {
+            "ip": "172.27.11.88"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "requests": {
+            "cpu": "28m",
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-11-01T00:17:47Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "checksum/console-grants": "fedbcad138c4679e0dc890e843680e057525d723c252026113dadf0997ce4c0f",
+          "kubectl.kubernetes.io/restartedAt": "2026-10-31T07:46:21Z"
+        },
+        "creationTimestamp": "2026-10-31T22:54:16Z",
+        "generateName": "staging-phorvex-console-5d9897b8c7-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "console",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/name": "phorvex-console",
+          "pod-template-hash": "5d9897b8c7",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-phorvex-console-5d9897b8c7-qq2rd",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-phorvex-console-5d9897b8c7",
+            "uid": "8aba2ced-95fa-4bfb-b861-cad93968a50e"
+          }
+        ],
+        "resourceVersion": "102305597",
+        "uid": "924d1a92-b613-4fff-9e5b-800c32ac62d4"
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "-root=/data",
+              "-web=/app/web",
+              "-addr=:8090",
+              "-state-dir=/var/lib/phorvex-console",
+              "-audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445",
+              "-audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc",
+              "-audit-source-client-cert=/etc/audit-client/tls.crt",
+              "-audit-source-client-key=/etc/audit-client/tls.key",
+              "-audit-source-ca=/etc/audit-client/ca.crt",
+              "-metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+              "-auth-grants=/etc/phorvex-console/grants.json"
+            ],
+            "env": [
+              {
+                "name": "PHORVEX_INJECTOR_IDENTITY",
+                "value": "phorvex-staging/staging-attacks"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACKS_URL",
+                "value": "http://staging-attacks:8090"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_SWEEP_NAMESPACES",
+                "value": "phorvex-staging-demo,console-identity-shared,p6-demo"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_MAX_BYTES",
+                "value": "2147483648"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES",
+                "value": "536870912"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS",
+                "value": "0"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT",
+                "value": "p6-demo"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT",
+                "value": "console-identity-shared"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_LITELLM_OUTPUT_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_ADMISSION_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_CRM_LIVE_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED",
+                "value": "false"
+              },
+              {
+                "name": "PHORVEX_PROM_URL",
+                "value": "http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_SIGNER_ARN",
+                "value": "arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-stagingp-140f47b908/42ff0e6e1afd5c83"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_ISSUER",
+                "value": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_CLIENT_ID",
+                "value": "5njtljkiehde7iesciehr6a562"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_ALB_REGION",
+                "value": "us-east-2"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_ISSUER",
+                "value": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_AUDIENCE",
+                "value": "phorvex-staging-console"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_OIDC_JWKS_URL",
+                "value": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_TRUSTED_ORIGINS",
+                "value": "https://staging-console.phorvex.ai"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303@sha256:67ae8c81da98b21e51fc514c6c0726982eced06a06bd0fd23724a28def6ba785",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 10,
+              "periodSeconds": 20,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "console",
+            "ports": [
+              {
+                "containerPort": 8090,
+                "name": "http",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "initialDelaySeconds": 3,
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "startupProbe": {
+              "failureThreshold": 720,
+              "httpGet": {
+                "path": "/api/health",
+                "port": "http",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 5,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/audit-client",
+                "name": "audit-client",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/tmp",
+                "name": "console-tmp"
+              },
+              {
+                "mountPath": "/var/lib/phorvex-console",
+                "name": "console-state"
+              },
+              {
+                "mountPath": "/etc/phorvex-console",
+                "name": "console-grants",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-g8x7f",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ip-172-27-11-194.us-east-2.compute.internal"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "fsGroup": 65532,
+          "runAsNonRoot": true
+        },
+        "serviceAccount": "staging-phorvex-console",
+        "serviceAccountName": "staging-phorvex-console",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "emptyDir": {},
+            "name": "console-tmp"
+          },
+          {
+            "name": "console-state",
+            "persistentVolumeClaim": {
+              "claimName": "staging-phorvex-console-state"
+            }
+          },
+          {
+            "name": "audit-client",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-phorvex-audit-client"
+            }
+          },
+          {
+            "configMap": {
+              "defaultMode": 288,
+              "name": "staging-phorvex-console-grants"
+            },
+            "name": "console-grants"
+          },
+          {
+            "name": "kube-api-access-g8x7f",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "10m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:25Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:16Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:30Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:30Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:16Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "10m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://729b1b3efa4428ce31c0e55b1594dd70d7714d477f4a44b86fbd6b5a757378d2",
+            "image": "sha256:5df981742e88d2600cfbb27662dbaf8ceddb9552dd9be7667bd9b5c7585c8a0c",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console@sha256:67ae8c81da98b21e51fc514c6c0726982eced06a06bd0fd23724a28def6ba785",
+            "lastState": {},
+            "name": "console",
+            "ready": true,
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-31T22:54:25Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/audit-client",
+                "name": "audit-client",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/tmp",
+                "name": "console-tmp"
+              },
+              {
+                "mountPath": "/var/lib/phorvex-console",
+                "name": "console-state"
+              },
+              {
+                "mountPath": "/etc/phorvex-console",
+                "name": "console-grants",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-g8x7f",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.11.194",
+        "hostIPs": [
+          {
+            "ip": "172.27.11.194"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.11.80",
+        "podIPs": [
+          {
+            "ip": "172.27.11.80"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "requests": {
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-10-31T22:54:16Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/restartedAt": "2026-10-28T21:44:27Z"
+        },
+        "creationTimestamp": "2026-10-31T22:54:16Z",
+        "generateName": "staging-sensor-6b65578c84-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/component": "sensor",
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/managed-by": "Helm",
+          "app.kubernetes.io/name": "phorvex-sensor",
+          "app.kubernetes.io/part-of": "phorvex",
+          "app.kubernetes.io/version": "0.1.0",
+          "eks.amazonaws.com/pod-identity": "enabled",
+          "pod-template-hash": "6b65578c84",
+          "topology.kubernetes.io/region": "us-east-2",
+          "topology.kubernetes.io/zone": "us-east-2a"
+        },
+        "name": "staging-sensor-6b65578c84-5pbsc",
+        "namespace": "phorvex-staging",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "staging-sensor-6b65578c84",
+            "uid": "4b21f696-5a78-458d-91bc-5cfbb24064d3"
+          }
+        ],
+        "resourceVersion": "102305413",
+        "uid": "1bb88080-d6c9-48d9-a234-52a5aab2b4f7"
+      },
+      "spec": {
+        "automountServiceAccountToken": true,
+        "containers": [
+          {
+            "args": [
+              "--listen=:9090",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--shutdown-grace=20s",
+              "--log-level=info",
+              "--log-format=json",
+              "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+              "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+              "--policy-namespaces=phorvex-staging-demo,console-identity-shared,p6-demo",
+              "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+              "--persistence-observer-identity=",
+              "--persistence-observer-namespaces=",
+              "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+              "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+              "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+              "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+            ],
+            "env": [
+              {
+                "name": "POD_NAMESPACE",
+                "valueFrom": {
+                  "fieldRef": {
+                    "apiVersion": "v1",
+                    "fieldPath": "metadata.namespace"
+                  }
+                }
+              },
+              {
+                "name": "PHORVEX_INJECTOR_IDENTITY",
+                "value": "phorvex-staging/staging-attacks"
+              },
+              {
+                "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+                "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_SOURCE_SHA256",
+                "value": "edb20620c6c6b7e347379e21b431efcc140b92759afab702bb24dff089fe5625"
+              },
+              {
+                "name": "PHORVEX_THROTTLE_PROXY_IMAGE",
+                "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex@sha256:3ed1756b0596d95014312d4599ff45fcc4b9bafb3e34b7e259ac00463ea38619"
+              },
+              {
+                "name": "PHORVEX_CONSOLE_IDENTITY_FIXTURE",
+                "value": "/etc/phorvex/identity-fixture/profile.json"
+              },
+              {
+                "name": "AWS_STS_REGIONAL_ENDPOINTS",
+                "value": "regional"
+              },
+              {
+                "name": "AWS_DEFAULT_REGION",
+                "value": "us-east-2"
+              },
+              {
+                "name": "AWS_REGION",
+                "value": "us-east-2"
+              },
+              {
+                "name": "AWS_CONTAINER_CREDENTIALS_FULL_URI",
+                "value": "http://169.254.170.23/v1/credentials"
+              },
+              {
+                "name": "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+                "value": "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token"
+              }
+            ],
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor:staging-0.11.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093",
+            "imagePullPolicy": "IfNotPresent",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "sensor",
+            "ports": [
+              {
+                "containerPort": 9090,
+                "name": "grpc",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/identity-fixture",
+                "name": "identity-fixture",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-9sqpd",
+                "readOnly": true
+              },
+              {
+                "mountPath": "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount",
+                "name": "eks-pod-identity-token",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+        "nodeSelector": {
+          "kubernetes.io/hostname": "ip-172-27-11-194.us-east-2.compute.internal"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "staging-sensor",
+        "serviceAccountName": "staging-sensor",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "eks-pod-identity-token",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "audience": "pods.eks.amazonaws.com",
+                    "expirationSeconds": 84242,
+                    "path": "eks-pod-identity-token"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "configMap": {
+              "defaultMode": 420,
+              "name": "staging-identity-fixture-profile"
+            },
+            "name": "identity-fixture-profile"
+          },
+          {
+            "configMap": {
+              "defaultMode": 420,
+              "name": "staging-sensor-identity-fixture"
+            },
+            "name": "identity-fixture"
+          },
+          {
+            "name": "grpc-tls",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "staging-sensor-grpc-tls"
+            }
+          },
+          {
+            "name": "kube-api-access-9sqpd",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "256Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:17Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:16Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:18Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:18Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-10-31T22:54:16Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "100m",
+              "memory": "256Mi"
+            },
+            "containerID": "containerd://4436860fa9023e42808914ba0cd2ea625966bffd1837d3ef149699e97dc0756c",
+            "image": "sha256:3c685d33383046659276848080a8097413540e53289b87aa42573052cf67f9bb",
+            "imageID": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor@sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093",
+            "lastState": {},
+            "name": "sensor",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "memory": "1Gi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "256Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-10-31T22:54:18Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/etc/phorvex/identity-fixture",
+                "name": "identity-fixture",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/etc/phorvex/grpc-tls",
+                "name": "grpc-tls",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-9sqpd",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              },
+              {
+                "mountPath": "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount",
+                "name": "eks-pod-identity-token",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "172.27.11.194",
+        "hostIPs": [
+          {
+            "ip": "172.27.11.194"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "172.27.11.91",
+        "podIPs": [
+          {
+            "ip": "172.27.11.91"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "memory": "1Gi"
+          },
+          "requests": {
+            "cpu": "79m",
+            "memory": "256Mi"
+          }
+        },
+        "startTime": "2026-10-31T22:54:16Z"
+      }
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  }
+}

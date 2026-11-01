@@ -1,0 +1,45 @@
+{
+  "result": "PASS",
+  "at": "2026-10-31T23:50:18.420915+00:00",
+  "total_index_entries": 626,
+  "exact_current_producer_entries": 5,
+  "latest_digest": "1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab",
+  "downloaded_bytes": 79254,
+  "header": {
+    "schema": "math-lab.snapshot.v1",
+    "capturedAt": "2026-10-31T23:50:10.929509341Z",
+    "decidedAt": "2026-10-31T23:50:13.094462223Z",
+    "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+    "captureIdentitySource": "recorder-process",
+    "tickID": "eeb086947f86cc8c8e5a78569eb60bf3",
+    "tenant": "stage-brain-benchmark",
+    "namespace": "phorvex-staging-demo",
+    "policyName": "stage-bench-defense",
+    "policyUID": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "policyGeneration": 1,
+    "owner": "uid\u0000621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "parameterSetID": "phorvex-production-decision-parameters/phorvex-staging-demo/stage-bench-defense@621c056d-ae10-452c-8828-b2dd0bbb5cb3:1",
+    "parameterManifestHash": "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8",
+    "policyOverridesHash": "sha256:9f683148e03118d1fa46659ed2be7b1455a812d15d93f9562268658bfd25379b",
+    "processConfig": {
+      "engine": "p1",
+      "flow-residual-classes": "",
+      "gpu-envelope-max": "0.2925",
+      "recon-profile": "ucw-recon"
+    },
+    "processConfigHash": "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010",
+    "reconProfile": "ucw-recon",
+    "contextProvider": "sensed-context",
+    "gpuEnvelopeMax": 0.2925,
+    "economicsMode": "fixed-disruption-aversion-v1",
+    "assets": [
+      "phorvex-staging-demo/stage-bench-api-f9b895d7-znspk",
+      "phorvex-staging-demo/stage-bench-api-f9b895d7-tjfh6",
+      "phorvex-staging-demo/stage-bench-api-f9b895d7-fntvf"
+    ],
+    "selected": null,
+    "finalized": true
+  },
+  "claim": "Actual authenticated Console list/download through manager remote-brain relay; header comes from recorder process and immutable brain image. Replay acceptance is separate."
+}

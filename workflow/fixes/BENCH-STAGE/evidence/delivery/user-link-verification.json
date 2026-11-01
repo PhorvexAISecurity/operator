@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-01T01:37:17.323476+00:00",
+  "result": "PASS",
+  "directory": "/workspace/benchmark-delivery/2026-11-01-stage-brain",
+  "files": {
+    "guide-fa.pdf": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183",
+    "stage-endpoint-600.json": "846d0651ee2bdd2386a4bc73cccd7aec8bf483b7c21ed6069463eb99c5ef4efe",
+    "phorvex-stage-benchmark.zip": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+    "stage-endpoint-custom.json": "ee9a3a631d625aede89880e40bc303c798d7bf7800f6298db42c09d2077bdc55",
+    "stage-parameters-64.txt": "ab8f872f989b8e85d789bffb17c7ee790362699c287ecb1f33d5b30333284354",
+    "RESULTS-fa.txt": "c7345bf91d2e55b031a4b5fe90a54db658852c8e9b24c554511aa4d8d7651a88"
+  },
+  "zip_sha256": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+  "source_review": "peer-review/code-retry/replay-delivery-review.json",
+  "permissions": {
+    "directory": "0o700",
+    "files": [
+      "0o600"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "collection_state": "REPORTS_COLLECTED",
+  "pending_jobs": [],
+  "jobs": [
+    {
+      "id": "8ffcfca38357",
+      "kind": "batch",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "474cff3249df",
+      "kind": "batch",
+      "state": "FAILED",
+      "experiment_id": null
+    },
+    {
+      "id": "180d1e5b1ee9",
+      "kind": "batch",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "74240aadda51",
+      "kind": "batch",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "84fcf64f961b",
+      "kind": "batch",
+      "state": "BLOCKED",
+      "experiment_id": null
+    },
+    {
+      "id": "5fc1c1b0f192",
+      "kind": "batch",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "83014231aae7",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "2c3bdec7-9f84-4a50-b4b8-313e11ff562b"
+    },
+    {
+      "id": "32f795de4856",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "7961f667-ee01-4213-9aa5-cc4393b78bf1"
+    },
+    {
+      "id": "29c3cdd547cd",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "df250104-af61-4aaa-adc4-c6bd21f16aab"
+    },
+    {
+      "id": "4b8171ea3c83",
+      "kind": "bench",
+      "state": "FAILED",
+      "experiment_id": null
+    },
+    {
+      "id": "f4f05c4d2de3",
+      "kind": "endpoint",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "d024b2f8a9fd",
+      "kind": "endpoint",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "5aeb716b562f",
+      "kind": "endpoint",
+      "state": "BLOCKED",
+      "experiment_id": null
+    },
+    {
+      "id": "c963f138052b",
+      "kind": "bench",
+      "state": "DONE",
+      "experiment_id": null
+    }
+  ],
+  "omitted": [],
+  "archive": "/workspace/.phorvex-test-tmp/phorvex-stage-benchmark-20261101-final.zip",
+  "sha256": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+  "files": 103
+}

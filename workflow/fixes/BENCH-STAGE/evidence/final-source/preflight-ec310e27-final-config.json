@@ -1,0 +1,29 @@
+{
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "description": "Coherent final committed-source ec310 preflight after schema-correct campaign metadata doctor PASS, followed by dedicated L1/L2. Source unchanged; prior partial and complete failed attempts remain separately retained.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-ec310e27-final-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-ec310e27-final-status.json",
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ],
+  "launch_prerequisite": "Lead-delegated campaign manifest conversion validated all source payload hashes and existing schema; standalone doctor exit0. Campaign manifests frozen for this run.",
+  "launch_authorized_at": "2026-11-01T01:25:02.408258+00:00"
+}

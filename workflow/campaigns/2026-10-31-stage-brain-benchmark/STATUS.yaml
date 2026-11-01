@@ -1,0 +1,191 @@
+schema_version: 2
+campaign_id: 2026-10-31-stage-brain-benchmark
+profile: workflow-v2
+question: Do stage-only source-pinned bot replays reproduce real brain decisions and
+  compare custom parameter/code and endpoint-study arms truthfully?
+state: CLOSED
+owner: hamihoriyat
+approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+created_at: '2026-10-31T22:31:00+00:00'
+updated_at: '2026-11-01T02:02:18+00:00'
+scope:
+  environment: phorvex-dev-eks/phorvex-staging+phorvex-staging-demo
+  source_release: operator-refactored
+  included_fixes:
+  - BENCH-STAGE
+  duration_ceiling: 6h validation; each calibration <=180s; each collection segment
+    <=30m
+  cost_ceiling: Existing stage cluster only; <=3 small fixture pods; <=2Gi snapshot
+    PVC; <=30 sequential calibration deletes; no new cloud cluster
+  permission: controlled-mutation
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4
+  digest: sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
+  embedded_git_sha: ef94fad362dabb51469211388ef80cdfa6eee1d4
+safety:
+  stop_conditions:
+  - Stop on non-stage target, source or UID drift, unexplained workload mutation,
+    missing control, collection gap or budget breach; preserve honest invalidation
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  unresolved: []
+  cleanup: PASS
+positive_control: PASS
+rounds:
+- id: round-1
+  state: COMPLETE
+- id: round-2
+  state: COMPLETE
+- id: round-3
+  state: COMPLETE
+- id: round-4
+  state: COMPLETE
+findings:
+- RPT-20261101-005200-stage-clock
+- RPT-20261101-005201-stage-vendored-chart
+- RPT-20261101-005202-stage-runtime-deadline
+verdict:
+  result: PASS
+  artifact: verdict.md
+  reviewer: stage-review
+roles:
+  campaign_lead: bench-v3-lead
+  independent_reviewer: stage-review
+  coordinator: bench-v3-lead
+next_action:
+  owner: bench-v3-lead
+  action: Publish reviewed source and evidence PR; retain active stage benchmark services
+    and explicit long-window limits
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-10-31T22:32:35+00:00'
+  by: bench-v3-lead
+  artifact: CAMPAIGN.md
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-10-31T22:36:54+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/evidence/baseline-current.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-10-31T22:36:59+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/evidence/baseline-current.json
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-10-31T23:45:18+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/evidence/control-round-complete.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Initial 30-minute actual control segment completed automatically; paused between
+    source revisions, no active calibration
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-10-31T23:53:12+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-2/evidence/runtime-receipt.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-10-31T23:54:29+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-11-01T00:30:38+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/evidence/handover.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: Round2 bounded collection ended; bookkeeping pause records environmental gap
+    and new journal handover; no physical calibration is active
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-11-01T00:32:52+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/evidence/runtime-after-drain.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T00:33:14+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/evidence/runtime-after-drain.json
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  note: Persistent read-only collection retained; third calibration already settled,
+    no further physical mutation planned
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-11-01T00:47:34+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/observations.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: RUNNING
+  at: '2026-11-01T00:48:00+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-4/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  note: No new physical mutation; previous failed code outcome remains retained
+  forced: false
+- from: RUNNING
+  to: ANALYZING
+  at: '2026-11-01T01:20:15+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-4/observations.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: ANALYZING
+  to: REVIEWED
+  at: '2026-11-01T02:01:59+00:00'
+  by: stage-review
+  artifact: verdict.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Independent H1/H2 and declared short-window H3 accepted against coherent ec310
+    source, actual bot outcomes, automatic recovery and scoped cleanup; efficacy remains
+    non-discriminating.
+  forced: false
+- from: REVIEWED
+  to: CLOSED
+  at: '2026-11-01T02:02:18+00:00'
+  by: bench-v3-lead
+  artifact: cleanup-final.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Independent measured-result, source-preflight and operational-handover reviews
+    passed; all rounds complete, no unresolved safety item; retained stage services
+    are intentional user configuration
+  forced: false

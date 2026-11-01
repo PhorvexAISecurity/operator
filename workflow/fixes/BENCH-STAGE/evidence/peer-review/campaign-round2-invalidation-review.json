@@ -1,0 +1,79 @@
+{
+  "result": "PASS_INVALIDATED_HISTORY_CONTROL_NOT_ENDPOINT_ACCEPTANCE",
+  "checked_at": "2026-11-01T00:34:28.957104+00:00",
+  "source_head": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "frozen_receipt_files": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/watch-status.json",
+      "sha256": "cc3b6e9f87ebf16b0e54c4cf05f2337c001e574cb3dcfa7f2cf257832f654afd",
+      "bytes": 435
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/calibration-2.json",
+      "sha256": "3388949cdb8e2722d3f16b61c7d2e854ee2db788efc1d83e2c12706cedf0063e",
+      "bytes": 778
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/retrospective-control.json",
+      "sha256": "915d9510882397f3f811cfb168d3e33c9e9dcf28f012f83b6f9836548da05c28",
+      "bytes": 2114
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/compressed-evidence.db",
+      "sha256": "fe706f99faf1648d170bf7dcdba3da710cfed97ba523d8600a986175b3d18ab6",
+      "bytes": 3043328
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/scope.json",
+      "sha256": "77425cd40827bb441193b9a0b53a613b3998f8a5c58de667d2d18f820fe0f880",
+      "bytes": 747
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/refresh-before-handover.json",
+      "sha256": "9cb1e388dfd91af8882bcb44458699f63fbe1bc839fe0d3840df1554b55a5ac8",
+      "bytes": 9128
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/handover-3e11/live/round2-frozen/launch-receipt.json",
+      "sha256": "7d975d149f340202f3a8f972fa42015ebd13b6d19a2aec520bd761701b4fa289",
+      "bytes": 626
+    }
+  ],
+  "verified_journal_events": 1125,
+  "correlated_environmental_events": [
+    {
+      "journal_seq": 814,
+      "observation_time": "2026-11-01T00:17:47.193260+00:00",
+      "node": "ip-172-27-44-44.us-east-2.compute.internal",
+      "node_event_time": "2026-11-01T00:17:50Z",
+      "node_event_reason": "NodeNotSchedulable",
+      "result": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "interpretation": "Same-node observed fixture termination/membership transition correlates with node unavailability; no collector transport-gap event at this transition."
+    },
+    {
+      "journal_seq": 1012,
+      "observation_time": "2026-11-01T00:22:29.002408+00:00",
+      "node": "ip-172-27-58-153.us-east-2.compute.internal",
+      "node_event_time": "2026-11-01T00:22:28Z",
+      "node_event_reason": "NodeNotSchedulable",
+      "result": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "interpretation": "Same-node observed fixture termination/membership transition correlates with node unavailability; no collector transport-gap event at this transition."
+    }
+  ],
+  "limits": [
+    "This verifies invalidation and environmental correlation, not a controller/actor audit of who initiated drain.",
+    "Round2 latest segment is shorter than 600s and cannot qualify declared endpoint history.",
+    "No bridge to prior valid segment or next independent journal is accepted.",
+    "Calibration3 receipt alone is acknowledgement; settled UID-bound replacement and actual endpoint outputs still required."
+  ]
+}

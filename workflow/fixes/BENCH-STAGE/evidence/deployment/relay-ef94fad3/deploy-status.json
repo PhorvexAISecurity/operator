@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 3742521,
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "started_at": "2026-10-31T23:48:21.133408+00:00",
+  "results": [
+    {
+      "name": "stage-relay-rollout",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 45.959,
+  "step": "stage-relay-rollout",
+  "child_pid": 3742532,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:49:07.092618+00:00"
+}

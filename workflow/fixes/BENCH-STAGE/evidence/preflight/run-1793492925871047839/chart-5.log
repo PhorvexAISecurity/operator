@@ -1,0 +1,14 @@
+diff -r '--exclude=.helmignore' '--exclude=Chart.yaml' '--exclude=Chart.lock' '--exclude=charts' phorvex/charts/phorvex/templates/deployment.yaml /workspace/.phorvex-test-tmp/phorvex-vendored.51JWWF/phorvex/templates/deployment.yaml
+256,258d255
+<         {{- if .Values.phorvex.mathLab.captureCostEvidence }}
+<         - --math-lab-capture-cost-evidence=true
+<         {{- end }}
+diff -r '--exclude=.helmignore' '--exclude=Chart.yaml' '--exclude=Chart.lock' '--exclude=charts' phorvex/charts/phorvex/values.yaml /workspace/.phorvex-test-tmp/phorvex-vendored.51JWWF/phorvex/values.yaml
+486c486
+<     capturePolicies: []      # e.g. ["phorvex-staging-demo/stage-bench-defense"]
+---
+>     capturePolicies: []      # e.g. ["vllm/vllm-defense"]
+489d488
+<     captureCostEvidence: false # bounded immutable replica observations; not endpoint loss history
+::error::the vendored subchart differs from phorvex/charts/phorvex.
+::error::Run: helm dependency update deploy/helm/phorvex-stack && git add deploy/helm/phorvex-stack

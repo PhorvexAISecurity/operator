@@ -1,0 +1,15 @@
+{
+  "schema": "phorvex-bench.endpoint-study.v1",
+  "title": "Original V2/V3: 30-day W / 1-day L — history and runtime readiness pending",
+  "policy": "phorvex-staging-demo/stage-bench-defense",
+  "ticks": 64,
+  "config": {
+    "lookback": 86400
+  },
+  "dataset": "recorded",
+  "study": {
+    "slo_target": 0.999,
+    "window": 2592000,
+    "worth_threshold": 0
+  }
+}

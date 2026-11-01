@@ -1,0 +1,65 @@
+test_custom_observed_settings_preserve_facts_and_all_retained_history (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_observed_settings_preserve_facts_and_all_retained_history) ... ok
+test_expanded_window_requires_proven_retention_and_sealed_coverage (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_expanded_window_requires_proven_retention_and_sealed_coverage) ... ok
+test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data) ... ok
+test_custom_study_settings_reach_real_shared_go_kernel (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_study_settings_reach_real_shared_go_kernel) ... ok
+test_strict_custom_study_settings_and_templates_validate_before_queue (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime) ... ERROR
+test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime) ... ERROR
+test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime) ... ERROR
+test_quarantine_requires_explicit_cap_only_when_price_is_required (benchmark.stage.test_evidence.EvidenceTests.test_quarantine_requires_explicit_cap_only_when_price_is_required) ... ok
+
+======================================================================
+ERROR: test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_stage_runtime
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/unittest/loader.py", line 154, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-stage/benchmark/bot/test_stage_runtime.py", line 23, in <module>
+    from runner import Console, TransportError
+  File "/workspace/operator-benchmark-stage/benchmark/worker/runner.py", line 27, in <module>
+    from exporter import COST_FILE, GATES_FILE, export_workbooks, typed_links, template_paths
+  File "/workspace/operator-benchmark-stage/benchmark/worker/exporter.py", line 16, in <module>
+    import openpyxl
+ModuleNotFoundError: No module named 'openpyxl'
+
+
+======================================================================
+ERROR: test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_stage_runtime
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/unittest/loader.py", line 154, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-stage/benchmark/bot/test_stage_runtime.py", line 23, in <module>
+    from runner import Console, TransportError
+  File "/workspace/operator-benchmark-stage/benchmark/worker/runner.py", line 27, in <module>
+    from exporter import COST_FILE, GATES_FILE, export_workbooks, typed_links, template_paths
+  File "/workspace/operator-benchmark-stage/benchmark/worker/exporter.py", line 16, in <module>
+    import openpyxl
+ModuleNotFoundError: No module named 'openpyxl'
+
+
+======================================================================
+ERROR: test_stage_runtime (unittest.loader._FailedTest.test_stage_runtime)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_stage_runtime
+Traceback (most recent call last):
+  File "/usr/lib/python3.11/unittest/loader.py", line 154, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-stage/benchmark/bot/test_stage_runtime.py", line 23, in <module>
+    from runner import Console, TransportError
+  File "/workspace/operator-benchmark-stage/benchmark/worker/runner.py", line 27, in <module>
+    from exporter import COST_FILE, GATES_FILE, export_workbooks, typed_links, template_paths
+  File "/workspace/operator-benchmark-stage/benchmark/worker/exporter.py", line 16, in <module>
+    import openpyxl
+ModuleNotFoundError: No module named 'openpyxl'
+
+
+----------------------------------------------------------------------
+Ran 9 tests in 2.180s
+
+FAILED (errors=3)

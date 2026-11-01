@@ -1,0 +1,49 @@
+{
+  "result": "PASS_SCOPED_OPERATIONAL_HANDOVER",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T01:32:56.843399+00:00",
+  "source_tip": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "aggregate": {
+    "path": "workflow/fixes/BENCH-STAGE/evidence/live/final-status.json",
+    "sha256": "326155087b39c49a6b62f38e2165bd071c13a9af1e73974755598999a0ed4024",
+    "verified_artifacts": 13
+  },
+  "additional_bindings": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-handover/recovery-independent-review.json",
+      "sha256": "870a39bf1087a356b9af9ed6cadca6d67e57281654014ea65b7f3147e6e6c648"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-handover/gap-independent-review.json",
+      "sha256": "cf2d4b82a9a5a469a027d04cce80c71fb6b4e75b48ec2034b2bf4be74e3f749d"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/stage-service-handover.md",
+      "sha256": "19aaf49e90e651c1036dc0c59a61a1353f71427a3e0a648695e226c67c81365c"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-verdict-draft.json",
+      "sha256": "cbcb82a57d198e1406aade0cae6ce28340b85b2dfcd44216f4e6f6b6e4bf26e4"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/manifest.json",
+      "sha256": "4716096f7da577cdf56c11237351e2bedfc973ebee08b9eda0d9a8aff840dec2"
+    }
+  ],
+  "accepted": [
+    "Exact live ef94 brain/manager embedded versions and immutable OCI digests, fixture/policy/Service UIDs, dryRun/B1/PDB2, three ready replicas.",
+    "Bot, read-only observer and automatic refresh timer active and enabled, lingering enabled, clean host ec310; runtime3e11 tree has no semantic delta from ec310 archive-only update.",
+    "Actual10-row mutation ledger: three bounded UID-preconditioned calibration deletes; no active/open/censored calibration remains.",
+    "Original external eviction gap and three blocked refresh attempts preserved; last-good aff38 generation stayed available; new automatic bdbd generation contains64 fresh post-gap snapshots with full600-second coverage and sealed exact provenance.",
+    "Task-owned remote temporary GitHub auth and both code-job scratch source/build homes are absent; bounded control units inactive/success; exact source bundle, raw journals/cohorts, binaries/results retained.",
+    "Intentional retained fixture/PVC/capture images/services/storage bounds, inspection paths and scope-preserving rollback are documented. No production activation or incoming Telegram ingestion is claimed."
+  ],
+  "remaining_overall_gate": "Complete coherent required ec310 preflight and formal source/P3 workflow; local temporary publication authentication is removed by lead after branch/PR delivery, not a remote runtime dependency.",
+  "campaign_limits_preserved": [
+    "Empty round-1 spec remains a record limitation; campaign-level prior scope is not rewritten as a complete round preregistration.",
+    "Round-3 handover sequencing deviation remains explicitly acknowledged.",
+    "Original failed code deadline attempt and30-day BLOCKED result remain unchanged.",
+    "No security efficacy, V3 advantage, realized counterfactual cost, long-history performance or guaranteed future readiness claim."
+  ],
+  "verdict_scope": "Operational campaign evidence and remote cleanup accepted. No assertion that pending source preflight, PR publication or merge is complete."
+}

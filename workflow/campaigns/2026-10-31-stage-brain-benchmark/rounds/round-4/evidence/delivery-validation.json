@@ -1,0 +1,126 @@
+{
+  "schema": "phorvex-bench.collection-check.v1",
+  "result": "PASS",
+  "scope": "Delivery integrity and reported state assertions; product correctness remains independently reviewed",
+  "archive": "/workspace/.phorvex-test-tmp/phorvex-stage-benchmark-20261101-final.zip",
+  "directory": "/workspace/.phorvex-test-tmp/phorvex-stage-benchmark-20261101-final",
+  "archive_sha256": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+  "archive_bytes": 5744546,
+  "files": 103,
+  "collection_schema": "phorvex-bench.private-delivery.v1",
+  "collection_state": "REPORTS_COLLECTED",
+  "pending_jobs": [],
+  "omitted": [],
+  "checks": [
+    "Every archive and extracted file hash and size verified",
+    "No duplicate or unaccounted ZIP members",
+    "All fourteen job states match expected terminal outcomes",
+    "Original failed code attempt remains included",
+    "All three independently labelled phase receipts and real Telegram file receipts retained",
+    "Every extracted directory 0700 and file 0600; archive0600; no symlinks",
+    "Known credential patterns absent; excluded input/log/source-clone paths absent",
+    "Candidate bundle exact2517bytes and expected SHA256; git bundle verify PASS",
+    "Exact local FA guide/guidance/results included; RESULTS-fa.txt contains no PENDING status",
+    "Successful code replay reports exact64 baseline/local-base/candidate cohort; endpoint positive64/negative0 states preserved"
+  ],
+  "jobs": {
+    "8ffcfca38357": "DONE",
+    "474cff3249df": "FAILED",
+    "180d1e5b1ee9": "DONE",
+    "74240aadda51": "DONE",
+    "84fcf64f961b": "BLOCKED",
+    "5fc1c1b0f192": "DONE",
+    "83014231aae7": "DONE",
+    "32f795de4856": "DONE",
+    "29c3cdd547cd": "DONE",
+    "4b8171ea3c83": "FAILED",
+    "f4f05c4d2de3": "DONE",
+    "d024b2f8a9fd": "DONE",
+    "5aeb716b562f": "BLOCKED",
+    "c963f138052b": "DONE"
+  },
+  "endpoint_results": [
+    {
+      "job": "f4f05c4d2de3",
+      "state": "COMPLETE",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 64,
+      "schema": "phorvex-bench.endpoint-result.v1"
+    },
+    {
+      "job": "d024b2f8a9fd",
+      "state": "COMPLETE",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 64,
+      "schema": "phorvex-bench.endpoint-result.v1"
+    },
+    {
+      "job": "5aeb716b562f",
+      "state": "BLOCKED",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 0,
+      "schema": "phorvex-bench.endpoint-result.v1"
+    }
+  ],
+  "code_result": {
+    "schema": "phorvex-bench.code-experiment-result.v1",
+    "state": "COMPLETE",
+    "toolchain_fidelity": "EXACT",
+    "cohort_size": 64,
+    "population": {
+      "arm_exclusions": {
+        "base-local": {},
+        "candidate": {},
+        "control": {}
+      },
+      "control_eligible": 64,
+      "control_exclusions": {},
+      "matched_by_arm": {
+        "base-local": 64,
+        "candidate": 64,
+        "control": 64
+      },
+      "snapshots_replayed": 64
+    }
+  },
+  "candidate_retention": {
+    "at": "2026-11-01T00:57:14.023871+00:00",
+    "candidate_commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+    "base_prerequisite": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "tag": "bench-c963f138052b",
+    "bundle_bytes": 2517,
+    "bundle_sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+    "verification": "git bundle verify PASS against actualcandidateclone",
+    "purpose": "Retain exact candidate commit/trees/blobs before normaljobclonecleanup; no push orproductionactivation"
+  },
+  "candidate_bundle_sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+  "receipt_phases": {
+    "bot-acceptance": {
+      "phase": "bot-acceptance",
+      "bot_source": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+      "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "state": "FAIL",
+      "previous_failed_batch": null,
+      "retry_policy": null
+    },
+    "endpoint-bot-acceptance": {
+      "phase": "endpoint-bot-acceptance",
+      "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+      "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "state": "PASS",
+      "previous_failed_batch": null,
+      "retry_policy": null
+    },
+    "code-bot-retry": {
+      "phase": "code-bot-retry",
+      "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+      "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "state": "PASS",
+      "previous_failed_batch": "474cff3249df",
+      "retry_policy": "one new actual model/queue attempt after owned refresh ends; original deadline unchanged"
+    }
+  },
+  "collector_sha256": "2923d2738ba9c191f634add2b9d5a91127190fc4088dcafbfe8042ac01d44894",
+  "guide_sha256": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183",
+  "fa_results_sha256": "c7345bf91d2e55b031a4b5fe90a54db658852c8e9b24c554511aa4d8d7651a88"
+}

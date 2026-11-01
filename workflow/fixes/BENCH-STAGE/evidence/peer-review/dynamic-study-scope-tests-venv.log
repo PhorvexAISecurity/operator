@@ -1,0 +1,14 @@
+test_custom_observed_settings_preserve_facts_and_all_retained_history (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_observed_settings_preserve_facts_and_all_retained_history) ... ok
+test_expanded_window_requires_proven_retention_and_sealed_coverage (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_expanded_window_requires_proven_retention_and_sealed_coverage) ... ok
+test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data) ... ok
+test_custom_study_settings_reach_real_shared_go_kernel (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_study_settings_reach_real_shared_go_kernel) ... ok
+test_strict_custom_study_settings_and_templates_validate_before_queue (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+test_missing_pin_after_freeze_blocks_code_and_direct_worker_requests (benchmark.bot.test_stage_runtime.StageScopeTest.test_missing_pin_after_freeze_blocks_code_and_direct_worker_requests) ... ok
+test_same_source_old_image_and_legacy_headers_never_inherit_current_pin (benchmark.bot.test_stage_runtime.StageScopeTest.test_same_source_old_image_and_legacy_headers_never_inherit_current_pin) ... ok
+test_stage_sync_filters_actual_headers_and_resumes_from_matching_image (benchmark.bot.test_stage_runtime.StageScopeTest.test_stage_sync_filters_actual_headers_and_resumes_from_matching_image) ... ok
+test_quarantine_requires_explicit_cap_only_when_price_is_required (benchmark.stage.test_evidence.EvidenceTests.test_quarantine_requires_explicit_cap_only_when_price_is_required) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 2.382s
+
+OK

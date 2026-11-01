@@ -1,0 +1,19 @@
+{
+  "image": {
+    "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+    "tag": "benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+  },
+  "phorvex": {
+    "mathLab": {
+      "capturePolicies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "captureMaxBytes": 1073741824
+    }
+  },
+  "mathLabStore": {
+    "existingClaim": "staging-brain-mathlab"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "base": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc",
+  "purpose": "Independent review of relay-only component; uncommitted experimental study and helper changes excluded",
+  "files": {
+    "phorvex/api/proto/phorvex/brain/v1/brain.proto": "ce8800a96186c1852898d5e7a59eec7e0d41b1aa5254d8e9afab1b96e743a56e",
+    "phorvex/internal/brainpb/brain.pb.go": "2a0f1483a913730002c746ee2bb1691df1a206121ba44af58e0f0e986950fdef",
+    "phorvex/internal/brainpb/brain_grpc.pb.go": "b1a72d670f77f0ff87388c076653b03a854a181c14a113724f5e52e6abea9fa9",
+    "phorvex/internal/audittransport/mathlab.go": "b4937d81e42a7ef5810ff6457dfcd9c19c5b24fc79b641b00ea3063ce85d5b40",
+    "phorvex/internal/brainsvc/server.go": "0ca1751865d9d2be53509d06473f89887fb232cb78f12382e78812b141d1ed90",
+    "phorvex/internal/brainsvc/snapshots.go": "419054a2e3daf9a47484be8a37254062e025c923654988430018bb7e3e54b3f1",
+    "phorvex/internal/brainclient/snapshots.go": "e7645f1d9ce138b982bfff38e80f0ee8a531a0160690e91d76d159f01fc1d8c9",
+    "phorvex/internal/brainclient/snapshots_test.go": "fc86330a1adbf50bcd4bf4b9d408cb2392886d627c3bb4a9a72d49af899ace24",
+    "phorvex/cmd/main.go": "37d24706876b442e75efa7b09a4440037fc8bf1faf3b012544a921cc1f51c0ce",
+    "phorvex/cmd/brain/main.go": "b4c1748dbb02ee8cb1c88778cffad36b13cec1992ace8305b7b689305a36b704",
+    "phorvex/cmd/brain/main_test.go": "35597ebac6ea397252dc422f64987184407a35b27abd3a575db9a2dc7374cf21",
+    "phorvex/internal/mathlab/recorder.go": "94721b8df63f187b5d80e21fafe0a762a90c4853783671d477043a2668ec1f76",
+    "phorvex/internal/mathlab/snapshot.go": "ae7c071aefffbada3f195aabae59a5750845303666cfd708ed6e307cee6ed3b9",
+    "phorvex/internal/mathlab/producer_identity_test.go": "4c544a55acfaf5f9c4060d1490c465b1b087294b75064b3a83ae06ab7ab2e501",
+    "deploy/charts/phorvex-brain/templates/deployment.yaml": "3eae8349f821253c74ba5497f1163a87f64cf274961a3e102aef3c58e70bb360",
+    "deploy/docker/service.Dockerfile": "ce86e7eba6d5d4e4b6620f56ae82f05b53193096bd7fcbfafe2f60d663568d9f",
+    "tools/test_pr_validation.py": "b33ea6be921117023c023e3ac4a2a9651910122020491faa0c91b634d23134d4",
+    "tools/test_service_charts.py": "ec70f7643b5d4879777910e397505f14afd90515ef90758092572a539f07f63a",
+    "docs/math-lab/REMOTE_CAPTURE.md": "6e643536b70207f77ea1d2fe356a0bec12087f99a1e04c2f97dd788948601bf3"
+  }
+}

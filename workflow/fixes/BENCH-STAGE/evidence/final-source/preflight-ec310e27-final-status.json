@@ -1,0 +1,23 @@
+{
+  "state": "DONE",
+  "pid": 366224,
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "started_at": "2026-11-01T01:25:02.505297+00:00",
+  "results": [
+    {
+      "name": "exact-current-ci-preflight",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 1935.415,
+  "step": "issue-specific-acceptance",
+  "child_pid": 392670,
+  "exit_code": 0,
+  "finished_at": "2026-11-01T01:57:17.920011+00:00"
+}

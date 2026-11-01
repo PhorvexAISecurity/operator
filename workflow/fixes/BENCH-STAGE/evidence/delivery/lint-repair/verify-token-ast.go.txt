@@ -1,0 +1,113 @@
+package main
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"go/format"
+	"go/parser"
+	"go/scanner"
+	"go/token"
+	"os"
+	"reflect"
+	"runtime"
+)
+
+type item struct {
+	Token   string `json:"token"`
+	Literal string `json:"literal"`
+}
+
+func tokens(src []byte) []item {
+	fset := token.NewFileSet()
+	var s scanner.Scanner
+	var faults []string
+	s.Init(fset.AddFile("source.go", -1, len(src)), src, func(_ token.Position, msg string) { faults = append(faults, msg) }, scanner.ScanComments)
+	var out []item
+	for {
+		_, tok, lit := s.Scan()
+		out = append(out, item{tok.String(), lit})
+		if tok == token.EOF {
+			break
+		}
+	}
+	if len(faults) != 0 {
+		panic(faults)
+	}
+	return out
+}
+
+var posType = reflect.TypeOf(token.Pos(0))
+
+func clearPositions(v reflect.Value) {
+	if !v.IsValid() {
+		return
+	}
+	if v.Type() == posType {
+		if v.CanSet() {
+			v.SetInt(0)
+		}
+		return
+	}
+	switch v.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if !v.IsNil() {
+			clearPositions(v.Elem())
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			clearPositions(v.Field(i))
+		}
+	case reflect.Slice:
+		for i := 0; i < v.Len(); i++ {
+			clearPositions(v.Index(i))
+		}
+	}
+}
+func astValue(src []byte) any {
+	tree, err := parser.ParseFile(token.NewFileSet(), "source.go", src, parser.ParseComments|parser.SkipObjectResolution)
+	if err != nil {
+		panic(err)
+	}
+	clearPositions(reflect.ValueOf(tree))
+	return tree
+}
+func hash(src []byte) string { s := sha256.Sum256(src); return hex.EncodeToString(s[:]) }
+func main() {
+	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "--" {
+		args = args[1:]
+	}
+	if len(args) != 2 {
+		panic("two input files required")
+	}
+	a, e := os.ReadFile(args[0])
+	if e != nil {
+		panic(e)
+	}
+	b, e := os.ReadFile(args[1])
+	if e != nil {
+		panic(e)
+	}
+	ta, tb := tokens(a), tokens(b)
+	fa, e := format.Source(a)
+	if e != nil {
+		panic(e)
+	}
+	fb, e := format.Source(b)
+	if e != nil {
+		panic(e)
+	}
+	negative := bytes.Replace(b, []byte("normalized endpoint trace JSON"), []byte("changed endpoint trace JSON"), 1)
+	proof := map[string]any{"go_version": runtime.Version(), "before_sha256": hash(a), "after_sha256": hash(b), "token_count": len(ta), "tokens_including_comments_and_semicolons_equal": reflect.DeepEqual(ta, tb), "ast_equal_after_only_position_erasure": reflect.DeepEqual(astValue(a), astValue(b)), "before_gofmt_clean": bytes.Equal(a, fa), "after_gofmt_clean": bytes.Equal(b, fb), "changed_literal_negative_control_detected": !reflect.DeepEqual(ta, tokens(negative)) && !reflect.DeepEqual(astValue(a), astValue(negative))}
+	if !reflect.DeepEqual(ta, tb) || !reflect.DeepEqual(astValue(a), astValue(b)) || !bytes.Equal(b, fb) || bytes.Equal(a, fa) || reflect.DeepEqual(ta, tokens(negative)) {
+		panic("equivalence/control failed")
+	}
+	out, e := json.MarshalIndent(proof, "", "  ")
+	if e != nil {
+		panic(e)
+	}
+	fmt.Println(string(out))
+}

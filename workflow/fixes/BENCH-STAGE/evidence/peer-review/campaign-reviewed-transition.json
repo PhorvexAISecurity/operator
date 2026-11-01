@@ -1,0 +1,27 @@
+{
+  "result": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T02:02:09.473043+00:00",
+  "campaign": "2026-10-31-stage-brain-benchmark",
+  "state": "REVIEWED",
+  "verdict": {
+    "result": "PASS",
+    "artifact": "verdict.md",
+    "reviewer": "stage-review"
+  },
+  "cleanup": "PASS",
+  "transition": {
+    "from": "ANALYZING",
+    "to": "REVIEWED",
+    "at": "2026-11-01T02:01:59+00:00",
+    "by": "stage-review",
+    "artifact": "verdict.md",
+    "approval_ref": null,
+    "phase_approval_ref": null,
+    "note": "Independent H1/H2 and declared short-window H3 accepted against coherent ec310 source, actual bot outcomes, automatic recovery and scoped cleanup; efficacy remains non-discriminating.",
+    "forced": false
+  },
+  "status_sha256_at_review": "6738e82454aeff57246709107731749ec8af8c27263611bb76e5487b0f1cdc07",
+  "review_receipt_sha256": "8b198dcd8f6cabec40673b0ba1785e34ae11d65241d3b8bb8973cbe4be61cd60",
+  "verdict_sha256": "51bc6d901fe1970ad441235a231c180b6ecf286d31b30385699f61fbd34ca9e9"
+}

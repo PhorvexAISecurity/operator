@@ -1,0 +1,55 @@
+{
+  "result": "PASS_PROPOSED_FORMAT_ONLY_DELTA_PENDING_COMMITTED_BINDING",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T02:17:58.840549+00:00",
+  "original_implementation": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "original_delivery": "32ebfee9",
+  "toolchain": "go1.26.3",
+  "product": {
+    "path": "phorvex/cmd/endpoint-v3/main.go",
+    "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+    "proposed_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce",
+    "delta": "Exactly one newline inserted before existing third-party import.",
+    "gofmt_output_equals_proposed": true,
+    "exact_full_tokens_including_automatic_semicolons_equal": true,
+    "exact_ast_excluding_positions_equal": true,
+    "comment_literals_preserved": true
+  },
+  "raw_evidence": {
+    "old_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go",
+    "new_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go.txt",
+    "bytes": 968,
+    "sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "content_unchanged": true,
+    "requirements": "Change only current retention-index path, keep original id/hash/producer/time and add explicit relocation/reproduction receipt. No signed result/output or historical test source claim changes."
+  },
+  "controls": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/formatter-ast-controls.json",
+      "sha256": "48012f30bcd4c789c53195a9a37b153bd77bb125fb51a37b9476ea640eb01d5d"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/compare.go.txt",
+      "sha256": "6477c29ab443908df5d8a7d90ec716269b3b7a94a38c3e3efb7265e8f31b2513"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/gofmt-0.diff",
+      "sha256": "2770232ff2dd80f26dc238dd466df2314421262590bd377414822baf12e6cd5a"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/gofmt-1.diff",
+      "sha256": "c72d05f37a7916110e61519571ff58233528e1557a720108d3b09e5afd1db7f1"
+    }
+  ],
+  "execution_note": "First go-run used noexec /tmp and could not execute. Successful control uses TMPDIR=/workspace/.phorvex-test-tmp with exact Go1.26.3. No product test outcome is inferred from that setup failure. gofmt -d exits1 when differences exist in this toolchain.",
+  "required_affected_validation": [
+    "Unchanged tools/check-go-format.py against main using Go1.26.3 after commit.",
+    "Endpoint-v3 CLI package test execution.",
+    "Current retention index/path integrity and signed historical evidence hash preservation."
+  ],
+  "boundaries": [
+    "No formatter exclusions or CI gate weakening.",
+    "Original ec310 suite, immutable campaign and L3 captures keep original sources; no fictitious full rerun at formatted head.",
+    "Formal signed patch equivalence must name actual committed formatted delivery head and reviewed literal-only delta."
+  ]
+}

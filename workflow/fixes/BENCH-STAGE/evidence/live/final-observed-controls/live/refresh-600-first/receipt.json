@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-01T00:41:42.726769+00:00",
+  "result": "READY64 actual600srefresh",
+  "files": [
+    {
+      "name": "trace.json",
+      "sha256": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+      "bytes": 251463
+    },
+    {
+      "name": "manifest.json",
+      "sha256": "d4af4a6b70f8919565ec45da8431795dae4a68a5776254dc0e2bf5dcd1490919",
+      "bytes": 42545
+    },
+    {
+      "name": "status.json",
+      "sha256": "a815aa34729c81cff5b7b7c45e460465c05a41cb1b06a810f5b44865627a8902",
+      "bytes": 15225
+    }
+  ]
+}

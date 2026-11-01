@@ -1,0 +1,113 @@
+{
+  "at": "2026-11-01T01:24:26.235850+00:00",
+  "reviewer": "stage-review",
+  "read_only": true,
+  "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+  "services": {
+    "phorvex-benchmark-bot.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC",
+      "unit_sha256": "a5d38dfa9cf504514b149f8705e90a8f6164c4c14a9e20cb0f4302e665afbbb9"
+    },
+    "phorvex-stage-observer.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 00:19:02 UTC",
+      "unit_sha256": "d67049d417541279a1c6b03497530fb8b9813037bd7bbad596fd4afa7a88906c"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC",
+      "unit_sha256": "23e380d0ffcdf61e6a4785870c385e174a46c0ba996c8ac4889ace301d60c4f1"
+    }
+  },
+  "runtime": {
+    "brain": {
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "generation": 29,
+      "ready": 1,
+      "pods": [
+        {
+          "name": "staging-brain-b4d544d55-pcl2l",
+          "uid": "0f2bda5c-0dcf-4df0-b408-cec4aba20869",
+          "node": "ip-172-27-62-202.us-east-2.compute.internal",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+          "version": {
+            "service": "brain",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ]
+    },
+    "manager": {
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "generation": 79,
+      "ready": 1,
+      "pods": [
+        {
+          "name": "staging-phorvex-58695ffd75-5vq2j",
+          "uid": "b0da8699-621f-4422-bfec-9ccce8deefd0",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+          "version": {
+            "service": "manager",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ]
+    }
+  },
+  "linger": {
+    "Linger": "yes"
+  },
+  "fixture": {
+    "uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+    "ready": 3,
+    "pods": [
+      {
+        "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212",
+        "name": "stage-bench-api-f9b895d7-47tcs",
+        "node": "ip-172-27-62-202.us-east-2.compute.internal"
+      },
+      {
+        "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+        "name": "stage-bench-api-f9b895d7-fntvf",
+        "node": "ip-172-27-11-194.us-east-2.compute.internal"
+      },
+      {
+        "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923",
+        "name": "stage-bench-api-f9b895d7-hkbkv",
+        "node": "ip-172-27-47-45.us-east-2.compute.internal"
+      }
+    ]
+  },
+  "free_bytes": 8416378880,
+  "repo": {
+    "head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+    "clean": true
+  },
+  "refresh": {
+    "status_sha256": "efa53f4f89b162bb315f3172dd010b8700545cda840ad661a423c44349a6aea1",
+    "state": "RUNNING",
+    "phase": "DISCOVER",
+    "reason": null,
+    "started_at": "2026-11-01T01:24:39.706213Z",
+    "finished_at": null,
+    "observed_segment": null,
+    "requested_ticks": 64,
+    "current_dataset": {
+      "trace_file": null,
+      "trace_sha256": null,
+      "source_revision": null,
+      "snapshot_source_revision": null
+    }
+  },
+  "result": "PASS_SERVICES_AND_PINNED_RUNTIME; refresh and cleanup reviewed separately"
+}

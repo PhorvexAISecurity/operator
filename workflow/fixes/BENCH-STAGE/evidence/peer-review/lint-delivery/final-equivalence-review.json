@@ -1,0 +1,141 @@
+{
+  "result": "PASS_FORMAT_ONLY_DELIVERY_EQUIVALENCE",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T02:20:10.743226+00:00",
+  "delivery_head": "1ae0beeda781e7063782bc7d07718f6ce64015a7",
+  "previous_delivery_head": "32ebfee98fe434530d7867c9215e28471106256c",
+  "reviewed_implementation_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "product_delta": {
+    "path": "phorvex/cmd/endpoint-v3/main.go",
+    "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+    "after_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce",
+    "one_blank_line_only": true,
+    "full_tokens_comments_semicolons_equal": true,
+    "ast_equal_excluding_source_positions_only": true,
+    "exact_go1263_gofmt_clean": true
+  },
+  "raw_evidence_relocation": {
+    "old_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go",
+    "new_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go.txt",
+    "bytes": 968,
+    "sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "byte_equal": true,
+    "old_retention_rows_preserved_except_single_path": 530,
+    "signed_historical_checks_verified_unchanged": [
+      {
+        "check": "decision",
+        "artifact": "03-decision.md",
+        "sha256": "78e6fcf878b71db8d756eb492d533a736f1f3503e28e3894ba94001dc0a930e4",
+        "source_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40"
+      },
+      {
+        "check": "red",
+        "artifact": "evidence/baseline-red.md",
+        "sha256": "1b1c5aa989e4b99460af548a5018353880bf4b32b626fe704f8e127fe1959569",
+        "source_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40"
+      },
+      {
+        "check": "preflight",
+        "artifact": "evidence/preflight/receipt.json",
+        "sha256": "591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "implementation",
+        "artifact": "04-diff.patch",
+        "sha256": "57825848f895303ba707ee10aefa9cd83aa10ae19e0ca881afc1dd812c3bb77e",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "l0",
+        "artifact": "evidence/preflight/run-1793496303783085569/go-unit-phorvex.log",
+        "sha256": "4b048f8441a266ada9ceaf0021247a2f0562fc723342e2f5912a81ac2f17267d",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "l1",
+        "artifact": "evidence/final-source/l1.txt",
+        "sha256": "bd0174abd71c9a4d260a70e6f438d3b8a0c6903bc151936043f232a22ea5280b",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "l2",
+        "artifact": "evidence/final-source/l2.txt",
+        "sha256": "7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "positive_control",
+        "artifact": "evidence/final-source/l2.txt",
+        "sha256": "7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "incident",
+        "artifact": "evidence/incident.md",
+        "sha256": "61d74b0801985e7ddcecabb9f8fa2a900ce868c57ffeb5e1626a684b9df913cc",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "p3",
+        "artifact": "evidence/p3/verdict.md",
+        "sha256": "d5b84ee3c1e48d1161505763fcd37e36ee8329d79e44a4b10698cf1857a1a0a4",
+        "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817"
+      },
+      {
+        "check": "l3",
+        "artifact": "evidence/live/l3-verdict.md",
+        "sha256": "fce67902d9cb700a12e2a98b019cd86b22b1e4221ba5cbc95e079fa327225900",
+        "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+      }
+    ]
+  },
+  "affected_checks": {
+    "receipt": "workflow/fixes/BENCH-STAGE/evidence/delivery/lint-repair/affected-checks.json",
+    "sha256": "d1ce4891b2e238576f6d77544cf156f11f5b679a73cd3bb8db4b083e854aeb83",
+    "logs": [
+      {
+        "path": "workflow/fixes/BENCH-STAGE/evidence/delivery/lint-repair/changed-file-format.log",
+        "sha256": "3f298f8e6a7eef2e2a070f1bdf93d219b626bdf25e0d2d75b549c1f748e1fd78",
+        "exit_code": 0
+      },
+      {
+        "path": "workflow/fixes/BENCH-STAGE/evidence/delivery/lint-repair/endpoint-tests.log",
+        "sha256": "932a20f1a2e41a26d7e7dc8b9c624cc7db2d97f8fedf5dd28744deea20799ec0",
+        "exit_code": 0
+      },
+      {
+        "path": "workflow/fixes/BENCH-STAGE/evidence/delivery/lint-repair/endpoint-build.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "exit_code": 0
+      }
+    ],
+    "independent_changed_format_gate": {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/changed-format-gate.log",
+      "sha256": "3f298f8e6a7eef2e2a070f1bdf93d219b626bdf25e0d2d75b549c1f748e1fd78",
+      "changed_go_files": 34
+    },
+    "raw_clock_reproduction": "10 rows byte-identical to original retained output"
+  },
+  "independent_controls": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/formatter-ast-controls.json",
+      "sha256": "48012f30bcd4c789c53195a9a37b153bd77bb125fb51a37b9476ea640eb01d5d"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/compare.go.txt",
+      "sha256": "6477c29ab443908df5d8a7d90ec716269b3b7a94a38c3e3efb7265e8f31b2513"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/lint-delivery/formatter-advisory.json",
+      "sha256": "592a2a8b95dabc17c86ff99311bfccbd52ef2b557e35af338fac89484af290bb"
+    }
+  ],
+  "gate_weakening": false,
+  "conclusion": "Accept the one-newline formatting delivery delta and byte-preserving raw artifact relocation for formal signed patch equivalence. No product behavior or scientific evidence changed.",
+  "limits": [
+    "All full preflight and live/campaign results retain their original ec310/ef94/d552 source identities. This receipt does not invent a full-suite or live rerun at1ae0.",
+    "Affected package tests/build and changed-file formatting gate pass at1ae0; remote PR CI for that head is a separate outcome.",
+    "CI source and formatter rules remain unchanged; no broad workflow/evidence exclusion is introduced."
+  ]
+}

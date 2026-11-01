@@ -1,0 +1,12 @@
+{
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "parent_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "changed_paths": [
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz"
+  ],
+  "archive_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+  "review_sha256": "67a8fb3e9db59b3503c54d1e094d7b00dd8351907b8a0b0d3e704992ece7e4e8",
+  "result": "EXACT_REVIEWED_ARCHIVE_COMMITTED",
+  "runtime_source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "runtime_equivalence": "All files outside this generated archive are byte-identical to3e11; actual deployed/runtime identities remain unchanged, not relabelled."
+}

@@ -22,6 +22,8 @@ const (
 	BrainService_Hello_FullMethodName                          = "/phorvex.brain.v1.BrainService/Hello"
 	BrainService_Decide_FullMethodName                         = "/phorvex.brain.v1.BrainService/Decide"
 	BrainService_CloseRecording_FullMethodName                 = "/phorvex.brain.v1.BrainService/CloseRecording"
+	BrainService_ListSnapshots_FullMethodName                  = "/phorvex.brain.v1.BrainService/ListSnapshots"
+	BrainService_ReadSnapshot_FullMethodName                   = "/phorvex.brain.v1.BrainService/ReadSnapshot"
 	BrainService_ParameterSet_FullMethodName                   = "/phorvex.brain.v1.BrainService/ParameterSet"
 	BrainService_RejectedDecisions_FullMethodName              = "/phorvex.brain.v1.BrainService/RejectedDecisions"
 	BrainService_SelectAlternative_FullMethodName              = "/phorvex.brain.v1.BrainService/SelectAlternative"
@@ -64,6 +66,11 @@ type BrainServiceClient interface {
 	// dispatcher finalized them, and hands the recording to the brain's Math Lab
 	// store.
 	CloseRecording(ctx context.Context, in *CloseRecordingRequest, opts ...grpc.CallOption) (*CloseRecordingResponse, error)
+	// Read-only access to this brain's bounded Math Lab store. These calls use
+	// the existing authenticated service connection; they never evaluate a tick.
+	ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error)
+	// Chunks keep a maximum-size snapshot within the existing message limit.
+	ReadSnapshot(ctx context.Context, in *ReadSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadSnapshotResponse], error)
 	// ParameterSet reports the decision parameter set a policy is decided with,
 	// for the audit's provenance store.
 	ParameterSet(ctx context.Context, in *ParameterSetRequest, opts ...grpc.CallOption) (*ParameterSetResponse, error)
@@ -138,6 +145,35 @@ func (c *brainServiceClient) CloseRecording(ctx context.Context, in *CloseRecord
 	}
 	return out, nil
 }
+
+func (c *brainServiceClient) ListSnapshots(ctx context.Context, in *ListSnapshotsRequest, opts ...grpc.CallOption) (*ListSnapshotsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSnapshotsResponse)
+	err := c.cc.Invoke(ctx, BrainService_ListSnapshots_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *brainServiceClient) ReadSnapshot(ctx context.Context, in *ReadSnapshotRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadSnapshotResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BrainService_ServiceDesc.Streams[1], BrainService_ReadSnapshot_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReadSnapshotRequest, ReadSnapshotResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_ReadSnapshotClient = grpc.ServerStreamingClient[ReadSnapshotResponse]
 
 func (c *brainServiceClient) ParameterSet(ctx context.Context, in *ParameterSetRequest, opts ...grpc.CallOption) (*ParameterSetResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -296,6 +332,11 @@ type BrainServiceServer interface {
 	// dispatcher finalized them, and hands the recording to the brain's Math Lab
 	// store.
 	CloseRecording(context.Context, *CloseRecordingRequest) (*CloseRecordingResponse, error)
+	// Read-only access to this brain's bounded Math Lab store. These calls use
+	// the existing authenticated service connection; they never evaluate a tick.
+	ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error)
+	// Chunks keep a maximum-size snapshot within the existing message limit.
+	ReadSnapshot(*ReadSnapshotRequest, grpc.ServerStreamingServer[ReadSnapshotResponse]) error
 	// ParameterSet reports the decision parameter set a policy is decided with,
 	// for the audit's provenance store.
 	ParameterSet(context.Context, *ParameterSetRequest) (*ParameterSetResponse, error)
@@ -346,6 +387,12 @@ func (UnimplementedBrainServiceServer) Decide(grpc.BidiStreamingServer[DecideReq
 }
 func (UnimplementedBrainServiceServer) CloseRecording(context.Context, *CloseRecordingRequest) (*CloseRecordingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CloseRecording not implemented")
+}
+func (UnimplementedBrainServiceServer) ListSnapshots(context.Context, *ListSnapshotsRequest) (*ListSnapshotsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListSnapshots not implemented")
+}
+func (UnimplementedBrainServiceServer) ReadSnapshot(*ReadSnapshotRequest, grpc.ServerStreamingServer[ReadSnapshotResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ReadSnapshot not implemented")
 }
 func (UnimplementedBrainServiceServer) ParameterSet(context.Context, *ParameterSetRequest) (*ParameterSetResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ParameterSet not implemented")
@@ -449,6 +496,35 @@ func _BrainService_CloseRecording_Handler(srv interface{}, ctx context.Context, 
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _BrainService_ListSnapshots_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSnapshotsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BrainServiceServer).ListSnapshots(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BrainService_ListSnapshots_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BrainServiceServer).ListSnapshots(ctx, req.(*ListSnapshotsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BrainService_ReadSnapshot_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReadSnapshotRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BrainServiceServer).ReadSnapshot(m, &grpc.GenericServerStream[ReadSnapshotRequest, ReadSnapshotResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type BrainService_ReadSnapshotServer = grpc.ServerStreamingServer[ReadSnapshotResponse]
 
 func _BrainService_ParameterSet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ParameterSetRequest)
@@ -700,6 +776,10 @@ var BrainService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _BrainService_CloseRecording_Handler,
 		},
 		{
+			MethodName: "ListSnapshots",
+			Handler:    _BrainService_ListSnapshots_Handler,
+		},
+		{
 			MethodName: "ParameterSet",
 			Handler:    _BrainService_ParameterSet_Handler,
 		},
@@ -758,6 +838,11 @@ var BrainService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _BrainService_Decide_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "ReadSnapshot",
+			Handler:       _BrainService_ReadSnapshot_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "phorvex/brain/v1/brain.proto",

@@ -6,7 +6,11 @@ There is no paths filter or draft guard on these source checks:
 
 - `charts`: current CRD and vendored subchart equality, Helm render, claim-language
   checks, tool regressions, and the offline recipe and fixture suites listed in the
-  workflow. Suites that need tools CI does not install are not run yet:
+  workflow. The benchmark wrapper builds the brain-owned endpoint reference with
+  the exact Go version in `build/test-harness/go.mod`, then runs every bot, worker
+  and stage Python test. All tests must pass with no skips, including both real
+  Go integration controls. Python workbook dependencies are pinned in
+  `tools/benchmark-test-requirements.txt`. Suites that need tools CI does not install are not run yet:
   `build/integrations/{vllm-0.7.3-drain-v11,vllm-0.7.3-reset-ack,voice-admission,voice-mcp,voice-memory}`,
   `build/test-harness/{fixtures/crm,guardrail}`, `deploy/loadgen` (cloud CLIs or extra
   Python packages) and `deploy/runner/tests` (self-hosted runner host).

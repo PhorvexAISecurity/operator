@@ -1,0 +1,16 @@
+{
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "created_at": "2026-11-01T01:30:04.754347+00:00",
+  "phase": "before_final_acceptance_execution",
+  "scripts": {
+    "verify.sh": "4436cde5d7a40368c37cddc256e4f66ae594adf394d58fe7b50739d8e1340a0e",
+    "evidence/final-source/run-acceptance.sh": "ffa2dd9e8219759b158fda484300f512aafaffbf0b4f9dd7301ea5145baf2b40",
+    "evidence/final-source/run-preflight.sh": "1cb0e1b1ee9dfcf1a0148417e63c84b98f7dbf5c31d06969ce18a3073aa54537"
+  },
+  "required_positive_tests": [
+    "TestEndpointStudyUsesRealPreCostPopulationAndExactBaseline",
+    "TestRemoteSnapshotRelayUsesRealRecorderStoreAndAuditRoute",
+    "TestRecorderProcessIdentityDoesNotRelabelDecisionPolicy"
+  ],
+  "note": "Intent/hash boundary only. Final acceptance requires actual completed run and matching logs/receipt; this file is not a PASS."
+}

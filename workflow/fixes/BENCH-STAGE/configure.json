@@ -1,0 +1,32 @@
+{
+  "change_class": "B",
+  "roles": {
+    "human_owner": "hamihoriyat",
+    "proposer": "bench-v3-lead",
+    "implementer": "bench-v3-worker",
+    "skeptic": "bench-v3-lead",
+    "live_verifier": "bench-v3-lead",
+    "coordinator": "bench-v3-lead"
+  },
+  "baseline": {
+    "code_branch": "main",
+    "code_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+    "deployed_git_sha": "bb92355cf7b6c4a696f44caf52bd5fa1268e7303"
+  },
+  "implementation": {
+    "branch": "fix/benchmark-stage",
+    "base_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40"
+  },
+  "capabilities_required": {
+    "go_toolchain": true,
+    "cluster_access": true,
+    "deployment_authority": true
+  },
+  "verification": {
+    "live_required": true,
+    "soak_required": false
+  },
+  "approvals": {
+    "pr_open": "operations/AUTONOMY.md"
+  }
+}

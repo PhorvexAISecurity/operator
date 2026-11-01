@@ -1,0 +1,14 @@
+{
+  "producer": "bench-v3-worker",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "started_at": "2026-11-01T02:04:29.100877+00:00",
+  "finished_at": "2026-11-01T02:06:09.720025+00:00",
+  "seconds": 100.619,
+  "command": [
+    "/workspace/.phorvex-tools/python311/python/bin/python3.11",
+    "workflow/tools/workflow.py",
+    "doctor"
+  ],
+  "exit_code": 0,
+  "result": "PASS"
+}

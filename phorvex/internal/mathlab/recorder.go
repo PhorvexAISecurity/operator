@@ -52,7 +52,12 @@ type Config struct {
 	// ProcessConfig holds the decision-relevant, non-secret effective operator flags.
 	ProcessConfig  map[string]string
 	GPUEnvelopeMax float64
+	// ProducerIdentity is optional. Split brain capture supplies its own process
+	// identity; local legacy capture keeps the incoming policy's identity.
+	ProducerIdentity *CaptureIdentity
 }
+
+type CaptureIdentity struct{ GitSHA, BrainImage string }
 
 // Recorder records allowlisted production ticks. A nil *Recorder records nothing.
 type Recorder struct {
@@ -71,6 +76,14 @@ func NewRecorder(cfg Config, sink Sink, observe func(result string, seconds floa
 	}
 	if sink == nil {
 		return nil, fmt.Errorf("math-lab recorder needs a snapshot store")
+	}
+	if cfg.ProducerIdentity != nil {
+		identity := *cfg.ProducerIdentity
+		decoded, err := hex.DecodeString(identity.GitSHA)
+		if err != nil || len(decoded) != 20 || identity.GitSHA != strings.ToLower(identity.GitSHA) || strings.TrimSpace(identity.BrainImage) == "" || identity.BrainImage == "notAvailable" {
+			return nil, fmt.Errorf("math-lab producer needs exact embedded source and configured image")
+		}
+		cfg.ProducerIdentity = &identity
 	}
 	allow := map[string]bool{}
 	for _, p := range cfg.Policies {
@@ -143,6 +156,11 @@ func (r *Recorder) Begin(ce *decision.CoverageEngine, spec v1alpha1.PhorvexPolic
 		TickID: pol.TickID, Tenant: pol.Tenant, Namespace: pol.Namespace, PolicyName: pol.PolicyName, PolicyUID: pol.PolicyUID,
 		PolicyGeneration: pol.PolicyGeneration, Owner: pol.Owner(), ProcessConfig: r.cfg.ProcessConfig,
 		ProcessConfigHash: r.processHash, GPUEnvelopeMax: r.cfg.GPUEnvelopeMax}
+	if r.cfg.ProducerIdentity != nil {
+		c.header.GitSHA = r.cfg.ProducerIdentity.GitSHA
+		c.header.BrainImage = r.cfg.ProducerIdentity.BrainImage
+		c.header.CaptureIdentitySource = "recorder-process"
+	}
 	// The profiles are the engine's own, not the registry default: an engine built before a
 	// default changed keeps the profile it was built with.
 	if ce.Recon != nil {

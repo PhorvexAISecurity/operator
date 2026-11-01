@@ -1,0 +1,9 @@
+{
+  "benchmark/stage/__init__.py": "93e9c303b0f91a7a87df1bce665f7780740d9f26f14b19645aaabdf251d7e04a",
+  "benchmark/stage/evidence.py": "a189d764c3cf552526e1b61923143f1fb4cf9b1fada752d6bf2e51d7ebac69f2",
+  "benchmark/stage/fixture.yaml": "66d80dc62cd610893bc62817265e2e5bf340a35d1fbf081923caaf260519f78f",
+  "benchmark/stage/normalize.py": "158dbadb71b7daf30155df0bde2e7284f1f01fffa5071e325e6df2122fa41df1",
+  "benchmark/stage/observe.py": "bae47e48b644bb0b2d630398925845814116cb5ca1b42ffaad67f166a6645529",
+  "benchmark/stage/test_evidence.py": "666b7e39f4522ad4dacb5ccdf77c6a33f397c3d5ca2b3897039d505ea7c062c7",
+  "benchmark/stage/test_observe.py": "a4cc320389b59c8d8b697a38c82aff1f9e6a0a95b1dbfa48aa64b7b22438b817"
+}

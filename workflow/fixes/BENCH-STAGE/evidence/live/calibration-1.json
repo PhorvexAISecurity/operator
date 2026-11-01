@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-31T23:01:56.230031+00:00",
+  "action": "controlled-stage-calibration",
+  "brain_issued": false,
+  "namespace": "phorvex-staging-demo",
+  "pod": "stage-bench-api-f9b895d7-9g4nd",
+  "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+  "reservation": 159,
+  "deadline_seconds": 120,
+  "result": {
+    "http_status": 200,
+    "acknowledged": true,
+    "returned_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+    "response_kind": "Pod",
+    "reason": null,
+    "resource_version": "102312682",
+    "deletion_timestamp": "2026-10-31T23:02:26Z",
+    "id": "calibration-46866ef1e9d4439ba1976903c0ec3057",
+    "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+    "operation": "uid-preconditioned-delete"
+  }
+}

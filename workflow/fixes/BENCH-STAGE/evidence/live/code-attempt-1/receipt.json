@@ -1,0 +1,74 @@
+{
+  "at": "2026-11-01T00:40:57.182700+00:00",
+  "result": "FAILED preserved",
+  "base_tests": {
+    "commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "toolchain": "go1.26.10",
+    "packages": [
+      "./cmd/brain-replay",
+      "./internal/decision",
+      "./internal/model"
+    ],
+    "counts": {
+      "pass": 465,
+      "fail": 0,
+      "skip": 2
+    },
+    "returncode": 0,
+    "status": "PASS"
+  },
+  "candidate_tests": {
+    "commit": "0816b904ce28323c11e270d514e5d2234538b2c8",
+    "toolchain": "go1.26.10",
+    "packages": [
+      "./cmd/brain-replay",
+      "./internal/decision",
+      "./internal/model"
+    ],
+    "counts": {
+      "pass": 508,
+      "fail": 1,
+      "skip": 2
+    },
+    "returncode": 1,
+    "status": "FAIL"
+  },
+  "only_failed_test": {
+    "Time": "2026-11-01T00:37:40.386541208Z",
+    "Action": "fail",
+    "Package": "github.com/phorvex/phorvex/internal/decision",
+    "Test": "TestExactRuntimeMatrix",
+    "Elapsed": 1.47
+  },
+  "failure_detail": [
+    "    exact_runtime_matrix_test.go:393: production-76-b2 seed=23001 repetition=2: status=timeout reason=\"subprocess exceeded the 500ms exact-check budget\", want completed\n"
+  ],
+  "changed_paths": [
+    "phorvex/internal/model/endpoint_seconds_v2.go",
+    "phorvex/internal/model/endpoint_seconds_v2_test.go"
+  ],
+  "environment": "Jump host also had unrelated px-amtd p4mc runner and owned endpoint refresh active; neither timing-test policy nor other users processes modified. Contention is a hypothesis, not proven rootcause.",
+  "next_step": "After endpoint acceptance, one new actual bot retry with owned refresh paused; preserve independent attempt and all guards.",
+  "files": [
+    {
+      "name": "CANDIDATE.json",
+      "sha256": "393a18b88c656107540c1df216c08017869f9fb7a116b8289d11a2519ca916cd"
+    },
+    {
+      "name": "tests-candidate.jsonl",
+      "sha256": "fdb0e0871a2ae13938254af39abf48d6ac7329e848c25b71826865f9f18124f7"
+    },
+    {
+      "name": "TESTS.json",
+      "sha256": "56e319b6a915d9188f2cda54f41dd1a6ab59bccf5f7882196776165fe2f85eb5"
+    },
+    {
+      "name": "brain.diff",
+      "sha256": "6c71143f38c59f5e2df363b267b36dbf3ae90a711bbe0e9eed2cf0de3515c82f"
+    },
+    {
+      "name": "tests-base-local.jsonl",
+      "sha256": "8d8f5b2ecee3c9d4193230c8927b83fb49e3fd16cc9d9f347c509d6bdc049e8d"
+    }
+  ]
+}

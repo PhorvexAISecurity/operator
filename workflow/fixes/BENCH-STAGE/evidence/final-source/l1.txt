@@ -1,0 +1,22 @@
+=== RUN   TestPreparationRetainsCostExcludedMoveWithoutEvaluatingLegacyCost
+--- PASS: TestPreparationRetainsCostExcludedMoveWithoutEvaluatingLegacyCost (0.00s)
+=== RUN   TestPreparationPreservesActualCapabilityAndAvailabilityVetoes
+=== RUN   TestPreparationPreservesActualCapabilityAndAvailabilityVetoes/capability
+=== RUN   TestPreparationPreservesActualCapabilityAndAvailabilityVetoes/availability
+--- PASS: TestPreparationPreservesActualCapabilityAndAvailabilityVetoes (0.00s)
+    --- PASS: TestPreparationPreservesActualCapabilityAndAvailabilityVetoes/capability (0.00s)
+    --- PASS: TestPreparationPreservesActualCapabilityAndAvailabilityVetoes/availability (0.00s)
+=== RUN   TestPreparationRejectsPartialPopulationOnReconCollision
+--- PASS: TestPreparationRejectsPartialPopulationOnReconCollision (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/actionset	0.056s
+=== RUN   TestStudyPreparationDoesNotMutateOwnerViewsOrCallImpureCapability
+--- PASS: TestStudyPreparationDoesNotMutateOwnerViewsOrCallImpureCapability (0.01s)
+=== RUN   TestStudyRealContainmentAndHardGateOverridePrices
+--- PASS: TestStudyRealContainmentAndHardGateOverridePrices (0.01s)
+=== RUN   TestStudyNegativePricedGainDoesNotAddAPricedWorthGate
+--- PASS: TestStudyNegativePricedGainDoesNotAddAPricedWorthGate (0.01s)
+=== RUN   TestStudyPreservesRealResourceAndFailureGates
+--- PASS: TestStudyPreservesRealResourceAndFailureGates (0.01s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/decision	0.145s

@@ -1,0 +1,10 @@
+{
+  "at": "2026-11-01T00:57:14.023871+00:00",
+  "candidate_commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+  "base_prerequisite": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "tag": "bench-c963f138052b",
+  "bundle_bytes": 2517,
+  "bundle_sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+  "verification": "git bundle verify PASS against actualcandidateclone",
+  "purpose": "Retain exact candidate commit/trees/blobs before normaljobclonecleanup; no push orproductionactivation"
+}

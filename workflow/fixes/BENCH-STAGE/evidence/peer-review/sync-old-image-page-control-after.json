@@ -1,0 +1,40 @@
+{
+  "schema": "phorvex-bench.independent-control.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:17:56.910922+00:00",
+  "kind": "actual snapshot bytes with mock read-only Console emulating Store.List oldest-first inclusive since/exclusive until+limit",
+  "remote_old_image_ticks": 2,
+  "remote_matching_ticks": 1,
+  "attempts": [
+    {
+      "since": null,
+      "listed": 1,
+      "downloaded": 1,
+      "rejected": [
+        {
+          "digest": "624c1d52e699d2775fb7814763307de3c0ca9d799e8600666e6fff39200a1a97",
+          "reason": "index header differs from pinned stage capture"
+        },
+        {
+          "digest": "3460a53f8df97907c9b9f2410194b48abb7cf052243e7ac923863651197450fb",
+          "reason": "index header differs from pinned stage capture"
+        }
+      ],
+      "more_available": false,
+      "index_pages": 3,
+      "pagination_blocked": null
+    },
+    {
+      "since": "2026-10-31T00:00:03Z",
+      "listed": 1,
+      "downloaded": 0,
+      "rejected": [],
+      "more_available": false,
+      "index_pages": 1,
+      "pagination_blocked": null
+    }
+  ],
+  "matching_local_count": 1,
+  "result": "PASS",
+  "source_sha256": "6a4bb432e2797f83a69e8f28c987ed772df9d79751deb251a21b73d35a445678"
+}

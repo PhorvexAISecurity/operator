@@ -1,0 +1,24 @@
+{
+  "schema_version": 2,
+  "subject": {
+    "kind": "campaign",
+    "id": "2026-10-31-stage-brain-benchmark",
+    "round": "round-1"
+  },
+  "recorded_at": "2026-11-01T00:54:49.087722+00:00",
+  "artifacts": [
+    {
+      "path": "evidence/baseline-current.json",
+      "sha256": "b76dbdf1fcdebd3d630746a2ddb734d09c03f2227bf25b8be9efa295e7bd9569",
+      "bytes": 957,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/control-round-complete.json",
+      "sha256": "6256f19e619086137dd4bd100ed22eeb505ec865ccd2f301141df06dd25cc420",
+      "bytes": 377,
+      "retention": "git-compact-receipt"
+    }
+  ],
+  "original_evidence": "Private rawjournal/cohort paths and hashes are recorded in corresponding BENCH-STAGE live/peerreviewreceipts; no rawdb iscommitted."
+}

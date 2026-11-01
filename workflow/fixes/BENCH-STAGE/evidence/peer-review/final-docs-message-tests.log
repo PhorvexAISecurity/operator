@@ -1,0 +1,12 @@
+test_bench_refuses_a_tampered_deployed_binary (benchmark.bot.test_bot.BotTest.test_bench_refuses_a_tampered_deployed_binary) ... ok
+test_duplicate_guide_requests_do_not_block_other_commands (benchmark.bot.test_bot.BotTest.test_duplicate_guide_requests_do_not_block_other_commands) ... ok
+test_guide_delivers_both_release_files_without_queuing_a_benchmark (benchmark.bot.test_bot.BotTest.test_guide_delivers_both_release_files_without_queuing_a_benchmark) ... ok
+test_guide_is_available_to_members_but_not_strangers (benchmark.bot.test_bot.BotTest.test_guide_is_available_to_members_but_not_strangers) ... ok
+test_guide_upload_failure_is_reported_and_retry_works (benchmark.bot.test_bot.BotTest.test_guide_upload_failure_is_reported_and_retry_works) ... ok
+test_missing_guide_files_do_not_send_a_partial_guide (benchmark.bot.test_bot.BotTest.test_missing_guide_files_do_not_send_a_partial_guide) ... ok
+test_strict_custom_study_settings_and_templates_validate_before_queue (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.210s
+
+OK

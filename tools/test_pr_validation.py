@@ -256,6 +256,17 @@ class PRValidationTests(unittest.TestCase):
                 self.assertTrue(from_lines)
                 self.assertTrue(all('@sha256:' in line for line in from_lines))
 
+    def test_brain_image_embeds_replay_with_the_same_build_identity(self):
+        dockerfile = (ROOT / 'deploy/docker/service.Dockerfile').read_text()
+        self.assertIn('if [ "${SERVICE}" = brain ]; then', dockerfile)
+        self.assertIn('-o /companions/brain-replay ./cmd/brain-replay', dockerfile)
+        self.assertIn('COPY --from=builder /companions/ /', dockerfile)
+        flags = re.findall(r'-ldflags="([^"]+)"', dockerfile)
+        self.assertEqual(len(flags), 2)
+        self.assertEqual(flags[0], flags[1])
+        self.assertIn('buildinfo.linkedGitSHA=${GIT_SHA}', flags[1])
+        self.assertIn('buildinfo.linkedVersion=${RELEASE_VERSION}', flags[1])
+
 
 
 RELEASE_RAW = (ROOT / '.github/workflows/release.yml').read_text()

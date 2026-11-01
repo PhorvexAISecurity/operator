@@ -22,7 +22,7 @@ type sink struct{ items []mathlab.Pending }
 
 func (s *sink) Enqueue(p mathlab.Pending) bool { s.items = append(s.items, p); return true }
 
-func writeSnapshot(t *testing.T, dir, gitSHA string) {
+func writeSnapshot(t *testing.T, dir, gitSHA string, configure ...func([]*model.WorkloadView)) {
 	t.Helper()
 	recon.Registry.SetDefault("ucw-recon")
 	e := decision.NewCoverageEngine()
@@ -35,6 +35,9 @@ func writeSnapshot(t *testing.T, dir, gitSHA string) {
 	views := []*model.WorkloadView{{Pod: model.Pod{Namespace: "ns", Name: "a", UID: "ua", DesiredReplicas: 3, ReadyReplicas: 3, Ready: true, MountedSecrets: []string{"s"}},
 		Phase: model.PhaseWarm, Telemetry: model.Telemetry{ReqRate: model.PresentSignal(5, "f")},
 		ExposureByVariable: map[string]time.Duration{model.VarPodIdentity: time.Hour, model.VarNetworkIdentity: time.Hour}}}
+	for _, f := range configure {
+		f(views)
+	}
 	s := &sink{}
 	rec, err := mathlab.NewRecorder(mathlab.Config{Policies: []string{"ns/p"}, GPUEnvelopeMax: cost.GPUEnvelopeMax()}, s, nil)
 	if err != nil {
@@ -49,14 +52,18 @@ func writeSnapshot(t *testing.T, dir, gitSHA string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	before := len(store.List(mathlab.ListFilter{}))
 	store.Enqueue(s.items[0])
 	ctx, cancel := context.WithCancel(context.Background())
 	go store.Run(ctx)
 	deadline := time.Now().Add(5 * time.Second)
-	for len(store.List(mathlab.ListFilter{})) == 0 && time.Now().Before(deadline) {
+	for len(store.List(mathlab.ListFilter{})) == before && time.Now().Before(deadline) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	cancel()
+	if got := len(store.List(mathlab.ListFilter{})); got != before+1 {
+		t.Fatalf("snapshot write did not finish: before=%d after=%d", before, got)
+	}
 }
 
 func readLines(t *testing.T, path string) []output {

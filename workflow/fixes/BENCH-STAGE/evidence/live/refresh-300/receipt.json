@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-01T00:38:28.734876+00:00",
+  "source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "files": [
+    {
+      "name": "trace.json",
+      "bytes": 252481,
+      "sha256": "d4d20d04b132a954df379cb9f0e00695f9d25737eaed95f5f4ad35788f74bc9c"
+    },
+    {
+      "name": "manifest.json",
+      "bytes": 42536,
+      "sha256": "64ba6135a5ac2f8595e05f414bfd9616354d8c450f249b90392488d8674b9acd"
+    },
+    {
+      "name": "status.json",
+      "bytes": 14891,
+      "sha256": "3823ab7d0773460cd57c69457845c01cfc9ee59b3d404a7726698bb08a17b7e0"
+    }
+  ],
+  "result": "READY64, actualfullrefresh"
+}

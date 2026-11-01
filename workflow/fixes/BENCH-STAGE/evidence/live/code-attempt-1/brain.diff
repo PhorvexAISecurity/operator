@@ -1,0 +1,142 @@
+diff --git a/phorvex/internal/model/endpoint_seconds_v2.go b/phorvex/internal/model/endpoint_seconds_v2.go
+new file mode 100644
+--- /dev/null
++++ b/phorvex/internal/model/endpoint_seconds_v2.go
+@@ -0,0 +1,57 @@
++package model
++
++import (
++	"fmt"
++	"math"
++)
++
++// EstimateEndpointSecondsV2 evaluates the experimental endpoint-second cost
++// model from explicit inputs. Durations are in seconds; rho, C_flow, C_norm and
++// E are returned in endpoint-seconds, in that order. k must be an integer count.
++// This helper only validates and computes; it does not derive any parameters.
++func EstimateEndpointSecondsV2(k, d, delta, tRB, hTail, tMid, pF float64) (rho, cFlow, cNorm, expected float64, err error) {
++	for _, input := range []struct {
++		name  string
++		value float64
++	}{
++		{"k", k},
++		{"D", d},
++		{"delta", delta},
++		{"T_rb", tRB},
++		{"H_tail", hTail},
++		{"T_mid", tMid},
++		{"p_f", pF},
++	} {
++		if math.IsNaN(input.value) || math.IsInf(input.value, 0) || input.value < 0 {
++			return 0, 0, 0, 0, fmt.Errorf("endpoint-seconds v2: %s must be finite and nonnegative", input.name)
++		}
++	}
++	if math.Trunc(k) != k {
++		return 0, 0, 0, 0, fmt.Errorf("endpoint-seconds v2: k must be an integer")
++	}
++	if pF > 1 {
++		return 0, 0, 0, 0, fmt.Errorf("endpoint-seconds v2: p_f must be between 0 and 1")
++	}
++	if d < tMid {
++		return 0, 0, 0, 0, fmt.Errorf("endpoint-seconds v2: D must be at least T_mid")
++	}
++
++	rho = k*(d+delta+tRB) + hTail
++	cFlow = k * tMid
++	cNorm = pF * (k*(d-tMid+delta+tRB) + hTail)
++	expected = cFlow + cNorm
++	for _, output := range []struct {
++		name  string
++		value float64
++	}{
++		{"rho", rho},
++		{"C_flow", cFlow},
++		{"C_norm", cNorm},
++		{"E", expected},
++	} {
++		if math.IsNaN(output.value) || math.IsInf(output.value, 0) || output.value < 0 {
++			return 0, 0, 0, 0, fmt.Errorf("endpoint-seconds v2: computed %s must be finite and nonnegative", output.name)
++		}
++	}
++	return rho, cFlow, cNorm, expected, nil
++}
+diff --git a/phorvex/internal/model/endpoint_seconds_v2_test.go b/phorvex/internal/model/endpoint_seconds_v2_test.go
+new file mode 100644
+--- /dev/null
++++ b/phorvex/internal/model/endpoint_seconds_v2_test.go
+@@ -0,0 +1,75 @@
++package model
++
++import (
++	"math"
++	"testing"
++)
++
++func TestEstimateEndpointSecondsV2Examples(t *testing.T) {
++	tests := []struct {
++		name   string
++		inputs [7]float64 // k, D, delta, T_rb, H_tail, T_mid, p_f
++		want   [4]float64 // rho, C_flow, C_norm, E
++	}{
++		{"A", [7]float64{1, 43, 30, 43, 43, 43, 1}, [4]float64{159, 43, 116, 159}},
++		{"B", [7]float64{1, 43, 30, 43, 43, 43, 0}, [4]float64{159, 43, 0, 43}},
++		{"C", [7]float64{2, 50, 30, 50, 100, 40, 0.25}, [4]float64{360, 80, 70, 150}},
++		{"D", [7]float64{0, 43, 30, 43, 0, 43, 1}, [4]float64{}},
++		{"zero values", [7]float64{}, [4]float64{}},
++		{"zero endpoints with tail", [7]float64{0, 43, 30, 43, 43, 43, 0.25}, [4]float64{43, 0, 10.75, 10.75}},
++		{"fractional seconds", [7]float64{3, 1.5, 0.25, 0.75, 0.5, 0.5, 0.5}, [4]float64{8, 1.5, 3.25, 4.75}},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			rho, cFlow, cNorm, expected, err := EstimateEndpointSecondsV2(
++				tt.inputs[0], tt.inputs[1], tt.inputs[2], tt.inputs[3], tt.inputs[4], tt.inputs[5], tt.inputs[6],
++			)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if got := [4]float64{rho, cFlow, cNorm, expected}; got != tt.want {
++				t.Fatalf("(rho, C_flow, C_norm, E) = %v, want %v", got, tt.want)
++			}
++		})
++	}
++}
++
++func TestEstimateEndpointSecondsV2RejectsInvalidInputs(t *testing.T) {
++	type testCase struct {
++		name   string
++		inputs [7]float64 // k, D, delta, T_rb, H_tail, T_mid, p_f
++	}
++	tests := []testCase{
++		{"fractional k", [7]float64{0.5, 43, 30, 43, 43, 43, 1}},
++		{"p_f above one", [7]float64{1, 43, 30, 43, 43, 43, 1.01}},
++		{"D below T_mid", [7]float64{1, 42, 30, 43, 43, 43, 1}},
++		{"product overflow", [7]float64{2, math.MaxFloat64, 0, 0, 0, 0, 1}},
++		{"duration sum overflow", [7]float64{1, math.MaxFloat64, math.MaxFloat64, 0, 0, 0, 1}},
++		{"tail sum overflow", [7]float64{1, math.MaxFloat64, 0, 0, math.MaxFloat64, 0, 1}},
++		{"overflow with zero p_f", [7]float64{2, math.MaxFloat64, 0, 0, 0, 0, 0}},
++	}
++	for index, name := range []string{"k", "D", "delta", "T_rb", "H_tail", "T_mid", "p_f"} {
++		for _, invalid := range []struct {
++			name  string
++			value float64
++		}{
++			{"negative", -1},
++			{"NaN", math.NaN()},
++			{"+Inf", math.Inf(1)},
++			{"-Inf", math.Inf(-1)},
++		} {
++			inputs := [7]float64{1, 43, 30, 43, 43, 43, 1}
++			inputs[index] = invalid.value
++			tests = append(tests, testCase{name + "/" + invalid.name, inputs})
++		}
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			if _, _, _, _, err := EstimateEndpointSecondsV2(
++				tt.inputs[0], tt.inputs[1], tt.inputs[2], tt.inputs[3], tt.inputs[4], tt.inputs[5], tt.inputs[6],
++			); err == nil {
++				t.Fatalf("expected error for inputs %v", tt.inputs)
++			}
++		})
++	}
++}

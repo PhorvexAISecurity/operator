@@ -1,0 +1,136 @@
+[
+  {
+    "op": "test",
+    "path": "/spec/generators",
+    "value": [
+      {
+        "matrix": {
+          "generators": [
+            {
+              "list": {
+                "elements": [
+                  {
+                    "environment": "staging",
+                    "namespace": "phorvex-staging",
+                    "release": "staging",
+                    "server": "https://kubernetes.default.svc"
+                  }
+                ]
+              }
+            },
+            {
+              "list": {
+                "elements": [
+                  {
+                    "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+                    "benchmarkValues": "{\"phorvex\":{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager\",\"tag\":\"staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40\",\"releaseDigest\":\"sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7\",\"releaseSourceSHA\":\"9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40\"},\"mathLab\":{\"captureCostEvidence\":true}}}",
+                    "chart": "phorvex/charts/phorvex",
+                    "service": "manager"
+                  },
+                  {
+                    "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+                    "benchmarkValues": "{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain\",\"tag\":\"staging-0.10.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40\",\"digest\":\"sha256:1ee0c571784e489c0591b8810c7f287c3efd653707ab0c833af389614c5da148\"},\"phorvex\":{\"mathLab\":{\"capturePolicies\":[\"phorvex-staging-demo/demo-api-defense\",\"phorvex-staging-demo/stage-bench-defense\"],\"captureMaxBytes\":1073741824}},\"mathLabStore\":{\"existingClaim\":\"staging-brain-mathlab\"}}",
+                    "chart": "deploy/charts/phorvex-brain",
+                    "service": "brain"
+                  },
+                  {
+                    "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+                    "benchmarkValues": "{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor\",\"tag\":\"staging-0.11.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40\",\"digest\":\"sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093\"}}",
+                    "chart": "deploy/charts/phorvex-sensor",
+                    "service": "sensor"
+                  },
+                  {
+                    "benchmarkRevision": "main",
+                    "benchmarkValues": "{}",
+                    "chart": "deploy/charts/phorvex-actuator",
+                    "service": "actuator"
+                  },
+                  {
+                    "benchmarkRevision": "main",
+                    "benchmarkValues": "{}",
+                    "chart": "deploy/charts/phorvex-attacks",
+                    "service": "attacks"
+                  },
+                  {
+                    "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+                    "benchmarkValues": "{\"phorvex\":{\"console\":{\"auth\":{\"grants\":{\"data\":\"{\\n  \\\"version\\\": 1,\\n  \\\"subjects\\\": [\\n    {\\n      \\\"issuer\\\": \\\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\\\",\\n      \\\"subject\\\": \\\"71fb8550-3041-702a-5735-a33baf8836c8\\\",\\n      \\\"roles\\\": [\\n        \\\"operator\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"p6-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"The production console's operator, confined to staging's demo tenant.\\\"\\n    },\\n    {\\n      \\\"issuer\\\": \\\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\\\",\\n      \\\"subject\\\": \\\"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\\\",\\n      \\\"roles\\\": [\\n        \\\"operator\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"p6-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\\\"\\n    },\\n    {\\n      \\\"issuer\\\": \\\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\\\",\\n      \\\"subject\\\": \\\"system:serviceaccount:phorvex-staging:staging-brain-benchmark\\\",\\n      \\\"roles\\\": [\\n        \\\"investor\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"phorvex-staging-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"Read-only source-pinned stage brain benchmark snapshot collection.\\\"\\n    }\\n  ]\\n}\"}}}}}",
+                    "chart": "deploy/charts/phorvex-console",
+                    "service": "console"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "op": "test",
+    "path": "/spec/template/spec/sources",
+    "value": [
+      {
+        "helm": {
+          "releaseName": "{{.release}}",
+          "skipCrds": true,
+          "valueFiles": [
+            "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+            "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+            "$values/deploy/environments/{{.environment}}/catalogue-family.yaml"
+          ],
+          "values": "{{.benchmarkValues}}"
+        },
+        "path": "{{.chart}}",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "{{.benchmarkRevision}}"
+      },
+      {
+        "ref": "values",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "{{.benchmarkRevision}}"
+      }
+    ]
+  },
+  {
+    "op": "replace",
+    "path": "/spec/generators/0/matrix/generators/1/list/elements",
+    "value": [
+      {
+        "benchmarkRevision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "benchmarkValues": "{\"phorvex\":{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager\",\"tag\":\"benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4\",\"releaseDigest\":\"sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e\",\"releaseSourceSHA\":\"ef94fad362dabb51469211388ef80cdfa6eee1d4\"},\"mathLab\":{\"captureCostEvidence\":true}}}",
+        "chart": "phorvex/charts/phorvex",
+        "service": "manager"
+      },
+      {
+        "benchmarkRevision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "benchmarkValues": "{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain\",\"tag\":\"benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4\",\"digest\":\"sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90\"},\"phorvex\":{\"mathLab\":{\"capturePolicies\":[\"phorvex-staging-demo/demo-api-defense\",\"phorvex-staging-demo/stage-bench-defense\"],\"captureMaxBytes\":1073741824}},\"mathLabStore\":{\"existingClaim\":\"staging-brain-mathlab\"}}",
+        "chart": "deploy/charts/phorvex-brain",
+        "service": "brain"
+      },
+      {
+        "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+        "benchmarkValues": "{\"image\":{\"repository\":\"753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor\",\"tag\":\"staging-0.11.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40\",\"digest\":\"sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093\"}}",
+        "chart": "deploy/charts/phorvex-sensor",
+        "service": "sensor"
+      },
+      {
+        "benchmarkRevision": "main",
+        "benchmarkValues": "{}",
+        "chart": "deploy/charts/phorvex-actuator",
+        "service": "actuator"
+      },
+      {
+        "benchmarkRevision": "main",
+        "benchmarkValues": "{}",
+        "chart": "deploy/charts/phorvex-attacks",
+        "service": "attacks"
+      },
+      {
+        "benchmarkRevision": "1b9d0ecb2e204a04f8b5a009bdaee3b9229befbe",
+        "benchmarkValues": "{\"phorvex\":{\"console\":{\"auth\":{\"grants\":{\"data\":\"{\\n  \\\"version\\\": 1,\\n  \\\"subjects\\\": [\\n    {\\n      \\\"issuer\\\": \\\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\\\",\\n      \\\"subject\\\": \\\"71fb8550-3041-702a-5735-a33baf8836c8\\\",\\n      \\\"roles\\\": [\\n        \\\"operator\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"p6-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"The production console's operator, confined to staging's demo tenant.\\\"\\n    },\\n    {\\n      \\\"issuer\\\": \\\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\\\",\\n      \\\"subject\\\": \\\"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\\\",\\n      \\\"roles\\\": [\\n        \\\"operator\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"p6-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\\\"\\n    },\\n    {\\n      \\\"issuer\\\": \\\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\\\",\\n      \\\"subject\\\": \\\"system:serviceaccount:phorvex-staging:staging-brain-benchmark\\\",\\n      \\\"roles\\\": [\\n        \\\"investor\\\"\\n      ],\\n      \\\"tenants\\\": [\\n        \\\"phorvex-staging-demo\\\"\\n      ],\\n      \\\"targets\\\": [\\n        \\\"default\\\"\\n      ],\\n      \\\"note\\\": \\\"Read-only source-pinned stage brain benchmark snapshot collection.\\\"\\n    }\\n  ]\\n}\"}}}}}",
+        "chart": "deploy/charts/phorvex-console",
+        "service": "console"
+      }
+    ]
+  }
+]

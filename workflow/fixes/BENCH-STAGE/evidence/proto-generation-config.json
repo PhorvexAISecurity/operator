@@ -1,0 +1,19 @@
+{
+  "source_sha": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc + uncommitted relay proto",
+  "description": "Pinned protobuf generator; source worktree is under active relay implementation. Not an acceptance receipt.",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/proto-generation-status.json",
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/proto-generation.txt",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "total_timeout_seconds": 1800,
+  "steps": [
+    {
+      "name": "checked-in-pinned-proto-generator",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/run-proto-generation.sh"
+      ],
+      "timeout_seconds": 1800
+    }
+  ]
+}

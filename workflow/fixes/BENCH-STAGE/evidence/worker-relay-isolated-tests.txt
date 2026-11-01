@@ -1,0 +1,13 @@
+Relay-only isolated baseline archive plus exactly the 19 SHA-bound component files. No experimental actionset/study/helper changes. Go1.26.3 local.
+START real-recorder-rpc-http-relay-and-rollout
+ok  	github.com/phorvex/phorvex/internal/brainclient	1.065s
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.073s
+ok  	github.com/phorvex/phorvex/internal/audittransport	0.706s
+ok  	github.com/phorvex/phorvex/cmd/brain	0.073s
+END real-recorder-rpc-http-relay-and-rollout exit=0
+START producer-identity-and-baseline-parity
+ok  	github.com/phorvex/phorvex/internal/mathlab	0.190s
+END producer-identity-and-baseline-parity exit=0
+START architecture
+ok  	github.com/phorvex/phorvex/internal/archtest	0.142s
+END architecture exit=0

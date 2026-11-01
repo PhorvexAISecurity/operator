@@ -1,0 +1,391 @@
+{
+  "source_head": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "journal_sha256": "fe706f99faf1648d170bf7dcdba3da710cfed97ba523d8600a986175b3d18ab6",
+  "read_only": true,
+  "verified_events": 1125,
+  "last_hash": "66292ca7a94066c8e04d564c18dfdd74450c2d67e5d38c827b4dc2d1cdb30b0a",
+  "transitions": [
+    {
+      "seq": 1,
+      "time": "2026-10-31T23:54:43.009578+00:00",
+      "kind": "session",
+      "stream": null,
+      "event": null,
+      "object": {
+        "name": null,
+        "uid": null,
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "WATCH_NOT_STARTED"
+        ]
+      ],
+      "to": [
+        null,
+        [
+          "WATCH_NOT_STARTED",
+          "WATCH_SESSION_STARTED"
+        ]
+      ],
+      "pods": []
+    },
+    {
+      "seq": 2,
+      "time": "2026-10-31T23:54:45.921920+00:00",
+      "kind": "list",
+      "stream": "deployment",
+      "event": null,
+      "object": {
+        "name": null,
+        "uid": null,
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "WATCH_NOT_STARTED",
+          "WATCH_SESSION_STARTED"
+        ]
+      ],
+      "to": [
+        null,
+        [
+          "WATCH_INITIALIZATION_INCOMPLETE",
+          "WATCH_NOT_STARTED",
+          "WATCH_SESSION_STARTED"
+        ]
+      ],
+      "pods": []
+    },
+    {
+      "seq": 7,
+      "time": "2026-10-31T23:55:06.471366+00:00",
+      "kind": "list",
+      "stream": "policy",
+      "event": null,
+      "object": {
+        "name": null,
+        "uid": null,
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "WATCH_INITIALIZATION_INCOMPLETE",
+          "WATCH_NOT_STARTED",
+          "WATCH_SESSION_STARTED"
+        ]
+      ],
+      "to": [
+        1793490906.471366,
+        []
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tjfh6",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-znspk",
+          "node": "ip-172-27-44-44.us-east-2.compute.internal",
+          "uid": "1bca3fbc-ea94-434e-9e05-26467b4a863e"
+        }
+      ]
+    },
+    {
+      "seq": 814,
+      "time": "2026-11-01T00:17:47.193260+00:00",
+      "kind": "watch",
+      "stream": "pods",
+      "event": "MODIFIED",
+      "object": {
+        "name": "stage-bench-api-f9b895d7-znspk",
+        "uid": "1bca3fbc-ea94-434e-9e05-26467b4a863e",
+        "deletionTimestamp": "2026-11-01T00:18:16Z"
+      },
+      "from": [
+        1793490906.471366,
+        []
+      ],
+      "to": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tw48t",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-znspk",
+          "node": "ip-172-27-44-44.us-east-2.compute.internal",
+          "uid": "1bca3fbc-ea94-434e-9e05-26467b4a863e"
+        }
+      ]
+    },
+    {
+      "seq": 819,
+      "time": "2026-11-01T00:17:47.320935+00:00",
+      "kind": "watch",
+      "stream": "pods",
+      "event": "ADDED",
+      "object": {
+        "name": "stage-bench-api-f9b895d7-5wlvd",
+        "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "to": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ]
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tw48t",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-znspk",
+          "node": "ip-172-27-44-44.us-east-2.compute.internal",
+          "uid": "1bca3fbc-ea94-434e-9e05-26467b4a863e"
+        },
+        {
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        }
+      ]
+    },
+    {
+      "seq": 837,
+      "time": "2026-11-01T00:17:52.080898+00:00",
+      "kind": "watch",
+      "stream": "endpointslices",
+      "event": "MODIFIED",
+      "object": {
+        "name": "stage-bench-api-fwjdk",
+        "uid": "2b9f9f01-585e-43bb-90f6-c27e8d78f56c",
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ]
+      ],
+      "to": [
+        1793492272.0808978,
+        []
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tw48t",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-5wlvd",
+          "node": "ip-172-27-62-45.us-east-2.compute.internal",
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        }
+      ]
+    },
+    {
+      "seq": 1012,
+      "time": "2026-11-01T00:22:29.002408+00:00",
+      "kind": "watch",
+      "stream": "endpointslices",
+      "event": "MODIFIED",
+      "object": {
+        "name": "stage-bench-api-fwjdk",
+        "uid": "2b9f9f01-585e-43bb-90f6-c27e8d78f56c",
+        "deletionTimestamp": null
+      },
+      "from": [
+        1793492272.0808978,
+        []
+      ],
+      "to": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tw48t",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-5wlvd",
+          "node": "ip-172-27-62-45.us-east-2.compute.internal",
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        }
+      ]
+    },
+    {
+      "seq": 1016,
+      "time": "2026-11-01T00:22:29.130466+00:00",
+      "kind": "watch",
+      "stream": "pods",
+      "event": "ADDED",
+      "object": {
+        "name": "stage-bench-api-f9b895d7-25bpm",
+        "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ]
+      ],
+      "to": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ]
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-tw48t",
+          "node": "ip-172-27-58-153.us-east-2.compute.internal",
+          "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-5wlvd",
+          "node": "ip-172-27-62-45.us-east-2.compute.internal",
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        },
+        {
+          "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+        }
+      ]
+    },
+    {
+      "seq": 1036,
+      "time": "2026-11-01T00:22:32.317348+00:00",
+      "kind": "watch",
+      "stream": "endpointslices",
+      "event": "MODIFIED",
+      "object": {
+        "name": "stage-bench-api-fwjdk",
+        "uid": "2b9f9f01-585e-43bb-90f6-c27e8d78f56c",
+        "deletionTimestamp": null
+      },
+      "from": [
+        null,
+        [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ]
+      ],
+      "to": [
+        1793492552.3173475,
+        []
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-5wlvd",
+          "node": "ip-172-27-62-45.us-east-2.compute.internal",
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-25bpm",
+          "node": "ip-172-27-47-45.us-east-2.compute.internal",
+          "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+        }
+      ]
+    },
+    {
+      "seq": 1125,
+      "time": "2026-11-01T00:25:06.789786+00:00",
+      "kind": "stopped",
+      "stream": null,
+      "event": null,
+      "object": {
+        "name": null,
+        "uid": null,
+        "deletionTimestamp": null
+      },
+      "from": [
+        1793492552.3173475,
+        []
+      ],
+      "to": [
+        null,
+        [
+          "COLLECTION_SESSION_ENDED"
+        ]
+      ],
+      "pods": [
+        {
+          "name": "stage-bench-api-f9b895d7-fntvf",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-5wlvd",
+          "node": "ip-172-27-62-45.us-east-2.compute.internal",
+          "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+        },
+        {
+          "name": "stage-bench-api-f9b895d7-25bpm",
+          "node": "ip-172-27-47-45.us-east-2.compute.internal",
+          "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+        }
+      ]
+    }
+  ]
+}

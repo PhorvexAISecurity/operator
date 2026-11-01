@@ -1,0 +1,62 @@
+{
+  "at": 1793488380.2309918,
+  "source_revision": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+  "policy_generation": 1,
+  "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+  "spec_replicas": 3,
+  "class": "stateless",
+  "ready_pod_uids": [
+    "1bca3fbc-ea94-434e-9e05-26467b4a863e",
+    "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+    "3196aa4b-4fd8-4785-b147-0c661627bbaa"
+  ],
+  "complete_from": 1793487671.3257422,
+  "watermark": 1793488380.2309918,
+  "measurement": "watch-observed-service-ready-backends",
+  "mode": "isolated-calibration",
+  "authoritative": false,
+  "reasons": [],
+  "moves": [
+    {
+      "id": "calibration-46866ef1e9d4439ba1976903c0ec3057",
+      "revision": 1,
+      "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+      "action": "rotate",
+      "containment": false,
+      "state": "settled",
+      "observed_at": 1793487718.2410002,
+      "attributed": true,
+      "measured": true,
+      "intervals": [
+        {
+          "endpoint_uid": "5b2594d7-8c64-411e-80dc-033592597fda:38677032-a920-4979-87f6-a00e682f6b42",
+          "start": 1793487716.3713365,
+          "end": 1793487718.2410002
+        }
+      ],
+      "reservation": null,
+      "overdue": false
+    }
+  ],
+  "samples": [
+    {
+      "id": "calibration-46866ef1e9d4439ba1976903c0ec3057",
+      "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+      "action": "rotate",
+      "at": 1793487718.2410002,
+      "duration": 5.545620679855347,
+      "censored": false,
+      "overdue": false,
+      "suspect": false
+    }
+  ],
+  "journal_seq": 436,
+  "journal_hash": "3a9cb4663750ec1bad45f11c7dbc09a0976216c616063b28ab85e58a17636963",
+  "qualified_observed_seconds": 708.9052495956421,
+  "frozen_journal_prefix": {
+    "seq": 470,
+    "hash": "ec4aa18a56f6f7e5f8c6ac64108e46913f975649edc774561010d4580459f19f"
+  }
+}

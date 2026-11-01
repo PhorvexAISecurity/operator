@@ -1,0 +1,19 @@
+{
+  "schema": "phorvex-bench.collector-freeze.v1",
+  "result": "PASS",
+  "change": "Allowlisted exact incremental candidate Git bundle and source retention receipt; preceding failed attempt retained",
+  "tests": {
+    "passed": 2,
+    "skipped": 0,
+    "scope": "Collector fixture only; actual bundle verified separately by lead"
+  },
+  "source_sha256": {
+    "collect-bot-delivery.py": "2e05b82e07fdf7900b2042f024efb545859f6b3843366534a35ff83904dce9b4",
+    "test_delivery_collector.py": "4e6bc36ed63ee8f9466dd2209e2c5195aec7f83f9209bdd80c50d6b94e3c8ad4",
+    "OPERATOR.md": "5c4bf46d89b4a16af57abcd37b0685746bff1ee679832c55d66f97068847bfe1",
+    "USER-GUIDANCE-fa.txt": "65c2325e67aa7463861620b4813e5163abe3e391dda947d2cec6f6a573952664",
+    "collector-candidate-retention-tests.txt": "a8cdbaed9324cc8e6a5401c438b63032851690ff55a23137bbbe2bdea3988347"
+  },
+  "remote_collection_performed": false,
+  "next_action": "Wait for lead terminal notification"
+}

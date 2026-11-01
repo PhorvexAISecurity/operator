@@ -2,6 +2,10 @@
 
 This covers the operator side of the Math/OR Benchmark Lab (tickets C, D and F, replay MVP). The lab dashboard consumes it from `benchmark/`.
 
+For the explicit offline V2/V3 candidate export and observed endpoint study,
+see [Endpoint study through the brain](ENDPOINT_STUDY.md). Default replay remains
+the legacy baseline/parameter path.
+
 ## What it does
 
 1. **Capture.** The operator can record the decision ticks of policies on an allowlist. Each record is an immutable, content-addressed snapshot of everything the production `CoverageEngine` reads to make one tick's decision.

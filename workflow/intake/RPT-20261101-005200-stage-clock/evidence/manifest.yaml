@@ -1,0 +1,49 @@
+schema_version: 2
+subject:
+  kind: intake
+  id: RPT-20261101-005200-stage-clock
+artifacts:
+- id: closed-03cb0ba016453c3cf8b4
+  path: DEDUP.md
+  bytes: 465
+  sha256: f7d8a568d62cb0f48389af6cf46cf65b616f15f8ab83f4ad5b1b4d29b26440ec
+  producer: bench-v3-lead
+  created_at: '2026-10-31T22:23:17.176295+00:00'
+  evidence_class: INTAKE
+  retention: git
+  description: Closed retained artifact. Original author, execution outcome, source
+    pin and limits remain in its own receipt/log; indexing is not a new independent
+    review or a claim that a failed historical run passed.
+- id: closed-d9ddfae894869942fe50
+  path: REPORT.md
+  bytes: 987
+  sha256: 46f235a4a62643652dfc259c0b31925e986410061de12a6a3548410c207bf414
+  producer: bench-v3-lead
+  created_at: '2026-11-01T00:52:03.373505+00:00'
+  evidence_class: INTAKE
+  retention: git
+  description: Closed retained artifact. Original author, execution outcome, source
+    pin and limits remain in its own receipt/log; indexing is not a new independent
+    review or a claim that a failed historical run passed.
+- id: closed-d6cf5c10d83511fcfaa3
+  path: VERIFICATION.md
+  bytes: 528
+  sha256: 91d275244cd18dbd24b5125dceede60bedd65ba650a7c39ffc31cde2250da41b
+  producer: bench-v3-lead
+  created_at: '2026-11-01T00:53:05.922916+00:00'
+  evidence_class: INTAKE
+  retention: git
+  description: Closed retained artifact. Original author, execution outcome, source
+    pin and limits remain in its own receipt/log; indexing is not a new independent
+    review or a claim that a failed historical run passed.
+- id: closed-830f92b1875554a57395
+  path: evidence/observed-evidence.json
+  bytes: 3407
+  sha256: f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56
+  producer: stage_review
+  created_at: '2026-11-01T00:18:53.772348+00:00'
+  evidence_class: INTAKE
+  retention: git
+  description: Closed retained artifact. Original author, execution outcome, source
+    pin and limits remain in its own receipt/log; indexing is not a new independent
+    review or a claim that a failed historical run passed.

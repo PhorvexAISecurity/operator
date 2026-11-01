@@ -6,15 +6,14 @@ identity and every hash are written to an immutable manifest before anything run
 """
 import json
 import math
-import os
 import re
-import shutil
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import analysis, binary, exports, registry
+from . import analysis, binary, exports, registry, stage_scope
 from .common import DIGEST, EXPERIMENT_ID, NAME, data_root, read_json, sha256_file, sha256_json, utc, write_json
-from .snapshots import corpus_summary, local_index
+from .snapshots import corpus_summary, local_index, frozen_index, cache_lock, freeze_cohort
 
 MAX_ARMS = 12
 MIN_SNAPSHOTS_WARN = 30
@@ -35,13 +34,22 @@ def _parse_time(value):
     return datetime.fromisoformat(value.replace('Z', '+00:00'))
 
 
-def select_cohort(data_dir, request):
-    entries = local_index(data_dir, request['namespace'], request['policy'])
+def select_cohort(data_dir, request, entries=None):
+    if entries is None:
+        entries = local_index(data_dir, request['namespace'], request['policy'])
     cohort = request.get('cohort') or {}
     since, until = _parse_time(cohort.get('since')), _parse_time(cohort.get('until'))
     wanted = set(cohort.get('digests') or [])
     out = []
     for e in entries:
+        if cohort.get('git_sha') and e['header'].get('gitSHA') != cohort['git_sha']:
+            continue
+        if cohort.get('policy_uid') and e['header'].get('policyUID') != cohort['policy_uid']:
+            continue
+        if cohort.get('brain_image') and e['header'].get('brainImage') != cohort['brain_image']:
+            continue
+        if cohort.get('capture_identity_source') and e['header'].get('captureIdentitySource') != cohort['capture_identity_source']:
+            continue
         captured = _parse_time(e['header'].get('capturedAt'))
         if wanted and e['digest'] not in wanted:
             continue
@@ -115,7 +123,7 @@ def arm_values(request, knob, inspection):
     return out
 
 
-def preflight(data_dir, request, binary_identity=None, registry_doc=None):
+def preflight(data_dir, request, binary_identity=None, registry_doc=None, cohort_entries=None):
     """Validate an experiment request. Returns {status, checks, errors, cohort, ...}."""
     checks, errors = [], []
     registry_doc = registry_doc or registry.load_registry()
@@ -167,7 +175,24 @@ def preflight(data_dir, request, binary_identity=None, registry_doc=None):
         seen_values.add(key)
     cohort = []
     if not errors:
-        cohort = select_cohort(data_dir, request)
+        if cohort_entries is None:
+            with cache_lock(data_dir, request['namespace'], request['policy']):
+                cohort = select_cohort(data_dir, request)
+        else:
+            cohort = select_cohort(data_dir, request, entries=cohort_entries)
+        if 'stage_provenance' in request or (Path(data_dir) / 'mathlab/stage.json').exists():
+            try:
+                pin, verified, provenance = stage_scope.validate_run(
+                    data_dir, request['namespace'] + '/' + request['policy'], cohort)
+                if not binary_identity or verified.get('binary_sha256') != binary_identity.get('binary_sha256'):
+                    raise stage_scope.StageError('requested replay binary differs from the installed stage binary')
+                if 'stage_provenance' in request and request['stage_provenance'] != provenance:
+                    raise stage_scope.StageError('stage provenance changed since the request was frozen')
+                requested = set((request.get('cohort') or {}).get('digests') or [])
+                if requested and requested != {entry['digest'] for entry in cohort}:
+                    raise stage_scope.StageError('the frozen stage cohort is incomplete; submit the benchmark again')
+            except stage_scope.StageError as error:
+                errors.append(_err('STAGE_SCOPE', 'cohort', str(error)))
         n = len(cohort)
         if n == 0:
             errors.append(_err('EMPTY_COHORT', 'cohort', 'no recorded snapshots match; sync the policy first', retryable=True))
@@ -228,25 +253,24 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
         raise ValueError('experiment request missing')
     registry_doc = registry_doc or registry.load_registry()
     _status(root, 'preflight', 'validating')
-    pf = preflight(data_dir, request, binary_identity, registry_doc)
-    write_json(root / 'preflight.json', pf)
-    if pf['status'] != 'PASS':
-        _status(root, 'preflight', 'preflight failed', state='PREFLIGHT_FAILED')
-        return 'PREFLIGHT_FAILED'
-    cohort = select_cohort(data_dir, request)
     cohort_dir = root / 'cohort'
-    cohort_dir.mkdir(exist_ok=True)
-    _status(root, 'cohort', 'freezing %d snapshots' % len(cohort), 0, len(cohort))
-    src = Path(data_dir).resolve() / 'mathlab' / 'snapshots' / request['namespace'] / request['policy']
-    for i, e in enumerate(cohort):
-        dst = cohort_dir / (e['digest'] + '.pxms')
-        if not dst.exists():
-            try:
-                os.link(src / dst.name, dst)
-            except OSError:
-                shutil.copy2(src / dst.name, dst)
-        if sha256_file(dst) != e['digest']:
-            raise ValueError('cohort snapshot %s failed its content check' % e['digest'])
+    frozen = cohort_dir.is_dir() and bool((request.get('cohort') or {}).get('digests'))
+    lock = nullcontext() if frozen else cache_lock(data_dir, request['namespace'], request['policy'])
+    with lock:
+        entries = frozen_index(cohort_dir) if frozen else local_index(data_dir, request['namespace'], request['policy'])
+        pf = preflight(data_dir, request, binary_identity, registry_doc, cohort_entries=entries)
+        write_json(root / 'preflight.json', pf)
+        if pf['status'] != 'PASS':
+            _status(root, 'preflight', 'preflight failed', state='PREFLIGHT_FAILED')
+            return 'PREFLIGHT_FAILED'
+        cohort = select_cohort(data_dir, request, entries=entries)
+        _status(root, 'cohort', 'freezing %d snapshots' % len(cohort), 0, len(cohort))
+        if not frozen:
+            freeze_cohort(data_dir, request['namespace'], request['policy'], cohort, cohort_dir)
+        else:
+            for entry in cohort:
+                if sha256_file(cohort_dir/(entry['digest']+'.pxms')) != entry['digest']:
+                    raise ValueError('frozen cohort snapshot failed its content check')
     knob = registry.knob(registry_doc, request['parameter_id'])
     arms = [{'arm_id': request['arms'][0]['arm_id'], 'overrides': []}]
     for arm in request['arms'][1:]:
@@ -259,7 +283,8 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
     write_json(root / 'arms.json', arms)
     _status(root, 'inspect', 'resolving configured and effective values')
     binary.run_isolated([binary_identity['path'], '-inspect', '-snapshots', str(cohort_dir), '-out', str(root / 'inspect.jsonl')])
-    inspections = [json.loads(l) for l in open(root / 'inspect.jsonl') if l.strip()]
+    with open(root / 'inspect.jsonl') as stream:
+        inspections = [json.loads(l) for l in stream if l.strip()]
     inspection = next((x for x in reversed(inspections) if 'effective' in x), None)
     manifest = {
         'schema_version': 'math-lab.experiment-manifest.v1', 'experiment_id': experiment_id, 'title': request.get('title'),
@@ -271,6 +296,7 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
         'cohort': {'snapshot_digests': [e['digest'] for e in cohort], 'digests_sha256': sha256_json([e['digest'] for e in cohort]),
                    'summary': corpus_summary(cohort), 'selection': request.get('cohort')},
         'replay_binary': binary_identity, 'registry_version': registry_doc.get('registry_version'),
+        'stage_provenance': request.get('stage_provenance'),
         'registry_sha256': sha256_json(registry_doc), 'learner_state_protocol': 'recorded owner state restored exactly per tick (RLS, conformal window, runtime lambda, stage clock, conjugate prior)',
         'comparator_mode': 'MATCHED_SNAPSHOT', 'score_reference': 'CONTROL_FACT_WEIGHTS',
         'control_inspection': inspection and {k: inspection.get(k) for k in ('snapshot_digest', 'effective', 'learned')},
@@ -293,7 +319,11 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
            'parameter_id': knob['param_id'], 'policy': manifest['policy'], 'seed': 20261009,
            'arm_values': arm_values(request, knob, inspection), 'comparison_status': 'OBSERVATIONAL' if observational else 'MATCHED_REPLAY'}
     rows, plots, population = analysis.analyze(lines, ctx)
+    matched_trials = [population['matched_by_arm'].get(a['arm_id'], 0) for a in arms[1:]]
+    complete = population['control_eligible'] == len(cohort) and all(n == len(cohort) for n in matched_trials)
+    state = 'COMPLETE' if population['control_eligible'] and complete else ('PARTIAL' if population['control_eligible'] else 'INVALID')
     result = {'schema_version': 'math-lab.experiment-result.v1', 'experiment_id': experiment_id, 'comparison_status': ctx['comparison_status'],
+              'state': state,
               'population': population, 'replay_summary': read_json(root / 'replay-summary.json'), 'arm_values': ctx['arm_values'],
               'finished_at': utc()}
     write_json(root / 'metrics.json', rows)
@@ -301,7 +331,5 @@ def run(data_dir, experiment_id, binary_identity, registry_doc=None):
     write_json(root / 'result.json', result)
     _status(root, 'export', 'writing evidence')
     exports.write_all(root, manifest, rows, plots, result)
-    matched_trials = [population['matched_by_arm'].get(a['arm_id'], 0) for a in arms[1:]]
-    state = 'COMPLETE' if population['control_eligible'] and all(matched_trials) and population['control_eligible'] == len(cohort) else ('PARTIAL' if population['control_eligible'] else 'INVALID')
     _status(root, 'done', 'finished', len(cohort), len(cohort), state=state)
     return state

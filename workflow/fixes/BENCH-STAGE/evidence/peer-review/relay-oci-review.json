@@ -1,0 +1,48 @@
+{
+  "schema": "phorvex-bench.independent-stage-artifact-review.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:46:37.936075+00:00",
+  "result": "PASS_FOR_AUTHORIZED_STAGE_ROLLOUT",
+  "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "images": {
+    "brain": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "archive_sha256": "abcc1ed14a4e8a18f5ecc93a2d4c2c8c413eeea11a5246f7b40ab1b85ea34180",
+      "config_sha256": "f1291812f32fc31eda63fb86d51a492cd842bf1812b59510b9bc8d2c28ca9de3"
+    },
+    "manager": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "digest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "archive_sha256": "5e3a1ac1262774cf7139484a2c4a7c4cead22a94fb24e5e602c4d67fc04eac07",
+      "config_sha256": "aa514655e121ffeb4a2ba71b4521403db3964d560b85714e06339b637a26ef12"
+    }
+  },
+  "evidence": {
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-compiled-artifacts-review.json": "e40fdd76932a947d65249b07676fb8a72d4ebaf17d408890c415720de8224046",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-oci-remote-verification.json": "917e18c560b90a0b599c0034816b11ad2766def1dc824ebc63567c232e33e665",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-render-review.json": "165595a1711924e0b67f03cb4f95d424b8ad9b7bdf1cf3c0fb3b2120c0101f65",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/build-receipt.json": "31ff1c7e215fd2b04f99d9199b9c5269a3a92e84173754d186bf2605e7420fce",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/composition-receipt.json": "5a825c98ee6b262404fb60d51b615a7ce26af76adcb2341dd87a5eb172467883",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/compose-status.json": "c73314fc918855e2742c5e03a5af65d5f6d9169f7ae3d92d4a990374fa6f9cb8",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/applicationset-patch.json": "5f6bb2081eb755209735addd35f86d39213c830ee5d87fc162c1bacf9d1a0ddf",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/brain-override.json": "87c2bfabed8b24659ea56e562c0e8c13979e3ba02828f0f595bd73cdb022bba7",
+    "workflow/fixes/BENCH-STAGE/evidence/deployment/relay-ef94fad3/manager-override.json": "1f67857156f4c97ce6ad91c822e8380123de759893bdb95b353abfbce380817e"
+  },
+  "independent_checks": [
+    "Remote archives independently hashed and fully validated by pinned crane; manifest digests independently recomputed.",
+    "Actual final merged root filesystems were streamed through crane export without remote writes; every expected binary hash, executable mode and root ownership matched independently checked clean source builds.",
+    "Actual archive configs retain exact pinned linux/amd64 base layers and environment plus only the expected binary layer, entrypoint, nonroot user, working directory and source/version labels.",
+    "Independent Helm render matches both saved object sets; brain producer image environment equals immutable image digest, capture is limited to named stage policies with bounded persistent store, and existing mTLS remains.",
+    "Patch preconditions match captured ApplicationSet and only manager/brain entries change; other services are unchanged.",
+    "Experimental V3 endpoint source is absent from these relay-only images."
+  ],
+  "scope": "Independent artifact/render acceptance for the already-authorized isolated stage relay rollout. This is not official main release provenance, final integrated benchmark acceptance or proof of runtime rollout.",
+  "required_next_evidence": [
+    "Published image digests equal these local manifest digests.",
+    "Running stage containers and embedded version report the reviewed source/images; the recorder header reports recorder-process with matching brain image.",
+    "Fresh source-bound observation segment and actual Console relay, exact snapshot baseline and bot benchmark results."
+  ],
+  "reviewer_performed_remote_mutation": false,
+  "reviewer_performed_publication_or_deployment": false
+}

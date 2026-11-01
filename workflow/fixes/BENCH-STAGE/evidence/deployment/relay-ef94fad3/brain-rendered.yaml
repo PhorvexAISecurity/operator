@@ -1,0 +1,231 @@
+---
+# Source: phorvex-brain/templates/networkpolicy.yaml
+# Only the manager reaches the brain (ADR-0001). The gRPC connection is
+# plaintext until mTLS, so this policy is its only access control.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: staging-brain
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: brain
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-brain
+      app.kubernetes.io/instance: staging
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: phorvex-staging
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/component: manager
+          app.kubernetes.io/name: phorvex
+    ports:
+    - port: grpc
+  # Kubelet probes arrive from the node, outside any namespace; the health port
+  # answers readiness only.
+  - ports:
+    - port: health
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: metrics
+  # The brain calls nothing; it only answers.
+  egress: []
+---
+# Source: phorvex-brain/templates/service.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-brain
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: brain
+    app.kubernetes.io/version: "0.1.0"
+automountServiceAccountToken: false
+---
+# Source: phorvex-brain/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-brain
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: brain
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  selector:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+  ports:
+  - name: grpc
+    port: 9090
+    targetPort: grpc
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+---
+# Source: phorvex-brain/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-brain
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: brain
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  # One brain: its cost learner, kill-chain stage clocks and retired owners live in
+  # memory (ADR-0001). Recreate never runs two at once.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-brain
+      app.kubernetes.io/instance: staging
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex-brain
+        app.kubernetes.io/instance: staging
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: phorvex
+        app.kubernetes.io/component: brain
+        app.kubernetes.io/version: "0.1.0"
+    spec:
+      serviceAccountName: staging-brain
+      # The brain reads no Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: brain
+        image: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+        args:
+        - --listen=:9090
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --gpu-envelope-max=0.2925
+        - --shutdown-grace=20s
+        - --log-level=info
+        - --log-format=json
+        - --math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense
+        - --math-lab-capture-dir=/var/lib/phorvex/math-lab
+        - --math-lab-capture-max-bytes=1073741824
+        - --grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt
+        - --grpc-tls-key=/etc/phorvex/grpc-tls/tls.key
+        - --grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt
+        - --grpc-tls-peer=staging-dispatcher.phorvex-staging.svc
+        ports:
+        - name: grpc
+          containerPort: 9090
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: health
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          limits:
+            memory: 1Gi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        volumeMounts:
+        - name: math-lab
+          mountPath: /var/lib/phorvex/math-lab
+        - name: grpc-tls
+          mountPath: /etc/phorvex/grpc-tls
+          readOnly: true
+      volumes:
+      - name: math-lab
+        persistentVolumeClaim:
+          claimName: staging-brain-mathlab
+      - name: grpc-tls
+        secret:
+          secretName: staging-brain-grpc-tls
+---
+# Source: phorvex-brain/templates/podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: staging-brain
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex-brain
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: brain
+    app.kubernetes.io/version: "0.1.0"
+spec:
+  namespaceSelector:
+    matchNames: ["phorvex-staging"]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-brain
+      app.kubernetes.io/instance: staging
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    # The services' own namespace labels (a policy's tenant) stay theirs.
+    honorLabels: true
+    relabelings:
+    - action: replace
+      sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: instance
+    - action: replace
+      targetLabel: environment
+      replacement: "staging"
+    metricRelabelings:
+      - action: replace
+        regex: phorvex_cost_nan_unactionable_total
+        replacement: phorvex_staging_cost_nan_unactionable_total
+        sourceLabels:
+        - __name__
+        targetLabel: __name__

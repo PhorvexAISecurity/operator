@@ -1,0 +1,19 @@
+{
+  "source_sha": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "description": "One coherent final committed-source preflight; exact selected current CI recipes and tool versions; no live cluster jobs.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-status.json",
+  "total_timeout_seconds": 3900,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    }
+  ]
+}

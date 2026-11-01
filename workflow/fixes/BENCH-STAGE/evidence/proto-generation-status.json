@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 286434,
+  "source_sha": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc + uncommitted relay proto",
+  "started_at": "2026-10-31T23:03:36.502095+00:00",
+  "results": [
+    {
+      "name": "checked-in-pinned-proto-generator",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 636.285,
+  "step": "checked-in-pinned-proto-generator",
+  "child_pid": 286435,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:14:12.787237+00:00"
+}

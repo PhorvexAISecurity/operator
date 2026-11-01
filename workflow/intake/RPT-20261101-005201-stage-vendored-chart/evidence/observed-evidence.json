@@ -1,0 +1,77 @@
+{
+  "result": "PASS_GENERATED_ARCHIVE_COMPONENT",
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "path": "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+  "old_archive_sha256": "95b006c92c9d5a3ac3461c22e8cf58e786d492ddba234800a60278a7d8244017",
+  "new_archive_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+  "members": 76,
+  "changed_members": [
+    "phorvex/templates/deployment.yaml",
+    "phorvex/values.yaml"
+  ],
+  "unchanged_members": 74,
+  "changed_members_match_reviewed_source": true,
+  "archive_metadata_unchanged": true,
+  "independent_regeneration_check": {
+    "exit": 0,
+    "tar": "GNU1.35",
+    "helm": "3.16.4"
+  },
+  "renders": [
+    {
+      "enabled": false,
+      "command": [
+        "/workspace/.phorvex-tools/helm",
+        "template",
+        "phorvex",
+        "deploy/helm/phorvex-stack",
+        "-n",
+        "phorvex-system",
+        "-f",
+        "deploy/helm/phorvex-stack/values.yaml",
+        "-f",
+        "deploy/helm/phorvex-stack/values-eks.yaml",
+        "--api-versions",
+        "monitoring.coreos.com/v1/PodMonitor",
+        "--include-crds"
+      ],
+      "old_normalized_render_sha256": "8264acf4144a2e23f40f2ea9231c9b7d786b2d11f1fe6c0c3ddc04e3e1e6ace4",
+      "new_normalized_render_sha256": "8264acf4144a2e23f40f2ea9231c9b7d786b2d11f1fe6c0c3ddc04e3e1e6ace4",
+      "old_flag_count": 0,
+      "new_flag_count": 0,
+      "diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "enabled": true,
+      "command": [
+        "/workspace/.phorvex-tools/helm",
+        "template",
+        "phorvex",
+        "deploy/helm/phorvex-stack",
+        "-n",
+        "phorvex-system",
+        "-f",
+        "deploy/helm/phorvex-stack/values.yaml",
+        "-f",
+        "deploy/helm/phorvex-stack/values-eks.yaml",
+        "--api-versions",
+        "monitoring.coreos.com/v1/PodMonitor",
+        "--include-crds",
+        "--set",
+        "phorvex.phorvex.mathLab.captureCostEvidence=true"
+      ],
+      "old_normalized_render_sha256": "8264acf4144a2e23f40f2ea9231c9b7d786b2d11f1fe6c0c3ddc04e3e1e6ace4",
+      "new_normalized_render_sha256": "1ccf0b345e4bbc4bff626ab1f4a2f348ab43001d2c87260e38257ba057973033",
+      "old_flag_count": 0,
+      "new_flag_count": 1,
+      "diff_sha256": "3df984e84f54b402fc34db54f7ebdba1592bdaf9292e5fd5da04a2d154660f9f"
+    }
+  ],
+  "render_normalization": "Only Helm admission-webhook generated ca.crt/tls.crt/tls.key/caBundle values replaced, after confirming unchanged original genCA/genSignedCert source. All other rendered bytes compared.",
+  "reviewer_control_corrections": [
+    "Initial direct source mapping ignored Helm-normalized Chart.yaml and expanded common dependency; corrected to deterministic generator and changed-member source equality.",
+    "First generator --check used default GNUtar1.34, rejected all archives; exact attested GNUtar1.35 passed without source changes.",
+    "Raw render comparison detects expected random webhook TLS generation; normalized only these fields before comparison."
+  ],
+  "scope": "Generated packaging only. Default full umbrella render equal except generated TLS; explicit opt-in adds exactly one reviewed capture argument. No deployment or source edits by reviewer."
+}

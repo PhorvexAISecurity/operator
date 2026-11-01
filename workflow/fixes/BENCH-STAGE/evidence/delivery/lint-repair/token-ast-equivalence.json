@@ -1,0 +1,11 @@
+{
+  "after_gofmt_clean": true,
+  "after_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce",
+  "ast_equal_after_only_position_erasure": true,
+  "before_gofmt_clean": false,
+  "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+  "changed_literal_negative_control_detected": true,
+  "go_version": "go1.26.3",
+  "token_count": 808,
+  "tokens_including_comments_and_semicolons_equal": true
+}

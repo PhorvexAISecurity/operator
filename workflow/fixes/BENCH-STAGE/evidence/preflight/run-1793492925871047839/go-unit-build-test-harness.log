@@ -1,0 +1,19 @@
+?   	github.com/r6security/phoenix-test-harness/cmd/catalogue-collector	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/cmd/harness	0.335s
+ok  	github.com/r6security/phoenix-test-harness/cmd/nats-owned-observer	13.901s
+ok  	github.com/r6security/phoenix-test-harness/defenders	0.173s
+?   	github.com/r6security/phoenix-test-harness/fixtures/crm	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/internal/adaptive	0.008s
+ok  	github.com/r6security/phoenix-test-harness/internal/capability	0.034s
+ok  	github.com/r6security/phoenix-test-harness/internal/cataloguecollector	1.172s
+ok  	github.com/r6security/phoenix-test-harness/internal/config	0.026s
+ok  	github.com/r6security/phoenix-test-harness/internal/core	1.566s
+ok  	github.com/r6security/phoenix-test-harness/internal/gpufunctional	0.684s
+ok  	github.com/r6security/phoenix-test-harness/internal/guardrailstatic	2.262s
+ok  	github.com/r6security/phoenix-test-harness/internal/jetstreamprobe	12.577s
+?   	github.com/r6security/phoenix-test-harness/internal/kube	[no test files]
+ok  	github.com/r6security/phoenix-test-harness/internal/mocks	0.058s
+ok  	github.com/r6security/phoenix-test-harness/internal/natsexposure	0.612s
+ok  	github.com/r6security/phoenix-test-harness/internal/report	0.257s
+ok  	github.com/r6security/phoenix-test-harness/internal/safety	0.226s
+ok  	github.com/r6security/phoenix-test-harness/scenarios	98.206s

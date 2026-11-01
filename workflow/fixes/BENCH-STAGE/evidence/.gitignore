@@ -1,0 +1,16 @@
+# Raw retained journals are hashed as local-original evidence, never source.
+/live/*.db
+/live/*.db-*
+/storage-controls/*.db
+/storage-controls/*.db-*
+# Full actual candidate payloads are retained by hash as local-original.
+/peer-review/r9-clock/actual-candidate-export.jsonl
+/peer-review/r9-clock/actual-failed-cohort-export.jsonl
+/peer-review/refresh-300/first-candidate-export.jsonl
+/peer-review/refresh-600/first-candidate-export.jsonl
+
+# Additional frozen live journals/cohorts remain private original evidence.
+/live/handover-3e11/**/*.db
+/live/handover-3e11/**/*.db-*
+/live/refresh-*/journal.db*
+/live/refresh-*/cohort/

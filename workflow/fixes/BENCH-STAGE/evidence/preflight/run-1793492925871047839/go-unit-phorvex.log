@@ -1,0 +1,114 @@
+ok  	github.com/phorvex/phorvex/api/v1alpha1	0.165s
+ok  	github.com/phorvex/phorvex/cmd	82.970s
+ok  	github.com/phorvex/phorvex/cmd/actuator	0.116s
+?   	github.com/phorvex/phorvex/cmd/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/brain	0.140s
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.497s
+?   	github.com/phorvex/phorvex/cmd/console	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/cost-admission	0.069s
+?   	github.com/phorvex/phorvex/cmd/cost-budget-admin	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-client	[no test files]
+?   	github.com/phorvex/phorvex/cmd/cost-load-detector	[no test files]
+?   	github.com/phorvex/phorvex/cmd/current-inventory-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/endpoint-v3	0.008s
+ok  	github.com/phorvex/phorvex/cmd/internal/actuatorconfig	0.068s
+ok  	github.com/phorvex/phorvex/cmd/internal/consoleserver	0.153s
+ok  	github.com/phorvex/phorvex/cmd/internal/decisionconfig	0.068s
+ok  	github.com/phorvex/phorvex/cmd/internal/grpctlsconfig	0.014s
+ok  	github.com/phorvex/phorvex/cmd/internal/policyscope	0.055s
+ok  	github.com/phorvex/phorvex/cmd/internal/sensorconfig	0.089s
+ok  	github.com/phorvex/phorvex/cmd/internal/trustconfig	0.051s
+?   	github.com/phorvex/phorvex/cmd/loss-observer	[no test files]
+?   	github.com/phorvex/phorvex/cmd/mig-allocation-helper	[no test files]
+?   	github.com/phorvex/phorvex/cmd/pendingcheck	[no test files]
+?   	github.com/phorvex/phorvex/cmd/persistence-observer	[no test files]
+ok  	github.com/phorvex/phorvex/cmd/ragstore-fixture	0.069s
+ok  	github.com/phorvex/phorvex/cmd/recovery	0.137s
+?   	github.com/phorvex/phorvex/cmd/sensor	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actionset	0.099s
+ok  	github.com/phorvex/phorvex/internal/actuationbrake	0.054s
+ok  	github.com/phorvex/phorvex/internal/actuator	47.976s
+?   	github.com/phorvex/phorvex/internal/actuatorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/actuatorclient	0.344s
+ok  	github.com/phorvex/phorvex/internal/actuatorpb	0.044s
+ok  	github.com/phorvex/phorvex/internal/actuatorsvc	0.077s
+?   	github.com/phorvex/phorvex/internal/agentdeny	[no test files]
+ok  	github.com/phorvex/phorvex/internal/archtest	0.497s
+ok  	github.com/phorvex/phorvex/internal/attackcatalog	0.010s
+?   	github.com/phorvex/phorvex/internal/attacks	[no test files]
+ok  	github.com/phorvex/phorvex/internal/audit	15.650s
+ok  	github.com/phorvex/phorvex/internal/auditguard	40.181s
+ok  	github.com/phorvex/phorvex/internal/audittransport	0.670s
+ok  	github.com/phorvex/phorvex/internal/authz	0.066s
+?   	github.com/phorvex/phorvex/internal/brainapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/brainclient	1.669s
+ok  	github.com/phorvex/phorvex/internal/brainpb	0.102s
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.055s
+ok  	github.com/phorvex/phorvex/internal/buildctx	0.021s
+ok  	github.com/phorvex/phorvex/internal/buildinfo	0.009s
+ok  	github.com/phorvex/phorvex/internal/calib	0.329s
+ok  	github.com/phorvex/phorvex/internal/capability	0.116s
+ok  	github.com/phorvex/phorvex/internal/capacity	0.098s
+ok  	github.com/phorvex/phorvex/internal/cataloguev1	65.593s
+ok  	github.com/phorvex/phorvex/internal/codeexec	6.869s
+ok  	github.com/phorvex/phorvex/internal/console	290.429s
+ok  	github.com/phorvex/phorvex/internal/controller	0.161s
+ok  	github.com/phorvex/phorvex/internal/cost	0.072s
+ok  	github.com/phorvex/phorvex/internal/cost/endpoint	0.030s
+ok  	github.com/phorvex/phorvex/internal/crmrefund	0.095s
+ok  	github.com/phorvex/phorvex/internal/ctxprov	0.056s
+ok  	github.com/phorvex/phorvex/internal/currentinventory	0.073s
+ok  	github.com/phorvex/phorvex/internal/currentobserver	0.099s
+?   	github.com/phorvex/phorvex/internal/datastore	[no test files]
+ok  	github.com/phorvex/phorvex/internal/decision	51.291s
+ok  	github.com/phorvex/phorvex/internal/disclosure	0.060s
+ok  	github.com/phorvex/phorvex/internal/endpointlease	0.212s
+ok  	github.com/phorvex/phorvex/internal/epssfeed	4.082s
+ok  	github.com/phorvex/phorvex/internal/epssmeta	0.077s
+ok  	github.com/phorvex/phorvex/internal/eventtrust	0.055s
+ok  	github.com/phorvex/phorvex/internal/exposure	0.056s
+ok  	github.com/phorvex/phorvex/internal/feasibility	0.068s
+ok  	github.com/phorvex/phorvex/internal/gpudevice	0.017s
+ok  	github.com/phorvex/phorvex/internal/graph	0.050s
+ok  	github.com/phorvex/phorvex/internal/identityfixture	0.109s
+ok  	github.com/phorvex/phorvex/internal/ingest	2.654s
+ok  	github.com/phorvex/phorvex/internal/inprocess	0.081s
+ok  	github.com/phorvex/phorvex/internal/killchain	0.058s
+ok  	github.com/phorvex/phorvex/internal/litellmclient	0.479s
+ok  	github.com/phorvex/phorvex/internal/losshistory	0.061s
+ok  	github.com/phorvex/phorvex/internal/lossobserver	0.408s
+ok  	github.com/phorvex/phorvex/internal/mathlab	2.965s
+ok  	github.com/phorvex/phorvex/internal/metrics	0.065s
+ok  	github.com/phorvex/phorvex/internal/model	0.121s
+ok  	github.com/phorvex/phorvex/internal/outputpolicy	0.098s
+ok  	github.com/phorvex/phorvex/internal/ownership	0.048s
+ok  	github.com/phorvex/phorvex/internal/pendinggate	0.806s
+?   	github.com/phorvex/phorvex/internal/persistence	[no test files]
+ok  	github.com/phorvex/phorvex/internal/physics	0.042s
+ok  	github.com/phorvex/phorvex/internal/platform	6.100s
+ok  	github.com/phorvex/phorvex/internal/podresources	0.079s
+ok  	github.com/phorvex/phorvex/internal/recon	0.098s
+?   	github.com/phorvex/phorvex/internal/registry	[no test files]
+ok  	github.com/phorvex/phorvex/internal/representation	0.122s
+ok  	github.com/phorvex/phorvex/internal/runner	7.586s
+ok  	github.com/phorvex/phorvex/internal/scaleprobe	0.022s
+ok  	github.com/phorvex/phorvex/internal/scopedoutcome	3.907s
+?   	github.com/phorvex/phorvex/internal/sensorapi	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorclient	0.151s
+?   	github.com/phorvex/phorvex/internal/sensorpb	[no test files]
+ok  	github.com/phorvex/phorvex/internal/sensorsvc	0.109s
+ok  	github.com/phorvex/phorvex/internal/servicetls	0.120s
+ok  	github.com/phorvex/phorvex/internal/servingbudget	15.482s
+?   	github.com/phorvex/phorvex/internal/servingbudget/budgettest	[no test files]
+ok  	github.com/phorvex/phorvex/internal/servingcontext	0.011s
+ok  	github.com/phorvex/phorvex/internal/slo	0.076s
+ok  	github.com/phorvex/phorvex/internal/startupauthz	0.093s
+ok  	github.com/phorvex/phorvex/internal/statefulrotation	0.097s
+ok  	github.com/phorvex/phorvex/internal/voiceadmissionpolicy	0.159s
+ok  	github.com/phorvex/phorvex/internal/voicemcppolicy	0.054s
+ok  	github.com/phorvex/phorvex/internal/voicememorypolicy	0.020s
+ok  	github.com/phorvex/phorvex/internal/voiceoutputpolicy	0.040s
+ok  	github.com/phorvex/phorvex/internal/voicerefundpolicy	0.008s
+ok  	github.com/phorvex/phorvex/internal/wire	0.043s
+ok  	github.com/phorvex/phorvex/tools/covermap	1.275s
+ok  	github.com/phorvex/phorvex/tools/servicerelease	142.304s

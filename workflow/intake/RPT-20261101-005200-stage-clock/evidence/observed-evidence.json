@@ -1,0 +1,48 @@
+{
+  "schema": "phorvex-bench.independent-clock-repair-review.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-11-01T00:18:53.772348+00:00",
+  "result": "PASS_R9_CLOCK_COMPONENT",
+  "source_manifest": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/source-manifest.json",
+  "source_manifest_sha256": "c82b5a271531c3b63b3a8002f2277103d53dbda638d6e049d0d419a8791d9490",
+  "sources": {
+    "benchmark/worker/endpoint_refresh.py": "bf6f9edfc4d533f65aee7ed4574502be19b490f24415c23704dcb8296edea3be",
+    "benchmark/worker/test_endpoint_refresh.py": "31448cd362d298f0712743038ace911f990ae3db4321e67111bd815a9510cb27"
+  },
+  "independent_tests": {
+    "passed": 18,
+    "skipped": 0,
+    "python": "3.12.15",
+    "log_sha256": "0a556c7cb9e920fe597b1e8d1b1f9a482b299059595bae42a722bf55112fcb21",
+    "go_exporter_bits_rechecked": 10
+  },
+  "evidence": {
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/committed-old-clock-control.json": "68614f8617d0ae30d918c6b2f4a283e75d03e37c5557b205cdb02ce2217a3c8a",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-failed-cohort-before-after.json": "698152a2a75ff9469ddd5cd4fecc799696b48690e1420594f10ce2c881c30af5",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-failed-cohort-export.jsonl": "0f7d5c9802e7d110fdab24cbc63846f87b6060c5a99e09669a84246ff7c768bd",
+    "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/independent-refresh-tests.log": "0a556c7cb9e920fe597b1e8d1b1f9a482b299059595bae42a722bf55112fcb21",
+    "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity-result.json": "2622c695541544b9e7fad21e41d04928c06f286cf346d748de3f8160dfaf3b0b",
+    "workflow/fixes/BENCH-STAGE/evidence/clock-repair/go-clock-parity.jsonl": "9a68e2323463eb47b1643df561f96e09ad488b43c374b7be66aa7b8d094bc606"
+  },
+  "actual_incident": {
+    "snapshot_digest": "7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a",
+    "selected_in_failed_job": true,
+    "decided_at": "2026-11-01T00:06:31.717543556Z",
+    "old_clock_at": 1793491591,
+    "actual_export_at": 1793491591.7175436,
+    "repaired_clock_at": 1793491591.7175436,
+    "baseline_reproduced": true,
+    "candidate_set_complete": true,
+    "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "candidate_source": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+    "candidate_binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857"
+  },
+  "review_findings": [
+    "Old committed parser floors actual fractional decision time, reproducing the retained real failure.",
+    "New ASCII RFC3339Nano parser retains integer UTC nanoseconds and mirrors the Go binary64 conversion order exactly, including offsets and negative epochs.",
+    "UnixNano range and malformed inputs are refused. No epsilon or weakened time-equality gate was introduced.",
+    "Fractional observation-window boundaries preserve inclusion/exclusion, and deliberately mismatched exported time still blocks publication while preserving the last-good manifest.",
+    "Existing refresh source, baseline, journal, quota and immutable-generation controls all pass."
+  ],
+  "scope": "Accepts these exact two worker files for immediate canonical commit and the already-authorized stage refresh retry. Actual end-to-end refresh acceptance and coherent final-source preflight remain required; no overall benchmark COMPLETE is asserted."
+}

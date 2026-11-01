@@ -1,0 +1,75 @@
+{
+  "producer": "bench-v3-worker",
+  "recorded_at": "2026-11-01T01:57:34.398258+00:00",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "base_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "result": "PASS",
+  "preflight": {
+    "path": "evidence/preflight/receipt.json",
+    "bytes": 25778,
+    "sha256": "591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee"
+  },
+  "preflight_job_count": 18,
+  "require_worktree": true,
+  "plan_sha256": "1b65472af4b6442f05b97923a810aaf29497edd37a30b0aa2ae8a1f3988b9c78",
+  "supervisor": {
+    "path": "evidence/final-source/preflight-ec310e27-final-status.json",
+    "bytes": 541,
+    "sha256": "395ca4b56e2ac98b33ea32b576910a58a32ac3a910fa35eda1d001092fd045c1"
+  },
+  "script_inputs": {
+    "path": "evidence/final-source/acceptance-script-inputs.json",
+    "bytes": 864,
+    "sha256": "dea419ed7064038d3dd6be484db69fa13a3a81255976edb46805f26aff2f8f43"
+  },
+  "acceptance_logs": {
+    "l1.txt": {
+      "sha256": "bd0174abd71c9a4d260a70e6f438d3b8a0c6903bc151936043f232a22ea5280b",
+      "bytes": 1481,
+      "passed_top_level_tests": [
+        "TestPreparationRetainsCostExcludedMoveWithoutEvaluatingLegacyCost",
+        "TestPreparationPreservesActualCapabilityAndAvailabilityVetoes",
+        "TestPreparationRejectsPartialPopulationOnReconCollision",
+        "TestStudyPreparationDoesNotMutateOwnerViewsOrCallImpureCapability",
+        "TestStudyRealContainmentAndHardGateOverridePrices",
+        "TestStudyNegativePricedGainDoesNotAddAPricedWorthGate",
+        "TestStudyPreservesRealResourceAndFailureGates"
+      ]
+    },
+    "l2.txt": {
+      "sha256": "7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc",
+      "bytes": 5243,
+      "passed_top_level_tests": [
+        "TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged",
+        "TestEndpointStudyUsesRealPreCostPopulationAndExactBaseline",
+        "TestEndpointStudyCrossSourceIsExplicitAndRetainsBothIdentities",
+        "TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls",
+        "TestEndpointStudyDoesNotBackdateHistory",
+        "TestEndpointStudyMissingPriceCannotBeComparable",
+        "TestEndpointStudyRetainsReactiveOnlyGate",
+        "TestBaselineReplayReproducesProductionExactlyAndDeterministically",
+        "TestRecorderProcessIdentityDoesNotRelabelDecisionPolicy",
+        "TestRecorderRejectsUnprovenExplicitProducerIdentity",
+        "TestRemoteSnapshotRelayUsesRealRecorderStoreAndAuditRoute",
+        "TestSnapshotRelayDefaultsAndMalformedRequestsFailClosed",
+        "TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart",
+        "TestSnapshotRelayChunkingHashAndServerBounds",
+        "TestSnapshotClientValidatesPeerChunksAndDeadline",
+        "TestEndpointCLIExplicitCrossSourceAndJSONResult",
+        "TestEndpointCLIRejectsMixedSnapshotSources",
+        "TestStudyJSONRejectsAmbiguousOrUnknownInput",
+        "TestReplayIdentityCannotBeOverriddenByEnvironment"
+      ]
+    }
+  },
+  "required_positive_controls": [
+    "TestEndpointStudyUsesRealPreCostPopulationAndExactBaseline",
+    "TestRemoteSnapshotRelayUsesRealRecorderStoreAndAuditRoute",
+    "TestRecorderProcessIdentityDoesNotRelabelDecisionPolicy"
+  ],
+  "external_obligations": [
+    "Shared-cluster E2E, image builds/deployment and live verification are separate; local PASS does not sign them.",
+    "Remote go-envtest with local Kubernetes API binaries and other remote CI jobs remain separate and unexecuted here; local PASS is not all remote CI passing."
+  ],
+  "scope": "One completed coherent current-recipe local preflight plus actual issue L1/L2. Live verification and independent P3 are separate lead-owned obligations; remote CI is not inferred."
+}

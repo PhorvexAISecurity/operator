@@ -1,0 +1,5 @@
+# Actual candidate unit run exceeded unchanged500ms deadline
+
+Actual bot batch474cff3249df child4b8171ea3c83 at stagecaptureef94 and bot348 produced a scoped arithmetic helper patch. Baseline465tests passed; candidate508tests passed and only TestExactRuntimeMatrix failed: production-76-b2 seed23001 repetition2 subprocess exceeded500ms. Two inherited testskips remained explicit. The candidate helper is not called by the selector; the entirefailedattempt and originaldiff/testlogs are retained.
+
+An unrelated px-amtdp4mc CPUrunner and our endpointrefresh ran concurrently on the sharedjump host. Contention is a hypothesis, not establishedcause or a product defect. One new originalrequest retry is preregistered in round4 with our refresh paused and all existing deadlines/gates unchanged. Anotheruser's processes are untouched. Evidence: fixes/BENCH-STAGE/evidence/live/code-attempt-1. This intake records the verifiedfailure symptom, not proof of CPUcausation; finalretry outcome must be appended separately.

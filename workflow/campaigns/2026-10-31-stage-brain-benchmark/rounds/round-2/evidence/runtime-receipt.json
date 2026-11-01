@@ -1,0 +1,94 @@
+{
+  "at": "2026-10-31T23:49:07.055708+00:00",
+  "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "result": "PASS",
+  "services": {
+    "brain": {
+      "deployment": "staging-brain",
+      "uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "pods": [
+        {
+          "name": "staging-brain-b4d544d55-gpdvt",
+          "uid": "8e6e18aa-44b2-4a9e-8f23-12964dee4e21",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+          "embedded_version": {
+            "service": "brain",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ],
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-31T23:48:31Z",
+            "lastUpdateTime": "2026-10-31T23:48:31Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-22T10:03:41Z",
+            "lastUpdateTime": "2026-10-31T23:48:31Z",
+            "message": "ReplicaSet \"staging-brain-b4d544d55\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 29,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    },
+    "manager": {
+      "deployment": "staging-phorvex",
+      "uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "pods": [
+        {
+          "name": "staging-phorvex-58695ffd75-r2xzf",
+          "uid": "cbb7b04d-8d37-468c-be89-fbddadfa62a5",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+          "embedded_version": {
+            "service": "manager",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ],
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-31T23:48:57Z",
+            "lastUpdateTime": "2026-10-31T23:48:57Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-31T08:36:36Z",
+            "lastUpdateTime": "2026-10-31T23:48:57Z",
+            "message": "ReplicaSet \"staging-phorvex-58695ffd75\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 79,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    }
+  },
+  "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks"
+}

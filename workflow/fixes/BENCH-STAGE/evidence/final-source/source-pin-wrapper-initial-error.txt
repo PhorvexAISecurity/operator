@@ -1,0 +1,1 @@
+Initial metadata-only wrapper used system python3, which lacked yaml: ModuleNotFoundError: No module named yaml. configure subsequently refused absent source-pins-final.yaml; no status mutation occurred. Corrected to existing workflow virtualenv.

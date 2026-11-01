@@ -1,0 +1,179 @@
+{
+  "automatic_recovery": {
+    "automatic_run": {
+      "elapsed_seconds": 120.807,
+      "finished_at": "2026-11-01T01:26:40.512865Z",
+      "phase": "COMPLETE",
+      "started_at": "2026-11-01T01:24:39.706213Z",
+      "state": "READY",
+      "ticks": 64
+    },
+    "current_move_counts": {
+      "censored": 0,
+      "open": 0,
+      "settled": 1
+    },
+    "generation_prefix": {
+      "hash": "8b0e7c3b305cb4d2c7f3574d76afd83c17e74cc157a3231df629ed0681b4fbf0",
+      "seq": 2372
+    },
+    "history": {
+      "all64_asof_state_verified": true,
+      "complete_from": 1793495306.4060414,
+      "cross_gap_bridge": false,
+      "first_decision": 1793495969.5669713,
+      "last_decision": 1793496284.9029255,
+      "lookback": 600,
+      "sealed_until": 1793496289.840831,
+      "window": 600
+    },
+    "trace_sha256": "bdbd1e0c6bafb630ca5e3325549d980e9605d4a7e314a9223581594c410ceab1"
+  },
+  "blocked_runs": [
+    {
+      "finished_at": "2026-11-01T01:13:07.783444Z",
+      "observed_segment": {
+        "complete_from": 1793495306.4060414,
+        "journal_prefix": {
+          "hash": "0be04b2e9b3fbc1c236e671a7cc92342e1387d9a92f122e779ae6b2293eea11c",
+          "seq": 1937
+        },
+        "sealed_until": 1793495533.722654,
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "phase": "SELECT",
+      "reason": "OBSERVED_HISTORY_INSUFFICIENT: available=227.3166127204895 required=600.0",
+      "started_at": "2026-11-01T01:10:16.275634Z",
+      "state": "BLOCKED"
+    },
+    {
+      "finished_at": "2026-11-01T01:17:30.590352Z",
+      "observed_segment": {
+        "complete_from": 1793495306.4060414,
+        "journal_prefix": {
+          "hash": "f07f58481e5f3cbeac627c0769c7ec0ca1722b0e37f2d7bd8a936dd6092eee31",
+          "seq": 2091
+        },
+        "sealed_until": 1793495787.4798064,
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "phase": "SELECT",
+      "reason": "OBSERVED_HISTORY_INSUFFICIENT: available=481.07376503944397 required=600.0",
+      "started_at": "2026-11-01T01:16:09.745322Z",
+      "state": "BLOCKED"
+    },
+    {
+      "finished_at": "2026-11-01T01:21:30.869256Z",
+      "observed_segment": {
+        "complete_from": 1793495306.4060414,
+        "journal_prefix": {
+          "hash": "0ba8d4c45d4b51c26322df25c949fb9e4ac530d17ae895c8581e432a9100a0c1",
+          "seq": 2226
+        },
+        "sealed_until": 1793496029.2689629,
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "phase": "SELECT",
+      "reason": "ELIGIBLE_SNAPSHOTS_INSUFFICIENT: available=17 requested=64 decision_interval=[1793495906.4060414,1793496029.2689629]",
+      "started_at": "2026-11-01T01:20:34.025272Z",
+      "state": "BLOCKED"
+    }
+  ],
+  "cause": {
+    "actor": "not established by available Pod/Node events",
+    "kind": "API-eviction-and-node-removal",
+    "node_events": [
+      "NodeNotSchedulable 01:08:23Z",
+      "Shutdown/NodeNotReady 01:09:22Z",
+      "DeletingNode absent in cloud provider 01:09:53Z",
+      "RemovingNode 01:09:58Z"
+    ],
+    "observer_process_restarts": 0,
+    "pod_disruption_reason": "EvictionByEvictionAPI",
+    "pod_disruption_transition": "2026-11-01T01:08:23Z",
+    "pod_uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+    "replacement_uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212",
+    "watch_session_restart": false
+  },
+  "coverage": {
+    "complete_from": 1793495306.4060414,
+    "cross_gap_bridge": false,
+    "previous_data_is_historical": true,
+    "required_window_and_lookback_seconds": 600,
+    "reset_seq": 1759,
+    "restored_seq": 1781,
+    "session": "a0b816ff152b4944b08de1e506829059"
+  },
+  "final_cleanup_evidence": {
+    "fixture_desired_replicas": 3,
+    "fixture_ready_pods": 3,
+    "journal_censored_moves": 0,
+    "journal_open_moves": 0,
+    "journal_settled_moves": 1,
+    "no_new_calibration_or_live_mutation_by_investigation": true
+  },
+  "last_good": {
+    "actual_generation_hash_verified": true,
+    "retained_after_successful_publication": true,
+    "ticks": 64,
+    "trace_sha256": "aff38a220edee5dae0a70df94ca89e5969d684dc25e113d823c4e17a8ed0aab7",
+    "unchanged_pointer_after_blocked_runs": true
+  },
+  "limitation": "The Eviction API caller is unknown; node events prove concurrent node drain/shutdown/removal. A successful fresh600-second generation does not establish30-day retained continuity/performance or prevent future external disruptions.",
+  "move_attribution": {
+    "censored_count": 0,
+    "external_eviction_has_intent_or_charge": false,
+    "intent_count": 1,
+    "open_count": 0,
+    "receipt_count": 1,
+    "samples": [
+      {
+        "action": "rotate",
+        "at": 1793492954.0956402,
+        "censored": false,
+        "duration": 9.18130350112915,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "overdue": false,
+        "suspect": false,
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      }
+    ],
+    "settled": [
+      {
+        "action": "rotate",
+        "attributed": true,
+        "containment": false,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "intervals": [
+          {
+            "end": 1793492954.0956402,
+            "endpoint_uid": "5b2594d7-8c64-411e-80dc-033592597fda:7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "start": 1793492950.9082956
+          }
+        ],
+        "measured": true,
+        "observed_at": 1793492954.0956402,
+        "overdue": false,
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "reservation": null,
+        "revision": 1,
+        "state": "settled",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      }
+    ]
+  },
+  "private_raw_journal": {
+    "bytes": 5976064,
+    "capture": "SQLite mode=ro backup into remote memory; transferred directly to local file; original remote unchanged",
+    "path": "/workspace/.phorvex-test-tmp/post-retry-journal.db",
+    "prefix": {
+      "hash": "ff9f266466f8fdb5edcccc1226b412eb5e7dad177d673f2611782fddeffe5da4",
+      "seq": 2208
+    },
+    "sha256": "b647b2e7a2e6ba6834536b51e68260ecc82f61ea46ec21095ef2bb0016874b04",
+    "verified_decoded_chain_records": 2208
+  },
+  "schema": "phorvex-stage.post-retry-investigation.v1",
+  "scope": "read-only stage runtime investigation; no source edit, live mutation, calibration or service restart",
+  "status": "PASS"
+}

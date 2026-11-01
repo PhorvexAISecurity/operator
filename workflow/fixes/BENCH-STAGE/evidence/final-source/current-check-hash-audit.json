@@ -1,0 +1,19 @@
+{
+  "current_signed_checks": [
+    {
+      "id": "check-red",
+      "path": "evidence/baseline-red.md",
+      "sha256": "1b1c5aa989e4b99460af548a5018353880bf4b32b626fe704f8e127fe1959569",
+      "source_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+      "verified": true
+    },
+    {
+      "id": "check-decision",
+      "path": "03-decision.md",
+      "sha256": "78e6fcf878b71db8d756eb492d533a736f1f3503e28e3894ba94001dc0a930e4",
+      "source_sha": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+      "verified": true
+    }
+  ],
+  "scope": "Hash/size audit only; not re-signing or adopting independent checks"
+}

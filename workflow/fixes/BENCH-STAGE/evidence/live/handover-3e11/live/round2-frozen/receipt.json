@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-01T00:28:44.306863+00:00",
+  "qualification": "blocked latest segment due observed node-drain-related fixture membership changes; no continuity bridged",
+  "files": [
+    {
+      "name": "watch-status.json",
+      "bytes": 435,
+      "sha256": "cc3b6e9f87ebf16b0e54c4cf05f2337c001e574cb3dcfa7f2cf257832f654afd"
+    },
+    {
+      "name": "calibration-2.json",
+      "bytes": 778,
+      "sha256": "3388949cdb8e2722d3f16b61c7d2e854ee2db788efc1d83e2c12706cedf0063e"
+    },
+    {
+      "name": "retrospective-control.json",
+      "bytes": 2114,
+      "sha256": "915d9510882397f3f811cfb168d3e33c9e9dcf28f012f83b6f9836548da05c28"
+    },
+    {
+      "name": "compressed-evidence.db",
+      "bytes": 3043328,
+      "sha256": "fe706f99faf1648d170bf7dcdba3da710cfed97ba523d8600a986175b3d18ab6"
+    },
+    {
+      "name": "scope.json",
+      "bytes": 747,
+      "sha256": "77425cd40827bb441193b9a0b53a613b3998f8a5c58de667d2d18f820fe0f880"
+    },
+    {
+      "name": "refresh-before-handover.json",
+      "bytes": 9128,
+      "sha256": "9cb1e388dfd91af8882bcb44458699f63fbe1bc839fe0d3840df1554b55a5ac8"
+    },
+    {
+      "name": "launch-receipt.json",
+      "bytes": 626,
+      "sha256": "7d975d149f340202f3a8f972fa42015ebd13b6d19a2aec520bd761701b4fa289"
+    }
+  ]
+}

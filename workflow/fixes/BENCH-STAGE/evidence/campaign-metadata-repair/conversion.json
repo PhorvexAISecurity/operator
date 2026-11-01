@@ -1,0 +1,41 @@
+{
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "created_at": "2026-11-01T01:23:06.474689+00:00",
+  "producer": "bench-v3-worker",
+  "scope": "Lead-delegated metadata shape repair only; schema, source code, receipts, result assertions and original authorship unchanged. Extra provenance prose preserved in each existing observations.md; malformed originals retained.",
+  "result": "PASS_SCHEMA_AND_PAYLOAD_IDENTITIES",
+  "rounds": [
+    {
+      "round": "round-1",
+      "manifest": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml",
+      "before_sha256": "71dd2f7efbf8d1194e2c753b5cd679e789cea8e8b85f2a10c589081fb26faa24",
+      "after_sha256": "d3b7bf108848937c27ede0f3043577999a393a71f8275a67a0dd15f97539ad78",
+      "artifact_hashes_and_sizes_preserved": true,
+      "artifacts": 2
+    },
+    {
+      "round": "round-2",
+      "manifest": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml",
+      "before_sha256": "3ff31a46e8f63611baba9181b245f41b05d4ea29f0ee91f462eba6862e0c07bc",
+      "after_sha256": "cc08bfdff8f5df3152dd06036dd4487a8329503981f669e11c751a8d90cfc8b2",
+      "artifact_hashes_and_sizes_preserved": true,
+      "artifacts": 2
+    },
+    {
+      "round": "round-3",
+      "manifest": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml",
+      "before_sha256": "d642edca8b0b1d44dbe84859f0339bec7b8f896a2f560009784b0bf893eb7bc8",
+      "after_sha256": "bdbf693b8d257f62f1418f23f9b806aca656b3440fa96ae80e5a06c9d4debf84",
+      "artifact_hashes_and_sizes_preserved": true,
+      "artifacts": 8
+    },
+    {
+      "round": "round-4",
+      "manifest": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/manifest.yaml",
+      "before_sha256": "c438fa74b41c1a8195e462b211f8d2bb559fb8b85b2c144fe6ee92bcfc97f602",
+      "after_sha256": "e0d04abfdbff84833591abe96e9c8dc3775edc76c5063a25839e1bf16bd8de78",
+      "artifact_hashes_and_sizes_preserved": true,
+      "artifacts": 4
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "phorvex-bench.storage-amendment-advisory.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:39:07.425875+00:00",
+  "result": "SUPPORT_WITH_EXPLICIT_ACCEPTANCE_CONDITIONS",
+  "source_of_measurement": "Root-provided inspection of real 30-minute stage journal; bind final implementation review to the original inspection/backup receipt when available.",
+  "sample": {
+    "events": 1079,
+    "seconds": 1840.8,
+    "decoded_logical_bytes": 5515312,
+    "stored_plain_logical_bytes": 5515312,
+    "sqlite_bytes": 5885952,
+    "estimated_zlib_level1_plus_128_bytes_per_record": 1727736
+  },
+  "mean_rate_extrapolation_not_guarantee": {
+    "records_30_days": 1519322.0338983051,
+    "decoded_bytes_30_days": 7766019504.563233,
+    "estimated_encoded_bytes_30_days": 2432796453.7157755,
+    "current_2_gib_raw_days": 8.295692458941781,
+    "proposed_4_gib_encoded_days": 52.96333718474479,
+    "sqlite_to_raw_logical_ratio_in_sample": 1.0672020005395888
+  },
+  "conditions": [
+    "New journals use explicit immutable versioned lossless encoding; old plain journals stay readable without silent recompression or continuity bridging.",
+    "Keep the canonical decoded event hash chain unchanged, bound each decoded event, and verify both decoded and encoded counters transactionally/on open.",
+    "Quota accounts actual encoded bytes plus a documented row allowance; physical SQLite pages and WAL remain additional.",
+    "Larger capacity must be explicitly selected in the actual capture configuration, not merely allowed by a new maximum.",
+    "Decompression rejects over-limit output, truncated streams, unused/trailing data and invalid decoded JSON without any unbounded decompression or flush.",
+    "Add real backup round-trip and canonical chain/normalization equivalence controls, corruption/counter mismatch/quota controls, and measure actual compressed SQLite storage.",
+    "Status reports both counters, configured quota, DB/WAL sizes and disk reserve. Rate-based time remaining is labelled an estimate, distinct from qualified time coverage.",
+    "Budget host disk for the 4 GiB journal, working snapshot cache, retained generations and existing benchmark free-space guard.",
+    "Keep full-scan costs explicit; a 30-day same-rate trace implies about 1.52 million rows and 7.77 GB decoded. Do not claim successful 30-day refresh performance without representative evidence."
+  ],
+  "scope": "Design advisory only; implementation, independent tests, actual configured storage and real continuous history remain pending. No source edits or live actions performed."
+}

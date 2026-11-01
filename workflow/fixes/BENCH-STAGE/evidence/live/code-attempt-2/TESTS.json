@@ -1,0 +1,34 @@
+{
+  "base-local": {
+    "commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "toolchain": "go1.26.10",
+    "packages": [
+      "./cmd/brain-replay",
+      "./internal/decision",
+      "./internal/model"
+    ],
+    "counts": {
+      "pass": 465,
+      "fail": 0,
+      "skip": 2
+    },
+    "returncode": 0,
+    "status": "PASS"
+  },
+  "candidate": {
+    "commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+    "toolchain": "go1.26.10",
+    "packages": [
+      "./cmd/brain-replay",
+      "./internal/decision",
+      "./internal/model"
+    ],
+    "counts": {
+      "pass": 509,
+      "fail": 0,
+      "skip": 2
+    },
+    "returncode": 0,
+    "status": "PASS"
+  }
+}

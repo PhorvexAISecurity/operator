@@ -1,0 +1,47 @@
+{
+  "reviewer": "stage-review",
+  "checked_at": "2026-11-01T00:37:04.018729+00:00",
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "result": "PENDING_REQUIRED_LIVE_OUTPUTS_AND_FINAL_PREFLIGHT",
+  "source_component_status": "Accepted reviewed components through R9; no newly identified runtime source blocker. Coherent final preflight still running.",
+  "accepted_component_evidence": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-parameter-review.json",
+      "sha256": "f2b1be426bc3dbde96d7de3067877e3884ff77b1b6b67b090d81cd3fed7b98a7"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-round2-invalidation-review.json",
+      "sha256": "6c6e6266a3fcaf06708c53834add85d6e3c5f62f2b2a045153a520c8059fe578"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/component-review.json",
+      "sha256": "f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r7-r8-component-review.json",
+      "sha256": "4eac6f9cb8c76836f52d818fc3c5c05152a9e0ef092e1791bfc6ed1517236eb4"
+    }
+  ],
+  "handover_addendum": {
+    "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/handover-addendum.md",
+    "interpretation": "Preserves preregistered spec and explicitly records the endpoint-acceptance sequencing deviation without claiming round2 endpoint success."
+  },
+  "final_required_evidence": [
+    "Exact final source 3e11 coherent preflight receipt and clean source binding.",
+    "Real V2A code job candidate diff, focused tests, candidate/base/control replay and report delivery; helper not invoked by replay must remain explicit.",
+    "Qualified endpoint generation from new uninterrupted journal segment with exact source/image/UID provenance, frozen prefix, sealed per-tick declared W and L.",
+    "Calibration3 durable intent/acknowledgement/observed isolated readiness interval/settled replacement and no doubled reservation charge.",
+    "Actual integrated paired endpoint arms with complete comparable population, shared chooser/value/gate parity, engine binary/source hashes and truthful measured versus predicted/counterfactual fields.",
+    "Default600s cohort and explicitly different covered custom W/L/SLO request labelled with actual settings; original30d request remains honest unavailable control.",
+    "Prior failed and external-gap segments retained and never joined or backdated into new history.",
+    "Mutation ledger records all three UID-preconditioned calibrations and rejected wrong-UID control; no extra physical actuation.",
+    "Final live runtime identity/status, retained fixture/PVC/observer/refresher quotas and rollback; removal of owned transient forwards/jobs/auth.",
+    "Campaign observations/analysis/reviews/cleanup and final verdict reconciled to actual outcomes; unknown original30d continuity/performance stays pending."
+  ],
+  "claim_limits": [
+    "Parameter and endpoint replay is decision-mechanism evidence; not security efficacy or observed counterfactual SLO impact.",
+    "Bot acceptance operator submission exercises actual queue/execution/Telegram delivery, not an incoming Telegram update.",
+    "Observed correlated node events establish environmental timing and identities, not an actor-level drain audit.",
+    "4GiB encoded journal and measured extrapolation do not guarantee30days of continuous collection or completion within current full-scan timeout."
+  ]
+}

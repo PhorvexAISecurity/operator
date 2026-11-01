@@ -483,9 +483,10 @@ phorvex:
   # recorded as replayable snapshots on the audit volume and relayed read-only through the
   # console for offline parameter replay. Empty records nothing. Requires audit.enabled.
   mathLab:
-    capturePolicies: []      # e.g. ["vllm/vllm-defense"]
+    capturePolicies: []      # e.g. ["phorvex-staging-demo/stage-bench-defense"]
     captureDir: /audit/math-lab
     captureMaxBytes: 1073741824
+    captureCostEvidence: false # bounded immutable replica observations; not endpoint loss history
 
   # Run the console as a second container in this pod.
   #

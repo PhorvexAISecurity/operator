@@ -164,29 +164,39 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class Console:
-    def __init__(self, out=None):
-        self.url = os.environ.get('CONSOLE_URL', '').rstrip('/')
-        self.token = os.environ.get('CONSOLE_TOKEN', '').strip()
+    def __init__(self, out=None, *, kube_context=None, namespace=None, service=None,
+                 token_service_account=None, service_port=80, use_environment=True,
+                 token_audience='phorvex-console', token_duration='6h'):
+        self.kube_context = kube_context or os.environ.get('KUBE_CONTEXT')
+        self.kube_namespace = namespace or os.environ.get('KUBE_NAMESPACE', 'phorvex-system')
+        self.kube_service = service or os.environ.get('CONSOLE_SERVICE', 'phorvex-console')
+        self.service_port = service_port
+        self.url = os.environ.get('CONSOLE_URL', '').rstrip('/') if use_environment else ''
+        self.token = os.environ.get('CONSOLE_TOKEN', '').strip() if use_environment else ''
         self.process = None
         self.owned_log = None
         self.out = Path(out) if out else None
         if not self.token:
-            self.token = self.kubectl('-n', os.environ.get('KUBE_NAMESPACE', 'phorvex-system'), 'create', 'token',
-                                      os.environ.get('CONSOLE_TOKEN_SERVICE_ACCOUNT', 'phorvex-phorvex-console-e2e'),
-                                      '--audience=phorvex-console', '--duration=6h').strip()
+            self.token = self.kubectl('-n', self.kube_namespace, 'create', 'token',
+                                      token_service_account or os.environ.get('CONSOLE_TOKEN_SERVICE_ACCOUNT', 'phorvex-phorvex-console-e2e'),
+                                      '--audience=' + token_audience, '--duration=' + token_duration).strip()
             if not self.token:
                 raise TransportError('Existing Console identity token could not be issued')
         if not self.url:
-            self.start_forward()
+            try:
+                self.start_forward()
+            except BaseException:
+                self.close()
+                raise
         parsed = urllib.parse.urlparse(self.url)
         if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError('CONSOLE_URL must be an HTTP(S) origin without credentials')
         if parsed.scheme == 'http' and parsed.hostname not in ('127.0.0.1', 'localhost', '::1'):
             raise ValueError('Remote Console requires HTTPS')
 
-    @staticmethod
-    def kubectl(*arguments, timeout=30):
-        result = subprocess.run(['kubectl', *arguments], capture_output=True, text=True, timeout=timeout)
+    def kubectl(self, *arguments, timeout=30):
+        context = ['--context', self.kube_context] if self.kube_context else []
+        result = subprocess.run(['kubectl', *context, *arguments], capture_output=True, text=True, timeout=timeout)
         if result.returncode:
             # Never echo stderr containing environment, auth or request payload.
             raise TransportError('kubectl read/token request failed')
@@ -199,10 +209,11 @@ class Console:
         log_path = self.out / 'raw' / 'port-forward.log' if self.out else Path('/tmp') / ('benchmark-forward-' + uuid.uuid4().hex + '.log')
         self.owned_log = log_path
         self.forward_stream = log_path.open('w')
-        service = os.environ.get('CONSOLE_SERVICE', 'phorvex-console')
+        service = self.kube_service
         if not service.replace('-', '').isalnum(): raise ValueError('Invalid Console service name')
-        self.process = subprocess.Popen(['kubectl', '-n', os.environ.get('KUBE_NAMESPACE', 'phorvex-system'),
-                                         'port-forward', '--address=127.0.0.1', 'service/' + service, f'{port}:80'],
+        context = ['--context', self.kube_context] if self.kube_context else []
+        self.process = subprocess.Popen(['kubectl', *context, '-n', self.kube_namespace,
+                                         'port-forward', '--address=127.0.0.1', 'service/' + service, f'{port}:{self.service_port}'],
                                         stdout=self.forward_stream, stderr=subprocess.STDOUT)
         end = time.monotonic() + 25
         while time.monotonic() < end:

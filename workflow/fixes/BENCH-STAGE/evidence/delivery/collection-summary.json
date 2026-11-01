@@ -1,0 +1,49 @@
+{
+  "collection_state": "PENDING_JOBS",
+  "pending_jobs": [
+    "474cff3249df",
+    "4b8171ea3c83"
+  ],
+  "jobs": [
+    {
+      "id": "8ffcfca38357",
+      "kind": "batch",
+      "state": "DONE",
+      "experiment_id": null
+    },
+    {
+      "id": "474cff3249df",
+      "kind": null,
+      "state": "PENDING_OR_UNRECORDED",
+      "experiment_id": null
+    },
+    {
+      "id": "4b8171ea3c83",
+      "kind": null,
+      "state": "PENDING_OR_UNRECORDED",
+      "experiment_id": null
+    },
+    {
+      "id": "83014231aae7",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "2c3bdec7-9f84-4a50-b4b8-313e11ff562b"
+    },
+    {
+      "id": "32f795de4856",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "7961f667-ee01-4213-9aa5-cc4393b78bf1"
+    },
+    {
+      "id": "29c3cdd547cd",
+      "kind": "param",
+      "state": "DONE",
+      "experiment_id": "df250104-af61-4aaa-adc4-c6bd21f16aab"
+    }
+  ],
+  "omitted": [],
+  "archive": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-parameters-v2.zip",
+  "sha256": "84448860777c98e87a45dc64e49718744bd6a0c220ade46a89814eca457bb11b",
+  "files": 47
+}

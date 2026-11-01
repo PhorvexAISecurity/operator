@@ -1,0 +1,70 @@
+{
+  "recorded_at": "2026-11-01T01:37:58.381226+00:00",
+  "producer": "bench-v3-worker",
+  "attempts": [
+    {
+      "status_path": "evidence/final-source/preflight-status.json",
+      "status_sha256": "cec0605d1fed949082623b2bd6526c68b5221c6f75c217379460f4a3756b304c",
+      "status_bytes": 357,
+      "source_sha": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+      "state": "INTERRUPTED",
+      "started_at": "2026-10-31T23:59:36.654547+00:00",
+      "elapsed_seconds": 142.122,
+      "results": [],
+      "run_directory": "evidence/preflight/run-1793491177843293225",
+      "disposition": "Interrupted for independent documentation/CI-dispatch review corrections.",
+      "finished_at": "2026-11-01T00:01:58.776165+00:00",
+      "exit_code": 143
+    },
+    {
+      "status_path": "evidence/final-source/preflight-de426ee1-status.json",
+      "status_sha256": "350065e7884ba6e7f85a45a21f6f2a872253422144be2842752e92919761735d",
+      "status_bytes": 357,
+      "source_sha": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+      "state": "INTERRUPTED",
+      "started_at": "2026-11-01T00:12:16.977063+00:00",
+      "elapsed_seconds": 133.545,
+      "results": [],
+      "run_directory": "evidence/preflight/run-1793491938142462766",
+      "disposition": "Interrupted after actual stage refresh exposed strict exporter-clock mismatch.",
+      "finished_at": "2026-11-01T00:14:30.522202+00:00",
+      "exit_code": 143
+    },
+    {
+      "status_path": "evidence/final-source/preflight-3e11f4e7-status.json",
+      "status_sha256": "2d47480e919c86a7728eb5747d98fe62c1524de17fc6cc019e0f9d3348b6ca20",
+      "status_bytes": 441,
+      "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+      "state": "FAILED",
+      "started_at": "2026-11-01T00:28:44.776223+00:00",
+      "elapsed_seconds": 2369.342,
+      "results": [
+        {
+          "name": "exact-current-ci-preflight",
+          "exit_code": 1,
+          "timed_out": false
+        }
+      ],
+      "run_directory": "evidence/preflight/run-1793492925871047839",
+      "disposition": "Completed coherent FAIL; only two chart gates failed on stale vendored subchart.",
+      "finished_at": "2026-11-01T01:08:14.118464+00:00",
+      "exit_code": 1
+    },
+    {
+      "status_path": "evidence/final-source/preflight-ec310e27-status.json",
+      "status_sha256": "eed70f8c4a1882f1c6afaa018241c27bc019662853bb7f7fd5d05b667b321e40",
+      "status_bytes": 357,
+      "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+      "state": "INTERRUPTED",
+      "started_at": "2026-11-01T01:10:16.274272+00:00",
+      "elapsed_seconds": 652.061,
+      "results": [],
+      "run_directory": "evidence/preflight/run-1793495417988642954",
+      "disposition": "Interrupted after workflow doctor rejected malformed campaign metadata; source unchanged.",
+      "finished_at": "2026-11-01T01:21:08.334308+00:00",
+      "exit_code": 143
+    }
+  ],
+  "active_run_excluded": "run-1793496303783085569",
+  "claim": "These closed attempts remain separate. No partial or failed output is used to manufacture a complete PASS."
+}

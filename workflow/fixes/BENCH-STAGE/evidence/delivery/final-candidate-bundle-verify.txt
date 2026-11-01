@@ -1,0 +1,6 @@
+The bundle contains this ref:
+f3a181d3e0ba6a75bf3bc286589249ca62263606 refs/tags/bench-c963f138052b
+The bundle requires this ref:
+ef94fad362dabb51469211388ef80cdfa6eee1d4 
+The bundle uses this hash algorithm: sha1
+/workspace/.phorvex-test-tmp/phorvex-stage-benchmark-20261101-final/jobs/c963f138052b/candidate.git.bundle is okay

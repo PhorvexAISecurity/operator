@@ -1,0 +1,637 @@
+{
+  "result": "PASS_ACTUAL_FROZEN_COHORT_AND_BINARIES",
+  "at": "2026-11-01T01:13:57.930094+00:00",
+  "job": "c963f138052b",
+  "cohort": [
+    {
+      "digest": "462656b96cd6b42d6b2f765831ab79ef2b3a5395dc4f61b83b14b3054a7ebf74",
+      "decided_at": "2026-11-01T00:22:11.393752484Z",
+      "tick_id": "9892cfd736aa886eb904289364651c65",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "ad53fe0592277b028820e1a1490b4d7bd7aeebcda27007c92f9f00d5955bffea",
+      "decided_at": "2026-11-01T00:23:02.982005131Z",
+      "tick_id": "61f22df69e7bc8e35feb6c967f259e81",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "eef72763bfa3c5ed2128af0d202b0f253bf659574c3e3b56d1294a8698ee588b",
+      "decided_at": "2026-11-01T00:23:23.85780958Z",
+      "tick_id": "1df60bc936a457ac46b6e77231993430",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "2e1466b8932c4c8478faa73d96fcb649dcbc04eab0c140ebfbf094b4e1c1d765",
+      "decided_at": "2026-11-01T00:23:48.89930473Z",
+      "tick_id": "9241a00bd4768637a0ac28ab014f263a",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "5434921a8396a3fea1965c18ef7df24540bfceb322b2dea512a7f35980b3304a",
+      "decided_at": "2026-11-01T00:24:09.057940526Z",
+      "tick_id": "c77e8a64a5e66bdb6f5370f52f3aaee9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "e7ee2b2934cc3505f99413d0b10ebf609747e63dd66e2040117587b5138bd506",
+      "decided_at": "2026-11-01T00:24:33.934539454Z",
+      "tick_id": "bf8a0b08c50602bb81dfd9eeee345abe",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "90ed05dc908c491d2aa66f8d91ec0f5d8feffc33a2f67ddc43f213ae6e285577",
+      "decided_at": "2026-11-01T00:24:58.974541968Z",
+      "tick_id": "fc3abed015be207a9dfa1cd197239ee9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "8ef6ed43bf6961898dd95d4f85508987e2b58a39d17d9545945dcce86bfd90f1",
+      "decided_at": "2026-11-01T00:25:18.866903965Z",
+      "tick_id": "aa175287dc19614a586bd330e591ad4a",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "4090e3977200ece20fd7c71e52723fb91425f0aec5a437860e3b769acba83cc0",
+      "decided_at": "2026-11-01T00:25:44.301736727Z",
+      "tick_id": "ba75bea4fed4a26a9267d732c624a3e9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "8a39aa4a0f49281369792f1b911f5d55b4fcbd7a761c09c38ebb855a62555b1f",
+      "decided_at": "2026-11-01T00:26:09.56813623Z",
+      "tick_id": "0ae8fa13b1137888cbc8e9840f215185",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "c6ff20b87979b8ee28deba082b9b51c20df68ee5a8af3a504bcbbb569f86c7d5",
+      "decided_at": "2026-11-01T00:26:29.295254635Z",
+      "tick_id": "0fce91f276491ae0c097fd106b3b11ba",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "290f2c735faff977d57aed9874adb8366f59bf8379f373904b5a96a7d05dc0be",
+      "decided_at": "2026-11-01T00:26:53.997888147Z",
+      "tick_id": "f703c503846302d58a8328a3b7ea0fcf",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "7c128cbe97bb48bc77b317673892c6de623b8e88c2338b684db444e177959131",
+      "decided_at": "2026-11-01T00:27:13.974777342Z",
+      "tick_id": "dedb49ef1d90fb0e07155c22999c98c2",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "8be3b4662d724e999561ceb23c2ca70025cdbe24d50c093833af4cacb97b7fe0",
+      "decided_at": "2026-11-01T00:27:39.352296962Z",
+      "tick_id": "92e026532ddad4a6ffeb2dbe52bcb215",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "b1375b857e2536be32c81f2f20bca5cf904dd82f4ee01532590db274ccec079c",
+      "decided_at": "2026-11-01T00:28:04.317764877Z",
+      "tick_id": "62d11c8f36944d9d92b75478c8441170",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "42a8e30d5c63c9d533cd6128fba4be04ea712bd81224f100c61efbad3a1aa264",
+      "decided_at": "2026-11-01T00:28:24.344223548Z",
+      "tick_id": "6cc90c098363cda2324cf4d9ca3e39c2",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "644a34a06235c4e5d0a1fb7a8d27a8d1434942b1099e29e819a246adb6e04e44",
+      "decided_at": "2026-11-01T00:29:24.832076149Z",
+      "tick_id": "d75efcad61de2505519c9c47794d6740",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "8f5e241cc2a5cdf170f25965623a77b116543c39407372feaff3ab74526684cc",
+      "decided_at": "2026-11-01T00:29:49.883083108Z",
+      "tick_id": "a97847873a56e9326f19b2243d40703b",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "70b6453f8897967a5ac5ad75a10b1eef7957d64153f07ea2b838dd550873fbe4",
+      "decided_at": "2026-11-01T00:30:09.851417008Z",
+      "tick_id": "b67e76a7ea9d46f84382f29d7b25deee",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "dfecffb1e14dc4ddab04932ac3a68f9fd80f66e3ee23a39569823601a30376d5",
+      "decided_at": "2026-11-01T00:30:35.078416003Z",
+      "tick_id": "43b19aec5fd6cc2a6c4a583a418816ca",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "ee366397c4ee5387eb0d48404d53a607624becb9b834ddce5dfc297146b1b385",
+      "decided_at": "2026-11-01T00:30:54.623698262Z",
+      "tick_id": "9873075c9998d12a8c22af147ee9c892",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "9ce35e52842c3f9a1354e441a0bfe7f197de50e703dce8e0befdd6d3735780db",
+      "decided_at": "2026-11-01T00:31:20.130123695Z",
+      "tick_id": "846d71a66e420090e3d552ed7b766daf",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "1cf61f0a67ff430f3fefe532fb534307ff1d06e5df98fc4fb4e369504ba8bb2e",
+      "decided_at": "2026-11-01T00:31:45.186431887Z",
+      "tick_id": "e738dc6eed02171a0a1b82f652024475",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "a5ac4ba99a82503f0caebcddd71e33ccfa5e671e5033c815cf59ed3be318ad21",
+      "decided_at": "2026-11-01T00:32:05.408003165Z",
+      "tick_id": "e5f5a90010dc241cdbe1e236497d963f",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "f6d168536157f335f41c7f3ed03127c2d46e413d070ade49da2a9203fd40d2a0",
+      "decided_at": "2026-11-01T00:32:30.531360985Z",
+      "tick_id": "3a6abe6636246323d06ea968a9ec53a9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "49bd5500805e5fd09029843612183a97ccab90933810a633d1bd425afe0e4e7d",
+      "decided_at": "2026-11-01T00:32:50.827757309Z",
+      "tick_id": "eeaabbbc172fb5307b9c5892aed5c10b",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "a5721b0ee65f880c97d3f6428327a1c9f83c7474aeb650b24131bb24449803e0",
+      "decided_at": "2026-11-01T00:33:15.542212983Z",
+      "tick_id": "a46fa89b1e3e5788a6cd753124661e5d",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "521033d1c1a063b269f100ad47267e396fe0f795d8e01f7d6ff5bfdf28f11374",
+      "decided_at": "2026-11-01T00:33:40.143665546Z",
+      "tick_id": "4830f2e35bda5b6620af83344873a832",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "542c8a0c13af9d1cdce10af990f5b3296e27a54a46f90fdf9d65311db1e6893c",
+      "decided_at": "2026-11-01T00:34:00.504487977Z",
+      "tick_id": "715c6dc58c5d790bc4a6f5d1cfdfc31b",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "c17df71c6a63a7d754b2ed83d8a9b3ed7064df8882d0a78a6ed67e633ac90903",
+      "decided_at": "2026-11-01T00:34:25.10455535Z",
+      "tick_id": "fc69e48fa22d05579ac295599931469e",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "c0df4d39575e9cb69f76716652494dd84e7d8567dd8cac5afd4adc92ab2304af",
+      "decided_at": "2026-11-01T00:34:50.251043659Z",
+      "tick_id": "50ef5f0d7e1e7467033a7837b8f3e8cc",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "65d544df08baeef25b3b57837f9953814b20f01d43ed56344882d245f65caaa2",
+      "decided_at": "2026-11-01T00:35:10.212602861Z",
+      "tick_id": "936790c51527adfaab3b03210a65b5fe",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "0c0552865771f76416a9105ca152b60215fffad74b2925aa247470a7edbc14f9",
+      "decided_at": "2026-11-01T00:35:35.369161642Z",
+      "tick_id": "5a0dc27a20fe450284023622ed1621ec",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "2420ff1f1062046f8de14652d06453f533a8ba0f413f3880debf6c2df5267bb0",
+      "decided_at": "2026-11-01T00:35:55.152952005Z",
+      "tick_id": "6d98ce3ebe2ca81eff25a34f1db06da2",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "7ebc1e65024a865ed96b15d899d1ffb3ac9d2b84c6649daec9a15e395f2d5b0e",
+      "decided_at": "2026-11-01T00:36:22.014225257Z",
+      "tick_id": "0121ff6db5fa35494bfde4c5a0cfee8f",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "ddbf3d5b5fc3febcbf9dc628fa29f4772253d5b08b21e22e19870053ff281467",
+      "decided_at": "2026-11-01T00:36:45.097774526Z",
+      "tick_id": "2d7d273956174a82c5e43b94800b49e9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "3f07ef3d76705e1988c87d40939c5a5cfe1a1149c85cc0f483260f51aed481ba",
+      "decided_at": "2026-11-01T00:37:05.36811889Z",
+      "tick_id": "3584266ecd5fa8c7bc26a51bc902ca72",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "c0a6918fe623265a0ba7a9800ff8c006ae6f6406c7473b5f196f3a6b8a096d78",
+      "decided_at": "2026-11-01T00:37:30.780649129Z",
+      "tick_id": "ebe5c85d447738da38fd56fa70ae844d",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "d4858d98916033f5f69d30ce7fd8eaa2ac54632a64e9c68b20ce81ad7e95f57f",
+      "decided_at": "2026-11-01T00:37:55.130068255Z",
+      "tick_id": "56ad5ef893d7e1e527468ae557d87821",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "43c87540869cfe4d3d8eb1b05b1e2a765ef7f886a0331226bb39e5eabd6d913d",
+      "decided_at": "2026-11-01T00:38:15.14473038Z",
+      "tick_id": "01bf485bd2bbc20e58c6b6b451887ce0",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "125b0648173bf76d44715d83b4f5b935d8c6f7410bf7296c8429c4906cb85293",
+      "decided_at": "2026-11-01T00:38:40.043175952Z",
+      "tick_id": "8f5e0d9337506d296e1d38a8b21e3620",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "4454b8bd6d4b3172c116141e2566a602cc22cd84bbeb7079aea6209c6f440ea0",
+      "decided_at": "2026-11-01T00:39:00.351695204Z",
+      "tick_id": "c0712cfd0082da3baad23ba07ce65758",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "93a1b5175ee8449e2244d3792bc20172a9781aa457314d2500c46d5d9b27d87b",
+      "decided_at": "2026-11-01T00:39:25.000102663Z",
+      "tick_id": "45329a1e224225e5bc397d1d35e0be30",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "23b70bdf44732fdb9ee460267e9582c1a85aa45c162bf2a89d99ad21b0bbc4ed",
+      "decided_at": "2026-11-01T00:39:50.450559416Z",
+      "tick_id": "9dbb4251aabb77c2bc59329791e9426a",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "7974abcbd3e92fafc14ed4de8d1270b0efe8f61af2224a9eafc6612fca988f03",
+      "decided_at": "2026-11-01T00:40:10.576726045Z",
+      "tick_id": "7af76663a0265d433d627fc1f7d92965",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "5ed1236719d75a95f951116de2138ff455ffcca751b8b5ef92021c425bb121b3",
+      "decided_at": "2026-11-01T00:40:35.536990258Z",
+      "tick_id": "eda717bd37e635bb0d9683fcc52f0569",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "914664c34358495b5605f7243a0924f3d8cac3d762389d67a1038f35167e24cd",
+      "decided_at": "2026-11-01T00:40:55.428906711Z",
+      "tick_id": "3e8943455b32d797ded56c6b1a80447f",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "5b4236ad3e7e910736bdeefdd2ee24cfa2a262daa64d19bec242cedbae9cfd26",
+      "decided_at": "2026-11-01T00:41:20.059259832Z",
+      "tick_id": "f4d7cd0d342d8ed7bd2b5db37b542d1a",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "41db198a5aeca1756acceb1989198d6c4742b6b003c1e35338e5a84201b91acf",
+      "decided_at": "2026-11-01T00:41:45.123562702Z",
+      "tick_id": "197e2fdb6a91d090dc7adb244473c41b",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "adb03670e59b59617603dd91ae357dc7a4ee4e46448cfe06195661ea2a5cbfc5",
+      "decided_at": "2026-11-01T00:42:05.248919612Z",
+      "tick_id": "0fedef17bb2410f5b69685ac6120d1a9",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "458c43eb40c4348a282adc06bd6f2833c7fdf994484cec8dadf834ed77badc1c",
+      "decided_at": "2026-11-01T00:42:30.366584644Z",
+      "tick_id": "738f1b0ab7f5acd540765744304b7457",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "ef3123551397931b06fba7b334804738ad457597242531a5ef903b512bf13ee8",
+      "decided_at": "2026-11-01T00:42:55.480374647Z",
+      "tick_id": "db5ad517ddcca8f2613b16d7ed436f1b",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "43a0104edb59988ec5ffe98d5122b8b0c0563c2e6c9f4ab554eaecc124b92554",
+      "decided_at": "2026-11-01T00:43:15.04486047Z",
+      "tick_id": "31b08252f33862eb216fe22e2bc47218",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "8989776665959a3460ea4f549543a51ae495924471a0356763418ae5c8ceafaa",
+      "decided_at": "2026-11-01T00:43:40.053731309Z",
+      "tick_id": "d77c7bc0836ae5e09f56dfa7d96edaf0",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "b1996459370afe618a81d6e5f11897a6507925a0268772001acb587e6d0e8fa2",
+      "decided_at": "2026-11-01T00:44:00.310949427Z",
+      "tick_id": "78dcbdad07de3aebdbce44ce2cc48dfd",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "a1b6b70dba9811ee7dc15ca840dbb59720dbec03e2dc367c96cfc51d48e8548d",
+      "decided_at": "2026-11-01T00:44:25.049068311Z",
+      "tick_id": "b82dd35ecdaf15854e77fca58bb64ad5",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "ff78f2201fe0eed7e74b7615258a07111cdef3a1a2e8ca2c146923af689967ba",
+      "decided_at": "2026-11-01T00:44:50.091188617Z",
+      "tick_id": "b86cf215dc1d220ec2954be232c68a96",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "fc86e54dffdbd1f5363a0d6ee0e64c97fa619073a0e47bd91eb4b87a7845db43",
+      "decided_at": "2026-11-01T00:45:10.256899932Z",
+      "tick_id": "c59161edaf7f6c86153593810bf4586a",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "622755da61667e0397b8c66c03a69b9c5f35f79ebb6a421fdd463f649702c35c",
+      "decided_at": "2026-11-01T00:45:35.14722252Z",
+      "tick_id": "900ad3d08023e61b80504efdfeb05052",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "f2ce6b31798294c502c23361f3ac78dcf200fc27c1f960cacf348ee5a83114b9",
+      "decided_at": "2026-11-01T00:46:00.322583997Z",
+      "tick_id": "e57bfb6b0b096c98df21f07c20c84d2c",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "57f2d2314ad9cf6a2ab11c57fedeede0ecb6b487b3ae4ccc571b6dc8a468b2b8",
+      "decided_at": "2026-11-01T00:46:20.124679067Z",
+      "tick_id": "e216dd083c50552149293dee1b5cb544",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "55b2d63bbde87178156c66f396eb84e8be8f62e54459dc6d3c2cc249106597c1",
+      "decided_at": "2026-11-01T00:46:45.226876055Z",
+      "tick_id": "dd79465b7688bb5250db7a5cd63d8511",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "31fd5a883f80effbf9264854ca661d6660b0f1efe7d038ce8a410ddfa864f5f0",
+      "decided_at": "2026-11-01T00:47:05.225771169Z",
+      "tick_id": "790cf4c892fba3674eb0f54a73cfef35",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    },
+    {
+      "digest": "a1ed3468d96011e8a3f5a2f4580663a859bec36714d7adb5af329aa4aff32465",
+      "decided_at": "2026-11-01T00:47:30.658771716Z",
+      "tick_id": "ede21d26d92b3a8c5dc31f78cd95c116",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "identity_source": "recorder-process",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+    }
+  ],
+  "binaries": [
+    {
+      "arm": "base-local",
+      "path": "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/bin/base-local",
+      "bytes": 39575714,
+      "sha256": "fcdaeea0a9298b0e34f68c2564269553f371ff96930862bb822b294402dc45d2",
+      "version": {
+        "brainImage": "notAvailable",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1"
+      }
+    },
+    {
+      "arm": "candidate",
+      "path": "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/bin/candidate",
+      "bytes": 39575714,
+      "sha256": "96000193dc96fd9be48753b0da6855140f7bb63cfca5fdb3db815f193e3f016a",
+      "version": {
+        "brainImage": "notAvailable",
+        "gitSHA": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1"
+      }
+    },
+    {
+      "arm": "control",
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90/brain-replay",
+      "bytes": 39575714,
+      "sha256": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+      "version": {
+        "brainImage": "notAvailable",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1"
+      }
+    }
+  ],
+  "remote_mutations": false
+}

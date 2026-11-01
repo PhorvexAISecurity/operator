@@ -1,0 +1,45 @@
+{
+  "schema": "phorvex-bench.independent-review-findings.v1",
+  "reviewer": "/root/stage_review",
+  "updated_at": "2026-10-31T23:12:44.844489+00:00",
+  "findings": [
+    {
+      "id": "R1",
+      "state": "component verified repaired",
+      "evidence": [
+        "r1-component-review.json",
+        "price-missing-controls/after-fix/controls.json",
+        "dynamic-study-scope-review.json"
+      ]
+    },
+    {
+      "id": "R2",
+      "state": "component verified repaired",
+      "evidence": [
+        "missing-stage-pin-control-after.json",
+        "dynamic-study-scope-review.json"
+      ]
+    },
+    {
+      "id": "R3",
+      "state": "producer repair in progress; consumer source/image guards independently verified",
+      "summary": "Split capture header inherited manager SHA/image. Recorder process identity must bind actual brain producer; same-source different-image and legacy records must not inherit new pin.",
+      "owner": "/root/v3_capture",
+      "consumer_review": "dynamic-study-scope-review.json"
+    },
+    {
+      "id": "R4",
+      "state": "repair in progress; independent transition test pending",
+      "summary": "Cached initial Hello false snapshot capability left manager relay nil forever after brain capture became enabled. Valid client should retain lazy read-only source and each RPC must fail closed until server supports it.",
+      "owner": "/root/v3_capture"
+    },
+    {
+      "id": "R5",
+      "state": "confirmed executable; repair in progress",
+      "summary": "After image repin an oldest-first full remote page of rejected old-image ticks repeats forever because no matching local record advances sync since.",
+      "owner": "/root/stage_bot",
+      "evidence": "sync-old-image-page-control.json"
+    }
+  ],
+  "verdict": "No final integration, image, live or campaign verdict. Component tests and static build recipe advisory are narrowly scoped."
+}

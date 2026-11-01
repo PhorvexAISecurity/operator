@@ -1,0 +1,43 @@
+{
+  "environment": {
+    "LD_LIBRARY_PATH": "/home/node/.cache/ac-browser-libs/usr/lib/x86_64-linux-gnu:/home/node/.cache/ac-browser-libs/lib/x86_64-linux-gnu:/home/node/.cache/noyad-chromelibs/usr/lib/x86_64-linux-gnu:/home/node/.cache/noyad-chromelibs/lib/x86_64-linux-gnu:/workspace/.phorvex-tools/browser-libs/root/usr/lib/x86_64-linux-gnu:/workspace/.phorvex-tools/browser-libs/root/lib/x86_64-linux-gnu"
+  },
+  "results": [
+    {
+      "language": "en",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--virtual-time-budget=3000",
+        "--user-data-dir=/workspace/.phorvex-test-tmp/guide-readiness-en-u21ojm7a",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-en.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-en.html"
+      ],
+      "exit_code": 0,
+      "html_sha256": "d17592108c0d20af1ee3f938764ad2d47557a52d215649d5c597d4a7f2cc27c7",
+      "pdf_sha256": "6db74b686fb072e2551cfc6ec123463adf58fc7e978365ef9980aec9a6f9a53f",
+      "pdf_bytes": 216897
+    },
+    {
+      "language": "fa",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome",
+        "--headless",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--virtual-time-budget=3000",
+        "--user-data-dir=/workspace/.phorvex-test-tmp/guide-readiness-fa-_1oyamd_",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-fa.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-fa.html"
+      ],
+      "exit_code": 0,
+      "html_sha256": "2cad6bf6bc68214c393cd843035ce9320061f875579954138ab59e883fc82d01",
+      "pdf_sha256": "02bb0a56ee626f4493f0e7ac0de81b528b8acbcfe679b3281c1347a61cf4b0c8",
+      "pdf_bytes": 212647
+    }
+  ]
+}

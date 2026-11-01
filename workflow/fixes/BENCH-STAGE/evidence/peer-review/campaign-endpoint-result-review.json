@@ -1,0 +1,106 @@
+{
+  "result": "PASS_ACTUAL_ENDPOINT_RESULTS_AND_30D_REFUSAL",
+  "checked_at": "2026-11-01T00:47:05.983363+00:00",
+  "package": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-terminal-round1",
+  "package_manifest_sha256": "92ce749d150aad638624243b843e765c9a9e90204e54ef8e729f3d0f4baeff68",
+  "package_files_verified": 80,
+  "jobs": [
+    {
+      "job": "f4f05c4d2de3",
+      "state": "COMPLETE",
+      "settings": {
+        "slo_target": 0.9,
+        "window": 600,
+        "worth_threshold": 0
+      },
+      "lookback": 600,
+      "config": {
+        "lookback": 600,
+        "min": 0.0001,
+        "max": 1000,
+        "eta": 0.004477248791932867,
+        "g_max": 1,
+        "max_dt": 30,
+        "delta": 30
+      },
+      "comparable": 64,
+      "exact_baseline": 64,
+      "brain_selection_parity": true,
+      "noop": {
+        "v2": 0,
+        "v3": 0
+      },
+      "changed": 0,
+      "forecast": {
+        "v2": 9804.800000000001,
+        "v3": 9804.800000000001
+      },
+      "candidate_counts_by_arm_and_sample_n": {
+        "('v2', 1)": 192,
+        "('v3', 1)": 192
+      },
+      "refusals": {},
+      "all_budget_value_and_price_arithmetic_verified": true,
+      "result_sha256": "4b0bed9cadf69119064cf27273294ca433d3fba70dadd2a8914932f19397f66e",
+      "trace_sha256": "315312141a2553ef75fb73caad255c2739d0f6bafc474f1550b0937a243e4ff7"
+    },
+    {
+      "job": "d024b2f8a9fd",
+      "state": "COMPLETE",
+      "settings": {
+        "slo_target": 0.95,
+        "window": 240,
+        "worth_threshold": 0.25
+      },
+      "lookback": 300,
+      "config": {
+        "lookback": 300,
+        "min": 0.001,
+        "max": 100,
+        "eta": 0.1,
+        "g_max": 1,
+        "max_dt": 5,
+        "delta": 2
+      },
+      "comparable": 64,
+      "exact_baseline": 64,
+      "brain_selection_parity": true,
+      "noop": {
+        "v2": 64,
+        "v3": 64
+      },
+      "changed": 0,
+      "forecast": {
+        "v2": 0,
+        "v3": 0
+      },
+      "candidate_counts_by_arm_and_sample_n": {
+        "('v2', 0)": 192,
+        "('v3', 0)": 192
+      },
+      "refusals": {
+        "BUDGET": 384
+      },
+      "all_budget_value_and_price_arithmetic_verified": true,
+      "result_sha256": "a189769fbb6d36b066cf6547a7b273ed3584b28b09f2701b6c52554d92fe25cd",
+      "trace_sha256": "9fc7ea4b3d25985eeecf937f45c6f5539e8f787704db27eede48e926d38cab87"
+    },
+    {
+      "job": "5aeb716b562f",
+      "state": "BLOCKED",
+      "comparable": 0,
+      "execution": false,
+      "missing_history_ticks": 64,
+      "result_sha256": "5d138a7ab3de050bbcae1fd439478dd5dff61b86bdbcf9e673801c030e54d1e7"
+    }
+  ],
+  "immutable_facts_gates_moves_samples": true,
+  "same_original_dataset_and_64_tick_population": true,
+  "limits": [
+    "This checks delivered results, original manifest binding and independently recomputed every budget/value/price/admission row.600 journal/header audit is separate and pending at this receipt.",
+    "Default study uses one observed calibration duration with stateless43s prior, not statistically established duration quantile. Custom W240 excludes the older sample and intentionally uses known-history n0 prior with failure upper1.",
+    "Lambda remains at its floor and effective price is0 across these low-burn histories; this campaign does not demonstrate a V3 ranking difference. Synthetic nonzero-lambda controls remain separate.",
+    "Forecast9804.8 is sum of64 immediate replay forecasts, not a physically executed sequential action cost. No counterfactual spend or verified security result is asserted.",
+    "First dynamic LLM code attempt remains FAILED due unchanged exact-check500ms test timeout. Full source preflight/code retry/cleanup remain separate."
+  ]
+}

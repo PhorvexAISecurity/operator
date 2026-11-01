@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-bench.independent-component-review.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:36:19.520350+00:00",
+  "result": "PASS_R6_SYNC_COMPONENT",
+  "sources": {
+    "benchmark/worker/mathlab/snapshots.py": "f117a35fe7e5f9ee9256687488c2a3ca687ab0ff3f4714bae0e06b8bbd36548a",
+    "benchmark/worker/stage_cli.py": "f1bf013f6abcd6f307ca8f9fc8e000b20dac28ac2a8b19b9a5268a42e5229f29",
+    "benchmark/bot/test_stage_runtime.py": "6a994e8d25d364fa45cc32e21741731a021ee5c6de0138fb4ba99e5628fd8ac5"
+  },
+  "finding": "Concurrent stage writers could both download and later register overlapping digests, leaving a gap between the shared download phase and exclusive ownership registration where a different registered writer could make those files pruneable. The failure was closed, but avoidable.",
+  "resolution": "An independent per-policy sync mutex is acquired before any cache lock and remains held across stage discovery, download, exclusive ownership registration and inspection. Stage refresh does not enter sync while holding a cache lock; shared readers and exclusive pruners retain their existing lock hierarchy.",
+  "tests": {
+    "passed": 2,
+    "skipped": 0,
+    "log": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r6-sync-independent-tests.log",
+    "sha256": "d74d4c1f89ad0a62e29ed3cdba179da9691990da769b751585247327039c77be",
+    "names": [
+      "StageScopeTest.test_stage_sync_serializes_download_to_ownership_registration_gap",
+      "StageScopeTest.test_stage_sync_filters_actual_headers_and_resumes_from_matching_image"
+    ]
+  },
+  "scope": "This closes R6 in refresh-component-review.json at these source hashes. Final integrated suites/source commit and real stage execution remain pending."
+}

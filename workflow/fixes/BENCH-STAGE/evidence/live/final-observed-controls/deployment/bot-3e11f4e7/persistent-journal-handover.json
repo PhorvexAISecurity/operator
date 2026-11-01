@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-01T00:30:03.753244+00:00",
+  "source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "service_sha256": "aa7b7a634c930c1b22c6f1c3c11d9be3cb5931fd85d5351b61e0a2aebc0ca0a8",
+  "journal": "observer/persistent-ef94-1a70/compressed-evidence.db",
+  "settings": {
+    "window": 600,
+    "lookback": 600,
+    "ticks": 64
+  },
+  "continuity": "new journal actualcoverage only, previous segment gaps retained",
+  "timer": "enabled/started; warmup may correctlyBLOCKuntil64sealedeligible ticks"
+}

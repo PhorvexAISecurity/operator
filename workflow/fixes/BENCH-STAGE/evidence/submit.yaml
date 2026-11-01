@@ -1,0 +1,31 @@
+preflight: evidence/preflight/receipt.json
+checks:
+  implementation:
+    artifact: 04-diff.patch
+    command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv
+      9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40 ec310e276e45e6a218f7520880e22c6c1c687817
+  l0:
+    artifact: evidence/preflight/run-1793496303783085569/go-unit-phorvex.log
+    command: GOTOOLCHAIN=local GOPATH=/workspace/.phorvex-go/gopath GOCACHE=/workspace/.phorvex-go/capture-cache
+      TMPDIR=/workspace/.phorvex-test-tmp GOMAXPROCS=2 KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false GO_BIN=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
+  l1:
+    artifact: evidence/final-source/l1.txt
+    command: GOTOOLCHAIN=local GOPATH=/workspace/.phorvex-go/gopath GOCACHE=/workspace/.phorvex-go/capture-cache
+      TMPDIR=/workspace/.phorvex-test-tmp GOMAXPROCS=2 KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false GO_BIN=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      bash workflow/fixes/BENCH-STAGE/verify.sh --invariants
+  l2:
+    artifact: evidence/final-source/l2.txt
+    command: GOTOOLCHAIN=local GOPATH=/workspace/.phorvex-go/gopath GOCACHE=/workspace/.phorvex-go/capture-cache
+      TMPDIR=/workspace/.phorvex-test-tmp GOMAXPROCS=2 KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false GO_BIN=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      bash workflow/fixes/BENCH-STAGE/verify.sh --integration
+  positive_control:
+    artifact: evidence/final-source/l2.txt
+    command: GOTOOLCHAIN=local GOPATH=/workspace/.phorvex-go/gopath GOCACHE=/workspace/.phorvex-go/capture-cache
+      TMPDIR=/workspace/.phorvex-test-tmp GOMAXPROCS=2 KUBECONFIG=/dev/null KUBEBUILDER_ASSETS=
+      USE_EXISTING_CLUSTER=false GO_BIN=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go
+      bash workflow/fixes/BENCH-STAGE/verify.sh --integration

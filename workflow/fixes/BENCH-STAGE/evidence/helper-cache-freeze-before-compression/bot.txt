@@ -1,0 +1,11 @@
+.........................................candidate: --run-id must be 6-40 lowercase hex digits
+candidate: --base-commit must be a full 40-character lowercase SHA
+............candidate: --run-dir must be outside the working repository
+.candidate: --base-commit ffffffffffffffffffffffffffffffffffffffff is not in the source repository
+..................................................................................................................
+----------------------------------------------------------------------
+Ran 168 tests in 37.910s
+
+OK
+bench-dddddd
+bench-abc123

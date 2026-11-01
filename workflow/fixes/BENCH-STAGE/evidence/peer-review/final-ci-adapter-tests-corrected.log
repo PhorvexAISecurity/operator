@@ -1,0 +1,9 @@
+test_current_ci_authority_retains_every_chart_check_and_pinned_setup (test_preflight.PreflightTests.test_current_ci_authority_retains_every_chart_check_and_pinned_setup) ... ok
+test_chart_benchmark_rejects_missing_recipe_and_pins_wrapper_hash (test_preflight.PreflightTests.test_chart_benchmark_rejects_missing_recipe_and_pins_wrapper_hash) ... ok
+test_chart_benchmark_requires_exact_local_go (test_preflight.PreflightTests.test_chart_benchmark_requires_exact_local_go) ... ok
+test_historical_chart_without_benchmark_setup_retains_its_plan (test_preflight.PreflightTests.test_historical_chart_without_benchmark_setup_retains_its_plan) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 2.931s
+
+OK

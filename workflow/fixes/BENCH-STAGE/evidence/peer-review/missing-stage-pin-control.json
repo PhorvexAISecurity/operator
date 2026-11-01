@@ -1,0 +1,8 @@
+{
+  "schema": "phorvex-bench.independent-control.v1",
+  "control_kind": "synthetic testkit, fake Go/replay; guard reachability only",
+  "stage_pin_exists": false,
+  "stage_provenance_attached": true,
+  "actual_result": "COMPLETE",
+  "expected": "refuse missing stage pin before replay"
+}

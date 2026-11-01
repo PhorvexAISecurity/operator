@@ -1,0 +1,28 @@
+{
+  "actual_failed_cohort_control": {
+    "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-failed-cohort-before-after.json",
+    "sha256": "698152a2a75ff9469ddd5cd4fecc799696b48690e1420594f10ce2c881c30af5"
+  },
+  "change": "Parse ASCII RFC3339Nano as integer UTC nanoseconds, then float(ns)/1e9 exactly matching actual Go exporter; strict clock equality preserved.",
+  "created_at": "2026-11-01T00:17:56.020432+00:00",
+  "go_control": {
+    "cases": 10,
+    "comparison_sha256": "2622c695541544b9e7fad21e41d04928c06f286cf346d748de3f8160dfaf3b0b",
+    "exact_float_bits_match": true,
+    "output_sha256": "9a68e2323463eb47b1643df561f96e09ad488b43c374b7be66aa7b8d094bc606",
+    "source_sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "version": "go1.26.3"
+  },
+  "live_writes": false,
+  "schema": "phorvex-stage.decision-clock-source.v1",
+  "scope": "Two worker source/test files only; no product brain/engine/collector/source-pin changes.",
+  "sources": {
+    "benchmark/worker/endpoint_refresh.py": "bf6f9edfc4d533f65aee7ed4574502be19b490f24415c23704dcb8296edea3be",
+    "benchmark/worker/test_endpoint_refresh.py": "31448cd362d298f0712743038ace911f990ae3db4321e67111bd815a9510cb27"
+  },
+  "tests": {
+    "log_sha256": "2c7c06fcc51da7d71c7bc3c27f7db2c6bfac6963a2c1da0527e4b989d0bb01fc",
+    "passed": 18,
+    "skipped": 0
+  }
+}

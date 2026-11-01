@@ -1,0 +1,59 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "archive_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+  "changed_members": [
+    "phorvex/templates/deployment.yaml",
+    "phorvex/values.yaml"
+  ],
+  "member_names_identical": true,
+  "unchanged_member_bytes_verified": 74,
+  "content_diff_sha256": "bbfceb46d4cfa8bcd74c77a7eeb2eeec6141dc63ef56a4ba8818a799cf7f42e6",
+  "renders": [
+    {
+      "command": [
+        "/workspace/.phorvex-tools/helm",
+        "template",
+        "phorvex",
+        "deploy/helm/phorvex-stack",
+        "-n",
+        "phorvex-system",
+        "-f",
+        "deploy/helm/phorvex-stack/values.yaml",
+        "-f",
+        "deploy/helm/phorvex-stack/values-eks.yaml",
+        "--api-versions",
+        "monitoring.coreos.com/v1/PodMonitor",
+        "--include-crds"
+      ],
+      "exit_code": 0,
+      "capture_cost_evidence": false,
+      "flag_occurrences": 0,
+      "render_sha256": "e2949a45a09d6f0112f953e24b21a6b414eb95d488ccec1448ac63a1fcd4d886"
+    },
+    {
+      "command": [
+        "/workspace/.phorvex-tools/helm",
+        "template",
+        "phorvex",
+        "deploy/helm/phorvex-stack",
+        "-n",
+        "phorvex-system",
+        "-f",
+        "deploy/helm/phorvex-stack/values.yaml",
+        "-f",
+        "deploy/helm/phorvex-stack/values-eks.yaml",
+        "--api-versions",
+        "monitoring.coreos.com/v1/PodMonitor",
+        "--include-crds",
+        "--set",
+        "phorvex.phorvex.mathLab.captureCostEvidence=true"
+      ],
+      "exit_code": 0,
+      "capture_cost_evidence": true,
+      "flag_occurrences": 1,
+      "render_sha256": "1e948bfd1bd5553772bdad7cddbaa4fd6d2f2ff980696f3b14c4639fb3e339dc"
+    }
+  ],
+  "result": "PASS_CONTENT_AND_DEFAULT_OPT_IN_RENDER",
+  "note": "Existing metadata and common/Phoenix archives unchanged; exact source template/value payload is now in the vendored chart."
+}

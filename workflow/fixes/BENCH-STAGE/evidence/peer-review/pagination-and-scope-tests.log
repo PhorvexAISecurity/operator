@@ -1,0 +1,32 @@
+test_stage_sync_paginates_old_image_pages_and_equal_time_boundaries (benchmark.bot.test_stage_runtime.StageScopeTest.test_stage_sync_paginates_old_image_pages_and_equal_time_boundaries) ... ok
+test_bounded_index_scan_resumes_remote_progress_and_never_skips_unreturned_ties (benchmark.bot.test_stage_runtime.StageScopeTest.test_bounded_index_scan_resumes_remote_progress_and_never_skips_unreturned_ties) ... ok
+test_missing_pin_after_freeze_blocks_code_and_direct_worker_requests (benchmark.bot.test_stage_runtime.StageScopeTest.test_missing_pin_after_freeze_blocks_code_and_direct_worker_requests) ... ok
+test_same_source_old_image_and_legacy_headers_never_inherit_current_pin (benchmark.bot.test_stage_runtime.StageScopeTest.test_same_source_old_image_and_legacy_headers_never_inherit_current_pin) ... ok
+test_stage_sync_filters_actual_headers_and_resumes_from_matching_image (benchmark.bot.test_stage_runtime.StageScopeTest.test_stage_sync_filters_actual_headers_and_resumes_from_matching_image) ... ok
+test_custom_observed_settings_preserve_facts_and_all_retained_history (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_observed_settings_preserve_facts_and_all_retained_history) ... ok
+test_expanded_window_requires_proven_retention_and_sealed_coverage (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_expanded_window_requires_proven_retention_and_sealed_coverage) ... ok
+test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data) ... ERROR
+test_custom_study_settings_reach_real_shared_go_kernel (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_custom_study_settings_reach_real_shared_go_kernel) ... ok
+test_strict_custom_study_settings_and_templates_validate_before_queue (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+test_quarantine_requires_explicit_cap_only_when_price_is_required (benchmark.stage.test_evidence.EvidenceTests.test_quarantine_requires_explicit_cap_only_when_price_is_required) ... ok
+test_retained_history_contract_keeps_moves_samples_and_untrimmed_intervals (benchmark.stage.test_evidence.EvidenceTests.test_retained_history_contract_keeps_moves_samples_and_untrimmed_intervals) ... ok
+
+======================================================================
+ERROR: test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (benchmark.bot.test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-stage/benchmark/bot/test_endpoint_study.py", line 110, in test_insufficient_original_30d_history_returns_blocked_preserving_installed_data
+    before = installed.read_bytes(), installed.with_suffix('.manifest.json').read_bytes()
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1051, in read_bytes
+    with self.open(mode='rb') as f:
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/pathlib.py", line 1045, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/.phorvex-test-tmp/endpoint-test-kq4_tb7f/data/mathlab/endpoint-traces/phorvex-staging-demo/stage-bench-defense.json'
+
+----------------------------------------------------------------------
+Ran 12 tests in 1.418s
+
+FAILED (errors=1)

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "hypotheses": [
+    {
+      "id": "H1",
+      "claim": "Recorded stage ticks exactly reproduce through the same-source brain-replay before any intervention.",
+      "falsifier": "Any divergent decision or missing collaborator verdict in required cohort.",
+      "sample_unit": "Immutable actual stage decision snapshot",
+      "minimum_observations": 64,
+      "positive_control": "Baseline vs baseline plus known valid registry perturbation; foreign namespace/source rejected.",
+      "acceptance_threshold": "64/64 exact comparable baselines; all foreign pins rejected."
+    },
+    {
+      "id": "H2",
+      "claim": "Custom parameter and code arms run through the actual pinned brain and bot with provenance.",
+      "falsifier": "Legacy corpus or dashboard used, missing arm tests, or standalone reference labelled brain.",
+      "sample_unit": "Bot experiment pair over identical tick hashes",
+      "minimum_observations": 2,
+      "positive_control": "One no-op paired replay and one declared parameter/code intervention with meaningful validation.",
+      "acceptance_threshold": "Both experiment types complete with exact source, mode, inputs and honest measured/predicted columns."
+    },
+    {
+      "id": "H3",
+      "claim": "Endpoint calibrated shadow study accounts only for observed UID-bound stage intervals with full declared short-window coverage.",
+      "falsifier": "Unrelated change credited, missing history called zero, or open-to-settled charged twice.",
+      "sample_unit": "Controlled calibration move and its durable watch interval",
+      "minimum_observations": 1,
+      "positive_control": "Wrong UID/delete precondition and injected watch-gap refuse credit; stable measured interval qualifies.",
+      "acceptance_threshold": "All negative controls refuse; actual qualified case emits complete provenance and paired integrated arms; insufficient duration sample confidence remains explicit."
+    }
+  ]
+}

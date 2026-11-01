@@ -30,6 +30,12 @@ service BrainService {
   // store.
   rpc CloseRecording(CloseRecordingRequest) returns (CloseRecordingResponse);
 
+  // Read-only access to this brain's bounded Math Lab store. These calls use
+  // the existing authenticated service connection; they never evaluate a tick.
+  rpc ListSnapshots(ListSnapshotsRequest) returns (ListSnapshotsResponse);
+  // Chunks keep a maximum-size snapshot within the existing message limit.
+  rpc ReadSnapshot(ReadSnapshotRequest) returns (stream ReadSnapshotResponse);
+
   // ParameterSet reports the decision parameter set a policy is decided with,
   // for the audit's provenance store.
   rpc ParameterSet(ParameterSetRequest) returns (ParameterSetResponse);
@@ -84,6 +90,33 @@ message HelloResponse {
   bool learns_rotation_cost = 5;
   bool persistence_observations = 6;
   string scoped_outcome_process_epoch_id = 7;
+  bool snapshots_enabled = 8;
+}
+
+message ListSnapshotsRequest {
+  string policy_uid = 1;
+  string namespace = 2;
+  string policy = 3;
+  // Optional RFC3339Nano bounds, matching the existing audit transport.
+  string since = 4;
+  string until = 5;
+  // Zero selects the default 500; at most 5000 entries.
+  uint32 limit = 6;
+}
+
+message ListSnapshotsResponse {
+  // Unmodified math-lab.snapshot-index.v1 JSON, bounded to 32 MiB.
+  bytes index_json = 1;
+}
+
+message ReadSnapshotRequest {
+  // Exact lowercase SHA-256; never a filesystem path.
+  string digest = 1;
+}
+
+message ReadSnapshotResponse {
+  // At most 1 MiB per chunk and 64 MiB in total, in file order.
+  bytes data = 1;
 }
 
 message DecideRequest {
