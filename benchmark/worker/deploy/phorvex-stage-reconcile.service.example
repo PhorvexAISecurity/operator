@@ -1,0 +1,14 @@
+[Unit]
+Description=Reconcile exact stage brain source and verified native replay
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
+Environment=PYTHONPATH=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE/benchmark/worker:/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
+Environment=PATH=/home/hami/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/hami/phorvex-benchmark/runtime/python/bin/python -B benchmark/worker/stage_reconcile.py --data /home/hami/phorvex-benchmark/stage-data --repo /home/hami/phorvex-benchmark/operator-refactored --ticks 64 --timeout 900 --max-work-bytes 268435456 --max-corpus-bytes 2147483648
+TimeoutStartSec=950
+SuccessExitStatus=2
+UMask=0077
+NoNewPrivileges=true

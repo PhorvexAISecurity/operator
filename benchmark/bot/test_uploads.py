@@ -195,7 +195,7 @@ class UploadTest(unittest.TestCase):
         self.assertTrue(bot.run_next())
         self.assertEqual([row['kind'] for row in self.history()], ['bench', 'param', 'batch'])
         self.assertTrue(all(row['state'] == 'DONE' for row in self.history()))
-        self.assertEqual(len(self.fake.documents()), 9)
+        self.assertEqual(len(self.fake.documents()), 10)  # Includes the separate runtime validation report.
         self.assertIsNone(bot.current)
         self.assertFalse(bot.activities)
 

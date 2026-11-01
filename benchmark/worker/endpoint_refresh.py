@@ -301,9 +301,21 @@ def verify_live(pin, policy):
     pol = stage_cli.kube(pin["kube_context"], namespace, "get", "phorvexpolicy", name, "-o", "json")
     if pol["metadata"]["uid"] != pin["policies"][policy]["uid"]:
         raise RefreshBlocked("LIVE_POLICY_UID_CHANGED_BEFORE_PUBLICATION")
+    if pin.get('identity_binding') == 'stage-pin.replay.v1' and pol['metadata'].get('generation') != pin['policies'][policy]['generation']:
+        raise RefreshBlocked('LIVE_POLICY_GENERATION_CHANGED_BEFORE_PUBLICATION')
+    if pin.get('manager'):
+        manager=stage_cli.running_image(pin['kube_context'],pin['service_namespace'],'staging-phorvex','manager')
+        if any(manager.get(k) != pin['manager'].get(k) for k in ('git_sha','image','image_digest','deployment_uid')):
+            raise RefreshBlocked('LIVE_MANAGER_CHANGED_BEFORE_PUBLICATION')
 
 
-def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, worth_threshold,
+def refresh(data_dir, *args, **kwargs):
+    # Reconciliation cannot replace the pin/engine while this exact cohort runs.
+    with stage_scope.pin_lock(data_dir, timeout=20):
+        return _refresh(data_dir, *args, **kwargs)
+
+
+def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, worth_threshold,
             ticks=64, timeout=900, max_work_bytes=512 << 20, max_generation_bytes=512 << 20,
             max_corpus_bytes=2 << 30, max_observation_age=600):
     stage_scope.policy(policy)
@@ -339,9 +351,15 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
         atomic_json(status_path, state)
         try:
             with wall_limit(timeout):
+                state['free_bytes_before']=shutil.disk_usage(data_dir).free
+                if state['free_bytes_before'] < (4 << 30)+2*max_work_bytes:
+                    raise RefreshBlocked('DISK_RESERVE: refresh cannot preserve the 4 GiB free reserve and bounded working allowance')
                 pin = stage_scope.load(data_dir, policy, repo)
                 control = stage_scope.identity(data_dir, pin)
                 engine = stage_scope.study_engine(data_dir, pin)
+                if journal_path is None:
+                    from stage_observer_runtime import resolve_journal
+                    journal_path = resolve_journal(data_dir, pin, policy)
                 # Only a real existing journal can be opened; a refresh cannot
                 # manufacture the observation scope or start/backdate a session.
                 if not Path(journal_path).is_file():
@@ -353,7 +371,7 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                     namespace, policy_name = stage_scope.policy(policy)
                     with snapshots.cache_lock(data_dir, namespace, policy_name, exclusive=True):
                         state["cache_before_sync"] = prune_cache(data_dir, pin, policy, max(256, ticks))
-                        available = max_corpus_bytes-bytes_in(corpus)
+                        available = max_corpus_bytes-bytes_in(data_dir/'mathlab/snapshots')
                     if available < snapshots.MAX_SNAPSHOT_BYTES:
                         raise RefreshBlocked("SNAPSHOT_CACHE_CAPACITY_EXHAUSTED")
                     state["phase"] = "SYNC"
@@ -361,7 +379,7 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                                                           max_sync_bytes=min(available, max_work_bytes))
                     with snapshots.cache_lock(data_dir, namespace, policy_name, exclusive=True):
                         register_downloads(data_dir, pin, policy, state["sync"].get("downloaded_digests", []))
-                        if bytes_in(corpus) > max_corpus_bytes:
+                        if bytes_in(data_dir/'mathlab/snapshots') > max_corpus_bytes:
                             raise RefreshBlocked("SNAPSHOT_CACHE_BYTE_LIMIT")
                     with journal.read_snapshot() as prefix:
                         observed = segment(journal, prefix, now=time.time(), max_age=max_observation_age)
@@ -413,6 +431,9 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                             def revalidate():
                                 if time.monotonic() >= deadline:
                                     raise RefreshBlocked("REFRESH_RUNTIME_LIMIT")
+                                state['free_bytes_before_publication']=shutil.disk_usage(data_dir).free
+                                if state['free_bytes_before_publication'] < (4 << 30)+(1 << 20):
+                                    raise RefreshBlocked('DISK_RESERVE: publication would violate the filesystem reserve')
                                 current = stage_scope.load(data_dir, policy, repo)
                                 if canonical(current) != canonical(pin):
                                     raise RefreshBlocked("STAGE_PIN_CHANGED_BEFORE_PUBLICATION")
@@ -446,8 +467,9 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("data", "repo", "policy", "journal"):
+    for name in ("data", "repo", "policy"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument('--journal', help='Explicit source-bound journal, or omit to use the managed current fixture observer')
     parser.add_argument("--slo-target", type=float, required=True)
     parser.add_argument("--window", type=float, required=True)
     parser.add_argument("--lookback", type=float, required=True)

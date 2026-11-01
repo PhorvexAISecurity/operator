@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh the measured current stage fixture endpoint cohort
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
+Environment=PYTHONPATH=/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE/benchmark/worker:/home/hami/phorvex-benchmark/releases/REVIEWED_SOURCE
+Environment=PATH=/home/hami/.local/bin:/usr/local/bin:/usr/bin:/bin
+# No fixed old-source --journal: resolve the supervisor's verified current scope.
+# 600s is this explicitly declared installation default, never a rewritten request.
+ExecStart=/home/hami/phorvex-benchmark/runtime/python/bin/python -B benchmark/worker/endpoint_refresh.py --data /home/hami/phorvex-benchmark/stage-data --repo /home/hami/phorvex-benchmark/operator-refactored --policy phorvex-staging-demo/stage-bench-defense --slo-target .9 --window 600 --lookback 600 --worth-threshold 0 --ticks 64 --timeout 900 --max-corpus-bytes 2147483648
+TimeoutStartSec=950
+SuccessExitStatus=2
+UMask=0077
+NoNewPrivileges=true

@@ -71,7 +71,7 @@ def _manifest(repo, digest):
     return json.loads(raw), m
 
 
-def _layer(m, digest, workdir):
+def _layer(m, digest, workdir, max_bytes=MAX_LAYER_BYTES):
     url = _ecr(['get-download-url-for-layer', '--registry-id', m['account'], '--repository-name', m['repo'], '--layer-digest', digest], m['region'])['downloadUrl']
     if not url.startswith('https://'):
         raise BinaryError('layer download URL is not HTTPS')
@@ -81,7 +81,7 @@ def _layer(m, digest, workdir):
     with urllib.request.urlopen(url, timeout=120) as response, open(path, 'wb') as out:
         for chunk in iter(lambda: response.read(1 << 20), b''):
             size += len(chunk)
-            if size > MAX_LAYER_BYTES:
+            if size > max_bytes:
                 raise BinaryError('layer exceeds the size bound')
             h.update(chunk)
             out.write(chunk)
@@ -96,8 +96,16 @@ def ensure_binary(data_dir, image=None, platform=('linux', 'amd64')):
     target = data_root(data_dir) / 'bin' / image['digest'].replace(':', '-')
     identity_path = target / 'identity.json'
     cached = read_json(identity_path)
-    if cached and Path(cached['path']).exists() and sha256_file(cached['path']) == cached['binary_sha256']:
-        return cached
+    if cached and Path(cached.get('path', '')).is_file() and sha256_file(cached['path']) == cached.get('binary_sha256'):
+        if cached.get('image_digest') != image['digest'] or cached.get('image') != image['image']:
+            raise BinaryError('cached replay identity differs from the requested immutable image')
+        version = json.loads(run_isolated([cached['path'], '-version'], timeout=30))
+        if version.get('gitSHA') != cached.get('git_sha'):
+            raise BinaryError('cached replay embedded source differs from its identity')
+        enriched = {**cached, **capabilities(version)}
+        if enriched != cached:
+            write_json(identity_path, enriched)
+        return enriched
     manifest, m = _manifest(image['repository'], image['digest'])
     platform_digest = image['digest']
     if manifest.get('mediaType') in INDEX_TYPES or 'manifests' in manifest:
@@ -109,20 +117,33 @@ def ensure_binary(data_dir, image=None, platform=('linux', 'amd64')):
         manifest, m = _manifest(image['repository'], platform_digest)
     target.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=target) as work:
+        downloaded = 0
         for layer in reversed(manifest.get('layers', [])):
             if 'gzip' not in layer.get('mediaType', '') and not layer.get('mediaType', '').endswith('.tar'):
                 continue
-            blob = _layer(m, layer['digest'], work)
-            with tarfile.open(blob, 'r:*') as tar:
-                member = next((x for x in tar.getmembers() if x.name.lstrip('./') == BINARY and x.isfile()), None)
-                if member is None:
-                    continue
-                if member.size > 256 << 20:
-                    raise BinaryError('binary exceeds the size bound')
-                data = tar.extractfile(member).read()
+            available = MAX_LAYER_BYTES-downloaded
+            if available <= 0 or layer.get('size', 0) > available:
+                raise BinaryError('image replay extraction exceeds the total layer download bound')
+            blob = _layer(m, layer['digest'], work, max_bytes=available)
+            downloaded += blob.stat().st_size
+            data = None
+            with tarfile.open(blob, 'r|*') as tar:
+                decoded = 0
+                for number, member in enumerate(tar):
+                    decoded += member.size+512
+                    if number >= 100000 or decoded > 2 << 30:
+                        raise BinaryError('image layer decoded archive exceeds extraction bounds')
+                    if member.name.lstrip('./') == BINARY and member.isfile():
+                        if member.size > 128 << 20:
+                            raise BinaryError('binary exceeds the size bound')
+                        data = tar.extractfile(member).read((128 << 20)+1)
+                        break
+            if data is None:
+                continue
             path = target / BINARY
             tmp = target / (BINARY + '.tmp')
-            tmp.write_bytes(data)
+            with tmp.open('wb') as stream:
+                stream.write(data); stream.flush(); os.fsync(stream.fileno())
             os.chmod(tmp, 0o755)
             os.replace(tmp, path)
             version = json.loads(run_isolated([str(path), '-version'], timeout=30))
@@ -130,8 +151,13 @@ def ensure_binary(data_dir, image=None, platform=('linux', 'amd64')):
                         'image_digest': image['digest'], 'platform_manifest_digest': platform_digest, 'layer_digest': layer['digest'],
                         'binary_sha256': sha256_file(path), 'git_sha': version.get('gitSHA'), 'brain_image': version.get('brainImage'),
                         'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'),
-                        'overridable_parameters': version.get('overridableParameters'), 'extracted_at': utc()}
+                        'overridable_parameters': version.get('overridableParameters'), 'extracted_at': utc(),
+                        **capabilities(version)}
             write_json(identity_path, identity)
+            for durable in (path, identity_path, target):
+                descriptor = os.open(durable, os.O_RDONLY)
+                try: os.fsync(descriptor)
+                finally: os.close(descriptor)
             return identity
     raise BinaryError('brain-replay is not present in this image (the deployed release predates the Math Lab)')
 
@@ -146,13 +172,26 @@ def run_isolated(args, timeout=1800, cwd=None):
     return result.stdout
 
 
-def local_identity(path):
+def local_identity(path, timeout=30, readonly=False):
     """Identity for a locally supplied binary (development/tests). Never used for a matched claim."""
-    version = json.loads(run_isolated([str(path), '-version'], timeout=30))
+    if readonly:
+        result = subprocess.run([str(path), '-version'], capture_output=True, text=True, timeout=timeout, cwd='/',
+                                env={'PATH':'/usr/bin:/bin','HOME':'/nonexistent','TMPDIR':'/nonexistent','LANG':'C.UTF-8'})
+        if result.returncode:
+            raise BinaryError('verified replay version observation failed')
+        version = json.loads(result.stdout)
+    else:
+        version = json.loads(run_isolated([str(path), '-version'], timeout=timeout))
     return {'schema_version': 'math-lab.replay-binary.v1', 'path': str(path), 'image': None, 'image_digest': None,
             'binary_sha256': sha256_file(path), 'git_sha': version.get('gitSHA'), 'brain_image': version.get('brainImage'),
             'snapshot_schema': version.get('snapshotSchema'), 'replay_schema': version.get('replaySchema'),
-            'overridable_parameters': version.get('overridableParameters'), 'local': True}
+            'overridable_parameters': version.get('overridableParameters'), 'local': True,
+            **capabilities(version)}
+
+
+def capabilities(version):
+    return {'endpoint_study_mode': version.get('endpointStudyMode'),
+            'study_candidates_schema': version.get('studyCandidatesSchema')}
 
 
 def overridable(identity):

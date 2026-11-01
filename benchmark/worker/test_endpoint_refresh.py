@@ -182,13 +182,36 @@ class RefreshTests(unittest.TestCase):
         def change_after_export(args,*rest):
             original(args,*rest)
             if '-export-study-candidates' in args:
-                engine=read_json(self.data/'mathlab/study-engine.json'); engine['classification']='changed'
-                atomic_json(self.data/'mathlab/study-engine.json',engine)
+                engine_path=Path(read_json(self.data/'mathlab/stage.json')['study_engine_reference']['path'])
+                engine=read_json(engine_path); engine['classification']='changed'
+                atomic_json(engine_path,engine)
         with mock.patch.object(refresh,'run_replay',side_effect=change_after_export):
             result=self.run_refresh()
         self.assertEqual(result['state'],'BLOCKED')
-        self.assertIn('STUDY_ENGINE_CHANGED',result['reason'])
+        self.assertIn('study engine reference changed',result['reason'])
         self.assertEqual(self.pointer().read_bytes(),before)
+
+    def test_free_reserve_block_retains_previous_dataset_before_any_sync(self):
+        self.assertEqual(self.run_refresh()['state'],'READY');before=self.pointer().read_bytes()
+        usage=refresh.shutil._ntuple_diskusage(10<<30,7<<30,3<<30)
+        with mock.patch.object(refresh.shutil,'disk_usage',return_value=usage), \
+             mock.patch.object(refresh.stage_cli,'sync_stage',side_effect=AssertionError('capacity must be checked before sync')):
+            result=self.run_refresh()
+        self.assertEqual(result['state'],'BLOCKED');self.assertIn('DISK_RESERVE',result['reason'])
+        self.assertEqual(self.pointer().read_bytes(),before)
+
+    def test_same_source_review_reinstall_retains_previous_pinned_evidence(self):
+        prior=read_json(self.data/'mathlab/stage.json')
+        installed=stage_scope.study_engine(self.data,prior)
+        original={item['path']:Path(item['path']).read_bytes() for item in installed['review_evidence']}
+        review=copy.deepcopy(installed['review_receipt']);review['reviewer']='another-independent-reviewer'
+        evidence=self.root/'evidence.txt';evidence.write_text('different actual review evidence')
+        review['evidence_sha256']=[hashlib.sha256(evidence.read_bytes()).hexdigest()]
+        receipt=self.root/'review.json';atomic_json(receipt,review)
+        refresh.stage_cli.install_study_engine(self.data,self.repo,installed['candidate']['path'],
+                    installed['source_revision'],installed['base_local']['path'],[receipt,evidence])
+        self.assertEqual({p:Path(p).read_bytes() for p in original},original)
+        self.assertEqual(stage_scope.study_engine(self.data,prior),installed)
 
     def test_wrong_observer_source_fails_before_sync(self):
         wrong=observed.Journal(self.root/'wrong.sqlite',{**self.journal.scope,'source_revision':'f'*40})
