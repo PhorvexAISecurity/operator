@@ -1,0 +1,45 @@
+{
+  "schema": "phorvex-bench.final-staged-review.v1",
+  "observed_at": "2026-11-01T22:28:45.405527+00:00",
+  "verdict": "PASS_STAGED_METADATA_AND_DECLARED_BOUNDED_ADMIN_PLAN",
+  "head": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "branch": "fix/benchmark-selfserve-evidence",
+  "index_sha256": "3bd22b04a1d606b28cbd2c32222d7eab33fd5df8233a716eb7c94f0a6acff0b7",
+  "staged_paths": 175,
+  "scope": "All staged paths workflow-only; exact product/build/chart/test leaf modes and blobs equal actual main808. No unstaged tracked edits.",
+  "structural_review": {
+    "path": "structural.json",
+    "sha256": "ff24b723a67c76f4826c3a4dab229034a153f304591360d6308606d1c8d94e17",
+    "superseding_delta": [
+      "workflow/issues/MASTER_ISSUES.md",
+      "workflow/issues/entries/M-195.md"
+    ]
+  },
+  "M195_present_tense_fixed": true,
+  "post_main_peer_manifest_members_verified": 17,
+  "source_and_claims": [
+    "Formal L3 uses actual brainB1/d208, distinct from installed runtime225 and chart/main808;169runtime equivalence and actualpost-main receipts remain explicit.",
+    "Twelve round artifacts and thirteen fix retention entries satisfy schema/formats/scoped Git bytes/hash references; compressedarchives retained and extracted dirs excluded.",
+    "Original W864000/L86400/active-policy request remains BLOCKED for absent qualified attribution/history, no model/test/build/replay, no fake ten-day success.",
+    "Two short fixture controls share one64-tick cohort and use explicit43second priors; forecasts are not realized costs or security efficacy.",
+    "Main handover/rootowner merge are observed facts; earlier failures and main Release prepared-batch failure remain distinct."
+  ],
+  "administrative_plan_review": {
+    "publisher_script": "/workspace/.phorvex-test-tmp/publish-benchmark-evidence.py",
+    "publisher_sha256": "69bc7a129cb9f78d75d5d37e6d11ffd76a1540259ff580ce223ece25eefe4b0a",
+    "not_executed_by_reviewer": true,
+    "bounded_changes": [
+      "Privately read existingPAT once; verify currentremote808, then remove only exacttask token/askpass directory and assertabsence.",
+      "Retain actualabsence receipt and exact13th campaigncopy/retentionentry.",
+      "CLOSED via existingCLI with cleanupPASS and current next_action, preserving original10d limitations.",
+      "Run existing private/index/render/doctor checks; stageworkflow-only records/evidence excluding raw extracted dirs; exactproductdiff guard.",
+      "Commit configuredauthor message, nonforcepush only successorbranch, create evidencePR; no mainpush/merge.",
+      "Use transient privatechild Git header/environment; no credential values in argv, retained files or report."
+    ]
+  },
+  "remaining_checks": [
+    "Start prepared CI watcher only on leadready; require credential_loaded_once before lead removesfiles.",
+    "Actual administrativeabsence, CLOSEDtransition, finalvalidationreceipt and newcommit/PR/CI remain future observations, not predeclaredPASS.",
+    "Publisher-produced additivefiles may be verified after creation; no source/runtime delta permitted."
+  ]
+}

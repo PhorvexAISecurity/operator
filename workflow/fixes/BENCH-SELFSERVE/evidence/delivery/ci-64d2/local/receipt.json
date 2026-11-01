@@ -1,0 +1,9 @@
+{
+  "at": "2026-11-01T21:43:47.148973+00:00",
+  "command": "PATH=/workspace/.phorvex-tools/python311/python/bin:$PATH TMPDIR=/workspace/.phorvex-test-tmp bash workflow/tools/check.sh",
+  "exit_code": 0,
+  "tests": 301,
+  "result": "PASS",
+  "log_sha256": "0831b94b4c3fa14e279f82f6d6e8f2c7b54c4c98df107ccda1c776069ec3e00a",
+  "scope": "Metadata repair check; not a replacement for actual GitHub CI or live acceptance."
+}

@@ -1,0 +1,22 @@
+{
+  "verdict": "PASS_EXACT_REQUEST_TO_VALIDATION_TO_EXECUTION",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:56:54.604580+00:00",
+  "base_review_sha256": "640fd3bc548cb9e1dd3c6b5c080bafdb6ccbe28dbf123cb0cd5aa335aad395a1",
+  "controls": [
+    {
+      "request": "fixture-endpoint-600s.txt",
+      "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667",
+      "child": "be9bc9fcd68f",
+      "normalized_request_exact": true
+    },
+    {
+      "request": "fixture-endpoint-custom.txt",
+      "sha256": "ce579a1c7b6d49efaaf771e0e086a96ea59eb098786848a4c4b1495ca49e8777",
+      "child": "4b45b14bbdb3",
+      "normalized_request_exact": true
+    }
+  ],
+  "default_template_matches_installed_runtime_git_blob": true,
+  "custom_matches_preregistered_literal": true
+}

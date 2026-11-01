@@ -1,0 +1,5 @@
+{
+  "path": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/artifact-review.json",
+  "sha256": "640fd3bc548cb9e1dd3c6b5c080bafdb6ccbe28dbf123cb0cd5aa335aad395a1",
+  "verdict": "PASS_BOUNDED_ACTUAL_NATIVE_FIXTURE_ENDPOINT_CONTROLS"
+}

@@ -1,0 +1,2957 @@
+{
+  "verdict": "PASS_CURRENT_NATIVE_BASELINES_64_EACH",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:26:40.635722+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "capture_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "capture_image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "pin_sha256": "a5f4f0909efe81b3277ddea029550eab970f5ff107fa4bc1738b90ed89173bcb",
+  "reconciliation_status_sha256": "e8ef1f6c0075635b54ae2ce4204d97f933d689d8c7f6c6b626325ad8383de41b",
+  "reconciliation_started_at": "2026-11-01T21:19:49.989903Z",
+  "reconciliation_finished_at": "2026-11-01T21:25:07.075177Z",
+  "reconciliation_baseline_ticks": {
+    "phorvex-staging-demo/demo-api-defense": 64,
+    "phorvex-staging-demo/stage-bench-defense": 64
+  },
+  "native_binary_path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903/brain-replay",
+  "native_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+  "engine_classification": "same-source image-native offline study; no cross-source review claim",
+  "actual_stage_observation": {
+    "brain": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+      "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "container": "brain",
+      "pods": [
+        {
+          "name": "staging-brain-586ccc7d47-mlrnj",
+          "uid": "3eaa3f61-855d-49e7-a471-c0996f268fab"
+        }
+      ],
+      "embedded_version": {
+        "service": "brain",
+        "version": "0.10.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "manager": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+      "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-phorvex",
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "container": "manager",
+      "pods": [
+        {
+          "name": "staging-phorvex-947f858bf-nlp4n",
+          "uid": "750d0653-81e4-4dba-b719-b8ad29498972"
+        }
+      ],
+      "embedded_version": {
+        "service": "manager",
+        "version": "0.16.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "capture": {
+      "enabled": true,
+      "policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "directory": "/var/lib/phorvex/math-lab",
+      "persistent_claim": "staging-brain-mathlab",
+      "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "cost_evidence": true
+    },
+    "policies": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "workload_generation": 3,
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140"
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "generation": 1,
+        "mode": "dryRun",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "stage-bench-api"
+          }
+        },
+        "workload_name": "stage-bench-api",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "workload_generation": 1,
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+      }
+    }
+  },
+  "baseline_evidence": [
+    {
+      "policy": "phorvex-staging-demo/demo-api-defense",
+      "policy_uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:f32ccfdfff6944ec924d671cc667810a0901191da5028df6bf5b092ced29066c.json",
+      "sha256": "56b154ed04a88bd2af45220ddb370180781f053251473d84c288cb9bdb4d5300",
+      "cohort_path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/cohorts/sha256:ba3dbb8c916bb8f5c92ea5b525f6c905d9a0e158c998650f20200c6eed50535c",
+      "ticks": 64,
+      "distinct_snapshot_digests": [
+        "e44e6be7abff58140d7a0b9674d4212c9f6247ebf8fe900f7e645fd7a9bfd2d2",
+        "aa155ffddea336c395bca02667d6b985a29bcd3c4bf9fede16675e2294ce2466",
+        "5140bada52348768941806c7f4a7886088ef34a4c79e37da101ef2946a6006b7",
+        "b4795498d66c5ddfe2c76fbe5a402a9a53afe1f2a7ec08c4c06c7fd04208c61f",
+        "6440e7b93723ffb3a1d822bbc6b08a66618cc59370e1b4437ec01c19dc4e91a5",
+        "07abb2cb93c2677588615d68b20aed2801cc3bfe24cdb5869178f457cb110f4e",
+        "c7ecc9c06abc12f27baa0a04599dd1d9a215eb9b7a2086c031ed3011154f8674",
+        "87e4ecf3c6a4cdb00373d846e10298529afa4efdc3651829affc3d3a18a01521",
+        "cd764d65a1165f820a12a219470e137fbebd7f9156ab2590b072e45eab8d86f7",
+        "ea22c1dcfb4d130e11512572210953055830007da4a836e59a7248f2aaf39ddb",
+        "d96d8e58f30421fb0ec71998e88a6056f3239ee1d9490a3842553a1fbd928ba6",
+        "117bed3bd81110bf90b187f679f3dba8245db1bc96098561b9ea069fbc4f0e96",
+        "70aa83f0dd826d46efe58b0c8e52ff2cf43165a209c89c1ec0144d6e4b39a1c0",
+        "dd2b2be341a2b510e0c6bd75b733535d45888c3a6efac8fc0701b530ec0bfc92",
+        "123854c45d02217da236b0fd4c76371bc6d89425db3ef2c6ee6a525ad4fa344e",
+        "da6843d69439432e8e13398522525f728bc314cfd9c05d11197b75fa947d5c14",
+        "52b6720276eff2124c7da08da853bc224ed0ba1ba0b072bcf824abba05e8a553",
+        "87336b49e5f13ceae6d2730fb593de81f8d7d0f707d851887367067c05c20e42",
+        "7f3ee11f657111f457fc286ed9204d6573778d3d97f0b83f3f8b10661f8b8c94",
+        "867791ad047471602c5d11fb838882291ab22fda5b06874b5fc62d474554703e",
+        "8c0657ece3a9d37b2b7a1962bba5dd34ffd0749ce8f26d5eaeb94bf458f8da3f",
+        "0e19d484ba099c447bd3d6ba76e97f091cc1bf2286d09fbc0a4ea8b0d3c3b4c1",
+        "6e7c8974ec706fbc6c47fa26c36a8cf9592a4bf64d74596d7921927345222f8e",
+        "ea4177c60f26d50ae163543a37ed6f94ce43d6a715d14a1a2c01180aee48e016",
+        "90e1da489bf29f7795f186bcc290ac1f64a43d24c2bcc9fdc11f20a70e72fbf1",
+        "8616e1be53be020fb3eb11694aa2d7ca99ac36204611d2744390a6d8a958c976",
+        "e7c3d4d0354f688c310cfb88daa6edc243f3354e983830f9ec49f1fc2b626532",
+        "03dfd29f242415ef8dd3bfb4a58e28457a8fc35fb867473ade7c8ed601151766",
+        "62c82e4bf54ef9ebde59d97b3929537229c6fbf6e0712ff71d8412563c245e98",
+        "b0a7602b0806c25730df1f09ea6ea562ce5f9738241bed27f4b9b08514c31d32",
+        "69288e1d981be2ab0b14978fa0dbd6a953501971f1a65227944bfbed19936719",
+        "77d1cf2734d25281bd4a3cf82de9600b572f9621fb064a00bb0b4493c78aaaf2",
+        "f79ad063d55de48a4ccf3cd5819aa7dfa9e83b966bd538495b52727758761795",
+        "b08bc3485b789330d2492725ddf1c5423aa8e347b2761656883ed17ff76888a6",
+        "4ff3802cea3f612a89d51e8c3dc14844e70e25dfaa9add396d128a10c3c8d0a6",
+        "8f5b294ca3c74ecb52a903ce728edf9f7d939426acec99f3d66eb2b9823e982a",
+        "ff2c6154c8a831b793f32bbcf71369525feebd6348e41219c95d2c4a828e4e62",
+        "c56911151ec85eb33d0c0dbdb1c9e6a6ca6e9db3094c98a62cce980782cc6ad4",
+        "34bc657fb580dc56464724ea8b624d1e4aa0a0f2da52f1624f3b4fbf87a4cd66",
+        "b8c26a2ede4544e0cb89e29dbd4ea3d806edbaeb56b0ecaa8ef5db726f676be8",
+        "ee8a13377a6a2c7f54aa938d5d42023c405b84208ce59b29ac45aa370c8054d6",
+        "80d9bedc1401fdadedd378fb33de6dfa413faef8c2ba205c86f892dde0a14477",
+        "2d4bdb5b46624c907b4ef6472877d9a1abfea95fff763ab0c0c88122fd6e96f6",
+        "16c5dc12d3a25a38032a96d09352fe38f4385e2060f2bc164cdf79cf49bd4934",
+        "72f39300521ae0d07e21cc0fc3d25dc7b97fb2c36c3178f1ff643b672c07a088",
+        "d922f64b42ff543d6888e84cba21299421928156b26fdcc9eb5167085e338845",
+        "577ba6284675e57f2d1b02091c5f106b4a60a84c6ee0697995972ee2a37c4b56",
+        "27fedc1fac313ac410c01e40445eb76b4625d2e98ece516f78497de657795b5b",
+        "6cbbeacc2f7ec52c7cd08045507c9915371245da3ce8fe3932f73731a3784be6",
+        "6d93a0ac2cbf242b0e276af529ae6100ee0f1bdb96ba64d445decf04ed178e7c",
+        "608cf07cbcd630f50f5723a6e33041e83ebd3f7e8b7e871420b4260a6a749fee",
+        "16ab11467622f44542594e030917c629cb92b0c1cb2d9f97c0c7246744783095",
+        "f534aa039f46ae08b36eefe6cf9ebae45d3eba077dd54dcbf13a5eca07a6d14a",
+        "a898a83ed5b39ba0c7920e0e48e0d7c5cf76a1256586e07efc69021741264fcb",
+        "98a149a6476372b209b4313a299024da03e161775d0ffc86d1588358e7b34ada",
+        "13b4360507166e529022a1653959d0440f52bc3e3d9f9d9fae62d1a3ec6a3642",
+        "c5fa4dee366015b760c8e4622a61ae3fbb53e44902bcb11e8dd17f13b1876712",
+        "db96fffb06ee5e1b171bd1d06f6f1d8f80a513cf019b5c142874e0b6537b22a2",
+        "42cfdd73ad9313c5e8c8f0b8005ce8ebb7efc8ce983b56bc191cd2674f2eb74e",
+        "adc5e059c459edb521c8cdd31fe942944da2d22b1151a753b9847c884aafff48",
+        "1cff507fe9bb0d58184ad436cdacc561478ebcbc2f1f5878931ee6549e6577f7",
+        "ec4453c48f41dda50f8c757a709f1bc2f5d974abde0f2630a5b5a4343841e965",
+        "3fda105e12670811321e23faf7ceb72484eea85b2fc17efaeefda5a1a7e6b827",
+        "8adf9336716cb50fec43fa9424e8524b9849a62de408438bda07d39ba4326638"
+      ],
+      "rows": [
+        {
+          "snapshot_digest": "03dfd29f242415ef8dd3bfb4a58e28457a8fc35fb867473ade7c8ed601151766",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4d754a8338c0e7723d1d2abb5f5bdf405e195fb7950f5aecd388801623331965"
+        },
+        {
+          "snapshot_digest": "07abb2cb93c2677588615d68b20aed2801cc3bfe24cdb5869178f457cb110f4e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "e01875f9bfa6bc624fa4d55174d882ecc65a5e35817f463fa7680a9edfbeb9d7"
+        },
+        {
+          "snapshot_digest": "0e19d484ba099c447bd3d6ba76e97f091cc1bf2286d09fbc0a4ea8b0d3c3b4c1",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f6dd1ed4facef727edef195943139ff4a26be182c0977c4de9b67fb13e4384aa"
+        },
+        {
+          "snapshot_digest": "117bed3bd81110bf90b187f679f3dba8245db1bc96098561b9ea069fbc4f0e96",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b229c33d4a0c3182cce8ba1ea7cc6708b16b9c31cb57138d4d29cebf14ad6f78"
+        },
+        {
+          "snapshot_digest": "123854c45d02217da236b0fd4c76371bc6d89425db3ef2c6ee6a525ad4fa344e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "18ef6804105a85fec2dfb97bc153d8a7e001aa41e851d50a318ffe7e61e025c0"
+        },
+        {
+          "snapshot_digest": "13b4360507166e529022a1653959d0440f52bc3e3d9f9d9fae62d1a3ec6a3642",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "35ed0f3776ed5254ebb404bb534b0ef7c475aafbe331ea46bc462d2664bc7257"
+        },
+        {
+          "snapshot_digest": "16ab11467622f44542594e030917c629cb92b0c1cb2d9f97c0c7246744783095",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "387878c6914196da3a884771d369cd2e09f0fe8884f6e676ea1856ca2321d662"
+        },
+        {
+          "snapshot_digest": "16c5dc12d3a25a38032a96d09352fe38f4385e2060f2bc164cdf79cf49bd4934",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4e724d2cfd956a0b6007d4a772d1ffded0e5f7e7d93727d74d29641fd865c3f8"
+        },
+        {
+          "snapshot_digest": "1cff507fe9bb0d58184ad436cdacc561478ebcbc2f1f5878931ee6549e6577f7",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "629b04313573f80c2a6b5cea237b8a4f4f52eca274a0fbeac5bc7065a5b67706"
+        },
+        {
+          "snapshot_digest": "27fedc1fac313ac410c01e40445eb76b4625d2e98ece516f78497de657795b5b",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "43340ef1d76415d73069c6ad4d06333ee05260c9b7e753d48bcd9c26bdab8ec4"
+        },
+        {
+          "snapshot_digest": "2d4bdb5b46624c907b4ef6472877d9a1abfea95fff763ab0c0c88122fd6e96f6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "80f1f838b044cedd14cbd024c24b88170ac2fde2749276fdf99155d86bcbde50"
+        },
+        {
+          "snapshot_digest": "34bc657fb580dc56464724ea8b624d1e4aa0a0f2da52f1624f3b4fbf87a4cd66",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "2c0ce3b95607ace83c338f6e4c10b55cf7323863319cc43173dbe183104bb990"
+        },
+        {
+          "snapshot_digest": "3fda105e12670811321e23faf7ceb72484eea85b2fc17efaeefda5a1a7e6b827",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "6e9cf78eb9e6ceea362236991722add1f69322c47098cb106b7f846524a4f538"
+        },
+        {
+          "snapshot_digest": "42cfdd73ad9313c5e8c8f0b8005ce8ebb7efc8ce983b56bc191cd2674f2eb74e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "e458494d0be5286c1cc9766b540dd399240bfd73e98c8762ed1d74a8fbdf36e5"
+        },
+        {
+          "snapshot_digest": "4ff3802cea3f612a89d51e8c3dc14844e70e25dfaa9add396d128a10c3c8d0a6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "3279060ad2a4b3b74eb81b9a005b754fb15c3d1071c1dc269a3f28257528279f"
+        },
+        {
+          "snapshot_digest": "5140bada52348768941806c7f4a7886088ef34a4c79e37da101ef2946a6006b7",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "34d5ada489bf2efcaa4ae80bcc69bc2981fbeed8833dffa6c6c25dd472812fe4"
+        },
+        {
+          "snapshot_digest": "52b6720276eff2124c7da08da853bc224ed0ba1ba0b072bcf824abba05e8a553",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d38265101519fb21a0d72722e55e9aba647bcf4fb44a20a7ff99edfeb7d9653c"
+        },
+        {
+          "snapshot_digest": "577ba6284675e57f2d1b02091c5f106b4a60a84c6ee0697995972ee2a37c4b56",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "1d2f113cd627290a587724414ddba1e281343c0f2decd7c090242c1ffb1ae4e6"
+        },
+        {
+          "snapshot_digest": "608cf07cbcd630f50f5723a6e33041e83ebd3f7e8b7e871420b4260a6a749fee",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ac5de8552fd6b750139768adf8822a6055acc6372f1f2645ae48b56b65ba69c9"
+        },
+        {
+          "snapshot_digest": "62c82e4bf54ef9ebde59d97b3929537229c6fbf6e0712ff71d8412563c245e98",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b5d9e9b6042aa97e43f48c43d58647e6ed8696fe86e0fe35c89a52d24baadd68"
+        },
+        {
+          "snapshot_digest": "6440e7b93723ffb3a1d822bbc6b08a66618cc59370e1b4437ec01c19dc4e91a5",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "14c448cd18967fa48b129367417c814a6471e0d10c85fa3ab8c55748f235ea07"
+        },
+        {
+          "snapshot_digest": "69288e1d981be2ab0b14978fa0dbd6a953501971f1a65227944bfbed19936719",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "01005b636ac0eb303b9f51ea24d01f34644037badcb22d63e8b6c38a47079ab0"
+        },
+        {
+          "snapshot_digest": "6cbbeacc2f7ec52c7cd08045507c9915371245da3ce8fe3932f73731a3784be6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "81b3622ceda68fe165e0bc9f89da0aca663d144a2fa550d3108ce01d785f3c41"
+        },
+        {
+          "snapshot_digest": "6d93a0ac2cbf242b0e276af529ae6100ee0f1bdb96ba64d445decf04ed178e7c",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "2d84fbf24e142caf17d0a385cd09c19c2102e950aa6575aeb6f8818624ede72c"
+        },
+        {
+          "snapshot_digest": "6e7c8974ec706fbc6c47fa26c36a8cf9592a4bf64d74596d7921927345222f8e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "aa5e6d5cffaf1472b0d25de4a69f53f1d76459bec21ce297b20f7f3a26046913"
+        },
+        {
+          "snapshot_digest": "70aa83f0dd826d46efe58b0c8e52ff2cf43165a209c89c1ec0144d6e4b39a1c0",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c62ef1db54b9d5c3d021e4bff9362c1b9dcbafd19a91e7969b304f76d4c7dde9"
+        },
+        {
+          "snapshot_digest": "72f39300521ae0d07e21cc0fc3d25dc7b97fb2c36c3178f1ff643b672c07a088",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "5de522a60ebbf1a5d1862a67106ea67d5d8063b56e5db7dd78f3cfd7628915b0"
+        },
+        {
+          "snapshot_digest": "77d1cf2734d25281bd4a3cf82de9600b572f9621fb064a00bb0b4493c78aaaf2",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "0ece5f1b6e344a2e3f956aa23d60865416cb67d58781adc5eee6c370fd30b274"
+        },
+        {
+          "snapshot_digest": "7f3ee11f657111f457fc286ed9204d6573778d3d97f0b83f3f8b10661f8b8c94",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "39c4a566d922e22ad238211e66f0606b0057d650e520c3ce2fe6b7fb0c611874"
+        },
+        {
+          "snapshot_digest": "80d9bedc1401fdadedd378fb33de6dfa413faef8c2ba205c86f892dde0a14477",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "5f3168eede5f5ad77225edb58caad9312691510ce94647c0721ef955cc832bdc"
+        },
+        {
+          "snapshot_digest": "8616e1be53be020fb3eb11694aa2d7ca99ac36204611d2744390a6d8a958c976",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "3b5661253a80b989eaa8def15f1dec7168f58abfcf175a0ee2db4f82ff1244d5"
+        },
+        {
+          "snapshot_digest": "867791ad047471602c5d11fb838882291ab22fda5b06874b5fc62d474554703e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "554686debfc03da773d114ea25a603e54d112f3104330f0120b0fe2410b2a3a4"
+        },
+        {
+          "snapshot_digest": "87336b49e5f13ceae6d2730fb593de81f8d7d0f707d851887367067c05c20e42",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d3e3a636675d04607ae11eec5de213fcabd063f423c1f22be1f07091a2387fda"
+        },
+        {
+          "snapshot_digest": "87e4ecf3c6a4cdb00373d846e10298529afa4efdc3651829affc3d3a18a01521",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ed63871f46067cabbc0ad09bbc6f3f43de31d3d675cec6649ac1009d9beb3e9d"
+        },
+        {
+          "snapshot_digest": "8adf9336716cb50fec43fa9424e8524b9849a62de408438bda07d39ba4326638",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4c1a4bef0d4dba5992a8676a8cd2dbcf324f18cd4b67cd43fc7fd553851bb43f"
+        },
+        {
+          "snapshot_digest": "8c0657ece3a9d37b2b7a1962bba5dd34ffd0749ce8f26d5eaeb94bf458f8da3f",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b563d9f25cc7d8bb3be768240dfd277e0bbbc14ca5e94fcacb87b1e284421a29"
+        },
+        {
+          "snapshot_digest": "8f5b294ca3c74ecb52a903ce728edf9f7d939426acec99f3d66eb2b9823e982a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "75847f874c13af486d81eb4e2b5e0961b44abbb1c959b223011ea8452a897836"
+        },
+        {
+          "snapshot_digest": "90e1da489bf29f7795f186bcc290ac1f64a43d24c2bcc9fdc11f20a70e72fbf1",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "135c9d6274eb2fd9b2e4de79fa470bbf00bb37494548363c4f245a5d73983def"
+        },
+        {
+          "snapshot_digest": "98a149a6476372b209b4313a299024da03e161775d0ffc86d1588358e7b34ada",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "82d9b2cbdb04e654d8ac6496c29726f01998424872c7de29a5b998975e2e3945"
+        },
+        {
+          "snapshot_digest": "a898a83ed5b39ba0c7920e0e48e0d7c5cf76a1256586e07efc69021741264fcb",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4dec4bfa4d5db96950f7063eb6f6651bf77433776be2987111d2e6e4a8684689"
+        },
+        {
+          "snapshot_digest": "aa155ffddea336c395bca02667d6b985a29bcd3c4bf9fede16675e2294ce2466",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "10c7f91cee3aa428aee68a647cb383298766bc6433e6f1d827b04da2e2bf04d4"
+        },
+        {
+          "snapshot_digest": "adc5e059c459edb521c8cdd31fe942944da2d22b1151a753b9847c884aafff48",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "08d9ba7f98dc02eb6c524881cb3795a2cf7ec491120e739a885d8353f80fa0e4"
+        },
+        {
+          "snapshot_digest": "b08bc3485b789330d2492725ddf1c5423aa8e347b2761656883ed17ff76888a6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "db86ac55c2911a971d95c64c475d793b8d24b33dd2f360b1aa346972647a7db8"
+        },
+        {
+          "snapshot_digest": "b0a7602b0806c25730df1f09ea6ea562ce5f9738241bed27f4b9b08514c31d32",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f5b1066a77eb602f6dccf036f56b6e41205fec9f443b91dbb9740a3b2ec43248"
+        },
+        {
+          "snapshot_digest": "b4795498d66c5ddfe2c76fbe5a402a9a53afe1f2a7ec08c4c06c7fd04208c61f",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "86f48b8b59e0d900025afeba43d9ac7403503d7ef9b3bffd4e8b6b4be817c998"
+        },
+        {
+          "snapshot_digest": "b8c26a2ede4544e0cb89e29dbd4ea3d806edbaeb56b0ecaa8ef5db726f676be8",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "738e91361ddc9c72f444aa20cd87516ddb7cce757dcc38f295b710342a5f6c41"
+        },
+        {
+          "snapshot_digest": "c56911151ec85eb33d0c0dbdb1c9e6a6ca6e9db3094c98a62cce980782cc6ad4",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "797091cd8b78a2be616548c0dcda6197b9a49ecb718489a5c17c63494122e9cc"
+        },
+        {
+          "snapshot_digest": "c5fa4dee366015b760c8e4622a61ae3fbb53e44902bcb11e8dd17f13b1876712",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "fae69d0fc5d4ff6b6cc127d1a1edaf18aa8c719c659b0575e9aeb05d1faf8471"
+        },
+        {
+          "snapshot_digest": "c7ecc9c06abc12f27baa0a04599dd1d9a215eb9b7a2086c031ed3011154f8674",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "2bd236b9fd199b7298b048745ba3b0851655f97b5a2b7eb866c38de680d2698c"
+        },
+        {
+          "snapshot_digest": "cd764d65a1165f820a12a219470e137fbebd7f9156ab2590b072e45eab8d86f7",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c7b35875916aea7e1545c455daa1385faf7d6d424d24381de20e2e5c9d0ad6b2"
+        },
+        {
+          "snapshot_digest": "d922f64b42ff543d6888e84cba21299421928156b26fdcc9eb5167085e338845",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f2e07023619ae52758e584cb1b3163e77dafd13eede2421b53ee655056263506"
+        },
+        {
+          "snapshot_digest": "d96d8e58f30421fb0ec71998e88a6056f3239ee1d9490a3842553a1fbd928ba6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "79808b8da81000e879b5ce4e63c8726980db7fd278dc24c9a947ff91d41ba8dc"
+        },
+        {
+          "snapshot_digest": "da6843d69439432e8e13398522525f728bc314cfd9c05d11197b75fa947d5c14",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f4c0af9e3b6be7d557800e81bc3f8074f07a9bb5d4f56b57de51208f2d53df4d"
+        },
+        {
+          "snapshot_digest": "db96fffb06ee5e1b171bd1d06f6f1d8f80a513cf019b5c142874e0b6537b22a2",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "bfdc35be0d5e701b0c0e64b9fc477bbbdbc19647e8d3ced9197ff4d53a70e9f3"
+        },
+        {
+          "snapshot_digest": "dd2b2be341a2b510e0c6bd75b733535d45888c3a6efac8fc0701b530ec0bfc92",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c4d67d11e48789d4bd52c8e50632b9e895bd68677f8b5523f0e9e4df5195a12b"
+        },
+        {
+          "snapshot_digest": "e44e6be7abff58140d7a0b9674d4212c9f6247ebf8fe900f7e645fd7a9bfd2d2",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "2ab1503c9db680c3e957da0f030f6d53cb69dc81373f5932d059c91cceb6a83a"
+        },
+        {
+          "snapshot_digest": "e7c3d4d0354f688c310cfb88daa6edc243f3354e983830f9ec49f1fc2b626532",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d1be116f1894549e147e956225cb12b948ea467cefc2916f9caaafb223257ea1"
+        },
+        {
+          "snapshot_digest": "ea22c1dcfb4d130e11512572210953055830007da4a836e59a7248f2aaf39ddb",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d39b0cb1e10c572151f77deb00437ab78e311a80a6180aae0d25d6891c8125fa"
+        },
+        {
+          "snapshot_digest": "ea4177c60f26d50ae163543a37ed6f94ce43d6a715d14a1a2c01180aee48e016",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f5e9662a49920ea88397e77a30ffbcfb20cf54c2121b4a4b0617a7e9060da5e5"
+        },
+        {
+          "snapshot_digest": "ec4453c48f41dda50f8c757a709f1bc2f5d974abde0f2630a5b5a4343841e965",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "53f9352aa44b5aa732beacd4e654218d884ab6773267d981f5b0d0c084c509cb"
+        },
+        {
+          "snapshot_digest": "ee8a13377a6a2c7f54aa938d5d42023c405b84208ce59b29ac45aa370c8054d6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b82974a5041b4ecd4b61863d5f5cc9efd14cf3ebace304839d92c4c72b49c803"
+        },
+        {
+          "snapshot_digest": "f534aa039f46ae08b36eefe6cf9ebae45d3eba077dd54dcbf13a5eca07a6d14a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f6ac8bf04b734501c8eef43c5119eeead2985446b3dca532dc26865f7618726c"
+        },
+        {
+          "snapshot_digest": "f79ad063d55de48a4ccf3cd5819aa7dfa9e83b966bd538495b52727758761795",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4b22189cfbc290e944775a7e45b57acf45be33e28359f5e32ae2823984a37c0a"
+        },
+        {
+          "snapshot_digest": "ff2c6154c8a831b793f32bbcf71369525feebd6348e41219c95d2c4a828e4e62",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "e108e259c2b4216986f7fc81b26d35a3cef1ace5954de5047f22346f0c21defb"
+        }
+      ],
+      "headers": [
+        {
+          "snapshot_digest": "03dfd29f242415ef8dd3bfb4a58e28457a8fc35fb867473ade7c8ed601151766",
+          "header_canonical_sha256": "ae2666c1b471eaaa375ea0fe0a4bda752bfbf3f2c3f2a304639bf034e725c29e",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "07abb2cb93c2677588615d68b20aed2801cc3bfe24cdb5869178f457cb110f4e",
+          "header_canonical_sha256": "37c34f5f00f2e9d3f04c545af67fa3b7c70ea6fd733389c95c620173e3f19777",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "0e19d484ba099c447bd3d6ba76e97f091cc1bf2286d09fbc0a4ea8b0d3c3b4c1",
+          "header_canonical_sha256": "b95140bf496fcd8e730d664fb8a7e8db9d2ba0bbef95e0fdb43634fd425c499e",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "117bed3bd81110bf90b187f679f3dba8245db1bc96098561b9ea069fbc4f0e96",
+          "header_canonical_sha256": "6d8c50b8d8f8fb50fe90b70eec1b1fbde27dab14522d9656fead44615db35061",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "123854c45d02217da236b0fd4c76371bc6d89425db3ef2c6ee6a525ad4fa344e",
+          "header_canonical_sha256": "8fc00f3694ca873474eca04d4ce3b942a5c693fd5a8352bb622004f8c83763df",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "13b4360507166e529022a1653959d0440f52bc3e3d9f9d9fae62d1a3ec6a3642",
+          "header_canonical_sha256": "a6918a2f58bbe5b40b8766996abae0560d258264a6e45245f8e113a81d57b64f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "16ab11467622f44542594e030917c629cb92b0c1cb2d9f97c0c7246744783095",
+          "header_canonical_sha256": "c29b0dc39d9087b21899bd21729824c81eadbcf537fee8fbc4ad6690d814b52b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "16c5dc12d3a25a38032a96d09352fe38f4385e2060f2bc164cdf79cf49bd4934",
+          "header_canonical_sha256": "73a2fefb61a1213c00d12cc9d75e25f43102f0a226599b544522e056db823d69",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "1cff507fe9bb0d58184ad436cdacc561478ebcbc2f1f5878931ee6549e6577f7",
+          "header_canonical_sha256": "96ff01f3993b663666159356362d3e0ada60d765777eeddcc9a39ad437592f76",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "27fedc1fac313ac410c01e40445eb76b4625d2e98ece516f78497de657795b5b",
+          "header_canonical_sha256": "cd54d02ed7c6a62a1954bc97f888e28f7ce1c7d1749a9f58b15ab5b89fba1ada",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "2d4bdb5b46624c907b4ef6472877d9a1abfea95fff763ab0c0c88122fd6e96f6",
+          "header_canonical_sha256": "06cd200700be847c2ae39bdd3784df07489754dc18afb82f07678e07c43cef63",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "34bc657fb580dc56464724ea8b624d1e4aa0a0f2da52f1624f3b4fbf87a4cd66",
+          "header_canonical_sha256": "a748bbb094ae9d615d5ea70824fa0c93b19c6b813ea736ac49240f42d9158d43",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "3fda105e12670811321e23faf7ceb72484eea85b2fc17efaeefda5a1a7e6b827",
+          "header_canonical_sha256": "8b50c203e91f2e01f3a975d00c581901717c4c6902e7fe773f763d9ced6ca5fb",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "42cfdd73ad9313c5e8c8f0b8005ce8ebb7efc8ce983b56bc191cd2674f2eb74e",
+          "header_canonical_sha256": "70328a64bca0546647248b073e41a343dbda77672b44fea24550eea47f7be551",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "4ff3802cea3f612a89d51e8c3dc14844e70e25dfaa9add396d128a10c3c8d0a6",
+          "header_canonical_sha256": "069b85d94ccb5f349b14d954990234301874c31fda165050fed781d6b2a6275c",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "5140bada52348768941806c7f4a7886088ef34a4c79e37da101ef2946a6006b7",
+          "header_canonical_sha256": "17a90124702c7fe1eccc439fcc54b4ca6b630fc6005209f0507c278029e31149",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "52b6720276eff2124c7da08da853bc224ed0ba1ba0b072bcf824abba05e8a553",
+          "header_canonical_sha256": "2d782777eea50b6699b97550c9f16475a591d1ff46cea8c87240677490418d3f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "577ba6284675e57f2d1b02091c5f106b4a60a84c6ee0697995972ee2a37c4b56",
+          "header_canonical_sha256": "a01d9223a4623c35a44b45d30775d512f4999b024bdd8fe93b2fdc50b8a0c371",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "608cf07cbcd630f50f5723a6e33041e83ebd3f7e8b7e871420b4260a6a749fee",
+          "header_canonical_sha256": "7547ecc4acecfc1b0e53e8852c8f9db7803966acd38d33fbe999e33bdd4a15b4",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "62c82e4bf54ef9ebde59d97b3929537229c6fbf6e0712ff71d8412563c245e98",
+          "header_canonical_sha256": "8fd86c18455237b15ff4b7df52e3c6e956459fd44b3867e253742d608c08bdf0",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6440e7b93723ffb3a1d822bbc6b08a66618cc59370e1b4437ec01c19dc4e91a5",
+          "header_canonical_sha256": "82beabfae1e54ce3e7f6727aca9fb5a616df06129bb6df4273dde2d67d3e23b9",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "69288e1d981be2ab0b14978fa0dbd6a953501971f1a65227944bfbed19936719",
+          "header_canonical_sha256": "00edd3fa3c7c98eb3ded16feda46a21c713c2e9cad6fdf69a9c78f89e8543b56",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6cbbeacc2f7ec52c7cd08045507c9915371245da3ce8fe3932f73731a3784be6",
+          "header_canonical_sha256": "7d4624144439e10367f465f700864b9c2bfce70c4f07cc389f1040dba2ea3e68",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6d93a0ac2cbf242b0e276af529ae6100ee0f1bdb96ba64d445decf04ed178e7c",
+          "header_canonical_sha256": "8f186ff8b13cbcb2d25e464ee05488402778a54dbf34e51951d2edbc31ee8dc9",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6e7c8974ec706fbc6c47fa26c36a8cf9592a4bf64d74596d7921927345222f8e",
+          "header_canonical_sha256": "9b06e531fc04a515e679e172ac69db0b257a394d26a3e936635d90a6cf42f7fa",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "70aa83f0dd826d46efe58b0c8e52ff2cf43165a209c89c1ec0144d6e4b39a1c0",
+          "header_canonical_sha256": "13a29f149d5399ce81c83ea07dcd56cc11a7fcaeb045cbe0df6cd81d0706bd4c",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "72f39300521ae0d07e21cc0fc3d25dc7b97fb2c36c3178f1ff643b672c07a088",
+          "header_canonical_sha256": "def3e39f411bf4dafea614e5ea86bb860c0da1fdb36423ebd27d74c702930185",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "77d1cf2734d25281bd4a3cf82de9600b572f9621fb064a00bb0b4493c78aaaf2",
+          "header_canonical_sha256": "2cb2d4967a044a37038bf48ee1b1c86117596a816d5f702324fdb604744b4262",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "7f3ee11f657111f457fc286ed9204d6573778d3d97f0b83f3f8b10661f8b8c94",
+          "header_canonical_sha256": "6283d23d0d83db00ae9a58571bbe271f802fc70273ed32debb200b1ace7288b7",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "80d9bedc1401fdadedd378fb33de6dfa413faef8c2ba205c86f892dde0a14477",
+          "header_canonical_sha256": "2b34873e7646bd4589c9a14ef5613789fc7284b1f0b61b455162bbd4cc4e8e12",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8616e1be53be020fb3eb11694aa2d7ca99ac36204611d2744390a6d8a958c976",
+          "header_canonical_sha256": "367dc3e93ad528b3dc088efd3d39a1955e73f1cb3f02192aa26cc2993e10edc8",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "867791ad047471602c5d11fb838882291ab22fda5b06874b5fc62d474554703e",
+          "header_canonical_sha256": "352c6bc956a00be0a433ccdcd5cb287fcf8420b1ddf822cc43caa8ccf9eb4307",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "87336b49e5f13ceae6d2730fb593de81f8d7d0f707d851887367067c05c20e42",
+          "header_canonical_sha256": "a8a342757370a39f7759844b3c06042ced82725abe63e157a5500a14b156e76d",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "87e4ecf3c6a4cdb00373d846e10298529afa4efdc3651829affc3d3a18a01521",
+          "header_canonical_sha256": "c4d9137fe34f14035adbbed0f126d93d3e9987dc0db0f8409f4be72b10349336",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8adf9336716cb50fec43fa9424e8524b9849a62de408438bda07d39ba4326638",
+          "header_canonical_sha256": "3ba397e850c95eab63f47c8a113b0690e5776d8a6a78e06cd983713832a1b2f1",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8c0657ece3a9d37b2b7a1962bba5dd34ffd0749ce8f26d5eaeb94bf458f8da3f",
+          "header_canonical_sha256": "cc32e614952cb6c9efa835a25691f5a93f27ca7b089ba536010e37d60b84f270",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8f5b294ca3c74ecb52a903ce728edf9f7d939426acec99f3d66eb2b9823e982a",
+          "header_canonical_sha256": "a791b9a083083a284d1e0cf01ce4bc1313cb3e49848d764f1acc1cbc59ee2efd",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "90e1da489bf29f7795f186bcc290ac1f64a43d24c2bcc9fdc11f20a70e72fbf1",
+          "header_canonical_sha256": "5963e8fa91b0bd847bf3562b84a0e065e50e98d75188a9134d4e25076a6f27e9",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "98a149a6476372b209b4313a299024da03e161775d0ffc86d1588358e7b34ada",
+          "header_canonical_sha256": "e8df198b8063c19d34293e87701d5b3d244061e7c572dca50cf9bb1d74c5e089",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "a898a83ed5b39ba0c7920e0e48e0d7c5cf76a1256586e07efc69021741264fcb",
+          "header_canonical_sha256": "2b96356889e0d41b12b13b8c8db869a026df0b17a4f82249e62a4a1b754fa738",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "aa155ffddea336c395bca02667d6b985a29bcd3c4bf9fede16675e2294ce2466",
+          "header_canonical_sha256": "0fe25ca1fabd491ed82e333b986f021b6f028331f27b0b9ca676e5acf3b20db0",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "adc5e059c459edb521c8cdd31fe942944da2d22b1151a753b9847c884aafff48",
+          "header_canonical_sha256": "36983e878e3f2b45b7e2991638d19b1cdb5e955f2788ff4a48da14391ec72def",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b08bc3485b789330d2492725ddf1c5423aa8e347b2761656883ed17ff76888a6",
+          "header_canonical_sha256": "9c3abc9060e2c11bb46d9ae0caca0b465c845c2bc87a39f5dba982ceb4f656f7",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b0a7602b0806c25730df1f09ea6ea562ce5f9738241bed27f4b9b08514c31d32",
+          "header_canonical_sha256": "c5cd92237e2b2a3e9bb454c56015f7edc57d1a87e8d01df6b76f45923e2897df",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b4795498d66c5ddfe2c76fbe5a402a9a53afe1f2a7ec08c4c06c7fd04208c61f",
+          "header_canonical_sha256": "40f6628ce3ab87ae43ad1cdcd1611b5a693e2d2deba41b4058e33aaa21f21a1a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b8c26a2ede4544e0cb89e29dbd4ea3d806edbaeb56b0ecaa8ef5db726f676be8",
+          "header_canonical_sha256": "97f2be5c8786de6f560657d07e280e44be7c8a8c292c8afa5c35b8b053b5fad0",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c56911151ec85eb33d0c0dbdb1c9e6a6ca6e9db3094c98a62cce980782cc6ad4",
+          "header_canonical_sha256": "6ed94038662a3a0010f2a018f6ea517f8d8a136ade94a61a35677cf46f5bdcb4",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c5fa4dee366015b760c8e4622a61ae3fbb53e44902bcb11e8dd17f13b1876712",
+          "header_canonical_sha256": "773a59c86fb65929dc178f487ee4675bb7847dec0415e99af746c093352e8d2f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c7ecc9c06abc12f27baa0a04599dd1d9a215eb9b7a2086c031ed3011154f8674",
+          "header_canonical_sha256": "b989ea89f54593a02d8e8fd970e64fee5e1c24f0480ebf01bd2f73c1e240d6fd",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "cd764d65a1165f820a12a219470e137fbebd7f9156ab2590b072e45eab8d86f7",
+          "header_canonical_sha256": "2af69c5f862a520ffc0dd6360e21b7bc92e0c69a5125700477f303a4d0a84700",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "d922f64b42ff543d6888e84cba21299421928156b26fdcc9eb5167085e338845",
+          "header_canonical_sha256": "5e754d5d20bbfdea450082a0da27af3413e3d4afa9c4615b94e50813275f9697",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "d96d8e58f30421fb0ec71998e88a6056f3239ee1d9490a3842553a1fbd928ba6",
+          "header_canonical_sha256": "5139a44b53475de022096282f3ffc7c95959e33be19af85a3e143a5e65b198db",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "da6843d69439432e8e13398522525f728bc314cfd9c05d11197b75fa947d5c14",
+          "header_canonical_sha256": "9ccf13e1e23d582aab74a79d11475f587854a485cb7aa9db325950631526b11a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "db96fffb06ee5e1b171bd1d06f6f1d8f80a513cf019b5c142874e0b6537b22a2",
+          "header_canonical_sha256": "b6026f24c775cd4c5c6456b239274e5885914622a0b8d2bb7b3b1676130e8a9d",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "dd2b2be341a2b510e0c6bd75b733535d45888c3a6efac8fc0701b530ec0bfc92",
+          "header_canonical_sha256": "12c40022f1264cf68e66e8da972ead08547df4379313b10590e884bb4b3e991b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "e44e6be7abff58140d7a0b9674d4212c9f6247ebf8fe900f7e645fd7a9bfd2d2",
+          "header_canonical_sha256": "f1d566e23ce0634becc412d2840fad587aceb4bfc9b7dc6ea9284fa32b27aaf4",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "e7c3d4d0354f688c310cfb88daa6edc243f3354e983830f9ec49f1fc2b626532",
+          "header_canonical_sha256": "16f5378cf24b66c9eb09f7f0992a71cb5cdd3aaf93037ec3e9c5f3c8a3971a67",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "ea22c1dcfb4d130e11512572210953055830007da4a836e59a7248f2aaf39ddb",
+          "header_canonical_sha256": "0e13c7dc6d2e0abb717588860dd74c74718f505812ec76c522b58e014cc6443f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "ea4177c60f26d50ae163543a37ed6f94ce43d6a715d14a1a2c01180aee48e016",
+          "header_canonical_sha256": "4d9cf3ee1a86f8a343507cefea88b85d78bb8abe825f887c35a9e72be22761e8",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "ec4453c48f41dda50f8c757a709f1bc2f5d974abde0f2630a5b5a4343841e965",
+          "header_canonical_sha256": "71a18f206c34ce245eed6771ca22ee163a08beacd4e21479bba1d44db59fd552",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "ee8a13377a6a2c7f54aa938d5d42023c405b84208ce59b29ac45aa370c8054d6",
+          "header_canonical_sha256": "bb5711220b87635b34d58f8d6e33c704f8daf05d00ef01df0c15a4eefd501f5a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "f534aa039f46ae08b36eefe6cf9ebae45d3eba077dd54dcbf13a5eca07a6d14a",
+          "header_canonical_sha256": "0a91319f7c9334263f9c8b0043c47b0688092d2b2530a093ee5ab2f63f45637b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "f79ad063d55de48a4ccf3cd5819aa7dfa9e83b966bd538495b52727758761795",
+          "header_canonical_sha256": "6bfcfa0617d95960efc4b8f3b76e781c9ae9a9f77dcb13cbd324cb90960e9fda",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "ff2c6154c8a831b793f32bbcf71369525feebd6348e41219c95d2c4a828e4e62",
+          "header_canonical_sha256": "70a63035826cc9b318ba923ef86bfc19472e2c9340e042924f94caba01148e6a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        }
+      ]
+    },
+    {
+      "policy": "phorvex-staging-demo/stage-bench-defense",
+      "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:7f178e616c1972a8c31d1e78104c07cd70e92d1fd7e950eab0f7c1aa19ed466d.json",
+      "sha256": "c0ad385af71ee84756bc336769ace9fc99c8ebc81a0634020fad3f231cd7cab3",
+      "cohort_path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/cohorts/sha256:e1fbc8442eba1d58651ba250cbf051fdc8b225fbc04b45fce1cbd48acc605bca",
+      "ticks": 64,
+      "distinct_snapshot_digests": [
+        "22a2f107f83329e29145babe355b3eb5741538a5b861b7cb3cd8301296e245bf",
+        "8a91f288f71a909bc4ec650b73cb83d0fd30bf9e643d6309113c52a5013d9343",
+        "d9c5175179eaf0324d7594d2801e026da30790fad708acc5be7271538bbd604a",
+        "723519d8759bd0fcb21564249248a935c472f2d86d0a904431928d3b5e96197a",
+        "3faf4ed7f44ede93bc7348a30e5dd96355336871a1a30d4f9a58f032158ae7dd",
+        "29dfd84dad5bffb1a3e49138b7fc07a7e850855efa53b9236ecb30f9a2babe41",
+        "de971a7974a23de0e75bb3d51e3d77b3eaf0d06a3be3c2621d604050b25dece9",
+        "468e24a51a4ee4d33f9c37b5c8426920a730b1ca608709a1d8ee52e6544605cb",
+        "9c373da2ff8c91bc27d43755f964712522b0ea301f6ad1e9ff19531650b28660",
+        "b302c2e8b6d14787bead79fa88f327b3212e295b9ad5bccddb12bb7935c14044",
+        "1ba877264d0bae381970a85bdf926b2c85cfbef59a6586b415b90f2d5e566b4f",
+        "e68b65686cd93f7fe2fca543c2059e5e5638d959c71d630aac28c46b54c192aa",
+        "01400431fb2c12d5563f9520a7bc55fbafb18f39cbaeb89c1563d7805587d303",
+        "04a584faf54bb38e70ac8c2e8e5ad8f41e76b91b6b9d46523e1d7bf785fe7276",
+        "6241bccdb13d9ac820c3c552e777724e97c101277ec1cdcdb4001aa5988c3757",
+        "65f82e93f85e003f692fdcf17995f46288b9348341d818255ce26680ba211881",
+        "aa1f3ce594f6314355aec1342cbc7b09bfd1cb0a554548157967a81638b2dcfd",
+        "6313cad56c15bdd2e22be9670aa2dfa7de88f122195d1ab43c4a8115554b23fe",
+        "b44e13ba59da7500a26a5bc057bcc5bd71f6bb8850e0eaa7f09391e111002899",
+        "c1894a62a7a808a2b09a00d16c3db087ee15a57d374c647f686a77153d80da27",
+        "bf92e0592eba50db46d207ff26d1f2b3f1be1da5395250b125f8f76ef56245a3",
+        "5839c3586afbe4d4beb2af914d50394c0ac6323b5c3d0cc8bf32cbdc3c7f05ff",
+        "2fe95d0468124e1805f5f037d598e5806842b03c061b224c0d2aff9c5f88076a",
+        "94f8ce49d6fda417e73a1cdc3d81a638a5b27dc2e1df799ea65151c7dd18c2e2",
+        "fb0147ce1adc50c53dc1b870f0827161976e088be23843306017b84e247e1cd4",
+        "3e4d42a7fccc09d93b36f8d16cf6a4e622b99e46a2917d183152e7a588749e66",
+        "af77f333226d731abdf74966444107469d3c965d64bdc9ee07649c4534e9bf68",
+        "18d5d34fed4f42cea4edb71c1fed4fe6fc1a8e4cd1b54dddbe36ca7f56a0d2ac",
+        "4f54f91ccf9ee6984e5c300143ad5ac67bf012ffe68ca2a646ab5415c116a781",
+        "fcf88e799ed4186878727ff305e061bec83512fc4eb2a2baa798f9151438557a",
+        "8bc199ee0714208cb5c2df308c16ee9849d6ecb57eda70ee7337f1fd8c11b913",
+        "bf3d6632eca5fc467ae702b2c9ee3e90e7ae94bd914fc0e1d19a2c9a03dd6a6b",
+        "cc30e7193da9489e844191371b4819dde16840d824d50fe1c950d3c0c2ee464b",
+        "b3850be0103d9802f5e872ca52d8bfbeddddde5421978b6dc50345d53f80cb8b",
+        "a226eb6979dedd2286f6a2f5e25699aab312f5bb1974c4e0e61d85c3fd3b50f0",
+        "39e121a029b12fc666004188ef8326cb1cec41c3c496ba364ccb7f8c45c37647",
+        "f3964a075157833a9554f53865de24cbd209846cb13e5dcf99ff334ec08e653d",
+        "44a81a2d6ab0366e22452f73685c8a6e28050eddf8f1390bd33d0483f47d93e6",
+        "0fe17b972ca9cb4f008e5ab441510b2c0095965c23e585036ccadbc33fd5a3d6",
+        "5daf142203c0ecdb42903bae55f040b31d86ff64d7137fb01ef24162169cc80c",
+        "c00913adc456b75472681853e1a7d93c52cee4b14c035b0f036cb7e889e23ef7",
+        "daf57ff478cc29786f58666382811a714bd5c7dd722e5f7a117c3626a4666df7",
+        "31b4cd09fb7b8e3d23ee19c4afe0c4e9583df2b58b0bc4ae6ede14c0c79bb281",
+        "c0c9d14d5c1e1fd0c57d9fdbdbc651cea95ebf5caeac7e8392b305b78ef60e08",
+        "cca0beccb751180028c4b1bb86aed58f0653a6ddfb9943aeb4070b98989d55ce",
+        "847c8af6c431cf9476f81c3ab4755bf7fbface6d6427323403dd38cc150a65c8",
+        "b989f687a786abca62a62b7d07dbaef8c955edfd8379bf785fa0bf2719773ecb",
+        "84fef4e605694754ffe991728072466f4f013d56928c005472cfb0e29235435e",
+        "f19fe448e98eaaf468742f4acc36060227257829ca7d40247abb64422d3bb47e",
+        "a613d8b83394c7bd23729a9a34845add740f450ad91384508258c735c2f0d2d5",
+        "957348c21205caf0a39c26af1a4a6e9038c605ca8bd457139787033c4ca2a092",
+        "09c28b9fe6f340a2a86ca5b85fa41d3373c578e0a0c280015a86cef8cc5cc20b",
+        "a3f8231bedc205077c77aeb8ae0aa1a325d125cc21db4d0fab3e67833a50ac45",
+        "422d1103202f4a0db490cb2b14fbed34515e662dd17eb20770df8d29cc9c022c",
+        "8dba0de6c7d500c101d3567aaf5bd09124e90f40f7eaa3b72bb8f3056aaa09c6",
+        "6271e2ff3c560fa5c791f51e9f24ea7b4d68c81d8e6659f924d2c82569f46530",
+        "da3ddbfd73291e1dd90aa21602890c70ec89915eb9fa2d9589f41cf43016b8e4",
+        "5894b21f21b46b199c3a61f5a2ce831f59912219a714a5701b47ca7247ac19ea",
+        "37bce3565fafbf66a61c37dbab5c2b65a0686ec909e9739961bff78be20c61a0",
+        "b145d097fcf57651dfb96a092ee02290103a4d4fe1dfd8f791886e48b9e56e5e",
+        "115397c8711b745ef2273ec909faf1b690b38257ebbf4a45bac5060f9aa6f0e1",
+        "0fde1cbadc2fe60c7745d43b3a9f074bcd24c49ae51b081e9268293dbabfdd11",
+        "e682318a2e5a3fbfcc1ebfe60e5dac289f733d170f4f2707ff1a49220d2760b4",
+        "31e73a6d72c76afeee2346d4c488bea10e4ccf06e1572e28426d4c990387680a"
+      ],
+      "rows": [
+        {
+          "snapshot_digest": "01400431fb2c12d5563f9520a7bc55fbafb18f39cbaeb89c1563d7805587d303",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "eaf23f6cef02f798bc6c19a001263fefd7f49e210a0bbf532e2bc8bfaedde4dd"
+        },
+        {
+          "snapshot_digest": "04a584faf54bb38e70ac8c2e8e5ad8f41e76b91b6b9d46523e1d7bf785fe7276",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "9fa1a22da7c6d88414873dcdcce2d0bf25704932194a9b8d2945cd0dc734cb22"
+        },
+        {
+          "snapshot_digest": "09c28b9fe6f340a2a86ca5b85fa41d3373c578e0a0c280015a86cef8cc5cc20b",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "a3ea03a45165a9cb2d6f41b59cf49d5538702664d6d083f28f420aa866d478a9"
+        },
+        {
+          "snapshot_digest": "0fde1cbadc2fe60c7745d43b3a9f074bcd24c49ae51b081e9268293dbabfdd11",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f63182f97a448165b2c100a0a8ffa5a85bc2a30c51853ceeb2002cfe40b8e5f2"
+        },
+        {
+          "snapshot_digest": "0fe17b972ca9cb4f008e5ab441510b2c0095965c23e585036ccadbc33fd5a3d6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "a9959372fec0ba27bfe4588cf48335776676a076d80ca567a5381448bbfa3e3a"
+        },
+        {
+          "snapshot_digest": "115397c8711b745ef2273ec909faf1b690b38257ebbf4a45bac5060f9aa6f0e1",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ed1b6f920d743bea73b327549717b28bd399ed7394afaf26420099b791600d73"
+        },
+        {
+          "snapshot_digest": "18d5d34fed4f42cea4edb71c1fed4fe6fc1a8e4cd1b54dddbe36ca7f56a0d2ac",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ad8caa4c82a72008e26712b10be4b93eb94132b8962a60490aa13ab9bcc850cc"
+        },
+        {
+          "snapshot_digest": "1ba877264d0bae381970a85bdf926b2c85cfbef59a6586b415b90f2d5e566b4f",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "6fd090a9015a10d1866aeab40deddd070e2d06ba5e039ca213bbfe9ab92a1a28"
+        },
+        {
+          "snapshot_digest": "22a2f107f83329e29145babe355b3eb5741538a5b861b7cb3cd8301296e245bf",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b17e362e6697858c090571e820e1a40a15d022aaa7589d6adbb2ab214715af88"
+        },
+        {
+          "snapshot_digest": "29dfd84dad5bffb1a3e49138b7fc07a7e850855efa53b9236ecb30f9a2babe41",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "59fd3c1de4323d13daafe761eb5742328f6235021ae1e394ff4f04bc17b11c5b"
+        },
+        {
+          "snapshot_digest": "2fe95d0468124e1805f5f037d598e5806842b03c061b224c0d2aff9c5f88076a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ccaed0aa85006007cbb386e2123a8f5ccacfadb0a367e091bc893d011748b3b4"
+        },
+        {
+          "snapshot_digest": "31b4cd09fb7b8e3d23ee19c4afe0c4e9583df2b58b0bc4ae6ede14c0c79bb281",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "ee69ff125c90ccecc204e78c0fe498650818a2a519c740bb67a214e59974d673"
+        },
+        {
+          "snapshot_digest": "31e73a6d72c76afeee2346d4c488bea10e4ccf06e1572e28426d4c990387680a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "0540a7f534e406b735e59e414b13bfca468a66416945acedca30b1ecd8abc7a0"
+        },
+        {
+          "snapshot_digest": "37bce3565fafbf66a61c37dbab5c2b65a0686ec909e9739961bff78be20c61a0",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "357ec726f5ec489c8c7e0ce51c3efb0fc78e6f93037ce4ce284cc92f78809660"
+        },
+        {
+          "snapshot_digest": "39e121a029b12fc666004188ef8326cb1cec41c3c496ba364ccb7f8c45c37647",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "be1e51e7ce06203eff8cb8df44130f092b8407ea6f8e540f9692ba2472f78f81"
+        },
+        {
+          "snapshot_digest": "3e4d42a7fccc09d93b36f8d16cf6a4e622b99e46a2917d183152e7a588749e66",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "115b35db05906093ed907df8303a714e638b65c44c684516263b2b816f943f3f"
+        },
+        {
+          "snapshot_digest": "3faf4ed7f44ede93bc7348a30e5dd96355336871a1a30d4f9a58f032158ae7dd",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "24f261bd26448ff6c3d561d4124d2b58e0e14fae23197ac6d45a62e8703f828e"
+        },
+        {
+          "snapshot_digest": "422d1103202f4a0db490cb2b14fbed34515e662dd17eb20770df8d29cc9c022c",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d84a7f06af4ff1b26999c66a193f7b184a31a03dbdb3c0ffd7d6670f64957a7b"
+        },
+        {
+          "snapshot_digest": "44a81a2d6ab0366e22452f73685c8a6e28050eddf8f1390bd33d0483f47d93e6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "8b73ecec25847346c6b46591d2fc60e56ae37a26c2caf451875f9149a90d8f65"
+        },
+        {
+          "snapshot_digest": "468e24a51a4ee4d33f9c37b5c8426920a730b1ca608709a1d8ee52e6544605cb",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "6e25bf93a6d2dd191040e8ccc13678567abb6b8ab3b363ae807ee6611a800239"
+        },
+        {
+          "snapshot_digest": "4f54f91ccf9ee6984e5c300143ad5ac67bf012ffe68ca2a646ab5415c116a781",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "178d3092ca28992ec0562227f184de5f2a9ba4e29082d2a0a06629537c09604e"
+        },
+        {
+          "snapshot_digest": "5839c3586afbe4d4beb2af914d50394c0ac6323b5c3d0cc8bf32cbdc3c7f05ff",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "8c7f54496f3ca32d838e04956969bfe22c0242219ace45889d81ec89f7819db6"
+        },
+        {
+          "snapshot_digest": "5894b21f21b46b199c3a61f5a2ce831f59912219a714a5701b47ca7247ac19ea",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "aa13aad707ff50b1791fb599fec1d376234e525c2cbfbb22266525cf5f464e1d"
+        },
+        {
+          "snapshot_digest": "5daf142203c0ecdb42903bae55f040b31d86ff64d7137fb01ef24162169cc80c",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "17bae07be938223ee3d401dd65f908558e20e14a30fb448d1fa719e2356e02a7"
+        },
+        {
+          "snapshot_digest": "6241bccdb13d9ac820c3c552e777724e97c101277ec1cdcdb4001aa5988c3757",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "87c838a45a9dff07d433599c11a74b9bd66004e60360d500247b8be8f310a387"
+        },
+        {
+          "snapshot_digest": "6271e2ff3c560fa5c791f51e9f24ea7b4d68c81d8e6659f924d2c82569f46530",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "37df27e50dea64f1e060c412265a64988e35baef367a8ee8ca0c88333ac9f203"
+        },
+        {
+          "snapshot_digest": "6313cad56c15bdd2e22be9670aa2dfa7de88f122195d1ab43c4a8115554b23fe",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "83a144a613597294f0c5deb82eafb0a5648b1c861665c0fda01782e92146601f"
+        },
+        {
+          "snapshot_digest": "65f82e93f85e003f692fdcf17995f46288b9348341d818255ce26680ba211881",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "858ff7da4abd72fb53b7c764255b924a99ead899f433dd32c987182d47cc10f4"
+        },
+        {
+          "snapshot_digest": "723519d8759bd0fcb21564249248a935c472f2d86d0a904431928d3b5e96197a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "5043c9a20b9e5f4ac8dc135e6139e5abe09cdb5c2847e30f6ff6585072904eac"
+        },
+        {
+          "snapshot_digest": "847c8af6c431cf9476f81c3ab4755bf7fbface6d6427323403dd38cc150a65c8",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "eb2495b454f3357dcc75c407f3e1d96cb51c90faf34f25a35659b415e7435694"
+        },
+        {
+          "snapshot_digest": "84fef4e605694754ffe991728072466f4f013d56928c005472cfb0e29235435e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "bcc992a1484146b63edfbfc0a49612ae45f3f7dd7578bc0282ac050ca2d3d11c"
+        },
+        {
+          "snapshot_digest": "8a91f288f71a909bc4ec650b73cb83d0fd30bf9e643d6309113c52a5013d9343",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d755711dd7bfcdd9bea2c1721e477135835c18de957f79e5647320d2ad282339"
+        },
+        {
+          "snapshot_digest": "8bc199ee0714208cb5c2df308c16ee9849d6ecb57eda70ee7337f1fd8c11b913",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "a98b794d2aac8816acf3c714285bf3bc5663207ed7670283525951cc6d22f220"
+        },
+        {
+          "snapshot_digest": "8dba0de6c7d500c101d3567aaf5bd09124e90f40f7eaa3b72bb8f3056aaa09c6",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "52cd6ee1fa72c4c69e8c0307946d42851bec2f6219cf78504448cdee1b62e2c5"
+        },
+        {
+          "snapshot_digest": "94f8ce49d6fda417e73a1cdc3d81a638a5b27dc2e1df799ea65151c7dd18c2e2",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f4db53ecaf7b603ae6bfacc9a34070490853273b847a064507b6bc76f615bc35"
+        },
+        {
+          "snapshot_digest": "957348c21205caf0a39c26af1a4a6e9038c605ca8bd457139787033c4ca2a092",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "568ffe65ae42e3edd74d1ccda39735f7678790255ac5dd1e5e595feaa725b8db"
+        },
+        {
+          "snapshot_digest": "9c373da2ff8c91bc27d43755f964712522b0ea301f6ad1e9ff19531650b28660",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b84d72c523fa54a9af261ed1375120c981145bf899e7c7108a90350865511151"
+        },
+        {
+          "snapshot_digest": "a226eb6979dedd2286f6a2f5e25699aab312f5bb1974c4e0e61d85c3fd3b50f0",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "0b2d1b61e5b316e4c40958c042069a9d42ee201e1c5a9e7761c367a39aa5353f"
+        },
+        {
+          "snapshot_digest": "a3f8231bedc205077c77aeb8ae0aa1a325d125cc21db4d0fab3e67833a50ac45",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "42a75c6170888435183fd1e3438ce95a3fe606e48ea8e3ad22199ad8be0bbd56"
+        },
+        {
+          "snapshot_digest": "a613d8b83394c7bd23729a9a34845add740f450ad91384508258c735c2f0d2d5",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "78911aa919ceceffe485b0cfd20b5777e5e0ce69db047415f5b9c6c118dd3624"
+        },
+        {
+          "snapshot_digest": "aa1f3ce594f6314355aec1342cbc7b09bfd1cb0a554548157967a81638b2dcfd",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "aded94c1558a82ffd86067f1db5aa846d9d2d484e27d2d3b7fcc3d40e7a1430e"
+        },
+        {
+          "snapshot_digest": "af77f333226d731abdf74966444107469d3c965d64bdc9ee07649c4534e9bf68",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "4bda37b6444cd9dc659894136b67641039523e6be6d41386152bace40de12f66"
+        },
+        {
+          "snapshot_digest": "b145d097fcf57651dfb96a092ee02290103a4d4fe1dfd8f791886e48b9e56e5e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c4eb5a2023e80199bd70c047b33c74f4f8d17ab999e64a84b9bf3beb0c60bc49"
+        },
+        {
+          "snapshot_digest": "b302c2e8b6d14787bead79fa88f327b3212e295b9ad5bccddb12bb7935c14044",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "966d38a8d1d9b55365007251d85183ef5e03ee0c418e90a2cf27c4e7d9e44a64"
+        },
+        {
+          "snapshot_digest": "b3850be0103d9802f5e872ca52d8bfbeddddde5421978b6dc50345d53f80cb8b",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c9359a84e17108288c6f75a6ead22bee05aad7deb366df23ac4d5cdc82e10ed9"
+        },
+        {
+          "snapshot_digest": "b44e13ba59da7500a26a5bc057bcc5bd71f6bb8850e0eaa7f09391e111002899",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "278efa8d43ade93629de8987583036323cf172142de6fb97596fd971dc2b5fff"
+        },
+        {
+          "snapshot_digest": "b989f687a786abca62a62b7d07dbaef8c955edfd8379bf785fa0bf2719773ecb",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "603c06c36929de446acb25e4f3b3c2c1c9a23b481673ac9065f41c4ee65f01a3"
+        },
+        {
+          "snapshot_digest": "bf3d6632eca5fc467ae702b2c9ee3e90e7ae94bd914fc0e1d19a2c9a03dd6a6b",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "acb20af836e1fc82d050e4b5a030ca0276c1fd3fdf5b577446160d7e29403722"
+        },
+        {
+          "snapshot_digest": "bf92e0592eba50db46d207ff26d1f2b3f1be1da5395250b125f8f76ef56245a3",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "f18ba8a6c555b9eeef291288395d84d7ca04f3e5554819baaa08e3c425ca8496"
+        },
+        {
+          "snapshot_digest": "c00913adc456b75472681853e1a7d93c52cee4b14c035b0f036cb7e889e23ef7",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "30aa220ccf0824ce74deead83cd8fc87970ba3f3a88c8d71e7aa9f12f5bb521e"
+        },
+        {
+          "snapshot_digest": "c0c9d14d5c1e1fd0c57d9fdbdbc651cea95ebf5caeac7e8392b305b78ef60e08",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "faea2cee38033c9575903d91a337b485d35db64e056d498e0b6ef06272e408d5"
+        },
+        {
+          "snapshot_digest": "c1894a62a7a808a2b09a00d16c3db087ee15a57d374c647f686a77153d80da27",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "732324e88ac1c9443148885cb17e65697b7c7e6bbac28d481cf53340a7a43582"
+        },
+        {
+          "snapshot_digest": "cc30e7193da9489e844191371b4819dde16840d824d50fe1c950d3c0c2ee464b",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c33d613dc41d5b1f463a64aa6c9b8a52fdbebb35007afe980d252dd13846b5d2"
+        },
+        {
+          "snapshot_digest": "cca0beccb751180028c4b1bb86aed58f0653a6ddfb9943aeb4070b98989d55ce",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "c82ac60444330fd54246bc8dc39078e968f7cd528f734ee9f52ef55189641020"
+        },
+        {
+          "snapshot_digest": "d9c5175179eaf0324d7594d2801e026da30790fad708acc5be7271538bbd604a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "8a62b63a0331591839267847d35ec7a7a1e6a20cbcd69b2008ac27b3b3bcca8f"
+        },
+        {
+          "snapshot_digest": "da3ddbfd73291e1dd90aa21602890c70ec89915eb9fa2d9589f41cf43016b8e4",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "d03ea691452a2f65acdb083ae8e33bc1267156c6c181b8c4452b2dedf8e183d7"
+        },
+        {
+          "snapshot_digest": "daf57ff478cc29786f58666382811a714bd5c7dd722e5f7a117c3626a4666df7",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "5a374a7b0dd1021508ce6011cf154396b4816436024658aac94d9b05868d13cb"
+        },
+        {
+          "snapshot_digest": "de971a7974a23de0e75bb3d51e3d77b3eaf0d06a3be3c2621d604050b25dece9",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "220590f27c7a7f421c9b977d3849181d0e10da210e31e2c99637d97d2cb6cdf0"
+        },
+        {
+          "snapshot_digest": "e682318a2e5a3fbfcc1ebfe60e5dac289f733d170f4f2707ff1a49220d2760b4",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "0ceaf750ff230e3d125d649af110e09f6422e7bba05cfe7da92c36120fb63fb6"
+        },
+        {
+          "snapshot_digest": "e68b65686cd93f7fe2fca543c2059e5e5638d959c71d630aac28c46b54c192aa",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "8cbdbe4e56eab2cb523b331713c95808a5f4b434080867b3df7b559e8f8341dd"
+        },
+        {
+          "snapshot_digest": "f19fe448e98eaaf468742f4acc36060227257829ca7d40247abb64422d3bb47e",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "a828c8971cad5034bc47641dd99f6e4afff3e2d5c955bb6290b9f9b333874f41"
+        },
+        {
+          "snapshot_digest": "f3964a075157833a9554f53865de24cbd209846cb13e5dcf99ff334ec08e653d",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "b34f632a4fa288cebfcf04ea63e337f9b1e4f3840d1e911b3ce09111c9050bd9"
+        },
+        {
+          "snapshot_digest": "fb0147ce1adc50c53dc1b870f0827161976e088be23843306017b84e247e1cd4",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "efe72dec205bcad14b6721e82030384176f724ff7f715845ec012bbca19f1075"
+        },
+        {
+          "snapshot_digest": "fcf88e799ed4186878727ff305e061bec83512fc4eb2a2baa798f9151438557a",
+          "status": "OK",
+          "baseline_check": {
+            "compared_records": 3,
+            "excluded_fields": [
+              "ScopedOutcomes: reporting-only cohort report keyed by process lifetime (owner count, epoch); never read by selection"
+            ],
+            "reproduced": true
+          },
+          "full_row_canonical_sha256": "fe76c179e538fd9af315dd5310afec20ce41d7bdb2bc14182429bff545c6b229"
+        }
+      ],
+      "headers": [
+        {
+          "snapshot_digest": "01400431fb2c12d5563f9520a7bc55fbafb18f39cbaeb89c1563d7805587d303",
+          "header_canonical_sha256": "2219467acd5b1473ebc1c3eee6d2367bdfd0c14b8442c4073db7dcabe1d9b563",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "04a584faf54bb38e70ac8c2e8e5ad8f41e76b91b6b9d46523e1d7bf785fe7276",
+          "header_canonical_sha256": "c1a5bb3e53ed56209ab53fc9dc5559ecbd81cd84cf929213257dca183fb30798",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "09c28b9fe6f340a2a86ca5b85fa41d3373c578e0a0c280015a86cef8cc5cc20b",
+          "header_canonical_sha256": "686f44a334fffcde6f4c2a4606ea10c6070028464e0206d2598ed24b827e6738",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "0fde1cbadc2fe60c7745d43b3a9f074bcd24c49ae51b081e9268293dbabfdd11",
+          "header_canonical_sha256": "e6157320b118cf1957aba89c7580bde33c124121068f5e8e82983c50429a2b82",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "0fe17b972ca9cb4f008e5ab441510b2c0095965c23e585036ccadbc33fd5a3d6",
+          "header_canonical_sha256": "1f7d450345898bb5536f7d86d886ee6d99495020f8198b9f2e8a6c2ddac964fb",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "115397c8711b745ef2273ec909faf1b690b38257ebbf4a45bac5060f9aa6f0e1",
+          "header_canonical_sha256": "52409e4b1bd777a90449b9f6d4a195629ecd471801b11a25dd5b602cbf68ee48",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "18d5d34fed4f42cea4edb71c1fed4fe6fc1a8e4cd1b54dddbe36ca7f56a0d2ac",
+          "header_canonical_sha256": "d335e18a1e8efa57a29cb626cde8ba7dad9023543b565340da4358013a855558",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "1ba877264d0bae381970a85bdf926b2c85cfbef59a6586b415b90f2d5e566b4f",
+          "header_canonical_sha256": "8c2a869810c3a6eebd84164b783182a94d754528389ceff74f70d519cce2ddb5",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "22a2f107f83329e29145babe355b3eb5741538a5b861b7cb3cd8301296e245bf",
+          "header_canonical_sha256": "d2146856bf90cbc0a917dca476224e84462f4a50b4d940a898b0a8ea29d6a7cd",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "29dfd84dad5bffb1a3e49138b7fc07a7e850855efa53b9236ecb30f9a2babe41",
+          "header_canonical_sha256": "f6f22f815a530a8405878a56bd1a8913e95ae5e7cdd1c1a28f4bc3552df2504d",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "2fe95d0468124e1805f5f037d598e5806842b03c061b224c0d2aff9c5f88076a",
+          "header_canonical_sha256": "a8a8ffe5c08a6fbfb6de9ce66c5804281892d8c4ce3327ea04fb164664148fa8",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "31b4cd09fb7b8e3d23ee19c4afe0c4e9583df2b58b0bc4ae6ede14c0c79bb281",
+          "header_canonical_sha256": "ed89bca79c83bd99b51c9d1c4436d67c7df4b5adb0ca4bf23db949752751790b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "31e73a6d72c76afeee2346d4c488bea10e4ccf06e1572e28426d4c990387680a",
+          "header_canonical_sha256": "cd6dc0e0e4a25af3fb84c946444d1dd743f6dbfbcab899b72fb32a63f6818736",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "37bce3565fafbf66a61c37dbab5c2b65a0686ec909e9739961bff78be20c61a0",
+          "header_canonical_sha256": "2902a4863bb8af4767d4b1dbf28ea30d160f483d5e25766140bc1bd7b7114a5c",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "39e121a029b12fc666004188ef8326cb1cec41c3c496ba364ccb7f8c45c37647",
+          "header_canonical_sha256": "3c0e62df52fdcbf174bc63b5ce411fe7f8887e5adfa91aecd327128326c01118",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "3e4d42a7fccc09d93b36f8d16cf6a4e622b99e46a2917d183152e7a588749e66",
+          "header_canonical_sha256": "0746a60793180214bdbd05b01670211d9ed6d095b16f4e9eca5fc9ec9e2c6cd3",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "3faf4ed7f44ede93bc7348a30e5dd96355336871a1a30d4f9a58f032158ae7dd",
+          "header_canonical_sha256": "043b96ff765686cc5ba9d3103ad4e8031b699c56ac40a8a69306e7748503d4a2",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "422d1103202f4a0db490cb2b14fbed34515e662dd17eb20770df8d29cc9c022c",
+          "header_canonical_sha256": "3abfed1171a12ba57d21ab6e9aa6e0e36ecca34920ae796545b2aefc2c319f7a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "44a81a2d6ab0366e22452f73685c8a6e28050eddf8f1390bd33d0483f47d93e6",
+          "header_canonical_sha256": "8df0e797f887b0031c83aeb6574782d86d921a964194f4d91563723ce78fff12",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "468e24a51a4ee4d33f9c37b5c8426920a730b1ca608709a1d8ee52e6544605cb",
+          "header_canonical_sha256": "4e0b097f2caca9d01e1531908a48e3affdfeabf0cf4a6f7a28f1494321d2fc21",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "4f54f91ccf9ee6984e5c300143ad5ac67bf012ffe68ca2a646ab5415c116a781",
+          "header_canonical_sha256": "00dea0e8549213fb6981b9e0f2e224ca37f5f9b69ef8baeb8dac2208b46ef176",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "5839c3586afbe4d4beb2af914d50394c0ac6323b5c3d0cc8bf32cbdc3c7f05ff",
+          "header_canonical_sha256": "bb6a86bed1faad73afaffefeccfa443e8f27531410d2f8b9bdd33c35232ef96d",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "5894b21f21b46b199c3a61f5a2ce831f59912219a714a5701b47ca7247ac19ea",
+          "header_canonical_sha256": "513198a3a43b056b5a4e374fceaac3e67d22757f1ebdfa5c32e14ba488ae8001",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "5daf142203c0ecdb42903bae55f040b31d86ff64d7137fb01ef24162169cc80c",
+          "header_canonical_sha256": "915eb597bbe1625e355c62ac13ef5136794d6e8eb0eb1e657b1d6595fc28b10f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6241bccdb13d9ac820c3c552e777724e97c101277ec1cdcdb4001aa5988c3757",
+          "header_canonical_sha256": "157c7ab904eeb98ee64bdb3194ad5aadb65d4c30a0666b18d36fdd2a59014c44",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6271e2ff3c560fa5c791f51e9f24ea7b4d68c81d8e6659f924d2c82569f46530",
+          "header_canonical_sha256": "40ee8b990551eb9764362e42368fe2f92556354b205baa1b9616d9c095bcf860",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "6313cad56c15bdd2e22be9670aa2dfa7de88f122195d1ab43c4a8115554b23fe",
+          "header_canonical_sha256": "8124c770c2c9dc304e2e8da48637f627fdd23fb221f27a4de65c523ce788169b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "65f82e93f85e003f692fdcf17995f46288b9348341d818255ce26680ba211881",
+          "header_canonical_sha256": "ed0581f3d3a2d8bd80de5ec447971a911e9a12fdbf8d56f0856112babf0f6121",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "723519d8759bd0fcb21564249248a935c472f2d86d0a904431928d3b5e96197a",
+          "header_canonical_sha256": "b7c787acbbcd9ee2e68b2144d8fca117a1ce28f2168249dd2a3155f0a49d549f",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "847c8af6c431cf9476f81c3ab4755bf7fbface6d6427323403dd38cc150a65c8",
+          "header_canonical_sha256": "5a5182f6d76a1cb7a6de249ce7b54c14d4ca07867e48f848fea031a9d7193ad0",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "84fef4e605694754ffe991728072466f4f013d56928c005472cfb0e29235435e",
+          "header_canonical_sha256": "d337a00cc9bbc74d975735bc438829ebe34df22858bdda6418bff55a4c1c84b3",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8a91f288f71a909bc4ec650b73cb83d0fd30bf9e643d6309113c52a5013d9343",
+          "header_canonical_sha256": "20103efc6532f9237d708208d736345e51a5b7bf64d100387f7b852cfc351665",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8bc199ee0714208cb5c2df308c16ee9849d6ecb57eda70ee7337f1fd8c11b913",
+          "header_canonical_sha256": "a6d1bd2706f5de3e916a05fb072a7419c1d57d7e946c17eacfc08783ef218924",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "8dba0de6c7d500c101d3567aaf5bd09124e90f40f7eaa3b72bb8f3056aaa09c6",
+          "header_canonical_sha256": "c40e6d08da707c2ff7480a5c59844e6f584dc8fd74c8d136255257cc0c60a87c",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "94f8ce49d6fda417e73a1cdc3d81a638a5b27dc2e1df799ea65151c7dd18c2e2",
+          "header_canonical_sha256": "eafcd49f9ec87a9871b83bd176c28da448971029cac39376d3c8f8fc6eb55a57",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "957348c21205caf0a39c26af1a4a6e9038c605ca8bd457139787033c4ca2a092",
+          "header_canonical_sha256": "813d83d7efe5de86534cc7096f1e8b714e6f8b6cb6067ff28d89be15caee4a51",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "9c373da2ff8c91bc27d43755f964712522b0ea301f6ad1e9ff19531650b28660",
+          "header_canonical_sha256": "7ef475d177cc97e8026725afeeda1741d6c7bd0cb8778c634e2201f384488cf6",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "a226eb6979dedd2286f6a2f5e25699aab312f5bb1974c4e0e61d85c3fd3b50f0",
+          "header_canonical_sha256": "98e9f4eb6c385cc690589b7551d6ea1a39e1605ef05e0bfbf02eee9fb5ce8a46",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "a3f8231bedc205077c77aeb8ae0aa1a325d125cc21db4d0fab3e67833a50ac45",
+          "header_canonical_sha256": "af112ebc3a696b792a42691dd565c3f70fcfa3781a41e14664cd8b0cba870895",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "a613d8b83394c7bd23729a9a34845add740f450ad91384508258c735c2f0d2d5",
+          "header_canonical_sha256": "1e0234aaf0d82eb6e403dc7b4f78d9a5e058e58c26979b02e440ec19e27bba5e",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "aa1f3ce594f6314355aec1342cbc7b09bfd1cb0a554548157967a81638b2dcfd",
+          "header_canonical_sha256": "c35424efc9628385e122a65bae840150b9175995e0563d564acc3d83e15ab8f6",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "af77f333226d731abdf74966444107469d3c965d64bdc9ee07649c4534e9bf68",
+          "header_canonical_sha256": "d1b93eb62e93cb7eb7539ec0aa02c866d19ea6d041de861eedb77130cfd06115",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b145d097fcf57651dfb96a092ee02290103a4d4fe1dfd8f791886e48b9e56e5e",
+          "header_canonical_sha256": "c6c2456105ec28080b4d233cb164dae3ad612ee7fd5be4a2e91971d8076927e6",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b302c2e8b6d14787bead79fa88f327b3212e295b9ad5bccddb12bb7935c14044",
+          "header_canonical_sha256": "9886fa111d76ba842690c5cba71082dae1e8ffbd31971c33132e14a7e4421f09",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b3850be0103d9802f5e872ca52d8bfbeddddde5421978b6dc50345d53f80cb8b",
+          "header_canonical_sha256": "b196b91f1d175c4ca6b0a28c0d9509dd0c65f90b3936fc9374ad4c931b809325",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b44e13ba59da7500a26a5bc057bcc5bd71f6bb8850e0eaa7f09391e111002899",
+          "header_canonical_sha256": "a11d769702e8a45e113c1d8361c2258f969a9a552dbf92ff10e720da7f681041",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "b989f687a786abca62a62b7d07dbaef8c955edfd8379bf785fa0bf2719773ecb",
+          "header_canonical_sha256": "ec11fd72e4d1b4b09aece961a0d75f21fb7ed2babca2074bab0a985c1da55f0a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "bf3d6632eca5fc467ae702b2c9ee3e90e7ae94bd914fc0e1d19a2c9a03dd6a6b",
+          "header_canonical_sha256": "b208e3c3c72f49491099508ca388a1b0426a206d1467d21a91fe5493f4551ec0",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "bf92e0592eba50db46d207ff26d1f2b3f1be1da5395250b125f8f76ef56245a3",
+          "header_canonical_sha256": "aae9d24fab7e9dd48da758f1d069d45f4f4dfee5e5e32baecdeffe61b52a994a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c00913adc456b75472681853e1a7d93c52cee4b14c035b0f036cb7e889e23ef7",
+          "header_canonical_sha256": "c7b46c944f48f68f97836f55b0e5efa84a949e10953c13da323ce4c22fb9801c",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c0c9d14d5c1e1fd0c57d9fdbdbc651cea95ebf5caeac7e8392b305b78ef60e08",
+          "header_canonical_sha256": "81f61693311518cab344e6265f9fe4c544eac84d7017da787defd45f90efe06a",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "c1894a62a7a808a2b09a00d16c3db087ee15a57d374c647f686a77153d80da27",
+          "header_canonical_sha256": "68cbdedf147918e0f7b11febe98686dad729c5fb9419bafd1fcb389f73e17743",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "cc30e7193da9489e844191371b4819dde16840d824d50fe1c950d3c0c2ee464b",
+          "header_canonical_sha256": "b4b7897d56ecf3b6e27f4b4672e97f51b91a0c3e364f55e9e3d3e48666a60fe4",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "cca0beccb751180028c4b1bb86aed58f0653a6ddfb9943aeb4070b98989d55ce",
+          "header_canonical_sha256": "40672bb409620cc937efec499bf293e23427f8e8c5a91e4332abda9fde85ea7b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "d9c5175179eaf0324d7594d2801e026da30790fad708acc5be7271538bbd604a",
+          "header_canonical_sha256": "b19373e47ddc4e5c0785f29b686ad0e9a1d99229a45374b88e9dd2b8d521d361",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "da3ddbfd73291e1dd90aa21602890c70ec89915eb9fa2d9589f41cf43016b8e4",
+          "header_canonical_sha256": "e13b9f7020f6f99912487c1bc03635c7606f52ae3e6a3b14865dc85cab2ec115",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "daf57ff478cc29786f58666382811a714bd5c7dd722e5f7a117c3626a4666df7",
+          "header_canonical_sha256": "55f18da1b0a83715c837f9d8deb0bec95a70d032b5f7bf93fe0d8f01e2de2949",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "de971a7974a23de0e75bb3d51e3d77b3eaf0d06a3be3c2621d604050b25dece9",
+          "header_canonical_sha256": "d13e2d2b1369f0315d1f5f88591f8ce598c1426d4c45b063d111ffe785f6a2bf",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "e682318a2e5a3fbfcc1ebfe60e5dac289f733d170f4f2707ff1a49220d2760b4",
+          "header_canonical_sha256": "c6ca915dadde7c171f2e2c45be69734cefcbc0b07573416b2ad188e1ca973485",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "e68b65686cd93f7fe2fca543c2059e5e5638d959c71d630aac28c46b54c192aa",
+          "header_canonical_sha256": "467ef2f6600a71ef95926a6dfa34acb34e233441bd32a103fc7a6b6afb8f111b",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "f19fe448e98eaaf468742f4acc36060227257829ca7d40247abb64422d3bb47e",
+          "header_canonical_sha256": "11177a6e354d4e912c899dcc3c123f2427d6d60ec323ce00b503b313403a28b9",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "f3964a075157833a9554f53865de24cbd209846cb13e5dcf99ff334ec08e653d",
+          "header_canonical_sha256": "3dd160cf7c56d621577549cf85c65e326b065a772c8d6e49838da5b0df6e80f8",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "fb0147ce1adc50c53dc1b870f0827161976e088be23843306017b84e247e1cd4",
+          "header_canonical_sha256": "f648738e9e96de152c393827c58240e6e6b36342cdec62780e0b385a5117fabb",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        },
+        {
+          "snapshot_digest": "fcf88e799ed4186878727ff305e061bec83512fc4eb2a2baa798f9151438557a",
+          "header_canonical_sha256": "1393e36620e079de68be3d934d9a09e90b6bbe063ae1d13ecd73a54bd4679435",
+          "captured_at": null,
+          "decided_at": null,
+          "policy_uid": null,
+          "git_sha": null,
+          "finalized": true
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Read-only source/identity/liveKube observation and all128 retainedrawhash/header/actualreplayrow validation; no newreconciliation orbenchmark dispatched.",
+    "This proves exactnativebaseline fidelity,not endpointobservedhistory, securityefficacy, original10dayresult,or terminalbotacceptance.",
+    "Actualsource rechecked duringthisread; later release/scope changes invalidatecurrentreadiness."
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema": "phorvex-bench.main-ci-observation.v1",
+  "terminal_observed_at": "2026-11-01T22:11:04.421046+00:00",
+  "main_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "overall": "MIXED: source CI success; separate prepared Release failure",
+  "source_ci": "SUCCESS (all five source/harness/E2E/RBAC/dashboard workflows)",
+  "release": "FAILURE (publish and release-pr skipped)",
+  "check_conclusions": {
+    "success": 17,
+    "skipped": 2,
+    "failure": 1
+  },
+  "workflows": [
+    {
+      "id": 41354937810,
+      "name": "Release",
+      "status": "completed",
+      "conclusion": "failure",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937810",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:01:49Z",
+      "event": "push",
+      "run_attempt": 1
+    },
+    {
+      "id": 41354937806,
+      "name": "Benchmark dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937806",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:03:11Z",
+      "event": "push",
+      "run_attempt": 1
+    },
+    {
+      "id": 41354937807,
+      "name": "Workflow harness",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937807",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:03:37Z",
+      "event": "push",
+      "run_attempt": 1
+    },
+    {
+      "id": 41354937815,
+      "name": "E2E harness contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937815",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:05:04Z",
+      "event": "push",
+      "run_attempt": 1
+    },
+    {
+      "id": 41354937804,
+      "name": "Native RBAC contract",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937804",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:04:40Z",
+      "event": "push",
+      "run_attempt": 1
+    },
+    {
+      "id": 41354937898,
+      "name": "PR source validation",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41354937898",
+      "created_at": "2026-11-01T22:01:04Z",
+      "updated_at": "2026-11-01T22:10:36Z",
+      "event": "push",
+      "run_attempt": 1
+    }
+  ],
+  "release_diagnosis": {
+    "error": "servicerelease: component manager deployment chart/values consumer drifted from pinned source",
+    "prepared_source": "76fe5b21",
+    "prepared_record": "b7630de2",
+    "prior_observation": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-eef/source-observation/eef-release.excerpt.log records the same failure before PR198 merged.",
+    "limit": "Shared observed failure text/prepared-record identity; no broader repair or root-cause generalization beyond retained evidence."
+  },
+  "actual_source_checkout": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "tree_equivalence_reference": "../drift-after-64d2/actual-main-tree-equivalence.json SHA2567e9e6b2cd65919e1d90f6a85d66635875b55c36d36fd91dd01eee84784f6a641",
+  "main_drift_after_start": false,
+  "scope": [
+    "Actual main push runs recorded separately from64d2 PRCI; all20 checks terminal, no all-green main claim.",
+    "Read-only GitHub observation/log downloads and evidence writes; no merge/source/live mutation, workflow rerun or cancellation.",
+    "Release publish skip is specific to this workflow; no inference about other actors or current deployed image identity.",
+    "Runtime/bot/measurement/efficacy acceptance remains independently verified by lead and peer."
+  ]
+}

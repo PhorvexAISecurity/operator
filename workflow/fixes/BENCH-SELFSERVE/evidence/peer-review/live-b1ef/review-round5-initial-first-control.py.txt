@@ -1,0 +1,232 @@
+"""Read-only independent verification of retained actual initial round5 outputs."""
+import collections
+import csv
+import datetime
+import hashlib
+import io
+import json
+import pathlib
+import sys
+import tarfile
+import zipfile
+
+sys.dont_write_bytecode = True
+REPO = pathlib.Path('/workspace/operator-benchmark-selfserve')
+sys.path.insert(0, str(REPO / 'benchmark/worker'))
+from mathlab import snapshots, exports
+from mathlab.common import sha256_json
+import openpyxl
+
+E = REPO / 'workflow/fixes/BENCH-SELFSERVE/evidence'
+R = E / 'live/bot-initial-b1ef-r5-artifacts'
+X = R / 'experiment'
+OUT = E / 'peer-review/live-b1ef'
+sha = lambda value: hashlib.sha256(value).hexdigest()
+read = lambda path: json.loads(path.read_text())
+source = 'b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0'
+image = 'sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903'
+binary = 'c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e'
+archive = E / 'live/bot-initial-b1ef-r5-artifacts.tar.gz'
+assert sha(archive.read_bytes()) == '246dc36f3bdff698d9916e836e61dcdd165e2881e252b6738fd7cd92129839e1'
+files = read(R / 'MANIFEST.json')
+assert len(files) == 120 and len({f['path'] for f in files}) == 120
+for f in files:
+    p = R / f['path']
+    assert p.resolve().is_relative_to(R.resolve())
+    assert p.stat().st_size == f['bytes'] and sha(p.read_bytes()) == f['sha256']
+with tarfile.open(archive) as tar:
+    raw_members = [m for m in tar if m.isfile()]
+    assert len(raw_members) == 121
+    for member in raw_members:
+        path = pathlib.PurePosixPath(member.name)
+        if path.parts[0] == R.name:
+            path = pathlib.PurePosixPath(*path.parts[1:])
+        assert (R / path).resolve().is_relative_to(R.resolve())
+        assert tar.extractfile(member).read() == (R / path).read_bytes()
+
+acceptance = read(R / 'acceptance/acceptance-status.json')
+assert acceptance['state'] == acceptance['job_outcome'] == acceptance['restoration'] == 'PASS'
+assert acceptance['source'] == '225877a8ecb4c11eb39980ba932c114f7a8068a4'
+assert acceptance['protected_before'] == acceptance['protected_after']
+assert acceptance['observer_before'] == acceptance['observer_after']
+assert acceptance['observer_before']['ActiveState'] == 'active'
+assert all(v['ActiveState'] == 'active' for v in acceptance['restored_units'].values())
+assert [(j['id'], j['state']) for j in acceptance['jobs']] == [('ce9e3ee08a1c', 'BLOCKED'), ('518953591ee8', 'DONE')]
+
+blocked = R / 'jobs/52c619e5c9d8/endpoint'
+original = (blocked / 'original-request.txt').read_bytes()
+assert original == (R / 'acceptance/original-10d.txt').read_bytes()
+assert sha(original) == '2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3'
+request = read(blocked / 'request.json')
+result = read(blocked / 'result.json')
+assert request['policy'] == 'phorvex-staging-demo/demo-api-defense'
+assert request['ticks'] == 64 and request['sync'] is False
+assert request['study'] == {'window': 864000, 'slo_target': .999}
+assert request['config']['lookback'] == 86400
+assert result['state'] == 'BLOCKED'
+assert result['required_windows'] == {'budget_seconds': 864000, 'burn_seconds': 86400}
+assert not any(result['activity'].values())
+assert all(result[k] is False for k in ('v2_executed', 'v3_executed', 'both_arms_executed'))
+assert all(result[k] is None for k in ('changed_choices', 'comparable_ticks', 'noop', 'forecast_endpoint_seconds', 'counterfactual_actual_charges'))
+reasons = [x['code'] for x in result['preflight']['reasons']]
+assert set(reasons) == {'MOVE_ATTRIBUTION_UNAVAILABLE', 'ENDPOINT_DATASET_UNAVAILABLE'}
+assert result['preflight']['snapshot_count'] == 64
+assert result['preflight']['runtime']['status'] == 'READY'
+assert result['preflight']['runtime']['actual_brain']['git_sha'] == source
+assert result['preflight']['runtime']['actual_brain']['image_digest'] == image
+conversion = read(blocked / 'compatibility-conversion.json')
+assert conversion['original_source_sha256'] == sha(original)
+with zipfile.ZipFile(blocked / 'evidence.zip') as bundle:
+    assert bundle.read('original-request.txt') == original
+    assert json.loads(bundle.read('compatibility-conversion.json')) == conversion
+    for name, digest in read(blocked / 'SHA256SUMS.json').items():
+        assert sha((blocked / name).read_bytes()) == sha(bundle.read(name)) == digest
+
+assert (R / 'acceptance/demo-param-64.txt').read_text() == '[params]\npolicy: phorvex-staging-demo/demo-api-defense\nticks: 64\nsync: false\nP-FEA-006: 1.0 1.2 1.5\n'
+req = read(X / 'request.json')
+manifest = read(X / 'experiment_manifest.json')
+experiment_result = read(X / 'result.json')
+eid = '88aa343c-e701-4d37-ad62-22b88bb66125'
+assert req['experiment_id'] == manifest['experiment_id'] == experiment_result['experiment_id'] == eid
+assert req['parameter_id'] == 'P-FEA-006'
+assert req['namespace'] == 'phorvex-staging-demo' and req['policy'] == 'demo-api-defense'
+assert req['arms'] == [{'arm_id': 'control', 'value_source': 'RECORDED_EFFECTIVE'}, {'arm_id': 'v1.0', 'value': 1.0}, {'arm_id': 'v1.2', 'value': 1.2}, {'arm_id': 'v1.5', 'value': 1.5}]
+assert manifest['request_sha256'] == sha256_json(req)
+assert manifest['stage_provenance'] == req['stage_provenance']
+assert manifest['replay_binary']['binary_sha256'] == req['stage_provenance']['replay']['binary_sha256'] == binary
+assert req['stage_provenance']['brain']['git_sha'] == manifest['replay_binary']['git_sha'] == source
+assert req['stage_provenance']['brain']['image_digest'] == manifest['replay_binary']['image_digest'] == image
+assert experiment_result['state'] == 'COMPLETE' and experiment_result['comparison_status'] == 'MATCHED_REPLAY'
+digests = manifest['cohort']['snapshot_digests']
+assert len(digests) == len(set(digests)) == 64
+assert set(digests) == set(req['cohort']['digests']) == {p.stem for p in (X / 'cohort').glob('*.pxms')}
+assert manifest['cohort']['digests_sha256'] == sha256_json(digests)
+headers = {}
+for digest in digests:
+    raw = X / 'cohort' / (digest + '.pxms')
+    assert sha(raw.read_bytes()) == digest
+    h = snapshots.read_header(raw)
+    assert h['finalized'] is True and h['gitSHA'] == source and h['brainImage'].endswith('@' + image)
+    assert h['captureIdentitySource'] == 'recorder-process'
+    assert h['namespace'] == 'phorvex-staging-demo' and h['policyName'] == 'demo-api-defense'
+    assert h['policyUID'] == '6485e0b3-0f36-4737-b0f5-7e846375da9f' and h['policyGeneration'] == 9
+    headers[digest] = h
+inspections = [json.loads(line) for line in (X / 'inspect.jsonl').read_text().splitlines()]
+assert len(inspections) == 64 and {i['snapshot_digest'] for i in inspections} == set(digests)
+for item in inspections:
+    assert item['header'] == headers[item['snapshot_digest']]
+    assert not item['unreplayable_fields']
+    assert item['effective']['spec.slo.costCeiling'] == 1.2
+rows = [json.loads(line) for line in (X / 'replay.jsonl').read_text().splitlines()]
+arm_values = {'control': 1.2, 'v1.0': 1.0, 'v1.2': 1.2, 'v1.5': 1.5}
+assert len(rows) == 256
+assert collections.Counter(r['arm_id'] for r in rows) == {a: 64 for a in arm_values}
+assert len({(r['arm_id'], r['snapshot']['snapshot_digest']) for r in rows}) == 256
+for row in rows:
+    s = row['snapshot']; h = headers[s['snapshot_digest']]
+    assert row['status'] == 'OK' and row['cross_version'] is False and row['replay_git_sha'] == source
+    for raw_key, header_key in [('captured_at', 'capturedAt'), ('git_sha', 'gitSHA'), ('brain_image', 'brainImage'), ('tick_id', 'tickID'), ('namespace', 'namespace'), ('policy_name', 'policyName'), ('policy_uid', 'policyUID'), ('parameter_manifest_hash', 'parameterManifestHash'), ('policy_overrides_hash', 'policyOverridesHash'), ('process_config_hash', 'processConfigHash'), ('economics_mode', 'economicsMode')]:
+        assert s[raw_key] == h[header_key]
+    assert row['arm_cost_ceiling_effective'] == arm_values[row['arm_id']]
+    if row['arm_id'] == 'control':
+        assert row['baseline_check']['reproduced'] is True and row['baseline_check']['compared_records'] == 3
+    else:
+        assert row.get('baseline_check') is None
+    assert row['selected_set'] == []
+    assert all(d['action'] == 'noop' and d['noop_reason'] == 'REACTIVE_ONLY_NOT_ATTACK_BACKED' and not d['attack_backed'] and not d['security_outcome_verified'] for d in row['decisions'])
+    assert all(not d['actuated'] for d in row['dispatch'])
+assert experiment_result['population']['matched_by_arm'] == {a: 64 for a in arm_values}
+summary = read(X / 'replay-summary.json')
+assert summary['results_by_status'] == {'OK': 256}
+assert summary['baseline_checked'] == summary['baseline_reproduced'] == 64
+assert summary['version_mismatch'] == summary['decode_failures'] == 0
+
+# Verify each table cell against the authoritative retained raw rows, then every workbook sheet against its CSV.
+table_counts = {}
+for name, columns, key in exports.ROW_FILES:
+    actual = list(csv.reader(io.StringIO((X / name).read_text())))
+    expected = [columns]
+    for row in rows:
+        identity = {'experiment_id': eid, **exports._ident(row)}
+        for detail in row.get(key) or []:
+            merged = {**identity, **detail}
+            expected.append([str(exports.safe(merged.get(c))) for c in columns])
+    assert actual == expected, name
+    table_counts[name] = len(actual) - 1
+metrics = read(X / 'metrics.json')
+metric_table = list(csv.reader(io.StringIO((X / 'sweep_results.csv').read_text())))
+assert metric_table == [exports.METRIC_HEADERS] + [[str(exports.safe(m.get(c))) for c in exports.METRIC_HEADERS] for m in metrics]
+assert len(metrics) == 131
+for arm in arm_values:
+    changed = [m for m in metrics if m['arm_id'] == arm and m['metric_id'] == 'M-P21' and m['comparison'] == 'ARM_LEVEL']
+    assert len(changed) == 1 and changed[0]['numerator'] == 0 and changed[0]['denominator'] == 64 and changed[0]['value'] == 0
+for m in metrics:
+    if m['metric_id'] == 'M-S01' or m['metric_id'].startswith('M-D'):
+        assert m['data_status'] == 'UNAVAILABLE' and m['value'] is None
+book = openpyxl.load_workbook(X / 'Phorvex_Math_Lab_Results.xlsx', read_only=True, data_only=True)
+sheet_counts = {}
+for sheet, name in [('Metrics', 'sweep_results.csv'), ('Candidates', 'candidates.csv'), ('Decisions', 'decision_funnel.csv'), ('Costs', 'cost_truth.csv'), ('Gates', 'candidate_gate_trace.csv')]:
+    expected = list(csv.reader(io.StringIO((X / name).read_text())))
+    actual = [[str(v) if v is not None else '' for v in row] for row in book[sheet].iter_rows(values_only=True)]
+    assert actual == expected, sheet
+    sheet_counts[sheet] = len(actual) - 1
+assert any('decision mechanism only' in str(cell) for row in book['Read me'].iter_rows(values_only=True) for cell in row)
+book.close()
+with zipfile.ZipFile(X / 'evidence.zip') as bundle:
+    for name in bundle.namelist():
+        assert bundle.read(name) == (X / name).read_bytes(), name
+activity = read(R / 'jobs/18e300921b28/ACTIVITY.json')
+assert activity['state'] == 'DONE' and activity['started'] == {'model_started': False, 'tests_started': False, 'build_started': False, 'replay_started': True, 'preflight_started': True}
+
+delivery = [json.loads(line) for line in (R / 'acceptance/telegram-delivery.jsonl').read_text().splitlines()]
+assert len(delivery) == 29 and collections.Counter(d['method'] for d in delivery) == {'sendMessage': 16, 'sendDocument': 13}
+reconstructed = {}
+for job in acceptance['jobs']:
+    validation = dict(job['validation']); validation.pop('batch_id')
+    reconstructed['validation-' + validation['id'] + '.json'] = (json.dumps(validation, indent=2) + '\n').encode()
+    stream = io.StringIO(newline=''); writer = csv.writer(stream)
+    writer.writerow(('batch_id', 'index', 'kind', 'state', 'job_id'))
+    writer.writerows((job['id'], row['index'], row['kind'], row['state'], row['job'] or '') for row in job['batch']['results'])
+    reconstructed['batch-' + job['id'] + '.csv'] = stream.getvalue().encode()
+retained = {f['sha256'] for f in files}
+documents = []
+for event in delivery:
+    assert isinstance(event.get('message_id'), int)
+    for doc in event.get('files', []):
+        method = 'retained_raw_file'
+        if doc['sha256'] not in retained:
+            payload = reconstructed[doc['name']]
+            assert sha(payload) == doc['sha256'] and len(payload) == doc['bytes']
+            method = 'byte_exact_reconstruction_from_retained_prequeue_validation_or_batch'
+        documents.append({**doc, 'verified_by': method})
+assert len(documents) == 13
+assert all(d['sha256'] not in {sha((X / 'evidence.zip').read_bytes()), sha((X / 'Phorvex_Math_Lab_Results.xlsx').read_bytes())} for d in documents)
+out = {
+    'verdict': 'PASS_INITIAL_BOT_PARAMETER_REPLAY_AND_TRUTHFUL_ORIGINAL_REFUSAL',
+    'reviewer': 'stage-review', 'at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    'runtime_source': acceptance['source'], 'captured_source': source,
+    'captured_image_digest': image, 'native_binary_sha256': binary,
+    'archive_sha256': sha(archive.read_bytes()), 'artifact_manifest_sha256': sha((R / 'MANIFEST.json').read_bytes()),
+    'retained_files_verified': 120, 'raw_snapshots': 64, 'replay_rows': 256,
+    'arm_values': arm_values, 'exact_control_reproductions': 64,
+    'all_arm_rows_OK_and_same_source': True, 'changed_decisions': 0,
+    'all_decisions_noop_reason': 'REACTIVE_ONLY_NOT_ATTACK_BACKED',
+    'csv_raw_detail_rows_verified': table_counts, 'metric_rows_verified': len(metrics),
+    'xlsx_rows_verified_against_csv': sheet_counts, 'experiment_zip_members_byte_exact': True,
+    'original_request_sha256': sha(original), 'original_required_windows': result['required_windows'],
+    'original_refusal_codes': reasons, 'original_model_test_build_replay_activity': False,
+    'original_unknown_outcomes_remain_null': True,
+    'restoration': 'PASS', 'protected_files_and_observer_unchanged': True,
+    'outbound_messages': len(delivery), 'outbound_documents': documents,
+    'limits': [
+        'Operator-supplied document bytes entered actual receive_document, parser, queue, readiness, replay and report. No incoming Telegram update is claimed; outbound receipts are real.',
+        'Nine actual document payloads match retained raw files; two validation JSON and two batch CSV payloads are byte-exact reconstructions matching actual delivery hashes.',
+        'Parameter XLSX and full experiment ZIP were generated and independently verified, but were not selected by existing run_param Telegram delivery. Do not claim these two files were delivered.',
+        'All arms produced no selected moves in a non-attack cohort. This demonstrates pipeline/override/fidelity, not defense efficacy or causal SLO benefit; ticks need not be independent.',
+        'Original10d remains BLOCKED, with W864000 and L86400 unchanged. Short fixture endpoint coverage and paired endpoint results are still separate pending acceptance.',
+        'This is historical actual-run verification, not a new current cluster readiness assertion; no live mutation or new replay was performed.'
+    ]
+}
+dest = OUT / 'round5-initial-artifacts-review.json'
+dest.write_text(json.dumps(out, indent=2) + '\n')
+print(json.dumps({'path': str(dest), 'sha256': sha(dest.read_bytes()), 'verdict': out['verdict']}, indent=2))

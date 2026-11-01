@@ -1,0 +1,75 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "files": [
+    {
+      "path": "final-harness-job.json",
+      "bytes": 2371,
+      "sha256": "1a29bdba1af043096531aea013dc3692bf598ae16b9df02cc1e2f2a98c410f9f"
+    },
+    {
+      "path": "final-source-jobs.json",
+      "bytes": 31471,
+      "sha256": "8ac3d71c50186de37dccb56f065defad994bee32019244556d743bfa3a4b4424"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 4969,
+      "sha256": "2f9974a2528743dd525fd6b82e8d3301e21e5bd2b263321ad815c3424c5ed8aa"
+    },
+    {
+      "path": "harness-success.excerpt.log",
+      "bytes": 1731,
+      "sha256": "875f200c0238fc13aa47660a2c6c70c72ffeb5808e7f6b2d4b1236e8d3d4a588"
+    },
+    {
+      "path": "harness-success.provenance.json",
+      "bytes": 620,
+      "sha256": "22aea73f2cea19d5d2b62d3c046b7dd1003a11aabc845a144ed14a0781296ec9"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 8830,
+      "sha256": "9527663b8cf8bc71accabfad77910d4a2be70635691362c1d3686b864b772d0d"
+    },
+    {
+      "path": "latest-status.json",
+      "bytes": 9577,
+      "sha256": "1f2fb1dd5a93f95d5c16ec7f1f934f371aebc7e54593a17baaf3abb468da532a"
+    },
+    {
+      "path": "local-harness-check.excerpt.log",
+      "bytes": 114,
+      "sha256": "d6c7063e225c6c21684314fae7a53fb187c90af42dc3afe6649933d50c3a11fb"
+    },
+    {
+      "path": "local-harness-check.provenance.json",
+      "bytes": 744,
+      "sha256": "2abfddf5b198837c80ebd8d1fb0e38c1eb45a18c7d2e041a4cdce1af46c11ce2"
+    },
+    {
+      "path": "merge-6e6499dd27352fade4e782f2840bbfcc61d6c9b7.json",
+      "bytes": 605,
+      "sha256": "254dc598fbfe8f31cb37a53f9ec8efb36878c55f91cf533ed3f57c0eebfaaaaf"
+    },
+    {
+      "path": "source-equivalence.json",
+      "bytes": 3452,
+      "sha256": "52e6fbd5bf364686e0595ef73205e9716756846120c30188009dbfa773ad06ed"
+    },
+    {
+      "path": "source-validation-checkout.excerpt.log",
+      "bytes": 1239,
+      "sha256": "5d1fd85babd8edb03b865a2db21a58c1ad1a806f316f95e842c6e4dc0e788c22"
+    },
+    {
+      "path": "source-validation-checkout.provenance.json",
+      "bytes": 482,
+      "sha256": "ff04bce058546251e10cc6910c9da5cd3eaf73912503635c420bdb34534478ec"
+    },
+    {
+      "path": "status-transitions.json",
+      "bytes": 25517,
+      "sha256": "c33681b2238c6fe635ab325ae27d8d93abe065799608a434701026fd2efec854"
+    }
+  ]
+}

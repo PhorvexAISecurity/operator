@@ -1,0 +1,117 @@
+{
+  "schema": "phorvex-bench.delivery-ci-observation.v1",
+  "terminal_observed_at": "2026-11-01T21:49:18.097831+00:00",
+  "overall": "SUCCESS",
+  "checks": {
+    "success": 17,
+    "failure": 0,
+    "total": 17,
+    "pending": 0
+  },
+  "workflows": [
+    {
+      "id": 41353242451,
+      "name": "Benchmark dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41353242451",
+      "created_at": "2026-11-01T21:40:46Z",
+      "updated_at": "2026-11-01T21:42:55Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41353242447,
+      "name": "Workflow harness",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41353242447",
+      "created_at": "2026-11-01T21:40:46Z",
+      "updated_at": "2026-11-01T21:43:50Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41353242409,
+      "name": "Native RBAC contract",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41353242409",
+      "created_at": "2026-11-01T21:40:46Z",
+      "updated_at": "2026-11-01T21:44:20Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41353242421,
+      "name": "E2E harness contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41353242421",
+      "created_at": "2026-11-01T21:40:46Z",
+      "updated_at": "2026-11-01T21:45:16Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41353242438,
+      "name": "PR source validation",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41353242438",
+      "created_at": "2026-11-01T21:40:46Z",
+      "updated_at": "2026-11-01T21:49:17Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    }
+  ],
+  "pr": {
+    "number": 198,
+    "state": "open",
+    "draft": false,
+    "merged": false,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "updated_at": "2026-11-01T21:40:41Z",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+    "base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  },
+  "current_main_at_terminal": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "actual_tested_merge": {
+    "observed_at": "2026-11-01T21:41:36.363286+00:00",
+    "merge_sha": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "tree_sha": "dd3c109605910e33a957bbf4a051c01cedee0025",
+    "parents": [
+      "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "64d2aaf9b63208bed10e62207cccd101b53b1029"
+    ],
+    "message": "Merge 64d2aaf9b63208bed10e62207cccd101b53b1029 into be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+    "scope": "Actual source-validation charts and Workflow harness job checkout logs independently prove this synthetic merge."
+  },
+  "source_drift_during_observation": false,
+  "source_equivalence": {
+    "receipt": "source-equivalence.json",
+    "sha256": "52e6fbd5bf364686e0595ef73205e9716756846120c30188009dbfa773ad06ed",
+    "result": "Exactly six reviewed metadata/copy files relative to688; every committed file matches the independent review, all non-workflow objects unchanged. Product/build/chart/test content consequently equals verified287."
+  },
+  "repair_acceptance": {
+    "actual_github_workflow_harness": "SUCCESS",
+    "actual_github_test_count": 301,
+    "actual_github_doctor_errors": 0,
+    "local_check": "Lead local301test/doctor0 proof retained separately; actual GitHub result is not inferred from that local check."
+  },
+  "history": "287 sourceCI SUCCESS,688 harness FAILURE and its exact metadata diagnosis remain unchanged.64d2 is a new passing run, not a relabelled failure.",
+  "scope": [
+    "Read-only GitHub REST and bounded logs; no source edits, remote mutations, workflow rerun/cancel or live operation.",
+    "PR198 is open and ready, not merged. This report grants no merge authorization.",
+    "CI/source equivalence does not establish actual stage image identity, bot result delivery, retained endpoint history or security efficacy. Those live obligations remain separate."
+  ]
+}

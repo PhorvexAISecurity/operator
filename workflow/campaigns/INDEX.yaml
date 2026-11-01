@@ -34,5 +34,5 @@ campaigns:
     profile: workflow-v2
   2026-11-01-stage-selfserve:
     directory: campaigns/2026-11-01-stage-selfserve
-    state: RUNNING
+    state: CLOSED
     profile: workflow-v2

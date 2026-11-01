@@ -1,0 +1,18 @@
+90: 2026-11-01T21:40:51.7741647Z ##[group]Fetching the repository
+91: 2026-11-01T21:40:51.7753932Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +6e6499dd27352fade4e782f2840bbfcc61d6c9b7:refs/remotes/pull/198/merge
+92: 2026-11-01T21:40:54.7336496Z From https://github.com/PhorvexSecurity/operator-refactored
+323: 2026-11-01T21:40:54.8451273Z  * [new tag]           sensor-v0.9.0                            -> sensor-v0.9.0
+324: 2026-11-01T21:40:54.8454872Z  * [new ref]           6e6499dd27352fade4e782f2840bbfcc61d6c9b7 -> pull/198/merge
+325: 2026-11-01T21:40:54.8461123Z ##[endgroup]
+350: 2026-11-01T21:40:55.4619999Z ##[endgroup]
+351: 2026-11-01T21:40:55.4680998Z [command]/usr/bin/git log -1 --format=%H
+352: 2026-11-01T21:40:55.4722412Z 6e6499dd27352fade4e782f2840bbfcc61d6c9b7
+353: 2026-11-01T21:40:55.4963859Z ##[group]Run bin="$(bash tools/provision-python.sh 3.11 "$RUNNER_TEMP/python")"
+397: 2026-11-01T21:43:12.2075917Z ----------------------------------------------------------------------
+398: 2026-11-01T21:43:12.2076911Z Ran 301 tests in 131.867s
+399: 2026-11-01T21:43:12.2077380Z 
+400: 2026-11-01T21:43:12.2077699Z OK
+401: 2026-11-01T21:43:16.2297397Z fix index: PASS
+402: 2026-11-01T21:43:16.9502799Z issues render: PASS
+403: 2026-11-01T21:43:46.1184079Z doctor: 0 error(s), 29 warning(s)
+404: 2026-11-01T21:43:46.1188131Z WARN: 221 archived records (fixes 197, campaigns 7 with 52 rounds, assessments 17) are verified only against PhorvexSecurity/operator@65af1c99; here doctor checks their structure, frozen STATUS digests and retained evidence, not removed evidence or source-commit pins (see ARCHIVE.yaml)

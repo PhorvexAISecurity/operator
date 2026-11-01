@@ -1,0 +1,236 @@
+{
+  "schema": "phorvex-bench.final-staged-structural-review.v1",
+  "observed_at": "2026-11-01T22:25:39.912417+00:00",
+  "head": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "index_sha256": "fe13ece01b5c197101d8c92ceaa6f28bb04e8e63fabaa1c76ff930ddc5f080b6",
+  "staged_count": 175,
+  "all_staged_paths_workflow_only": true,
+  "all_product_leaf_modes_and_object_ids_unchanged": true,
+  "unstaged_tracked_edits": [],
+  "round_manifest": {
+    "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/manifest.yaml",
+    "sha256": "3acfa13affa0447c4600f968507dd9ebf2a310d5f35c23e90913643f49040bb3",
+    "entries": 12,
+    "retention_counts": {
+      "git": 12
+    },
+    "rows": [
+      {
+        "id": "initial-bot-archive",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/bot-initial-b1ef-r5-artifacts.tar.gz",
+        "retention": "git"
+      },
+      {
+        "id": "fixture-bot-archive",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/bot-fixture-b1ef-r5-artifacts.tar.gz",
+        "retention": "git"
+      },
+      {
+        "id": "native-baseline-proof",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/native-baselines-current.json",
+        "retention": "git"
+      },
+      {
+        "id": "native-baseline-verdict",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/native-prerequisite-verdict.json",
+        "retention": "git"
+      },
+      {
+        "id": "fixture-ready64-proof",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/ready64-verification.json",
+        "retention": "git"
+      },
+      {
+        "id": "initial-bot-review",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/round5-initial-artifacts-review.json",
+        "retention": "git"
+      },
+      {
+        "id": "initial-delivery-review",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/round5-delivered-report-addendum.json",
+        "retention": "git"
+      },
+      {
+        "id": "runtime-install-proof",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/runtime-install-receipt-225877.json",
+        "retention": "git"
+      },
+      {
+        "id": "capture-rollout-proof",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/capture-v8-rollout-1.json",
+        "retention": "git"
+      },
+      {
+        "id": "round5-preregistered-baseline-control",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/baseline-control.json",
+        "retention": "git"
+      },
+      {
+        "id": "fixture-bot-independent-review",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/fixture-artifact-review.json",
+        "retention": "git"
+      },
+      {
+        "id": "actual-main-handover-independent-review",
+        "resolved": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/references/main-handover-verdict.json",
+        "retention": "git"
+      }
+    ]
+  },
+  "fix_manifest_summary": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/manifest.yaml",
+    "sha256": "fbc917982b673e7edadd04324283c6d8b0b8812140001296ec3b4569c2215515",
+    "entries": 13,
+    "retention_counts": {
+      "git": 13
+    }
+  },
+  "current_status_artifact_checks": [
+    {
+      "name": "decision",
+      "result": "PASS",
+      "source_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+      "path": "workflow/fixes/BENCH-SELFSERVE/03-decision.md",
+      "sha256": "db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c"
+    },
+    {
+      "name": "red",
+      "result": "PASS",
+      "source_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/baseline-red.md",
+      "sha256": "a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3"
+    },
+    {
+      "name": "base_review",
+      "result": "PASS",
+      "source_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/base-review.md",
+      "sha256": "a2e4c7bdd5a13bc3ded53e369356532d743bc5dc10c25d77a768ebca7faee0d0"
+    },
+    {
+      "name": "preflight",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/preflight/receipt.json",
+      "sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3"
+    },
+    {
+      "name": "implementation",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/04-diff.patch",
+      "sha256": "46724a4b57658efee5cbfe1169eddffe7339068ef4bc69a05766ad5bf8b53af2"
+    },
+    {
+      "name": "l0",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/preflight/receipt.json",
+      "sha256": "353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3"
+    },
+    {
+      "name": "l1",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/l1.txt",
+      "sha256": "02065d9fa05fa94f90e3b9fafa6fbdac2a52af061596f889705fb86914db8b01"
+    },
+    {
+      "name": "l2",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/l2.txt",
+      "sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa"
+    },
+    {
+      "name": "positive_control",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/l2.txt",
+      "sha256": "29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa"
+    },
+    {
+      "name": "incident",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/incident.md",
+      "sha256": "f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a"
+    },
+    {
+      "name": "p3",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/p3/verdict.md",
+      "sha256": "e31b15c828bdff2b31be92bf45b61f0817a522069a886f55e952daee6a17cb73"
+    },
+    {
+      "name": "patch_equivalence",
+      "result": "PASS",
+      "source_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-64d2/source-equivalence.json",
+      "sha256": "52e6fbd5bf364686e0595ef73205e9716756846120c30188009dbfa773ad06ed"
+    },
+    {
+      "name": "l3",
+      "result": "PASS",
+      "source_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/l3/main-handover.md",
+      "sha256": "30597728d48863337de2d4bc2f6593fa39f99ac9b51ddd2428763edddd1ee69c"
+    }
+  ],
+  "immutable_seals": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-64d2/manifest.json",
+      "sha256": "2762c6a56673782111154397f9ecb36655b826a6747264b55dac58c29778b9a6",
+      "indexed_member_hashes_verified": 14
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-main-808079a0/manifest.json",
+      "sha256": "7e17be58814ac8be147cf002c34149d033cb6bdaed13c0994e12753c39b8cd9a",
+      "indexed_member_hashes_verified": 10
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/drift-after-64d2/external-merge-seal.json",
+      "sha256": "2165fa0493d0e29d96fa0bc8a6ac01844de5a4fdafb0b12a3586bbb1c514f824",
+      "indexed_member_hashes_verified": 2
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/fixture-b1ef-run/review-manifest.json",
+      "sha256": "1b9e9728674e414e910d2dacd32e36a4e7fc1afaa4f0238cc98fd613e41c10ee",
+      "indexed_member_hashes_verified": 19
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/main-808-handover/post-main-review-manifest.json",
+      "sha256": "664f808cdc0782c5e4cc5974457811302a611ea7e761d2d6ab087f882b4720f7",
+      "indexed_member_hashes_verified": 0
+    }
+  ],
+  "raw_extracted_dirs_absent_from_index": [
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-b1ef-r5-artifacts/",
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-fixture-b1ef-r5-artifacts/"
+  ],
+  "source_bindings": {
+    "brain_image_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "brain_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+    "installed_runtime": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "chart_main": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+    "temporary_source_pins_removed": true
+  },
+  "original_10d": {
+    "windows": {
+      "budget_seconds": 864000,
+      "burn_seconds": 86400
+    },
+    "refusal_codes": [
+      "MOVE_ATTRIBUTION_UNAVAILABLE",
+      "ENDPOINT_DATASET_UNAVAILABLE"
+    ],
+    "model_test_build_replay": false
+  },
+  "planned_administrative_followthrough": [
+    "Remove task auth files and retain real absence receipt only after private publisher/watch reads credentials.",
+    "Close campaign/update cleanup ledger and replace stale pre-merge next_action.",
+    "Append exact administrative retention metadata and final existing doctor/private/index/render receipts; no product/runtime changes."
+  ],
+  "limits": "This validates exact prepared175-file index and read claims against retained independent evidence. It does not authorize new main merge or independently repeat live/numeric experiments; future added administrative files remain separately reviewable."
+}

@@ -1,0 +1,22 @@
+{
+  "verdict": "PASS_EXACT_MERGED_SOURCE_EQUIVALENCE",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T22:05:17.425518+00:00",
+  "actual_main": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "actual_tree": "dd3c109605910e33a957bbf4a051c01cedee0025",
+  "parents": [
+    "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "64d2aaf9b63208bed10e62207cccd101b53b1029"
+  ],
+  "reviewed_pr_head": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+  "tested_synthetic_merge": "6e6499dd27352fade4e782f2840bbfcc61d6c9b7",
+  "reviewed_product_source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "whole_tree_changed_paths": [],
+  "product_changed_paths": [],
+  "runtime_files_verified_against_installed225_manifest": 169,
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "limits": [
+    "Read-only exact Git object verification. Actual cluster retarget/rollout and cleanup remain separate pending checks.",
+    "No new future release or arbitrary main advance is approved. Cleanup must recheck current main and exact owned template immediately."
+  ]
+}

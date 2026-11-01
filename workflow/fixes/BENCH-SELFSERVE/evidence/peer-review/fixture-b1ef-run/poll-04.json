@@ -1,0 +1,69 @@
+{
+  "at": "2026-11-01T21:51:51.881398+00:00",
+  "receipt_sha256": "278cbdd8560150b15043f32c77c98b63794c391bf19f573dc9972d80c6c92ae0",
+  "receipt": {
+    "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "phase": "fixture",
+    "state": "PASS",
+    "job_outcome": "PASS",
+    "restoration": "PASS",
+    "finished_at": "2026-11-01T21:51:10.684660+00:00",
+    "error": null,
+    "restoration_errors": null
+  },
+  "jobs": [
+    {
+      "request": "fixture-endpoint-600s.txt",
+      "batch_id": "9148cab8abaf",
+      "state": "DONE",
+      "children": [
+        {
+          "id": "be9bc9fcd68f",
+          "state": "DONE"
+        }
+      ]
+    },
+    {
+      "request": "fixture-endpoint-custom.txt",
+      "batch_id": "9979ac0c1117",
+      "state": "DONE",
+      "children": [
+        {
+          "id": "4b45b14bbdb3",
+          "state": "DONE"
+        }
+      ]
+    }
+  ],
+  "phorvex-selfserve-acceptance-fixture-225877a8ecb4-b1ef-r5": {
+    "MainPID": "0",
+    "Result": "success",
+    "ExecMainStatus": "0",
+    "ActiveState": "inactive",
+    "SubState": "dead"
+  },
+  "phorvex-stage-observer.service": {
+    "MainPID": "1648552",
+    "Result": "success",
+    "ExecMainStatus": "0",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "phorvex-benchmark-bot.service": {
+    "MainPID": "1735737",
+    "Result": "success",
+    "ExecMainStatus": "0",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "phorvex-stage-endpoint-refresh.timer": {
+    "Result": "success",
+    "ActiveState": "active",
+    "SubState": "waiting"
+  },
+  "phorvex-stage-reconcile.timer": {
+    "Result": "success",
+    "ActiveState": "active",
+    "SubState": "running"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "observed_at": "2026-11-01T21:30:26.160653+00:00",
+  "merge_sha": "aa1aeb8a179de931c805c3031586c2c703e0bf55",
+  "tree_sha": "e7ebbaa24174e8b4bc8b0ef5e5199f343cef30d2",
+  "parents": [
+    "be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "688a6db5fec9ea80504d92bab40299d98e2f5880"
+  ],
+  "message": "Merge 688a6db5fec9ea80504d92bab40299d98e2f5880 into be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/aa1aeb8a179de931c805c3031586c2c703e0bf55",
+  "scope": "GitHub synthetic merge object, actual CI checkout log pending."
+}

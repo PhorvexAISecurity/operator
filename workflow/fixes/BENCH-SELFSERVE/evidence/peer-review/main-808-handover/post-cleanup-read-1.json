@@ -1,0 +1,2926 @@
+{
+  "schema": "phorvex-bench.peer-post-main-readonly.v1",
+  "started_at": "2026-11-01T22:13:33.126254+00:00",
+  "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+  "objects": {
+    "appset": {
+      "identity": {
+        "name": "phorvex-services",
+        "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+        "generation": 21,
+        "resourceVersion": "103601611"
+      },
+      "spec": {
+        "generators": [
+          {
+            "matrix": {
+              "generators": [
+                {
+                  "list": {
+                    "elements": [
+                      {
+                        "environment": "staging",
+                        "namespace": "phorvex-staging",
+                        "release": "staging",
+                        "server": "https://kubernetes.default.svc"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "list": {
+                    "elements": [
+                      {
+                        "chart": "phorvex/charts/phorvex",
+                        "service": "manager"
+                      },
+                      {
+                        "chart": "deploy/charts/phorvex-brain",
+                        "service": "brain"
+                      },
+                      {
+                        "chart": "deploy/charts/phorvex-sensor",
+                        "service": "sensor"
+                      },
+                      {
+                        "chart": "deploy/charts/phorvex-actuator",
+                        "service": "actuator"
+                      },
+                      {
+                        "chart": "deploy/charts/phorvex-attacks",
+                        "service": "attacks"
+                      },
+                      {
+                        "chart": "deploy/charts/phorvex-console",
+                        "service": "console"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "goTemplate": true,
+        "goTemplateOptions": [
+          "missingkey=error"
+        ],
+        "template": {
+          "metadata": {
+            "finalizers": [
+              "resources-finalizer.argocd.argoproj.io"
+            ],
+            "labels": {
+              "app.kubernetes.io/part-of": "phorvex",
+              "phorvex.ai/environment": "{{.environment}}",
+              "phorvex.ai/service": "{{.service}}"
+            },
+            "name": "phorvex-{{.service}}-{{.environment}}"
+          },
+          "spec": {
+            "destination": {
+              "namespace": "{{.namespace}}",
+              "server": "{{.server}}"
+            },
+            "ignoreDifferences": [
+              {
+                "group": "apiextensions.k8s.io",
+                "jsonPointers": [
+                  "/status"
+                ],
+                "kind": "CustomResourceDefinition"
+              },
+              {
+                "jsonPointers": [
+                  "/data"
+                ],
+                "kind": "ConfigMap",
+                "name": "agent-deny-guard",
+                "namespace": "p6-demo"
+              },
+              {
+                "jsonPointers": [
+                  "/data"
+                ],
+                "kind": "Secret",
+                "name": "{{.release}}-phorvex-webhook-cert"
+              },
+              {
+                "group": "admissionregistration.k8s.io",
+                "jqPathExpressions": [
+                  ".webhooks[]?.clientConfig.caBundle"
+                ],
+                "kind": "MutatingWebhookConfiguration"
+              },
+              {
+                "group": "admissionregistration.k8s.io",
+                "jqPathExpressions": [
+                  ".webhooks[]?.clientConfig.caBundle"
+                ],
+                "kind": "ValidatingWebhookConfiguration"
+              }
+            ],
+            "project": "phorvex-services",
+            "sources": [
+              {
+                "helm": {
+                  "releaseName": "{{.release}}",
+                  "skipCrds": true,
+                  "valueFiles": [
+                    "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+                    "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+                    "$values/deploy/environments/{{.environment}}/catalogue-family.yaml"
+                  ]
+                },
+                "path": "{{.chart}}",
+                "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+                "targetRevision": "main"
+              },
+              {
+                "ref": "values",
+                "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+                "targetRevision": "main"
+              }
+            ],
+            "syncPolicy": {
+              "automated": {
+                "enabled": true,
+                "prune": false,
+                "selfHeal": true
+              },
+              "retry": {
+                "backoff": {
+                  "duration": "15s",
+                  "factor": 2
+                },
+                "limit": 3
+              },
+              "syncOptions": [
+                "CreateNamespace=true",
+                "ServerSideApply=true",
+                "RespectIgnoreDifferences=true"
+              ]
+            }
+          }
+        },
+        "templatePatch": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: main\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: main\n{{- end }}"
+      }
+    },
+    "pvc": {
+      "identity": {
+        "name": "staging-brain-mathlab",
+        "uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+        "generation": null,
+        "resourceVersion": "102305250"
+      },
+      "status": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "capacity": {
+          "storage": "2Gi"
+        },
+        "phase": "Bound"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "2Gi"
+          }
+        },
+        "storageClassName": "gp2-csi",
+        "volumeMode": "Filesystem",
+        "volumeName": "pvc-dab89cf9-6bea-4211-9487-f87c84fa0f5f"
+      }
+    },
+    "grants": {
+      "identity": {
+        "name": "staging-phorvex-console-grants",
+        "uid": "b5e870c8-2fde-4c69-a4da-c3e4b4523538",
+        "generation": null,
+        "resourceVersion": "103547816"
+      },
+      "data": {
+        "subjects": [
+          {
+            "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB",
+            "note": "The production console's operator, confined to staging's demo tenant.",
+            "roles": [
+              "operator"
+            ],
+            "subject": "71fb8550-3041-702a-5735-a33baf8836c8",
+            "targets": [
+              "default"
+            ],
+            "tenants": [
+              "console-identity-shared"
+            ]
+          },
+          {
+            "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+            "note": "Staging End-to-End runs against the demo tenant; token minted per run, never stored.",
+            "roles": [
+              "operator"
+            ],
+            "subject": "system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e",
+            "targets": [
+              "default"
+            ],
+            "tenants": [
+              "console-identity-shared"
+            ]
+          },
+          {
+            "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+            "note": "Read-only source-pinned stage brain benchmark snapshot collection.",
+            "roles": [
+              "investor"
+            ],
+            "subject": "system:serviceaccount:phorvex-staging:staging-brain-benchmark",
+            "targets": [
+              "default"
+            ],
+            "tenants": [
+              "phorvex-staging-demo"
+            ]
+          }
+        ],
+        "version": 1
+      },
+      "sha256": "b1e8c33ca2b7eb7fbcac86285609c763918e4a35ba197d8a3e400cadb4394361"
+    },
+    "staging-brain": {
+      "identity": {
+        "name": "staging-brain",
+        "uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+        "generation": 42,
+        "resourceVersion": "103548186"
+      },
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/name": "phorvex-brain"
+        }
+      },
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T21:11:56Z",
+            "lastUpdateTime": "2026-11-01T21:11:56Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-22T10:03:41Z",
+            "lastUpdateTime": "2026-11-01T21:11:56Z",
+            "message": "ReplicaSet \"staging-brain-586ccc7d47\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 42,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      },
+      "securityContext": {
+        "fsGroup": 65532,
+        "fsGroupChangePolicy": "OnRootMismatch",
+        "runAsNonRoot": true,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "volumes": [
+        {
+          "name": "math-lab",
+          "persistentVolumeClaim": {
+            "claimName": "staging-brain-mathlab"
+          }
+        },
+        {
+          "name": "grpc-tls",
+          "secret": {
+            "defaultMode": 420,
+            "secretName": "staging-brain-grpc-tls"
+          }
+        }
+      ],
+      "containers": [
+        {
+          "name": "brain",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "args": [
+            "--listen=:9090",
+            "--metrics-bind-address=:8080",
+            "--health-probe-bind-address=:8081",
+            "--gpu-envelope-max=0.2925",
+            "--shutdown-grace=20s",
+            "--log-level=info",
+            "--log-format=json",
+            "--math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense",
+            "--math-lab-capture-dir=/var/lib/phorvex/math-lab",
+            "--math-lab-capture-max-bytes=1073741824",
+            "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+            "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+            "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+            "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+          ],
+          "volumeMounts": [
+            {
+              "mountPath": "/var/lib/phorvex/math-lab",
+              "name": "math-lab"
+            },
+            {
+              "mountPath": "/etc/phorvex/grpc-tls",
+              "name": "grpc-tls",
+              "readOnly": true
+            }
+          ]
+        }
+      ]
+    },
+    "staging-phorvex": {
+      "identity": {
+        "name": "staging-phorvex",
+        "uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+        "generation": 95,
+        "resourceVersion": "103548238"
+      },
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/name": "phorvex"
+        }
+      },
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T21:11:59Z",
+            "lastUpdateTime": "2026-11-01T21:11:59Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-31T08:36:36Z",
+            "lastUpdateTime": "2026-11-01T21:11:59Z",
+            "message": "ReplicaSet \"staging-phorvex-947f858bf\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 95,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      },
+      "securityContext": {
+        "fsGroup": 65532,
+        "fsGroupChangePolicy": "OnRootMismatch",
+        "runAsNonRoot": true
+      },
+      "volumes": [
+        {
+          "name": "grpc-tls",
+          "secret": {
+            "defaultMode": 420,
+            "secretName": "staging-dispatcher-grpc-tls"
+          }
+        },
+        {
+          "name": "audit",
+          "persistentVolumeClaim": {
+            "claimName": "staging-phorvex-audit"
+          }
+        },
+        {
+          "name": "audit-server",
+          "secret": {
+            "defaultMode": 420,
+            "secretName": "staging-phorvex-audit-server"
+          }
+        },
+        {
+          "emptyDir": {},
+          "name": "calibration-evidence"
+        }
+      ],
+      "containers": [
+        {
+          "name": "manager",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+          "args": [
+            "--base-interval=10s",
+            "--actions-supported-debounce=3",
+            "--calibration-shadow=true",
+            "--calibration-sample=5m",
+            "--calibration-refresh=30m",
+            "--calibration-lookback=168h",
+            "--calibration-export-dir=/var/run/phorvex-calibration",
+            "--metrics-bind-address=:8080",
+            "--health-probe-bind-address=:8081",
+            "--leader-elect=true",
+            "--brain-endpoint=staging-brain:9090",
+            "--sensor-endpoint=staging-sensor:9090",
+            "--actuator-endpoint=staging-actuator:9090",
+            "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+            "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+            "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+            "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+            "--policy-namespaces=phorvex-staging-demo,console-identity-shared",
+            "--max-retained-quarantines-per-namespace=1",
+            "--serving-security-mode=secure-required",
+            "--gpu-envelope-max=0.2925",
+            "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+            "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+            "--persistence-observer-identity=",
+            "--persistence-observer-namespaces=",
+            "--audit-json=/audit/live.jsonl",
+            "--audit-max-bytes=268435456",
+            "--audit-max-backups=4",
+            "--audit-source-addr=:8445",
+            "--audit-source-cert=/etc/audit-server/tls.crt",
+            "--audit-source-key=/etc/audit-server/tls.key",
+            "--audit-source-ca=/etc/audit-server/ca.crt",
+            "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc",
+            "--math-lab-capture-cost-evidence=true"
+          ],
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/phorvex/grpc-tls",
+              "name": "grpc-tls",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/audit",
+              "name": "audit"
+            },
+            {
+              "mountPath": "/etc/audit-server",
+              "name": "audit-server",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/var/run/phorvex-calibration",
+              "name": "calibration-evidence"
+            }
+          ]
+        }
+      ]
+    },
+    "staging-phorvex-console": {
+      "identity": {
+        "name": "staging-phorvex-console",
+        "uid": "bf3cfe69-4c96-415b-84be-f929ef759602",
+        "generation": 64,
+        "resourceVersion": "103548176"
+      },
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/instance": "staging",
+          "app.kubernetes.io/name": "phorvex-console"
+        }
+      },
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T21:11:55Z",
+            "lastUpdateTime": "2026-11-01T21:11:55Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-22T15:03:41Z",
+            "lastUpdateTime": "2026-11-01T21:11:55Z",
+            "message": "ReplicaSet \"staging-phorvex-console-6667fd58c\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 64,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      },
+      "securityContext": {
+        "fsGroup": 65532,
+        "runAsNonRoot": true
+      },
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "console-tmp"
+        },
+        {
+          "name": "console-state",
+          "persistentVolumeClaim": {
+            "claimName": "staging-phorvex-console-state"
+          }
+        },
+        {
+          "name": "audit-client",
+          "secret": {
+            "defaultMode": 420,
+            "secretName": "staging-phorvex-audit-client"
+          }
+        },
+        {
+          "configMap": {
+            "defaultMode": 288,
+            "name": "staging-phorvex-console-grants"
+          },
+          "name": "console-grants"
+        }
+      ],
+      "containers": [
+        {
+          "name": "console",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:7fc7ce8760b28b5ed49d96f63e96234ba42dde66a45e36a950b8f5f8ff1c08a4",
+          "args": [
+            "-root=/data",
+            "-web=/app/web",
+            "-addr=:8090",
+            "-state-dir=/var/lib/phorvex-console",
+            "-audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445",
+            "-audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc",
+            "-audit-source-client-cert=/etc/audit-client/tls.crt",
+            "-audit-source-client-key=/etc/audit-client/tls.key",
+            "-audit-source-ca=/etc/audit-client/ca.crt",
+            "-metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+            "-auth-grants=/etc/phorvex-console/grants.json"
+          ],
+          "volumeMounts": [
+            {
+              "mountPath": "/etc/audit-client",
+              "name": "audit-client",
+              "readOnly": true
+            },
+            {
+              "mountPath": "/tmp",
+              "name": "console-tmp"
+            },
+            {
+              "mountPath": "/var/lib/phorvex-console",
+              "name": "console-state"
+            },
+            {
+              "mountPath": "/etc/phorvex-console",
+              "name": "console-grants",
+              "readOnly": true
+            }
+          ]
+        }
+      ]
+    },
+    "app-brain": {
+      "identity": {
+        "name": "phorvex-brain-staging",
+        "uid": "cf609874-de56-4d97-b92d-170650933d32",
+        "generation": 5314,
+        "resourceVersion": "103605040"
+      },
+      "sources": [
+        {
+          "helm": {
+            "releaseName": "staging",
+            "skipCrds": true,
+            "valueFiles": [
+              "$values/deploy/environments/staging/phorvex.yaml",
+              "$values/deploy/environments/staging/brain.yaml",
+              "$values/deploy/environments/staging/catalogue-family.yaml"
+            ]
+          },
+          "path": "deploy/charts/phorvex-brain",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        },
+        {
+          "ref": "values",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        }
+      ],
+      "health": {
+        "lastTransitionTime": "2026-11-01T21:11:56Z",
+        "status": "Healthy"
+      },
+      "operation": "Succeeded",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/brain.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "deploy/charts/phorvex-brain",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "808079a03728b3ac5f449ba268bb91b20e95c93d",
+          "808079a03728b3ac5f449ba268bb91b20e95c93d"
+        ],
+        "status": "Synced"
+      },
+      "conditions": [],
+      "outofsync_resources": []
+    },
+    "app-manager": {
+      "identity": {
+        "name": "phorvex-manager-staging",
+        "uid": "2e6e3ccf-b2f6-46ad-855a-25a6e77ac9b9",
+        "generation": 5656,
+        "resourceVersion": "103604883"
+      },
+      "sources": [
+        {
+          "helm": {
+            "releaseName": "staging",
+            "skipCrds": true,
+            "valueFiles": [
+              "$values/deploy/environments/staging/phorvex.yaml",
+              "$values/deploy/environments/staging/manager.yaml",
+              "$values/deploy/environments/staging/catalogue-family.yaml"
+            ]
+          },
+          "path": "phorvex/charts/phorvex",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        },
+        {
+          "ref": "values",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        }
+      ],
+      "health": {
+        "lastTransitionTime": "2026-11-01T21:11:59Z",
+        "status": "Healthy"
+      },
+      "operation": "Succeeded",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/manager.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "phorvex/charts/phorvex",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "808079a03728b3ac5f449ba268bb91b20e95c93d",
+          "808079a03728b3ac5f449ba268bb91b20e95c93d"
+        ],
+        "status": "OutOfSync"
+      },
+      "conditions": [],
+      "outofsync_resources": [
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-catalogue-credential-revoke",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-agent-action-deny",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-output-policy-activation",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-catalogue-credential-revoke",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-actuator-routine",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-agent-action-deny",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-output-policy-activation",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        }
+      ]
+    },
+    "app-console": {
+      "identity": {
+        "name": "phorvex-console-staging",
+        "uid": "463fd824-9791-4e74-b8c5-09b41b00a3ad",
+        "generation": 5193,
+        "resourceVersion": "103604386"
+      },
+      "sources": [
+        {
+          "helm": {
+            "releaseName": "staging",
+            "skipCrds": true,
+            "valueFiles": [
+              "$values/deploy/environments/staging/phorvex.yaml",
+              "$values/deploy/environments/staging/console.yaml",
+              "$values/deploy/environments/staging/catalogue-family.yaml"
+            ]
+          },
+          "path": "deploy/charts/phorvex-console",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        },
+        {
+          "ref": "values",
+          "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+          "targetRevision": "main"
+        }
+      ],
+      "health": {
+        "lastTransitionTime": "2026-11-01T21:11:56Z",
+        "status": "Healthy"
+      },
+      "operation": "Succeeded",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/console.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "deploy/charts/phorvex-console",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "808079a03728b3ac5f449ba268bb91b20e95c93d",
+          "808079a03728b3ac5f449ba268bb91b20e95c93d"
+        ],
+        "status": "OutOfSync"
+      },
+      "conditions": [],
+      "outofsync_resources": [
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-cleanup",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-cleanup-ledger",
+          "namespace": "phorvex-staging",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "Role",
+          "name": "staging-phorvex-attacks-ledger-read",
+          "namespace": "phorvex-staging",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-cleanup",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p1-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p2-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p4-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-target",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-console-policy-edit",
+          "namespace": "p6-demo",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-cleanup-ledger",
+          "namespace": "phorvex-staging",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        },
+        {
+          "group": "rbac.authorization.k8s.io",
+          "kind": "RoleBinding",
+          "name": "staging-phorvex-attacks-ledger-read",
+          "namespace": "phorvex-staging",
+          "requiresPruning": true,
+          "status": "OutOfSync",
+          "version": "v1"
+        }
+      ]
+    },
+    "demo-api-defense": {
+      "identity": {
+        "name": "demo-api-defense",
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "resourceVersion": "103605579"
+      },
+      "mode": "active",
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "demo-api"
+        }
+      }
+    },
+    "stage-bench-defense": {
+      "identity": {
+        "name": "stage-bench-defense",
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "generation": 1,
+        "resourceVersion": "103605633"
+      },
+      "mode": "dryRun",
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      }
+    },
+    "workload-demo-api": {
+      "identity": {
+        "name": "demo-api",
+        "uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "generation": 3,
+        "resourceVersion": "98515125"
+      },
+      "replicas": 3,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "demo-api"
+        }
+      },
+      "status": {
+        "availableReplicas": 3,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-22T23:07:15Z",
+            "lastUpdateTime": "2026-10-22T23:07:18Z",
+            "message": "ReplicaSet \"demo-api-7c788969c\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          },
+          {
+            "lastTransitionTime": "2026-10-28T18:02:52Z",
+            "lastUpdateTime": "2026-10-28T18:02:52Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          }
+        ],
+        "observedGeneration": 3,
+        "readyReplicas": 3,
+        "replicas": 3,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 3
+      },
+      "securityContext": {
+        "runAsNonRoot": true,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "volumes": [
+        {
+          "emptyDir": {},
+          "name": "tmp"
+        },
+        {
+          "configMap": {
+            "defaultMode": 420,
+            "name": "demo-api-nginx"
+          },
+          "name": "nginx-conf"
+        }
+      ],
+      "containers": [
+        {
+          "name": "web",
+          "image": "public.ecr.aws/nginx/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+          "args": [],
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp",
+              "name": "tmp"
+            },
+            {
+              "mountPath": "/etc/nginx/conf.d",
+              "name": "nginx-conf",
+              "readOnly": true
+            }
+          ]
+        },
+        {
+          "name": "exporter",
+          "image": "public.ecr.aws/nginx/nginx-prometheus-exporter:1.5.3@sha256:85666e7fde7e253f1c6d978f9a961245df4c9cdb7677e1866d9bb28e8f9ee41d",
+          "args": [
+            "--nginx.scrape-uri=http://127.0.0.1:8081/stub_status"
+          ],
+          "volumeMounts": []
+        }
+      ]
+    },
+    "service-demo-api": {
+      "identity": {
+        "name": "demo-api",
+        "uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+        "generation": null,
+        "resourceVersion": "92134889"
+      },
+      "selector": {
+        "app.kubernetes.io/name": "demo-api"
+      }
+    },
+    "workload-stage-bench-api": {
+      "identity": {
+        "name": "stage-bench-api",
+        "uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "generation": 1,
+        "resourceVersion": "102895876"
+      },
+      "replicas": 3,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      },
+      "status": {
+        "availableReplicas": 3,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-31T22:37:22Z",
+            "lastUpdateTime": "2026-10-31T22:37:26Z",
+            "message": "ReplicaSet \"stage-bench-api-f9b895d7\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          },
+          {
+            "lastTransitionTime": "2026-11-01T09:35:35Z",
+            "lastUpdateTime": "2026-11-01T09:35:35Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          }
+        ],
+        "observedGeneration": 1,
+        "readyReplicas": 3,
+        "replicas": 3,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 3
+      },
+      "securityContext": {
+        "fsGroup": 101,
+        "runAsNonRoot": true,
+        "runAsUser": 101,
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      },
+      "volumes": [
+        {
+          "emptyDir": {
+            "sizeLimit": "16Mi"
+          },
+          "name": "tmp"
+        }
+      ],
+      "containers": [
+        {
+          "name": "web",
+          "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+          "args": [],
+          "volumeMounts": [
+            {
+              "mountPath": "/tmp",
+              "name": "tmp"
+            }
+          ]
+        }
+      ]
+    },
+    "service-stage-bench-api": {
+      "identity": {
+        "name": "stage-bench-api",
+        "uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+        "generation": null,
+        "resourceVersion": "102290061"
+      },
+      "selector": {
+        "app.kubernetes.io/name": "stage-bench-api"
+      }
+    }
+  },
+  "runtime": {
+    "phorvex-stage-observer.service": {
+      "MainPID": "1648552",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1735737",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "Result": "success",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "1761505",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "activating",
+      "SubState": "start",
+      "UnitFileState": "static"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "Result": "success",
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-stage-reconcile.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "inactive",
+      "SubState": "dead",
+      "UnitFileState": "static"
+    },
+    "phorvex-benchmark-api.service": {
+      "MainPID": "3936630",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/api",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-proxy.service": {
+      "MainPID": "3936645",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/config",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "phorvex-benchmark-web.service": {
+      "MainPID": "3936644",
+      "Result": "success",
+      "NRestarts": "0",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/web",
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled"
+    },
+    "observer": {
+      "sha256": "8d30a8860dcd7b9aa758c82fdfb1670045d0244e4a583ab38735952702b8e2cd",
+      "value": {
+        "at": "2026-11-01T22:13:56.270268Z",
+        "capacity": {
+          "free_bytes": 5786640384,
+          "image_binary_cache_bytes": 198704826,
+          "native_baseline_bytes": 58772818,
+          "reserve_bytes": 4294967296,
+          "snapshot_cache_bytes": 166885050
+        },
+        "continuity": "Actual journal watch segments only; restart/source changes never bridge history.",
+        "descriptor": {
+          "brain_deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+          "manager": {
+            "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+            "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+            "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+            "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373"
+          },
+          "policy": "phorvex-staging-demo/stage-bench-defense",
+          "policy_generation": 1,
+          "schema": "phorvex-bench.observer-runtime.v1",
+          "scope": {
+            "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+            "deployment_name": "stage-bench-api",
+            "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+            "measurement": "watch-observed-service-ready-backends",
+            "mode": "isolated-calibration",
+            "namespace": "phorvex-staging-demo",
+            "policy_name": "stage-bench-defense",
+            "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+            "repository": "PhorvexSecurity/operator-refactored",
+            "schema": "phorvex-stage.scope.v1",
+            "selector": {
+              "app.kubernetes.io/name": "stage-bench-api"
+            },
+            "service_name": "stage-bench-api",
+            "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+            "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+            "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+          },
+          "workload_generation": 1
+        },
+        "journal": "/home/hami/phorvex-benchmark/stage-data/observer/managed/sha256:cb296e9016e97e25ace7ed7d168d195165bc19605671f9d54422c04f9197bb0c/compressed-evidence.db",
+        "owned_pid": 1705633,
+        "schema": "phorvex-bench.observer-runtime.v1",
+        "state": "RUNNING"
+      }
+    },
+    "pin": {
+      "sha256": "a5f4f0909efe81b3277ddea029550eab970f5ff107fa4bc1738b90ed89173bcb",
+      "value": {
+        "brain": {
+          "container": "brain",
+          "deployment": "staging-brain",
+          "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+          "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "embedded_version": {
+            "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+            "service": "brain",
+            "version": "0.10.0"
+          },
+          "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "pods": [
+            {
+              "name": "staging-brain-586ccc7d47-mlrnj",
+              "uid": "3eaa3f61-855d-49e7-a471-c0996f268fab"
+            }
+          ],
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
+        },
+        "capture": {
+          "cost_evidence": true,
+          "directory": "/var/lib/phorvex/math-lab",
+          "enabled": true,
+          "persistent_claim": "staging-brain-mathlab",
+          "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+          "policies": [
+            "phorvex-staging-demo/demo-api-defense",
+            "phorvex-staging-demo/stage-bench-defense"
+          ]
+        },
+        "console": {
+          "audience": "phorvex-staging-console",
+          "port": 80,
+          "service": "staging-phorvex-console",
+          "service_account": "staging-brain-benchmark"
+        },
+        "identity_binding": "stage-pin.replay.v1",
+        "installed_at": "2026-11-01T21:20:10.927259Z",
+        "kube_context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+        "manager": {
+          "container": "manager",
+          "deployment": "staging-phorvex",
+          "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+          "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+          "embedded_version": {
+            "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+            "service": "manager",
+            "version": "0.16.0"
+          },
+          "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+          "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+          "pods": [
+            {
+              "name": "staging-phorvex-947f858bf-nlp4n",
+              "uid": "750d0653-81e4-4dba-b719-b8ad29498972"
+            }
+          ],
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
+        },
+        "native_study": {
+          "baseline_evidence": [
+            {
+              "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:f32ccfdfff6944ec924d671cc667810a0901191da5028df6bf5b092ced29066c.json",
+              "sha256": "56b154ed04a88bd2af45220ddb370180781f053251473d84c288cb9bdb4d5300"
+            },
+            {
+              "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:7f178e616c1972a8c31d1e78104c07cd70e92d1fd7e950eab0f7c1aa19ed466d.json",
+              "sha256": "c0ad385af71ee84756bc336769ace9fc99c8ebc81a0634020fad3f231cd7cab3"
+            }
+          ],
+          "binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+          "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "schema": "phorvex-bench.native-study.v1",
+          "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+        },
+        "policies": {
+          "phorvex-staging-demo/demo-api-defense": {
+            "generation": 9,
+            "mode": "active",
+            "selector": {
+              "matchLabels": {
+                "app.kubernetes.io/name": "demo-api"
+              }
+            },
+            "service_name": "demo-api",
+            "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+            "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+            "workload_generation": 3,
+            "workload_name": "demo-api",
+            "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b"
+          },
+          "phorvex-staging-demo/stage-bench-defense": {
+            "generation": 1,
+            "mode": "dryRun",
+            "selector": {
+              "matchLabels": {
+                "app.kubernetes.io/name": "stage-bench-api"
+              }
+            },
+            "service_name": "stage-bench-api",
+            "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+            "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+            "workload_generation": 1,
+            "workload_name": "stage-bench-api",
+            "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+          }
+        },
+        "replay": {
+          "binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+          "brain_image": "notAvailable",
+          "endpoint_study_mode": "PAIRED_BRAIN_REPLAY",
+          "extracted_at": "2026-11-01T21:13:28.719321Z",
+          "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "layer_digest": "sha256:7da1edf35d19264a0afdcdc0cedad7f57481a48fd05b2fe0daa9980d570f3dbc",
+          "overridable_parameters": [
+            "P-FEA-006",
+            "P-FEA-005",
+            "P-OBJ-003"
+          ],
+          "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903/brain-replay",
+          "platform_manifest_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+          "producer": "stage-brain-image",
+          "replay_schema": "math-lab.replay.v1",
+          "schema_version": "math-lab.replay-binary.v1",
+          "snapshot_schema": "math-lab.snapshot.v1",
+          "study_candidates_schema": "math-lab.study-candidates.v1"
+        },
+        "repository": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "schema": "phorvex-bench.stage-pin.v1",
+        "service_namespace": "phorvex-staging",
+        "study_engine_lane": "native-stage-image"
+      }
+    },
+    "refresh": {
+      "sha256": "7522863b019069206515348a5aea42804ae4eb815e65a3d23eecdd7f24573e3e",
+      "value": {
+        "bounds": {
+          "corpus_bytes": 2147483648,
+          "generation_bytes": 536870912,
+          "observation_age_seconds": 600,
+          "timeout_seconds": 900,
+          "work_bytes": 536870912
+        },
+        "phase": "DISCOVER",
+        "policy": "phorvex-staging-demo/stage-bench-defense",
+        "requested_ticks": 64,
+        "schema": "phorvex-stage.endpoint-refresh.v1",
+        "started_at": "2026-11-01T22:11:49.875989Z",
+        "state": "RUNNING",
+        "study_settings": {
+          "lookback": 600.0,
+          "target": 0.9,
+          "window": 600.0,
+          "worth_threshold": 0.0
+        }
+      }
+    },
+    "dataset": {
+      "sha256": "8ff3d1b4c65c74a345c3c00dfe576d2945ccf23fe3f05fc1787c7506906ab88b",
+      "value": {
+        "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+        "normalization": {
+          "authoritative_admission": false,
+          "bindings": [
+            {
+              "at": 1793569965.6196764,
+              "candidate_export_sha256": "939ae019f539100aca48dfbc55bb2f21e9859e713667aedfdb9e66a8857c2db3",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "07771630269283073664a93b52fb5d300114a1bec5187a8b88edcbd53b2d32f9",
+              "journal_seq": 882,
+              "original_tick_id": "f0473cc06e495ee94911ed3381d35b51",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "cd6fa88b02708eb27ae4db894163a97ca98804f37ee364df5b9626ccf88864d5",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569970.7386053,
+              "candidate_export_sha256": "2fea8db9fe9700b11343580ad6ffe475613faa3938b40c2e64c8d41c46f32cb5",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "a1bd37ba780f394fd8af0296522fa40884094961b3fae56a5a03d4767366a473",
+              "journal_seq": 885,
+              "original_tick_id": "436f8fd8e9a13f91183a4ce22c95400f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "eac9b4b119f8dbc7268cf18c1a455fc5b59682f64b49225f01a26dc8c3e5016b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569975.6774752,
+              "candidate_export_sha256": "cacf6fa46bbf61f13386f2400900d8eaca24a24ccb620a86648ea18341f9af53",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "e96c203db9a81d2f8f68fe8a5fcdb4af9fd4f0dff5e7fffe779bb960ae6ee6a3",
+              "journal_seq": 888,
+              "original_tick_id": "f37372449dc07585332f8af232c5eb42",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "1e08ecb43aefcb1efa70194977577bbe438331d5720987d11a14372c886aaed7",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569980.781332,
+              "candidate_export_sha256": "e8cf5c52e41a4a86a33a101f2f5af363a388eb727c3ea91dac26e5e7f045abdc",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "4bf85c295623577201931c9ec0e7f119bc51345e1f5236e5afc6ae718ca8ba46",
+              "journal_seq": 891,
+              "original_tick_id": "029115190452d662e84ad0e949542a82",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "ff18bf8c46851445ef2deb11717ea00fefc89db30710cc098349a80fbd036e5a",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569985.6891525,
+              "candidate_export_sha256": "1d047e38468d8019b43417710d55d657488135dd85134871f0f8e0a8b759b7d1",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "20a1f218dddf15bd190f6b0d5ecadd5b5206793b509ba064f0fc9dafa3419b4c",
+              "journal_seq": 894,
+              "original_tick_id": "b3e28905836f6312ccb8126f90180df0",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "4db6bdf74384ab69f7264427681d5943cdf3cf669e22d1ce65eeee4a5944f64b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569990.658719,
+              "candidate_export_sha256": "c6d0b580b5bc612252150ad44dfa1d1ca3ce3d5c90946ff3e439477e8f4db962",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f44e1cfbf64aae602140c52d28892fc8003c56e8aac924a7c3ddb915ba3840ca",
+              "journal_seq": 897,
+              "original_tick_id": "08595d9429526113c9fd300c39a9bed3",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "5bd42a462a42e69a5c506b253fb3e4c1e81a1b1dabc3bf18b0bec887d96fad75",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793569995.6641977,
+              "candidate_export_sha256": "43c4d91db8ca92e181bbfa6704571552438d525aebb068a5bfe678143039911f",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "67790ef3790fa38d37d3d38093717e423f6c964fee13143b0204f301953f8dff",
+              "journal_seq": 899,
+              "original_tick_id": "93feb4759922cacb63bae11f2938023b",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "d7b851b4285bfb3551b233819d895be63468eeec6ac18b7634923e9109cd7b9d",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570000.6912076,
+              "candidate_export_sha256": "9868c2fcf2a655c68dc374104bfc9156c4a7e9abeb3b6acd11740e1064616e22",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "a18c48f3137fa7afc8735ead4bd0e9713d9faca7932640f3bc79b6c42518996b",
+              "journal_seq": 903,
+              "original_tick_id": "dbb9e5fb43c92ada97c7110e5278b80d",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "dd71eb3c11f2b7d6a3dcbf6a9bcb1ac9536b35401dbc96ea28cc175f44ea433e",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570005.6085882,
+              "candidate_export_sha256": "0ed1e9fe906ed5dec8532a959aae89c07299ff44d2217f0cc76eec98fc72edf2",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5ee2107cfb1e13d0bc58fa0ba7ac49da3b30f304093d25bcb8c20c7b892545d6",
+              "journal_seq": 906,
+              "original_tick_id": "252351024b4699dcd7d3ca23a919b272",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "3d405a242001210fb44046276468bbf400bc9bc9da66cb354425e92e5f368028",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570010.7010806,
+              "candidate_export_sha256": "5c05569ed55fefca7dbbe66cc8cc0d60c830b8ad7556acb1715c16eee9eba16c",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "37cf910a5c3a08f07e0aa5f48f723edcbac9b682226e45e4a5324970c5bb68aa",
+              "journal_seq": 909,
+              "original_tick_id": "c85d5cfdc67f403a5b98710ecd993d8f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "dd7d90ed54a22900d8aa240cc48f4badcc4ac2ef0d96ae4d433f8a55aafa482b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570015.6341507,
+              "candidate_export_sha256": "d5f5909096187c6ab4c464f076cdf96150eb2d5e440644025a745e3564cd6ffb",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "69b27307cfcaf54f81a05e8a4421f00c571a17beab96f5d1efee5bf8c9377127",
+              "journal_seq": 912,
+              "original_tick_id": "0bfeb1edec30893e085e3bfa0fdd046b",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "ce2fdaf11e908d405a1bc43d0e05d8e388c273771fbad807f6048aaa6ae695ee",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570020.645254,
+              "candidate_export_sha256": "ffd4bb272ef963d20a80981c6f1c53de0e437d754c4af7b49ce77c96c551d239",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "a4fb30479e6c233f219ea003929acfa1e23715b0b2055aef7e61c2449688e03a",
+              "journal_seq": 915,
+              "original_tick_id": "5141e0e77c783c2b89c4f62dd072f921",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "5ba189828d4c8b4132e55bb13610fcabab88d0f9ef64def195e44f137e2e3616",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570025.6731966,
+              "candidate_export_sha256": "af2235add043300ee4958b73e997dea7650218c1162d21799a3e2e63e7671325",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "37151ebe0c3657a1af5f21794f93348d20eb0f7285e62a33b9c991dff3b2cbdb",
+              "journal_seq": 918,
+              "original_tick_id": "66382154dbe422e0e5bb8fde9c0550b2",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "3d9859116ce9fbf6505d07e02082132a4b02ffb82d0b54bd70b35618ba6f35c1",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570030.702361,
+              "candidate_export_sha256": "15608e0ad95e91da7fdbc6f2904a1266a1ae6974c5588590d071774ed9985881",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "ffdbeb204ff326d1348ff8540c31355e2bcfabfd85b4b4c53de0d4dc8cf921a9",
+              "journal_seq": 921,
+              "original_tick_id": "25847079c24787e7a190f43b90e65b43",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "01a04bdb46982a03b65ca49153f39e88f3f9baee5350b5408686e31f044ab61a",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570035.7450066,
+              "candidate_export_sha256": "5ce4a677ade0b2a2063e6886237f8bc0c8e941927ae18bd7e5c73b84276866a9",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "7e2ed8a981a83ad086f4f5c8e0c0339ffc3da7674ddc69ba4916823c5e056030",
+              "journal_seq": 924,
+              "original_tick_id": "a03f15c31badf3aacb1e243583aaf895",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "eb9497f09f2ceaf999d320c2fd35cf431e365015977cbd53c89e77dbc3fe8901",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570040.6939764,
+              "candidate_export_sha256": "37103d3c377bb5bf089b76b7b2a63ff2a38371bde171a09d9c230b108dd53bbc",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "1197bb242f25afcd84d4e63c01db60bd0e26052bf7f4d32dd0bb7ec8069bfb3e",
+              "journal_seq": 927,
+              "original_tick_id": "bff7862959523a3e252e8260568ae7bc",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "85941df4e991d864caf9e8cb0f165eefefa0198c3c8a7f4c3fffee64e8780fb1",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570045.694438,
+              "candidate_export_sha256": "52ae1e281843e7ff226065f06f2ec07dd6ef258dace16459531a976286c9523f",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "1983d81726f839dc4e99728f194aec4b4f9804d911c86a54ca26946d3ff47428",
+              "journal_seq": 930,
+              "original_tick_id": "d1d6c962cc03361c211a05a46099ec67",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "cadff25e647eca8d1a73e4ed28d445afb37f0911523629aa7c592c4f0e6a3e3a",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570050.8263447,
+              "candidate_export_sha256": "a8f597de8c8af7c970a3be49d8bc86d6d226bfc3d0ea6b5efcb60171119f01bc",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "ec33b62b7b312cb59e150a00acc9de5cfe41ef246f011aa849f6e849c6451d63",
+              "journal_seq": 933,
+              "original_tick_id": "77fd84ae37a6011acadeb5620618476f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "e71d10a902b5ef7c238fba46ed136b774d287c299d85407db0f302d70ebb68ac",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570055.5786512,
+              "candidate_export_sha256": "9139803b602459e82c464c60076c42323aeea72005f417ad22dd7a8bceed1eb4",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f5453a90b3618f9e4f6321827dcd1125ce77b87a505b707b0dce9179d8550f83",
+              "journal_seq": 935,
+              "original_tick_id": "d9e6e07bb1eb4cedad1648949074df45",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "c264df19748e89b747cb7e4e6b84f636218b0cacbc2cf51ec507798d2e5fd7ea",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570060.793694,
+              "candidate_export_sha256": "84bbc51e52d902e1df29d37cc318fe25904765ef952e14baa6764b2172c2997e",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f1a56798e2aa23bfef8bbd3ee02a36cce615c8ba26c99433311b098e074a2761",
+              "journal_seq": 939,
+              "original_tick_id": "47341c8625fc4d755fbcec0819867aec",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "d4f9a9edb4bf465e2875aa27da0c51edb6f070539f1b05376ae71dffcf447bba",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570065.6457088,
+              "candidate_export_sha256": "be527d4264e1c11e1165c68c862986994d7847d366555f71bce2db04cd469aa8",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "b59faefdac819f48a440f1ba1d00792537be2e044cfcbbbdca9266ad04fb024e",
+              "journal_seq": 942,
+              "original_tick_id": "8b62b13d7f5afb0c04064b14bdd5367e",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "40550d46b4e305e2c12227ba4d39d35118e9eacd9a0238a3d4f207d45e16106e",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570070.8374996,
+              "candidate_export_sha256": "0bc8d7998f3bbd3f1e98a9cb9f0c775887dd4680e483d4371b706b5b08238b6a",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "73207b753c8eee2b1a1ef1334233f7678d2ed287e1e8c5a8d852c30be1d024bc",
+              "journal_seq": 945,
+              "original_tick_id": "0b2f3d8946bce9edf07999030a2d8f24",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "f9959bc4ad0dd4f59b52ddd7d86c35202467adf9e8f94968b2fed862566ed656",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570075.6661415,
+              "candidate_export_sha256": "2645db7ca1f5045472b2753de0890a9b5c4f62cb1ad0c55022fa8032a5ab6a12",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "284fd16537861455697868c18aad1fd85e80d82545a4bd6bea156992fe20da6a",
+              "journal_seq": 948,
+              "original_tick_id": "4ed3314b2aafd98a9902257467ea406f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "a69e3060e4246b76bc2dfb8f1b71925ff8f06e847c973fb3d6c1ffdadc07456b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570080.9213452,
+              "candidate_export_sha256": "bf454ee514f417a494ef2ed104276f9f3291a1eb3b73c42cdb878c8d4a7728bc",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "12a13523a049730402586353898621b68b7f231cb7349e90c8c04dd263664e72",
+              "journal_seq": 951,
+              "original_tick_id": "a67e4868b1fc60741519fdc902aee317",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "a754cedcd5002bd800af5a87b3a835ae7c727b4e2b90cbcdd8a57f00bf224454",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570085.962781,
+              "candidate_export_sha256": "b612f11a05ec684775620d2e2675cf08541f31690adb48d9dd40b1cdb521ca42",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "3b6e540f057cd269f31bab3359c43256de55fe793325d19ad08f560eb63fd920",
+              "journal_seq": 953,
+              "original_tick_id": "88bd0f1a681ef685f92420c8c0246346",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "1608cf8e3dbdede1527bb77bc973170cd44adb87a04203454b95839c2ec1aa82",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570091.1146681,
+              "candidate_export_sha256": "d9bdfdb3f93311139432575c482a09390992789d2f5cadc9d310d5bc1b092c0e",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "871664e006c860a500511e55dc1ffc12ec5d06c589f519690ee34161757ea5a9",
+              "journal_seq": 957,
+              "original_tick_id": "fec0782f23a753df32ad7bf98abd8877",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "a7c390e4f3ad30e25763f4c236b8d78be94a02237c7dd580f04bc196867af352",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570095.9388597,
+              "candidate_export_sha256": "0b5a1f24426b7ff319066cd579d6dc014f148e57a5558c0e6f86bf3c8dabd14c",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "e4e0a9798fd923b753a99b12737a39736bc270531679d2efe474a67781a06495",
+              "journal_seq": 959,
+              "original_tick_id": "0ba318238926359f043ba23ae45c04f3",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "deb4935074966da3e3b53887a95e44c926aa490a51c8683cb597a97514c9b956",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570100.9819314,
+              "candidate_export_sha256": "865ea661c7d0b83535a5ee29bfcd734a5217cb5412285bbac3d31bd27bf6845e",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5f8b04d769184bbe6edcce30f9b4e8d843963d39f527ed98f6ddab1d511b9ec8",
+              "journal_seq": 962,
+              "original_tick_id": "b55ce01d34cb9aa64669a09d3b02e939",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "b1678fb680a825112946dce5a1ccf41b52c184e0bdad364bc3707cd2ddd8c416",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570106.2025628,
+              "candidate_export_sha256": "a0dc075a5caf0d53e1bb96208c35f5273ff3a283b5ee2d338cd1836e72f47ddf",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f66b0f600278ff4957a8363a0530ab6dc1b1ce86bb2a7a3a3301c1873b345438",
+              "journal_seq": 965,
+              "original_tick_id": "7a9032115b711e1b61352a1c77a946b7",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "e2765c08fbaa86b02ce96a6baa862ef6c0e88d8ff3933c0d94d322bcf7988130",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570111.1257734,
+              "candidate_export_sha256": "cf97b922d192c27070cf3cf83ec7b5e1cef6903f4bc0f6c4ea542d03183f0a43",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "b6fb1b16d6e3feab36228d1ec681f00f50c5fdaf6f078cf0229a93e8d6121ff5",
+              "journal_seq": 968,
+              "original_tick_id": "ce4b44b623f0f7888e023d6a6c99221d",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "9d7857e9dac86ed781d082eb26e92c412dc5709c45c3f08c907d9719227432cd",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570115.9278386,
+              "candidate_export_sha256": "c7b99bf7d2b62fcea1925d0a732241bc5c81820fa46e03fee7940d0a588bb9de",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "e13c97f01cdaf9b396e6c2afada2171413e286f25ba87ed5ab4b4d818227740e",
+              "journal_seq": 971,
+              "original_tick_id": "5353f6b16f622cafbc938d9e84c5e410",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "48e09564367ed26aff3969a7b4f1fac60ff51f552f858c89aa5dad68bd4c74e7",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570121.0333338,
+              "candidate_export_sha256": "5a4d17d7f4b40ae255a56d49862f1d8399bb931deae1cc4168daffbe621e6e27",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "b28242c32e5de0279d1a54d3fd371664354da39bd993c3a9700647ddedf41d82",
+              "journal_seq": 974,
+              "original_tick_id": "e76afa76255377d09e2cdea4ba68eae9",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "09a992a9ac7b188c75c4552b829d684a2458a3bf5f1756fce30638b487506334",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570125.9026349,
+              "candidate_export_sha256": "ee51d3870e311d9701234ba61db6f1e34266ddff24a00237ddb5006779d3f983",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "4b61264e1266709a48b550014d07fd3be36f3d188e2b04b3aae372620f7cc4b8",
+              "journal_seq": 977,
+              "original_tick_id": "d20b80445fd542e63487b190053e5c52",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "dc46cc5098959ffea714bc65ca74f8102ce9993421dd99edc66ef8229e53ab8f",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570130.8662817,
+              "candidate_export_sha256": "0bb1e1c42231060b4fb88f330514d0dc6dccdb1dabe7c1943abcc85ff6cc0916",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "b107d617231eefb6f25f51533dda2de487eacc7989ada0e0a7b4f368a246cde5",
+              "journal_seq": 980,
+              "original_tick_id": "5e019fc63401c88fa214082a3809b859",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "ae2d7a9f6eb18314dcbb80ddd18992e616e9a67d967f5eee15cb6a3976723889",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570135.9684472,
+              "candidate_export_sha256": "05f27f7e6bb860b12419ad6550b04e35de8017f0055b6f97194cc5f3b908e2c4",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "bf863e3bb293e99f9f0b574a1889739b86be4d7594cbac6f068b7809004e774d",
+              "journal_seq": 983,
+              "original_tick_id": "673351431ba2becd0269896edf1aa1ee",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "fac9780e2e7cc366a018acb8bee463eff168750c8e851d4f048d28781f09b333",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570141.2044573,
+              "candidate_export_sha256": "c13d121b9a5d5f0743c3a9d6617e5cd0ac7f31967322f719392f1912484e95ce",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "80650e3ac517829c1c7ce2f13cb5325cd91d9076bb6bf61204ad603600e646ac",
+              "journal_seq": 986,
+              "original_tick_id": "7f3bad35527735528b86826eef1b63ab",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "a7f15fd0b9afde860fc51609548ea75907031acedac2cb1d98fbaafb60283f80",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570146.0629497,
+              "candidate_export_sha256": "25996622f0f771f27f9265bfc4690e741564df9fb7076016a950f2ba0c3cd4cb",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "4f13729dac7c87e4f44430b47e81f9cdc48a280cc82b78c38c0e467d9abc4c1f",
+              "journal_seq": 988,
+              "original_tick_id": "07132738b3b9e2a9fdfb5887697a634a",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "7add6419db59cf496d0d2d9a0ce0e3cba546a0ba60e1bec3306bd392a2786434",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570151.077151,
+              "candidate_export_sha256": "65e738e780448d03958f93b7de16953eab55a661a0f19430e63d0e58f559914f",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "3134562c06e79cb9d7d3158889b925019f283d4901c4335c447a5fbb3dbf523f",
+              "journal_seq": 992,
+              "original_tick_id": "f3ca3497e5d35345fa084145e2930e07",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "c40057750358866232e40db36bdb47a08d601ec6b91257500f66f4cabc7e7cc1",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570156.744427,
+              "candidate_export_sha256": "21570ccc40b2d63daa8d762eec8776b778a9d6a63883f2f8406a54320f4358cf",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5cd19d2386957a827faa5eabe8664cc9f94a560c2d0e79167c8c9dcc899368e9",
+              "journal_seq": 995,
+              "original_tick_id": "03bb4775e7e27ee639e2cdf4cab79510",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "7154fd1ba94d5ae9910241a9a54fa398605a4960f65a0b31894fce948adff410",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570161.1209302,
+              "candidate_export_sha256": "896492f5414ae38c688613447ba50f9c33bb0836bb629f9be6801cd5c43604ea",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "85bbe2ab06613a573fb60b5372fb1fd3d60c091f98cd32b48e3556cf279d48db",
+              "journal_seq": 998,
+              "original_tick_id": "7a1eccb92d92577dfe7b6e6fdb13b4ea",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "b939c8db50dd6b47e9e59aae30f05cb93a5531ff0382c6a94e91feab7d53327e",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570166.0278594,
+              "candidate_export_sha256": "3800cf2269c43752d4bc13022396e1b7942205355b3a50e9d474d3f0b2839841",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "c5c5b6251c023aeab16db91111b75e18b003ffeca594416649103664b105c9ad",
+              "journal_seq": 1001,
+              "original_tick_id": "e8eebb7d9eb5687fbcaa2f62a619c2fc",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "9a79554e9c6ba8e1ca520130bc0022289bc3fd0dc347080e135fc127148c0bf7",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570171.1527798,
+              "candidate_export_sha256": "6f6b7b6ca3402ce8f58d5759226edeae1f69e45a671893f08acc22300f3d6ae3",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f68c138e84a8f06988879347bfe89763243e0d9412f3ff41e6c2b8432c45fc10",
+              "journal_seq": 1004,
+              "original_tick_id": "dfb24535708ade03cea1349e65f54313",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "cc33f10bc6f09b592cf7b4588b5e659e0f037cec66a5f88c93226313061bd686",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570176.150989,
+              "candidate_export_sha256": "c61c90655120cb1198b389d243343c1516c1d9c716b1e9210c95a9d20b8d9c76",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "e25108d41ddcc176025cc3fa124fc8c7625e3ae79614568df19207b9f57b3e15",
+              "journal_seq": 1006,
+              "original_tick_id": "3d6d77803c2cd4f7eb232c8573b325a0",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "041e602739401bd637062ab84b54f6e1528289ec3883d6830eac18396b89441c",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570181.2195585,
+              "candidate_export_sha256": "6a9d5dfa722bcff1c5072aaafc759c5645ca562c86e591e3417b7b6fafaa9127",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "05ab3e87016b7f862263db6ba6e53362be862eba924a9d1d63df61c35d13458d",
+              "journal_seq": 1010,
+              "original_tick_id": "01fbf30e9b3e1f019cebd815ff6ea9f8",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "ebd6dd533af35fcaa65c0781b94a5f2d7f79a556dea9580abfb1b09121e79227",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570186.0958836,
+              "candidate_export_sha256": "1c3d714cea4c8f7da4cd82ea1f77ff388b4beee23c06992688bdaa216e824433",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "6bf2e610f5c8e164300c18cd3763693fd16c9f28a83aafe02a8bb6d39dd9797e",
+              "journal_seq": 1012,
+              "original_tick_id": "24fb511d1967c5f5f6fdc34d0fe788d8",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "fe76e4bd03816fb4539ea5414e400be6e3b93436c720ea7314c03077c349ab4a",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570191.252009,
+              "candidate_export_sha256": "bc0597d4777e26103709ffa006ec8f18961b91934177dccd72f8ff201eb5242e",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "287d16ffd2be072d0da4098cd9d54b8708c78508a93962f1829082af90a51009",
+              "journal_seq": 1016,
+              "original_tick_id": "501b7b23c390c047f81d8426c536aab2",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "51af4b183b02bb6b4da4027a1092ff932f3e1e9a906c926613707d876fb95315",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570196.4514072,
+              "candidate_export_sha256": "7da0d818ffcc32b7f8cc59d068d2e63d515ede27d9c7c3c06c91743b69a71bf3",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "74525c3028c91d1668d13d4e144efbf5253a2dd64325e05aae2a647cc119f52e",
+              "journal_seq": 1018,
+              "original_tick_id": "420918d486708de645ab5ca23cbe5429",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "413dd23a1acd20ffe6059c175742f9a5cfb02a10e8721e5d5e1d746f38cba877",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570201.3714318,
+              "candidate_export_sha256": "bbbf06d09baa7fa8ab4ae4414b597b1dc920d960dd6505db2590e30bbf14257b",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5c69fb24da3840a6a98046069c2cedce05dff5846540f7a68190238d5332569f",
+              "journal_seq": 1021,
+              "original_tick_id": "42e9a918cf9d94e4ec98bf8ea65a5089",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "f0baac631c18c9260476c422d1fcbd749b761ca1942f6f6bd078ea76b4235ca9",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570206.279732,
+              "candidate_export_sha256": "3a0949bbd05c42c5a94fa1c38758fe9506c26de6e103d66190e9d7431da12846",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "866c17c25bec14d9deeaaaac6193610ee826ace2a1b42666c96068139f020291",
+              "journal_seq": 1023,
+              "original_tick_id": "b6d87b5ad1912d073f3cdce1915df59f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "3a17c448a950744aa09086d88236bb4971c0541ed794c2589b3857f6447b25a8",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570211.4694288,
+              "candidate_export_sha256": "fe162146fb4069f81eab99e3e37a6a9c60c8bba32de2866c2a073284280e8f1a",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "e1c2884d87db762141db7c1e5e63d33c5e5dc3ae7ad7b30748dc6af9497f21fb",
+              "journal_seq": 1027,
+              "original_tick_id": "5d17b3fa903e9f2c3d054302fd1fe24c",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "aa1b62c9c8520586d900231c54e015b416d10396bb6f3de2ad0ca8af46afc929",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570216.3593645,
+              "candidate_export_sha256": "70f46ebe63d7c21d646f65ba17594ab0e5795fbf4715d69b97aadc0aeab89ca6",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5940f00b685c7f1c7f6f1704f84e4a90af3ffe11032c91ce3da0ebb8967edbe4",
+              "journal_seq": 1030,
+              "original_tick_id": "9bb529574f1835715173114cec35ebb7",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "f02bee1e6b8b923381e980f9ea92d9bd216f10de237df182d4b6ebef1e74b6f3",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570221.5113356,
+              "candidate_export_sha256": "459df967bb7ef7fc129d32acbd8f3b36bc6f7c55fdc5374feaf9adc1384f8784",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "0ace9a232b2d021c546803aba923f1576654c75abc12677a10b2ffc6f752dc6f",
+              "journal_seq": 1033,
+              "original_tick_id": "b362c662a1070ba9de857875d0495925",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "8cc8eb4cda934ce8c6722cbdada501258b4df6b8dd35458c26e49210d397495e",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570226.6654909,
+              "candidate_export_sha256": "3a6ad1b439f239f0f99e7935ff15afa7f586ed0941b9a04b2b1a1a1994f88c2a",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "5bda47e9351d8291cc2034d80464d9f30fe9d147ad41a409ec893700781c4d1e",
+              "journal_seq": 1036,
+              "original_tick_id": "fb7e503a58f1aa3f719d305559668e21",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "5cfbd1915a9ec756a28039e82a09ba1eeff8ed1eff74b87a1d90206c8c5021da",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570231.5123715,
+              "candidate_export_sha256": "61970c1c890706d5bda32dde925dec4009018853db4e6995d85f7dbe8e64bb23",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "0ae8a51deed739507dbb4bda3c2ca465f54427671c8479d85467c09e1f719cb7",
+              "journal_seq": 1039,
+              "original_tick_id": "16497a0f0f1ed7811686838523539b3f",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "7162b598c6df75679f7a9aa69a820826688e579c94a3bee412ac4e16d8ee858b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570236.4729974,
+              "candidate_export_sha256": "76e4527a281df18b7be14e0002350830d959216b29017752fa704a67af0e1305",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "24a2fe0b42258050355edde161e3765687bd4842e08ef8781ea1f72ada40f6e0",
+              "journal_seq": 1042,
+              "original_tick_id": "a5038bb7d3009321f38f432fabfc2d1a",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "6b4ea878aa9a897afe16f3f3991f570e23b56215a55063c374b7a9c2a68044a4",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570241.6337643,
+              "candidate_export_sha256": "ebd26e74e98ba86fef5e54195856a7a04fc083c582f641f01a98e252fe6cb6ed",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "4d19b004ffc7c7b6ff682c2764f70572285b924e09183dfb9a7075b3df164454",
+              "journal_seq": 1045,
+              "original_tick_id": "c2d24f7302aa7e6a9fb6e2ef1026509c",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "d2671ea8d690211b6e8f67147ed993bae866f5ad93cd454589dce1847c94af20",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570246.8918724,
+              "candidate_export_sha256": "845c846b2146803361b1517901c7bdc434c4e41d9b269e012432bc8a11035d2f",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "82e0949be87d11dc55e0359f97be399f22d06fb2e6058083b2f4d7bf0d67cf0a",
+              "journal_seq": 1048,
+              "original_tick_id": "08192ce1d57f42a073875193ba65fb09",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "faa47a33bf9250fdeab2088d62320869f9a9a1b40ebd07002eed86dcfc074d50",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570251.6825519,
+              "candidate_export_sha256": "2a0367e1d71242f6ae59186500cd6c7334de117dbff6eb4d94e1933567447ecb",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "97da5213575a4a226ff10faaff506f4cf10725bd36764f11ac44f3fef3d83785",
+              "journal_seq": 1051,
+              "original_tick_id": "25bd8e710c034a26fdc4e5913bde40f1",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "97e46293902374cb704186e5516783cbf6dab9a04ec8769ac8fa88f897ba3a6b",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570256.73354,
+              "candidate_export_sha256": "f84491f0bd8d8914c6ccbb8237c0b993396468fd66666733f619db7c9a748e77",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "92cac2672efde1c7ca7780098a2033f6fefa36166ab87a4966ad9b35abed8e35",
+              "journal_seq": 1054,
+              "original_tick_id": "3ca0c38d856cce90ef562e86a33d677c",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "dfffa53cefbf0740148b73ba9b5e09b3c8e10333753b72fc702509096d360084",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570261.9643214,
+              "candidate_export_sha256": "235379c54bb85255ce0619a2156c3c1cb92617c04175ac0395fcfdbb21c4e853",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "67e4593562e58366b1f50f9d3d18a94d389a4542431ec618fd3a151c45fd1b59",
+              "journal_seq": 1057,
+              "original_tick_id": "1ee305622b797f80675ed298025220f4",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "31071a2ea54fbc768f640fa2186cfc02a8c5b6c9cbafd06296e50e4fbc4692ce",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570267.1572561,
+              "candidate_export_sha256": "87a85a85cf18a5ae767d01964007c0a63242ac61be0057bac5a39f6156d1d513",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "8cb3f5d21c6a70d4bc6493dbd01c983117044d3b3375ee4c6262b030100c0718",
+              "journal_seq": 1059,
+              "original_tick_id": "c648cb9dcc5dc1a402245fca50e18e7e",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "b4c4526935f97420f467830e0a5b7db486ab320f25734bfdf8b8265f3bfddfb3",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570272.78973,
+              "candidate_export_sha256": "514c4b900eedff299398b034a7ea75e1a6c04bd0622197226e9c1a4aa8dabdac",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "dc97b73c6d88d36c6d59721516118d4c041cc0d1fde0641c6337958a7633eb63",
+              "journal_seq": 1063,
+              "original_tick_id": "8def3e3ac4fdf8e9fb9e64e194bd0456",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "1d8cfa71c003b37837903db901cb6e6ddfaaeffc7a1131b33561f843898d6782",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570276.5950558,
+              "candidate_export_sha256": "7511bd4ac4376cd05a263903fc0643232a24fa1cff3e045e94451d58a2410963",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "0879199ca72874d549a288e618411988796f6075dc76f5e0b8a495db9255f95d",
+              "journal_seq": 1066,
+              "original_tick_id": "0feb6192acc1eabb3cf8aba5134d8465",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "17f5082a6295326d14459cd3cfdf3435696bc8408e2256d388c9159cb4a52689",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            },
+            {
+              "at": 1793570281.668876,
+              "candidate_export_sha256": "c543fa23abf13fa019b4d45be7176bb81d3b6e8ca9e7afc3f21174c7f39e14ee",
+              "complete_from": 1793568462.225789,
+              "journal_hash": "f8235745a0bcaabf341f10cc616be36a320afd297b78371d46121437f0588a6a",
+              "journal_seq": 1069,
+              "original_tick_id": "5f2b3864da88db6d154063d29518755c",
+              "policy_generation": 1,
+              "sealed_until": 1793570284.3298264,
+              "snapshot_digest": "b7d50f9d0868f219f578101c935daf3c5c67af1dd4a7690c4fb342956cee5444",
+              "watch_session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+              "workload_generation": 1
+            }
+          ],
+          "counterfactual_actual_charges": null,
+          "cross_version": false,
+          "journal_prefix": {
+            "hash": "029cf6426486f961323c61d966d80e9442e89736423435de06a802e9cb7a14ce",
+            "seq": 1098
+          },
+          "limitations": [
+            "Observed Service ready-backend intervals use collector serialized observation time; they are not measured application outages.",
+            "Physical calibration rotations are not brain-issued moves or counterfactual arm outcomes.",
+            "The isolated dryRun fixture and complete observed window establish a shadow study ledger only.",
+            "Study SLO, shorter windows and worth threshold are explicit experimental inputs, not tenant acceptance."
+          ],
+          "measurement": "watch-observed-service-ready-backends",
+          "missing": {},
+          "move_origin": "controlled-stage-calibration",
+          "refresh": {
+            "base_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+            "baseline_exact_count": 64,
+            "candidate_export_sha256": "31ac2ae5627c46e9f939f6a7959c0c72af2d55f1cf8392ed2eb46470a0017a8a",
+            "capture_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+            "observed_segment": {
+              "complete_from": 1793568462.225789,
+              "journal_prefix": {
+                "hash": "029cf6426486f961323c61d966d80e9442e89736423435de06a802e9cb7a14ce",
+                "seq": 1098
+              },
+              "sealed_until": 1793570284.3298264,
+              "session": "7e41c5c8f25040bdb699dc87bb8ed4b5"
+            },
+            "schema": "phorvex-stage.endpoint-refresh.v1",
+            "study_binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e"
+          },
+          "retention": {
+            "interval_clipping": false,
+            "moves": "all-observed",
+            "samples": "all-observed",
+            "schema": "phorvex-stage.retained-history.v1"
+          },
+          "schema": "phorvex-stage.normalization.v1",
+          "scope": {
+            "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+            "deployment_name": "stage-bench-api",
+            "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+            "measurement": "watch-observed-service-ready-backends",
+            "mode": "isolated-calibration",
+            "namespace": "phorvex-staging-demo",
+            "policy_name": "stage-bench-defense",
+            "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+            "repository": "PhorvexSecurity/operator-refactored",
+            "schema": "phorvex-stage.scope.v1",
+            "selector": {
+              "app.kubernetes.io/name": "stage-bench-api"
+            },
+            "service_name": "stage-bench-api",
+            "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+            "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+            "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+          },
+          "snapshot_digests": [
+            "cd6fa88b02708eb27ae4db894163a97ca98804f37ee364df5b9626ccf88864d5",
+            "eac9b4b119f8dbc7268cf18c1a455fc5b59682f64b49225f01a26dc8c3e5016b",
+            "1e08ecb43aefcb1efa70194977577bbe438331d5720987d11a14372c886aaed7",
+            "ff18bf8c46851445ef2deb11717ea00fefc89db30710cc098349a80fbd036e5a",
+            "4db6bdf74384ab69f7264427681d5943cdf3cf669e22d1ce65eeee4a5944f64b",
+            "5bd42a462a42e69a5c506b253fb3e4c1e81a1b1dabc3bf18b0bec887d96fad75",
+            "d7b851b4285bfb3551b233819d895be63468eeec6ac18b7634923e9109cd7b9d",
+            "dd71eb3c11f2b7d6a3dcbf6a9bcb1ac9536b35401dbc96ea28cc175f44ea433e",
+            "3d405a242001210fb44046276468bbf400bc9bc9da66cb354425e92e5f368028",
+            "dd7d90ed54a22900d8aa240cc48f4badcc4ac2ef0d96ae4d433f8a55aafa482b",
+            "ce2fdaf11e908d405a1bc43d0e05d8e388c273771fbad807f6048aaa6ae695ee",
+            "5ba189828d4c8b4132e55bb13610fcabab88d0f9ef64def195e44f137e2e3616",
+            "3d9859116ce9fbf6505d07e02082132a4b02ffb82d0b54bd70b35618ba6f35c1",
+            "01a04bdb46982a03b65ca49153f39e88f3f9baee5350b5408686e31f044ab61a",
+            "eb9497f09f2ceaf999d320c2fd35cf431e365015977cbd53c89e77dbc3fe8901",
+            "85941df4e991d864caf9e8cb0f165eefefa0198c3c8a7f4c3fffee64e8780fb1",
+            "cadff25e647eca8d1a73e4ed28d445afb37f0911523629aa7c592c4f0e6a3e3a",
+            "e71d10a902b5ef7c238fba46ed136b774d287c299d85407db0f302d70ebb68ac",
+            "c264df19748e89b747cb7e4e6b84f636218b0cacbc2cf51ec507798d2e5fd7ea",
+            "d4f9a9edb4bf465e2875aa27da0c51edb6f070539f1b05376ae71dffcf447bba",
+            "40550d46b4e305e2c12227ba4d39d35118e9eacd9a0238a3d4f207d45e16106e",
+            "f9959bc4ad0dd4f59b52ddd7d86c35202467adf9e8f94968b2fed862566ed656",
+            "a69e3060e4246b76bc2dfb8f1b71925ff8f06e847c973fb3d6c1ffdadc07456b",
+            "a754cedcd5002bd800af5a87b3a835ae7c727b4e2b90cbcdd8a57f00bf224454",
+            "1608cf8e3dbdede1527bb77bc973170cd44adb87a04203454b95839c2ec1aa82",
+            "a7c390e4f3ad30e25763f4c236b8d78be94a02237c7dd580f04bc196867af352",
+            "deb4935074966da3e3b53887a95e44c926aa490a51c8683cb597a97514c9b956",
+            "b1678fb680a825112946dce5a1ccf41b52c184e0bdad364bc3707cd2ddd8c416",
+            "e2765c08fbaa86b02ce96a6baa862ef6c0e88d8ff3933c0d94d322bcf7988130",
+            "9d7857e9dac86ed781d082eb26e92c412dc5709c45c3f08c907d9719227432cd",
+            "48e09564367ed26aff3969a7b4f1fac60ff51f552f858c89aa5dad68bd4c74e7",
+            "09a992a9ac7b188c75c4552b829d684a2458a3bf5f1756fce30638b487506334",
+            "dc46cc5098959ffea714bc65ca74f8102ce9993421dd99edc66ef8229e53ab8f",
+            "ae2d7a9f6eb18314dcbb80ddd18992e616e9a67d967f5eee15cb6a3976723889",
+            "fac9780e2e7cc366a018acb8bee463eff168750c8e851d4f048d28781f09b333",
+            "a7f15fd0b9afde860fc51609548ea75907031acedac2cb1d98fbaafb60283f80",
+            "7add6419db59cf496d0d2d9a0ce0e3cba546a0ba60e1bec3306bd392a2786434",
+            "c40057750358866232e40db36bdb47a08d601ec6b91257500f66f4cabc7e7cc1",
+            "7154fd1ba94d5ae9910241a9a54fa398605a4960f65a0b31894fce948adff410",
+            "b939c8db50dd6b47e9e59aae30f05cb93a5531ff0382c6a94e91feab7d53327e",
+            "9a79554e9c6ba8e1ca520130bc0022289bc3fd0dc347080e135fc127148c0bf7",
+            "cc33f10bc6f09b592cf7b4588b5e659e0f037cec66a5f88c93226313061bd686",
+            "041e602739401bd637062ab84b54f6e1528289ec3883d6830eac18396b89441c",
+            "ebd6dd533af35fcaa65c0781b94a5f2d7f79a556dea9580abfb1b09121e79227",
+            "fe76e4bd03816fb4539ea5414e400be6e3b93436c720ea7314c03077c349ab4a",
+            "51af4b183b02bb6b4da4027a1092ff932f3e1e9a906c926613707d876fb95315",
+            "413dd23a1acd20ffe6059c175742f9a5cfb02a10e8721e5d5e1d746f38cba877",
+            "f0baac631c18c9260476c422d1fcbd749b761ca1942f6f6bd078ea76b4235ca9",
+            "3a17c448a950744aa09086d88236bb4971c0541ed794c2589b3857f6447b25a8",
+            "aa1b62c9c8520586d900231c54e015b416d10396bb6f3de2ad0ca8af46afc929",
+            "f02bee1e6b8b923381e980f9ea92d9bd216f10de237df182d4b6ebef1e74b6f3",
+            "8cc8eb4cda934ce8c6722cbdada501258b4df6b8dd35458c26e49210d397495e",
+            "5cfbd1915a9ec756a28039e82a09ba1eeff8ed1eff74b87a1d90206c8c5021da",
+            "7162b598c6df75679f7a9aa69a820826688e579c94a3bee412ac4e16d8ee858b",
+            "6b4ea878aa9a897afe16f3f3991f570e23b56215a55063c374b7a9c2a68044a4",
+            "d2671ea8d690211b6e8f67147ed993bae866f5ad93cd454589dce1847c94af20",
+            "faa47a33bf9250fdeab2088d62320869f9a9a1b40ebd07002eed86dcfc074d50",
+            "97e46293902374cb704186e5516783cbf6dab9a04ec8769ac8fa88f897ba3a6b",
+            "dfffa53cefbf0740148b73ba9b5e09b3c8e10333753b72fc702509096d360084",
+            "31071a2ea54fbc768f640fa2186cfc02a8c5b6c9cbafd06296e50e4fbc4692ce",
+            "b4c4526935f97420f467830e0a5b7db486ab320f25734bfdf8b8265f3bfddfb3",
+            "1d8cfa71c003b37837903db901cb6e6ddfaaeffc7a1131b33561f843898d6782",
+            "17f5082a6295326d14459cd3cfdf3435696bc8408e2256d388c9159cb4a52689",
+            "b7d50f9d0868f219f578101c935daf3c5c67af1dd4a7690c4fb342956cee5444"
+          ],
+          "snapshot_source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "state": "READY",
+          "study_settings": {
+            "lookback": 600.0,
+            "target": 0.9,
+            "window": 600.0,
+            "worth_threshold": 0.0
+          }
+        },
+        "policy": "phorvex-staging-demo/stage-bench-defense",
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "producer": "benchmark/worker/endpoint_refresh.py:31ac2ae5627c46e9f939f6a7959c0c72af2d55f1cf8392ed2eb46470a0017a8a",
+        "repository": "PhorvexSecurity/operator-refactored",
+        "schema": "phorvex-stage.endpoint-manifest.v1",
+        "snapshot_digests": [
+          "cd6fa88b02708eb27ae4db894163a97ca98804f37ee364df5b9626ccf88864d5",
+          "eac9b4b119f8dbc7268cf18c1a455fc5b59682f64b49225f01a26dc8c3e5016b",
+          "1e08ecb43aefcb1efa70194977577bbe438331d5720987d11a14372c886aaed7",
+          "ff18bf8c46851445ef2deb11717ea00fefc89db30710cc098349a80fbd036e5a",
+          "4db6bdf74384ab69f7264427681d5943cdf3cf669e22d1ce65eeee4a5944f64b",
+          "5bd42a462a42e69a5c506b253fb3e4c1e81a1b1dabc3bf18b0bec887d96fad75",
+          "d7b851b4285bfb3551b233819d895be63468eeec6ac18b7634923e9109cd7b9d",
+          "dd71eb3c11f2b7d6a3dcbf6a9bcb1ac9536b35401dbc96ea28cc175f44ea433e",
+          "3d405a242001210fb44046276468bbf400bc9bc9da66cb354425e92e5f368028",
+          "dd7d90ed54a22900d8aa240cc48f4badcc4ac2ef0d96ae4d433f8a55aafa482b",
+          "ce2fdaf11e908d405a1bc43d0e05d8e388c273771fbad807f6048aaa6ae695ee",
+          "5ba189828d4c8b4132e55bb13610fcabab88d0f9ef64def195e44f137e2e3616",
+          "3d9859116ce9fbf6505d07e02082132a4b02ffb82d0b54bd70b35618ba6f35c1",
+          "01a04bdb46982a03b65ca49153f39e88f3f9baee5350b5408686e31f044ab61a",
+          "eb9497f09f2ceaf999d320c2fd35cf431e365015977cbd53c89e77dbc3fe8901",
+          "85941df4e991d864caf9e8cb0f165eefefa0198c3c8a7f4c3fffee64e8780fb1",
+          "cadff25e647eca8d1a73e4ed28d445afb37f0911523629aa7c592c4f0e6a3e3a",
+          "e71d10a902b5ef7c238fba46ed136b774d287c299d85407db0f302d70ebb68ac",
+          "c264df19748e89b747cb7e4e6b84f636218b0cacbc2cf51ec507798d2e5fd7ea",
+          "d4f9a9edb4bf465e2875aa27da0c51edb6f070539f1b05376ae71dffcf447bba",
+          "40550d46b4e305e2c12227ba4d39d35118e9eacd9a0238a3d4f207d45e16106e",
+          "f9959bc4ad0dd4f59b52ddd7d86c35202467adf9e8f94968b2fed862566ed656",
+          "a69e3060e4246b76bc2dfb8f1b71925ff8f06e847c973fb3d6c1ffdadc07456b",
+          "a754cedcd5002bd800af5a87b3a835ae7c727b4e2b90cbcdd8a57f00bf224454",
+          "1608cf8e3dbdede1527bb77bc973170cd44adb87a04203454b95839c2ec1aa82",
+          "a7c390e4f3ad30e25763f4c236b8d78be94a02237c7dd580f04bc196867af352",
+          "deb4935074966da3e3b53887a95e44c926aa490a51c8683cb597a97514c9b956",
+          "b1678fb680a825112946dce5a1ccf41b52c184e0bdad364bc3707cd2ddd8c416",
+          "e2765c08fbaa86b02ce96a6baa862ef6c0e88d8ff3933c0d94d322bcf7988130",
+          "9d7857e9dac86ed781d082eb26e92c412dc5709c45c3f08c907d9719227432cd",
+          "48e09564367ed26aff3969a7b4f1fac60ff51f552f858c89aa5dad68bd4c74e7",
+          "09a992a9ac7b188c75c4552b829d684a2458a3bf5f1756fce30638b487506334",
+          "dc46cc5098959ffea714bc65ca74f8102ce9993421dd99edc66ef8229e53ab8f",
+          "ae2d7a9f6eb18314dcbb80ddd18992e616e9a67d967f5eee15cb6a3976723889",
+          "fac9780e2e7cc366a018acb8bee463eff168750c8e851d4f048d28781f09b333",
+          "a7f15fd0b9afde860fc51609548ea75907031acedac2cb1d98fbaafb60283f80",
+          "7add6419db59cf496d0d2d9a0ce0e3cba546a0ba60e1bec3306bd392a2786434",
+          "c40057750358866232e40db36bdb47a08d601ec6b91257500f66f4cabc7e7cc1",
+          "7154fd1ba94d5ae9910241a9a54fa398605a4960f65a0b31894fce948adff410",
+          "b939c8db50dd6b47e9e59aae30f05cb93a5531ff0382c6a94e91feab7d53327e",
+          "9a79554e9c6ba8e1ca520130bc0022289bc3fd0dc347080e135fc127148c0bf7",
+          "cc33f10bc6f09b592cf7b4588b5e659e0f037cec66a5f88c93226313061bd686",
+          "041e602739401bd637062ab84b54f6e1528289ec3883d6830eac18396b89441c",
+          "ebd6dd533af35fcaa65c0781b94a5f2d7f79a556dea9580abfb1b09121e79227",
+          "fe76e4bd03816fb4539ea5414e400be6e3b93436c720ea7314c03077c349ab4a",
+          "51af4b183b02bb6b4da4027a1092ff932f3e1e9a906c926613707d876fb95315",
+          "413dd23a1acd20ffe6059c175742f9a5cfb02a10e8721e5d5e1d746f38cba877",
+          "f0baac631c18c9260476c422d1fcbd749b761ca1942f6f6bd078ea76b4235ca9",
+          "3a17c448a950744aa09086d88236bb4971c0541ed794c2589b3857f6447b25a8",
+          "aa1b62c9c8520586d900231c54e015b416d10396bb6f3de2ad0ca8af46afc929",
+          "f02bee1e6b8b923381e980f9ea92d9bd216f10de237df182d4b6ebef1e74b6f3",
+          "8cc8eb4cda934ce8c6722cbdada501258b4df6b8dd35458c26e49210d397495e",
+          "5cfbd1915a9ec756a28039e82a09ba1eeff8ed1eff74b87a1d90206c8c5021da",
+          "7162b598c6df75679f7a9aa69a820826688e579c94a3bee412ac4e16d8ee858b",
+          "6b4ea878aa9a897afe16f3f3991f570e23b56215a55063c374b7a9c2a68044a4",
+          "d2671ea8d690211b6e8f67147ed993bae866f5ad93cd454589dce1847c94af20",
+          "faa47a33bf9250fdeab2088d62320869f9a9a1b40ebd07002eed86dcfc074d50",
+          "97e46293902374cb704186e5516783cbf6dab9a04ec8769ac8fa88f897ba3a6b",
+          "dfffa53cefbf0740148b73ba9b5e09b3c8e10333753b72fc702509096d360084",
+          "31071a2ea54fbc768f640fa2186cfc02a8c5b6c9cbafd06296e50e4fbc4692ce",
+          "b4c4526935f97420f467830e0a5b7db486ab320f25734bfdf8b8265f3bfddfb3",
+          "1d8cfa71c003b37837903db901cb6e6ddfaaeffc7a1131b33561f843898d6782",
+          "17f5082a6295326d14459cd3cfdf3435696bc8408e2256d388c9159cb4a52689",
+          "b7d50f9d0868f219f578101c935daf3c5c67af1dd4a7690c4fb342956cee5444"
+        ],
+        "snapshot_source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "trace_file": "stage-bench-defense.bde8f73535c121b91acd83e720e9526d92664706742b7c414fb9c432c5a8d484.trace.json",
+        "trace_sha256": "bde8f73535c121b91acd83e720e9526d92664706742b7c414fb9c432c5a8d484"
+      }
+    },
+    "protected_hashes": {
+      "/home/hami/phorvex-benchmark/config/bot.env": "fb8ffda397d37c8807989a7ab38bf2b3b3c52728e1237bb3a00fc1cc9ff55d36",
+      "/home/hami/phorvex-benchmark/bot/owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+      "/home/hami/phorvex-benchmark/bot/members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81",
+      "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11",
+      "/home/hami/phorvex-benchmark/operator-refactored/.git/config": "3ea0c65e774a30545a2716e0e88c2a1488fc0ba7c1b7ec03bda10f2a06c092ba"
+    },
+    "checkout_head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+    "current_link": "/home/hami/phorvex-benchmark/releases/20261028-header-reader-54417066"
+  },
+  "free_bytes": 5789937664,
+  "live_observation": {
+    "brain": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+      "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "container": "brain",
+      "pods": [
+        {
+          "name": "staging-brain-586ccc7d47-mlrnj",
+          "uid": "3eaa3f61-855d-49e7-a471-c0996f268fab"
+        }
+      ],
+      "embedded_version": {
+        "service": "brain",
+        "version": "0.10.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "manager": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+      "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+      "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "deployment": "staging-phorvex",
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "container": "manager",
+      "pods": [
+        {
+          "name": "staging-phorvex-947f858bf-nlp4n",
+          "uid": "750d0653-81e4-4dba-b719-b8ad29498972"
+        }
+      ],
+      "embedded_version": {
+        "service": "manager",
+        "version": "0.16.0",
+        "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      }
+    },
+    "capture": {
+      "enabled": true,
+      "policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "directory": "/var/lib/phorvex/math-lab",
+      "persistent_claim": "staging-brain-mathlab",
+      "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "cost_evidence": true
+    },
+    "policies": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "workload_generation": 3,
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140"
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "generation": 1,
+        "mode": "dryRun",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "stage-bench-api"
+          }
+        },
+        "workload_name": "stage-bench-api",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "workload_generation": 1,
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+      }
+    }
+  },
+  "pin_matches_observation": true,
+  "replay_binary": {
+    "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903/brain-replay",
+    "sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+    "version": {
+      "brainImage": "notAvailable",
+      "endpointStudyMode": "PAIRED_BRAIN_REPLAY",
+      "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "overridableParameters": [
+        "P-FEA-006",
+        "P-FEA-005",
+        "P-OBJ-003"
+      ],
+      "replaySchema": "math-lab.replay.v1",
+      "snapshotSchema": "math-lab.snapshot.v1",
+      "studyCandidatesSchema": "math-lab.study-candidates.v1"
+    }
+  },
+  "completed_at": "2026-11-01T22:14:35.344558+00:00"
+}

@@ -1,0 +1,11 @@
+{
+  "verdict": "PASS_DELIVERED_BOT_CSV_AND_REPORT_LIMITATIONS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:39:56.390965+00:00",
+  "base_review_sha256": "482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907",
+  "delivered_metrics_csv_sha256": "1d2324d87482ae70dc472fa37a400b60e426653e4b5eaa1aac17d922b57ad227",
+  "all_visible_csv_cells_match_raw_metric_json": true,
+  "rows": 91,
+  "html_sha256": "c6f96181ba710ccae3dbb2db8d7b753f171741f2ddefe8ef622b1fa7a8d8ff22",
+  "explicit_replay_limit_present": true
+}

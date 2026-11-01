@@ -1,0 +1,14 @@
+92: 2026-11-01T21:28:20.8330451Z ##[group]Fetching the repository
+93: 2026-11-01T21:28:20.8342217Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +aa1aeb8a179de931c805c3031586c2c703e0bf55:refs/remotes/pull/198/merge
+94: 2026-11-01T21:28:24.6260597Z From https://github.com/PhorvexSecurity/operator-refactored
+325: 2026-11-01T21:28:24.6496561Z  * [new tag]           sensor-v0.9.0                            -> sensor-v0.9.0
+326: 2026-11-01T21:28:24.6497320Z  * [new ref]           aa1aeb8a179de931c805c3031586c2c703e0bf55 -> pull/198/merge
+327: 2026-11-01T21:28:24.6499380Z ##[endgroup]
+332: 2026-11-01T21:28:24.6522599Z ##[group]Checking out the ref
+333: 2026-11-01T21:28:24.6523641Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/198/merge
+334: 2026-11-01T21:28:25.1760729Z Note: switching to 'refs/remotes/pull/198/merge'.
+335: 2026-11-01T21:28:25.1762020Z 
+352: 2026-11-01T21:28:25.1794583Z ##[endgroup]
+353: 2026-11-01T21:28:25.1838368Z [command]/usr/bin/git log -1 --format=%H
+354: 2026-11-01T21:28:25.1863555Z aa1aeb8a179de931c805c3031586c2c703e0bf55
+355: 2026-11-01T21:28:25.1872241Z ##[group]Removing auth

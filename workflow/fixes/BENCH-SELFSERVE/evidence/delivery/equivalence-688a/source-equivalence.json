@@ -1,0 +1,134 @@
+{
+  "schema": "phorvex-bench.source-equivalence.v1",
+  "observed_at": "2026-11-01T21:28:50.044014+00:00",
+  "baseline_commit": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "evidence_commit": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "parents": [
+    "287fd2e4cd97c1ef8a0475b16316b04c6938b518"
+  ],
+  "commit_message": "Record reviewed stage benchmark remediation and live evidence",
+  "result": "PASS",
+  "all_non_workflow_root_entries_identical": true,
+  "non_workflow_entries": {
+    ".dockerignore": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "d76e42f6b7248e754c6f3b8b2531fa43cf1fe3df"
+    },
+    ".gitattributes": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "163f2d202c8b81a6d0117c9bf52e3317000f266d"
+    },
+    ".github": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "3c6ccbb9cdb3cefd9c09e7b520e58143e7dd6fc2"
+    },
+    ".gitignore": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "bd685343ac34f421315e1274d9b543f35d21456e"
+    },
+    "AGENTS.md": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "3693df05f19f8f93461e1884079daff7f0c9b434"
+    },
+    "CHECKLIST.md": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "60c776c28c09dbe80a978bbd1ab05e3ee0b5a11b"
+    },
+    "End-to-End": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "55d8df9996abcd37d5f7f0f549835ce09458648b"
+    },
+    "README.md": {
+      "mode": "100644",
+      "type": "blob",
+      "object": "c2cec087f54d6473609a84fed0795f651c03ba30"
+    },
+    "benchmark": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "524ce3adb752abaebafec168a0818fcc9f69eea1"
+    },
+    "build": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "e25b6dc075aad8432c2dde5e508552b6c5a71845"
+    },
+    "dashboard-web": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "be48134a42405cf78eea2a57d554192443917c80"
+    },
+    "deploy": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "8e8a26bc2337e6ce88ca1ce9b154d2560f052911"
+    },
+    "docs": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "b9221970fe627db34e830b524eb9b2c3867179b6"
+    },
+    "farm-fixtures": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "e2d9a9111f95ef4b472702368e541d76e041011e"
+    },
+    "libs": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "c4ccb527ebf7a34f5bafb063ad28830ce9e06a4a"
+    },
+    "phorvex": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "25f3316201042bb20003bc1e38d4dd812b983057"
+    },
+    "release": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "2c9016bc8094c78e8a3cdd22c32c5c975b02fc00"
+    },
+    "tools": {
+      "mode": "040000",
+      "type": "tree",
+      "object": "5efbbd4563ad33f8ed09f28f70e299af4c611f35"
+    }
+  },
+  "workflow_tree_before": {
+    "mode": "040000",
+    "type": "tree",
+    "object": "f71c4aeaaa4ad923274931dd69a1897e034be706"
+  },
+  "workflow_tree_after": {
+    "mode": "040000",
+    "type": "tree",
+    "object": "4c93ed3ee38d25000dd89541b608958e86903768"
+  },
+  "changed_files": 920,
+  "change_status_counts": {
+    "A": 914,
+    "M": 6
+  },
+  "non_workflow_changes": [],
+  "workflow_areas": {
+    "workflow/campaigns/2026-11-01-stage-selfserve": 42,
+    "workflow/campaigns/INDEX.yaml": 1,
+    "workflow/fixes/BENCH-SELFSERVE": 866,
+    "workflow/intake/INDEX.yaml": 1,
+    "workflow/intake/RPT-20261101-173500-bench-selfserve": 5,
+    "workflow/issues/MASTER_ISSUES.md": 1,
+    "workflow/issues/NEXT_ID": 1,
+    "workflow/issues/entries": 1,
+    "workflow/issues/joins.yaml": 1,
+    "workflow/issues/layout.md": 1
+  },
+  "scope": "Exact Git object/mode identity proves all non-workflow product, build, chart, test and config content unchanged. This is source equivalence, not a claim that688 CI has run or passed.",
+  "raw_evidence": "Original CSV/log whitespace is part of immutable evidence bytes and is not normalized."
+}

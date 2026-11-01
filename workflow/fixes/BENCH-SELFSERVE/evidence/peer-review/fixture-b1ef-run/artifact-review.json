@@ -1,0 +1,170 @@
+{
+  "verdict": "PASS_BOUNDED_ACTUAL_NATIVE_FIXTURE_ENDPOINT_CONTROLS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:56:07.546421+00:00",
+  "archive_sha256": "912074c2930b7f307ee1275a92e2b2231704bb810fe0065ff69927f777d30984",
+  "retained_files_verified": 170,
+  "ready64_review_sha256": "3ecae52a96b331981a5b1fcbab9e2889090f0e7adaed17a9f0d7e1709bfec1d8",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "captured_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "binary_sha256": "c5bf81d5a9589ec822a3ed9c2112c3e88603634530d573276662b5250fc6f51e",
+  "controls": [
+    {
+      "child": "be9bc9fcd68f",
+      "state": "COMPLETE",
+      "ticks": 64,
+      "captured_control_exact": 64,
+      "local_base_exact": 64,
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "W": 600,
+      "L": 600,
+      "s": 0.9,
+      "worth_threshold": 0,
+      "delta": 30,
+      "R": 180,
+      "forecast_candidate_E": 159,
+      "noop": {
+        "v2": 0,
+        "v3": 0
+      },
+      "forecast_total": {
+        "v2": 10176,
+        "v3": 10176
+      },
+      "changed_v2_v3_choices": 0,
+      "candidate_csv_rows_verified": 384,
+      "result_sha256": "b4cc5f1c555afcbbf093519bf3549b8427881b2a76731f08052bf0cd7580376c",
+      "trace_sha256": "4f954a9eb20d21fb3af154aac573fc6281542212cb4dd69e0622c66a7ac92be5"
+    },
+    {
+      "child": "4b45b14bbdb3",
+      "state": "COMPLETE",
+      "ticks": 64,
+      "captured_control_exact": 64,
+      "local_base_exact": 64,
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "W": 240,
+      "L": 300,
+      "s": 0.95,
+      "worth_threshold": 0.25,
+      "delta": 2,
+      "R": 36,
+      "forecast_candidate_E": 131,
+      "noop": {
+        "v2": 64,
+        "v3": 64
+      },
+      "forecast_total": {
+        "v2": 0,
+        "v3": 0
+      },
+      "changed_v2_v3_choices": 0,
+      "candidate_csv_rows_verified": 384,
+      "result_sha256": "a2990992d44b558a9a4b75073e07fd4f638d4ef4bfbc4169a70f0a28d3a65da2",
+      "trace_sha256": "397bea803312158b70927f7660e14e6e744ac627caebe41c922c2c0faf62627f"
+    }
+  ],
+  "shared_original_dataset_trace": "2e0a59c7d9caffab4e91127c3aafd9ffe3e6c94674d3393eec4005c8b26718fa",
+  "custom_only_declared_trace_settings_changed": true,
+  "duration_samples": 0,
+  "calibration_moves": 0,
+  "stateless_duration_prior_seconds": 43,
+  "restoration": "PASS",
+  "protected_files_and_observer_unchanged": true,
+  "outbound_messages": 34,
+  "outbound_documents": [
+    {
+      "name": "validation-3b4a321a0dc8.json",
+      "bytes": 6499,
+      "sha256": "1e48ceee7d5ca2b8ed8b1ecd4c29c71dd3b9e781139f87d07a61e4d18718a1b5",
+      "verification": "byte_exact_retained_validation_or_batch_reconstruction"
+    },
+    {
+      "name": "endpoint-be9bc9fcd68f-report.html",
+      "bytes": 51469,
+      "sha256": "549bc719affa32825b3b45ab21683054eea4a27b07db9737b1ea214fba4c56e5",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-be9bc9fcd68f-metrics.csv",
+      "bytes": 122741,
+      "sha256": "731fb0a1bbf8cc41fb7d7f22862e3bf8fd6bf8f0d551e5185301b9c67f0d0d76",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-be9bc9fcd68f-result.json",
+      "bytes": 387726,
+      "sha256": "b4cc5f1c555afcbbf093519bf3549b8427881b2a76731f08052bf0cd7580376c",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-be9bc9fcd68f-evidence.zip",
+      "bytes": 5135833,
+      "sha256": "edffd04ba0f504127a6267dbd7682169647e28eac1ddbf7a403eca3b62d5fd9d",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "batch-9148cab8abaf.json",
+      "bytes": 430,
+      "sha256": "57b10ef857535cca330bf24fd7872e7287cea349f7eedc1e1915949140c34bff",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "batch-9148cab8abaf.csv",
+      "bytes": 77,
+      "sha256": "b1073560bcb35e600c51539cc06340cf99160ebd536d18032a1df30648031cba",
+      "verification": "byte_exact_retained_validation_or_batch_reconstruction"
+    },
+    {
+      "name": "validation-9dc1f946fe7e.json",
+      "bytes": 6520,
+      "sha256": "18419fb55b50fb42edb53f3db7708389ab456516d98c74cdb1a11194012a6c6d",
+      "verification": "byte_exact_retained_validation_or_batch_reconstruction"
+    },
+    {
+      "name": "endpoint-4b45b14bbdb3-report.html",
+      "bytes": 52137,
+      "sha256": "508daab8b2a3d498fadc930d394ba3be5aa3951f87eff3b3789f1465d8b4652c",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-4b45b14bbdb3-metrics.csv",
+      "bytes": 124789,
+      "sha256": "f6beb8cadc2ab182eb0ddc155ed5cb40e83c0c761bd5fb0c466ddf57d4e0d8e7",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-4b45b14bbdb3-result.json",
+      "bytes": 400351,
+      "sha256": "a2990992d44b558a9a4b75073e07fd4f638d4ef4bfbc4169a70f0a28d3a65da2",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "endpoint-4b45b14bbdb3-evidence.zip",
+      "bytes": 5136119,
+      "sha256": "ae57f525012daa31773416df180177c05047ee71dd1b6f7d8cf3ffb366020a39",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "batch-9979ac0c1117.json",
+      "bytes": 430,
+      "sha256": "fcee7044f1ccd2e74b8ee708ac0ab449579ef9d7e51571cb12e44573661f3072",
+      "verification": "retained_raw_file"
+    },
+    {
+      "name": "batch-9979ac0c1117.csv",
+      "bytes": 77,
+      "sha256": "8523eb6c1f3694f8fe11a8e1fd1126954ca2b4cb0098938afcec63bc8cc47b7b",
+      "verification": "byte_exact_retained_validation_or_batch_reconstruction"
+    }
+  ],
+  "limits": [
+    "Actual bot parser/queue/execution/outbound transport; supplied bytes replace incoming download only. No incoming Telegram update is claimed.",
+    "Both arms use the same image-native shared brain predicates and experimental endpoint costs. The64 observations in each control share one cohort and are not128 independent trials.",
+    "Default control selects a counterfactual rotate per tick; custom controls veto every candidate on known budget. No physical action occurred; shadow admission remains BLOCKED.",
+    "Zero measured duration samples uses the explicit43s stateless prior, failure bound1 and rollback proxy. Forecast10176 endpoint-seconds is not actual charge, actual outage or security benefit.",
+    "Lambda stays at its floor, making V2/V3 ordering identical. These runs do not establish adaptive-lambda efficacy or behavior under a positive burn signal.",
+    "Original10d active-policy request remains separately BLOCKED. Durable main release survival and temporary override cleanup remain unverified/pending."
+  ]
+}

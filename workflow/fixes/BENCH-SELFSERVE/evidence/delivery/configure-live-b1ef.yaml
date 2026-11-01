@@ -1,0 +1,13 @@
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
+  digest: sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
+  git_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  rolled_out_at: '2026-11-01T21:12:35+00:00'
+pull_request:
+  reviewed_head: 64d2aaf9b63208bed10e62207cccd101b53b1029
+  checks: PASS
+  patch_equivalence: PASS
+next_action:
+  owner: live_verifier
+  action: Complete actual fixture evidence review, preserve component identity distinction
+    and current capture; main merge needs explicit authorization

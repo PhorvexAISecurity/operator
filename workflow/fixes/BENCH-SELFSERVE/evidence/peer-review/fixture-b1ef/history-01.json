@@ -1,0 +1,55 @@
+{
+  "at": "2026-11-01T21:43:41.683629+00:00",
+  "pin_sha256": "a5f4f0909efe81b3277ddea029550eab970f5ff107fa4bc1738b90ed89173bcb",
+  "scope": {
+    "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "deployment_name": "stage-bench-api",
+    "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+    "measurement": "watch-observed-service-ready-backends",
+    "mode": "isolated-calibration",
+    "namespace": "phorvex-staging-demo",
+    "policy_name": "stage-bench-defense",
+    "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "repository": "PhorvexSecurity/operator-refactored",
+    "schema": "phorvex-stage.scope.v1",
+    "selector": {
+      "app.kubernetes.io/name": "stage-bench-api"
+    },
+    "service_name": "stage-bench-api",
+    "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+    "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+  },
+  "journal": "/home/hami/phorvex-benchmark/stage-data/observer/managed/sha256:cb296e9016e97e25ace7ed7d168d195165bc19605671f9d54422c04f9197bb0c/compressed-evidence.db",
+  "encoding": "zlib-v1",
+  "verified_prefix": {
+    "seq": 571,
+    "hash": "309a5c5d6a023e73bfb092cdcafdecee190598102ee61f4c168c59bdf268aec8"
+  },
+  "event_kinds": {
+    "session": 1,
+    "list": 6,
+    "checkpoint": 96,
+    "watch": 468
+  },
+  "observed_segment": {
+    "session": "7e41c5c8f25040bdb699dc87bb8ed4b5",
+    "complete_from": 1793568462.225789,
+    "sealed_until": 1793569362.1697307,
+    "journal_prefix": {
+      "seq": 571,
+      "hash": "309a5c5d6a023e73bfb092cdcafdecee190598102ee61f4c168c59bdf268aec8"
+    }
+  },
+  "current_coverage_seconds": 899.9439415931702,
+  "move_states": {},
+  "policy_generation": 1,
+  "workload_generation": 1,
+  "ready_pod_count": 3,
+  "scope_and_chain_verified": true,
+  "limits": [
+    "Read-only SQLite frozen prefix and decoded hash-chain/reducer verification. No history bridge or write.",
+    "Current journal coverage alone does not establish a qualified normalized 64-tick dataset."
+  ],
+  "pin_unchanged": true
+}

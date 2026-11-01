@@ -1,0 +1,12 @@
+{
+  "schema": "phorvex-bench.local-check-provenance.v1",
+  "observed_at": "2026-11-01T21:43:20.511742+00:00",
+  "producer": "root lead, session86418",
+  "producer_reported_command": "pinned Python3.11 workflow/tools/check.sh",
+  "producer_reported_exit_code": 0,
+  "original_log_path": "/workspace/.phorvex-test-tmp/bench-evidence-workflow-check.log",
+  "original_log_bytes": 1940,
+  "original_log_sha256": "0831b94b4c3fa14e279f82f6d6e8f2c7b54c4c98df107ccda1c776069ec3e00a",
+  "excerpt_sha256": "d6c7063e225c6c21684314fae7a53fb187c90af42dc3afe6649933d50c3a11fb",
+  "scope": "Read-only log corroboration of lead local verification; not a substitute for actual64d2 GitHub CI, and log is not treated as an executed-commit identity attestation."
+}

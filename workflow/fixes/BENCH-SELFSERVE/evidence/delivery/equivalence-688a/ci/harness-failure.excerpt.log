@@ -1,0 +1,90 @@
+89: 2026-11-01T21:28:19.8260803Z ##[endgroup]
+90: 2026-11-01T21:28:19.8262783Z ##[group]Fetching the repository
+91: 2026-11-01T21:28:19.8265273Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +aa1aeb8a179de931c805c3031586c2c703e0bf55:refs/remotes/pull/198/merge
+92: 2026-11-01T21:28:23.0296733Z From https://github.com/PhorvexSecurity/operator-refactored
+93: 2026-11-01T21:28:23.0301792Z  * [new branch]        campaign/attacks-endpointslices          -> origin/campaign/attacks-endpointslices
+94: 2026-11-01T21:28:23.0304262Z  * [new branch]        campaign/attacks-impersonate-detectors   -> origin/campaign/attacks-impersonate-detectors
+95: 2026-11-01T21:28:23.0306279Z  * [new branch]        campaign/attacks-np-cm-reads             -> origin/campaign/attacks-np-cm-reads
+96: 2026-11-01T21:28:23.0307918Z  * [new branch]        campaign/code-fixes                      -> origin/campaign/code-fixes
+97: 2026-11-01T21:28:23.0310090Z  * [new branch]        campaign/fix-console-endpointslices      -> origin/campaign/fix-console-endpointslices
+322: 2026-11-01T21:28:23.0746348Z  * [new tag]           sensor-v0.8.0                            -> sensor-v0.8.0
+323: 2026-11-01T21:28:23.0747293Z  * [new tag]           sensor-v0.9.0                            -> sensor-v0.9.0
+324: 2026-11-01T21:28:23.0748294Z  * [new ref]           aa1aeb8a179de931c805c3031586c2c703e0bf55 -> pull/198/merge
+325: 2026-11-01T21:28:23.0750804Z ##[endgroup]
+326: 2026-11-01T21:28:23.0751701Z ##[group]Determining the checkout info
+327: 2026-11-01T21:28:23.0752680Z ##[endgroup]
+328: 2026-11-01T21:28:23.0753310Z [command]/usr/bin/git sparse-checkout disable
+329: 2026-11-01T21:28:23.0754974Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+330: 2026-11-01T21:28:23.0758801Z ##[group]Checking out the ref
+350: 2026-11-01T21:28:23.6934102Z ##[endgroup]
+351: 2026-11-01T21:28:23.6994024Z [command]/usr/bin/git log -1 --format=%H
+352: 2026-11-01T21:28:23.7037109Z aa1aeb8a179de931c805c3031586c2c703e0bf55
+353: 2026-11-01T21:28:23.7293506Z ##[group]Run bin="$(bash tools/provision-python.sh 3.11 "$RUNNER_TEMP/python")"
+354: 2026-11-01T21:28:23.7294188Z [36;1mbin="$(bash tools/provision-python.sh 3.11 "$RUNNER_TEMP/python")"[0m
+355: 2026-11-01T21:28:23.7294636Z [36;1mecho "$bin" >> "$GITHUB_PATH"[0m
+356: 2026-11-01T21:28:23.7319932Z shell: /usr/bin/bash -e {0}
+357: 2026-11-01T21:28:23.7320224Z ##[endgroup]
+358: 2026-11-01T21:28:24.5790628Z /home/runner/work/_temp/python/cpython-3.11.17+20261001-x86_64-unknown-linux-gnu-install_only.tar.gz: OK
+401: 2026-11-01T21:30:47.3360682Z fix index: PASS
+402: 2026-11-01T21:30:48.0954363Z issues render: PASS
+403: 2026-11-01T21:31:18.5204634Z doctor: 40 error(s), 29 warning(s)
+404: 2026-11-01T21:31:18.5206890Z WARN: 221 archived records (fixes 197, campaigns 7 with 52 rounds, assessments 17) are verified only against PhorvexSecurity/operator@65af1c99; here doctor checks their structure, frozen STATUS digests and retained evidence, not removed evidence or source-commit pins (see ARCHIVE.yaml)
+405: 2026-11-01T21:31:18.5210060Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/live/control-journal.db
+406: 2026-11-01T21:31:18.5216253Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/storage-controls/control-journal-compressed.db
+407: 2026-11-01T21:31:18.5217792Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/r9-clock/actual-candidate-export.jsonl
+408: 2026-11-01T21:31:18.5219650Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/r9-clock/actual-failed-cohort-export.jsonl
+409: 2026-11-01T21:31:18.5221616Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/r9-clock/snapshots/1bfda03622805e5b362da5222e35f5e0955b1f4fc9b0a4fa33ada27ecaec46ab.pxms
+410: 2026-11-01T21:31:18.5223716Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/r9-clock/snapshots/7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a.pxms
+411: 2026-11-01T21:31:18.5225560Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/live/handover-3e11/live/round2-frozen/compressed-evidence.db
+412: 2026-11-01T21:31:18.5227138Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/refresh-300/first-candidate-export.jsonl
+413: 2026-11-01T21:31:18.5228631Z WARN: BENCH-STAGE: local-original evidence unavailable evidence/peer-review/refresh-600/first-candidate-export.jsonl
+414: 2026-11-01T21:31:18.5229974Z WARN: M-25: legacy record lacks verify.sh
+431: 2026-11-01T21:31:18.5244678Z WARN: 35 newly filed issue(s) await anatomy join review
+432: 2026-11-01T21:31:18.5245565Z WARN: anatomy is stale relative to the observed deployed source; release sync required
+433: 2026-11-01T21:31:18.5246909Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'id' is a required property
+434: 2026-11-01T21:31:18.5248522Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'bytes' is a required property
+435: 2026-11-01T21:31:18.5250425Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'producer' is a required property
+436: 2026-11-01T21:31:18.5252101Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'created_at' is a required property
+437: 2026-11-01T21:31:18.5253810Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'evidence_class' is a required property
+438: 2026-11-01T21:31:18.5255618Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.0: 'retention' is a required property
+439: 2026-11-01T21:31:18.5257262Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'id' is a required property
+440: 2026-11-01T21:31:18.5258916Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'bytes' is a required property
+441: 2026-11-01T21:31:18.5260807Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'producer' is a required property
+442: 2026-11-01T21:31:18.5262541Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'created_at' is a required property
+443: 2026-11-01T21:31:18.5264274Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'evidence_class' is a required property
+444: 2026-11-01T21:31:18.5266128Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.1: 'retention' is a required property
+445: 2026-11-01T21:31:18.5267824Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'id' is a required property
+446: 2026-11-01T21:31:18.5269601Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'bytes' is a required property
+447: 2026-11-01T21:31:18.5271101Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'producer' is a required property
+448: 2026-11-01T21:31:18.5272636Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'created_at' is a required property
+449: 2026-11-01T21:31:18.5274367Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'evidence_class' is a required property
+450: 2026-11-01T21:31:18.5276249Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.2: 'retention' is a required property
+451: 2026-11-01T21:31:18.5277985Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'id' is a required property
+452: 2026-11-01T21:31:18.5279857Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'bytes' is a required property
+453: 2026-11-01T21:31:18.5281569Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'producer' is a required property
+454: 2026-11-01T21:31:18.5283286Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'created_at' is a required property
+455: 2026-11-01T21:31:18.5285542Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'evidence_class' is a required property
+456: 2026-11-01T21:31:18.5287334Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.3: 'retention' is a required property
+457: 2026-11-01T21:31:18.5288981Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'id' is a required property
+458: 2026-11-01T21:31:18.5290818Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'bytes' is a required property
+459: 2026-11-01T21:31:18.5292468Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'producer' is a required property
+460: 2026-11-01T21:31:18.5294205Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'created_at' is a required property
+461: 2026-11-01T21:31:18.5295944Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'evidence_class' is a required property
+462: 2026-11-01T21:31:18.5297783Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: schema artifacts.4: 'retention' is a required property
+463: 2026-11-01T21:31:18.5299685Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: duplicate/empty artifact id None
+464: 2026-11-01T21:31:18.5301243Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: unknown retention None
+465: 2026-11-01T21:31:18.5302788Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: duplicate/empty artifact id None
+466: 2026-11-01T21:31:18.5304280Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: unknown retention None
+467: 2026-11-01T21:31:18.5305785Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: duplicate/empty artifact id None
+468: 2026-11-01T21:31:18.5307292Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: unknown retention None
+469: 2026-11-01T21:31:18.5308789Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: duplicate/empty artifact id None
+470: 2026-11-01T21:31:18.5310900Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: unknown retention None
+471: 2026-11-01T21:31:18.5312428Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: duplicate/empty artifact id None
+472: 2026-11-01T21:31:18.5313868Z FAIL: campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml: unknown retention None
+473: 2026-11-01T21:31:18.5477794Z ##[error]Process completed with exit code 1.
+474: 2026-11-01T21:31:18.5622555Z Post job cleanup.
+475: 2026-11-01T21:31:18.6670432Z [command]/usr/bin/git version
+476: 2026-11-01T21:31:18.6790508Z git version 2.56.0
+477: 2026-11-01T21:31:18.6880662Z Temporarily overriding HOME='/home/runner/work/_temp/e1fde535-a97b-4ca1-89d6-7fc12935dfc8' before making global git config changes
+478: 2026-11-01T21:31:18.6896494Z Adding repository directory to the temporary git global config as a safe directory
+479: 2026-11-01T21:31:18.6898209Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/operator-refactored/operator-refactored

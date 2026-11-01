@@ -1,0 +1,97 @@
+{
+  "schema": "phorvex-bench.ci-failure-diagnosis.v1",
+  "observed_at": "2026-11-01T21:33:03.867692+00:00",
+  "head_sha": "688a6db5fec9ea80504d92bab40299d98e2f5880",
+  "actual_ci_merge_sha": "aa1aeb8a179de931c805c3031586c2c703e0bf55",
+  "run_id": 41352163788,
+  "job_id": 124984519634,
+  "failed_step": "Run bash workflow/tools/check.sh",
+  "failed_validator": "doctor",
+  "error_count": 40,
+  "manifest": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/manifest.yaml",
+  "committed_manifest_sha256": "79b5297a70c0dafda141cc57b32591eb7c58e4c09e8991cdcd34d5093912b53c",
+  "artifact_rows": [
+    {
+      "index": 0,
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz",
+      "keys_present": [
+        "path",
+        "sha256"
+      ],
+      "missing_required": [
+        "bytes",
+        "created_at",
+        "evidence_class",
+        "id",
+        "producer",
+        "retention"
+      ]
+    },
+    {
+      "index": 1,
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json",
+      "keys_present": [
+        "path",
+        "sha256"
+      ],
+      "missing_required": [
+        "bytes",
+        "created_at",
+        "evidence_class",
+        "id",
+        "producer",
+        "retention"
+      ]
+    },
+    {
+      "index": 2,
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json",
+      "keys_present": [
+        "path",
+        "sha256"
+      ],
+      "missing_required": [
+        "bytes",
+        "created_at",
+        "evidence_class",
+        "id",
+        "producer",
+        "retention"
+      ]
+    },
+    {
+      "index": 3,
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json",
+      "keys_present": [
+        "path",
+        "sha256"
+      ],
+      "missing_required": [
+        "bytes",
+        "created_at",
+        "evidence_class",
+        "id",
+        "producer",
+        "retention"
+      ]
+    },
+    {
+      "index": 4,
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json",
+      "keys_present": [
+        "path",
+        "sha256"
+      ],
+      "missing_required": [
+        "bytes",
+        "created_at",
+        "evidence_class",
+        "id",
+        "producer",
+        "retention"
+      ]
+    }
+  ],
+  "classification": "Workflow evidence manifest metadata failure introduced by evidence commit. Non-workflow source identity to287 is still exact; whole688 CI is not green.",
+  "repair_scope_advisory": "Fill required schema metadata from actual retained files using real producer/time/retention provenance; preserve raw evidence bytes and hashes. Rerun relevant harness checks only after a reviewed repair. No repair/rerun was performed by this observer."
+}

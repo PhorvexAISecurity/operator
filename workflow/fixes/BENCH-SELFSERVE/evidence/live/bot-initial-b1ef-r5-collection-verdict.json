@@ -1,0 +1,50 @@
+{
+  "at": "2026-11-01T21:45:46.695961+00:00",
+  "result": "PASS_INITIAL_CONTROLS_ONLY",
+  "archive": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-b1ef-r5-artifacts.tar.gz",
+    "sha256": "246dc36f3bdff698d9916e836e61dcdd165e2881e252b6738fd7cd92129839e1",
+    "bytes": 8117005,
+    "files": 120
+  },
+  "independent_review": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round5-initial-artifacts-review.json",
+    "sha256": "482fa27c5f6f2da8ea57338e7487bd47199f095ecd044fb0707deb44dd0fb907"
+  },
+  "parameter": {
+    "batch": "518953591ee8",
+    "job": "18e300921b28",
+    "state": "DONE",
+    "policy": "phorvex-staging-demo/demo-api-defense",
+    "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "ticks_per_arm": 64,
+    "arms": 4,
+    "rows_ok": 256,
+    "control_reproductions": 64,
+    "parameter": "P-FEA-006",
+    "values": [
+      1.0,
+      1.2,
+      1.5
+    ]
+  },
+  "original_10d": {
+    "batch": "ce9e3ee08a1c",
+    "job": "52c619e5c9d8",
+    "state": "BLOCKED",
+    "reasons": [
+      "MOVE_ATTRIBUTION_UNAVAILABLE",
+      "ENDPOINT_DATASET_UNAVAILABLE"
+    ],
+    "original_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+    "window": 864000,
+    "lookback": 86400,
+    "model_build_replay_started": false
+  },
+  "limits": [
+    "All parameter decisions are non-attack NOOP; no efficacy claim.",
+    "Generated parameter XLSX and full ZIP were not Telegram attachments; copied for user handover.",
+    "Separate endpoint fixture acceptance is pending.",
+    "Historical/fixture data is not substituted for missing original ten-day active data."
+  ]
+}

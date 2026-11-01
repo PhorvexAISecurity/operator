@@ -1,0 +1,10 @@
+{
+  "observed_at": "2026-11-01T22:05:21.636652+00:00",
+  "main_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "pr_head_sha": "64d2aaf9b63208bed10e62207cccd101b53b1029",
+  "pr_base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "pr_merge_sha": "808079a03728b3ac5f449ba268bb91b20e95c93d",
+  "pr_state": "closed",
+  "draft": false,
+  "merged": true
+}
