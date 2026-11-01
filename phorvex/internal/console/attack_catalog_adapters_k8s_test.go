@@ -26,12 +26,15 @@ type fakeK8sCatalogueCluster struct {
 	signal        k8sCatalogueSignal
 	physical      AttackCatalogPhysicalResult
 	cleanup       AttackCatalogCleanupResult
+	retry         AttackCatalogRetrySafety
 	preflightErr  error
 	signalErr     error
+	retryErr      error
 	preflightCall atomic.Int32
 	signalCall    atomic.Int32
 	physicalCall  atomic.Int32
 	cleanupCall   atomic.Int32
+	retryCall     atomic.Int32
 }
 
 func (f *fakeK8sCatalogueCluster) Preflight(context.Context, attackcatalog.Entry, k8sCatalogueProfile) (k8sCatalogueFixture, error) {
@@ -52,6 +55,11 @@ func (f *fakeK8sCatalogueCluster) Physical(context.Context, attackcatalog.Entry,
 func (f *fakeK8sCatalogueCluster) Cleanup(context.Context, attackcatalog.Entry, k8sCatalogueProfile, k8sCatalogueFixture, k8sCatalogueSignal, string, string) AttackCatalogCleanupResult {
 	f.cleanupCall.Add(1)
 	return f.cleanup
+}
+
+func (f *fakeK8sCatalogueCluster) ReconcileRetrySafety(context.Context, attackcatalog.Entry, k8sCatalogueProfile, AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	f.retryCall.Add(1)
+	return f.retry, f.retryErr
 }
 
 func k8sCatalogueTestEntry(t *testing.T, id string) attackcatalog.Entry {
@@ -233,6 +241,20 @@ func TestK8sCatalogueAdapterMembershipAndFixedProfiles(t *testing.T) {
 	}
 	if gotIDs[attackcatalog.FirstID] {
 		t.Fatalf("unrelated catalogue ID %q was registered by Kubernetes families", attackcatalog.FirstID)
+	}
+}
+
+func TestK8sCatalogueRetryReconcileDelegatesOnlyExactBinding(t *testing.T) {
+	adapter, cluster, _ := completeFakeK8sCatalogue(t, k8sCatalogueFamilyQuarantine, AttackCatalogExecutionActive, true)
+	cluster.retry = AttackCatalogRetrySafety{Verified: true, RetrySafe: true, Reason: "clean"}
+	persisted := AttackCatalogResult{CatalogueID: adapter.entry.ID, RunID: "cat-retry", Family: adapter.profile.Family}
+	safety, err := adapter.ReconcileRetrySafety(context.Background(), persisted)
+	if err != nil || !safety.RetrySafe || cluster.retryCall.Load() != 1 {
+		t.Fatalf("exact retry reconciliation was not delegated: safety=%+v calls=%d err=%v", safety, cluster.retryCall.Load(), err)
+	}
+	persisted.CatalogueID = "AML.T0049"
+	if _, err = adapter.ReconcileRetrySafety(context.Background(), persisted); err == nil || cluster.retryCall.Load() != 1 {
+		t.Fatalf("foreign catalogue identity reached retry verifier: calls=%d err=%v", cluster.retryCall.Load(), err)
 	}
 }
 
