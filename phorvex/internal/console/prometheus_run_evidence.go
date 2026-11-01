@@ -398,11 +398,18 @@ func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result A
 			metric.RawCapture.CapturedAt.Before(metric.FinalCapture.CapturedAt) {
 			return fmt.Errorf("Prometheus metric %q capture timestamps are not monotonic", metric.Key)
 		}
-		if len(metric.Range) == 0 {
-			return fmt.Errorf("Prometheus metric %q has no raw range series", metric.Key)
-		}
 		if !prometheusRangeQueryCoversCaptures(metric.RawCapture, metric.BaselineCapture, metric.FinalCapture) {
 			return fmt.Errorf("Prometheus metric %q raw query window does not cover baseline and final", metric.Key)
+		}
+		if len(metric.Range) == 0 {
+			// Candidate exclusions are a negative diagnostic: no excluded
+			// candidate is the expected successful result. Preserve that absence
+			// only when all three validated captures and the derived deltas agree;
+			// every positive release metric remains fail-closed below.
+			if prometheusEmptyCandidateExclusionsProveAbsence(metric) {
+				continue
+			}
+			return fmt.Errorf("Prometheus metric %q has no raw range series", metric.Key)
 		}
 		var first, last float64
 		found := false
@@ -423,6 +430,12 @@ func validatePrometheusReleaseEvidence(evidence *PrometheusRunEvidence, result A
 		}
 	}
 	return nil
+}
+
+func prometheusEmptyCandidateExclusionsProveAbsence(metric PrometheusMetricEvidence) bool {
+	return metric.Key == "candidate-exclusions" &&
+		len(metric.Baseline) == 0 && len(metric.Final) == 0 &&
+		len(metric.Range) == 0 && len(metric.Deltas) == 0
 }
 
 // A counter can be absent at baseline and be born during the run. In that case
