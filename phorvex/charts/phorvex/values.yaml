@@ -518,6 +518,7 @@ phorvex:
       familyFixtures:
         enabled: false
         profile: ""
+        namespaceUID: ""
         cleanupPolicy: Delete
         images:
           workload: ""

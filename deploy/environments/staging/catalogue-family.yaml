@@ -2,12 +2,14 @@ phorvex:
   policyNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
+  - p1-demo
   actuatorNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
+  - p1-demo
   trustedDetectors:
   - phorvex-staging/staging-attacks
-  - p6/p6-attacks
+  - p1/p1-attacks
   agentActionDeny:
     enabled: false
     namespaces: []
@@ -20,16 +22,17 @@ phorvex:
     attackNamespaces:
     - phorvex-staging-demo
     - console-identity-shared
+    - p1-demo
     attackCatalog:
       enabled: true
-      authorizationTenant: console-identity-shared
+      authorizationTenant: p1-demo
       familyFixtures:
         enabled: true
-        profile: identity-sa-rotate
-        namespaceUID: ''
+        profile: quarantine
+        namespaceUID: 45e2ab1b-5a45-42ab-8afe-87218f2c758d
         cleanupPolicy: Delete
         images:
-          workload: ''
+          workload: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae
           phorvex: ''
           guardrail: ''
           python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
@@ -37,17 +40,17 @@ phorvex:
       agentAction:
         enabled: false
         namespace: p6-demo
-        image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8
+        image: ''
       prometheusEvidence:
         enabled: true
     auth:
       grants:
         data: "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\": \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\"\
           ,\n      \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n      \"roles\": [\n        \"operator\"\n    \
-          \  ],\n      \"tenants\": [\n        \"console-identity-shared\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n\
+          \  ],\n      \"tenants\": [\n        \"p1-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n\
           \      \"note\": \"The production console's operator, confined to staging's demo tenant.\"\n    },\n    {\n    \
           \  \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\n      \"subject\"\
           : \"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\",\n      \"roles\": [\n        \"operator\"\
-          \n      ],\n      \"tenants\": [\n        \"console-identity-shared\"\n      ],\n      \"targets\": [\n        \"default\"\n   \
+          \n      ],\n      \"tenants\": [\n        \"p1-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n   \
           \   ],\n      \"note\": \"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\"\
           \n    }\n  ]\n}\n"
