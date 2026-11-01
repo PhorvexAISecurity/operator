@@ -1,0 +1,32 @@
+[
+  {
+    "after": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/after-0.go",
+    "ast_equal_after_import_sort_ignoring_positions": true,
+    "before": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go",
+    "exact_tokens_including_inserted_semicolons_equal": false,
+    "function_tokens_equal_ignoring_semicolons": true,
+    "import_multiset_equal": true,
+    "raw_ast_equal_ignoring_positions": false,
+    "tokens_equal_ignoring_semicolons": false
+  },
+  {
+    "after": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/after-1.go",
+    "ast_equal_after_import_sort_ignoring_positions": true,
+    "before": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-1.go",
+    "exact_tokens_including_inserted_semicolons_equal": false,
+    "function_tokens_equal_ignoring_semicolons": true,
+    "import_multiset_equal": true,
+    "raw_ast_equal_ignoring_positions": true,
+    "tokens_equal_ignoring_semicolons": true
+  },
+  {
+    "after": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/grouped-main.go",
+    "ast_equal_after_import_sort_ignoring_positions": false,
+    "before": "/workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go",
+    "exact_tokens_including_inserted_semicolons_equal": true,
+    "function_tokens_equal_ignoring_semicolons": true,
+    "import_multiset_equal": true,
+    "raw_ast_equal_ignoring_positions": true,
+    "tokens_equal_ignoring_semicolons": true
+  }
+]

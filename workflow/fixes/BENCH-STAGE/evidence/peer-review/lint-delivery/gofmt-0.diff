@@ -1,0 +1,15 @@
+diff /workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go.orig /workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go
+--- /workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go.orig
++++ /workspace/.phorvex-test-tmp/peer-gofmt-5maysf3n/before-0.go
+@@ -5,10 +5,10 @@
+ 	"encoding/json"
+ 	"flag"
+ 	"fmt"
++	study "github.com/phorvex/phorvex/internal/cost/endpoint"
+ 	"io"
+ 	"os"
+ 	"path/filepath"
+-	study "github.com/phorvex/phorvex/internal/cost/endpoint"
+ )
+ 
+ func main() {

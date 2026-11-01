@@ -5927,3 +5927,184 @@ artifacts:
   description: Bounded formatting-delivery correction. Original reviewed source and
     historical/live evidence are not relabelled; raw clock source bytes are retained
     under explicit document naming.
+- id: check-patch_equivalence
+  path: evidence/delivery/lint-repair/patch-equivalence-verdict.md
+  sha256: b8364dded909248da7a281ac8dc6ba3399de6ae31e146395489ea074d2ff2a6b
+  bytes: 2501
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:20:35+00:00'
+  source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  command: Independent exact Git-object insertion assertion, Go1.26.3 formatter and
+    token/AST controls; hash-bound affected tests/build and original clock reproduction;
+    peer final-equivalence-review.json
+  evidence_class: EQUIVALENCE
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: lint-delivery-4d1905e88f20f7d8
+  path: PR_BODY.final.md
+  bytes: 8066
+  sha256: 1788de284765f0cba9d20b8d4ede8086ef8961c975ba5fc6760283d5b754eb20
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:20:08.499884+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-5dd71662ee21b1f5
+  path: evidence/delivery/lint-repair/affected-checks.json
+  bytes: 2809
+  sha256: d1ce4891b2e238576f6d77544cf156f11f5b679a73cd3bb8db4b083e854aeb83
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:18:53.669279+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-7b96a32fd1ca853b
+  path: evidence/delivery/lint-repair/changed-file-format.log
+  bytes: 44
+  sha256: 3f298f8e6a7eef2e2a070f1bdf93d219b626bdf25e0d2d75b549c1f748e1fd78
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:18:50.529893+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-2c8eedaa75af68c7
+  path: evidence/delivery/lint-repair/endpoint-build.log
+  bytes: 0
+  sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:18:51.799903+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-dd7d74fe7fb83526
+  path: evidence/delivery/lint-repair/endpoint-tests.log
+  bytes: 117
+  sha256: 932a20f1a2e41a26d7e7dc8b9c624cc7db2d97f8fedf5dd28744deea20799ec0
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:18:51.737903+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-fbdf37a91061e3ec
+  path: evidence/delivery/lint-repair/lead-equivalence.json
+  bytes: 1222
+  sha256: 2b5f76e7d03f80ac702d5f604dd3bb1b2a4a888b1f6645a1bf3719f64f40c9a0
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:19:47.192448+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-644618c4d1385d9e
+  path: evidence/peer-review/lint-delivery/changed-format-gate.log
+  bytes: 44
+  sha256: 3f298f8e6a7eef2e2a070f1bdf93d219b626bdf25e0d2d75b549c1f748e1fd78
+  producer: stage-review
+  created_at: '2026-11-01T02:18:28.731712+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-0324223d02bf53ba
+  path: evidence/peer-review/lint-delivery/compare.go.txt
+  bytes: 2581
+  sha256: 6477c29ab443908df5d8a7d90ec716269b3b7a94a38c3e3efb7265e8f31b2513
+  producer: stage-review
+  created_at: '2026-11-01T02:17:58.840211+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-64699c342c6b9ebc
+  path: evidence/peer-review/lint-delivery/final-equivalence-review.json
+  bytes: 6449
+  sha256: 73f3eb03a7dfdfae2cb3027ce6f46ff4df9aab224d60ec102861b4fa6f428f24
+  producer: stage-review
+  created_at: '2026-11-01T02:20:10.744862+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-a088dcd739043d13
+  path: evidence/peer-review/lint-delivery/formatter-advisory.json
+  bytes: 3015
+  sha256: 592a2a8b95dabc17c86ff99311bfccbd52ef2b557e35af338fac89484af290bb
+  producer: stage-review
+  created_at: '2026-11-01T02:17:58.842460+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-b2c5f9f83c89e2ab
+  path: evidence/peer-review/lint-delivery/formatter-ast-controls.json
+  bytes: 1411
+  sha256: 48012f30bcd4c789c53195a9a37b153bd77bb125fb51a37b9476ea640eb01d5d
+  producer: stage-review
+  created_at: '2026-11-01T02:17:16.024108+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-46db729cb90d02dd
+  path: evidence/peer-review/lint-delivery/gofmt-0.diff
+  bytes: 492
+  sha256: 2770232ff2dd80f26dc238dd466df2314421262590bd377414822baf12e6cd5a
+  producer: stage-review
+  created_at: '2026-11-01T02:16:21.131481+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-f64a555d0f0edda5
+  path: evidence/peer-review/lint-delivery/gofmt-1.diff
+  bytes: 2132
+  sha256: c72d05f37a7916110e61519571ff58233528e1557a720108d3b09e5afd1db7f1
+  producer: stage-review
+  created_at: '2026-11-01T02:16:21.154549+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-315525b0491e34c7
+  path: evidence/peer-review/lint-delivery/temporary-control-path.json
+  bytes: 1182
+  sha256: b146504fa1cd381cf6a7380c1e98477fea6fa38a5f4d4152924c7760ca14e29b
+  producer: stage-review
+  created_at: '2026-11-01T02:16:21.164537+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.
+- id: lint-delivery-77a759ba54f18ab0
+  path: pr-equivalence-config.json
+  bytes: 228
+  sha256: 385f2a579121229c7f502aa09a4df99b0120331fa11aa2602d32280865aa4c31
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:20:34.480117+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: 1ae0beeda781e7063782bc7d07718f6ce64015a7
+  description: Bounded delivery formatting/evidence-relocation control. Original full
+    preflight and stage runs retain their historical source identities.

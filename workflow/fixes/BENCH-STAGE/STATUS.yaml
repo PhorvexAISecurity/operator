@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 21
+revision: 23
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -92,6 +92,13 @@ checks:
     source_sha: ef94fad362dabb51469211388ef80cdfa6eee1d4
     at: '2026-11-01T02:01:18+00:00'
     deployment_digest: sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
+  patch_equivalence:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/delivery/lint-repair/patch-equivalence-verdict.md
+    sha256: b8364dded909248da7a281ac8dc6ba3399de6ae31e146395489ea074d2ff2a6b
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T02:20:35+00:00'
 fix_id: BENCH-STAGE
 issues: []
 title: Source-pinned stage brain benchmarks through the bot
@@ -124,10 +131,10 @@ implementation:
   stacked_on: []
 pull_request:
   url: https://github.com/PhorvexSecurity/operator-refactored/pull/183
-  reviewed_head: ec310e276e45e6a218f7520880e22c6c1c687817
+  reviewed_head: 1ae0beeda781e7063782bc7d07718f6ce64015a7
   merge_sha: null
   checks: pending
-  patch_equivalence: pending
+  patch_equivalence: PASS
 deployment:
   image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
   digest: sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
@@ -160,7 +167,7 @@ next_action:
   owner: coordinator
   action: Monitor PR 183 review and actual GitHub CI; stage benchmark services remain
     active. Main merge requires separate authorization.
-updated_at: '2026-11-01T02:13:05+00:00'
+updated_at: '2026-11-01T02:20:40+00:00'
 follow_up_to: BENCH-V3
 configuration_history:
 - at: '2026-10-31T22:25:19+00:00'
@@ -206,6 +213,11 @@ configuration_history:
   - deployment
   approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
 - at: '2026-11-01T02:12:23+00:00'
+  by: bench-v3-lead
+  fields:
+  - pull_request
+  approval_ref: null
+- at: '2026-11-01T02:20:40+00:00'
   by: bench-v3-lead
   fields:
   - pull_request

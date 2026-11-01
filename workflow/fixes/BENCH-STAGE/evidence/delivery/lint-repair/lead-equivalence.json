@@ -1,0 +1,24 @@
+{
+  "at": "2026-11-01T02:19:47.191680+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS_BOUNDED_WHITESPACE_EQUIVALENCE",
+  "reviewed_source": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "delivery_source": "1ae0beeda781e7063782bc7d07718f6ce64015a7",
+  "only_product_delta": {
+    "path": "phorvex/cmd/endpoint-v3/main.go",
+    "description": "One blank line separating import groups; exact insertion asserted against Git objects.",
+    "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+    "after_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce"
+  },
+  "gofmt_version": "Go1.26.3",
+  "raw_relocation": {
+    "old_path": "evidence/clock-repair/clock-parity.go",
+    "new_path": "evidence/clock-repair/clock-parity.go.txt",
+    "sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "bytes": 968,
+    "only_current_index_path_changed": true
+  },
+  "existing_signed_checks_unchanged": 11,
+  "affected_checks_sha256": "d1ce4891b2e238576f6d77544cf156f11f5b679a73cd3bb8db4b083e854aeb83",
+  "source_pins_and_live_results": "Original ec310 preflight and actual deployed component identities retained; no rerun or deployment relabelled."
+}
