@@ -109,6 +109,36 @@ func TestPrometheusRangeQueryMustCoverEmptyBaselineAndFinal(t *testing.T) {
 	}
 }
 
+func TestPrometheusEmptyCandidateExclusionsProveAbsence(t *testing.T) {
+	empty := PrometheusMetricEvidence{Key: "candidate-exclusions"}
+	if !prometheusEmptyCandidateExclusionsProveAbsence(empty) {
+		t.Fatal("validated empty candidate exclusions were rejected")
+	}
+
+	cases := map[string]PrometheusMetricEvidence{
+		"positive metric": {Key: "selected-action"},
+		"baseline present": {
+			Key: "candidate-exclusions", Baseline: []PrometheusSeries{{}},
+		},
+		"final present": {
+			Key: "candidate-exclusions", Final: []PrometheusSeries{{}},
+		},
+		"range present": {
+			Key: "candidate-exclusions", Range: []PrometheusSeries{{}},
+		},
+		"delta present": {
+			Key: "candidate-exclusions", Deltas: []PrometheusDelta{{}},
+		},
+	}
+	for name, metric := range cases {
+		t.Run(name, func(t *testing.T) {
+			if prometheusEmptyCandidateExclusionsProveAbsence(metric) {
+				t.Fatal("inconsistent empty range was accepted")
+			}
+		})
+	}
+}
+
 func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) {
 	var mu sync.Mutex
 	instantCalls := map[string]int{}
