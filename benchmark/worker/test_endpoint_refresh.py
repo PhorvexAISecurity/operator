@@ -5,11 +5,13 @@ the product's real Recorder/export/paired CLI tests cover engine semantics.
 No final READY flag or journal coverage result is mocked here.
 """
 import copy
+from contextlib import contextmanager, ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -150,6 +152,107 @@ class RefreshTests(unittest.TestCase):
     def pointer(self):
         return self.data/'mathlab/endpoint-traces'/(self.policy+'.manifest.json')
 
+    @contextmanager
+    def held_lock(self, path):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        process = subprocess.Popen([sys.executable, '-c',
+            'import fcntl,sys; f=open(sys.argv[1],"a"); fcntl.flock(f,fcntl.LOCK_EX); '
+            'print("LOCKED",flush=True); sys.stdin.read()', str(path)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(process.stdout.readline().strip(), 'LOCKED')
+            yield
+        finally:
+            process.stdin.close()
+            process.wait(timeout=5)
+            process.stdout.close()
+
+    def test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers(self):
+        self.assertEqual(self.run_refresh()['state'], 'READY')
+        before = self.pointer().read_bytes()
+        status_path = self.data/'mathlab/endpoint-refresh'/(self.policy+'.status.json')
+        status_before = status_path.read_bytes()
+        with self.held_lock(self.data/'mathlab/stage.lock'):
+            result = subprocess.run([sys.executable, str(HERE/'endpoint_refresh.py'),
+                '--data', str(self.data), '--repo', str(self.repo), '--policy', self.policy,
+                '--journal', str(self.journal.path), '--slo-target', '.9', '--window', '600',
+                '--lookback', '600', '--worth-threshold', '0', '--ticks', '64'],
+                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        state = json.loads(result.stdout)
+        self.assertEqual((state['state'], state['phase'], state['reason']),
+                         ('BLOCKED', 'LEASE', 'STAGE_PIN_LEASE_BUSY'))
+        self.assertGreaterEqual(state['lease_wait_seconds'], 19)
+        self.assertGreaterEqual(state['elapsed_seconds'], state['lease_wait_seconds'])
+        self.assertGreaterEqual((datetime.fromisoformat(state['finished_at']) -
+                                 datetime.fromisoformat(state['started_at'])).total_seconds(), 19)
+        self.assertEqual(state['requested_ticks'], 64)
+        self.assertEqual(state['study_settings'], {'target': .9, 'window': 600, 'lookback': 600, 'worth_threshold': 0})
+        self.assertEqual(read_json(status_path), state)
+        self.assertNotEqual(status_path.read_bytes(), status_before)
+        self.assertEqual(self.pointer().read_bytes(), before)
+        self.assertEqual(self.run_refresh()['state'], 'READY')
+
+    def test_lease_block_before_work_and_invalid_request_preserve_data(self):
+        self.assertEqual(self.run_refresh()['state'], 'READY')
+        before = self.pointer().read_bytes()
+        self.sync.reset_mock()
+        actual_lock = stage_scope.pin_lock
+        with self.held_lock(self.data/'mathlab/stage.lock'), \
+             mock.patch.object(stage_scope, 'pin_lock', side_effect=lambda data, **kw: actual_lock(data, timeout=0)), \
+             mock.patch.object(stage_scope, 'load', side_effect=AssertionError('no discovery before lease')), \
+             mock.patch.object(refresh, 'run_replay', side_effect=AssertionError('no replay before lease')):
+            state = self.run_refresh()
+            self.assertEqual(state['reason'], 'STAGE_PIN_LEASE_BUSY')
+            status_path = self.data/'mathlab/endpoint-refresh'/(self.policy+'.status.json')
+            status_before = status_path.read_bytes(), status_path.stat().st_mtime_ns
+            with self.assertRaisesRegex(ValueError, 'invalid explicit study'):
+                self.run_refresh(window=0)
+            self.assertEqual((status_path.read_bytes(), status_path.stat().st_mtime_ns), status_before)
+        self.sync.assert_not_called()
+        self.assertEqual(self.pointer().read_bytes(), before)
+
+    def test_another_refresh_owner_status_and_pointer_are_never_overwritten(self):
+        self.assertEqual(self.run_refresh()['state'], 'READY')
+        status_path = self.data/'mathlab/endpoint-refresh'/(self.policy+'.status.json')
+        status_before = status_path.read_bytes(), status_path.stat().st_mtime_ns
+        pointer_before = self.pointer().read_bytes(), self.pointer().stat().st_mtime_ns
+        actual_lock = stage_scope.pin_lock
+        for global_busy in (False, True):
+            with self.subTest(global_busy=global_busy), ExitStack() as contexts:
+                contexts.enter_context(self.held_lock(status_path.with_suffix('.lock')))
+                if global_busy:
+                    contexts.enter_context(self.held_lock(self.data/'mathlab/stage.lock'))
+                    contexts.enter_context(mock.patch.object(stage_scope, 'pin_lock',
+                        side_effect=lambda data, **kw: actual_lock(data, timeout=0)))
+                contexts.enter_context(mock.patch.object(stage_scope, 'load', side_effect=AssertionError('owner is active')))
+                state = self.run_refresh()
+                self.assertEqual((state['state'], state['phase'], state['reason']),
+                                 ('BLOCKED', 'LEASE', 'REFRESH_ALREADY_RUNNING'))
+                self.assertEqual((status_path.read_bytes(), status_path.stat().st_mtime_ns), status_before)
+                self.assertEqual((self.pointer().read_bytes(), self.pointer().stat().st_mtime_ns), pointer_before)
+
+    def test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease(self):
+        with self.assertRaises(stage_scope.StageError) as invalid:
+            with stage_scope.pin_lock(self.data, timeout=-1):
+                self.fail('invalid timeout acquired')
+        self.assertNotIsInstance(invalid.exception, stage_scope.StageLeaseBusy)
+        for error in (stage_scope.StageError('invalid lease configuration'), PermissionError('denied')):
+            @contextmanager
+            def failed_acquisition():
+                raise error
+                yield
+            with self.subTest(error=type(error).__name__), \
+                 mock.patch.object(stage_scope, 'pin_lock', return_value=failed_acquisition()):
+                with self.assertRaises(type(error)) as raised:
+                    self.run_refresh()
+                self.assertIs(raised.exception, error)
+        body_error = stage_scope.StageLeaseBusy('body failure')
+        with mock.patch.object(refresh, '_refresh', side_effect=body_error):
+            with self.assertRaises(stage_scope.StageLeaseBusy) as raised:
+                self.run_refresh()
+            self.assertIs(raised.exception, body_error)
+
     def test_real_normalization_latest64_true_sourcepins_and_atomic_generation(self):
         result=self.run_refresh()
         self.assertEqual(result['state'],'READY',result)
@@ -182,13 +285,36 @@ class RefreshTests(unittest.TestCase):
         def change_after_export(args,*rest):
             original(args,*rest)
             if '-export-study-candidates' in args:
-                engine=read_json(self.data/'mathlab/study-engine.json'); engine['classification']='changed'
-                atomic_json(self.data/'mathlab/study-engine.json',engine)
+                engine_path=Path(read_json(self.data/'mathlab/stage.json')['study_engine_reference']['path'])
+                engine=read_json(engine_path); engine['classification']='changed'
+                atomic_json(engine_path,engine)
         with mock.patch.object(refresh,'run_replay',side_effect=change_after_export):
             result=self.run_refresh()
         self.assertEqual(result['state'],'BLOCKED')
-        self.assertIn('STUDY_ENGINE_CHANGED',result['reason'])
+        self.assertIn('study engine reference changed',result['reason'])
         self.assertEqual(self.pointer().read_bytes(),before)
+
+    def test_free_reserve_block_retains_previous_dataset_before_any_sync(self):
+        self.assertEqual(self.run_refresh()['state'],'READY');before=self.pointer().read_bytes()
+        usage=refresh.shutil._ntuple_diskusage(10<<30,7<<30,3<<30)
+        with mock.patch.object(refresh.shutil,'disk_usage',return_value=usage), \
+             mock.patch.object(refresh.stage_cli,'sync_stage',side_effect=AssertionError('capacity must be checked before sync')):
+            result=self.run_refresh()
+        self.assertEqual(result['state'],'BLOCKED');self.assertIn('DISK_RESERVE',result['reason'])
+        self.assertEqual(self.pointer().read_bytes(),before)
+
+    def test_same_source_review_reinstall_retains_previous_pinned_evidence(self):
+        prior=read_json(self.data/'mathlab/stage.json')
+        installed=stage_scope.study_engine(self.data,prior)
+        original={item['path']:Path(item['path']).read_bytes() for item in installed['review_evidence']}
+        review=copy.deepcopy(installed['review_receipt']);review['reviewer']='another-independent-reviewer'
+        evidence=self.root/'evidence.txt';evidence.write_text('different actual review evidence')
+        review['evidence_sha256']=[hashlib.sha256(evidence.read_bytes()).hexdigest()]
+        receipt=self.root/'review.json';atomic_json(receipt,review)
+        refresh.stage_cli.install_study_engine(self.data,self.repo,installed['candidate']['path'],
+                    installed['source_revision'],installed['base_local']['path'],[receipt,evidence])
+        self.assertEqual({p:Path(p).read_bytes() for p in original},original)
+        self.assertEqual(stage_scope.study_engine(self.data,prior),installed)
 
     def test_wrong_observer_source_fails_before_sync(self):
         wrong=observed.Journal(self.root/'wrong.sqlite',{**self.journal.scope,'source_revision':'f'*40})

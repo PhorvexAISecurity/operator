@@ -1,0 +1,141 @@
+{
+  "schema": "phorvex-bench.component-inputs.v1",
+  "owner": "bench-v3-worker",
+  "base_source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "scope": "Bot parser/readiness/runtime/guides plus stage cohort filters; helper-owned reconcile files separate",
+  "paths": [
+    {
+      "path": "benchmark/bot/ENDPOINT-V3.md",
+      "bytes": 9338,
+      "sha256": "bcf4c799cf355ad8edd28de7ca512d531598b948d6839de98fa80ee7b78b98d8"
+    },
+    {
+      "path": "benchmark/bot/README.md",
+      "bytes": 12806,
+      "sha256": "456ae937b05bcee74ed0258fc58d0552bfb1a67c32399cd6247e570b8347c028"
+    },
+    {
+      "path": "benchmark/bot/endpoint_study.py",
+      "bytes": 35547,
+      "sha256": "aaf7805dac5d7d8fce7430aea678d0d10329a3bc83c35d8c15b386563ac9ce9e"
+    },
+    {
+      "path": "benchmark/bot/file_requests.py",
+      "bytes": 16112,
+      "sha256": "d0e73aa82edfd4174d59b249aabc3e642165b31e48a01cf6befb699b54b93b65"
+    },
+    {
+      "path": "benchmark/bot/guide-en.html",
+      "bytes": 203254,
+      "sha256": "9c73a988800018f19188d9dfa01c12aae14a5600fbdd8beda9082fc792f63900"
+    },
+    {
+      "path": "benchmark/bot/guide-en.pdf",
+      "bytes": 561661,
+      "sha256": "967b046193f63a05568ec61c6d08e89a128b39e20e81188a26e1bec386d15335"
+    },
+    {
+      "path": "benchmark/bot/guide-fa.html",
+      "bytes": 230900,
+      "sha256": "51311caca5be704ce33ca6161401703138846358eb77596f44d4d91d7a96a327"
+    },
+    {
+      "path": "benchmark/bot/guide-fa.pdf",
+      "bytes": 647477,
+      "sha256": "4293767162e5c3bec62d46111c7970922a7927afcc8f601e33f1006c0b484f68"
+    },
+    {
+      "path": "benchmark/bot/request_readiness.py",
+      "bytes": 19156,
+      "sha256": "df988fcbfbd302146ec315b12d13c5edf6c3a2853133cc79b607932979cb501b"
+    },
+    {
+      "path": "benchmark/bot/service.py",
+      "bytes": 78420,
+      "sha256": "d36bc983f22a1767ea0ba4f58ca74ba67ddce6d574a6e9fd4f707723fe29ab4a"
+    },
+    {
+      "path": "benchmark/bot/stage_runtime.py",
+      "bytes": 5459,
+      "sha256": "93c38c3111d51f38bc48b3137e63a39e6073a9bec2b995fc58595b7be75f7cff"
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-10d.txt",
+      "bytes": 309,
+      "sha256": "a9d64d343190e74845954a3f8080b866959f08f1e771cffa985ba4d55c4ff10e"
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-fixture-600s.txt",
+      "bytes": 259,
+      "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667"
+    },
+    {
+      "path": "benchmark/bot/test_bot.py",
+      "bytes": 44979,
+      "sha256": "8538cecabeae56492d1a3f340f0dedb8bd12537d270caa5dbd387a3526ef1da3"
+    },
+    {
+      "path": "benchmark/bot/test_endpoint_study.py",
+      "bytes": 18361,
+      "sha256": "3c287a9d074496f5dcf490ac70b604c5459468469aa378f8b4e214f79b601d22"
+    },
+    {
+      "path": "benchmark/bot/test_request_readiness.py",
+      "bytes": 16649,
+      "sha256": "f51d85ef98b241c844836271a255dfd63a80a765db1136c31a2fe31fe4941d13"
+    },
+    {
+      "path": "benchmark/bot/test_selfserve_requests.py",
+      "bytes": 5797,
+      "sha256": "f059d72ebbbc1c4e9d31bfca48cb2b9fd2c62380916ee7a805fcb2dcf57b9ecc"
+    },
+    {
+      "path": "benchmark/bot/test_study.py",
+      "bytes": 16448,
+      "sha256": "c4dbb5a0f442de7b6bf98e5a050cbb55738abf770a6f36a993dfd0e0ab8902bc"
+    },
+    {
+      "path": "benchmark/bot/test_uploads.py",
+      "bytes": 15030,
+      "sha256": "7ef727be9169daed97b2caf9058b71b053914d548fa96642ef3f9e2741c6638b"
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-10d-original.txt",
+      "bytes": 13522,
+      "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3"
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-30d-original.txt",
+      "bytes": 12132,
+      "sha256": "c4f07c2b1635a89fbf60c37f318805e6a3169438bf6739b9448ba54f910f3687"
+    },
+    {
+      "path": "benchmark/bot/testkit.py",
+      "bytes": 11260,
+      "sha256": "46320c779be26d9a564c525207edf6c4a05f2bff009b632b9f3d5e47180f3a19"
+    },
+    {
+      "path": "benchmark/worker/mathlab/experiment.py",
+      "bytes": 21744,
+      "sha256": "389f323e8ef15cbba42646dd2f58957b2ce93a8cf4cc8133c0824e57fe0623a6"
+    }
+  ],
+  "checks": [
+    {
+      "path": "evidence/requests/bot-author-final.txt",
+      "result": "PASS",
+      "tests": 188,
+      "skipped": 0,
+      "bytes": 28191,
+      "sha256": "f07f8e38cacbb6eafdb2644bf980855f88dc6d972a99093c709305c5bbfc5be2",
+      "command": "PYTHONDONTWRITEBYTECODE=1 TMPDIR=/workspace/.phorvex-test-tmp /workspace/.phorvex-tools/python312/python/bin/python3.12 -m unittest discover -s benchmark/bot -p test_*.py -v"
+    },
+    {
+      "path": "evidence/requests/guide-render-receipt.json",
+      "result": "PASS",
+      "bytes": 1447,
+      "sha256": "b889517db422307d7c3c1a38ced2eabaed659dc3c7b083f68cd248fdb2e3c639",
+      "command": "Headless Chromium print-to-pdf of exact HTML; PyMuPDF extraction and required field assertions"
+    }
+  ]
+}

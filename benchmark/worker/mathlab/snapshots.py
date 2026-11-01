@@ -82,14 +82,15 @@ def _clock(value):
         return None
 
 
-def stage_listing(console, query, expected_header):
+def stage_listing(console, query, expected_header, *, newest=False, initial_entries=()):
     """Bounded, inclusive pagination; never jump over equal-time rows.
 
     Index headers can reject an obsolete cohort cheaply. They never establish
     acceptance: downloaded bytes still undergo the complete header/hash check.
     """
     query = dict(query)
-    entries, rejected, seen = [], [], set()
+    entries, rejected = list(initial_entries), []
+    seen = {entry['digest'] for entry in entries}
     pages, more, reason, cursor = 0, False, None, query.get('since')
     wanted = page_limit = int(query['limit'])
     while pages < MAX_INDEX_PAGES:
@@ -107,6 +108,14 @@ def stage_listing(console, query, expected_header):
                 rejected.append({'digest': digest, 'reason': 'index header differs from pinned stage capture'})
             else:
                 entries.append(entry)
+        if newest:
+            if any(_clock((entry.get('header') or {}).get('capturedAt')) is None for entry in entries):
+                reason = 'recent snapshot index lacks valid capture timestamps'
+                more = True
+                break
+            # Keep producer order, including its nanosecond timestamp ordering;
+            # Python datetime comparison truncates sub-microsecond fractions.
+            entries = entries[-wanted:]
         more = len(page) >= page_limit
         if not more: break
         next_cursor = (page[-1].get('header') or {}).get('capturedAt')
@@ -121,11 +130,14 @@ def stage_listing(console, query, expected_header):
             reason = '5000 or more snapshots share a capture timestamp; the index cannot safely advance without a digest cursor'
             break
         cursor = next_cursor  # inclusive: boundary records must be rechecked
-        if len(entries) >= wanted:
+        if len(entries) >= wanted and not newest:
             break
-    return entries, {'index_pages': pages, 'index_scanned': len(seen), 'rejected': rejected,
+    result = {'index_pages': pages, 'index_scanned': len(seen), 'rejected': rejected,
                      'more_available': more, 'next_since': cursor if more else None,
                      'pagination_blocked': reason}
+    if newest:
+        result['latest_scan_complete'] = not more and reason is None
+    return entries, result
 
 
 def read_header(path_or_bytes):

@@ -1,0 +1,33 @@
+{
+  "schema": "phorvex-bench.capture-component.v1",
+  "base_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+  "paths": {
+    "deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "deploy/charts/phorvex-attacks/values.yaml": "b91813b48afbae1cf7a977de0a7a11c47c95229940a72bfc954f5e229e34bf32",
+    "deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "deploy/charts/phorvex-common/templates/_console-grants.tpl": "32ef42c850270c8531f75828ad2b340db4f54b09874fb5316236a72c86df8296",
+    "deploy/charts/phorvex-common/templates/_console.tpl": "f0ee8a29ff5db06992edf7b4ceb9a9431d41c72c7f6a29df66b8f7ce8326ea54",
+    "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "deploy/charts/phorvex-console/values.yaml": "7504590d1a6b12954a29b2858cc472c38804f8b0c2cc45918e721936dcf19dc1",
+    "deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "deploy/environments/staging/brain.yaml": "20f6bcb240af9a157531012099b40c9e0fcecc398e6fe258ed29ed1d573fce51",
+    "deploy/environments/staging/console.yaml": "eff88a3df9432ec3e51cb8d6935408ec6e7829ef72f6e42a5bbefe8a23eb2e25",
+    "deploy/environments/staging/manager.yaml": "c5f123a5b77befab8dbceb802f5b76a29c043d23826cebffd9cd40d3fb4811dd",
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz": "1b3f22b43412984a66705117af299a20dcfb08b25b2e199d4924d6fd7be25a89",
+    "phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+    "phorvex/charts/phorvex/values.yaml": "951687e19d6bd89e3fd40491b6d5ced8b3ed67a9e67f235e97a5beefdb2f8f14",
+    "tools/test_stage_benchmark_capture.py": "47c6b34baf8f2ad0addb4743a2654473406572d6f29446bead60fa0ed26fc91a"
+  },
+  "author_tests": "head-tests.txt",
+  "baseline_red": "baseline-red.txt",
+  "packaging_check": "package-check.txt",
+  "implementation_notes": [
+    "Stage image fields remain byte-identical.",
+    "Final catalogue overlay remains unchanged; one explicit extra reader subject is appended.",
+    "Shared grants default returns original JSON bytes; ConfigMap and pod checksum use the same effective document.",
+    "Default empty lists synchronized in manager, console and attacks chart values.",
+    "Generated archives rebuilt by checked-in recipe with GNU tar1.35 and Helm3.16.4."
+  ],
+  "review_correction": "Require numeric JSON version1; string and boolean versions rejected before rendering."
+}

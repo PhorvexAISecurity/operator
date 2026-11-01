@@ -1,0 +1,7 @@
+# Preregistered current-closure and bot lease update
+
+Before V6 mutation or runtime installation: main4d adds only four Console retry-verifier Go files; descendantb1ef closes the independently operated quarantine window. Actual service images remaina5f. Reviewed composition225877 preserves all five upstream paths exactly and corrects the independently reproduced bot acquisition race, including original upload/conversion ZIP and nonnull batch headline. Its169-file runtime manifest is independently bound. Install225877, not the staged711 runtime with the now-known bot race.
+
+V6 changes only the exact owned V5 source references to225877, keeping capture enabled while applying current closed-family settings. Fresh actuala5f identity/UID preconditions remain mandatory. Preserve old external1457 template as historical evidence, but cleanup must not reopen that obsolete window: the proposal records a structurally identical cleanup template pointing at reviewed closedb1ef, usable only under exact-owned-value/current-main guards. Never overwrite an unowned replacement.
+
+H1-H4, original10d request,64ticks and separate600/custom controls remain unchanged. Nativea5f baseline control64+64 passed20:37:40 and observer started20:38:49; any deployment or runtime restart gap must remain explicit and new history must qualify before endpoint acceptance. Full225877 preflight and actual final bot outcomes remain required.

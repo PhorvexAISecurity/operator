@@ -1,0 +1,9 @@
+{
+  "command": "/workspace/.phorvex-workflow-venv/bin/python workflow/tools/workflow.py submit-review BENCH-SELFSERVE --file workflow/fixes/BENCH-SELFSERVE/evidence/final-source/submit-review.yaml --by bench-v3-worker --expect-revision 7",
+  "exit_code": 1,
+  "result": "REFUSED_PREREQUISITE",
+  "error": "FAIL: transition prerequisites: checks.base_review: needs PASS evidence or an explicit NOT_REQUIRED ruling",
+  "status_revision_before": 7,
+  "status_revision_after": 7,
+  "explanation": "Original RED baseline fe649402 is retained, while reviewed upstream integration uses implementation base c3174a51. The lead must independently sign that real base integration before handoff; no waiver or source mutation requested."
+}

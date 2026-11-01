@@ -1,0 +1,11 @@
+[Unit]
+Description=Keep allowed stage benchmark capture source reconciled
+
+[Timer]
+OnBootSec=30
+OnUnitInactiveSec=5min
+Persistent=true
+Unit=phorvex-stage-reconcile.service
+
+[Install]
+WantedBy=timers.target

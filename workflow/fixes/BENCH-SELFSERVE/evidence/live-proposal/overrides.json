@@ -1,0 +1,49 @@
+{
+  "brain": {
+    "phorvex": {
+      "mathLab": {
+        "capturePolicies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "captureMaxBytes": 1073741824
+      }
+    },
+    "mathLabStore": {
+      "existingClaim": "staging-brain-mathlab"
+    }
+  },
+  "manager": {
+    "phorvex": {
+      "mathLab": {
+        "captureCostEvidence": true
+      }
+    }
+  },
+  "console": {
+    "phorvex": {
+      "console": {
+        "auth": {
+          "grants": {
+            "extraSubjects": [
+              {
+                "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+                "subject": "system:serviceaccount:phorvex-staging:staging-brain-benchmark",
+                "roles": [
+                  "investor"
+                ],
+                "tenants": [
+                  "phorvex-staging-demo"
+                ],
+                "targets": [
+                  "default"
+                ],
+                "note": "Read-only source-pinned stage brain benchmark snapshot collection."
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

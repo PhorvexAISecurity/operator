@@ -1,0 +1,90 @@
+{
+  "original_receipt": {
+    "schema": "phorvex-bench.independent-native-replay.v1",
+    "at": "2026-11-01T18:05:15.342688+00:00",
+    "state": "FAIL",
+    "authority": "lead executed actual image-native replay over isolated downloaded current-source cohort; not a bot submission",
+    "brain": {
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+      "digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "container": "brain",
+      "pods": [
+        {
+          "name": "staging-brain-5fcd75df99-bj5wn",
+          "uid": "19806925-d8a8-49e0-b0c9-6a69ffc78311"
+        }
+      ],
+      "embedded_version": {
+        "service": "brain",
+        "version": "0.10.0",
+        "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+      }
+    },
+    "binary": {
+      "schema_version": "math-lab.replay-binary.v1",
+      "path": "/home/hami/phorvex-benchmark/stage-data/live/selfserve-native-control/mathlab/bin/sha256-ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf/brain-replay",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "platform_manifest_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "layer_digest": "sha256:de185c5cb71c57ee1b64b6d9e07c09ca2e5ac17339b49fce3a19b1e12d629d7c",
+      "binary_sha256": "739b43a24c79ee7599ea02aab84ade4e23081d1881dd9db225d0e4c8ea192f86",
+      "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "brain_image": "notAvailable",
+      "snapshot_schema": "math-lab.snapshot.v1",
+      "replay_schema": "math-lab.replay.v1",
+      "overridable_parameters": [
+        "P-FEA-006",
+        "P-FEA-005",
+        "P-OBJ-003"
+      ],
+      "extracted_at": "2026-11-01T18:05:15.300809Z"
+    },
+    "actual_version": {
+      "brainImage": "notAvailable",
+      "endpointStudyMode": "PAIRED_BRAIN_REPLAY",
+      "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "overridableParameters": [
+        "P-FEA-006",
+        "P-FEA-005",
+        "P-OBJ-003"
+      ],
+      "replaySchema": "math-lab.replay.v1",
+      "snapshotSchema": "math-lab.snapshot.v1",
+      "studyCandidatesSchema": "math-lab.study-candidates.v1"
+    },
+    "policies": {},
+    "error_type": "AssertionError",
+    "error": "not yet64 exact finalized current-policy ticks"
+  },
+  "downloaded_cache_summary": {
+    "snapshots": 62,
+    "first_captured_at": "2026-11-01T18:00:05.075974494Z",
+    "last_captured_at": "2026-11-01T18:05:19.919205389Z",
+    "bytes": 4873924,
+    "git_sha": {
+      "61e83673b8d4f143fca67e17b8a54dc4712f9b28": 62
+    },
+    "economics_mode": {
+      "fixed-disruption-aversion-v1": 62
+    },
+    "policy_uid": {
+      "6485e0b3-0f36-4737-b0f5-7e846375da9f": 62
+    },
+    "process_config_hash": {
+      "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010": 62
+    },
+    "parameter_manifest_hash": {
+      "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8": 62
+    },
+    "policy_overrides_hash": {
+      "sha256:9984250bf2371dc8de11789cfbce7fba91c7cf2dea8f1d57473bea36ce99390e": 62
+    },
+    "finalized": 62,
+    "with_unreplayable_fields": 0
+  }
+}

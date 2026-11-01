@@ -2,7 +2,7 @@
 
 The bot benchmarks **operator-refactored** using recorded decision ticks from a stage namespace. Each recorded run binds the brain image digest, source commit, replay binary hash, policy UID and snapshot hashes. The old `operator` clone and production/vllm corpus are not valid inputs for this bot.
 
-The default policy is `phorvex-staging-demo/demo-api-defense`. A different stage policy can be pinned and selected explicitly. Experimental arms run offline: predicted choices and forecast costs are not executed defenses or measured counterfactual outcomes.
+The default policy is `phorvex-staging-demo/demo-api-defense`. `/policies` lists the configured stage allowlist and installed pins. Requests retain their exact policy; the bot never substitutes the separate `stage-bench-defense` dryRun fixture. Experimental arms run offline: predicted choices and forecast costs are not executed defenses or measured counterfactual outcomes.
 
 ## Choose a request
 
@@ -13,10 +13,14 @@ The default policy is `phorvex-staging-demo/demo-api-defense`. A different stage
 | `endpoint-v3-recorded.json` | Uses real stage snapshots and qualified observer inputs in the reviewed brain study engine; validates the deployed control and local base first. |
 | `endpoint-v3-stage-600s.json` | Explicit 600-second W/L stage study with configurable SLO and worth threshold; requires complete observed history. |
 | `endpoint-v3-original-30d-pending.json` | Original 30-day W / 1-day L request; requires complete retained history and verified storage/runtime readiness. The 30-day capability is not yet validated. |
+| `endpoint-v3-10d.txt` | Declarative exact requested demo policy, 64 ticks, sync:false, W=10 days/L=1 day, s=.999. Missing active-policy attribution or retained history returns BLOCKED. |
+| `endpoint-v3-fixture-600s.txt` | A separate explicit dryRun fixture control. It requires its own current source and complete 600-second measured history; it does not satisfy the 10-day request. |
 | `endpoint-v3-synthetic.json` | Executes the shared Go cost kernel on labelled synthetic fixtures; a numerical reference test. |
 | `study-*.json` | Configurable Cost/History **reference algorithms**, arms and seeds. These are not the production History picker. Missing real ledgers remain `NEEDS_DATA`. |
 
-Use `/templates` for valid files and `/guide` for English HTML/PDF. Persian guides are also shipped in [HTML](guide-fa.html) and [PDF](guide-fa.pdf). Send a file without a caption to run it. `/validate` as the caption checks structure and parameter domains only; it does not certify data readiness. `/check` reports configuration, source/data availability, disk and model access. `/status`, `/runs` and `/cancel` track work. Owner-only `/invite` creates a one-use invitation.
+Use `/templates` for valid files and `/guide` for English HTML/PDF. Persian guides are also shipped in [HTML](guide-fa.html) and [PDF](guide-fa.pdf). Send a file without a caption to run it. `/validate` reports syntax validity separately from read-only runtime readiness: requested policy, live source/image/UID, capture, available/fresh ticks and required endpoint history. Apart from receiving the attached request itself, it does not sync snapshots/source, repin, queue, call a model or execute replay. Execution repeats the checks and still requires exact baseline reproduction and the applicable tests. Missing prerequisites produce `BLOCKED` artifacts; malformed requests and genuine test/internal failures remain errors. `/check` reports configuration, disk and model access; `/status`, `/runs` and `/cancel` track work. Owner-only `/invite` creates a one-use invitation.
+
+For arbitrary supported V2/V3 settings use `[endpoint]` TXT/Markdown or endpoint JSON. Set independent `study.window` (W) and `config.lookback` (L) in seconds, `study.slo_target`, optional `study.worth_threshold`, and bounded `config.min/max/eta/g_max/max_dt/delta`. Unknown, duplicate or malformed keys are rejected. If min/max change without eta, eta is derived as `ln(max/min)/3600`; an explicit eta is preserved. `sync:false` prevents request downloads but never skips identity checks. Only the two exact previously reviewed V3 prose hashes receive compatibility conversion; their original bytes, conversion contract and normalized settings are retained. Edited prose remains a generic code request and is never silently interpreted as a different algorithm.
 
 The registry at `benchmark/mathlab/registry/parameter_registry.json` lists supported replay knobs and domains. All such knobs can be selected by ID; unknown or non-overridable parameters are rejected. For a new formula or unregistered algorithm, use a scoped code request with concrete equations, input fields, invariants and tests. A model decline is reported with its reason and is not a successful benchmark.
 
@@ -24,7 +28,18 @@ The registry at `benchmark/mathlab/registry/parameter_registry.json` lists suppo
 
 Keep secrets in the private `config/bot.env` described by [the example](deploy/bot.env.example). Set `BOT_REPO` to an `operator-refactored` clone containing the exact stage source, `MATHLAB_DATA_DIR` to a separate stage directory, and `BOT_DEFAULT_POLICY` to the stage capture policy. The bot's owner/member state can stay in its existing private state directory. `DASHBOARD_*` no longer selects the replay service; `/param` and sync use the stage runtime directly.
 
-The stage brain must capture the allowlisted policy into a bounded persistent store. Its actual image and source must be verified after rollout. Then, from the benchmark host:
+The staging service values retain both policy capture entries, the existing bounded PVC, manager cost observations and a separate read-only Console binding across image releases. The Console's additive grant preserves the current catalogue's operator grants. Applying those values is an operator action; uploaded requests never change the cluster. Capture of an active policy does not create attributed endpoint history. Its actual image and source must be verified after rollout. Then, from the benchmark host:
+
+For recurring reconciliation, use the reviewed [stage service examples](../worker/deploy/README.md). The bounded reconciler observes the actual stage source, fetches that exact repository source, extracts its image-native replay without Docker, and verifies every selected baseline before atomically publishing a pin. It preserves historical pins/cohorts and serializes source changes against running jobs. It cannot enable cluster capture or supply missing endpoint history. A source/policy/workload change starts a new observer segment; the old history is never relabelled. Its default allowlist contains only the two named stage policies:
+
+```sh
+PYTHONPATH=benchmark/worker:. python3 benchmark/worker/stage_reconcile.py \
+  --data /home/hami/phorvex-benchmark/stage-data \
+  --repo /home/hami/phorvex-benchmark/operator-refactored \
+  --ticks 64 --timeout 900 --max-work-bytes 268435456 --max-corpus-bytes 2147483648
+```
+
+The following explicit manual pin/sync commands remain available for operator setup:
 
 ```sh
 python3 benchmark/worker/stage_cli.py pin \
@@ -57,7 +72,9 @@ Build the synthetic reference runner with `benchmark/endpointv3/build.py` and sh
 
 See [ENDPOINT-V3.md](ENDPOINT-V3.md). The stage observer and normalizer produce UID-bound observed ready-backend intervals, duration evidence and a complete candidate export from the actual brain pipeline. An arbitrary uploaded trace cannot become recorded evidence.
 
-The new typed study engine can remain an explicitly reviewed experimental source while capture runs the merged stage release. Install the candidate and the exact local base with independent review evidence:
+When the actual image-native replay exposes paired-study and candidate-export capabilities, reconciliation can install a same-source native lane after measured exact baseline equivalence. This is not a cross-source review approval. Every requested study still validates its own frozen cohort and measured history. Missing or changed binaries, capabilities, generation bindings or evidence block readiness.
+
+A typed study engine from a different source remains an explicitly reviewed experimental lane. Install that candidate and its exact local base with independent review evidence:
 
 ```sh
 python3 benchmark/worker/stage_cli.py install-study-engine \

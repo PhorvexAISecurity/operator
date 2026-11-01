@@ -4,3 +4,12 @@ image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
   tag: "staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
   digest: "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903"
+# Persist the allowlisted capture across normal staging image releases.
+phorvex:
+  mathLab:
+    capturePolicies:
+    - phorvex-staging-demo/demo-api-defense
+    - phorvex-staging-demo/stage-bench-defense
+    captureMaxBytes: 1073741824
+mathLabStore:
+  existingClaim: staging-brain-mathlab

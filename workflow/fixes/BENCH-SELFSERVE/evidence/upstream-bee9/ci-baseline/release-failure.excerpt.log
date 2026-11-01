@@ -1,0 +1,19 @@
+2014: 2026-11-01T19:14:20.4026651Z #44 ...
+2015: 2026-11-01T19:14:20.4027375Z 
+2016: 2026-11-01T19:14:20.4029663Z #33 [kubectl 2/2] RUN set -eux;     arch="amd64";     curl -fsSLo /kubectl "https://dl.k8s.io/release/v1.31.4/bin/linux/${arch}/kubectl";     curl -fsSLo /kubectl.sha256 "https://dl.k8s.io/release/v1.31.4/bin/linux/${arch}/kubectl.sha256";     echo "$(cat /kubectl.sha256)  /kubectl" | sha256sum -c -;     chmod +x /kubectl
+2017: 2026-11-01T19:14:20.5540997Z #33 61.29 curl: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+2018: 2026-11-01T19:14:20.6056674Z #33 ERROR: process "/bin/sh -c set -eux;     arch=\"${TARGETARCH:-amd64}\";     curl -fsSLo /kubectl \"https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl\";     curl -fsSLo /kubectl.sha256 \"https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl.sha256\";     echo \"$(cat /kubectl.sha256)  /kubectl\" | sha256sum -c -;     chmod +x /kubectl" did not complete successfully: exit code: 35
+2019: 2026-11-01T19:14:20.6059547Z 
+2020: 2026-11-01T19:14:20.6063364Z #44 [gobuild 15/17] RUN --mount=type=cache,id=phvx-console-gomod-amd64,target=/go/pkg/mod,sharing=locked --mount=type=cache,id=phvx-console-gobuild-amd64,target=/root/.cache/go-build,sharing=locked CGO_ENABLED=0 GOOS=linux GOARCH=amd64     go build -trimpath       -ldflags="-s -w -X github.com/phorvex/phorvex/internal/console.BuildStamp=0.16.0 -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=bee9caccf3bae388d412e72adfe50ca9de41a486 -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=0.16.0"       -o /console ./cmd/console
+2021: 2026-11-01T19:14:20.9612334Z #44 ...
+2022: 2026-11-01T19:14:20.9613180Z 
+2034: 2026-11-01T19:14:21.0156898Z 0.489 + curl -fsSLo /kubectl https://dl.k8s.io/release/v1.31.4/bin/linux/amd64/kubectl
+2035: 2026-11-01T19:14:21.0158558Z 1.236 + curl -fsSLo /kubectl.sha256 https://dl.k8s.io/release/v1.31.4/bin/linux/amd64/kubectl.sha256
+2036: 2026-11-01T19:14:21.0172231Z url: (35) TLS connect error: error:0A000126:SSL routines::unexpected eof while reading
+2037: 2026-11-01T19:14:21.0176751Z ------
+2038: 2026-11-01T19:14:21.0181945Z ERROR: failed to build: failed to solve: process "/bin/sh -c set -eux;     arch=\"${TARGETARCH:-amd64}\";     curl -fsSLo /kubectl \"https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl\";     curl -fsSLo /kubectl.sha256 \"https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${arch}/kubectl.sha256\";     echo \"$(cat /kubectl.sha256)  /kubectl\" | sha256sum -c -;     chmod +x /kubectl" did not complete successfully: exit code: 35
+2039: 2026-11-01T19:14:21.0217845Z ##[error]Process completed with exit code 1.
+2040: 2026-11-01T19:14:21.0334419Z ##[group]Run set -euo pipefail
+2041: 2026-11-01T19:14:21.0334906Z [36;1mset -euo pipefail[0m
+2042: 2026-11-01T19:14:21.0335334Z [36;1mif [ -n "${FIXTURE_BUILDER:-}" ]; then[0m
+2043: 2026-11-01T19:14:21.0335912Z [36;1m  docker buildx rm "$FIXTURE_BUILDER"[0m

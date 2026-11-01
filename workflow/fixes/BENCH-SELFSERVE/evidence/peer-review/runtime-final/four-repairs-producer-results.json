@@ -1,0 +1,75 @@
+{
+  "schema": "phorvex-bench.independent-four-repair-controls.v1",
+  "reviewer": "stage-review",
+  "hydration": {
+    "producer": "Real partial Git clone and explicit local transport substitution only for authorized fetch. No network.",
+    "initial_complete_tree_readonly_refused": true,
+    "explicit_fetches": 4,
+    "result": {
+      "source_revision": "b963ec70df4fca267365a9761effa952391eb7e5",
+      "fetched": true,
+      "checkout_head": "cce82dc2e8a1c07d7931f49ca5f73fd9ab791c8b",
+      "offline_checkout_trees": [
+        {
+          "source_revision": "cce82dc2e8a1c07d7931f49ca5f73fd9ab791c8b",
+          "tree": "8d260a38b30070d91a6a6907dd5eaf6bb07e88e7",
+          "blob_count": 1,
+          "decoded_blob_bytes": 28,
+          "materialized_blobs": 1,
+          "offline_objects_complete": true
+        },
+        {
+          "source_revision": "b963ec70df4fca267365a9761effa952391eb7e5",
+          "tree": "3063b563770bf773755b1a39a4519494e60d591d",
+          "blob_count": 271,
+          "decoded_blob_bytes": 4508,
+          "materialized_blobs": 270,
+          "offline_objects_complete": true
+        }
+      ]
+    },
+    "offline_archive_sha256": "78b580889c4c8e4c9b6f8d0db2fda0e35d069655d065902668b2931b58b68035",
+    "offline_archive_equal": true,
+    "readonly_git_unchanged": true,
+    "head_config_and_fetch_head_preserved": true
+  },
+  "cold_backlog": {
+    "producer": "Actual470 final hash-addressed PXMS per policy and actual sync/reconcile/native receipt plumbing; Kubernetes/Console/image extraction scripted boundaries and executable fixture are not product engine proof.",
+    "status": "READY",
+    "requested_ticks": 64,
+    "per_policy": {
+      "old": 400,
+      "fresh": 70
+    },
+    "both_selected_actual_latest64": true,
+    "queries": 2,
+    "all_queries_upper_bounded": true,
+    "source": "51f1a6d278b2c0bde4390d01d18e903cf72710db",
+    "pin_sha256": "f6e6ba6683bed28e51e254c1a69bddb1ea6e8a343853c511acaede32984fd4fc"
+  },
+  "service_uid": {
+    "producer": "Real Journal/reducer/normalizer. Current Service supplied at observation boundary. Unrelated missing-engine refusal remains; no mock PASS.",
+    "codes": {
+      "matching": [
+        "ENDPOINT_ENGINE_UNAVAILABLE"
+      ],
+      "recreated": [
+        "ENDPOINT_SERVICE_UNVERIFIED",
+        "ENDPOINT_ENGINE_UNAVAILABLE"
+      ],
+      "missing": [
+        "ENDPOINT_SERVICE_UNVERIFIED",
+        "ENDPOINT_ENGINE_UNAVAILABLE"
+      ]
+    },
+    "immutable_manifest_unchanged": true
+  },
+  "source_hashes": {
+    "benchmark/worker/stage_reconcile.py": "ba0690841cc36daa71e4cb6072dd799a397041db27d5539741c81e8e0243f1dc",
+    "benchmark/worker/stage_cli.py": "2e9637b8f39a62837f9e7fc3aa40077bb9c471807029eae093d87c80b8c5dc26",
+    "benchmark/worker/mathlab/stage_scope.py": "25a17f34f6bd0bf7cb8f4507bb0cecf980ed8a8463da4579a7401cbd45f0b420",
+    "benchmark/worker/mathlab/snapshots.py": "1221dbfd4c431b2b5a9cad3e80d07f7a5f7ed7afece1afbd803d17c339a671fc",
+    "benchmark/worker/mathlab/recent_snapshots.py": "dd8587c697ea316e2bf5082eb7c62da3a331b63a8ca525add1aa0d6e7e91aae8",
+    "benchmark/bot/request_readiness.py": "1b1d5e413d1919fff348d0628ba269d0918c2d8914e612a894e53e20e27f1998"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "schema": "phorvex-bench.author-integration-check.v1",
+  "source_manifest": {
+    "path": "evidence/final-source/integrated-source-inputs.json",
+    "sha256": "de30ed13f4ac19d7fdbc7a8af73ed34be9cf84edd637cad1ba3cf89a334e97a3"
+  },
+  "source_inventory_verified_after_run": true,
+  "command": "GO_BIN=/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go GOTOOLCHAIN=local GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 TMPDIR=/workspace/.phorvex-test-tmp PYTHONDONTWRITEBYTECODE=1 /workspace/.phorvex-tools/python312/python/bin/python3.12 -m unittest discover -s tools -p test_benchmark_regressions.py -v",
+  "result": "PASS",
+  "suites": {
+    "bot": 188,
+    "worker": 97,
+    "stage": 45
+  },
+  "skipped": 0,
+  "reference_binary_sha256": "c17a03a8334c3d13b9299259ef81ac7520eb7b179ad46e0babf96236404073c2",
+  "log": {
+    "path": "evidence/final-source/integrated-benchmark-wrapper.txt",
+    "sha256": "1495a1fb2c63bf4ed687e9ea6af0e314a3b3c3c40e8734ffcca70e0a15122b1b",
+    "bytes": 52474
+  }
+}

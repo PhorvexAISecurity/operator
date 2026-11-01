@@ -1,0 +1,68 @@
+{
+  "schema": "phorvex-bench.peer-upstream-composition-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:12:27.925189+00:00",
+  "verdict": "PASS_FOR_COMPOSITION_COMMIT",
+  "base": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "prior_component": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "upstream": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "frozen_composition": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/composition-inputs.json",
+    "sha256": "77dbc19be5fa093a6725624fbd0833ea6b17c34a5c966879fd8799a18c6aa175",
+    "paths": 72
+  },
+  "independent_artifacts": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/independent-render-control.py",
+      "sha256": "323de203e4b0354f8f2c04467bad52d586b1400fb12ccfba9a04a5af04fd4071"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/independent-render-control.json",
+      "sha256": "28264789fb1e9c14a9aba70c7a27c75642a9a5f383af24108aa028b77af03e35"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/independent-render-control.txt",
+      "sha256": "0996d38302392ca61a4eb1ee4fd50f48ae4fb3197af21edb74834ba1d305d674"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/independent-composition.json",
+      "sha256": "201d392b0aec78ff513755f1f80f01b0c6ad81731cb2374f73d5d762fcdd50b4"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/upstream-composition-payloads.json",
+      "sha256": "f39370d8ea461e99e7033f7fefe5dfd5fb8ed9b8cc178680852b8b393ba278c1"
+    }
+  ],
+  "findings": [
+    "All72 staged/working source hashes match frozen composition; runtime43 exactly matches the accepted a5d component.",
+    "All13 upstream-only files match bee9 byte-for-byte, including new operator-namespace Go/RBAC/schema/tools and the externally closed family overlay.",
+    "Three overlapping text files exactly equal an independently recomputed Git three-way merge; seven generated archive conflicts contain the composed source.",
+    "Difference from current bee9 is exactly the prior authorized capture16 plus runtime43 paths; no additional feature paths.",
+    "Independent Helm default+actual three-file stage renders for all6 services preserve upstream defaults and images; actuator/sensor/attacks are unchanged. Only approved brain/manager capture and Console benchmark-reader differences remain.",
+    "Rendered identity-shared family grants remain intact, with one separate read-only benchmark subject; no p1 quarantine window or old-family grant is restored. Resource comparisons include API,kind,namespace,name."
+  ],
+  "author_affected_controls": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/capture-tests.txt",
+      "sha256": "541c1c4194e9afa80d16b206425c203c59a03ff31b4c069add108fc0c56f65de"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/catalogue-tests.txt",
+      "sha256": "95c1009268f48bfc37255174f055628e784638484553fe4fdef5b5b7bdd5573f"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/package-check.txt",
+      "sha256": "ce40d3af12db7c5fccc0cde5bc3ad1b6abf18150a1e6435c9a5e750b3b9f1753"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/go-namespace-tests.txt",
+      "sha256": "cf86d40f17864cd3c9a1248e0662ebf158acb8581febf9d29aecd68b6efcd8f7"
+    }
+  ],
+  "limits": [
+    "This accepts the source composition, not current cluster deployment or full new-source preflight. Commit exact frozen bytes and rerun coherent source-pinned required gates.",
+    "Existing runtime a5d remains independently accepted and byte-identical for43 runtime files; do not relabel it as a different deployed source.",
+    "Old owned6ae override removal is separately reviewed/executed; refreshed capture proposal must preserve latest upstream and requires its own live source/identity checks.",
+    "Real bot acceptance and short fixture evidence remain pending;10day/active attribution is not established."
+  ]
+}

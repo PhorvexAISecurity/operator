@@ -1,0 +1,14 @@
+{
+  "kind": "ApplicationSet",
+  "namespace": "argocd",
+  "name": "phorvex-services",
+  "expected_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "test_fresh_resourceVersion": true,
+  "expected_existing_templatePatch": null,
+  "operation": "add /spec/templatePatch",
+  "value": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 6ae89857369468d4ca39a6856d9fd55c3b5debd3\n    path: '{{.chart}}'\n    helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - '$values/deploy/environments/{{.environment}}/phorvex.yaml'\n      - '$values/deploy/environments/{{.environment}}/{{.service}}.yaml'\n      - '$values/deploy/environments/{{.environment}}/catalogue-family.yaml'\n      valuesObject:\n{{- if eq .service \"brain\" }}\n        phorvex:\n          mathLab:\n            capturePolicies:\n            - phorvex-staging-demo/demo-api-defense\n            - phorvex-staging-demo/stage-bench-defense\n            captureMaxBytes: 1073741824\n        mathLabStore:\n          existingClaim: staging-brain-mathlab\n{{- end }}\n{{- if eq .service \"manager\" }}\n        phorvex:\n          mathLab:\n            captureCostEvidence: true\n{{- end }}\n{{- if eq .service \"console\" }}\n        phorvex:\n          console:\n            auth:\n              grants:\n                extraSubjects:\n                - issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\n                  subject: system:serviceaccount:phorvex-staging:staging-brain-benchmark\n                  roles:\n                  - investor\n                  tenants:\n                  - phorvex-staging-demo\n                  targets:\n                  - default\n                  note: Read-only source-pinned stage brain benchmark snapshot collection.\n{{- end }}\n  - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: main\n    ref: values\n{{- end }}\n",
+  "chart_source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "values_source": "main",
+  "values_reviewed_at": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "prune": false
+}

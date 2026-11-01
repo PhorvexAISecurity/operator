@@ -1,0 +1,75 @@
+{
+  "at": "2026-11-01T20:22:49.822369+00:00",
+  "free_bytes": 6351200256,
+  "pin_source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "reconcile": {
+    "status": "BLOCKED",
+    "phase": "DISCOVER",
+    "started_at": "2026-11-01T20:19:01.054668Z",
+    "finished_at": "2026-11-01T20:19:14.733577Z",
+    "elapsed_seconds": 13.679,
+    "baseline_ticks": null,
+    "reasons": [
+      {
+        "code": "CAPTURE_DISABLED",
+        "message": "requested policies are absent from the actual brain capture configuration",
+        "recovery": "Apply the reviewed durable staging capture values; this service never patches the cluster."
+      }
+    ]
+  },
+  "observer": {
+    "state": "BLOCKED",
+    "at": "2026-11-01T20:22:10.485746Z",
+    "reason": "requested policies are absent from the actual brain capture configuration",
+    "owned_pid": null,
+    "journal": null
+  },
+  "observer_source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "endpoint": {
+    "state": "BLOCKED",
+    "phase": "DISCOVER",
+    "reason": "managed fixture observer is not running; retain the requested window and wait for observation",
+    "started_at": "2026-11-01T20:19:01.055818Z",
+    "finished_at": "2026-11-01T20:19:01.674018Z"
+  },
+  "units": {
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1465133",
+      "Result": "success",
+      "ExecMainStatus": "0",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-reconcile.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "ExecMainStatus": "2",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "Result": "success",
+      "ActiveState": "active",
+      "SubState": "waiting"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1465130",
+      "Result": "success",
+      "ExecMainStatus": "0",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "ExecMainStatus": "2",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "Result": "success",
+      "ActiveState": "active",
+      "SubState": "waiting"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "state_revision": 21,
+  "purpose": "Byte-exact retained source/review/check artifacts before current image-only integration; no source or result relabelled",
+  "files": [
+    {
+      "original": "STATUS.yaml",
+      "retained": "evidence/pre-eef-225877/STATUS.yaml",
+      "sha256": "44587f8c77f9d053914f6151cd6780b4e6c9ba895e30c54e9587c1be09d2b3e6",
+      "bytes": 10834
+    },
+    {
+      "original": "04-diff.patch",
+      "retained": "evidence/pre-eef-225877/04-diff.patch",
+      "sha256": "8fde779bd69073a83f4b7ff90965e0ed51f36e3af59a171f8bdbf207e4e42fc2",
+      "bytes": 3170716
+    },
+    {
+      "original": "05-evidence.md",
+      "retained": "evidence/pre-eef-225877/05-evidence.md",
+      "sha256": "ea686a27a3d8d0d674ed56794d977b71836dcb64958ec67d6ae857539392771b",
+      "bytes": 7024
+    },
+    {
+      "original": "evidence/manifest.yaml",
+      "retained": "evidence/pre-eef-225877/evidence/manifest.yaml",
+      "sha256": "dd326defacd7c1ab5298de8c72291d8c5b83150d9a41fa501f46c100453da00b",
+      "bytes": 6376
+    },
+    {
+      "original": "evidence/incident.md",
+      "retained": "evidence/pre-eef-225877/evidence/incident.md",
+      "sha256": "f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a",
+      "bytes": 2935
+    },
+    {
+      "original": "evidence/p3/verdict.md",
+      "retained": "evidence/pre-eef-225877/evidence/p3/verdict.md",
+      "sha256": "204a473f57ef22f39f0b3d170588de9814223603116775fe15829acfa4276e60",
+      "bytes": 1811
+    }
+  ]
+}

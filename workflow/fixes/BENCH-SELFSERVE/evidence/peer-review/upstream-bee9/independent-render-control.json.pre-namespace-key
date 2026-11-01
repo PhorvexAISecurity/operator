@@ -1,0 +1,607 @@
+{
+  "schema": "phorvex-bench.capture-independent-control.v1",
+  "reviewer": "stage-review",
+  "base_sha": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "default_comparison_note": "Only randomized admission webhook certificate bytes normalized; exact template bytes unchanged from base. All other rendered data compared.",
+  "overlay_order": [
+    "phorvex.yaml",
+    "COMPONENT.yaml",
+    "catalogue-family.yaml"
+  ],
+  "renders": {
+    "brain": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": [
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-brain"
+          ],
+          "path": "/spec/template/spec/containers",
+          "before": [
+            {
+              "name": "brain",
+              "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+              "imagePullPolicy": "IfNotPresent",
+              "env": [
+                {
+                  "name": "PHORVEX_BRAIN_IMAGE",
+                  "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf"
+                }
+              ],
+              "args": [
+                "--listen=:9090",
+                "--metrics-bind-address=:8080",
+                "--health-probe-bind-address=:8081",
+                "--gpu-envelope-max=0.2925",
+                "--shutdown-grace=20s",
+                "--log-level=info",
+                "--log-format=json",
+                "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+                "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+                "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+                "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+              ],
+              "ports": [
+                {
+                  "name": "grpc",
+                  "containerPort": 9090
+                },
+                {
+                  "name": "metrics",
+                  "containerPort": 8080
+                },
+                {
+                  "name": "health",
+                  "containerPort": 8081
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/readyz",
+                  "port": "health"
+                }
+              },
+              "livenessProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": "health"
+                }
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "readOnlyRootFilesystem": true,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                }
+              },
+              "resources": {
+                "limits": {
+                  "memory": "1Gi"
+                },
+                "requests": {
+                  "cpu": "100m",
+                  "memory": "256Mi"
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "grpc-tls",
+                  "mountPath": "/etc/phorvex/grpc-tls",
+                  "readOnly": true
+                }
+              ]
+            }
+          ],
+          "after": [
+            {
+              "name": "brain",
+              "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+              "imagePullPolicy": "IfNotPresent",
+              "env": [
+                {
+                  "name": "PHORVEX_BRAIN_IMAGE",
+                  "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf"
+                }
+              ],
+              "args": [
+                "--listen=:9090",
+                "--metrics-bind-address=:8080",
+                "--health-probe-bind-address=:8081",
+                "--gpu-envelope-max=0.2925",
+                "--shutdown-grace=20s",
+                "--log-level=info",
+                "--log-format=json",
+                "--math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense",
+                "--math-lab-capture-dir=/var/lib/phorvex/math-lab",
+                "--math-lab-capture-max-bytes=1073741824",
+                "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+                "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+                "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+                "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+              ],
+              "ports": [
+                {
+                  "name": "grpc",
+                  "containerPort": 9090
+                },
+                {
+                  "name": "metrics",
+                  "containerPort": 8080
+                },
+                {
+                  "name": "health",
+                  "containerPort": 8081
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/readyz",
+                  "port": "health"
+                }
+              },
+              "livenessProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": "health"
+                }
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "readOnlyRootFilesystem": true,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                }
+              },
+              "resources": {
+                "limits": {
+                  "memory": "1Gi"
+                },
+                "requests": {
+                  "cpu": "100m",
+                  "memory": "256Mi"
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "math-lab",
+                  "mountPath": "/var/lib/phorvex/math-lab"
+                },
+                {
+                  "name": "grpc-tls",
+                  "mountPath": "/etc/phorvex/grpc-tls",
+                  "readOnly": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-brain"
+          ],
+          "path": "/spec/template/spec/securityContext/fsGroup",
+          "before": null,
+          "after": 65532
+        },
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-brain"
+          ],
+          "path": "/spec/template/spec/securityContext/fsGroupChangePolicy",
+          "before": null,
+          "after": "OnRootMismatch"
+        },
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-brain"
+          ],
+          "path": "/spec/template/spec/volumes",
+          "before": [
+            {
+              "name": "grpc-tls",
+              "secret": {
+                "secretName": "staging-brain-grpc-tls"
+              }
+            }
+          ],
+          "after": [
+            {
+              "name": "math-lab",
+              "persistentVolumeClaim": {
+                "claimName": "staging-brain-mathlab"
+              }
+            },
+            {
+              "name": "grpc-tls",
+              "secret": {
+                "secretName": "staging-brain-grpc-tls"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "manager": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": [
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-phorvex"
+          ],
+          "path": "/spec/template/spec/containers",
+          "before": [
+            {
+              "name": "manager",
+              "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+              "imagePullPolicy": "IfNotPresent",
+              "args": [
+                "--base-interval=10s",
+                "--actions-supported-debounce=3",
+                "--calibration-shadow=true",
+                "--calibration-sample=5m",
+                "--calibration-refresh=30m",
+                "--calibration-lookback=168h",
+                "--calibration-export-dir=/var/run/phorvex-calibration",
+                "--metrics-bind-address=:8080",
+                "--health-probe-bind-address=:8081",
+                "--leader-elect=true",
+                "--brain-endpoint=staging-brain:9090",
+                "--sensor-endpoint=staging-sensor:9090",
+                "--actuator-endpoint=staging-actuator:9090",
+                "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+                "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+                "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+                "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+                "--policy-namespaces=phorvex-staging-demo,console-identity-shared",
+                "--max-retained-quarantines-per-namespace=1",
+                "--serving-security-mode=secure-required",
+                "--gpu-envelope-max=0.2925",
+                "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+                "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+                "--persistence-observer-identity=",
+                "--persistence-observer-namespaces=",
+                "--audit-json=/audit/live.jsonl",
+                "--audit-max-bytes=268435456",
+                "--audit-max-backups=4",
+                "--audit-source-addr=:8445",
+                "--audit-source-cert=/etc/audit-server/tls.crt",
+                "--audit-source-key=/etc/audit-server/tls.key",
+                "--audit-source-ca=/etc/audit-server/ca.crt",
+                "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc"
+              ],
+              "env": [
+                {
+                  "name": "POD_NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                {
+                  "name": "PHORVEX_BRAIN_IMAGE",
+                  "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33"
+                },
+                {
+                  "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+                  "value": "false"
+                },
+                {
+                  "name": "PHORVEX_INJECTOR_IDENTITY",
+                  "value": "phorvex-staging/staging-attacks"
+                },
+                {
+                  "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+                  "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+                },
+                {
+                  "name": "PHORVEX_ACTUATOR",
+                  "value": "native"
+                }
+              ],
+              "ports": [
+                {
+                  "name": "metrics",
+                  "containerPort": 8080
+                },
+                {
+                  "name": "health",
+                  "containerPort": 8081
+                },
+                {
+                  "name": "audit-tls",
+                  "containerPort": 8445
+                }
+              ],
+              "startupProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": 8081
+                },
+                "periodSeconds": 10,
+                "failureThreshold": 42
+              },
+              "livenessProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": 8081
+                },
+                "initialDelaySeconds": 15,
+                "periodSeconds": 20
+              },
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/readyz",
+                  "port": 8081
+                },
+                "initialDelaySeconds": 5,
+                "periodSeconds": 10
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "readOnlyRootFilesystem": true,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                }
+              },
+              "resources": {
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "256Mi"
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "grpc-tls",
+                  "mountPath": "/etc/phorvex/grpc-tls",
+                  "readOnly": true
+                },
+                {
+                  "name": "audit",
+                  "mountPath": "/audit"
+                },
+                {
+                  "name": "audit-server",
+                  "mountPath": "/etc/audit-server",
+                  "readOnly": true
+                },
+                {
+                  "name": "calibration-evidence",
+                  "mountPath": "/var/run/phorvex-calibration"
+                }
+              ]
+            }
+          ],
+          "after": [
+            {
+              "name": "manager",
+              "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+              "imagePullPolicy": "IfNotPresent",
+              "args": [
+                "--base-interval=10s",
+                "--actions-supported-debounce=3",
+                "--calibration-shadow=true",
+                "--calibration-sample=5m",
+                "--calibration-refresh=30m",
+                "--calibration-lookback=168h",
+                "--calibration-export-dir=/var/run/phorvex-calibration",
+                "--metrics-bind-address=:8080",
+                "--health-probe-bind-address=:8081",
+                "--leader-elect=true",
+                "--brain-endpoint=staging-brain:9090",
+                "--sensor-endpoint=staging-sensor:9090",
+                "--actuator-endpoint=staging-actuator:9090",
+                "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+                "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+                "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+                "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+                "--policy-namespaces=phorvex-staging-demo,console-identity-shared",
+                "--max-retained-quarantines-per-namespace=1",
+                "--serving-security-mode=secure-required",
+                "--gpu-envelope-max=0.2925",
+                "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+                "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+                "--persistence-observer-identity=",
+                "--persistence-observer-namespaces=",
+                "--audit-json=/audit/live.jsonl",
+                "--audit-max-bytes=268435456",
+                "--audit-max-backups=4",
+                "--audit-source-addr=:8445",
+                "--audit-source-cert=/etc/audit-server/tls.crt",
+                "--audit-source-key=/etc/audit-server/tls.key",
+                "--audit-source-ca=/etc/audit-server/ca.crt",
+                "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc",
+                "--math-lab-capture-cost-evidence=true"
+              ],
+              "env": [
+                {
+                  "name": "POD_NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                {
+                  "name": "PHORVEX_BRAIN_IMAGE",
+                  "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33"
+                },
+                {
+                  "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+                  "value": "false"
+                },
+                {
+                  "name": "PHORVEX_INJECTOR_IDENTITY",
+                  "value": "phorvex-staging/staging-attacks"
+                },
+                {
+                  "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+                  "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+                },
+                {
+                  "name": "PHORVEX_ACTUATOR",
+                  "value": "native"
+                }
+              ],
+              "ports": [
+                {
+                  "name": "metrics",
+                  "containerPort": 8080
+                },
+                {
+                  "name": "health",
+                  "containerPort": 8081
+                },
+                {
+                  "name": "audit-tls",
+                  "containerPort": 8445
+                }
+              ],
+              "startupProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": 8081
+                },
+                "periodSeconds": 10,
+                "failureThreshold": 42
+              },
+              "livenessProbe": {
+                "httpGet": {
+                  "path": "/healthz",
+                  "port": 8081
+                },
+                "initialDelaySeconds": 15,
+                "periodSeconds": 20
+              },
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/readyz",
+                  "port": 8081
+                },
+                "initialDelaySeconds": 5,
+                "periodSeconds": 10
+              },
+              "securityContext": {
+                "allowPrivilegeEscalation": false,
+                "readOnlyRootFilesystem": true,
+                "capabilities": {
+                  "drop": [
+                    "ALL"
+                  ]
+                }
+              },
+              "resources": {
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "256Mi"
+                }
+              },
+              "volumeMounts": [
+                {
+                  "name": "grpc-tls",
+                  "mountPath": "/etc/phorvex/grpc-tls",
+                  "readOnly": true
+                },
+                {
+                  "name": "audit",
+                  "mountPath": "/audit"
+                },
+                {
+                  "name": "audit-server",
+                  "mountPath": "/etc/audit-server",
+                  "readOnly": true
+                },
+                {
+                  "name": "calibration-evidence",
+                  "mountPath": "/var/run/phorvex-calibration"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "console": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": [
+        {
+          "object": [
+            "v1",
+            "ConfigMap",
+            "staging-phorvex-console-grants"
+          ],
+          "path": "/data/grants.json",
+          "before": "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\": \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\",\n      \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n      \"roles\": [\n        \"operator\"\n      ],\n      \"tenants\": [\n        \"console-identity-shared\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n      \"note\": \"The production console's operator, confined to staging's demo tenant.\"\n    },\n    {\n      \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\n      \"subject\": \"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\",\n      \"roles\": [\n        \"operator\"\n      ],\n      \"tenants\": [\n        \"console-identity-shared\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n      \"note\": \"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\"\n    }\n  ]\n}\n",
+          "after": "{\"subjects\":[{\"issuer\":\"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\",\"note\":\"The production console's operator, confined to staging's demo tenant.\",\"roles\":[\"operator\"],\"subject\":\"71fb8550-3041-702a-5735-a33baf8836c8\",\"targets\":[\"default\"],\"tenants\":[\"console-identity-shared\"]},{\"issuer\":\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\"note\":\"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\",\"roles\":[\"operator\"],\"subject\":\"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\",\"targets\":[\"default\"],\"tenants\":[\"console-identity-shared\"]},{\"issuer\":\"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\"note\":\"Read-only source-pinned stage brain benchmark snapshot collection.\",\"roles\":[\"investor\"],\"subject\":\"system:serviceaccount:phorvex-staging:staging-brain-benchmark\",\"targets\":[\"default\"],\"tenants\":[\"phorvex-staging-demo\"]}],\"version\":1}\n"
+        },
+        {
+          "object": [
+            "apps/v1",
+            "Deployment",
+            "staging-phorvex-console"
+          ],
+          "path": "/spec/template/metadata/annotations/checksum/console-grants",
+          "before": "67831f053e75a33c8e4437d092361dff936a8745e76ee92d6f4ae79dead3b2f4",
+          "after": "b6f0de4877e9b278902466e5341e7110a5d735bd3176571f73fb8ac2d95ba8ab"
+        }
+      ]
+    },
+    "actuator": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": []
+    },
+    "sensor": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": []
+    },
+    "attacks": {
+      "defaults_identical": true,
+      "stage_images_identical": true,
+      "changes": []
+    }
+  },
+  "archives": {
+    "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz": {
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "members": 24,
+      "changed_members": [
+        "phorvex-common/templates/_console-grants.tpl",
+        "phorvex-common/templates/_console.tpl"
+      ],
+      "unchanged_members": 22
+    },
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz": {
+      "sha256": "0996d95651da8a8fd29fc26d1634a5665d96565628cbf420cf338a6dd7b7faa6",
+      "members": 76,
+      "changed_members": [
+        "phorvex/charts/phorvex-common/templates/_console-grants.tpl",
+        "phorvex/charts/phorvex-common/templates/_console.tpl",
+        "phorvex/values.yaml"
+      ],
+      "unchanged_members": 73
+    }
+  },
+  "six_common_archives_identical": true,
+  "verdict": "PASS"
+}

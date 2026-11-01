@@ -1,0 +1,35 @@
+{
+  "schema": "phorvex-bench.author-integration-check.v2",
+  "source_manifest": {
+    "path": "evidence/final-source/integrated-source-inputs-v3.json",
+    "sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67"
+  },
+  "source_inventory_verified_after_run": true,
+  "final_delta_result": "PASS",
+  "affected_command": "PYTHONPATH=benchmark/bot TMPDIR=/workspace/.phorvex-test-tmp PYTHONDONTWRITEBYTECODE=1 /workspace/.phorvex-tools/python312/python/bin/python3.12 -m unittest discover -s benchmark/bot -p test_*.py -v",
+  "affected_suites": {
+    "bot": 190
+  },
+  "skipped": 0,
+  "affected_log": {
+    "path": "evidence/final-source/atomic-bot-suite.txt",
+    "sha256": "4c5d36ad3e6611be1528a3fced974b5ab7498337a7dc56857fb7629dc0bb69a9",
+    "bytes": 28593
+  },
+  "prior_wrapper": {
+    "path": "evidence/final-source/integrated-benchmark-wrapper-v2.txt",
+    "sha256": "ad924624e49e727c123931d1a9c27353d4d653f4f62666d5b82ab5bd39a1f490",
+    "suites": {
+      "bot": 188,
+      "worker": 103,
+      "stage": 45
+    },
+    "skipped": 0,
+    "qualification": "Completed v2 component wrapper; three bot files were amended after its bot phase. Not claimed as a final-head coherent receipt. Unchanged worker/stage source reviewed separately; final committed full preflight will execute all suites again."
+  },
+  "atomic_delta_receipt": {
+    "path": "evidence/requests/atomic-consumers-delta-v2.json",
+    "sha256": "282735b14d50259f492c309f040d3074bc39ceb86a93900646c5268218de9274"
+  },
+  "final_preflight": "PENDING_AFTER_SOURCE_COMMIT"
+}

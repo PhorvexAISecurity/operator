@@ -289,7 +289,7 @@ class StudyUploadTest(unittest.TestCase):
         self.assertTrue(bot.run_next())
         self.assertEqual([r['kind'] for r in self.history()], ['study', 'batch'])
         self.assertTrue(all(r['state'] == 'DONE' for r in self.history()))
-        self.assertEqual(len(self.fake.documents()), 6)
+        self.assertEqual(len(self.fake.documents()), 8)  # Both validate and upload retain a readiness report.
         self.assertTrue(any('evidence=synthetic' in t for t in self.fake.texts()))
 
     def test_missing_recorded_data_is_not_a_planner_failure(self):

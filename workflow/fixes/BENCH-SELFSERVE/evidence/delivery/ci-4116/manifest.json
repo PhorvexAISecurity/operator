@@ -1,0 +1,66 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "scope": "read-only actual GitHub CI observation for PR198 head4116",
+  "files": [
+    {
+      "path": "catalogue-semantic-diff.json",
+      "bytes": 395,
+      "sha256": "4a818a3281aab8f3c569fd967f0b5ecfa2b31269a2803a256845c16db847b00f"
+    },
+    {
+      "path": "checkout-source.excerpt.log",
+      "bytes": 771,
+      "sha256": "c1de9e7ec6d65687092a9b9985686160ce4bb1dbcd9c4680e83dc64b874053fa"
+    },
+    {
+      "path": "final-pr-status.json",
+      "bytes": 291,
+      "sha256": "4a682c630051ab72bf0241ad32fb8bab8c0615bcac27bbff24150b710bc3a622"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 4072,
+      "sha256": "82facc73e7bde1ce9d8781df00872ce4092d01b21a7fc78693b40e3e545ae0df"
+    },
+    {
+      "path": "go-envtest.excerpt.log",
+      "bytes": 954,
+      "sha256": "0bd2ef9c636ddd3e73937788fca08d536f5f3ee4d0562a20ff995530a9128226"
+    },
+    {
+      "path": "go-envtest.provenance.json",
+      "bytes": 450,
+      "sha256": "58d2dc609817c2850b3ff3104f3573adec916916109e24d3582402d68d82ca12"
+    },
+    {
+      "path": "go-unit.excerpt.log",
+      "bytes": 761,
+      "sha256": "bf5e057b866adf9e56a2bcf9c3e750003171f2aedf11e1e4da57d9ded8fa75e2"
+    },
+    {
+      "path": "go-unit.provenance.json",
+      "bytes": 445,
+      "sha256": "8cbbfc6e657d8080b3d2af021d5da835ab0374ed1eefec454d76d2cfff402f72"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 9074,
+      "sha256": "0ca587c47c1bd9c2bca86080791a1dfc834f67e3e7e18d67b9fbf7a0898534e2"
+    },
+    {
+      "path": "source-comparison.json",
+      "bytes": 2400,
+      "sha256": "cda7af00e58d0707b24509bb58da09e0365e9b8963b8e0ba4c56845f9710033e"
+    },
+    {
+      "path": "source-jobs.json",
+      "bytes": 3464,
+      "sha256": "9d355ec31d6b6bff23e12a017443b231b45bbbd96b3037a5c59b73bcbaf19c3b"
+    },
+    {
+      "path": "tested-merge-source.json",
+      "bytes": 732,
+      "sha256": "3ae43846cae166e969a8bdd6f4dedf1ecf5fb9ccab86f446c7c58c4bd199ab06"
+    }
+  ]
+}

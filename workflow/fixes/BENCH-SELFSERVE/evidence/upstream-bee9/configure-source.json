@@ -1,0 +1,7 @@
+{
+  "implementation": {
+    "branch": "fix/benchmark-selfserve",
+    "base_sha": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+    "head_sha": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65"
+  }
+}

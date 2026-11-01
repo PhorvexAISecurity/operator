@@ -1,0 +1,26 @@
+{
+  "at": "2026-11-01T20:23:16.696871+00:00",
+  "result": "PASS",
+  "evidence_class": "BASELINE_INSTRUMENT_CONTROL",
+  "source_revision": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+  "upstream_main": "1457be4433a719784523a68ec3dd982cb57af409",
+  "runtime_installed": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "runtime_staged_not_installed": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "positive_control": "Fresh actual embedded stage image/native paired replay identity agrees; all three applications healthy on1457 and original policy/workload/Service identities preserved. Owned services and capacity present. Capture absent on current release is expected pre-mutation state, not readiness.",
+  "references": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-1457-capture-preconditions.json",
+      "sha256": "e507c85c65fb7cc749b366280aca79e9c8a1f2a727cef7fe0a016cf25f5e0ed4"
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/evidence/runtime-at-baseline.json",
+      "sha256": "44d1784b2430fe269f8749690bc960194afc0b4b2714cdef48c66fbc7f87389c"
+    }
+  ],
+  "limits": [
+    "No new source-native baseline/history/bot outcome claimed",
+    "Old61e/bee9 evidence does not fill current a5f history",
+    "No original ten-day performance result claimed"
+  ]
+}

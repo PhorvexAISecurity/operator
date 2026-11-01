@@ -1,0 +1,6 @@
+Requirement already satisfied: PyYAML==6.0.2 in /workspace/.phorvex-tools/python312/python/lib/python3.12/site-packages (6.0.2)
+Requirement already satisfied: openpyxl==3.1.5 in /workspace/.phorvex-tools/python312/python/lib/python3.12/site-packages (from -r tools/benchmark-test-requirements.txt (line 1)) (3.1.5)
+Requirement already satisfied: et_xmlfile==2.0.0 in /workspace/.phorvex-tools/python312/python/lib/python3.12/site-packages (from -r tools/benchmark-test-requirements.txt (line 2)) (2.0.0)
+
+[notice] A new release of pip is available: 26.2.1 -> 26.2.2
+[notice] To update, run: pip install --upgrade pip

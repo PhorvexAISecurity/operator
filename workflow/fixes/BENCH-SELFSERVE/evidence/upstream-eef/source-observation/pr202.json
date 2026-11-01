@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-11-01T20:59:30.386707+00:00",
+  "api_path": "/pulls/202",
+  "data": {
+    "number": 202,
+    "title": "deploy(staging): reopen quarantine catalogue window",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/202",
+    "state": "closed",
+    "draft": false,
+    "merged": true,
+    "merged_at": "2026-11-01T20:54:19Z",
+    "merge_commit_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+    "mergeable": true,
+    "mergeable_state": "unstable",
+    "updated_at": "2026-11-01T20:54:21Z",
+    "changed_files": 1,
+    "commits": 1,
+    "additions": 16,
+    "deletions": 13,
+    "head": {
+      "sha": "d783274c5b302ccce4e8cd959c6855a961c501b9",
+      "ref": "deploy/reopen-quarantine-b1ef9ccdb258"
+    },
+    "base": {
+      "sha": "408944e2182a36affd18374865e1fdd392221192",
+      "ref": "main"
+    }
+  }
+}

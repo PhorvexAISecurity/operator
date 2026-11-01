@@ -1,0 +1,23 @@
+{
+  "command": [
+    "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+    "tools/render_catalogue_staging_values.py",
+    "--profile",
+    "quarantine",
+    "--namespace-uid",
+    "45e2ab1b-5a45-42ab-8afe-87218f2c758d",
+    "--agent-image",
+    "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8",
+    "--workload-image",
+    "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
+  ],
+  "differences": [
+    {
+      "path": "/phorvex/console/attackCatalog/agentAction/image",
+      "actual": "",
+      "expected": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+    }
+  ],
+  "current_source": "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+  "overlay_byte_equal_main": "565c3ea44387d45641d36a4ace9615de62f59fa9"
+}

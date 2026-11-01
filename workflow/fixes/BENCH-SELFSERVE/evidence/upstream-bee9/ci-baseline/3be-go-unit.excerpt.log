@@ -1,0 +1,5 @@
+364: 2026-11-01T19:03:30.4562803Z --- FAIL: TestAllSixStagingDeploymentsRenderTheVerifiedImage (1.72s)
+365: 2026-11-01T19:03:30.4563926Z     --- FAIL: TestAllSixStagingDeploymentsRenderTheVerifiedImage/attacks (0.16s)
+366: 2026-11-01T19:03:30.4572761Z         consumer_test.go:290: component attacks has unbound authoritative rendered consumer apps/v1/Deployment/p1-demo/demo-api//spec/template/spec/containers/0/image/web selecting "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
+368: 2026-11-01T19:03:30.4575581Z FAIL	github.com/phorvex/phorvex/tools/servicerelease	42.346s
+370: 2026-11-01T19:03:30.8600654Z ##[error]Process completed with exit code 1.

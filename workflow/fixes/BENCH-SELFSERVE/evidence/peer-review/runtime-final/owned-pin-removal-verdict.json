@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-bench.peer-owned-pin-removal.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:08:15.345901+00:00",
+  "verdict": "PASS_FOR_REMOVAL_OF_EXACT_OWNED_OVERRIDE",
+  "script": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/remove-owned-capture-pin-for-upstream.py",
+    "sha256": "8c8e4eb5d3b19d4e9e9670a1f192d08675c0c8df7aa1126e54335333eaa6b591"
+  },
+  "owned_template_sha256": "8fee86293373b85c8e1e2c42601f1424b81ca1bae3fe42cb70cb185cd63bba64",
+  "expected_applicationset_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "reason": "External reviewed main PR191/192 advanced beyond the temporary6ae pin and explicitly closed the quarantine window. Removal satisfies the originally declared pin expiry condition.",
+  "review": [
+    "Exact Kubernetes context/argocd/ApplicationSet name, expected UID and owned template content hash are fixed.",
+    "JSON Patch tests fresh UID,resourceVersion and exact template value before removing only /spec/templatePatch; any intervening modification refuses.",
+    "No other spec field, Application object, deployment, policy, journal, raw capture, runtime unit or repository source is mutated by this script.",
+    "Floating main source configuration resumes from the unchanged underlying template; current upstream family closure is not overwritten.",
+    "Post-response confirms templatePatch absent; operation receipt records identity/resourceVersion/generation and explicit external-release cause."
+  ],
+  "limits": [
+    "Proposal approval does not claim actual CAS execution or subsequent Argo convergence. Root must retain those real receipts and recheck current capture/grant/runtime readiness before benchmark submission.",
+    "No main merge, arbitrary source override, direct workload mutation or prune command is authorized by this verdict."
+  ]
+}

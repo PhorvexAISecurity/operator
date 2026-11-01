@@ -1,0 +1,33 @@
+{
+  "verdict": "PASS",
+  "components": 6,
+  "render_deltas": {
+    "brain": 4,
+    "manager": 1,
+    "console": 2,
+    "actuator": 0,
+    "sensor": 0,
+    "attacks": 0
+  },
+  "archives": {
+    "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz": {
+      "sha256": "410046e3c8c3bfadcc1754a25bc12324c2bf57aa7ee2465a75c6575581b43f1a",
+      "members": 24,
+      "changed_members": [
+        "phorvex-common/templates/_console-grants.tpl",
+        "phorvex-common/templates/_console.tpl"
+      ],
+      "unchanged_members": 22
+    },
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz": {
+      "sha256": "1b3f22b43412984a66705117af299a20dcfb08b25b2e199d4924d6fd7be25a89",
+      "members": 76,
+      "changed_members": [
+        "phorvex/charts/phorvex-common/templates/_console-grants.tpl",
+        "phorvex/charts/phorvex-common/templates/_console.tpl",
+        "phorvex/values.yaml"
+      ],
+      "unchanged_members": 73
+    }
+  }
+}

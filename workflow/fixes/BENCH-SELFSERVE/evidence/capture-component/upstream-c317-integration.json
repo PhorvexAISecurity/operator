@@ -1,0 +1,16 @@
+{
+  "schema": "phorvex-bench.capture-upstream-integration.v1",
+  "head": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "original_baseline": "fe6494022a65fcca236e405521685708eb104d9e",
+  "original_source_manifest_sha256": "8b2dbfc604a776aef03133a7d28f23254ae710cc95348f0b2a1474116c68c685",
+  "capture_source_files_unchanged": true,
+  "upstream_only_path": "deploy/environments/staging/catalogue-family.yaml",
+  "upstream_sha256": "141332d868af6d38de8805d3b68968039e2c2ae327d2fd90c8acf905c2d541be",
+  "overlay_tests": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/capture-component/upstream-c317-overlay-tests.txt",
+    "sha256": "9a0ed6756952c06d033c7185d2ef5139f033ee1e468b11d70ddc7728711dad07",
+    "result": "PASS",
+    "count": 7
+  },
+  "scope": "Current quarantine family final overlay preserved; all16 independently reviewed capture source files are unchanged."
+}

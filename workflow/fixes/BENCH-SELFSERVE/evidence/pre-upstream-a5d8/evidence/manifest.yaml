@@ -1,0 +1,138 @@
+schema_version: 1
+fix_id: BENCH-SELFSERVE
+artifacts:
+- id: check-red
+  path: evidence/baseline-red.md
+  sha256: a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3
+  bytes: 1798
+  producer: bench-v3-lead
+  created_at: '2026-11-01T17:31:32+00:00'
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  command: Exact main parser/hash-routing and typed-schema control; actual installed
+    jh stage_scope.load for requested demo policy versus known fixture policy
+  evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-decision
+  path: 03-decision.md
+  sha256: db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c
+  bytes: 7139
+  producer: bench-v3-lead
+  created_at: '2026-11-01T17:32:49+00:00'
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  command: 'Lead plan amended from actual final Helm-overlay counterexample: default-empty
+    additive readonly benchmark subject; independent source/component review and full
+    scoped checks required'
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-base_review
+  path: evidence/upstream-integration/base-review.md
+  sha256: 6f9483d81a932792d1977fb04fd8b28fbf8d2325c9551d8157ee0df0aba9b7b7
+  bytes: 2425
+  producer: bench-v3-lead
+  created_at: '2026-11-01T19:03:27+00:00'
+  source_sha: c3174a516bee6bf8eae39749825051c3cfcb8cc6
+  command: git diff fe6494022a65fcca236e405521685708eb104d9e c3174a516bee6bf8eae39749825051c3cfcb8cc6;
+    git diff --exit-code c3174a516bee6bf8eae39749825051c3cfcb8cc6 a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    -- deploy/environments/staging/catalogue-family.yaml; inspect independent six-component
+    current-base render and final committed-source receipts
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-preflight
+  path: evidence/preflight/receipt.json
+  sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+  bytes: 13402
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: workflow.py preflight BENCH-SELFSERVE --run
+  evidence_class: PREFLIGHT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: 1ff1b68d382ec1efa297ebe56be6d7075e7343131d3a06583281aed9f7681ebc
+  bytes: 3137682
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv c3174a516bee6bf8eae39749825051c3cfcb8cc6
+    a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/preflight/receipt.json
+  sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+  bytes: 13402
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-preflight.sh
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/final-source/l1.txt
+  sha256: 089866873ae2f9832a61fda8f7b30b23ebfcc18255c1b30a3de18d7ccc29310e
+  bytes: 2787
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-acceptance.sh
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/final-source/l2.txt
+  sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+  bytes: 7728
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-acceptance.sh
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/final-source/l2.txt
+  sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+  bytes: 7728
+  producer: bench-v3-worker
+  created_at: '2026-11-01T19:03:41+00:00'
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  command: Exact committed-source real PXMS/native replay publication, offline source
+    hydration and current scope producer controls in run-acceptance.sh; live product
+    acceptance remains independent
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null

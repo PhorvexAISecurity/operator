@@ -7,7 +7,7 @@ backdating or automatic deletion of journals/results is performed here.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import fcntl
 import heapq
@@ -301,11 +301,45 @@ def verify_live(pin, policy):
     pol = stage_cli.kube(pin["kube_context"], namespace, "get", "phorvexpolicy", name, "-o", "json")
     if pol["metadata"]["uid"] != pin["policies"][policy]["uid"]:
         raise RefreshBlocked("LIVE_POLICY_UID_CHANGED_BEFORE_PUBLICATION")
+    if pin.get('identity_binding') == 'stage-pin.replay.v1' and pol['metadata'].get('generation') != pin['policies'][policy]['generation']:
+        raise RefreshBlocked('LIVE_POLICY_GENERATION_CHANGED_BEFORE_PUBLICATION')
+    if pin.get('manager'):
+        manager=stage_cli.running_image(pin['kube_context'],pin['service_namespace'],'staging-phorvex','manager')
+        if any(manager.get(k) != pin['manager'].get(k) for k in ('git_sha','image','image_digest','deployment_uid')):
+            raise RefreshBlocked('LIVE_MANAGER_CHANGED_BEFORE_PUBLICATION')
 
 
-def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, worth_threshold,
+def refresh(data_dir, *args, **kwargs):
+    # Reconciliation cannot replace the pin/engine while this exact cohort runs.
+    started, started_at = time.monotonic(), utc()
+    with ExitStack() as leases:
+        try:
+            leases.enter_context(stage_scope.pin_lock(data_dir, timeout=20))
+        except stage_scope.StageLeaseBusy as exc:
+            # Only acquisition timeout is a prerequisite. Exceptions raised by
+            # the refresh body must not be reclassified as lease contention.
+            return _refresh(data_dir, *args, **kwargs, _lease_blocked={
+                "error": exc, "started": started, "started_at": started_at,
+                "wait_seconds": time.monotonic()-started})
+        return _refresh(data_dir, *args, **kwargs)
+
+
+def finish_status(state, pointer, status_path, started, *, publish=True):
+    try:
+        current_manifest = read_json(pointer, {}) or {}
+    except (OSError, ValueError):
+        current_manifest = {}
+    state["current_dataset"] = {key: current_manifest.get(key) for key in
+                                ("trace_file", "trace_sha256", "source_revision", "snapshot_source_revision", "snapshot_digests")}
+    state.update(finished_at=utc(), elapsed_seconds=round(time.monotonic()-started, 3))
+    if publish:
+        atomic_json(status_path, state)
+    return state
+
+
+def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, worth_threshold,
             ticks=64, timeout=900, max_work_bytes=512 << 20, max_generation_bytes=512 << 20,
-            max_corpus_bytes=2 << 30, max_observation_age=600):
+            max_corpus_bytes=2 << 30, max_observation_age=600, _lease_blocked=None):
     stage_scope.policy(policy)
     if (any(type(x) not in (float, int) or not math.isfinite(x) for x in (target, window, lookback, worth_threshold)) or
             not 0 < target < 1 or not 1 <= window <= 2592000 or not 1 <= lookback <= 2592000 or worth_threshold < 0):
@@ -323,10 +357,11 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
     status_path = data_dir / "mathlab/endpoint-refresh" / (policy + ".status.json")
     status_path.parent.mkdir(parents=True, exist_ok=True)
     pointer = data_dir / "mathlab/endpoint-traces" / (policy + ".manifest.json")
-    started = time.monotonic()
+    started = _lease_blocked["started"] if _lease_blocked else time.monotonic()
     deadline = started + timeout
     state = {"schema": "phorvex-stage.endpoint-refresh.v1", "state": "RUNNING", "policy": policy,
-             "started_at": utc(), "phase": "DISCOVER", "requested_ticks": ticks,
+             "started_at": _lease_blocked["started_at"] if _lease_blocked else utc(),
+             "phase": "LEASE" if _lease_blocked else "DISCOVER", "requested_ticks": ticks,
              "study_settings": {"target": target, "window": window, "lookback": lookback, "worth_threshold": worth_threshold},
              "bounds": {"timeout_seconds": timeout, "work_bytes": max_work_bytes,
                         "generation_bytes": max_generation_bytes, "corpus_bytes": max_corpus_bytes,
@@ -334,14 +369,29 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
     with status_path.with_suffix(".lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RefreshBlocked("REFRESH_ALREADY_RUNNING") from exc
+        except BlockingIOError:
+            state.update(state="BLOCKED", phase="LEASE", reason="REFRESH_ALREADY_RUNNING")
+            # The status belongs to the active refresher. Return this attempt's
+            # result without modifying its status or the current dataset.
+            return finish_status(state, pointer, status_path, started, publish=False)
+        if _lease_blocked:
+            state.update(state="BLOCKED", phase="LEASE", reason="STAGE_PIN_LEASE_BUSY",
+                         error_type=type(_lease_blocked["error"]).__name__,
+                         detail=str(_lease_blocked["error"]),
+                         lease_wait_seconds=round(_lease_blocked["wait_seconds"], 3))
+            return finish_status(state, pointer, status_path, started)
         atomic_json(status_path, state)
         try:
             with wall_limit(timeout):
+                state['free_bytes_before']=shutil.disk_usage(data_dir).free
+                if state['free_bytes_before'] < (4 << 30)+2*max_work_bytes:
+                    raise RefreshBlocked('DISK_RESERVE: refresh cannot preserve the 4 GiB free reserve and bounded working allowance')
                 pin = stage_scope.load(data_dir, policy, repo)
                 control = stage_scope.identity(data_dir, pin)
                 engine = stage_scope.study_engine(data_dir, pin)
+                if journal_path is None:
+                    from stage_observer_runtime import resolve_journal
+                    journal_path = resolve_journal(data_dir, pin, policy)
                 # Only a real existing journal can be opened; a refresh cannot
                 # manufacture the observation scope or start/backdate a session.
                 if not Path(journal_path).is_file():
@@ -353,7 +403,7 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                     namespace, policy_name = stage_scope.policy(policy)
                     with snapshots.cache_lock(data_dir, namespace, policy_name, exclusive=True):
                         state["cache_before_sync"] = prune_cache(data_dir, pin, policy, max(256, ticks))
-                        available = max_corpus_bytes-bytes_in(corpus)
+                        available = max_corpus_bytes-bytes_in(data_dir/'mathlab/snapshots')
                     if available < snapshots.MAX_SNAPSHOT_BYTES:
                         raise RefreshBlocked("SNAPSHOT_CACHE_CAPACITY_EXHAUSTED")
                     state["phase"] = "SYNC"
@@ -361,7 +411,7 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                                                           max_sync_bytes=min(available, max_work_bytes))
                     with snapshots.cache_lock(data_dir, namespace, policy_name, exclusive=True):
                         register_downloads(data_dir, pin, policy, state["sync"].get("downloaded_digests", []))
-                        if bytes_in(corpus) > max_corpus_bytes:
+                        if bytes_in(data_dir/'mathlab/snapshots') > max_corpus_bytes:
                             raise RefreshBlocked("SNAPSHOT_CACHE_BYTE_LIMIT")
                     with journal.read_snapshot() as prefix:
                         observed = segment(journal, prefix, now=time.time(), max_age=max_observation_age)
@@ -413,6 +463,9 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                             def revalidate():
                                 if time.monotonic() >= deadline:
                                     raise RefreshBlocked("REFRESH_RUNTIME_LIMIT")
+                                state['free_bytes_before_publication']=shutil.disk_usage(data_dir).free
+                                if state['free_bytes_before_publication'] < (4 << 30)+(1 << 20):
+                                    raise RefreshBlocked('DISK_RESERVE: publication would violate the filesystem reserve')
                                 current = stage_scope.load(data_dir, policy, repo)
                                 if canonical(current) != canonical(pin):
                                     raise RefreshBlocked("STAGE_PIN_CHANGED_BEFORE_PUBLICATION")
@@ -433,21 +486,14 @@ def refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, w
                     journal.close()
         except Exception as exc:
             state.update(state="BLOCKED", reason=str(exc)[:2000], error_type=type(exc).__name__)
-        try:
-            current_manifest = read_json(pointer, {}) or {}
-        except (OSError, ValueError):
-            current_manifest = {}
-        state["current_dataset"] = {key: current_manifest.get(key) for key in
-                                    ("trace_file", "trace_sha256", "source_revision", "snapshot_source_revision", "snapshot_digests")}
-        state.update(finished_at=utc(), elapsed_seconds=round(time.monotonic()-started, 3))
-        atomic_json(status_path, state)
-        return state
+        return finish_status(state, pointer, status_path, started)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("data", "repo", "policy", "journal"):
+    for name in ("data", "repo", "policy"):
         parser.add_argument("--" + name, required=True)
+    parser.add_argument('--journal', help='Explicit source-bound journal, or omit to use the managed current fixture observer')
     parser.add_argument("--slo-target", type=float, required=True)
     parser.add_argument("--window", type=float, required=True)
     parser.add_argument("--lookback", type=float, required=True)

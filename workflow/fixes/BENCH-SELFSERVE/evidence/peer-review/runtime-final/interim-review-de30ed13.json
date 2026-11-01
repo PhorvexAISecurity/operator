@@ -1,0 +1,54 @@
+{
+  "schema": "phorvex-bench.independent-component-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T18:28:21.465008+00:00",
+  "verdict": "REPAIRS_REQUIRED",
+  "source_manifest": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/final-source/integrated-source-inputs.json",
+    "sha256": "de30ed13f4ac19d7fdbc7a8af73ed34be9cf84edd637cad1ba3cf89a334e97a3"
+  },
+  "source_paths_matched": 39,
+  "source_paths_changed_after_freeze": [
+    "benchmark/worker/stage_reconcile.py"
+  ],
+  "independent_tests": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/bot-focused-tests.txt",
+      "sha256": "a73449eb06aa7e56b7a200681a41e75679cc51b93f1b05fb00ebefbc07ceaa36",
+      "tests": 33,
+      "skips": 0,
+      "result": "PASS"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/helper-focused-tests.txt",
+      "sha256": "943da889abeb082bfb6bffd085c8ab60cb13724a78afcaace41a48e0b394e1bf",
+      "tests": 68,
+      "skips": 0,
+      "result": "PASS"
+    }
+  ],
+  "findings": [
+    {
+      "id": "runtime-deadline",
+      "evidence": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-probe.json",
+      "sha256": "59d3a6b66bebbf8599ce325e2de054843838f97e7bf73f83250dd9cb0b0b0ac8",
+      "detail": "Actual healthy fixture runtime probe exceeds60s; demo36.30s positive demonstrates actual path. Reduce duplicated sequential observations under bounded coherent checks, then repeat actual both policies."
+    },
+    {
+      "id": "source-tree-completeness",
+      "evidence": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/source-blob-counterexample.json",
+      "sha256": "dccf7c6a352c56f27300c39cad312bdafa4769eb1527bd8b397c1ede5714f168",
+      "detail": "Commit-only ensure_source can accept a partial clone with absent tree blobs; explicit hydration and offline proof required before READY."
+    },
+    {
+      "id": "cold-capture-backlog",
+      "evidence": "Lead reported latest cold-start sync reads oldest256 then discards stale scratch; exact producer test pending helper",
+      "detail": "Preserve bounded progress or bootstrap recent actual cohort; do not accept stale data or alter requested ticks."
+    }
+  ],
+  "limits": [
+    "Test pass is not live readiness or bot acceptance.",
+    "Final source acceptance awaits amended frozen source and affected controls.",
+    "The existing active-demo attribution and ten-day history remain unavailable; preserve requested windows and BLOCKED."
+  ]
+}

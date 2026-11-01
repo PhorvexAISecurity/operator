@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-01T21:00:01.063456+00:00",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "base": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "runtime_files": 169,
+  "patch_sha256": "8fde779bd69073a83f4b7ff90965e0ed51f36e3af59a171f8bdbf207e4e42fc2",
+  "artifacts": {
+    "evidence/baseline-red.md": "a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3",
+    "evidence/peer-review/runtime-installed-225877/source-p3-advisory.md": "626712355a8354b58c47722b769af2f530690aa5a9ef64ae303fc2439bd323ab",
+    "evidence/upstream-b1ef/preflight/receipt.json": "37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a",
+    "evidence/peer-review/bot-lease-repair/commit-binding-225877a8.json": "096bb7f80f864c9c462e6e2001fa8ff5d317873a4c0b3b59258d6a8239fd11bb",
+    "evidence/delivery/ci-225877/manifest.json": "a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8"
+  },
+  "verdict_sha256": "204a473f57ef22f39f0b3d170588de9814223603116775fe15829acfa4276e60",
+  "result": "PASS_SOURCE_ONLY_L3_PENDING"
+}

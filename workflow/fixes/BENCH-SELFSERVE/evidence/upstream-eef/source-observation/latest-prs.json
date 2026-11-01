@@ -1,0 +1,84 @@
+{
+  "observed_at": "2026-11-01T20:59:56.083824+00:00",
+  "api_path": "/pulls?state=all&sort=created&direction=desc&per_page=6",
+  "data": [
+    {
+      "number": 202,
+      "title": "deploy(staging): reopen quarantine catalogue window",
+      "state": "closed",
+      "draft": false,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/202",
+      "created_at": "2026-11-01T20:54:14Z",
+      "updated_at": "2026-11-01T20:54:21Z",
+      "merged_at": "2026-11-01T20:54:19Z",
+      "merge_commit_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "head_sha": "d783274c5b302ccce4e8cd959c6855a961c501b9",
+      "base_sha": "408944e2182a36affd18374865e1fdd392221192"
+    },
+    {
+      "number": 201,
+      "title": "deploy(staging): isolated release b1ef9ccdb258",
+      "state": "closed",
+      "draft": false,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/201",
+      "created_at": "2026-11-01T20:51:23Z",
+      "updated_at": "2026-11-01T20:53:25Z",
+      "merged_at": "2026-11-01T20:53:24Z",
+      "merge_commit_sha": "408944e2182a36affd18374865e1fdd392221192",
+      "head_sha": "30b24b0d9af4c9571e587c454510dd5238b269b3",
+      "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+    },
+    {
+      "number": 200,
+      "title": "chore(staging): close quarantine window for release",
+      "state": "closed",
+      "draft": false,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/200",
+      "created_at": "2026-11-01T20:33:28Z",
+      "updated_at": "2026-11-01T20:33:34Z",
+      "merged_at": "2026-11-01T20:33:34Z",
+      "merge_commit_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "head_sha": "831a4d47599aaeb5e5643beba12849b1c82444dd",
+      "base_sha": "4d9454a9083c3ef1995296e7931f4c098d8f496e"
+    },
+    {
+      "number": 199,
+      "title": "fix(console): reconcile Kubernetes catalogue retry safety",
+      "state": "closed",
+      "draft": false,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/199",
+      "created_at": "2026-11-01T20:30:39Z",
+      "updated_at": "2026-11-01T20:30:48Z",
+      "merged_at": "2026-11-01T20:30:47Z",
+      "merge_commit_sha": "4d9454a9083c3ef1995296e7931f4c098d8f496e",
+      "head_sha": "66cdbe89ab47d517ed919feb0698f87138814794",
+      "base_sha": "1457be4433a719784523a68ec3dd982cb57af409"
+    },
+    {
+      "number": 198,
+      "title": "fix(benchmark): keep stage capture and request readiness consistent",
+      "state": "open",
+      "draft": true,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+      "created_at": "2026-11-01T20:25:11Z",
+      "updated_at": "2026-11-01T20:43:23Z",
+      "merged_at": null,
+      "merge_commit_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+      "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+      "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+    },
+    {
+      "number": 197,
+      "title": "deploy(staging): reopen quarantine catalogue window",
+      "state": "closed",
+      "draft": false,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/197",
+      "created_at": "2026-11-01T20:09:31Z",
+      "updated_at": "2026-11-01T20:09:39Z",
+      "merged_at": "2026-11-01T20:09:37Z",
+      "merge_commit_sha": "1457be4433a719784523a68ec3dd982cb57af409",
+      "head_sha": "d74ab73bff52a7c772dc2e2348f2b5c3ac5313fb",
+      "base_sha": "90c0c98484c306d0f8c0eb9136506f6901b2de4a"
+    }
+  ]
+}

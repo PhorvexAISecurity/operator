@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-bench.peer-source-blob-control.v1",
+  "reviewer": "stage-review",
+  "source_manifest_sha256": "de30ed13f4ac19d7fdbc7a8af73ed34be9cf84edd637cad1ba3cf89a334e97a3",
+  "producer": "Real local Git partial clone with approved origin string and local file promisor; no credential or network access",
+  "source_revision": "5f74e301fa525c93932b11716170a99f4fb27cf6",
+  "missing_object_count_before": 1,
+  "ensure_source_returned": {
+    "source_revision": "5f74e301fa525c93932b11716170a99f4fb27cf6",
+    "fetched": false,
+    "checkout_head": "5f74e301fa525c93932b11716170a99f4fb27cf6"
+  },
+  "ensure_source_git_unchanged": true,
+  "no_lazy_fetch_archive_exit": 128,
+  "no_lazy_fetch_archive_error": "warning: lazy fetching disabled; some objects may not be available\nfatal: could not fetch 1075b13a2926d14451ad3e83e4a239147fd68ce5 from promisor remote",
+  "normal_archive_exit": 0,
+  "normal_archive_added_git_files": [
+    ".git/objects/pack/pack-f91b0be5ffebda651ab94835d36ce7540630747a.idx",
+    ".git/objects/pack/pack-f91b0be5ffebda651ab94835d36ce7540630747a.pack",
+    ".git/objects/pack/pack-f91b0be5ffebda651ab94835d36ce7540630747a.promisor"
+  ],
+  "root": "/workspace/.phorvex-test-tmp/peer-source-blobs-xdyofao5",
+  "conclusion": "Commit-only source qualification succeeds although required tree blobs are absent. Later read-only-disabled-lazy archive fails; ordinary archive fetches and mutates Git objects."
+}

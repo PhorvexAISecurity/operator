@@ -1,0 +1,8 @@
+{
+  "script3_sha256": "33b4feabdb79c910afe0e0373522ac54a16fe85c0b553ac666339cd4592916d4",
+  "script4_sha256": "d8d3dce5d2f4182790d2f1cd59437558960e7d6684c568d8bcdc250290092230",
+  "executable_ast_equal_except_exact_payload_and_output_directory": true,
+  "embedded_payload_matches_fresh_preconditions": true,
+  "go_template_cases": 24,
+  "missing_key_rejected": true
+}

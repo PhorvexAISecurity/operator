@@ -1,0 +1,26 @@
+{
+  "result": "PASS",
+  "source_manifest_sha256": "63d6c607081f9de0bcf9feb8d86212c694e5f81b1751f14349b5e25339f8865b",
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "tests": [
+    {
+      "command": "TMPDIR=/workspace/.phorvex-test-tmp PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=benchmark/bot:benchmark/worker exact Python3.12.15 -m unittest -v test_job_lease test_request_readiness",
+      "count": 19,
+      "skips": 0,
+      "elapsed_seconds": 33.878,
+      "log": "author-tests-v2.txt",
+      "sha256": "18abcd502cc4d14b39c3d913df246b9cd2436e504948da42edd177b846fa9044"
+    },
+    {
+      "command": "exact Python3.12.15/Helm3.16.4 -m unittest discover -s tools -p test_stage_benchmark_capture.py -v",
+      "count": 7,
+      "skips": 0,
+      "elapsed_seconds": 6.183,
+      "log": "closed-capture-tests.txt",
+      "sha256": "f97166ca1a964f002ea616772fecc846a7f1aac205361fe8f8e0258b2ae27a75"
+    }
+  ],
+  "working_directory": "/workspace/operator-benchmark-selfserve-1457",
+  "original_failure": "Independent actual20s nativeProducer/bot counterexample retained in peer-review/bot-lease-race; original-upload omission control retained separately. Initial author18-test failure was a test lookup using readiness instead of existing endpoint preflight field; corrected assertion, unchanged endpoint schema.",
+  "scope": "Actual OS lock, native reconciliation fixture, real queue/batch/PXMS/normalizer/replay protocol; external transports scripted, no live-brain or actual Telegram efficacy claim. Full committed-source gate remains pending."
+}

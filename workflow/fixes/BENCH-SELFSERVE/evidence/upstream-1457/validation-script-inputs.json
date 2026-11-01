@@ -1,0 +1,30 @@
+{
+  "source_base": "1457be4433a719784523a68ec3dd982cb57af409",
+  "source_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "files": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/run-preflight.sh",
+      "sha256": "66532aadfae17af450596f9d2fef7e5cea8311fe6bb9d2cbc272f855902c6222"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/run-acceptance.sh",
+      "sha256": "b3625076af4830a7f170767b80bcf45551b727c2124a703b956e050c129d4edf"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/verify-upstream.sh",
+      "sha256": "a594bfba18b98020cfe46d785a80fefca14054dac5cdf8a73e19ae1df6c1c804"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/validate-final.py",
+      "sha256": "dd115a5d92562eb07156e31f20b93db1148cdfb15581dfcb3b53082504a94048"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/submit-review.yaml",
+      "sha256": "af65df18c8e3a4f6c7a02a59faf2f3629685e06100ca83f1f478ba700f9b79a4"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/final-checks-config.json",
+      "sha256": "32e49f48c071d721ddc041d925f29fa7b1ff82dea76415e5b7d1a6aa60c0c9f4"
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+test_bench_end_to_end_from_telegram (test_bot.BotTest.test_bench_end_to_end_from_telegram) ... ok
+test_bench_freezes_before_model_work_and_survives_later_cache_prune (test_bot.BotTest.test_bench_freezes_before_model_work_and_survives_later_cache_prune) ... FAIL
+test_bench_refused_and_uncompilable_changes_are_reported (test_bot.BotTest.test_bench_refused_and_uncompilable_changes_are_reported) ... FAIL
+test_bench_refuses_a_tampered_deployed_binary (test_bot.BotTest.test_bench_refuses_a_tampered_deployed_binary) ... ok
+test_bench_refuses_when_the_disk_is_short (test_bot.BotTest.test_bench_refuses_when_the_disk_is_short) ... FAIL
+test_bench_with_an_untagged_deployed_commit (test_bot.BotTest.test_bench_with_an_untagged_deployed_commit) ... ERROR
+test_cancel_stops_before_the_next_step (test_bot.BotTest.test_cancel_stops_before_the_next_step) ... FAIL
+test_check_reports_every_dependency_without_secrets (test_bot.BotTest.test_check_reports_every_dependency_without_secrets) ... ok
+test_config_requires_an_allowlist (test_bot.BotTest.test_config_requires_an_allowlist) ... ok
+test_decline_reason_is_visible_without_opening_plan_attachment (test_bot.BotTest.test_decline_reason_is_visible_without_opening_plan_attachment) ... FAIL
+test_duplicate_guide_requests_do_not_block_other_commands (test_bot.BotTest.test_duplicate_guide_requests_do_not_block_other_commands) ... ok
+test_english_menu_and_profile_override_default_english_and_persian_locales (test_bot.BotTest.test_english_menu_and_profile_override_default_english_and_persian_locales) ... ok
+test_failed_candidate_tests_stop_before_build_and_replay (test_bot.BotTest.test_failed_candidate_tests_stop_before_build_and_replay) ... FAIL
+test_first_start_skips_the_backlog_and_restarts_resume (test_bot.BotTest.test_first_start_skips_the_backlog_and_restarts_resume) ... ok
+test_guide_delivers_both_release_files_without_queuing_a_benchmark (test_bot.BotTest.test_guide_delivers_both_release_files_without_queuing_a_benchmark) ... ok
+test_guide_is_available_to_members_but_not_strangers (test_bot.BotTest.test_guide_is_available_to_members_but_not_strangers) ... ok
+test_guide_upload_failure_is_reported_and_retry_works (test_bot.BotTest.test_guide_upload_failure_is_reported_and_retry_works) ... ok
+test_help_status_runs_cancel_and_queue_limit (test_bot.BotTest.test_help_status_runs_cancel_and_queue_limit) ... ok
+test_invite_adds_a_member_without_replacing_the_paired_owner (test_bot.BotTest.test_invite_adds_a_member_without_replacing_the_paired_owner) ... ok
+test_invites_require_an_active_owner_and_a_private_owner_chat (test_bot.BotTest.test_invites_require_an_active_owner_and_a_private_owner_chat) ... ok
+test_member_invite_rejects_wrong_expired_and_group_joins (test_bot.BotTest.test_member_invite_rejects_wrong_expired_and_group_joins) ... ok
+test_membership_file_requires_private_valid_records (test_bot.BotTest.test_membership_file_requires_private_valid_records) ... ok
+test_missing_guide_files_do_not_send_a_partial_guide (test_bot.BotTest.test_missing_guide_files_do_not_send_a_partial_guide) ... ok
+test_owner_pairing_is_private_expiring_single_use_and_survives_restart (test_bot.BotTest.test_owner_pairing_is_private_expiring_single_use_and_survives_restart) ... ok
+test_param_preflight_failure_and_bad_usage (test_bot.BotTest.test_param_preflight_failure_and_bad_usage) ... ok
+test_param_runs_through_the_dashboard_and_returns_files (test_bot.BotTest.test_param_runs_through_the_dashboard_and_returns_files) ... ok
+test_parameter_window_excludes_other_source_revisions (test_bot.BotTest.test_parameter_window_excludes_other_source_revisions) ... ok
+test_strangers_get_no_reply_and_their_id_is_logged (test_bot.BotTest.test_strangers_get_no_reply_and_their_id_is_logged) ... ok
+test_login_cookie_origin_and_relogin (test_bot.DashboardClientTest.test_login_cookie_origin_and_relogin) ... ok
+test_sync_conflict_waits_on_the_queued_sync_and_artifacts_are_raw (test_bot.DashboardClientTest.test_sync_conflict_waits_on_the_queued_sync_and_artifacts_are_raw) ... ok
+test_wrong_password_and_origin_fail_without_leaking_the_password (test_bot.DashboardClientTest.test_wrong_password_and_origin_fail_without_leaking_the_password) ... ok
+test_env_example_holds_no_secret_values (test_bot.DeployFilesTest.test_env_example_holds_no_secret_values) ... ok
+test_install_script (test_bot.DeployFilesTest.test_install_script) ... ok
+test_unit_matches_the_dashboard_layout (test_bot.DeployFilesTest.test_unit_matches_the_dashboard_layout) ... ok
+test_deltas_require_fidelity_and_full_candidate_coverage (test_bot.ReportTest.test_deltas_require_fidelity_and_full_candidate_coverage) ... ok
+test_formatting_keeps_intervals_and_missing (test_bot.ReportTest.test_formatting_keeps_intervals_and_missing) ... ok
+test_html_is_escaped_and_csv_is_neutralized (test_bot.ReportTest.test_html_is_escaped_and_csv_is_neutralized) ... ok
+test_paired_differences_never_replace_arm_values (test_bot.ReportTest.test_paired_differences_never_replace_arm_values) ... ok
+test_long_messages_are_split_and_documents_are_multipart (test_bot.TelegramClientTest.test_long_messages_are_split_and_documents_are_multipart) ... ok
+test_token_is_validated_and_never_in_an_error (test_bot.TelegramClientTest.test_token_is_validated_and_never_in_an_error) ... ok
+test_bounded_download_and_token_redaction (test_uploads.DownloadAndProgressTest.test_bounded_download_and_token_redaction) ... ok
+test_progress_api_failure_does_not_fail_the_operation (test_uploads.DownloadAndProgressTest.test_progress_api_failure_does_not_fail_the_operation) ... ok
+test_progress_edits_one_card_heartbeats_and_finishes (test_uploads.DownloadAndProgressTest.test_progress_edits_one_card_heartbeats_and_finishes) ... ok
+test_all_completed_examples_parse_including_word (test_uploads.ParserTest.test_all_completed_examples_parse_including_word) ... ok
+test_command_list_and_strict_options (test_uploads.ParserTest.test_command_list_and_strict_options) ... ok
+test_file_formats_encodings_and_word_limits (test_uploads.ParserTest.test_file_formats_encodings_and_word_limits) ... ok
+test_invalid_fields_empty_sections_and_limits_are_rejected (test_uploads.ParserTest.test_invalid_fields_empty_sections_and_limits_are_rejected) ... ok
+test_optional_sections_and_multiline_change (test_uploads.ParserTest.test_optional_sections_and_multiline_change) ... ok
+test_registry_domains_and_duplicate_numeric_values (test_uploads.ParserTest.test_registry_domains_and_duplicate_numeric_values) ... ok
+test_cancel_stops_remaining_experiments (test_uploads.UploadTest.test_cancel_stops_remaining_experiments) ... ok
+test_metadata_write_failure_does_not_claim_an_accepted_batch_was_rejected (test_uploads.UploadTest.test_metadata_write_failure_does_not_claim_an_accepted_batch_was_rejected) ... ok
+test_mixed_upload_runs_real_code_pipeline_and_parameter_pipeline (test_uploads.UploadTest.test_mixed_upload_runs_real_code_pipeline_and_parameter_pipeline) ... FAIL
+test_param_only_upload_executes_and_keeps_batch_evidence (test_uploads.UploadTest.test_param_only_upload_executes_and_keeps_batch_evidence) ... ok
+test_runtime_failure_continues_independent_experiments_and_reports_partial (test_uploads.UploadTest.test_runtime_failure_continues_independent_experiments_and_reports_partial) ... ok
+test_unauthorized_and_oversized_uploads_are_not_downloaded (test_uploads.UploadTest.test_unauthorized_and_oversized_uploads_are_not_downloaded) ... ok
+test_unrecognized_caption_never_downloads_or_enqueues (test_uploads.UploadTest.test_unrecognized_caption_never_downloads_or_enqueues) ... ok
+test_validate_only_and_invalid_mixed_file_never_enqueue (test_uploads.UploadTest.test_validate_only_and_invalid_mixed_file_never_enqueue) ... ok
+test_word_upload_queues_only_its_present_sections (test_uploads.UploadTest.test_word_upload_queues_only_its_present_sections) ... ok
+test_exact_reviewed_prompt_routes_before_llm_and_storage_guards (test_endpoint_study.EndpointBotTest.test_exact_reviewed_prompt_routes_before_llm_and_storage_guards) ... ok
+test_recorded_upload_reaches_batch_blocked_and_sends_evidence (test_endpoint_study.EndpointBotTest.test_recorded_upload_reaches_batch_blocked_and_sends_evidence) ... FAIL
+test_custom_observed_settings_preserve_facts_and_all_retained_history (test_endpoint_study.EndpointStudyTest.test_custom_observed_settings_preserve_facts_and_all_retained_history) ... ok
+test_custom_study_settings_reach_real_shared_go_kernel (test_endpoint_study.EndpointStudyTest.test_custom_study_settings_reach_real_shared_go_kernel) ... skipped 'build endpointv3/build.py for Go integration tests'
+test_expanded_window_requires_proven_retention_and_sealed_coverage (test_endpoint_study.EndpointStudyTest.test_expanded_window_requires_proven_retention_and_sealed_coverage) ... ok
+test_insufficient_original_30d_history_returns_blocked_preserving_installed_data (test_endpoint_study.EndpointStudyTest.test_insufficient_original_30d_history_returns_blocked_preserving_installed_data) ... ok
+test_missing_recorded_inputs_produce_blocked_artifacts_without_runner (test_endpoint_study.EndpointStudyTest.test_missing_recorded_inputs_produce_blocked_artifacts_without_runner) ... ok
+test_missing_telemetry_is_not_a_comparable_zero_effect (test_endpoint_study.EndpointStudyTest.test_missing_telemetry_is_not_a_comparable_zero_effect) ... skipped 'build endpointv3/build.py for Go integration tests'
+test_nested_input_errors_are_rejected_before_queueing (test_endpoint_study.EndpointStudyTest.test_nested_input_errors_are_rejected_before_queueing) ... ok
+test_real_go_64_ticks_both_arms_adaptive_state_and_determinism (test_endpoint_study.EndpointStudyTest.test_real_go_64_ticks_both_arms_adaptive_state_and_determinism) ... skipped 'build endpointv3/build.py for Go integration tests'
+test_strict_custom_study_settings_and_templates_validate_before_queue (test_endpoint_study.EndpointStudyTest.test_strict_custom_study_settings_and_templates_validate_before_queue) ... ok
+test_unqualified_json_install_is_rejected_and_changed_manifest_fails_closed (test_endpoint_study.EndpointStudyTest.test_unqualified_json_install_is_rejected_and_changed_manifest_fails_closed) ... ok
+test_validation_does_not_invent_recorded_authority (test_endpoint_study.EndpointStudyTest.test_validation_does_not_invent_recorded_authority) ... ok
+test_actual_source_headers_positive_and_exact_insufficient_count (test_request_readiness.RequestReadinessTests.test_actual_source_headers_positive_and_exact_insufficient_count) ... ok
+test_live_capture_or_source_drift_blocks_despite_complete_cache (test_request_readiness.RequestReadinessTests.test_live_capture_or_source_drift_blocks_despite_complete_cache) ... ok
+test_missing_policy_does_not_fall_back_to_fixture (test_request_readiness.RequestReadinessTests.test_missing_policy_does_not_fall_back_to_fixture) ... ok
+test_old_image_uid_and_stale_headers_do_not_qualify (test_request_readiness.RequestReadinessTests.test_old_image_uid_and_stale_headers_do_not_qualify) ... ok
+test_real_upload_validate_and_execution_are_separate_and_no_model_runs (test_request_readiness.RequestReadinessTests.test_real_upload_validate_and_execution_are_separate_and_no_model_runs) ... ok
+test_source_change_after_validation_is_rechecked_before_model (test_request_readiness.RequestReadinessTests.test_source_change_after_validation_is_rechecked_before_model) ... ok
+test_declarative_endpoint_fields_support_independent_arbitrary_windows (test_selfserve_requests.SelfserveRequestTests.test_declarative_endpoint_fields_support_independent_arbitrary_windows) ... ok
+test_declarative_rejects_unknown_duplicate_and_non_numeric_fields (test_selfserve_requests.SelfserveRequestTests.test_declarative_rejects_unknown_duplicate_and_non_numeric_fields) ... ok
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+test_modified_prose_stays_generic_code_and_never_silently_maps (test_selfserve_requests.SelfserveRequestTests.test_modified_prose_stays_generic_code_and_never_silently_maps) ... ok
+test_original_thirty_day_compatibility_sets_explicit_slo_and_window (test_selfserve_requests.SelfserveRequestTests.test_original_thirty_day_compatibility_sets_explicit_slo_and_window) ... ok
+
+======================================================================
+ERROR: test_bench_with_an_untagged_deployed_commit (test_bot.BotTest.test_bench_with_an_untagged_deployed_commit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 725, in test_bench_with_an_untagged_deployed_commit
+    summary = next(t for t in self.fake.texts() if t.startswith('Code experiment'))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration
+
+======================================================================
+FAIL: test_bench_freezes_before_model_work_and_survives_later_cache_prune (test_bot.BotTest.test_bench_freezes_before_model_work_and_survives_later_cache_prune)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 686, in test_bench_freezes_before_model_work_and_survives_later_cache_prune
+    self.assertEqual(self.history()[-1]['state'], 'DONE')
+AssertionError: 'BLOCKED' != 'DONE'
+- BLOCKED
++ DONE
+
+
+======================================================================
+FAIL: test_bench_refused_and_uncompilable_changes_are_reported (test_bot.BotTest.test_bench_refused_and_uncompilable_changes_are_reported)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 662, in test_bench_refused_and_uncompilable_changes_are_reported
+    self.assertIn('the LLM step failed: no in-scope diff', self.fake.texts()[-1])
+AssertionError: 'the LLM step failed: no in-scope diff' not found in "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=6, available=unknown.\nSTAGE_SCOPE_MISMATCH: installed pin names a different stage context/namespace Reconcile against the fixed approved stage context.\nRUNTIME_OBSERVATION_UNAVAILABLE: [Errno 2] No such file or directory: 'kubectl' Check stage access/rollout and retry bounded readiness; no request was queued.\nSNAPSHOT_CACHE_UNAVAILABLE: No installed snapshot cache is available for this exact policy. Run the configured stage reconciler and collect this policy before benchmarking."
+
+======================================================================
+FAIL: test_bench_refuses_when_the_disk_is_short (test_bot.BotTest.test_bench_refuses_when_the_disk_is_short)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 745, in test_bench_refuses_when_the_disk_is_short
+    self.assertRegex(self.fake.texts()[-1], r'only [\d.]+ GB is free on the host and /bench needs 1000000.0 GB')
+AssertionError: Regex didn't match: 'only [\\d.]+ GB is free on the host and /bench needs 1000000.0 GB' not found in "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=6, available=unknown.\nSTAGE_SCOPE_MISMATCH: installed pin names a different stage context/namespace Reconcile against the fixed approved stage context.\nRUNTIME_OBSERVATION_UNAVAILABLE: [Errno 2] No such file or directory: 'kubectl' Check stage access/rollout and retry bounded readiness; no request was queued.\nSNAPSHOT_CACHE_UNAVAILABLE: No installed snapshot cache is available for this exact policy. Run the configured stage reconciler and collect this policy before benchmarking."
+
+======================================================================
+FAIL: test_cancel_stops_before_the_next_step (test_bot.BotTest.test_cancel_stops_before_the_next_step)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 788, in test_cancel_stops_before_the_next_step
+    self.assertEqual(self.history()[-1]['state'], 'CANCELLED')
+AssertionError: 'BLOCKED' != 'CANCELLED'
+- BLOCKED
++ CANCELLED
+
+
+======================================================================
+FAIL: test_decline_reason_is_visible_without_opening_plan_attachment (test_bot.BotTest.test_decline_reason_is_visible_without_opening_plan_attachment)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 735, in test_decline_reason_is_visible_without_opening_plan_attachment
+    self.assertIn('Reason: BLOCKED: missing measured endpoint ledger.', self.fake.texts()[-1])
+AssertionError: 'Reason: BLOCKED: missing measured endpoint ledger.' not found in "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=6, available=unknown.\nSTAGE_SCOPE_MISMATCH: installed pin names a different stage context/namespace Reconcile against the fixed approved stage context.\nRUNTIME_OBSERVATION_UNAVAILABLE: [Errno 2] No such file or directory: 'kubectl' Check stage access/rollout and retry bounded readiness; no request was queued.\nSNAPSHOT_CACHE_UNAVAILABLE: No installed snapshot cache is available for this exact policy. Run the configured stage reconciler and collect this policy before benchmarking."
+
+======================================================================
+FAIL: test_failed_candidate_tests_stop_before_build_and_replay (test_bot.BotTest.test_failed_candidate_tests_stop_before_build_and_replay)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_bot.py", line 696, in test_failed_candidate_tests_stop_before_build_and_replay
+    self.assertIn('candidate Go tests FAIL; benchmark stopped', self.fake.texts()[-1])
+AssertionError: 'candidate Go tests FAIL; benchmark stopped' not found in "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=6, available=unknown.\nSTAGE_SCOPE_MISMATCH: installed pin names a different stage context/namespace Reconcile against the fixed approved stage context.\nRUNTIME_OBSERVATION_UNAVAILABLE: [Errno 2] No such file or directory: 'kubectl' Check stage access/rollout and retry bounded readiness; no request was queued.\nSNAPSHOT_CACHE_UNAVAILABLE: No installed snapshot cache is available for this exact policy. Run the configured stage reconciler and collect this policy before benchmarking."
+
+======================================================================
+FAIL: test_mixed_upload_runs_real_code_pipeline_and_parameter_pipeline (test_uploads.UploadTest.test_mixed_upload_runs_real_code_pipeline_and_parameter_pipeline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_uploads.py", line 198, in test_mixed_upload_runs_real_code_pipeline_and_parameter_pipeline
+    self.assertEqual(len(self.fake.documents()), 9)
+AssertionError: 10 != 9
+
+======================================================================
+FAIL: test_recorded_upload_reaches_batch_blocked_and_sends_evidence (test_endpoint_study.EndpointBotTest.test_recorded_upload_reaches_batch_blocked_and_sends_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_endpoint_study.py", line 222, in test_recorded_upload_reaches_batch_blocked_and_sends_evidence
+    self.assertEqual(len(self.fake.documents()), 6)
+AssertionError: 7 != 6
+
+----------------------------------------------------------------------
+Ran 83 tests in 9.517s
+
+FAILED (failures=8, errors=1, skipped=3)

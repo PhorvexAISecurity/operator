@@ -1,0 +1,40 @@
+{
+  "source": "e9d796a5b62eec2de020f0489a324f1956880a5a",
+  "result": "EXPECTED_RED_WITH_PASSING_POSITIVE_CONTROL",
+  "exit_code": 1,
+  "tests": 3,
+  "expected_assertion_failures": 2,
+  "positive_control": "Actual unchanged SensorChartTests defaults parity passes against the same real manager defaults source.",
+  "command": [
+    "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+    "-m",
+    "unittest",
+    "test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers",
+    "test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers",
+    "test_service_charts.SensorChartTests.test_its_defaults_are_the_managers",
+    "-v"
+  ],
+  "source_inputs": [
+    {
+      "path": "tools/test_service_charts.py",
+      "sha256": "ec70f7643b5d4879777910e397505f14afd90515ef90758092572a539f07f63a"
+    },
+    {
+      "path": "phorvex/charts/phorvex/values.yaml",
+      "sha256": "ca5fb912ac596d7f44b4adac246c02e77a375bba2bf90b5ffba6f393975e790d"
+    },
+    {
+      "path": "deploy/charts/phorvex-console/values.yaml",
+      "sha256": "82caf512ab56b56cb0dc9bfd5694a84e3a9eb051dc2dc8874f1bdc73c7b58116"
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/values.yaml",
+      "sha256": "b096bf6d774a1e47c1429cbf8c1ea955f7b46a812325c0f60d21a79bdd5c6c85"
+    },
+    {
+      "path": "deploy/charts/phorvex-sensor/values.yaml",
+      "sha256": "0c87aae0d2adf7136b3f88baefdcee6a6000c99af4d5d92ec0c71a174cea81c4"
+    }
+  ],
+  "log_sha256": "64ce608c27c14cc6999b4d45da23a0d1182ce7373cf1a83171f8a13f592f5f6b"
+}

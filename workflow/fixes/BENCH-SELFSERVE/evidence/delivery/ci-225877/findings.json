@@ -1,0 +1,61 @@
+{
+  "schema": "phorvex-bench.delivery-ci-observation.v1",
+  "scope": "Read-only GitHub CI observation; no rerun/cancellation/source edit/live mutation/efficacy verdict.",
+  "terminal_observed_at": "2026-11-01T20:53:27.341640+00:00",
+  "pr": 198,
+  "pr_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+  "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "pr_state": "open",
+  "draft": true,
+  "tested_merge_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+  "tested_merge_parents": [
+    "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "225877a8ecb4c11eb39980ba932c114f7a8068a4"
+  ],
+  "overall": "SUCCESS: all16 actual check runs and all4 actual workflows completed successfully.",
+  "checks": {
+    "success": 16,
+    "failure": 0,
+    "pending": 0
+  },
+  "workflows": [
+    {
+      "id": 41348308741,
+      "name": "Benchmark dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308741"
+    },
+    {
+      "id": 41348308743,
+      "name": "Native RBAC contract",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308743"
+    },
+    {
+      "id": 41348308746,
+      "name": "E2E harness contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308746"
+    },
+    {
+      "id": 41348308738,
+      "name": "PR source validation",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738"
+    }
+  ],
+  "known_failure_controls": {
+    "active_quarantine_consumer": "Source-validation go-unit job succeeded; actual tools/servicerelease package result is retained. Closed catalogue source bytes are identical across b1ef base,225877 head and882c7e7d tested merge.",
+    "m168_durability": "Actual go-envtest log explicitly passes result_write_failure, final_marker_failure and their parent test. No prior failure artifact was removed or relabelled."
+  },
+  "history": "Previous4116RED remains under evidence/delivery/ci-4116. This evidence applies only to225877 and its recorded synthetic merge with b1ef.",
+  "limits": [
+    "CI success does not establish deployed image identity, real bot completion, endpoint-history availability or security efficacy.",
+    "No conclusion is inferred from local8/8; actual GitHub run/job status and bounded log provenance support this report.",
+    "No source/live changes, rerun or cancellation occurred during observation."
+  ]
+}

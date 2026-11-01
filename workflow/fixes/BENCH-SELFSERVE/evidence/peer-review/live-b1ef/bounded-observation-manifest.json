@@ -1,0 +1,111 @@
+{
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:22:11.563145+00:00",
+  "verdict": "ROLLOUT_AND_RETAINED_NEGATIVE_ACCEPTED_NATIVE_READY_PENDING",
+  "capture_rollout_review_sha256": "a503d2425ff9ae8a9ce70299fe8fd6b350985ce808b29bf8677a7000b9639c31",
+  "round4_artifact_review_sha256": "de080abcbc224a4c079b736d607d0e45dadb1ad37b8937d69ca243d1e916ea85",
+  "last_native_observation": {
+    "at": "2026-11-01T21:21:42.702108+00:00",
+    "status": "RUNNING",
+    "phase": "CAPACITY",
+    "started_at": "2026-11-01T21:19:49.989903Z",
+    "finished_at": null,
+    "baseline_ticks": null,
+    "reasons": [],
+    "status_sha256": "12ff7ed228bf54a5b99b6757a2d5f1889f0c1e223675db195751c092bd65da39",
+    "pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d",
+    "pin_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+    "pin_image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+    "phorvex-stage-reconcile.timer": {
+      "NextElapseUSecRealtime": "",
+      "NextElapseUSecMonotonic": "infinity",
+      "LastTriggerUSec": "Sun 2026-11-01 21:19:49 UTC",
+      "Result": "success",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-reconcile.service": {
+      "Result": "success",
+      "ExecMainStatus": "0",
+      "ActiveState": "activating",
+      "SubState": "start"
+    }
+  },
+  "native_baseline_acceptance": "NOT_YET_READY_OR_VERIFIED",
+  "automatic_retry_started_at": "2026-11-01T21:19:49.989903Z",
+  "historical_pin_preserved": true,
+  "watch_scope": "Bounded roughly8minute readonlywatch; no cluster mutation, service control, retry dispatch or current-baseline claim. First18/64refusal remains truthful; nexttimerattempt is stillrunning.",
+  "next_action": "WhenactualstatusREADY, run already-prepared verify-native-readonly.py against installed225 withbytecodewritesdisabled; validates64+64receipt/rawhash/header/row,binary andactualKube scope beforeclaimingcurrentb1efnativebaseline. Do not substitute olda5f baseline or statusRUNNING.",
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/capture-rollout-review.json",
+      "sha256": "a503d2425ff9ae8a9ce70299fe8fd6b350985ce808b29bf8677a7000b9639c31",
+      "bytes": 936
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-02.json",
+      "sha256": "fdd3c409aa224789b4589bab01e40048f365cf1676aa819a1dd4121dd1a42ae3",
+      "bytes": 792
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-03.json",
+      "sha256": "a5ea5532772de5979276fc9582c5eca766da132aa3a5bc1def71f3b7a29fd7bb",
+      "bytes": 792
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-04.json",
+      "sha256": "ead188976fe6c3a299f7f0c221813abfef3acd647290d52085faf49d17e06592",
+      "bytes": 792
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-05.json",
+      "sha256": "5645b409be8c859fb4e8be9882deac2f472db5bdc96d0410f9bdc52b4c0e0bb2",
+      "bytes": 792
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-06.json",
+      "sha256": "dd3c99f4d025112e2bf2bb51c8aa3dbaf5d2285ec0bd3591ebe1148e4d1d52a1",
+      "bytes": 864
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-07.json",
+      "sha256": "c5def7bf4dd43437a6d63c910747af2d9a451234d16e35b5d950b8c52542236e",
+      "bytes": 864
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-readonly.py",
+      "sha256": "d1e0cbca5b4f5998305f3d5a1e9cd14314de79276cf5f18c3af62e8425a6ad8c",
+      "bytes": 688
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/poll-with-timer-readonly.py",
+      "sha256": "a48e49d2158ce38d35293dc0fcc30c13f36db778a8139d92ed439c759db0ec33",
+      "bytes": 1110
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/review-round4-initial-postqueue-validation-assumption.py.txt",
+      "sha256": "dc6c9e372836636befe1ee3e821c1a6e076412030d21ead3ac20003503ab57d1",
+      "bytes": 4985
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/review-round4.py",
+      "sha256": "8e57b026cfec75171cf0bbd9f647fcc877c958defe90ecab30e53d367ae21298",
+      "bytes": 5018
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/round4-artifacts-review.json",
+      "sha256": "de080abcbc224a4c079b736d607d0e45dadb1ad37b8937d69ca243d1e916ea85",
+      "bytes": 4754
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/validation-byte-reconstruction-note.txt",
+      "sha256": "f588fe5d2d337e09a46c4b37051c4bcdf575946dcf45c180fccddd8be5e2e62e",
+      "bytes": 331
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-b1ef/verify-native-readonly.py",
+      "sha256": "24562a63f4e80f521898b73cea138ae7f9061217b9216f70071be470315682d0",
+      "bytes": 4780
+    }
+  ]
+}

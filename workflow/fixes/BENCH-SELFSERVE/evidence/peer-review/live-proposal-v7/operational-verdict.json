@@ -1,0 +1,101 @@
+{
+  "verdict": "PASS_FOR_GUARDED_CAPTURE_ATTEMPT_AND_RECONCILED_ACCEPTANCE_DRIVER",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:06:46.026531+00:00",
+  "source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "upstream": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "runtime_installed": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "actual_brain": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "operator_sha256": "91b3b62821c96ee47b4d13c7b2e6532d492345976d9d38d2fb4f0e4ce9ad5aa8",
+  "driver_sha256": "8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf",
+  "launcher_sha256": "6442b0ca15ae8b79cfde4f836a693417819e5860aaee030aae10b91dc8c09306",
+  "checks": [
+    "Exact fresh21:03 precondition hashes, embeddedbrain/managerb1ef/nativecapability, all3Healthy/Succeeded, fixedpolicy/workload/Serviceidentities andcurrentimagevalues verified.",
+    "Executable applyAST identicalacceptedV6 exceptliteralpayload/output; fullspec/UID/RV/health/images/args/main/branch/spaceguards unchanged.",
+    "Onlytwo selected3stage sourceSHA substitutions eef\u21922a9; previousactual24-branch template proof applies through exactbyteequivalence apartfromliteralSHA andterminalnewline. Nootherappfields,pruneorimage rollback.",
+    "Incomingquarantine settings preserved by independently reviewedsource/render; externaltemplate retained forcleanup onlyexactownedvalue/currentmainreview.",
+    "Acceptance driver changesonlyuniqueoutputdirectory; unchangedrequests, originalbytehash, actualbot/parser/queue/outboundrecipient, idle/timer/observer/privatefile/restorationguards.",
+    "Launcher changesonlynewnamespace/hash/currentb1efpin; installed225WorkingDirectory/envfile guards andexactpreviouslyfailure-tested privateerrorhandler unchanged.",
+    "All169runtimebytes equal225and2a9; no runtimeupgrade/restart authorizedbythisproposal. Sourceidentities remain separatelylabelled."
+  ],
+  "conditions": [
+    "Apply onlyafterallfreshguards pass andwithin declared23:25UTC ceiling; ongoingmain/scope monitoring remainslead responsibility.",
+    "Launchwithinstalledruntime225 onlyafteractualb1efnative64+64 reconciliation andfreshscopequalification; olda5fproofcannot substitute.",
+    "Fixturephase waitsfornewgenuinecontinuous64tickcoverage; nojournalbridging/backdatingorphysicalactuation.",
+    "Preserveallround4failedartifacts; newuniqueoutputs refuseoverwrite. LAUNCHEDisnotterminalPASS; collectactualjobs/delivery/restorationbeforeL3.",
+    "Restoreexternaltemplate onlyifownedvalueandreviewedcurrentmainstillmatch; otherwisefreshreview,neveroverwrite anotherowner.",
+    "No claimallappsSynced,currentREADY,completed10daystudy,orsecurityefficacy."
+  ],
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v7/proposal.json",
+      "sha256": "041331fd367f028772c24ab4c2d1fbd5976e7090f66946010d1d65132fd122e0",
+      "bytes": 712
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v7/operation.json",
+      "sha256": "cbddcd06a0dbc19373d31961cc0ea2b4336cdae8bdb44b5e090ec6cd99a92a61",
+      "bytes": 3313
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v7/preconditions.json",
+      "sha256": "93bf225dcd7f6bfe3a854dc854af5cce1b9c1a43c01b23b88d238c91193d33a7",
+      "bytes": 18199
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v7/acceptance-operators.json",
+      "sha256": "80bf4649e6e2c7bb654036ccf06539da16d6b74c0d98faeebf1fd9c7476df841",
+      "bytes": 791
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v7.py",
+      "sha256": "91b3b62821c96ee47b4d13c7b2e6532d492345976d9d38d2fb4f0e4ce9ad5aa8",
+      "bytes": 16201
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/run-selfserve-bot-acceptance-b1ef-r5.py",
+      "sha256": "8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf",
+      "bytes": 7928
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/launch-bot-acceptance-b1ef-r5.py",
+      "sha256": "6442b0ca15ae8b79cfde4f836a693417819e5860aaee030aae10b91dc8c09306",
+      "bytes": 2228
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/commit-binding-2a9a101a.json",
+      "sha256": "417408c4330783b2d39354556c50304b6f51f061b01a4601832aa27d9ead6a61",
+      "bytes": 912
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/composition-verdict.json",
+      "sha256": "bca71aad18d674da14071d19b4f25826390771bdd697ef7d9e7362b760de44cf",
+      "bytes": 3140
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v6/operational-verdict.json",
+      "sha256": "e4c0fc68bfb785b91e18abe807d312ae514566bb78e43a49b3263f5a408cd4a3",
+      "bytes": 4958
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/launcher-operational-verdict.json",
+      "sha256": "a7c341acc1e16c7ee415ae95a327422211af4f2033d6930818edb36e4e97c0c6",
+      "bytes": 3436
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/spec.md",
+      "sha256": "8ec0c59ddb629477c3b5a00318dbf8c207d402969c2bc8c9809e778184f2e9e6",
+      "bytes": 4583
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/evidence/baseline-control.json",
+      "sha256": "a4d5dfc79560b097f6eefca293f95517798829389409565d3a5265d0f2662611",
+      "bytes": 1055
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v7/verify-proposal.py",
+      "sha256": "c4752b4c62367bbc5d8481f9714b8fecc40768c5f8dd8c0c6d21780f79b73c99",
+      "bytes": 9118
+    }
+  ]
+}

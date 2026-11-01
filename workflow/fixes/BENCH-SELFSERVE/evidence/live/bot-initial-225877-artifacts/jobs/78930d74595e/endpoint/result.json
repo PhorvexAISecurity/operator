@@ -1,0 +1,210 @@
+{
+  "schema": "phorvex-bench.endpoint-result.v1",
+  "state": "BLOCKED",
+  "mode": "PAIRED_BRAIN_REPLAY",
+  "requested_mode": "PAIRED_BRAIN_REPLAY",
+  "requested_policy": "phorvex-staging-demo/demo-api-defense",
+  "requested_ticks": 64,
+  "requested_sync": false,
+  "required_windows": {
+    "budget_seconds": 864000,
+    "burn_seconds": 86400
+  },
+  "requested_study": {
+    "window": 864000,
+    "slo_target": 0.999
+  },
+  "requested_config": {
+    "lookback": 86400,
+    "min": 0.0001,
+    "max": 1000,
+    "eta": 0.004477248791932867,
+    "g_max": 1,
+    "max_dt": 30,
+    "delta": 30
+  },
+  "evidence": "recorded-unavailable",
+  "phase": "PREFLIGHT",
+  "reason": "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313. W=864000 s; L=86400 s.\nSTAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.\nREPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.\nRUNTIME_OBSERVATION_UNAVAILABLE: stage deployment rollout is incomplete; all desired replicas must be updated, ready and available Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.\nMOVE_ATTRIBUTION_UNAVAILABLE: The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it. Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.\nENDPOINT_DATASET_UNAVAILABLE: No qualified normalized endpoint dataset is installed for the exact requested policy. Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments.",
+  "preflight": {
+    "schema": "phorvex-bench.request-readiness.v1",
+    "syntax": "VALID",
+    "status": "BLOCKED",
+    "requested_policy": "phorvex-staging-demo/demo-api-defense",
+    "requested_ticks": 64,
+    "requested_sync": false,
+    "requested_kind": "endpoint",
+    "reasons": [
+      {
+        "code": "STAGE_SOURCE_CHANGED",
+        "message": "running stage source/image/UID differs from installed pin",
+        "recovery": "Run stage reconciliation; preserve older cohorts as historical.",
+        "sync_can_help": false
+      },
+      {
+        "code": "REPLAY_SOURCE_UNAVAILABLE",
+        "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+        "recovery": "Reconcile the exact deployed source and image-extracted replay.",
+        "sync_can_help": false
+      },
+      {
+        "code": "RUNTIME_OBSERVATION_UNAVAILABLE",
+        "message": "stage deployment rollout is incomplete; all desired replicas must be updated, ready and available",
+        "recovery": "Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.",
+        "sync_can_help": false
+      },
+      {
+        "code": "MOVE_ATTRIBUTION_UNAVAILABLE",
+        "message": "The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it.",
+        "recovery": "Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.",
+        "sync_can_help": false
+      },
+      {
+        "code": "ENDPOINT_DATASET_UNAVAILABLE",
+        "message": "No qualified normalized endpoint dataset is installed for the exact requested policy.",
+        "recovery": "Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments.",
+        "sync_can_help": false
+      }
+    ],
+    "available_policies": [
+      "phorvex-staging-demo/demo-api-defense",
+      "phorvex-staging-demo/stage-bench-defense"
+    ],
+    "snapshot_count": 313,
+    "latest_captured_at": "2026-11-01T20:53:40.047095609Z",
+    "baseline_validation": "NOT_RUN",
+    "semantics": "Read-only prerequisite check; execution rechecks identity, hashes, exact replay and tests.",
+    "requested_mode": "PAIRED_BRAIN_REPLAY",
+    "required_windows": {
+      "budget_seconds": 864000,
+      "burn_seconds": 86400
+    },
+    "requested_study": {
+      "window": 864000,
+      "slo_target": 0.999
+    },
+    "requested_config": {
+      "lookback": 86400,
+      "min": 0.0001,
+      "max": 1000,
+      "eta": 0.004477248791932867,
+      "g_max": 1,
+      "max_dt": 30,
+      "delta": 30
+    },
+    "runtime": {
+      "schema": "phorvex-bench.runtime-readiness.v1",
+      "status": "BLOCKED",
+      "requested_policy": "phorvex-staging-demo/demo-api-defense",
+      "reasons": [
+        {
+          "code": "STAGE_SOURCE_CHANGED",
+          "message": "running stage source/image/UID differs from installed pin",
+          "recovery": "Run stage reconciliation; preserve older cohorts as historical."
+        },
+        {
+          "code": "REPLAY_SOURCE_UNAVAILABLE",
+          "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+          "recovery": "Reconcile the exact deployed source and image-extracted replay."
+        },
+        {
+          "code": "RUNTIME_OBSERVATION_UNAVAILABLE",
+          "message": "stage deployment rollout is incomplete; all desired replicas must be updated, ready and available",
+          "recovery": "Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted."
+        }
+      ],
+      "pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d",
+      "actual_brain": {
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+        "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+        "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+        "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+        "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "deployment": "staging-brain",
+        "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+        "container": "brain",
+        "pods": [
+          {
+            "name": "staging-brain-5db86554cd-mtv4s",
+            "uid": "610471ac-12dd-474c-975b-624108a8aa02"
+          }
+        ],
+        "embedded_version": {
+          "service": "brain",
+          "version": "0.10.0",
+          "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+        }
+      },
+      "policy": {
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+        "workload_generation": 3,
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+        "dry_run": false
+      },
+      "capture": {
+        "enabled": false,
+        "policies": [],
+        "directory": null,
+        "persistent_claim": null,
+        "persistent_claim_uid": null,
+        "cost_evidence": false
+      },
+      "available_policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "allowed_policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ]
+    },
+    "policy_mode": "active",
+    "missing_fields": [
+      "ticks[].ledger.complete_from",
+      "ticks[].ledger.moves[].id",
+      "ticks[].ledger.moves[].attributed",
+      "ticks[].ledger.moves[].intervals[]",
+      "ticks[].candidates[].samples"
+    ],
+    "diagnostic_capture": {
+      "field": "inspection.endpoint_cost_evidence.endpoint_loss_status",
+      "source": "phorvex/internal/mathlab/inspect.go",
+      "limitation": "Replica-history capture reports endpoint loss unavailable; waiting alone does not create move-attributed endpoint intervals."
+    },
+    "pin_sha256": "sha256:8272636f60f43cdff62e00e7e8f5a8e9cace4183b27df07b9e9da5336fc2b0b0",
+    "available_pinned_policies": [
+      "phorvex-staging-demo/demo-api-defense",
+      "phorvex-staging-demo/stage-bench-defense"
+    ],
+    "latest_age_seconds": 129.34897089004517,
+    "max_age_seconds": 900
+  },
+  "v2_executed": false,
+  "v3_executed": false,
+  "both_arms_executed": false,
+  "changed_choices": null,
+  "comparable_ticks": null,
+  "noop": null,
+  "forecast_endpoint_seconds": null,
+  "counterfactual_actual_charges": null,
+  "limitations": [
+    "Neither arm executed. Missing recorded evidence is unknown, not zero. No model tokens or Go builds were spent."
+  ],
+  "activity": {
+    "model_started": false,
+    "tests_started": false,
+    "build_started": false,
+    "replay_started": false,
+    "preflight_started": false
+  }
+}

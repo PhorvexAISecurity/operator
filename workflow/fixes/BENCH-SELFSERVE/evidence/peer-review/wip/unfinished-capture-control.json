@@ -1,0 +1,40 @@
+{
+  "schema": "phorvex-bench.peer-counterexample.v1",
+  "reviewer": "stage-review",
+  "control": "six valid content-addressed fixture PXMS files with finalized=false; real local header reader; only remote Kubernetes observations mocked; replay not run",
+  "observed": {
+    "schema": "phorvex-bench.request-readiness.v1",
+    "syntax": "VALID",
+    "status": "READY",
+    "requested_policy": "phorvex-staging-demo/demo-api-defense",
+    "requested_ticks": 6,
+    "requested_sync": false,
+    "requested_kind": "bench",
+    "reasons": [],
+    "available_policies": [
+      "phorvex-staging-demo/demo-api-defense"
+    ],
+    "snapshot_count": 6,
+    "latest_captured_at": "2026-10-28T00:00:05Z",
+    "baseline_validation": "NOT_RUN",
+    "semantics": "Read-only prerequisite check; execution rechecks identity, hashes, exact replay and tests.",
+    "runtime": {
+      "status": "READY",
+      "reasons": [],
+      "available_policies": [
+        "phorvex-staging-demo/demo-api-defense"
+      ],
+      "policy": {
+        "uid": "u",
+        "mode": "active"
+      }
+    },
+    "pin_sha256": "sha256:98a59c258bdb4935129114963a7db787aa81138d753139911e983cbcca7ff737",
+    "available_pinned_policies": [
+      "phorvex-staging-demo/demo-api-defense"
+    ],
+    "latest_age_seconds": 5.0,
+    "max_age_seconds": 900
+  },
+  "source_sha256": "764287554b53e97b3d5f009515f440c90611dcbb5606f2d334a26efcaca67c89"
+}

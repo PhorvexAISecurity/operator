@@ -1,0 +1,9 @@
+# Lead P3 source verdict: PASS
+
+Reviewer: bench-v3-lead; source225877a8ecb4c11eb39980ba932c114f7a8068a4, baseb1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0.
+
+The worker authored the product changes. I independently reproduced the original incident against the actual installed baseline and positive fixture, reviewed the signed source/component findings and their real producer counterexamples, inspected the precise final bot lease change, and verified the canonical patch and all169 committed runtime file hashes. The independent review chain found and corrected source-identity, observer continuity, native-pin, refresh-lease and bot-lease defects; no unresolved source defect remains at this source. The original uploaded bytes, W/L, policy, sync:false, unknown fields and no-model/build/replay refusal semantics are retained. Missing active-policy attribution is not fabricated.
+
+Current author handoff20 binds full8/8 required preflight and82 dedicated controls; real remoteCI225877 records16/16 checks and4/4 workflows successful. The full canonical delta and peer tests cover default/predicate/stale paths and positive controls. The actual installed169 files and six units match; a real concurrent refresh returns typedBLOCKED/exit2. These facts justify source acceptance and reviewed PR delivery, not live experiment efficacy.
+
+Current live debt: externalreleaseeef replaced our owned capture template and deployedactualb1ef withcaptureoff during actualbotacceptance. Nativea5f64+64 and V6healthyrollout are historical. Actualoriginal10d refusal is truthful; actualdemo64positive and fixture600/custom remain unproven. KeepL3/campaignsuccess/issueclosure pending. Never overwrite an externalreplacement as cleanup. The new upstreamcomposition needs fresh independent binding; this verdict only covers225877.

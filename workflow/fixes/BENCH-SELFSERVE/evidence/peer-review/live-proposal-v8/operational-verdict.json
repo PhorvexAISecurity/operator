@@ -1,0 +1,90 @@
+{
+  "verdict": "PASS_FOR_BOUNDED_ATTEMPT_WITH_IMMEDIATE_GUARDS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:10:24.185149+00:00",
+  "source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "main_boundary": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "actual_image_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "installed_runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "operator_sha256": "e091cfd759cd4596e1ad7193f09956c6e1425559053fb97544c825beefab008c",
+  "operation_sha256": "7cff85d49687f00c3f0d248b825e3a43026d498d2ed1c53f68747b48489a987a",
+  "template_sha256": "bf3a66c31a2468fad2a2afea721ca3a3970281b075be770eb855583e22df256b",
+  "checks": [
+    "Exactfull executableAST equals reviewedV7 exceptliteralpayload/output; allscope/source/image/health/UID/generation/Service/fullAppSet/UID-RV/privateoutput guards preserved.",
+    "Expectedexternalgen19/eef and21:03 completepreconditions retainedbyteexact; applyalgorithm independentlyrequeries allpredicates and exactmainbe676/published287 immediatelybeforemutation.",
+    "Onlytwo sourceSHA refs change for same3stagingapps; allpath/valueFiles/release/repository semantics and other21templatebranches preserved through exactliteral-only equivalence.",
+    "Currentclosedbe676 family byte-exactsource; actualb1ef imagevalues unchangedfromreviewed2a9; source287 component/commitverified, all169runtimebytes identical installed225.",
+    "Cleanup template preservesexternalstructure butpointsclosedbe676; oldeefquarantine cannotbe restored underthisreview.",
+    "Prioraccepted8d3c095 driver/6442b0launcher unchanged,includingprivateerror sanitization andactualinstalledWD/envfile checks. V7 wasnotapplied; itsinapplicabilityremainsrecorded."
+  ],
+  "conditions": [
+    "Oneboundedleadapply onlyif freshguardsallpass; stoponmain/scope drift,4GiBreservebreach or23:25UTCceiling. No prune,mainmerge orunrelatedsettings change.",
+    "Currentpreconditions are a referenceboundary,not a substitute forimmediaterequeries. AppSetCAS doesnot atomicallyfreezeallotherresources.",
+    "Acceptance mustpassruntime225argument andwaitactualb1efnative64+64/currentpolicy qualification. No runtimeupgrade/restart implied.",
+    "Fixtureendpointrequires genuinefreshcontinuity and64eligiblecurrentticks; alloldfailures/gaps retained. No fabricatedhistory oractuation.",
+    "Cleanuprequires exactownedvalue pluscurrentreviewedmain; externalreplacement isnever overwritten. Futurecleanupimplementation needsreview.",
+    "Actualrollout/nativebaseline/botterminalresults/restoration andfinalheadP3/L3 remainseparate; no currentREADY/COMPLETE claim."
+  ],
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v8/proposal.json",
+      "sha256": "3308b781c1b4452b8cde2acb1e5d8a220e2ff8c8fe98c83dd537afd218eac6fb",
+      "bytes": 774
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v8/operation.json",
+      "sha256": "7cff85d49687f00c3f0d248b825e3a43026d498d2ed1c53f68747b48489a987a",
+      "bytes": 3390
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v8/preconditions.json",
+      "sha256": "93bf225dcd7f6bfe3a854dc854af5cce1b9c1a43c01b23b88d238c91193d33a7",
+      "bytes": 18199
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v8.py",
+      "sha256": "e091cfd759cd4596e1ad7193f09956c6e1425559053fb97544c825beefab008c",
+      "bytes": 16278
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/commit-binding-287fd2e4.json",
+      "sha256": "a5d7bc4bfec78fdf2d663d2a28f1994b21c06c8a19807a30a79c1c031a7c0c0c",
+      "bytes": 937
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/composition-verdict.json",
+      "sha256": "a0281a93da2f2d19493e35a4146c8e30c006f7b330dedac06d3f243b8cd4f09c",
+      "bytes": 2695
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v7/operational-verdict.json",
+      "sha256": "fddb1ddbe3c1532991e26c3d82e0abbe67e7294a48a15cb32264e8ba13428ac0",
+      "bytes": 5733
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v7/supersession-and-driver-verdict.json",
+      "sha256": "bbd5cf45fe3d4b3a4974449406c8ef029fa3e454c0a9edba5d85aa30bb89afaf",
+      "bytes": 1337
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/run-selfserve-bot-acceptance-b1ef-r5.py",
+      "sha256": "8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf",
+      "bytes": 7928
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/launch-bot-acceptance-b1ef-r5.py",
+      "sha256": "6442b0ca15ae8b79cfde4f836a693417819e5860aaee030aae10b91dc8c09306",
+      "bytes": 2228
+    },
+    {
+      "path": "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-5/plan-update-be676.md",
+      "sha256": "23c199bccae7c383162856698b390fc74757fd997924d655f725572e7c677229",
+      "bytes": 667
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v8/verify-proposal.py",
+      "sha256": "461de58af4f798842b468dfe38ce87e657fd525febe491b42ac12dbcd4ef4ab2",
+      "bytes": 7336
+    }
+  ]
+}

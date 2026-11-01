@@ -1,0 +1,21 @@
+{
+  "purpose": "Exact current CI/author commands with isolated output for the final565 composition. Preserve earlier a5d PASS and0288 FAIL receipts intact.",
+  "scripts": [
+    {
+      "path": "evidence/upstream-565/run-preflight.sh",
+      "sha256": "20139e134391569e0eff1e46b8bca3afe90f9a965c4fc73f82170e148a5221aa"
+    },
+    {
+      "path": "evidence/upstream-565/run-acceptance.sh",
+      "sha256": "2de1edfa898fa91ca3d11115782ef357076419615962028b39031b1df6fbf979"
+    },
+    {
+      "path": "evidence/upstream-565/verify-upstream.sh",
+      "sha256": "b4e1a29ad6525381ff0a564a861de68aba5ba962d3fcd047d79ba8f2940803c0"
+    },
+    {
+      "path": "evidence/final-source/owned-runner.py",
+      "sha256": "b406cce591d169de57fb29223e26a4c74031a21f9811f0e9cfdea4008e935e6a"
+    }
+  ]
+}

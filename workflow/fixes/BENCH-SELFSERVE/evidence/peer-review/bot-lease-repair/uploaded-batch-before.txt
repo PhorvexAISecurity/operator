@@ -1,0 +1,4 @@
+{
+  "path": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/bot-lease-repair/uploaded-batch-before.json",
+  "sha256": "b2f005ea891be06a449088977373db63099a0f833919dc8e6fe48e277e32a060"
+}

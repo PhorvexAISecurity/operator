@@ -30,6 +30,8 @@ authorization persists privately in the state directory. Secrets
 """
 import json
 import csv
+from contextlib import nullcontext, ExitStack
+import html
 import io
 import hashlib
 import hmac
@@ -43,6 +45,7 @@ import threading
 import time
 import traceback
 import uuid
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -57,6 +60,7 @@ import file_requests  # noqa: E402
 import study  # noqa: E402
 import storage  # noqa: E402
 import endpoint_study  # noqa: E402
+import request_readiness  # noqa: E402
 from mathlab import stage_scope, snapshots  # noqa: E402
 from stage_runtime import StageRuntime  # noqa: E402
 from progress import Progress  # noqa: E402
@@ -75,7 +79,8 @@ HELP = """Phorvex benchmark bot (offline replay and labelled reference studies; 
 /study    help for Cost/History studies and paired V2/V3 endpoint-cost studies
 /guide    download the English step-by-step guide as HTML and PDF
 /upload   how to submit a .md, .txt, .docx or study .json experiment file
-/validate validate an attached file without running it (use as its caption)
+/validate check file syntax and read-only runtime readiness (use as its caption)
+/policies show installed stage policies and source readiness
 /templates download completed example files
 /status   the running job and the queue
 /runs     the last results
@@ -88,6 +93,7 @@ COMMANDS = [
     {'command': 'upload', 'description': 'Run experiments from a Markdown, TXT or Word file'},
     {'command': 'templates', 'description': 'Download completed experiment-file examples'},
     {'command': 'validate', 'description': 'Validate a file: attach it with /validate as caption'},
+    {'command': 'policies', 'description': 'List installed stage policies and current source'},
     {'command': 'guide', 'description': 'Download the English guide (HTML and PDF)'},
     {'command': 'bench', 'description': 'Test a brain code or formula change'},
     {'command': 'param', 'description': 'Compare brain parameter values'},
@@ -106,17 +112,17 @@ BOT_DESCRIPTION = ('Benchmark brain changes before release. Compare parameters, 
                    'Authorized members only. Replay results do not deploy changes or measure live defense outcomes.')
 BOT_SHORT_DESCRIPTION = 'Brain replay benchmarks: code, formulas and parameters. Use /guide for the English HTML and PDF playbook.'
 UPLOAD_HELP = """Send a .md, .txt, .docx or study .json document in this chat.
-Use [bench] and/or [params] sections, or a list of /bench and /param commands.
+Use [bench], [params] or [endpoint] sections, or a list of /bench and /param commands.
 The entire file is parsed and its options and parameter domains are validated before anything is queued.
 Valid uploads run automatically as one batch, with up to 5 independent experiments executed in order.
-Use /validate as the file caption to check structure and values without running it.
+Use /validate as the file caption. Syntax validity and runtime readiness are reported separately; no snapshot/source sync, repin, model or replay starts.
 Use a forward slash: unrecognized captions (including backslash-validate) are rejected without running.
 Go tests and live replay preflight still run for each experiment. /templates sends completed examples.
 For dynamic Cost/History comparisons use a phorvex-bench.study.v1 JSON file from /templates.
 Studies run reference algorithms without an LLM, using explicit trace inputs, arms and seeds.
 Missing recorded ledgers produce NEEDS_DATA; synthetic examples are labelled synthetic.
-For paired V2/V3 adaptive lambda use endpoint-v3-recorded.json or endpoint-v3-synthetic.json.
-Synthetic endpoint studies run the shared Go reference kernel. Qualified recorded studies run the reviewed brain engine on actual stage snapshots after exact baseline checks. Missing qualified inputs produce BLOCKED with an evidence report, before LLM/build work.
+For paired V2/V3 adaptive lambda use an [endpoint] TXT/Markdown file or endpoint JSON from /templates. W=study.window and L=config.lookback are independent seconds; requested policy/windows are never substituted.
+Synthetic endpoint studies run the shared Go reference kernel. Qualified recorded studies run the verified image-native or explicitly reviewed brain engine on actual stage snapshots after exact baseline checks. Known missing inputs produce BLOCKED before LLM/build work; later failures preserve any work already started.
 Limits: 2 MiB per document (including study JSON), 256 KiB extracted prose."""
 
 
@@ -222,6 +228,7 @@ class Job:
         self.kind, self.chat_id, self.user, self.text = kind, chat_id, user, text
         self.created, self.state, self.step = utc(), 'QUEUED', ''
         self.cancel = threading.Event()
+        self.activity = {key: False for key in ('model_started', 'tests_started', 'build_started', 'replay_started', 'preflight_started')}
 
 
 def parse_options(words, cfg):
@@ -319,6 +326,13 @@ class BenchBot:
             self.say(chat_id, self.status())
         elif command == '/runs':
             self.say(chat_id, self.runs())
+        elif command == '/policies':
+            try:
+                pin = stage_scope.load(self.cfg.data, repo=self.cfg.repo)
+                self.say(chat_id, 'Allowed stage policies:\n%s\nInstalled stage source: %s\nInstalled policies:\n%s\nEach request checks live source, capture and data readiness. No policy is substituted.' %
+                         ('\n'.join(stage_scope.ALLOWED_POLICIES), pin['brain']['git_sha'], '\n'.join(sorted(pin['policies']))))
+            except stage_scope.StageError as error:
+                self.say(chat_id, 'Allowed stage policies:\n%s\nInstalled stage unavailable: %s\nRun the configured stage reconciler; uploads cannot add policies to its allowlist.' % ('\n'.join(stage_scope.ALLOWED_POLICIES), error))
         elif command == '/check':
             def dependency_check():
                 progress = self.activity(chat_id, 'Dependency check', 'Checking benchmark dependencies')
@@ -362,7 +376,12 @@ class BenchBot:
             try:
                 # Validate all options before entering the queue, just as uploads do.
                 task = file_requests.command_spec(command + ' ' + rest.strip(), self.cfg.policy, self.cfg.ticks)
-                self.enqueue(Job(task['kind'], chat_id, who, task['text']))
+                readiness = self.readiness_for(task)
+                self.say(chat_id, self.readiness_summary(readiness))
+                job = Job(task['kind'], chat_id, who, task['text'])
+                job.conversion = task.get('conversion')
+                job.original_request = text
+                self.enqueue(job)
             except file_requests.RequestError as error:
                 self.say(chat_id, 'Request rejected: %s' % error)
         else:
@@ -432,15 +451,19 @@ class BenchBot:
             record = {'id': upload_id, 'source_name': Path(name).name[:200], 'source_sha256': hashlib.sha256(data).hexdigest(),
                       'created': utc(), 'user': who, 'validation': 'STRUCTURE_AND_PARAMETER_DOMAINS_PASS',
                       'mode': 'VALIDATE_ONLY' if dry_run else 'RUN', 'experiments': tasks}
+            record['runtime_readiness'] = [self.readiness_for(task) for task in tasks]
             (folder / 'VALIDATION.json').write_text(json.dumps(record, indent=2) + '\n')
             validation_note = ('Study schema, limits and supplied trace structure are valid. '
                                'Dataset availability and evidence completeness are checked during execution.'
                                if tasks[0]['kind'] in ('study', 'endpoint') else
                                'Structure, options and registry parameter values are valid. Go tests and replay preflight run during execution.')
-            self.say(chat_id, 'File validation PASS: %d experiment(s): %s.\n%s'
-                     % (len(tasks), ', '.join(task['kind'] for task in tasks), validation_note))
+            self.say(chat_id, 'File syntax VALID: %d experiment(s): %s.\n%s\n%s'
+                     % (len(tasks), ', '.join(task['kind'] for task in tasks), validation_note,
+                        '\n'.join(self.readiness_summary(row) for row in record['runtime_readiness'])))
+            self.send_file(chat_id, 'validation-%s.json' % upload_id, (folder / 'VALIDATION.json').read_bytes())
             if dry_run:
-                state, phase = 'DONE', 'Validation passed; no experiments were queued'
+                state = 'BLOCKED' if any(row['status'] == 'BLOCKED' for row in record['runtime_readiness']) else 'DONE'
+                phase = 'Syntax valid; runtime %s; no experiments were queued' % ('blocked' if state == 'BLOCKED' else 'ready')
                 self.say(chat_id, 'Validation only: nothing was run. Send the file without /validate to execute it.')
             else:
                 job = Job('batch', chat_id, who, '%s: %d experiments' % (Path(name).name[:100], len(tasks)))
@@ -632,6 +655,77 @@ class BenchBot:
                          for r in reversed(rows))
 
     # ── jobs ───────────────────────────────────────────────────────────────
+    def readiness_for(self, spec):
+        requested = request_readiness.descriptor(spec, self.cfg.policy, self.cfg.ticks)
+        if self.dashboard is not None:
+            return self.dashboard.request_readiness(requested)
+        return request_readiness.inspect(self.cfg.data, self.cfg.repo, requested)
+
+    @staticmethod
+    def readiness_summary(result):
+        text = 'Runtime %s: %s; requested ticks=%s, available=%s.' % (
+            result['status'], result['requested_policy'], result['requested_ticks'],
+            result.get('snapshot_count') if result.get('snapshot_count') is not None else 'unknown')
+        if result.get('required_windows'):
+            text += ' W=%s s; L=%s s.' % (result['required_windows']['budget_seconds'], result['required_windows']['burn_seconds'])
+        if result.get('reasons'):
+            text += '\n' + '\n'.join('%s: %s %s' % (row['code'], row['message'], row.get('recovery', '')) for row in result['reasons'])
+        return text
+
+    def prerequisite_report(self, job, readiness, endpoint_request=None):
+        root = job.dir / ('endpoint' if endpoint_request else 'preflight')
+        root.mkdir(exist_ok=True)
+        if endpoint_request:
+            self.endpoint_provenance(job, root)
+        (root / 'readiness.json').write_text(json.dumps(readiness, indent=2) + '\n')
+        started = any(job.activity.values())
+        work_note = ('Stopped during %s. Earlier work is retained in this job; token/build/replay costs are not inferred.' % job.step
+                     if started else 'No model, build or replay was started. Unknown results are null.')
+        if endpoint_request:
+            result = endpoint_study.blocked(endpoint_request, self.readiness_summary(readiness), readiness)
+            result['activity'] = dict(job.activity)
+            if started:
+                result['limitations'] = [work_note, 'Prerequisite loss does not erase work already started.']
+            if job.activity['replay_started']:
+                result.update(v2_executed=None, v3_executed=None, both_arms_executed=None)
+            (root / 'request.json').write_text(json.dumps(endpoint_request, indent=2) + '\n')
+            endpoint_study.export(root, result)
+        else:
+            result = {'state': 'BLOCKED', 'requested_mode': readiness.get('requested_mode', 'SOURCE_PINNED_BRAIN_REPLAY'),
+                      'requested_policy': readiness['requested_policy'], 'requested_ticks': readiness['requested_ticks'],
+                      'requested_sync': readiness['requested_sync'], 'readiness': readiness,
+                      'both_arms_executed': None if job.activity['replay_started'] else False,
+                      'activity': dict(job.activity), 'stopped_during': job.step,
+                      'comparable_ticks': None, 'changed_choices': None,
+                      'reason': self.readiness_summary(readiness)}
+            (root / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+            (root / 'report.html').write_text('<!doctype html><meta charset="utf-8"><h1>Brain benchmark BLOCKED</h1><pre>' + html.escape(json.dumps(result, indent=2)) + '</pre><p>' + html.escape(work_note) + '</p>')
+            (root / 'metrics.csv').write_text('state,comparable_ticks,changed_choices\nBLOCKED,,\n')
+            with zipfile.ZipFile(root / 'evidence.zip', 'w', zipfile.ZIP_DEFLATED) as bundle:
+                for path in sorted(root.iterdir()):
+                    if path.name != 'evidence.zip': bundle.write(path, path.name)
+        job.state = 'BLOCKED'
+        for name in ('report.html', 'result.json', 'metrics.csv', 'evidence.zip'):
+            self.send_file(job.chat_id, 'blocked-%s-%s' % (job.id, name), (root / name).read_bytes())
+        self.say(job.chat_id, result['reason'])
+        return result['reason']
+
+    def check_prerequisites(self, job, endpoint_request=None, allow_sync=True):
+        spec = {'kind': 'endpoint' if endpoint_request else job.kind,
+                'text': json.dumps(endpoint_request) if endpoint_request else job.text}
+        readiness = self.readiness_for(spec)
+        if readiness['status'] == 'READY':
+            return None
+        # A declared sync may repair only missing/stale local snapshot cache.
+        # Missing identity, capture, endpoint history and attribution remain blocked.
+        if (allow_sync and readiness.get('requested_sync') and readiness.get('reasons') and
+                all(row.get('sync_can_help') for row in readiness['reasons'])):
+            self.sync(job, readiness['requested_policy'])
+            readiness = self.readiness_for(spec)
+            if readiness['status'] == 'READY':
+                return None
+        return self.prerequisite_report(job, readiness, endpoint_request)
+
     def step(self, job, label):
         if job.cancel.is_set():
             raise JobError('cancelled before: %s' % label)
@@ -668,11 +762,58 @@ class BenchBot:
             job.progress.start('Preparing the experiment')
         headline = ''
         try:
-            headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch,
-                        'study': self.run_study, 'endpoint': self.run_endpoint}[job.kind](job)
+            if job.cancel.is_set():
+                raise JobError('cancelled before prerequisite checks')
+            guard = stage_scope.pin_lock(self.cfg.data) if self.cfg.data and job.kind != 'batch' else nullcontext()
+            with ExitStack() as leases:
+                wait_started = time.monotonic()
+                try:
+                    leases.enter_context(guard)
+                except stage_scope.StageLeaseBusy as err:
+                    if job.cancel.is_set():
+                        raise JobError('cancelled while waiting for the stage pin lease') from err
+                    # The actual acquisition timeout is already evidence. A
+                    # later successful probe cannot erase this attempt's cause.
+                    requested = request_readiness.descriptor(
+                        {'kind': job.kind, 'text': job.text}, self.cfg.policy, self.cfg.ticks)
+                    readiness = {'schema': 'phorvex-bench.request-readiness.v1', 'syntax': 'VALID',
+                        'status': 'BLOCKED', 'requested_kind': requested['kind'],
+                        'requested_policy': requested['policy'], 'requested_ticks': requested['ticks'],
+                        'requested_sync': requested['sync'], 'snapshot_count': None,
+                        'available_policies': None, 'baseline_validation': 'NOT_RUN', 'reasons': [],
+                        'phase': 'LEASE', 'lease_wait_seconds': round(time.monotonic()-wait_started, 3)}
+                    request = endpoint_study.validate(requested['request']) if job.kind == 'endpoint' else None
+                    if request:
+                        readiness.update(endpoint_study.request_context(request))
+                    elif job.kind == 'study':
+                        readiness.update(requested_mode='REFERENCE_STUDY', requested_request=requested['request'])
+                    request_readiness.reason(readiness, 'STAGE_PIN_LEASE_BUSY', str(err),
+                        'Retry this unchanged request after the current stage job or reconciliation completes.')
+                    job.step = 'stage pin lease'
+                    headline = self.prerequisite_report(job, readiness, request)
+                    return headline
+                headline = {'param': self.run_param, 'bench': self.run_bench, 'batch': self.run_batch,
+                            'study': self.run_study, 'endpoint': self.run_endpoint}[job.kind](job)
             if job.state == 'RUNNING':
                 job.state = 'DONE'
-        except (JobError, stage_scope.StageError) as err:
+        except stage_scope.StageError as err:
+            if job.cancel.is_set():
+                job.state, headline = 'CANCELLED', str(err)
+            else:
+                # A source/UID/cache race is a missing prerequisite only when the
+                # same read-only check corroborates it. Other errors remain failures.
+                try:
+                    readiness = self.readiness_for({'kind': job.kind, 'text': job.text})
+                except Exception:
+                    readiness = None
+                    (job.dir / 'readiness-error.txt').write_text(traceback.format_exc())
+                if readiness is not None and readiness['status'] == 'BLOCKED':
+                    request = endpoint_study.validate(json.loads(job.text)) if job.kind == 'endpoint' else None
+                    headline = self.prerequisite_report(job, readiness, request)
+                else:
+                    job.state, headline = 'FAILED', str(err)
+                    self.say(job.chat_id, '[%s] failed: %s' % (job.id, err))
+        except JobError as err:
             job.state = 'CANCELLED' if job.cancel.is_set() else 'FAILED'
             headline = str(err)
             self.say(job.chat_id, '[%s] %s: %s' % (job.id, job.state.lower(), err))
@@ -684,6 +825,8 @@ class BenchBot:
             self.say(job.chat_id, '[%s] failed during "%s" (%s); details are in %s/error.txt on the host.'
                      % (job.id, job.step, type(err).__name__, job.dir))
         finally:
+            (job.dir / 'ACTIVITY.json').write_text(json.dumps({'state': job.state, 'phase': job.step,
+                'started': job.activity, 'model_token_count': None, 'build_cost': None, 'replay_cost': None}, indent=2) + '\n')
             for clone in ('candidate-src', 'base-src', 'go-home'):
                 shutil.rmtree(job.dir / clone, ignore_errors=True)
             if job.kind == 'bench':
@@ -704,6 +847,7 @@ class BenchBot:
                 results.append({'index': index, 'kind': spec['kind'], 'state': 'CANCELLED', 'job': None})
                 continue
             child = Job(spec['kind'], job.chat_id, job.user, spec['text'])
+            child.conversion = spec.get('conversion')
             child.parent, child.cancel, child.progress = job, job.cancel, job.progress
             child.batch_position = 'Experiment %d/%d (%s)' % (index, len(job.specs), spec['kind'])
             self.step(job, child.batch_position)
@@ -749,13 +893,42 @@ class BenchBot:
         self.say(job.chat_id, headline)
         return headline
 
+    def endpoint_provenance(self, job, root):
+        """Keep converted source bytes with both early refusals and execution."""
+        if getattr(job, 'conversion', None):
+            conversion = dict(job.conversion)
+            if getattr(job, 'parent', None):
+                upload = self.cfg.state / 'uploads' / job.parent.upload_id
+                source = next(upload.glob('source.*'), None)
+                if source:
+                    shutil.copyfile(source, root / ('original-request' + source.suffix))
+                    conversion['original_source_sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+            elif getattr(job, 'original_request', None):
+                (root / 'original-request.txt').write_text(job.original_request)
+                conversion['original_source_sha256'] = hashlib.sha256(job.original_request.encode()).hexdigest()
+            (root / 'compatibility-conversion.json').write_text(json.dumps(conversion, indent=2) + '\n')
+
     def run_endpoint(self, job, request=None):
         if request is None:
             request = endpoint_study.strict_json(job.text)
+        request = endpoint_study.validate(request)
+        root = job.dir / 'endpoint'
+        root.mkdir(exist_ok=True)
+        self.endpoint_provenance(job, root)
+        blocked = self.check_prerequisites(job, request)
+        if blocked is not None:
+            return blocked
+        if request.get('dataset') == 'recorded' and request.get('sync') and request['policy'] not in getattr(job, 'synced_policies', set()):
+            self.sync(job, request['policy'])
+            blocked = self.check_prerequisites(job, request, allow_sync=False)
+            if blocked is not None:
+                return blocked
         self.step(job, 'preflighting paired V2/V3 endpoint-cost inputs')
+        job.activity['preflight_started'] = True
         try:
             result = endpoint_study.run(request, job.dir / 'endpoint', self.cfg.data,
-                                        progress=lambda s: self.step(job, s), cancelled=job.cancel.is_set)
+                                        progress=lambda s: self.step(job, s), cancelled=job.cancel.is_set,
+                                        activity=lambda name: job.activity.__setitem__(name, True))
         except (ValueError, OSError) as err:
             raise JobError('endpoint study: %s' % err) from err
         job.state = 'DONE' if result['state'] == 'COMPLETE' else result['state']
@@ -800,6 +973,7 @@ class BenchBot:
                 done = dash.wait_job(started['id'], cancelled=job.cancel.is_set)
                 if done.get('status') != 'COMPLETE':
                     raise JobError('sync failed: %s' % (done.get('message') or done.get('status')))
+            job.synced_policies = getattr(job, 'synced_policies', set()) | {policy}
         except DashboardError as err:
             raise JobError('sync: %s' % err)
 
@@ -832,6 +1006,9 @@ class BenchBot:
         opts, _ = parse_options([w for w in rest if '=' in w or w == 'nosync'], self.cfg)
         if not 1 <= len(values) <= 11:
             raise JobError('give 1 to 11 values to compare with the recorded value')
+        blocked = self.check_prerequisites(job)
+        if blocked is not None:
+            return blocked
         arms = [{'arm_id': 'control', 'value_source': 'RECORDED_EFFECTIVE'}]
         for v in values:
             if v == 'unset':
@@ -842,8 +1019,11 @@ class BenchBot:
             except ValueError:
                 raise JobError('%s is not a number' % v)
             arms.append({'arm_id': ('v%s' % v)[:40], 'value': number})
-        if opts['sync']:
+        if opts['sync'] and opts['policy'] not in getattr(job, 'synced_policies', set()):
             self.sync(job, opts['policy'])
+            blocked = self.check_prerequisites(job, allow_sync=False)
+            if blocked is not None:
+                return blocked
         dash = self.need_dashboard()
         cohort = {'max_snapshots': opts['ticks'], 'spacing': 'even'}
         cohort.update(self.recorded_window(opts['policy']))
@@ -854,12 +1034,14 @@ class BenchBot:
                    'secondary_metric_ids': ['M-P26', 'M-P19', 'M-P22', 'M-P25'], 'safety_metric_ids': []}
         try:
             self.step(job, 'preflight')
+            job.activity['preflight_started'] = True
             pf = dash.preflight(request)
             if pf.get('status') != 'PASS':
                 bad = ['%s: %s' % (c.get('id'), c.get('message')) for c in pf.get('checks', []) if c.get('status') == 'FAIL']
                 errs = ['%s %s' % (e.get('error_code'), e.get('reason')) for e in pf.get('errors', [])]
                 raise JobError('preflight failed:\n' + '\n'.join(bad + errs or [str(pf.get('status'))]))
             self.step(job, 'replaying the pinned stage brain')
+            job.activity['replay_started'] = True
             experiment = dash.create(request)
             done = dash.wait_experiment(experiment['id'], cancelled=job.cancel.is_set,
                                         progress=lambda m: self.step(job, m))
@@ -879,10 +1061,8 @@ class BenchBot:
         """A contiguous deployed-revision window, using the dashboard's existing time filters."""
         if not self.cfg.data:
             return {}
-        current = Path(self.cfg.data) / 'mathlab/bin/current.json'
-        if not current.exists():
-            raise JobError('no deployed brain-replay identity; sync first')
-        base = json.loads(current.read_text())['git_sha']
+        pin = stage_scope.load(self.cfg.data, policy, self.cfg.repo)
+        base = stage_scope.identity(self.cfg.data, pin)['git_sha']
         ns, name = policy.split('/')
         entries = code_experiment.local_index(self.cfg.data, ns, name)
         indices = [i for i, entry in enumerate(entries) if entry['header'].get('gitSHA') == base]
@@ -899,13 +1079,15 @@ class BenchBot:
     def run_bench(self, job):
         opts, words = parse_options(job.text.split(), self.cfg)
         prompt = ' '.join(words).strip()
-        registered = endpoint_study.legacy_request(prompt, opts['policy'], opts['ticks'])
+        registered = endpoint_study.legacy_request(prompt, opts['policy'], opts['ticks'], opts['sync'])
         if registered is not None:
-            if opts['sync']:
-                self.sync(job, opts['policy'])
+            job.conversion = endpoint_study.legacy_conversion(prompt, registered)
             return self.run_endpoint(job, registered)
         if len(prompt) < 10:
             raise JobError('describe the brain change in words, for example: /bench raise the rotate threshold for the stage workload')
+        blocked = self.check_prerequisites(job)
+        if blocked is not None:
+            return blocked
         if not self.cfg.repo or not self.cfg.data:
             raise JobError('the bot needs BOT_REPO (operator-refactored clone) and a separate stage MATHLAB_DATA_DIR')
         stage_pin = stage_scope.load(self.cfg.data, opts['policy'], self.cfg.repo)
@@ -916,8 +1098,11 @@ class BenchBot:
             raise JobError('only %.1f GB is free on the host and /bench needs %.1f GB (BOT_MIN_FREE_GB); '
                            'free some space first; this request has not reached the model, tests or replay'
                            % (free, self.cfg.min_free_gb))
-        if opts['sync']:
+        if opts['sync'] and opts['policy'] not in getattr(job, 'synced_policies', set()):
             self.sync(job, opts['policy'])
+            blocked = self.check_prerequisites(job, allow_sync=False)
+            if blocked is not None:
+                return blocked
         ns, name = opts['policy'].split('/')
 
         self.step(job, 'reading the deployed brain')
@@ -946,14 +1131,17 @@ class BenchBot:
                           **stage_scope.cohort_filter(stage_pin, opts['policy'])}
         with snapshots.cache_lock(self.cfg.data, ns, name):
             cohort = code_experiment.select_cohort(self.cfg.data, {'namespace': ns, 'policy': name, 'cohort': cohort_request})
-            if not cohort:
-                raise JobError('no recorded ticks from deployed commit %s; sync current snapshots before benchmarking' % base[:12])
+            if len(cohort) != opts['ticks']:
+                readiness = self.readiness_for({'kind': 'bench', 'text': job.text})
+                request_readiness.reason(readiness, 'SNAPSHOT_COUNT_CHANGED', 'The available cohort changed before it could be frozen; no model call was made.', 'Sync the exact stage policy and retry with the requested full cohort.')
+                return self.prerequisite_report(job, readiness)
             cohort_request['digests'] = [entry['digest'] for entry in cohort]
             stage_provenance = stage_scope.cohort(stage_pin, opts['policy'], cohort)
 
             snapshots.freeze_cohort(self.cfg.data, ns, name, cohort, job.dir/'experiment/cohort')
 
         self.step(job, 'asking the LLM for a change against %s' % base_name)
+        job.activity['model_started'] = True
         (job.dir / 'prompt.txt').write_text(prompt + '\n')
         try:
             plan_record, _ = planner.plan(planner.parse_args([
@@ -996,6 +1184,7 @@ class BenchBot:
                 # A newly added package has no baseline tests.
                 selected = [p for p in packages if (Path(src) / 'phorvex' / p).is_dir()]
                 self.step(job, 'running Go unit tests: %s (%s; %s)' % (arm, ', '.join(selected), toolchain))
+                job.activity['tests_started'] = True
                 tests[arm] = replay_build.test(src, commit, selected, go=self.cfg.go,
                                                log=job.dir / ('tests-%s.jsonl' % arm), toolchain=toolchain,
                                                cache_dir=self.cfg.go_cache)
@@ -1006,6 +1195,7 @@ class BenchBot:
                     raise JobError('%s Go tests %s; benchmark stopped. See the attached test log.'
                                    % (arm, tests[arm]['status']))
             self.step(job, 'building brain-replay from the deployed commit and from the candidate')
+            job.activity['build_started'] = True
             replay_build.build(base_src, base, job.dir / 'bin' / 'base-local', go=self.cfg.go,
                                log=job.dir / 'build-base.log', toolchain=toolchain, cache_dir=self.cfg.go_cache)
             replay_build.build(cand['repo'], cand['candidateCommit'], job.dir / 'bin' / 'candidate', go=self.cfg.go,
@@ -1016,6 +1206,7 @@ class BenchBot:
             raise JobError('the build failed (the candidate may not compile): %s' % err)
 
         self.step(job, 'replaying recorded ticks: deployed, deployed-built-here, candidate')
+        job.activity['replay_started'] = True
         request = {'experiment_id': 'bot-' + job.id, 'title': prompt[:200], 'namespace': ns, 'policy': name,
                    'cohort': cohort_request, 'base_commit': base,
                    'candidate_commit': cand['candidateCommit'], 'created_at': job.created,
@@ -1144,7 +1335,9 @@ def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model, s
     def repo():
         if not cfg.repo:
             raise ConfigError('BOT_REPO is not set')
-        deployed = json.loads((Path(cfg.data or '/nonexistent') / 'mathlab' / 'bin' / 'current.json').read_text())['git_sha']
+        with stage_scope.pin_lock(cfg.data, readonly=True):
+            pin = stage_scope.load(cfg.data, cfg.policy, cfg.repo)
+            deployed = stage_scope.identity(cfg.data, pin)['git_sha']
         stage_scope.repository(cfg.repo, deployed)
         if replay_build._git(cfg.repo, 'cat-file', '-t', deployed + '^{commit}') != 'commit':
             raise ConfigError('%s does not contain the deployed commit %s' % (cfg.repo, deployed[:12]))
@@ -1161,9 +1354,8 @@ def check(cfg, env, telegram=None, out=print, model_probe=planner.check_model, s
     item('free disk', disk, disables='/bench')
     def go():
         version = subprocess.run([cfg.go, 'version'], capture_output=True, text=True, check=True).stdout.strip()
-        current = Path(cfg.data or '/nonexistent') / 'mathlab/bin/current.json'
-        if current.exists():
-            ident = json.loads(current.read_text())
+        with stage_scope.pin_lock(cfg.data, readonly=True):
+            ident = stage_scope.identity(cfg.data, stage_scope.load(cfg.data, cfg.policy))
             version += '; replay uses ' + replay_build.deployed_toolchain(ident['path'], go=cfg.go)
         return version
     item('go', go, disables='/bench')

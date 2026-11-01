@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T17:44:15.614585+00:00",
+  "operation": "Fast-forward unpublished issue branch to preserve concurrent quarantine catalogue change",
+  "old_head": "fe6494022a65fcca236e405521685708eb104d9e",
+  "new_head": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "upstream_paths": [
+    "deploy/environments/staging/catalogue-family.yaml"
+  ],
+  "all_existing_worktree_edits_preserved": 21,
+  "current_family_sha256": "141332d868af6d38de8805d3b68968039e2c2ae327d2fd90c8acf905c2d541be",
+  "original_baseline_receipts": "Retained as historical fe649 evidence; additive current-family acceptance required"
+}

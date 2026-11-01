@@ -1,0 +1,39 @@
+{
+  "observed_at": "2026-11-01T20:59:54.979447+00:00",
+  "api_path": "/actions/runs/41349223291/jobs?per_page=100",
+  "data": [
+    {
+      "id": 124975570673,
+      "name": "pending",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223291/job/124975570673",
+      "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "failed_steps": [
+        {
+          "name": "Persist and validate the prepared batch source",
+          "conclusion": "failure",
+          "number": 5
+        }
+      ]
+    },
+    {
+      "id": 124975784363,
+      "name": "publish",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223291/job/124975784363",
+      "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "failed_steps": []
+    },
+    {
+      "id": 124975784783,
+      "name": "release-pr",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223291/job/124975784783",
+      "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "failed_steps": []
+    }
+  ]
+}

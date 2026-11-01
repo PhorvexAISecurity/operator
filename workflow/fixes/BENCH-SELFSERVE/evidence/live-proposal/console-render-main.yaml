@@ -1,0 +1,1132 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-phorvex-console-e2e
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: console
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-attacks-cleanup
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: attacks-cleanup
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staging-phorvex-console-grants
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/component: console-auth
+data:
+  grants.json: "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\":\
+    \ \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\",\n     \
+    \ \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n      \"roles\": [\n\
+    \        \"operator\"\n      ],\n      \"tenants\": [\n        \"p1-demo\"\n \
+    \     ],\n      \"targets\": [\n        \"default\"\n      ],\n      \"note\"\
+    : \"The production console's operator, confined to staging's demo tenant.\"\n\
+    \    },\n    {\n      \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\"\
+    ,\n      \"subject\": \"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\"\
+    ,\n      \"roles\": [\n        \"operator\"\n      ],\n      \"tenants\": [\n\
+    \        \"p1-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n  \
+    \    ],\n      \"note\": \"Staging End-to-End runs against the demo tenant; token\
+    \ minted per run, never stored.\"\n    }\n  ]\n}\n"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: staging-phorvex-console-state
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: console-state
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: gp2-csi
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: staging-phorvex-console-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - nodes
+  - namespaces
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  - deployments
+  - replicasets
+  - daemonsets
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - amtd.r6security.com
+  resources:
+  - securityevents
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: staging-phorvex-attacks-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - nodes
+  - namespaces
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - amtd.r6security.com
+  resources:
+  - securityevents
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - selfsubjectaccessreviews
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - ''
+  resources:
+  - serviceaccounts
+  verbs:
+  - impersonate
+  resourceNames:
+  - p1-attacks
+  - staging-attacks
+  - staging-attacks-cleanup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: staging-phorvex-console-scan-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - clusterroles
+  - rolebindings
+  - clusterrolebindings
+  verbs:
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: staging-phorvex-console-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: staging-phorvex-console-role
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: staging-phorvex-attacks-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: staging-phorvex-attacks-role
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: staging-phorvex-console-scan-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: staging-phorvex-console-scan-role
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-identity-catalog
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - serviceaccounts
+  resourceNames:
+  - console-id-fixture
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - serviceaccounts/token
+  resourceNames:
+  - console-id-fixture
+  verbs:
+  - create
+- apiGroups:
+  - ''
+  resources:
+  - secrets
+  verbs:
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  resourceNames:
+  - console-id-fixture
+  verbs:
+  - get
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - create
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  - deployments
+  - replicasets
+  - daemonsets
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - delete
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  - deployments
+  - replicasets
+  - daemonsets
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - delete
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  - deployments
+  - replicasets
+  - daemonsets
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - delete
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-identity-catalog
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-identity-catalog
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-target
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-cleanup
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks-cleanup
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: phorvex-staging-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-console-policy-edit
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-target
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-cleanup
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks-cleanup
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: console-identity-shared
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-console-policy-edit
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-target
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-target
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-attacks-cleanup
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-attacks-cleanup
+subjects:
+- kind: ServiceAccount
+  name: staging-attacks-cleanup
+  namespace: phorvex-staging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-console-policy-edit
+  namespace: p1-demo
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-console-policy-edit
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: console
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: phorvex-console
+    app.kubernetes.io/instance: staging
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: console
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 3900
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex-console
+      app.kubernetes.io/instance: staging
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex-console
+        app.kubernetes.io/instance: staging
+        app.kubernetes.io/component: console
+      annotations:
+        checksum/console-grants: 7448b9032e012ddf559563962fc06ba83f606ba4999ffe4d9beb597e5089ea18
+    spec:
+      serviceAccountName: staging-phorvex-console
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 65532
+      containers:
+      - name: console
+        image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:b3872872f1e55fb6c18a38c91b7547dd1da1cb08b65afbe6e5749ed179e258e5
+        imagePullPolicy: IfNotPresent
+        args:
+        - -root=/data
+        - -web=/app/web
+        - -addr=:8090
+        - -state-dir=/var/lib/phorvex-console
+        - -audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445
+        - -audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc
+        - -audit-source-client-cert=/etc/audit-client/tls.crt
+        - -audit-source-client-key=/etc/audit-client/tls.key
+        - -audit-source-ca=/etc/audit-client/ca.crt
+        - -metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+        - -auth-grants=/etc/phorvex-console/grants.json
+        env:
+        - name: PHORVEX_INJECTOR_IDENTITY
+          value: phorvex-staging/staging-attacks
+        - name: PHORVEX_CONSOLE_ATTACKS_URL
+          value: http://staging-attacks:8090
+        - name: PHORVEX_CONSOLE_SWEEP_NAMESPACES
+          value: phorvex-staging-demo,console-identity-shared,p1-demo
+        - name: PHORVEX_CONSOLE_HISTORY_MAX_BYTES
+          value: '2147483648'
+        - name: PHORVEX_CONSOLE_HISTORY_MIN_FREE_BYTES
+          value: '536870912'
+        - name: PHORVEX_CONSOLE_HISTORY_RETENTION_DAYS
+          value: '0'
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT
+          value: p1-demo
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT
+          value: console-identity-shared
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_MONGO_EXPOSURE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_NATS_EXPOSURE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_NATS_CLIENT_RESPONSE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_GUARDRAIL_STATIC_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_GUARDRAIL_AVAILABILITY_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_GUARDRAIL_EFFECT_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_GUARDRAIL_OUTPUT_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_DRAIN_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_ENDPOINT_LEASE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_LITELLM_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_VOICE_AGENCY_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_LITELLM_OUTPUT_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_VOICE_OUTPUT_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_VOICE_ADMISSION_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_VOICE_MCP_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_CRM_LIVE_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_POD_BOUND_TOKEN_CPU_ENABLED
+          value: 'false'
+        - name: PHORVEX_CONSOLE_CATALOGUE_V1_ENABLED
+          value: 'false'
+        - name: PHORVEX_PROM_URL
+          value: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+        - name: PHORVEX_CONSOLE_ALB_SIGNER_ARN
+          value: arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-stagingp-140f47b908/42ff0e6e1afd5c83
+        - name: PHORVEX_CONSOLE_ALB_ISSUER
+          value: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
+        - name: PHORVEX_CONSOLE_ALB_CLIENT_ID
+          value: 5njtljkiehde7iesciehr6a562
+        - name: PHORVEX_CONSOLE_ALB_REGION
+          value: us-east-2
+        - name: PHORVEX_CONSOLE_OIDC_ISSUER
+          value: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+        - name: PHORVEX_CONSOLE_OIDC_AUDIENCE
+          value: phorvex-staging-console
+        - name: PHORVEX_CONSOLE_OIDC_JWKS_URL
+          value: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys
+        - name: PHORVEX_CONSOLE_TRUSTED_ORIGINS
+          value: https://staging-console.phorvex.ai
+        ports:
+        - name: http
+          containerPort: 8090
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 5
+          failureThreshold: 720
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 256Mi
+        volumeMounts:
+        - name: audit-client
+          mountPath: /etc/audit-client
+          readOnly: true
+        - name: console-tmp
+          mountPath: /tmp
+        - name: console-state
+          mountPath: /var/lib/phorvex-console
+        - name: console-grants
+          mountPath: /etc/phorvex-console
+          readOnly: true
+      volumes:
+      - name: console-tmp
+        emptyDir: {}
+      - name: console-state
+        persistentVolumeClaim:
+          claimName: staging-phorvex-console-state
+      - name: audit-client
+        secret:
+          secretName: staging-phorvex-audit-client
+      - name: console-grants
+        configMap:
+          name: staging-phorvex-console-grants
+          defaultMode: 288
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: staging-phorvex-console
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: console
+  annotations:
+    alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:us-east-2:753556437180:userpool/us-east-2_JfwlBPRbB","userPoolClientID":"5njtljkiehde7iesciehr6a562","userPoolDomain":"phorvex-console-753556437180"}'
+    alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
+    alb.ingress.kubernetes.io/auth-scope: openid
+    alb.ingress.kubernetes.io/auth-type: cognito
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:753556437180:certificate/6f771a0d-5c30-4897-bcba-9422024cd3b6
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/manage-backend-security-group-rules: 'true'
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/security-groups: sg-098aac8d74e88e2fe
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/subnets: subnet-0e2c4f3f433045f81,subnet-08bd0af4dcc7672e2
+    alb.ingress.kubernetes.io/target-type: ip
+    external-dns.alpha.kubernetes.io/hostname: staging-console.phorvex.ai
+spec:
+  ingressClassName: alb
+  rules:
+  - host: staging-console.phorvex.ai
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: staging-phorvex-console
+            port:
+              name: http

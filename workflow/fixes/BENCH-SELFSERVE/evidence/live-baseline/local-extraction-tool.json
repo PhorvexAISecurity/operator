@@ -1,0 +1,6 @@
+{
+  "path": "/workspace/.phorvex-tools/crane/crane",
+  "version": "0.22.1",
+  "sha256": "8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992",
+  "use": "Local fallback only; remote /home/hami/.local/bin/crane exists outside default SSH PATH; native ECR extractor avoids Docker entirely."
+}

@@ -1,0 +1,36 @@
+{
+  "current_minimal_required_grant": {
+    "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+    "roles": [
+      "investor"
+    ],
+    "subject": "system:serviceaccount:phorvex-staging:staging-brain-benchmark",
+    "targets": [
+      "default"
+    ],
+    "tenants": [
+      "phorvex-staging-demo"
+    ]
+  },
+  "exact_previously_proposed_grant": {
+    "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+    "note": "Read-only source-pinned stage brain benchmark snapshot collection.",
+    "roles": [
+      "investor"
+    ],
+    "subject": "system:serviceaccount:phorvex-staging:staging-brain-benchmark",
+    "targets": [
+      "default"
+    ],
+    "tenants": [
+      "phorvex-staging-demo"
+    ]
+  },
+  "historical_runtime_positive_receipt": "workflow/fixes/BENCH-STAGE/evidence/live/relay-console-receipt.json",
+  "historical_source": "workflow/fixes/BENCH-STAGE/evidence/deployment/proposal/console-override.json",
+  "historical_source_sha256": "d77956afd41d19d64e1357e5cac7494c08ecc09aa3f88fb3cf0bac9e04da84b0",
+  "limitations": "Historical proposal plus subsequent successful relay receipt proves former route; current live grant absence is separately measured. No token minted or active Console access tested in this read-only investigation.",
+  "runtime_positive_receipt_sha256": "1c84e92a1c7fa618a79226b5390242a09e939b6d14775594a0b58bc462a94853",
+  "source_role_contract": "phorvex/internal/console/auth_identity.go: investor CanRead=true, CanOperate=false",
+  "source_routes": "phorvex/internal/console/routes.go:99-100 read routes scope namespace query and fixed default target"
+}

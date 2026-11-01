@@ -1,0 +1,30 @@
+{
+  "at": "2026-11-01T20:07:54.799213+00:00",
+  "result": "PASS_CAPTURE_ROLLOUT",
+  "chart_source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "actual_image_source": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "checks": {
+    "brain": "exact immutable image/UID; complete healthy rollout at reviewed source",
+    "manager": "exact immutable image/UID; complete healthy rollout at reviewed source",
+    "console": "exact immutable image/UID; complete healthy rollout at reviewed source"
+  },
+  "policy_uid_generation_modes_preserved": true,
+  "persistent_claim_bound": true,
+  "actual_grants_equal_exact_composed_render": true,
+  "free_bytes": 6578450432,
+  "qualification": "Capture deployment and actual scoped access only; native reconciliation/history/bot outcomes remain separate.",
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v4-rollout-2.json",
+      "sha256": "145739efe7474890f0f8875de6243970c6dd6e94e2f77be64ecdd3f6d656c8af"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bee9-a5f-capture-preconditions.json",
+      "sha256": "7cb0462ad93f8057c1840ca5ea7b9263789fdd2fe0c54f3bb30eb63850f4c08f"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-transport-v4-runtime-console.json",
+      "sha256": "9f59a403aaa00fc886cb7a0db0e5318ddf783c20e175114a9d2367fea588d5ef"
+    }
+  ]
+}

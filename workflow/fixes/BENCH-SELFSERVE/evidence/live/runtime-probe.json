@@ -1,0 +1,160 @@
+{
+  "schema": "phorvex-bench.actual-readonly-runtime-probe.v1",
+  "at": "2026-11-01T18:22:00.828712+00:00",
+  "state": "FAIL",
+  "source_manifest_sha256": "449fec50b24fc1eeef9686b584e930a8e815245b50a53f048560f84dd7e2cbcb",
+  "scope": "actual live identities, isolated scratch pin built from actual observe and verified native binary; active pins/services untouched",
+  "probes": {
+    "phorvex-staging-demo/demo-api-defense": {
+      "seconds": 36.300667867064476,
+      "result": {
+        "schema": "phorvex-bench.runtime-readiness.v1",
+        "status": "READY",
+        "requested_policy": "phorvex-staging-demo/demo-api-defense",
+        "reasons": [],
+        "pin_sha256": "cc88ad5ddae570da44a5f6b459ac45571ac32eccad09ba781c23cc95378b6b1f",
+        "actual_brain": {
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+          "digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+          "deployment": "staging-brain",
+          "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+          "container": "brain",
+          "pods": [
+            {
+              "name": "staging-brain-5fcd75df99-bj5wn",
+              "uid": "19806925-d8a8-49e0-b0c9-6a69ffc78311"
+            }
+          ],
+          "embedded_version": {
+            "service": "brain",
+            "version": "0.10.0",
+            "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+          }
+        },
+        "policy": {
+          "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+          "generation": 9,
+          "mode": "active",
+          "dry_run": false,
+          "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+          "workload_generation": 3,
+          "workload_name": "demo-api"
+        },
+        "capture": {
+          "enabled": true,
+          "policies": [
+            "phorvex-staging-demo/demo-api-defense",
+            "phorvex-staging-demo/stage-bench-defense"
+          ],
+          "directory": "/var/lib/phorvex/math-lab",
+          "persistent_claim": "staging-brain-mathlab",
+          "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+          "cost_evidence": true
+        },
+        "available_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "allowed_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "actual_manager": {
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+          "digest": "sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+          "image_digest": "sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+          "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+          "deployment": "staging-phorvex",
+          "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+          "container": "manager",
+          "pods": [
+            {
+              "name": "staging-phorvex-6dddc96964-qcd7d",
+              "uid": "c51a458e-df6c-4a9c-a6ee-9ab31e54733b"
+            }
+          ],
+          "embedded_version": {
+            "service": "manager",
+            "version": "0.16.0",
+            "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+          }
+        }
+      }
+    },
+    "phorvex-staging-demo/stage-bench-defense": {
+      "seconds": 60.21099101938307,
+      "result": {
+        "schema": "phorvex-bench.runtime-readiness.v1",
+        "status": "BLOCKED",
+        "requested_policy": "phorvex-staging-demo/stage-bench-defense",
+        "reasons": [
+          {
+            "code": "RUNTIME_OBSERVATION_UNAVAILABLE",
+            "message": "Command '['kubectl', '--context', 'arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks', '-n', 'phorvex-staging', 'get', 'pods', '-o', 'json']' timed out after 2.252833817154169 seconds",
+            "recovery": "Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted."
+          }
+        ],
+        "pin_sha256": "cc88ad5ddae570da44a5f6b459ac45571ac32eccad09ba781c23cc95378b6b1f",
+        "actual_brain": {
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+          "digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+          "deployment": "staging-brain",
+          "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+          "container": "brain",
+          "pods": [
+            {
+              "name": "staging-brain-5fcd75df99-bj5wn",
+              "uid": "19806925-d8a8-49e0-b0c9-6a69ffc78311"
+            }
+          ],
+          "embedded_version": {
+            "service": "brain",
+            "version": "0.10.0",
+            "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+          }
+        },
+        "policy": {
+          "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+          "generation": 1,
+          "mode": "dryRun",
+          "dry_run": true,
+          "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+          "workload_generation": 1,
+          "workload_name": "stage-bench-api"
+        },
+        "capture": {
+          "enabled": true,
+          "policies": [
+            "phorvex-staging-demo/demo-api-defense",
+            "phorvex-staging-demo/stage-bench-defense"
+          ],
+          "directory": "/var/lib/phorvex/math-lab",
+          "persistent_claim": "staging-brain-mathlab",
+          "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+          "cost_evidence": true
+        },
+        "available_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "allowed_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ]
+      }
+    }
+  },
+  "observe_seconds": 45.898832857608795,
+  "setup": "Actual observe/new_pin in isolated scratch only; this is not an active deployment or synthetic READY fixture.",
+  "active_pin_hashes_unchanged": {
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/stage.json": "f075191c6b6464ce35c5938b84942ce1cbfe1f25d5815c5e6ca419cdfe114e0c",
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11"
+  }
+}

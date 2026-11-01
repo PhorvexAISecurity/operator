@@ -1,0 +1,29 @@
+{
+  "schema": "phorvex-bench.peer-source-commit-binding.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:58:33.893852+00:00",
+  "verdict": "PASS_FOR_SOURCE_COMMIT_AND_COHERENT_PREFLIGHT",
+  "source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "parents": [
+    "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+    "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+  ],
+  "component_paths": 3,
+  "two_upstream_go_files_byte_equal": true,
+  "only_catalogue_exception": {
+    "path": "phorvex.console.attackCatalog.agentAction.image",
+    "before": "",
+    "proposed": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8",
+    "enabled_unchanged": false
+  },
+  "runtime_unchanged_paths": 43,
+  "prior_default_and_archive_unchanged": true,
+  "source_manifest_sha256": "1395f756002b4746de0ef48abc09d3dfa9347296a3b446b0f5e1c171d3c859cf",
+  "independent_a5f_gate_and_six_render_control_sha256": "cff539954480ee765055d5569ec235a61f163765f7fee71e914e900a38a84e71",
+  "source_only_no_metadata": true,
+  "limits": [
+    "Upstream Go cleanup logic is preserved byte-exact; this bounded integration review is not a new author claim for that upstream feature.",
+    "Exact one-field gate producer and six-service rendered equivalence were independently tested before commit and are now source-bound.",
+    "Final coherent preflight and current stage/bot acceptance remain separate actual evidence."
+  ]
+}

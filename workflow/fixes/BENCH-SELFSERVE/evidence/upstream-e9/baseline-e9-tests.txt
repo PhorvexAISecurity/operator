@@ -1,0 +1,26 @@
+test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers) ... FAIL
+test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... FAIL
+test_its_defaults_are_the_managers (test_service_charts.SensorChartTests.test_its_defaults_are_the_managers) ... ok
+
+======================================================================
+FAIL: test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/bench-e9-defaults-2mpxxj9b/tools/test_service_charts.py", line 776, in test_its_defaults_are_the_managers
+    self.assertEqual(value, manager[key], key)
+AssertionError: {'ena[201 chars]'', 'namespaceUID': '', 'cleanupPolicy': 'Dele[6633 chars]''}}} != {'ena[201 chars]'', 'cleanupPolicy': 'Delete', 'images': {'wor[6613 chars]''}}}
+Diff is 12066 characters long. Set self.maxDiff to None to see it. : console
+
+======================================================================
+FAIL: test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/bench-e9-defaults-2mpxxj9b/tools/test_service_charts.py", line 973, in test_its_defaults_are_the_managers
+    self.assertEqual(value, manager[key], key)
+AssertionError: {'ena[201 chars]'', 'namespaceUID': '', 'cleanupPolicy': 'Dele[6633 chars]''}}} != {'ena[201 chars]'', 'cleanupPolicy': 'Delete', 'images': {'wor[6613 chars]''}}}
+Diff is 12066 characters long. Set self.maxDiff to None to see it. : console
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.661s
+
+FAILED (failures=2)

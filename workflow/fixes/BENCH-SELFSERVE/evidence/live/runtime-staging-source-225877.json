@@ -1,0 +1,23 @@
+{
+  "commit": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "at": "2026-11-01T20:44:42.323803+00:00",
+  "archive_scope": "complete immutable git archive",
+  "files": {
+    "launch-bot-acceptance-a5f.py": {
+      "sha256": "c3fdbf9f30127d71320b15dd8c831f5de731afeddbb5abdea9821460364af9be",
+      "bytes": 2215
+    },
+    "install-runtime-current-a5f.py": {
+      "sha256": "420e74148d57af2f4ff7413b77490eee5bce5be9860ae1690edc60510586da6e",
+      "bytes": 10121
+    },
+    "source.tar.gz": {
+      "sha256": "aed76b31d39d6cc692b8aba5b0f2c38a5a59b6d5669458afee4bc3dafb1ec0a8",
+      "bytes": 17906572
+    },
+    "reviewed-source-manifest.json": {
+      "sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+      "bytes": 29065
+    }
+  }
+}

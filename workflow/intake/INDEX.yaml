@@ -367,3 +367,10 @@ intakes:
     state: VERIFIED
     issue_id: null
     aliases: []
+  RPT-20261101-173500-bench-selfserve:
+    directory: intake/RPT-20261101-173500-bench-selfserve
+    kind: INCIDENT
+    title: Stage benchmark admission and deployment readiness regression
+    state: FILED
+    issue_id: M-195
+    aliases: []

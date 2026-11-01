@@ -1,0 +1,10 @@
+# The console chart's own staging values (deploy/charts/phorvex-console), merged after
+# phorvex.yaml. The release writes the published console image here, under
+# `phorvex.console.image`.
+phorvex:
+  console:
+    image:
+      repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console"
+      tag: "staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+      releaseDigest: "sha256:b3872872f1e55fb6c18a38c91b7547dd1da1cb08b65afbe6e5749ed179e258e5"
+      releaseSourceSHA: "61e83673b8d4f143fca67e17b8a54dc4712f9b28"

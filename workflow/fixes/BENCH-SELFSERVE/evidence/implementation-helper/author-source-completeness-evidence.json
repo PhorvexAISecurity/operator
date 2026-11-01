@@ -1,0 +1,29 @@
+{
+  "schema": "phorvex-bench.author-component-evidence.v1",
+  "author": "stage-observer",
+  "at": "2026-11-01T18:38:19.742622+00:00",
+  "source_manifest": "workflow/fixes/BENCH-SELFSERVE/evidence/implementation-helper/source-completeness-runtime-manifest.json",
+  "source_manifest_sha256": "b3d55bdd0490d72f4cc1e938cde74f00d95724e6583a3a6e8ac7fc8eec90c531",
+  "supersedes_author_receipt_sha256": "4e18a418f480357325c7b7f3ac9fe5c16d43db26e9c577782331dd21b9e604f6",
+  "tests": {
+    "status": "PASS",
+    "count": 71,
+    "seconds": 68.09,
+    "log": "author-source-complete-71-tests.log",
+    "sha256": "c1a4aba3efe1e6ad45d4bd2f312c5d4bc2e0a64d4b2f807d468c11142c9f22f6"
+  },
+  "controls": [
+    "Real promisor clone:270 missing new-tree blobs plus missing current HEAD blobs; offline archive fails before hydration and is byte-identical to full origin archive afterward.",
+    "Existing replay_build.checkout succeeds offline using hydrated shared object store; repository HEAD/config and object store remain unchanged by validation/checkout.",
+    "Missing source blob plus unavailable explicit origin returns BLOCKED and preserves previous native pin.",
+    "Readonly source readiness rejects incomplete deployed/HEAD tree without lazy fetch or object writes.",
+    "Batched healthy probe retains both embedded-version executions with two namespace inventories (4kubectl transport calls); Service UID recreation is blocked.",
+    "Prior exact-source/native baseline, retained journal/no-bridge, immutable review evidence, source/generation races, capacity and consumer lease controls pass."
+  ],
+  "limits": [
+    "Source retrieval remains bounded by512MiB growth and4GiB reserve; decoded checkout tree512MiB and100000entries caps can block.",
+    "Namespace inventories are independent API observations, not an atomic cluster snapshot; execution/publication revalidation remains required.",
+    "Canonical worker owns recent-tail metadata/bootstrap controls and final integrated test manifest.",
+    "Root owns actual live healthy latency measurement and independent native source acceptance; no helper live operations."
+  ]
+}

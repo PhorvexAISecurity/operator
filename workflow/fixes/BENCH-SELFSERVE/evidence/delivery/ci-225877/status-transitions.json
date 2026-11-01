@@ -1,0 +1,328 @@
+[
+  {
+    "observed_at": "2026-11-01T20:50:47.963381+00:00",
+    "actual_pr_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "runs": [
+      {
+        "id": 41348308738,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41348308741,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308743,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308746,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "checks": [
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T20:51:51.894916+00:00",
+    "actual_pr_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "runs": [
+      {
+        "id": 41348308738,
+        "name": "PR source validation",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "id": 41348308741,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308743,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308746,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "checks": [
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "in_progress",
+        "conclusion": null
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  },
+  {
+    "observed_at": "2026-11-01T20:53:27.341640+00:00",
+    "actual_pr_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "runs": [
+      {
+        "id": 41348308741,
+        "name": "Benchmark dashboard",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308743,
+        "name": "Native RBAC contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308746,
+        "name": "E2E harness contracts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 41348308738,
+        "name": "PR source validation",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "checks": [
+      {
+        "name": "PR validation",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (actuator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-unit",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (brain)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (attacks)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "charts",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "lint",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (console)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (operator)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "go-envtest",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "frontend",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "images (sensor)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "e2e-contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "fixture-images",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "name": "verify",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ]
+  }
+]

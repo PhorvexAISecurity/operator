@@ -1,0 +1,12 @@
+{
+  "id": 41339413354,
+  "name": "Staging isolated release",
+  "head_sha": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "event": "workflow_dispatch",
+  "status": "completed",
+  "conclusion": "failure",
+  "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339413354",
+  "created_at": "2026-11-01T18:59:35Z",
+  "updated_at": "2026-11-01T19:14:30Z",
+  "observed_at": "2026-11-01T19:16:30.174468+00:00"
+}

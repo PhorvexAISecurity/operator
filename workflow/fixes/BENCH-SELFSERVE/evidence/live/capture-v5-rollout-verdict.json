@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-01T20:28:05.970180+00:00",
+  "result": "PASS_CAPTURE_ROLLOUT",
+  "chart_source": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "actual_image_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "three_applications_healthy_and_complete": true,
+  "immutable_images_uids_policy_generations_modes_preserved": true,
+  "actual_grants_equal_current_composed_render": true,
+  "persistent_claim_bound": true,
+  "free_bytes": 6345273344,
+  "qualification": "Capture deployment only; native reconciliation/history/bot outcomes remain pending.",
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v5-rollout-1.json",
+      "sha256": "92fd160a203b2fa8fed28f06889b373dd66c789041a9fbd1dc37f90aa4425676"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-1457-capture-preconditions.json",
+      "sha256": "e507c85c65fb7cc749b366280aca79e9c8a1f2a727cef7fe0a016cf25f5e0ed4"
+    }
+  ]
+}

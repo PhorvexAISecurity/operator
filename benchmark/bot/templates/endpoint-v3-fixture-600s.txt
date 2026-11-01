@@ -1,0 +1,10 @@
+[endpoint]
+title: Separate short dryRun fixture control — not the ten-day request
+policy: phorvex-staging-demo/stage-bench-defense
+ticks: 64
+sync: false
+dataset: recorded
+study.window: 600
+config.lookback: 600
+study.slo_target: 0.9
+study.worth_threshold: 0

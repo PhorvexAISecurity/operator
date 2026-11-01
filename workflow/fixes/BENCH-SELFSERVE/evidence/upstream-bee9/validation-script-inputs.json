@@ -1,0 +1,21 @@
+{
+  "purpose": "Same exact gates and author controls at the composed source, with new output paths to preserve all signed a5d logs/receipts.",
+  "scripts": [
+    {
+      "path": "evidence/upstream-bee9/run-preflight.sh",
+      "sha256": "de7afd5e37865838ac62cf78031b8e78909525b6dd824210145b7d39f83859d6"
+    },
+    {
+      "path": "evidence/upstream-bee9/verify-upstream.sh",
+      "sha256": "e9fb9e8c72d70f24787ae5c6ddd45ba6d1f18a76998ff298b9eb1ca97f8b4bd3"
+    },
+    {
+      "path": "evidence/upstream-bee9/run-acceptance.sh",
+      "sha256": "2d323e246d27bfba7c4e4ab8226bc896d99f48613a1cb990996d3b871a2b9a91"
+    },
+    {
+      "path": "evidence/final-source/owned-runner.py",
+      "sha256": "b406cce591d169de57fb29223e26a4c74031a21f9811f0e9cfdea4008e935e6a"
+    }
+  ]
+}

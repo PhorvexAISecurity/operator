@@ -1,0 +1,10 @@
+{
+  "manifest_sha256": "77dbc19be5fa093a6725624fbd0833ea6b17c34a5c966879fd8799a18c6aa175",
+  "verified_composed_paths": 72,
+  "branch_difference_from_bee9_exactly_prior_capture_and_runtime": 59,
+  "textual_composition_exact_git_three_way": [
+    "deploy/charts/phorvex-attacks/values.yaml",
+    "deploy/charts/phorvex-common/templates/_console.tpl",
+    "deploy/charts/phorvex-console/values.yaml"
+  ]
+}

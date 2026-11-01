@@ -1,0 +1,62 @@
+{
+  "schema": "phorvex-bench.peer-acceptance-launcher.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:01:32.878049+00:00",
+  "verdict": "PASS_FOR_RECONCILED_BOUNDED_ACCEPTANCE_LAUNCH",
+  "launcher_sha256": "f3625d40a59621ba1f8854f2f22e34090e29c790c7351e7bed1ea5ce5ada2c0a",
+  "underlying_acceptance_sha256": "4ed509d87adab058aa026e6f6f1d890e02e3263a5d5eb407641bf40337b37a28",
+  "original_negative_control": {
+    "source_sha256": "9cd9cb87566b766d6d9a3c4a2565bf8b4b45f3f34fc70e38f0f3e91792d3f978",
+    "uncaught_nonzero_traceback_contains_fake_private_value": true
+  },
+  "fixed_controls": [
+    {
+      "case": "actual_nonzero_with_private_argv",
+      "result": "SANITIZED_REFUSAL",
+      "exception": "Private-environment operation failed with exit code 1; command and output withheld"
+    },
+    {
+      "case": "actual_oserror_with_private_argv",
+      "result": "SANITIZED_REFUSAL",
+      "exception": "Private-environment operation unavailable; command and output withheld"
+    },
+    {
+      "case": "actual_timeout_with_test_transport_shortening_only",
+      "result": "SANITIZED_REFUSAL",
+      "exception": "Private-environment operation unavailable; command and output withheld"
+    },
+    {
+      "case": "actual_success_positive",
+      "result": "PASS"
+    }
+  ],
+  "scope": [
+    "Reads current installed bot unit Environment privately, verifies exact WorkingDirectory and EnvironmentFile, and requires actualbee9 stage pin before creating a phase-specific transient unit.",
+    "Launches only exact previously reviewed4ed acceptance script against actual installeda5d runtime. Source labels correctly distinguish installed runtimea5d from capturebee9 and deployment-chart4dc.",
+    "No shell interpolation; subprocess argv is used. Error handling returns only fixed diagnostic/exitcode and suppresses original exception context; no private command or subprocess output is printed.",
+    "Underlying acceptance script retains idle/maintenance guards, real bot parser/queue/replay/outbound delivery and owned-unit restoration checks. Launcher LAUNCHED means process creation, not job success."
+  ],
+  "conditions": [
+    "Root runs only after successful actual source-native reconciliation and current scope verification.",
+    "Both phases must preserve real terminal job/delivery/restoration receipts. Existing unique phase output directories refuse overwrite; failed attempts stay failures.",
+    "No live launch was performed by the reviewer. Fake sentinel controls contain no real credentials; timeout transport alone shortens30s to10ms."
+  ],
+  "artifacts": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/launch-bot-acceptance.py": {
+      "sha256": "f3625d40a59621ba1f8854f2f22e34090e29c790c7351e7bed1ea5ce5ada2c0a",
+      "bytes": 2218
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/run-selfserve-bot-acceptance.py": {
+      "sha256": "4ed509d87adab058aa026e6f6f1d890e02e3263a5d5eb407641bf40337b37a28",
+      "bytes": 7917
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/launcher-private-error-control.py": {
+      "sha256": "f14a9e8557def85cc3065cbe4361f8eadefcab0d7cd501ded9eadd9620d30763",
+      "bytes": 4735
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/launcher-before-private-error-fix.py.txt": {
+      "sha256": "9cd9cb87566b766d6d9a3c4a2565bf8b4b45f3f34fc70e38f0f3e91792d3f978",
+      "bytes": 1847
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "main": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "source": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "message": "Merge pull request #202 from PhorvexSecurity/deploy/reopen-quarantine-b1ef9ccdb258\n\ndeploy(staging): reopen quarantine catalogue window",
+  "parents": [
+    "408944e2182a36affd18374865e1fdd392221192",
+    "d783274c5b302ccce4e8cd959c6855a961c501b9"
+  ],
+  "files": [
+    "deploy/environments/staging/catalogue-family.yaml"
+  ],
+  "prs": [
+    {
+      "number": 202,
+      "state": "closed",
+      "head": "d783274c5b302ccce4e8cd959c6855a961c501b9",
+      "base": "408944e2182a36affd18374865e1fdd392221192",
+      "title": "deploy(staging): reopen quarantine catalogue window",
+      "merged": "2026-11-01T20:54:19Z"
+    }
+  ]
+}

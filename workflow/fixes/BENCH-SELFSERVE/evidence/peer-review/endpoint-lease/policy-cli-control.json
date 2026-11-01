@@ -1,0 +1,19 @@
+{
+  "schema": "phorvex-bench.independent-refresh-policy-cli.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:12:04.843346+00:00",
+  "source_hashes": {
+    "benchmark/worker/endpoint_refresh.py": "cc055cba0eb1ed3982a84b4a8fe35acb4c8c3086133b4db89fe48075486216f6",
+    "benchmark/worker/mathlab/stage_scope.py": "47bf61c8e98d128bd4a9778467a41dddf89056d8911a0a24e8c5a2b9148d85ed",
+    "benchmark/worker/test_endpoint_refresh.py": "64ce0f0d546b604a3f1768ea0403b02ed02448dcdecd7c8f75392ddffe82d4a3"
+  },
+  "actual_separate_cli_process_and_flock": true,
+  "exit_code": 2,
+  "state": "BLOCKED",
+  "phase": "LEASE",
+  "reason": "REFRESH_ALREADY_RUNNING",
+  "status_and_pointer_hash_mtime_unchanged": true,
+  "no_stderr": true,
+  "elapsed_seconds": 0.337,
+  "verdict": "PASS"
+}

@@ -1,0 +1,382 @@
+{
+  "actual_stage_source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "current_blockers": [
+    {
+      "installed_policies": {
+        "phorvex-staging-demo/stage-bench-defense": {
+          "generation": 1,
+          "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+        }
+      },
+      "reason": "REQUESTED_POLICY_NOT_PINNED",
+      "requested": {
+        "budget": {
+          "antiOverRotationWindow": "90s",
+          "maxGracePeriodSeconds": 30,
+          "maxMovesPerTick": 1,
+          "proactiveFloor": "15m",
+          "tickInterval": "5s"
+        },
+        "dryRun": null,
+        "identity": {
+          "generation": 9,
+          "name": "demo-api-defense",
+          "namespace": "phorvex-staging-demo",
+          "resourceVersion": "103329273",
+          "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f"
+        },
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        }
+      }
+    },
+    {
+      "actual_source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "installed_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "observed_fail_closed_refresh": {
+        "finished_at": "2026-11-01T17:29:51.693059Z",
+        "phase": "SYNC",
+        "reason": "running stage brain changed; install its new pin before synchronizing",
+        "started_at": "2026-11-01T17:29:19.560005Z",
+        "state": "BLOCKED"
+      },
+      "reason": "INSTALLED_PIN_SOURCE_AND_IMAGE_STALE"
+    },
+    {
+      "brain_capture_args": [],
+      "brain_volume_names": [
+        "grpc-tls"
+      ],
+      "manager_cost_evidence_capture_enabled": false,
+      "reason": "CAPTURE_DISABLED_AND_PVC_NOT_MOUNTED"
+    },
+    {
+      "matched_grants": 0,
+      "minimal_grant": {
+        "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+        "roles": [
+          "investor"
+        ],
+        "subject": "system:serviceaccount:phorvex-staging:staging-brain-benchmark",
+        "targets": [
+          "default"
+        ],
+        "tenants": [
+          "phorvex-staging-demo"
+        ]
+      },
+      "reason": "CONSOLE_READ_GRANT_MISSING",
+      "serviceaccount_still_exists": {
+        "generation": null,
+        "name": "staging-brain-benchmark",
+        "namespace": "phorvex-staging",
+        "resourceVersion": "102305013",
+        "uid": "f1c7d952-7838-4220-bac8-f1e53abe9838"
+      }
+    },
+    {
+      "old_scope": {
+        "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+        "deployment_name": "stage-bench-api",
+        "image_digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+        "measurement": "watch-observed-service-ready-backends",
+        "mode": "isolated-calibration",
+        "namespace": "phorvex-staging-demo",
+        "policy_name": "stage-bench-defense",
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "repository": "PhorvexSecurity/operator-refactored",
+        "schema": "phorvex-stage.scope.v1",
+        "selector": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        },
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+        "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      },
+      "reason": "OLD_OBSERVER_IS_DIFFERENT_POLICY_WORKLOAD_AND_SOURCE",
+      "requested_mapping": [
+        {
+          "identity": {
+            "generation": 3,
+            "name": "demo-api",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "98515125",
+            "uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b"
+          },
+          "kind": "Deployment",
+          "owners": null,
+          "phase": null,
+          "readyReplicas": 3,
+          "replicas": 3,
+          "selector": {
+            "matchLabels": {
+              "app.kubernetes.io/name": "demo-api"
+            }
+          }
+        },
+        {
+          "identity": {
+            "generation": 1,
+            "name": "demo-api-7c788969c-bd94s",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "97465187",
+            "uid": "8283ef72-25b8-4a6d-be44-60ede4a33da2"
+          },
+          "kind": "Pod",
+          "owners": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "demo-api-7c788969c",
+              "uid": "1ef38f0d-47e1-4aa4-90bc-a708ac01d559"
+            }
+          ],
+          "phase": "Running",
+          "readyReplicas": null,
+          "replicas": null,
+          "selector": {}
+        },
+        {
+          "identity": {
+            "generation": 1,
+            "name": "demo-api-7c788969c-dpfdk",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "97477221",
+            "uid": "5e522331-7449-4b74-8793-af1fece415db"
+          },
+          "kind": "Pod",
+          "owners": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "demo-api-7c788969c",
+              "uid": "1ef38f0d-47e1-4aa4-90bc-a708ac01d559"
+            }
+          ],
+          "phase": "Running",
+          "readyReplicas": null,
+          "replicas": null,
+          "selector": {}
+        },
+        {
+          "identity": {
+            "generation": 1,
+            "name": "demo-api-7c788969c-nnkcn",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "98515199",
+            "uid": "79ec5949-2dcb-428d-9131-4ee0455a513e"
+          },
+          "kind": "Pod",
+          "owners": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "demo-api-7c788969c",
+              "uid": "1ef38f0d-47e1-4aa4-90bc-a708ac01d559"
+            }
+          ],
+          "phase": "Running",
+          "readyReplicas": null,
+          "replicas": null,
+          "selector": {}
+        },
+        {
+          "identity": {
+            "generation": null,
+            "name": "demo-api",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "92134889",
+            "uid": "045aabbd-c330-4354-ba63-7b43fd928140"
+          },
+          "kind": "Service",
+          "owners": null,
+          "phase": null,
+          "readyReplicas": null,
+          "replicas": null,
+          "selector": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        }
+      ]
+    }
+  ],
+  "gitops": {
+    "application_set": {
+      "generation": 8,
+      "name": "phorvex-services",
+      "namespace": "argocd",
+      "resourceVersion": "103327183",
+      "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5"
+    },
+    "configuration_path_recommendation": [
+      {
+        "keys": [
+          "phorvex.mathLab.capturePolicies (explicit authorized stage policy allowlist)",
+          "phorvex.mathLab.captureMaxBytes (bounded by existing PVC)",
+          "phorvex.mathLab.captureCostEvidence=true (manager cost evidence)"
+        ],
+        "path": "deploy/environments/staging/phorvex.yaml"
+      },
+      {
+        "keys": [
+          "mathLabStore.existingClaim=staging-brain-mathlab"
+        ],
+        "path": "deploy/environments/staging/brain.yaml"
+      },
+      {
+        "keys": [
+          "Exact investor grant through reviewed default-empty additive Console grant seam, after preserving the catalogue overlay base grants. Root/worker owns the exact key and implementation."
+        ],
+        "path": "deploy/environments/staging/console.yaml"
+      }
+    ],
+    "durability_basis": [
+      "phorvex/tools/servicerelease/consumer.go:mutateDeploymentValues updates only image scalar nodes",
+      "tools/staging_release.py:expected_service_values preserves unrelated values",
+      "ApplicationSet sources read these tracked stage files on main; no manual deployment/AppSet override is required after reviewed integration"
+    ],
+    "existing_stage_value_precedence": "staging/phorvex.yaml, staging/<service>.yaml, staging/catalogue-family.yaml",
+    "grant_precedence_finding": "The final staging/catalogue-family.yaml replaces full phorvex.console.auth.grants.data; adding a subject only in shared phorvex.yaml will be overridden. Additive reader binding must survive the full three-file render.",
+    "grant_render_review_requirements": [
+      "Render both default-empty and all three actual staging value files.",
+      "Final grant JSON must retain existing subjects/version, add exactly one bounded investor subject, and reject duplicate issuer+subject.",
+      "The checksum/console-grants annotation must hash the same final merged grant JSON, including additions, so grant updates trigger the intended rollout."
+    ],
+    "live_owner": "Root applies any reviewed temporary stage-only route and restores tracked GitOps configuration; this investigator made no changes.",
+    "sources": [
+      {
+        "helm": {
+          "releaseName": "{{.release}}",
+          "valueFiles": [
+            "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+            "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+            "$values/deploy/environments/{{.environment}}/catalogue-family.yaml"
+          ]
+        },
+        "path": "{{.chart}}",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      },
+      {
+        "helm": {},
+        "ref": "values",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      }
+    ],
+    "templatePatch": null
+  },
+  "limitations": [
+    "Current61e capture is disabled, so this baseline contains actual live version/schema/help and verified image-layer bytes, not a claimed new61e snapshot cohort or successful paired replay.",
+    "PVC contents were not inspected while unmounted; this investigation proves the claim persists, not data deletion or loss.",
+    "Live reads are time-stamped sequential observations, not one atomic cluster snapshot.",
+    "No token was minted, no policy changed, no cluster configuration changed, no service restarted, no binary installed on the host."
+  ],
+  "operational_advisory": [
+    "Keep active demo-api-defense unchanged; capture/sync is read-only observation. Do not use isolated stage-bench fixture cost ledger for demo-api.",
+    "After restoring reviewed durable capture and Console grant, install actual61e brain image-extracted pin for demo-api-defense and gather fresh source/image/UID-matched snapshots before exact baseline replay.",
+    "Preserve prior pin/cohorts as historical. A source change must be explicit; new endpoint observer scope cannot be obtained by relabeling the old journal.",
+    "The ten-day request does not create ten days of recorded history. Declare actual sample count/window availability; absent history remains unavailable."
+  ],
+  "positive_controls": {
+    "ECR_read_access_verified": true,
+    "actual_native_replay_version": {
+      "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+      "endpointStudyMode": "PAIRED_BRAIN_REPLAY",
+      "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "overridableParameters": [
+        "P-FEA-006",
+        "P-FEA-005",
+        "P-OBJ-003"
+      ],
+      "replaySchema": "math-lab.replay.v1",
+      "snapshotSchema": "math-lab.snapshot.v1",
+      "studyCandidatesSchema": "math-lab.study-candidates.v1"
+    },
+    "capture_PVC_retained_bound": {
+      "identity": {
+        "generation": null,
+        "name": "staging-brain-mathlab",
+        "namespace": "phorvex-staging",
+        "resourceVersion": "102305250",
+        "uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "2Gi"
+          }
+        },
+        "storageClassName": "gp2-csi",
+        "volumeMode": "Filesystem",
+        "volumeName": "pvc-dab89cf9-6bea-4211-9487-f87c84fa0f5f"
+      },
+      "status": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "capacity": {
+          "storage": "2Gi"
+        },
+        "phase": "Bound"
+      }
+    },
+    "native_replay_help_supports_export_and_paired": true,
+    "native_replay_image_layer_hash_verified": {
+      "actual_runtime_version_evidence": "raw-selected.json pods[].native_replay_version",
+      "binary_bytes": 39780514,
+      "binary_sha256": "739b43a24c79ee7599ea02aab84ade4e23081d1881dd9db225d0e4c8ea192f86",
+      "compressed_bytes": 12954406,
+      "layer_digest": "sha256:de185c5cb71c57ee1b64b6d9e07c09ca2e5ac17339b49fce3a19b1e12d629d7c",
+      "member_name": "brain-replay",
+      "storage": "memory only; no remote binary installation",
+      "verified_layer_sha256": "sha256:de185c5cb71c57ee1b64b6d9e07c09ca2e5ac17339b49fce3a19b1e12d629d7c"
+    },
+    "running_brain_version": {
+      "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "service": "brain",
+      "version": "0.10.0"
+    },
+    "running_manager_version": {
+      "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+      "service": "manager",
+      "version": "0.16.0"
+    }
+  },
+  "schema": "phorvex-bench.selfserve-baseline-findings.v1",
+  "status": "READ_ONLY_BASELINE_COMPLETE",
+  "tools": {
+    "docker": {
+      "rc": 1,
+      "stderr": "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock\n",
+      "stdout": "\n"
+    },
+    "expected_new_cache_directory": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf/",
+    "local_crane": {
+      "path": "/workspace/.phorvex-tools/crane/crane",
+      "sha256": "8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992",
+      "use": "Local fallback only; remote /home/hami/.local/bin/crane exists outside default SSH PATH; native ECR extractor avoids Docker entirely.",
+      "version": "0.22.1"
+    },
+    "preferred_native_extractor": "benchmark/worker/mathlab/binary.py:ensure_binary, using read-only ECR manifest/layer APIs and SHA checks; install through authorized stage pin command, not a production image or developer-labelled replacement.",
+    "remote_crane": {
+      "path": "/home/hami/.local/bin/crane",
+      "rc": 0,
+      "sha256": "7e00f53d871214a6eff6f67eef434745af6fd5e1c04fb563df37b93cc352f8c1",
+      "version": "0.20.2"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:07:58.162439+00:00",
+  "scope": "Mechanical three-path currentbe676 integration only; no new benchmarksource logic.",
+  "upstream": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "previous_head": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "staged_tree": "5d574e7aeeb7360cbfe51d608d0195c4ba9397e5",
+  "source_manifest_sha256": "5c82a26c45f959a9ffd6026a42ab7dde7423985fbffb68ceb8d5fd5173836888",
+  "checks": [
+    "Three incomingpaths,indexandworktree byte-exactupstream; latestclosedfamilygrants preserved.",
+    "Runtime169,allcapturevalues,defaultcharts,archivesandreleasepins unchanged from2a9.",
+    "Sixactualdefault andthreeoverlay render comparisonsPASS:currentb1efimages unchanged,onlyauthorizedcapture/reader additions,allothercomponents unchanged.",
+    "ActualstrictcataloguegatePASS0consumers underclosedidentityfamily; oldoperator subjects/order retained plusinvestorbenchmarkreader."
+  ],
+  "render_change_counts": {
+    "brain": 4,
+    "manager": 1,
+    "console": 2,
+    "actuator": 0,
+    "sensor": 0,
+    "attacks": 0
+  },
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/composition-inputs.json",
+      "sha256": "5c82a26c45f959a9ffd6026a42ab7dde7423985fbffb68ceb8d5fd5173836888",
+      "bytes": 1077
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/capture-tests.txt",
+      "sha256": "0ccf5a427f872cec9fe282d8de65ca9af399b3fa2d65adc550089e32cda997fc",
+      "bytes": 105
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/source-verification.json",
+      "sha256": "b8bcf065d6800f4026b347232a916193ff3982c06cb6f9bba0fa855673d79581",
+      "bytes": 1295
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/independent-render-control.py",
+      "sha256": "fda3955c96c7c6dd2ecc77d834f44066b07969d43f1307bcc3e1771e0bdd82b8",
+      "bytes": 5919
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/independent-render-control.json",
+      "sha256": "f309f95a9ecc91245ba169581fba6a19b5042444918d45263fd491c13635079e",
+      "bytes": 23919
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-be676/render-output.txt",
+      "sha256": "ec639eaf5b45015956d80c38eb13de73d8bd6263d38548c4a71ba142e3aebda4",
+      "bytes": 950
+    }
+  ],
+  "limits": [
+    "Commitbindingandnewcoherentfinalhead checks required.",
+    "Prior2a9run interrupted143 remains incomplete; no PASS relabel.",
+    "No currentcapture/nativebaseline,botsuccess,L3orliveapplication claim."
+  ]
+}

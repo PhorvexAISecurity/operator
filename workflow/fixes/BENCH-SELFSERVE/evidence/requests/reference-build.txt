@@ -1,0 +1,1 @@
+{"binary": "/workspace/operator-benchmark-selfserve/benchmark/endpointv3/bin/endpoint-v3", "binary_sha256": "c17a03a8334c3d13b9299259ef81ac7520eb7b179ad46e0babf96236404073c2", "source_files": 10}

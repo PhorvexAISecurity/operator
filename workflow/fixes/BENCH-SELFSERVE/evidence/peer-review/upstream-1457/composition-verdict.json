@@ -1,0 +1,61 @@
+{
+  "schema": "phorvex-bench.component-peer-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:21:08.055085+00:00",
+  "verdict": "PASS_FOR_EXACT_ISOLATED_SOURCE_COMMIT",
+  "upstream": "1457be4433a719784523a68ec3dd982cb57af409",
+  "previous_head": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "worktree": "/workspace/operator-benchmark-selfserve-1457",
+  "staged_tree": "6f4b192ae9292a3a9b427e988465f4b76425586f",
+  "source_manifest_sha256": "7d272b0fafe1ad7caa06d8f52d473338b636d589f4091e90a678f8c6a31ad865",
+  "checks": [
+    "Eight staged/working files and staged tree exact freeze; all168 runtime files unchanged from reviewed711, including lease repair.",
+    "Brain conflict resolves to exact1457 image-file bytes followed by unchanged approved capture/PVC suffix. Other current images/release data exact upstream after only prior approved capture/reader additions.",
+    "Current quarantine NamespaceUID/workload/p1-demo scopes/grants preserved. Only disabled agentAction.image is canonically pinned; unchanged strict gate executes PASS with one expected workload consumer.",
+    "All6 component default renders identical upstream1457. Actual ordered three-overlay images equal current1457; only original capture/reader deltas in3 selected components; actuator/sensor/attacks zero deltas.",
+    "Existing subjects retain exact order/content; one investor-only stage benchmark subject appended. Existing namespace operator RBAC remains untouched.",
+    "Manager default and all archives unchanged from reviewed711. Actual archive payload verification continues to match composed chart source."
+  ],
+  "limits": [
+    "Main711 worktree/source/preflight remains untouched; this receipt binds isolated composition only. Canonical must bind resulting commit and run coherent preflight after main fast-forward.",
+    "No live current-source rollout, capture transport, native reconciliation, bot result or endpoint-history readiness is established by this component review."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/composition-inputs.json": {
+      "sha256": "7d272b0fafe1ad7caa06d8f52d473338b636d589f4091e90a678f8c6a31ad865",
+      "bytes": 2137
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/author-capture-results.json": {
+      "sha256": "af4f63fb7d662dc534c748dd7607c72ef3adcb8c86ea4654e976c275321a7a63",
+      "bytes": 663
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-1457/capture-tests.txt": {
+      "sha256": "963921280fc9994a68699fb79bdfea50e5528ef5b16a1a4a3c62f505689430c4",
+      "bytes": 1487
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/independent-composition.py": {
+      "sha256": "d3c54fbc5964da431460075bedad7530389bb9764e85d3a7784e4b4642d9e7af",
+      "bytes": 4654
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/independent-composition.json": {
+      "sha256": "e394808738e0ec423acd2c36275187567c495e9d48c26bd79b5dd61f4a8b2d7d",
+      "bytes": 1180
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/strict-catalogue-gate.txt": {
+      "sha256": "73ed58f50c55831f6080f66322cd117ba5f1985debc47ada9e2a9b03ff9efcd7",
+      "bytes": 180
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/independent-render-control.py": {
+      "sha256": "8e02e41eae74055cdad1ff2be356486a02b2079d86ba102e6e123588e5e11d6f",
+      "bytes": 5918
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/independent-render-control.json": {
+      "sha256": "f8b8e8d57a503383c54c7002aaa8aa158ded048a768f32ba3fc2a5ca616b2bdc",
+      "bytes": 23871
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/independent-render-control.txt": {
+      "sha256": "ec639eaf5b45015956d80c38eb13de73d8bd6263d38548c4a71ba142e3aebda4",
+      "bytes": 950
+    }
+  }
+}

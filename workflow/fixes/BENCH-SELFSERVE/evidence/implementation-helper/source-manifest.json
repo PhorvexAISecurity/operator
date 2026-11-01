@@ -1,0 +1,76 @@
+{
+  "schema": "phorvex-bench.author-source-manifest.v1",
+  "author": "stage-observer",
+  "state": "SOURCE_FROZEN_PENDING_FINAL_TEST_AND_PEER_REVIEW",
+  "files": [
+    {
+      "path": "benchmark/worker/stage_cli.py",
+      "sha256": "1ecc0171f817cae2d437dd5878bb60a70a39e54aa700bea45d2a570ca9ef08e4"
+    },
+    {
+      "path": "benchmark/worker/mathlab/binary.py",
+      "sha256": "18637c57cc09c21ae3ff797914421e8accb7c674fb110295f9e97eb9c0fb3fd1"
+    },
+    {
+      "path": "benchmark/worker/mathlab/stage_scope.py",
+      "sha256": "2c6f1ad86caccf34c8e7d38a00714fb1ca0d0287eed60c5a236b19c01037dfca"
+    },
+    {
+      "path": "benchmark/worker/stage_reconcile.py",
+      "sha256": "6964aa6f927bc205cfafd38a7eb34ca7a414daff5e36daa3796bd525b0902eaf"
+    },
+    {
+      "path": "benchmark/worker/stage_observer_runtime.py",
+      "sha256": "6e25fb4e652d9e64eddb556250f1f01e56ed64efe5207e541a74e9d35e3701bc"
+    },
+    {
+      "path": "benchmark/worker/test_stage_reconcile.py",
+      "sha256": "8a2f1cc5921264b3c7ad6e12dcb3e8067aff95127594aaff1399ba566f6ff043"
+    },
+    {
+      "path": "benchmark/worker/test_stage_observer_runtime.py",
+      "sha256": "c70ea2cb3e3a673c58559658b08a3c2eb9a54488f37f835c667fed0ce56af0a8"
+    },
+    {
+      "path": "benchmark/worker/endpoint_refresh.py",
+      "sha256": "d15b632bb9f7f9eb62b8abd48255c575124c56ed928a4f15e9a38538578747db"
+    },
+    {
+      "path": "benchmark/worker/test_endpoint_refresh.py",
+      "sha256": "180d8a98ddf472026a69e46b69c61ad3709b5c0947f6e41c881ba6cdaafffc44"
+    },
+    {
+      "path": "benchmark/stage/evidence.py",
+      "sha256": "314123805cb13eee81bc5808a53411511524458f569786accf00c657c0c5c999"
+    },
+    {
+      "path": "benchmark/stage/normalize.py",
+      "sha256": "7d60ce044ba073e3fe586186d272ec2908acae0db3ea22daf695ac909957f4b1"
+    },
+    {
+      "path": "benchmark/worker/deploy/README.md",
+      "sha256": "c436ec58f6d8c098bc6bf6cd80d8ca3f3494b134fd150bf62a48e46661085eef"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.service.example",
+      "sha256": "8f1f60af93a857c85db8beecabbc2093e6607e136ca9c112ea39d967dd8cd3db"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.timer.example",
+      "sha256": "f128a13ebf3160841a2a937194c2c4228760ec8774f9b1cd594bf0be0e3f9ab2"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-observer.service.example",
+      "sha256": "5042a2219f1477d0e36158a6bf27d304e1df91bb71224465ebc080e93cd039e5"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.service.example",
+      "sha256": "bd858706cb191073bd2823ab76f80df6de0db644c266d51fbf2cd4c3d68a189a"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.timer.example",
+      "sha256": "61a408ab2e4a0a1827bc55dfd8a0ea54754a249afad2e7e36f65843c430074c1"
+    }
+  ],
+  "amendment": "Lead-requested bounded60s live-read defaults; content-addressed immutable reviewed-engine evidence preserves previous pin references on same-source reinstallation."
+}

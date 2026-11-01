@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-11-01T20:59:30.335227+00:00",
+  "api_path": "/pulls/198",
+  "data": {
+    "number": 198,
+    "title": "fix(benchmark): keep stage capture and request readiness consistent",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "merged_at": null,
+    "merge_commit_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "updated_at": "2026-11-01T20:43:23Z",
+    "changed_files": 60,
+    "commits": 8,
+    "additions": 3986,
+    "deletions": 172,
+    "head": {
+      "sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+      "ref": "fix/benchmark-selfserve"
+    },
+    "base": {
+      "sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "ref": "main"
+    }
+  }
+}

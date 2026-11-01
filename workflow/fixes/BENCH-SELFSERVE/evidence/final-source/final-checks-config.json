@@ -1,0 +1,27 @@
+{
+  "description": "BENCH-SELFSERVE exact committed source preflight then author L1/L2; no live mutations",
+  "source_sha": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "cwd": "/workspace/operator-benchmark-selfserve",
+  "status": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/final-source/final-checks-status.json",
+  "log": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/final-source/final-checks.log",
+  "env": {},
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "coherent-current-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "author-L1-L2",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ]
+}

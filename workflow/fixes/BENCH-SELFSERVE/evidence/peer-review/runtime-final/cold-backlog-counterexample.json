@@ -1,0 +1,74 @@
+{
+  "schema": "phorvex-bench.peer-cold-backlog-control.v1",
+  "reviewer": "stage-review",
+  "producer": "Real content-addressed finalized PXMS, actual stage_listing/sync/private reconciliation; Console inclusive oldest-first index and Kubernetes/image extraction are scripted transport boundaries, not product-engine proof.",
+  "policy_snapshots": {
+    "old": 400,
+    "fresh": 70
+  },
+  "requested_ticks": 64,
+  "runs": [
+    {
+      "status": "BLOCKED",
+      "phase": "SYNC",
+      "reasons": [
+        {
+          "code": "CAPTURE_STALE",
+          "message": "latest exact-source capture is more than 600 seconds old",
+          "recovery": "Check stage capture/relay and wait for fresh ticks; old data is not relabeled current."
+        }
+      ],
+      "sync": {
+        "phorvex-staging-demo/demo-api-defense": {
+          "listed": 256,
+          "downloaded": 256,
+          "since": null,
+          "next_since": "2026-11-01T17:13:19.569281Z",
+          "more_available": true
+        }
+      },
+      "active_pin_exists": false,
+      "private_scratch_count": 0
+    },
+    {
+      "status": "BLOCKED",
+      "phase": "SYNC",
+      "reasons": [
+        {
+          "code": "CAPTURE_STALE",
+          "message": "latest exact-source capture is more than 600 seconds old",
+          "recovery": "Check stage capture/relay and wait for fresh ticks; old data is not relabeled current."
+        }
+      ],
+      "sync": {
+        "phorvex-staging-demo/demo-api-defense": {
+          "listed": 256,
+          "downloaded": 256,
+          "since": null,
+          "next_since": "2026-11-01T17:13:19.569281Z",
+          "more_available": true
+        }
+      },
+      "active_pin_exists": false,
+      "private_scratch_count": 0
+    }
+  ],
+  "index_reads": [
+    {
+      "policy": "demo-api-defense",
+      "since": "",
+      "limit": 256
+    },
+    {
+      "policy": "demo-api-defense",
+      "since": "",
+      "limit": 256
+    }
+  ],
+  "conclusion": "Two fresh reconciliations each fetch the same oldest256, fail stale and discard cursor scratch even though70 current qualified snapshots exist. No pin published.",
+  "source_hashes": {
+    "benchmark/worker/stage_reconcile.py": "31fcf203658f5420c742d03934934afaa2f68d4cabdd604e2f61ccea90ffb1ba",
+    "benchmark/worker/stage_cli.py": "1ecc0171f817cae2d437dd5878bb60a70a39e54aa700bea45d2a570ca9ef08e4",
+    "benchmark/worker/mathlab/snapshots.py": "f117a35fe7e5f9ee9256687488c2a3ca687ab0ff3f4714bae0e06b8bbd36548a"
+  }
+}

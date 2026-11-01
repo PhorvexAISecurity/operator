@@ -1,0 +1,10 @@
+import sys,pathlib,json,datetime
+root=pathlib.Path('/home/hami/phorvex-benchmark');sys.path.insert(0,str(root/'releases/stage-bot-3e11f4e7/benchmark/worker'));from mathlab import stage_scope
+r={'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runtime_release':'stage-bot-3e11f4e7','checks':[]}
+for policy in ['phorvex-staging-demo/demo-api-defense','phorvex-staging-demo/stage-bench-defense']:
+ try:
+  pin=stage_scope.load(root/'stage-data',policy,root/'operator-refactored');r['checks'].append({'policy':policy,'result':'PIN_PRESENT','source':pin['brain']['git_sha'],'policies':sorted(pin['policies'])})
+ except stage_scope.StageError as e:r['checks'].append({'policy':policy,'result':'BLOCKING_EXCEPTION','error':str(e)})
+assert r['checks'][0]['error']=='policy is not in the installed stage capture pin; pin and sync it before running'
+assert r['checks'][1]['result']=='PIN_PRESENT'
+print(json.dumps(r,indent=2))

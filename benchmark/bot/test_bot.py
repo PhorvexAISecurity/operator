@@ -250,6 +250,12 @@ class FakeDashboard:
     def __init__(self, preflight_status='PASS'):
         self.calls, self.preflight_status = [], preflight_status
 
+    def request_readiness(self, requested):
+        # This test double models an already-ready backend. The real local
+        # pin/header/live-observation predicates are covered in test_request_readiness.
+        return {'status': 'READY', 'requested_policy': requested['policy'], 'requested_ticks': requested['ticks'],
+                'requested_sync': requested['sync'], 'snapshot_count': requested['ticks'], 'reasons': []}
+
     def sync(self, policy):
         self.calls.append(('sync', policy))
         return {'id': 'job1'}
@@ -286,7 +292,8 @@ class BotTest(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix='bot-service-'))
         self.addCleanup(shutil.rmtree, self.tmp)
         self.fake = FakeTelegram()
-        self.env = {'TELEGRAM_BOT_TOKEN': TOKEN, 'BOT_ALLOWED_USER_IDS': str(OWNER), 'BOT_STATE_DIR': str(self.tmp / 'state')}
+        self.env = {'TELEGRAM_BOT_TOKEN': TOKEN, 'BOT_ALLOWED_USER_IDS': str(OWNER), 'BOT_STATE_DIR': str(self.tmp / 'state'),
+                    'BOT_MAX_TICKS': '6'}
         for k, v in (('OPENAI_API_KEY', OPENAI_KEY), ('OPENAI_MODEL', 'test-model')):
             os.environ[k] = v
             self.addCleanup(os.environ.pop, k, None)
@@ -597,6 +604,19 @@ class BotTest(unittest.TestCase):
             'path': str(deployed), 'git_sha': base, 'binary_sha256': testkit.hashlib.sha256(deployed.read_bytes()).hexdigest(),
             'image_digest': 'sha256:' + 'e' * 64}))
         testkit.write_stage_pin(data, base)
+        with service.stage_scope.pin_lock(data):
+            pass
+        with service.snapshots.cache_lock(data, 'phorvex-staging-demo', 'demo-api-defense'):
+            pass
+        # Fake only the remote Kubernetes observation for these local producer
+        # fixtures. Header/source/count checks still read the real fixture files.
+        probe = mock.patch.object(service.request_readiness, 'live_probe', return_value={
+            'status': 'READY', 'reasons': [], 'available_policies': ['phorvex-staging-demo/demo-api-defense'],
+            'policy': {'uid': 'u', 'mode': 'active'}})
+        probe.start(); self.addCleanup(probe.stop)
+        clock = mock.patch.object(service.request_readiness.time, 'time',
+                                  return_value=service.request_readiness.clock('2026-10-28T00:00:10Z'))
+        clock.start(); self.addCleanup(clock.stop)
         go, template = testkit.write_fake_go(self.tmp / 'fakego')
         (go.parent / 'expected-toolchain').write_text('go1.26.10')
         os.environ['FAKE_REPLAY_TEMPLATE'] = str(template)
@@ -616,7 +636,7 @@ class BotTest(unittest.TestCase):
         before = (testkit.git(repo, 'status', '--porcelain'), testkit.git(repo, 'for-each-ref'))
         bot = self.bot(FakeDashboard(), self.openai_returning(testkit.threshold_diff(3, 5)),
                        BOT_REPO=str(repo), MATHLAB_DATA_DIR=str(data), BOT_GO=str(go))
-        bot.handle(message(OWNER, '/bench ticks=100 raise the rotate threshold for vllm from 3 to 5'))
+        bot.handle(message(OWNER, '/bench ticks=6 raise the rotate threshold for vllm from 3 to 5'))
         self.assertTrue(bot.run_next())
         texts = self.fake.texts()
         self.assertTrue(any('asking the LLM for a change against manager-v0.12.0' in t for t in texts), texts)

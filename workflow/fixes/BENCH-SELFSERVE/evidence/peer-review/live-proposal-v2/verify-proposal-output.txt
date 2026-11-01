@@ -1,0 +1,5 @@
+{
+  "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v2/operational-verdict.json",
+  "sha256": "589881acb515bcbf5901282e4f8e310215761543294c654c0891644c37af95c5",
+  "verdict": "PASS_FOR_BOUNDED_LIVE_ATTEMPT"
+}

@@ -1,0 +1,76 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "source": "read-only upstream CI investigation",
+  "files": [
+    {
+      "path": "3be-charts.excerpt.log",
+      "bytes": 1007,
+      "sha256": "1743c86a8e9154f15037525f376c49f4a107bf6c79fbd25b5c30781f86c4ed14"
+    },
+    {
+      "path": "3be-go-unit.excerpt.log",
+      "bytes": 761,
+      "sha256": "c5d242044c7d4467309483693723a58a9791520fd23dd9ba00717732fb6d82b5"
+    },
+    {
+      "path": "bee9-charts.excerpt.log",
+      "bytes": 1007,
+      "sha256": "652fdd1c292ef139672d385e9762b5d495f7fbf11ab4ee0c82320da0b9ccaba9"
+    },
+    {
+      "path": "bee9-envtest-assertion.json",
+      "bytes": 3079,
+      "sha256": "17881978465592c7a8e85036bf79d6e1568e1a7ec02cd8d3d13cfe07db4f2958"
+    },
+    {
+      "path": "bee9-go-envtest.excerpt.log",
+      "bytes": 392,
+      "sha256": "7dfcb49ffe9bbe5c7b8bf139c6215cdb8c6be21d59864d5090c0cbde70c1a215"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 5800,
+      "sha256": "c2c0bcf34e2ce72f4caf651180c1d5b54da1c7ce45e6d12dc260ce1e8103ee86"
+    },
+    {
+      "path": "log-provenance.json",
+      "bytes": 3346,
+      "sha256": "393b2c70a256158132f4d4826d981e557e63ced0aeed04dc63cf2b7aed5c7a02"
+    },
+    {
+      "path": "merged-package-check-tar135.log",
+      "bytes": 62,
+      "sha256": "ce40d3af12db7c5fccc0cde5bc3ad1b6abf18150a1e6435c9a5e750b3b9f1753"
+    },
+    {
+      "path": "merged-package-check.log",
+      "bytes": 731,
+      "sha256": "94cca5126bf9b70790c8876abe915e00036566e67560e56763702c79027c0e09"
+    },
+    {
+      "path": "release-failure.excerpt.log",
+      "bytes": 3022,
+      "sha256": "365d57dee3914c434a61044d3b1df59a8bf0178f732798d03720ab6b0b43eba8"
+    },
+    {
+      "path": "release-jobs.json",
+      "bytes": 1076,
+      "sha256": "a8b0484d73458f2d295ae679da6d84880afde166c62978af734459cc54858589"
+    },
+    {
+      "path": "release-log-provenance.json",
+      "bytes": 290,
+      "sha256": "5c3d5a3db6e8f5aa41a7d8ea656d89ae7a33020e34c7e5e56b5fd8dff5b325ca"
+    },
+    {
+      "path": "release-status.json",
+      "bytes": 434,
+      "sha256": "6fbb5a681fbeb9976f3f5728b2736785de28d0e6082c0c718a3413a4af514b50"
+    },
+    {
+      "path": "upstream-common-payload-checks.json",
+      "bytes": 3317,
+      "sha256": "522c7d3690ab069c3e3895118fae72e0715e85d2acdfd0c5d2158d4db76a4351"
+    }
+  ]
+}

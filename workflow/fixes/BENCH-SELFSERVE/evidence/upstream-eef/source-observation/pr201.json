@@ -1,0 +1,29 @@
+{
+  "observed_at": "2026-11-01T20:59:30.389920+00:00",
+  "api_path": "/pulls/201",
+  "data": {
+    "number": 201,
+    "title": "deploy(staging): isolated release b1ef9ccdb258",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/201",
+    "state": "closed",
+    "draft": false,
+    "merged": true,
+    "merged_at": "2026-11-01T20:53:24Z",
+    "merge_commit_sha": "408944e2182a36affd18374865e1fdd392221192",
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "updated_at": "2026-11-01T20:53:25Z",
+    "changed_files": 8,
+    "commits": 1,
+    "additions": 69,
+    "deletions": 69,
+    "head": {
+      "sha": "30b24b0d9af4c9571e587c454510dd5238b269b3",
+      "ref": "release/staging-isolated-b1ef9ccdb258"
+    },
+    "base": {
+      "sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "ref": "main"
+    }
+  }
+}

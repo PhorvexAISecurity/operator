@@ -1,0 +1,79 @@
+{
+  "schema": "phorvex-bench.operational-proposal-peer-review.v4",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:59:42.408917+00:00",
+  "verdict": "PASS_FOR_BOUNDED_LIVE_ATTEMPT",
+  "source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "main": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "actual_image_source": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "images": {
+    "brain": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-bee9caccf3bae388d412e72adfe50ca9de41a486@sha256:3200cb0e57130468ebdf73ba22b02d4e531d2cf25fe92cc7fb895672659aa2bf",
+    "manager": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-bee9caccf3bae388d412e72adfe50ca9de41a486@sha256:b1ac09d66a0651360252806b8f39925c45a677f63c320d9a5773ec7935163044",
+    "console": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-bee9caccf3bae388d412e72adfe50ca9de41a486@sha256:cef329f8709c02fd8c867d127dbd1c8845ecd991bb2ca282b910a32e7ed695d5"
+  },
+  "template_cases": {
+    "total": 24,
+    "selected_staging": 3,
+    "empty_unmodified": 21,
+    "missing_key_rejected": true
+  },
+  "checks": [
+    "Every proposal manifest file hash verified; embedded operator payload equals fresh19:48:24 actual preconditions and expected.json.",
+    "Executable Python AST identical to accepted V3 except exact embedded payload and evidence output directory. All fresh source/main, full AppSet/UID/RV, deployment/policy/workload/Service identity, complete rollout/health and4GiB guards preserved.",
+    "Go template differs V3 only both source revisions; all repository/path/release/skipCrds/orderedvalueFiles fields preserved. Only selected3 staging application source arrays change.",
+    "Committed4dc exact source binding accepted. Current closed a5f family preserved except independently proven canonical inactive-image field with no rendered effect; newbee9 image tags/digests exactly equal all3 actual deployment preconditions.",
+    "Both policy UID/generation/mode, workload UID/generation/selectors/replicas and Service UID/selectors remain unchanged from prior approved scope. Native61e historical receipts are not relabelled as currentbee9 evidence."
+  ],
+  "conditions": [
+    "Root applies only after round3 preregistration/rebaseline and fresh guard success; remote exact issue/main refs checked at execution.",
+    "Temporary pin freezes selected3 apps; root monitors main/effective images and removes exact override before unreviewed subsequent release and after durable merge.",
+    "ApplicationSet UID/RV CAS is atomic for that object; other fresh observations are not a cross-object transaction. Detected intervening changes require stop/review.",
+    "This is proposal acceptance only. Actual Argo rollout, source-native reconciliation, authenticated capture and real bot/history results remain separate pending evidence."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v4/proposal-manifest.json": {
+      "sha256": "6970c6115eccd69edb60b674db91f050a71aead9fe21e4962277998bce9277dd",
+      "bytes": 1600
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v4/operation.json": {
+      "sha256": "9b79dfc4de715fa1973e11c907253aa74365109f9cafc354af7ed343a7b85f2e",
+      "bytes": 1605
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v4/expected.json": {
+      "sha256": "a215dc2f7a64f1b0e8970bdc9b719f3bda9c840308221f0640b9094f6118b8bd",
+      "bytes": 10471
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v4/templatePatch.yaml.gotmpl": {
+      "sha256": "0cd04d01d31f032c9ba1e71692a9cb8e2cbcf1b8ce43436421bf3be94fae3b63",
+      "bytes": 745
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v4.py": {
+      "sha256": "d8d3dce5d2f4182790d2f1cd59437558960e7d6684c568d8bcdc250290092230",
+      "bytes": 13659
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/bee9-a5f-capture-preconditions.json": {
+      "sha256": "7cb0462ad93f8057c1840ca5ea7b9263789fdd2fe0c54f3bb30eb63850f4c08f",
+      "bytes": 17180
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-a5f/commit-binding-4dc325d3.json": {
+      "sha256": "8382d871e40bd27968f78be640fc553f40c7f9e379ae7f2ca913fbe1355fe136",
+      "bytes": 1482
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/guard-equivalence.json": {
+      "sha256": "6345ce0f3e955f208d86ee89d566216fd0034d0ebfb68b3cddf8ef314f502177",
+      "bytes": 368
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/template-output.json": {
+      "sha256": "d71c2ac5b44429e09cd70fe14f670786f06e2714e7251ae5330887d9fcca6fa7",
+      "bytes": 4891
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/template-stderr.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/verify-proposal.py": {
+      "sha256": "17a8ef4d3bc54732cff5046db5541ba14c5fa6470d1e8245cf4dc85163a044fc",
+      "bytes": 6137
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "verdict": "PASS_INSTALLED_CONTENT_AND_UNIT_BINDING",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:55:41.508906+00:00",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "release": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "runtime_files_verified": 169,
+  "unit_hashes_verified": {
+    "phorvex-stage-reconcile.service": "3b02eaacf9561b3e293f4b7eceffd1529167f028a22eca924c4b332627adfc3f",
+    "phorvex-stage-reconcile.timer": "61a408ab2e4a0a1827bc55dfd8a0ea54754a249afad2e7e36f65843c430074c1",
+    "phorvex-stage-endpoint-refresh.timer": "f128a13ebf3160841a2a937194c2c4228760ec8774f9b1cd594bf0be0e3f9ab2",
+    "phorvex-benchmark-bot.service": "0516247f8386fe05626e46331e7ccf5d8340f4719412f9c02accef9f9fea1ce2",
+    "phorvex-stage-observer.service": "c1e24d6395910ef0163f83ed97cc8132b9f9a5bc38c3cd44156d6a6d1a7df107",
+    "phorvex-stage-endpoint-refresh.service": "7d9888b0d7d800d1a0bba2bc3e61d31da4578e310235c5167f4d7d0b1cf73929"
+  },
+  "units_observed": {
+    "phorvex-stage-reconcile.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "ExecMainStatus": "2",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4/benchmark/bot",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1648552",
+      "Result": "success",
+      "ExecMainStatus": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "0",
+      "Result": "success",
+      "ExecMainStatus": "2",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-225877a8ecb4",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    }
+  },
+  "native_capture_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "native_capture_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+  "native_replay_binary_sha256": "ea9fc8f0b2ebcb7dabc6d866ba4b155a4085244da2c301155d5a8a05e8812874",
+  "scope": "Read-only file hashing/systemctl show only. Unit activity may be temporarily paused by already authorized acceptance; no bot or cluster mutation, no terminal benchmark claim."
+}

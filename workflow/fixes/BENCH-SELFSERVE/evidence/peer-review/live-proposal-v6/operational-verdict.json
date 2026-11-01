@@ -1,0 +1,75 @@
+{
+  "schema": "phorvex-bench.operational-proposal-peer-review.v6",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:45:19.311195+00:00",
+  "verdict": "PASS_FOR_BOUNDED_LIVE_ATTEMPT",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "upstream": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "actual_image_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "replaces_owned_template_sha256": "962ac858b9897bc58b011177e72e79001c747ce1fefc8b218f147e00fd092beb",
+  "operator_sha256": "c287d2e378b5ee398ed772d9055fc2264142c8f8bd7edfcb1523aec7fca7cd1d",
+  "template_sha256": "22b756e2f469dbe70fd7d0e15b634984d64d065caf100820fb3d2dbad10a955c",
+  "checks": [
+    "Exact proposal manifest, literal operator payload and current20:40:16 precondition hashes verified. Full executable AST is identical to accepted V5 except reviewed payload/output directory.",
+    "All original full AppSet spec, UID/resourceVersion, deployment health/args/images, policy UID/generation/mode, workload/Service, publishedsource/main and free-space guards preserved.",
+    "Proposed template is byte-exact existing V5 with only two source SHA substitutions. Prior actual24-branch Go-template proof remains applicable: only brain/manager/console staging selected;21other branches empty, all path/valueFiles/repository/release fields unchanged.",
+    "Committed225877 closed family is byte-exact latestb1ef; all six fresh default/stage render controls preserve currenta5f images and upstreamclosedfamily grants while retaining reviewed benchmark capture and read-only reader grant.",
+    "Cleanup template is byte-exact original external template except1457\u2192closedb1ef. Original stale1457 remains historical evidence only; cleanup cannot reopen old quarantine."
+  ],
+  "conditions": [
+    "Root may execute one bounded replacement only after current main/branch and every fresh guard pass. No prune; no other ApplicationSet fields or unrelated services change.",
+    "Monitor main/effectiveimages and stop on changedscope. AppSet CAS does not atomically freeze all previously observed cluster resources.",
+    "Cleanup is a future separately reviewed operation using exact-owned-value/current-main guards; never overwrite external replacement or restore obsolete1457.",
+    "Actual rollout, finalruntime installation/restart gap, bot terminal results and qualifying new endpoint history remain separate evidence; this verdict is not current readiness or campaign completion."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/proposal-manifest.json": {
+      "sha256": "10a9e6feae119620fcf723df0758e7f3ace413f30abce3e4ea3831bf402953f9",
+      "bytes": 1370
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/operation.json": {
+      "sha256": "ad5b5c68d6f663eecd68fa9bb5fe8372e4a2b6e57c9448ffbab03d5f25faafc8",
+      "bytes": 3547
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/expected.json": {
+      "sha256": "bf2a744208d02df3e8bb11a3b370390e19738105ac1ab1079d527d864dfc6639",
+      "bytes": 11568
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/templatePatch.yaml.gotmpl": {
+      "sha256": "22b756e2f469dbe70fd7d0e15b634984d64d065caf100820fb3d2dbad10a955c",
+      "bytes": 745
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v6.py": {
+      "sha256": "c287d2e378b5ee398ed772d9055fc2264142c8f8bd7edfcb1523aec7fca7cd1d",
+      "bytes": 16683
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-v5-before-closure-preconditions.json": {
+      "sha256": "ef85768227d0f79da3e9586c07f5763217903d94bf494bab2e76f7e0655123b3",
+      "bytes": 18502
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/operational-verdict.json": {
+      "sha256": "54c0d326c63b2d60cc52961de91da55027af2c309693ea2691277891e5559b2d",
+      "bytes": 4834
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/proposed-template-output.json": {
+      "sha256": "3b1997aa96848d039a0e3643d364a158f587bb7907a14674b668c1490c5cd959",
+      "bytes": 4891
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/bot-lease-repair/commit-binding-225877a8.json": {
+      "sha256": "096bb7f80f864c9c462e6e2001fa8ff5d317873a4c0b3b59258d6a8239fd11bb",
+      "bytes": 880
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/bot-lease-repair/independent-render-control.json": {
+      "sha256": "ce3df72959a1da88f3c8311035e6584d1504e3eb2ec6271d27d303506a72f02f",
+      "bytes": 23919
+    },
+    "workflow/campaigns/2026-11-01-stage-selfserve/rounds/round-4/plan-update-b1ef.md": {
+      "sha256": "8ba5a32587a8e42c5caf347bb881013a3c67a0c0fa16e2eb43712e593f7af5ac",
+      "bytes": 1424
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v6/verify-proposal.py": {
+      "sha256": "d4d7290fe0716532c7076cf9720eca39777bac1b5aeca2ed3a1c1e2de7549f1a",
+      "bytes": 8348
+    }
+  }
+}

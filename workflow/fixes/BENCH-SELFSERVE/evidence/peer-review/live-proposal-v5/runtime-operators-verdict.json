@@ -1,0 +1,71 @@
+{
+  "schema": "phorvex-bench.peer-current-runtime-operators.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:26:00.978166+00:00",
+  "verdict": "PASS_FOR_CURRENT_SCOPE_GUARDED_ATTEMPT_AFTER_NATIVE_RECONCILIATION",
+  "installer_sha256": "420e74148d57af2f4ff7413b77490eee5bce5be9860ae1690edc60510586da6e",
+  "launcher_sha256": "c3fdbf9f30127d71320b15dd8c831f5de731afeddbb5abdea9821460364af9be",
+  "runtime_manifest_sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+  "accepted_runtime_source_arguments": [
+    "711813101692b2c083ba6975b8eca811e7e2ff30",
+    "4116c23e7b44e804596e7c711f1aa05d5662e896"
+  ],
+  "checks": [
+    "Installer differs acceptedde6 only3 exact identity strings: actuala5f source and2immutable digests. They equal retained fresh actual embedded/image observations. All content/unit/native/policy/workload/service/idle/disk/protected-state/rollback guards remain byte-identical.",
+    "Both accepted runtime source arguments have exact168 reviewed runtime files under manifestdb67471a. Actual installed source must be labelled as passed, not as another commit or capture source.",
+    "Launcher differs acceptedf362 only parameterized source with40hex validation, actualcapturea5f predicate and corresponding diagnostic. Exact unit WorkingDirectory/EnvironmentFile and4ed underlying acceptance hash guards remain; sanitized error helper byte-identical.",
+    "Actual pure argument validation accepts2reviewed source/phase controls and rejects badphase/path/shortsource without executing operator side effects."
+  ],
+  "conditions": [
+    "Do not install until actual currenta5f native reconciliation/pin proves READY and every fresh observation matches. Capture proposal acceptance alone is insufficient.",
+    "Installer restarts owned observer; explicitly retain old journals and record the continuity gap/new session. Endpoint readiness requires fresh requested window, never bridged history.",
+    "Source filesystem/release-origin must match exact chosen source and manifest; all6owned units/protected user files/unrelated services remain guarded.",
+    "No live execution by reviewer. Actual installation/rollback status, full final preflight, real bot/delivery/restoration and current endpoint readiness remain separate evidence."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/install-runtime-lease-repair.py": {
+      "sha256": "de6aebdcabd5cdf037449bfb657cc0c1fe18de6dbc79b571b15d28cf51772f27",
+      "bytes": 10121
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/install-runtime-current-a5f.py": {
+      "sha256": "420e74148d57af2f4ff7413b77490eee5bce5be9860ae1690edc60510586da6e",
+      "bytes": 10121
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/launch-bot-acceptance.py": {
+      "sha256": "f3625d40a59621ba1f8854f2f22e34090e29c790c7351e7bed1ea5ce5ada2c0a",
+      "bytes": 2218
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/launch-bot-acceptance-a5f.py": {
+      "sha256": "c3fdbf9f30127d71320b15dd8c831f5de731afeddbb5abdea9821460364af9be",
+      "bytes": 2215
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/runtime-source-manifest.json": {
+      "sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+      "bytes": 28890
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/commit-binding-4116c23e.json": {
+      "sha256": "b1985255b4ce75827fdce0c70b04a5d7c754116a0e1e3b42c05a455594960578",
+      "bytes": 923
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-1457-capture-preconditions.json": {
+      "sha256": "e507c85c65fb7cc749b366280aca79e9c8a1f2a727cef7fe0a016cf25f5e0ed4",
+      "bytes": 18199
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/runtime-install-operational-verdict.json": {
+      "sha256": "0ec8efeb273a813efa563efb622cf28dcdb4f4b82ef3a1e1db2e5083a04bb775",
+      "bytes": 3610
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/runtime-rollback-control.json": {
+      "sha256": "b1139462d2336721533f0410c55446b69fc4b206e4c6664deba943cbe699d2c6",
+      "bytes": 1624
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v4/launcher-operational-verdict.json": {
+      "sha256": "a7c341acc1e16c7ee415ae95a327422211af4f2033d6930818edb36e4e97c0c6",
+      "bytes": 3436
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/verify-runtime-operators.py": {
+      "sha256": "000f7967dba85292fabd75d7327da937dc061895a79ef1a497af7c7095005238",
+      "bytes": 5573
+    }
+  }
+}

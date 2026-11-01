@@ -1,0 +1,18 @@
+{
+  "kind": "ApplicationSet",
+  "namespace": "argocd",
+  "name": "phorvex-services",
+  "expected_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "test_fresh_resourceVersion": true,
+  "expected_existing_templatePatch": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 1457be4433a719784523a68ec3dd982cb57af409\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 1457be4433a719784523a68ec3dd982cb57af409\n{{- end }}",
+  "operation": "replace /spec/templatePatch",
+  "value": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 4116c23e7b44e804596e7c711f1aa05d5662e896\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 4116c23e7b44e804596e7c711f1aa05d5662e896\n{{- end }}\n",
+  "chart_source": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "values_source": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "values_reviewed_at": "1457be4433a719784523a68ec3dd982cb57af409",
+  "prune": false,
+  "temporary_source_pin": true,
+  "owner": "bench-v3-lead",
+  "expiry_condition": "Owned bounded replacement preserves the prior external1457 template in its receipt. On cleanup restore that exact prior value only while this exact owned override remains and after reviewing actual current release; never remove or overwrite an externally replaced template. Durable main integration requires separate merge authorization.",
+  "prior_templatePatch_sha256": "a77f350c0ef95e2b47d7e79b845afda3111b967de6484de4e4273532a68bef44"
+}

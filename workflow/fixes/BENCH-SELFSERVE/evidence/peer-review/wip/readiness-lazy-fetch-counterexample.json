@@ -1,0 +1,14 @@
+{
+  "schema": "phorvex-bench.peer-counterexample.v1",
+  "reviewer": "stage-review",
+  "label": "read-only source check can trigger Git promisor lazy fetch",
+  "producer": "Real Git partial clone from local file promisor cache; origin is exact approved repository string. No Internet or credentials. New source exists only in configured promisor remote before check.",
+  "source_revision": "b05a0e6d3532b5b08465258191fa7215631e6bf1",
+  "returned": "https://github.com/PhorvexSecurity/operator-refactored.git",
+  "git_files_changed": [
+    ".git/objects/pack/pack-e982573c0bf743af1d54cfb0414b6f93340cb053.idx",
+    ".git/objects/pack/pack-e982573c0bf743af1d54cfb0414b6f93340cb053.pack",
+    ".git/objects/pack/pack-e982573c0bf743af1d54cfb0414b6f93340cb053.promisor"
+  ],
+  "scope_source_sha256": "a005cb1c689eb1d305bc75db6348e9daad8d4982340f69c9e5ff5a322c6b1b49"
+}

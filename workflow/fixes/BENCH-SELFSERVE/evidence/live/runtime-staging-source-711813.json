@@ -1,0 +1,23 @@
+{
+  "commit": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "at": "2026-11-01T20:13:52.488064+00:00",
+  "archive_scope": "complete immutable git archive",
+  "files": {
+    "source.tar.gz": {
+      "sha256": "6a0726ecc34b67477e8d20c49ea59ede13b5e25290d552258449b520890794b0",
+      "bytes": 17898126
+    },
+    "launch-bot-acceptance-final.py": {
+      "sha256": "0cb388c3f2ca46f4c4e6cd14ce34fa730719d85f53927de87b9f402d89965ef1",
+      "bytes": 2216
+    },
+    "install-runtime-lease-repair.py": {
+      "sha256": "a9c66ba2dac4b9825f3c18e3bdb4761069f3d260e1ba4ef6baf008a7062c28d2",
+      "bytes": 9192
+    },
+    "reviewed-source-manifest.json": {
+      "sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+      "bytes": 28890
+    }
+  }
+}

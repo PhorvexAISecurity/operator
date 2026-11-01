@@ -1,0 +1,88 @@
+test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject) ... FAIL
+test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc) ... ERROR
+test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain) ... ERROR
+test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) ... 
+  test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='brain') ... ERROR
+  test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='manager') ... ERROR
+  test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='console') ... FAIL
+
+======================================================================
+ERROR: test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 70, in test_actual_stage_brain_records_both_policies_on_existing_pvc
+    self.assert_capture('brain', render('brain'))
+                                 ^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 31, in render
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/workspace/.phorvex-tools/helm', 'template', 'staging', '/workspace/operator-benchmark-selfserve/deploy/charts/phorvex-brain', '-n', 'phorvex-staging', '--api-versions', 'monitoring.coreos.com/v1', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/phorvex.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/brain.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/catalogue-family.yaml']' returned non-zero exit status 1.
+
+======================================================================
+ERROR: test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 73, in test_actual_stage_manager_exports_cost_observations_to_remote_brain
+    self.assert_capture('manager', render('manager'))
+                                   ^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 31, in render
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/workspace/.phorvex-tools/helm', 'template', 'staging', '/workspace/operator-benchmark-selfserve/phorvex/charts/phorvex', '-n', 'phorvex-staging', '--api-versions', 'monitoring.coreos.com/v1', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/phorvex.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/manager.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/catalogue-family.yaml']' returned non-zero exit status 1.
+
+======================================================================
+ERROR: test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='brain')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 92, in test_official_next_release_pin_preserves_all_capture_and_reader_settings
+    docs = render(component, path)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 31, in render
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/workspace/.phorvex-tools/helm', 'template', 'staging', '/workspace/operator-benchmark-selfserve/deploy/charts/phorvex-brain', '-n', 'phorvex-staging', '--api-versions', 'monitoring.coreos.com/v1', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/phorvex.yaml', '-f', '/tmp/tmph2tqari5/values.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/catalogue-family.yaml']' returned non-zero exit status 1.
+
+======================================================================
+ERROR: test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='manager')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 92, in test_official_next_release_pin_preserves_all_capture_and_reader_settings
+    docs = render(component, path)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 31, in render
+    result = subprocess.run(command, check=True, capture_output=True, text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/workspace/.phorvex-tools/helm', 'template', 'staging', '/workspace/operator-benchmark-selfserve/phorvex/charts/phorvex', '-n', 'phorvex-staging', '--api-versions', 'monitoring.coreos.com/v1', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/phorvex.yaml', '-f', '/tmp/tmpoj1dswm7/values.yaml', '-f', '/workspace/operator-benchmark-selfserve/deploy/environments/staging/catalogue-family.yaml']' returned non-zero exit status 1.
+
+======================================================================
+FAIL: test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 76, in test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject
+    self.assert_capture('console', render('console'))
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 60, in assert_capture
+    self.assertEqual(len(binding), 1)
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) (component='console')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 93, in test_official_next_release_pin_preserves_all_capture_and_reader_settings
+    self.assert_capture(component, docs)
+  File "/workspace/operator-benchmark-selfserve/tools/test_stage_benchmark_capture.py", line 60, in assert_capture
+    self.assertEqual(len(binding), 1)
+AssertionError: 0 != 1
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.678s
+
+FAILED (failures=2, errors=4)

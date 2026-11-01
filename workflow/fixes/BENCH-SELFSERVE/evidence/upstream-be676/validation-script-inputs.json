@@ -1,0 +1,29 @@
+{
+  "source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "paths": [
+    {
+      "path": "evidence/upstream-be676/run-preflight.sh",
+      "sha256": "43162a252b2abe264883496f2abf7147854c2df6ec44a5cd27546926fb3f56d3"
+    },
+    {
+      "path": "evidence/upstream-be676/run-acceptance.sh",
+      "sha256": "c64d3f1efeaae7b359623b7111413214ca2d3a52e482d450335297ba4d3e2b7d"
+    },
+    {
+      "path": "evidence/upstream-be676/verify-upstream.sh",
+      "sha256": "06dc31c726632f0190b07de949537fc2fe8b024ba282916e690b9433bb4174b1"
+    },
+    {
+      "path": "evidence/upstream-be676/validate-final.py",
+      "sha256": "91489f51388eb04334a6e49f20cac16ee6e2eaab53491d18bf3947f98435921b"
+    },
+    {
+      "path": "evidence/upstream-be676/submit-review.yaml",
+      "sha256": "bd47a53a786bfc7bd96310ba70d10cfd5ca90bc63cfe2b186f5fa54e6ce467ee"
+    },
+    {
+      "path": "evidence/upstream-be676/final-checks-config.json",
+      "sha256": "33f1352dbe89e6a3e771b5ff01f72702f96383a2a58000e0bbd91e0b3b1783a7"
+    }
+  ]
+}

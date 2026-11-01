@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-11-01T20:59:55.003630+00:00",
+  "api_path": "/git/ref/pull/198/merge",
+  "data": {
+    "ref": "refs/pull/198/merge",
+    "node_id": "REF_kwDOVMD7CLNyZWZzL3B1bGwvMTk4L21lcmdl",
+    "url": "https://api.github.com/repos/PhorvexSecurity/operator-refactored/git/refs/pull/198/merge",
+    "object": {
+      "sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+      "type": "commit",
+      "url": "https://api.github.com/repos/PhorvexSecurity/operator-refactored/git/commits/882c7e7df255ff3880b97d9622be06ad393873d9"
+    }
+  }
+}

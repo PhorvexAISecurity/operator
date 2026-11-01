@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-01T20:17:22.278856+00:00",
+  "identity": {
+    "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+    "generation": 16,
+    "resourceVersion": "103490721"
+  },
+  "templatePatch": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 1457be4433a719784523a68ec3dd982cb57af409\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 1457be4433a719784523a68ec3dd982cb57af409\n{{- end }}",
+  "sha256": "a77f350c0ef95e2b47d7e79b845afda3111b967de6484de4e4273532a68bef44",
+  "managedFields": [],
+  "lead_mutation": false,
+  "qualification": "Read-only external replacement observation; never remove a template that no longer matches the owned V4 hash."
+}

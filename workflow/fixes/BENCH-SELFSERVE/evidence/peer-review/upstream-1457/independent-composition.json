@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-bench.independent-composition.v2",
+  "at": "2026-11-01T20:20:52.164446+00:00",
+  "reviewer": "stage-review",
+  "upstream": "1457be4433a719784523a68ec3dd982cb57af409",
+  "previous_head": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "isolated_worktree": "/workspace/operator-benchmark-selfserve-1457",
+  "source_manifest_sha256": "7d272b0fafe1ad7caa06d8f52d473338b636d589f4091e90a678f8c6a31ad865",
+  "staged_tree": "6f4b192ae9292a3a9b427e988465f4b76425586f",
+  "staged_and_working_paths_verified": 8,
+  "runtime_files_unchanged": 168,
+  "upstream_exact_paths": 4,
+  "capture_settings_unchanged_paths": 3,
+  "brain_resolution": "Exact upstream image file plus byte-identical approved capture suffix",
+  "only_catalogue_exception": "Disabled agentAction.image matches current batch pin; all other current quarantine fields/grants/UID preserved.",
+  "default_and_archives_unchanged": true,
+  "actual_unchanged_strict_catalogue_gate": {
+    "count": 1,
+    "images": [
+      "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
+    ]
+  },
+  "verdict": "PASS"
+}

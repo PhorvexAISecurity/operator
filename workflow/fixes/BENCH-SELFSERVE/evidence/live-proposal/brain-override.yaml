@@ -1,0 +1,8 @@
+phorvex:
+  mathLab:
+    capturePolicies:
+    - phorvex-staging-demo/demo-api-defense
+    - phorvex-staging-demo/stage-bench-defense
+    captureMaxBytes: 1073741824
+mathLabStore:
+  existingClaim: staging-brain-mathlab

@@ -1,0 +1,65 @@
+{
+  "schema": "phorvex-bench.peer-upstream-assessment.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:17:55.081718+00:00",
+  "base": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "upstream": "1457be4433a719784523a68ec3dd982cb57af409",
+  "changed_paths": [
+    {
+      "path": "deploy/environments/staging/actuator.yaml",
+      "sha256": "2b6dbadc3b79540d43e29f8ef1f33bcb560d8dc18776021e8427439e3eae4f75"
+    },
+    {
+      "path": "deploy/environments/staging/attacks.yaml",
+      "sha256": "f460cd284729dd050b42c93e8b5145493aa0691b86011608205cbd9b36f593c5"
+    },
+    {
+      "path": "deploy/environments/staging/brain.yaml",
+      "sha256": "6d777e072fce7c1ea9e28828858248abe228c3e91c115f6665669ba45c6b1bf9"
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "99b82e56ec53b787c08696cd70c7a6165c135169df37f933b3a686bacd6a9074"
+    },
+    {
+      "path": "deploy/environments/staging/console.yaml",
+      "sha256": "a9f7c7b64304a4b36c3285dfa1370a02be0970b8f29e8bf182603d5fd7f68c0d"
+    },
+    {
+      "path": "deploy/environments/staging/manager.yaml",
+      "sha256": "30ef4f5ca1b6d2078f14f7384c217458757e6ce42ff7cf96b2c76cd4cb8dec64"
+    },
+    {
+      "path": "deploy/environments/staging/sensor.yaml",
+      "sha256": "8a7108f0e6ddc81a618f82e2a9ca4d108c7b497482734c84bd39f459d95ff61e"
+    },
+    {
+      "path": "release/staging-batch.json",
+      "sha256": "a48b60e59ed9e72bb19e38e01318949d7905a3b2464079b23a3f196c236c263d"
+    }
+  ],
+  "no_upstream_benchmark_runtime_changes": true,
+  "current_images": {
+    "brain": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+    "manager": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+    "console": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:cd19c2ee0ce474974a5575abde8fb4483a118a866d4b1b6f455ea1530f6eeb63"
+  },
+  "current_family": {
+    "profile": "quarantine",
+    "namespace_uid": "45e2ab1b-5a45-42ab-8afe-87218f2c758d",
+    "byte_equal_prior_565": true,
+    "agent_action_enabled": false,
+    "inactive_agent_image_empty": true,
+    "canonical_batch_agent_pin": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+  },
+  "integration_contract": [
+    "Preserve all8 latest release/family files, including current quarantine UID/p1-demo grants/trusted detector and all six images.",
+    "Retain only existing approved capture/reader additions to3 service values; keep reviewed manager empty namespaceUID default and canonical archive.",
+    "Restore only disabled agentAction.image to current batch pin through unchanged generator. Same canonical mismatch remains; do not weaken validation.",
+    "Keep168 reviewed runtime files unchanged from711; final merge/source manifest and exact actual-scope operator proposal must be separately bound."
+  ],
+  "limits": [
+    "Read-only Git-object assessment; no new source integration, test execution, deployment or live readiness claim.",
+    "Currentbee9-specific installer/launcher guards must be refreshed for actuala5f identities before compatible execution."
+  ]
+}

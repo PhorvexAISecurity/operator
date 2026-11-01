@@ -1,0 +1,9 @@
+{
+  "observed_at": "2026-11-01T20:36:07.402485+00:00",
+  "number": 198,
+  "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "base_sha": "1457be4433a719784523a68ec3dd982cb57af409",
+  "merge_commit_sha": "c768a0c04ba7d9597309d55b488b241b7e361e9d",
+  "draft": true,
+  "state": "open"
+}

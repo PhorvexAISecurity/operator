@@ -1,0 +1,121 @@
+test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers (test_endpoint_refresh.RefreshTests.test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers) ... ERROR
+test_lease_block_before_work_and_invalid_request_preserve_data (test_endpoint_refresh.RefreshTests.test_lease_block_before_work_and_invalid_request_preserve_data) ... ERROR
+test_another_refresh_owner_status_and_pointer_are_never_overwritten (test_endpoint_refresh.RefreshTests.test_another_refresh_owner_status_and_pointer_are_never_overwritten) ... ERROR
+test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease (test_endpoint_refresh.RefreshTests.test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease) ... ERROR
+
+======================================================================
+ERROR: test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers (test_endpoint_refresh.RefreshTests.test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/test_endpoint_refresh.py", line 118, in setUp
+    self.engine = refresh.stage_cli.install_study_engine(self.data, self.repo, candidate, self.candidate_source, base, [receipt,evidence])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 445, in install_study_engine
+    return _install_study_engine(data_dir, repo, candidate_path, candidate_source, base_path, evidence)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 457, in _install_study_engine
+    candidate = binary.local_identity(Path(candidate_path).resolve())
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 184, in local_identity
+    version = json.loads(run_isolated([str(path), '-version'], timeout=timeout))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 169, in run_isolated
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd or home)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 13] Permission denied: '/tmp/tmpzzmtknsc/candidate-replay'
+
+======================================================================
+ERROR: test_lease_block_before_work_and_invalid_request_preserve_data (test_endpoint_refresh.RefreshTests.test_lease_block_before_work_and_invalid_request_preserve_data)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/test_endpoint_refresh.py", line 118, in setUp
+    self.engine = refresh.stage_cli.install_study_engine(self.data, self.repo, candidate, self.candidate_source, base, [receipt,evidence])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 445, in install_study_engine
+    return _install_study_engine(data_dir, repo, candidate_path, candidate_source, base_path, evidence)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 457, in _install_study_engine
+    candidate = binary.local_identity(Path(candidate_path).resolve())
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 184, in local_identity
+    version = json.loads(run_isolated([str(path), '-version'], timeout=timeout))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 169, in run_isolated
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd or home)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 13] Permission denied: '/tmp/tmpgm_0xe54/candidate-replay'
+
+======================================================================
+ERROR: test_another_refresh_owner_status_and_pointer_are_never_overwritten (test_endpoint_refresh.RefreshTests.test_another_refresh_owner_status_and_pointer_are_never_overwritten)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/test_endpoint_refresh.py", line 118, in setUp
+    self.engine = refresh.stage_cli.install_study_engine(self.data, self.repo, candidate, self.candidate_source, base, [receipt,evidence])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 445, in install_study_engine
+    return _install_study_engine(data_dir, repo, candidate_path, candidate_source, base_path, evidence)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 457, in _install_study_engine
+    candidate = binary.local_identity(Path(candidate_path).resolve())
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 184, in local_identity
+    version = json.loads(run_isolated([str(path), '-version'], timeout=timeout))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 169, in run_isolated
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd or home)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 13] Permission denied: '/tmp/tmp4pb43vho/candidate-replay'
+
+======================================================================
+ERROR: test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease (test_endpoint_refresh.RefreshTests.test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/test_endpoint_refresh.py", line 118, in setUp
+    self.engine = refresh.stage_cli.install_study_engine(self.data, self.repo, candidate, self.candidate_source, base, [receipt,evidence])
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 445, in install_study_engine
+    return _install_study_engine(data_dir, repo, candidate_path, candidate_source, base_path, evidence)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_cli.py", line 457, in _install_study_engine
+    candidate = binary.local_identity(Path(candidate_path).resolve())
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 184, in local_identity
+    version = json.loads(run_isolated([str(path), '-version'], timeout=timeout))
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/mathlab/binary.py", line 169, in run_isolated
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd or home)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 13] Permission denied: '/tmp/tmpt52ot4wr/candidate-replay'
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.508s
+
+FAILED (errors=4)

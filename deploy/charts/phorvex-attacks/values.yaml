@@ -471,6 +471,9 @@ phorvex:
       # grantsConfigured: false). Bind the specific Cognito subjects who should be operators
       # before rollout — do not grant a role because someone can log in.
       grants:
+        # Optional explicitly authorized bindings, added to data after all values overlays.
+        # Duplicate issuer/subject bindings are rejected; no roles or scopes are inferred.
+        extraSubjects: []
         enabled: false
         create: false
         configMapName: ""

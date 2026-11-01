@@ -1,0 +1,24 @@
+{
+  "schema": "phorvex-benchmark.capture-deploy-proposal.v1",
+  "chart_source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "main_values_reviewed_at": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "artifacts": {
+    "brain-override.yaml": "f3881f87ee7b35bd6ad52b458e792af9af532020089aaf8eb7509d991dfd5820",
+    "brain-render-main.yaml": "9da7b9f41746e4956b27ff181813b1637b612647cf5e5fedbc94a5ebacccbc69",
+    "brain-render-proposed.yaml": "1b5afc4cb8daa81ca77d12d9a3f28cbbb636f8555e8f025e2d33e8c5c4b7712b",
+    "console-override.yaml": "298e845e920349e1e241567d476a1f1aa2fa3ed952c0728c7601dfd814adae14",
+    "console-render-main.yaml": "f4fae092b456f2c78ab331fffb90731dbe2129086f784443a38cd0b6476be7d1",
+    "console-render-proposed.yaml": "01f91a0cc5b379b32bf98969d192ded1b615e3c6dd4da7673f6a518baacf7d25",
+    "main-values/brain.yaml": "2437f9190f3185672ebad275dbc3fc6a751c204e91a00513bc04e9725cfea8d9",
+    "main-values/catalogue-family.yaml": "141332d868af6d38de8805d3b68968039e2c2ae327d2fd90c8acf905c2d541be",
+    "main-values/console.yaml": "0a1ff53f927cd336c8bfcbb454f02b1c9c3244df2af045d691695de4e8711e7b",
+    "main-values/manager.yaml": "c35a0995e685099fe4bfe5018339cfb4efc2c16678219d80378c21ecc12beb40",
+    "main-values/phorvex.yaml": "9f8bdd265ff4ca2a64e9ed1a2b190c6229d6c1f12b6a02a5bb899a2e36d94255",
+    "manager-override.yaml": "5eebd05d82f06e17be22d848bc5a13570c21f326bea0eebe27a79bacdc678e93",
+    "manager-render-main.yaml": "91253cf8418aece95124697d78cb9eda59bcfcd03fccdad2c56b242191c94eb4",
+    "manager-render-proposed.yaml": "f78e5f4cac28b61e2975e5ad3396ea306901476af9c2151a733355a79f14b8ae",
+    "operation.json": "326f72473c2ff4e4cd40ab50dd79f8d64f98cc52a4c3c9d3a47cab2960d92097",
+    "overrides.json": "44ec3bf5c5ffa4b000b20c21c66cb656287b0784b36ea8d4df2f9d0b14d5fcdb",
+    "templatePatch.yaml.gotmpl": "042c633747e95d985ad1c5e6784a6f626bcd50fc66eb2aaf848143c7a2fe26a9"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:58:59.780877+00:00",
+  "scope": "Final225 source advisory and retained external live change; no formal workflow-state mutation or L3 pass",
+  "artifacts": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/source-p3-advisory.md",
+      "sha256": "626712355a8354b58c47722b769af2f530690aa5a9ef64ae303fc2439bd323ab",
+      "bytes": 6036
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/installation-and-rollout-review.json",
+      "sha256": "2f1770b02dd788af62220699a44f9ba82dd186c7b5f430688225f80345d549f6",
+      "bytes": 5267
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/coherent-preflight-validation.json",
+      "sha256": "e0530db9c5cd3252a4a690a095e8bbe68acab62ddf2cd5a626b68ea80371df5b",
+      "bytes": 604
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json",
+      "sha256": "d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89",
+      "bytes": 18466
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/latest-status.json",
+      "sha256": "88943969ee64521bf6cb2254546e3a8fad3138feb9c4565ece0d4ed0dc425121",
+      "bytes": 8549
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/tested-merge-source.json",
+      "sha256": "1713cb47752ca891f30356038cd4ed940e7541cf67da5f7e4b1f5dedec530c57",
+      "bytes": 722
+    }
+  ]
+}

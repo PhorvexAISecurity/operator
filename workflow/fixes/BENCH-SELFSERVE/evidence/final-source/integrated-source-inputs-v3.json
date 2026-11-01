@@ -1,0 +1,239 @@
+{
+  "schema": "phorvex-bench.integrated-inputs.v1",
+  "producer": "bench-v3-worker",
+  "baseline_source": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "component_parent": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "state": "FROZEN_PENDING_INDEPENDENT_REVIEW",
+  "amendment": "Atomic stage pin is authoritative for recorded parameter window and /check repository/toolchain; endpoint audit no longer requires obsolete legacy current.json. All other v2 source bytes retained.",
+  "references": [
+    {
+      "path": "evidence/final-source/integrated-source-inputs-v2.json",
+      "sha256": "d967c2dd551cc804aff039763ca792a625f2df905206e95321a93a4140ee47e5"
+    },
+    {
+      "path": "evidence/requests/atomic-consumers-delta-v2.json",
+      "sha256": "282735b14d50259f492c309f040d3074bc39ceb86a93900646c5268218de9274"
+    },
+    {
+      "path": "evidence/requests/atomic-consumer-final-tests.txt",
+      "sha256": "29fa1b3ba557c8bb9ee9425eb04b2c53ea125bb030282838c058ce21000acf20"
+    }
+  ],
+  "paths": [
+    {
+      "path": "benchmark/bot/ENDPOINT-V3.md",
+      "bytes": 9338,
+      "sha256": "bcf4c799cf355ad8edd28de7ca512d531598b948d6839de98fa80ee7b78b98d8"
+    },
+    {
+      "path": "benchmark/bot/README.md",
+      "bytes": 12806,
+      "sha256": "456ae937b05bcee74ed0258fc58d0552bfb1a67c32399cd6247e570b8347c028"
+    },
+    {
+      "path": "benchmark/bot/endpoint_study.py",
+      "bytes": 35513,
+      "sha256": "ea57d00a583039199e9ae5b875d7ae8507d1102b0bf4c1e9fa80d8afcdfdace4"
+    },
+    {
+      "path": "benchmark/bot/file_requests.py",
+      "bytes": 16112,
+      "sha256": "d0e73aa82edfd4174d59b249aabc3e642165b31e48a01cf6befb699b54b93b65"
+    },
+    {
+      "path": "benchmark/bot/guide-en.html",
+      "bytes": 203254,
+      "sha256": "9c73a988800018f19188d9dfa01c12aae14a5600fbdd8beda9082fc792f63900"
+    },
+    {
+      "path": "benchmark/bot/guide-en.pdf",
+      "bytes": 561661,
+      "sha256": "967b046193f63a05568ec61c6d08e89a128b39e20e81188a26e1bec386d15335"
+    },
+    {
+      "path": "benchmark/bot/guide-fa.html",
+      "bytes": 230900,
+      "sha256": "51311caca5be704ce33ca6161401703138846358eb77596f44d4d91d7a96a327"
+    },
+    {
+      "path": "benchmark/bot/guide-fa.pdf",
+      "bytes": 647477,
+      "sha256": "4293767162e5c3bec62d46111c7970922a7927afcc8f601e33f1006c0b484f68"
+    },
+    {
+      "path": "benchmark/bot/request_readiness.py",
+      "bytes": 20115,
+      "sha256": "1b1d5e413d1919fff348d0628ba269d0918c2d8914e612a894e53e20e27f1998"
+    },
+    {
+      "path": "benchmark/bot/service.py",
+      "bytes": 78383,
+      "sha256": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b"
+    },
+    {
+      "path": "benchmark/bot/stage_runtime.py",
+      "bytes": 5459,
+      "sha256": "93c38c3111d51f38bc48b3137e63a39e6073a9bec2b995fc58595b7be75f7cff"
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-10d.txt",
+      "bytes": 309,
+      "sha256": "a9d64d343190e74845954a3f8080b866959f08f1e771cffa985ba4d55c4ff10e"
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-fixture-600s.txt",
+      "bytes": 259,
+      "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667"
+    },
+    {
+      "path": "benchmark/bot/test_bot.py",
+      "bytes": 44979,
+      "sha256": "8538cecabeae56492d1a3f340f0dedb8bd12537d270caa5dbd387a3526ef1da3"
+    },
+    {
+      "path": "benchmark/bot/test_endpoint_study.py",
+      "bytes": 18361,
+      "sha256": "3c287a9d074496f5dcf490ac70b604c5459468469aa378f8b4e214f79b601d22"
+    },
+    {
+      "path": "benchmark/bot/test_request_readiness.py",
+      "bytes": 20313,
+      "sha256": "7642d6a5c274909d14f43ad02f7e1c54f54f574eb59d37e10ea9782a54bb1e7d"
+    },
+    {
+      "path": "benchmark/bot/test_selfserve_requests.py",
+      "bytes": 5797,
+      "sha256": "f059d72ebbbc1c4e9d31bfca48cb2b9fd2c62380916ee7a805fcb2dcf57b9ecc"
+    },
+    {
+      "path": "benchmark/bot/test_study.py",
+      "bytes": 16448,
+      "sha256": "c4dbb5a0f442de7b6bf98e5a050cbb55738abf770a6f36a993dfd0e0ab8902bc"
+    },
+    {
+      "path": "benchmark/bot/test_uploads.py",
+      "bytes": 15030,
+      "sha256": "7ef727be9169daed97b2caf9058b71b053914d548fa96642ef3f9e2741c6638b"
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-10d-original.txt",
+      "bytes": 13522,
+      "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3"
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-30d-original.txt",
+      "bytes": 12132,
+      "sha256": "c4f07c2b1635a89fbf60c37f318805e6a3169438bf6739b9448ba54f910f3687"
+    },
+    {
+      "path": "benchmark/bot/testkit.py",
+      "bytes": 11260,
+      "sha256": "46320c779be26d9a564c525207edf6c4a05f2bff009b632b9f3d5e47180f3a19"
+    },
+    {
+      "path": "benchmark/stage/evidence.py",
+      "bytes": 37604,
+      "sha256": "314123805cb13eee81bc5808a53411511524458f569786accf00c657c0c5c999"
+    },
+    {
+      "path": "benchmark/stage/normalize.py",
+      "bytes": 14900,
+      "sha256": "7d60ce044ba073e3fe586186d272ec2908acae0db3ea22daf695ac909957f4b1"
+    },
+    {
+      "path": "benchmark/worker/deploy/README.md",
+      "bytes": 5377,
+      "sha256": "c9e9b7dcfe7f214bab1509060ae696adf9c32f4604dc742e33efafe11235f9c0"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.service.example",
+      "bytes": 1032,
+      "sha256": "8f1f60af93a857c85db8beecabbc2093e6607e136ca9c112ea39d967dd8cd3db"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.timer.example",
+      "bytes": 215,
+      "sha256": "f128a13ebf3160841a2a937194c2c4228760ec8774f9b1cd594bf0be0e3f9ab2"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-observer.service.example",
+      "bytes": 942,
+      "sha256": "5042a2219f1477d0e36158a6bf27d304e1df91bb71224465ebc080e93cd039e5"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.service.example",
+      "bytes": 781,
+      "sha256": "bd858706cb191073bd2823ab76f80df6de0db644c266d51fbf2cd4c3d68a189a"
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.timer.example",
+      "bytes": 206,
+      "sha256": "61a408ab2e4a0a1827bc55dfd8a0ea54754a249afad2e7e36f65843c430074c1"
+    },
+    {
+      "path": "benchmark/worker/endpoint_refresh.py",
+      "bytes": 28940,
+      "sha256": "d15b632bb9f7f9eb62b8abd48255c575124c56ed928a4f15e9a38538578747db"
+    },
+    {
+      "path": "benchmark/worker/mathlab/binary.py",
+      "bytes": 10731,
+      "sha256": "18637c57cc09c21ae3ff797914421e8accb7c674fb110295f9e97eb9c0fb3fd1"
+    },
+    {
+      "path": "benchmark/worker/mathlab/experiment.py",
+      "bytes": 21744,
+      "sha256": "389f323e8ef15cbba42646dd2f58957b2ce93a8cf4cc8133c0824e57fe0623a6"
+    },
+    {
+      "path": "benchmark/worker/mathlab/recent_snapshots.py",
+      "bytes": 4729,
+      "sha256": "dd8587c697ea316e2bf5082eb7c62da3a331b63a8ca525add1aa0d6e7e91aae8"
+    },
+    {
+      "path": "benchmark/worker/mathlab/snapshots.py",
+      "bytes": 15735,
+      "sha256": "1221dbfd4c431b2b5a9cad3e80d07f7a5f7ed7afece1afbd803d17c339a671fc"
+    },
+    {
+      "path": "benchmark/worker/mathlab/stage_scope.py",
+      "bytes": 19376,
+      "sha256": "25a17f34f6bd0bf7cb8f4507bb0cecf980ed8a8463da4579a7401cbd45f0b420"
+    },
+    {
+      "path": "benchmark/worker/stage_cli.py",
+      "bytes": 36797,
+      "sha256": "2e9637b8f39a62837f9e7fc3aa40077bb9c471807029eae093d87c80b8c5dc26"
+    },
+    {
+      "path": "benchmark/worker/stage_observer_runtime.py",
+      "bytes": 10051,
+      "sha256": "6c064a2dd5886a073b6dd742b9daaabb079005530fd974c054ed22e11594490f"
+    },
+    {
+      "path": "benchmark/worker/stage_reconcile.py",
+      "bytes": 30262,
+      "sha256": "ba0690841cc36daa71e4cb6072dd799a397041db27d5539741c81e8e0243f1dc"
+    },
+    {
+      "path": "benchmark/worker/test_endpoint_refresh.py",
+      "bytes": 21551,
+      "sha256": "180d8a98ddf472026a69e46b69c61ad3709b5c0947f6e41c881ba6cdaafffc44"
+    },
+    {
+      "path": "benchmark/worker/test_recent_snapshots.py",
+      "bytes": 4918,
+      "sha256": "ac7b3a18e618b74f8fa3bb6461ddeb738f1ee588a7304948c7fa0b815f296152"
+    },
+    {
+      "path": "benchmark/worker/test_stage_observer_runtime.py",
+      "bytes": 9643,
+      "sha256": "360bc4e7bf6e1ce816aad74f90dc9887b8fba49ae774ec914056b6ef7562908b"
+    },
+    {
+      "path": "benchmark/worker/test_stage_reconcile.py",
+      "bytes": 26094,
+      "sha256": "9313bc5e617ad60f2bd2fddd38390d9b9145be008552997177843fc524e9a333"
+    }
+  ]
+}

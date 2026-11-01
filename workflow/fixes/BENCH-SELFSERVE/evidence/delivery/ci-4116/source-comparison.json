@@ -1,0 +1,47 @@
+[
+  {
+    "source_revision": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+    "blobs": {
+      "deploy/environments/staging/catalogue-family.yaml": "5b2ecd91de2b739af922888e8f763c234aa5f672",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107",
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6"
+    },
+    "catalogue_family": {
+      "profile": "quarantine",
+      "enabled": true,
+      "workload_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae",
+      "authorization_tenant": "p1-demo"
+    }
+  },
+  {
+    "source_revision": "1457be4433a719784523a68ec3dd982cb57af409",
+    "blobs": {
+      "deploy/environments/staging/catalogue-family.yaml": "f2c5d3014ed33f9fd75afbe895d0f0b87d863f0a",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107",
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6"
+    },
+    "catalogue_family": {
+      "profile": "quarantine",
+      "enabled": true,
+      "workload_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae",
+      "authorization_tenant": "p1-demo"
+    }
+  },
+  {
+    "source_revision": "4d9454a9083c3ef1995296e7931f4c098d8f496e",
+    "blobs": {
+      "deploy/environments/staging/catalogue-family.yaml": "f2c5d3014ed33f9fd75afbe895d0f0b87d863f0a",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107",
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6"
+    },
+    "catalogue_family": {
+      "profile": "quarantine",
+      "enabled": true,
+      "workload_image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae",
+      "authorization_tenant": "p1-demo"
+    }
+  }
+]

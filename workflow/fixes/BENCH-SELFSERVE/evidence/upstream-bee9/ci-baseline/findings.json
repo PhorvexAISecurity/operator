@@ -1,0 +1,90 @@
+{
+  "schema": "phorvex-bench.upstream-ci-diagnostic.v1",
+  "observed_at": "2026-11-01T19:18:46.760972+00:00",
+  "scope": "Read-only GitHub REST logs/artifacts and source comparison; no product fix or live mutation.",
+  "sources": {
+    "baseline": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+    "namespace_merge": "3be59316aa641be615f70f487e2d5612c55d474b",
+    "closed_quarantine": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+    "reviewed_integration": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65"
+  },
+  "unchanged_source_blob_ids": {
+    "baseline": {
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107"
+    },
+    "namespace_merge": {
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107"
+    },
+    "closed_quarantine": {
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107"
+    },
+    "reviewed_integration": {
+      "phorvex/internal/console/m168_experiment_test.go": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "phorvex/internal/console/arms_runner.go": "35370ebfbf3d0816937de9d443384e3c2395b2b6",
+      "phorvex/tools/servicerelease/consumer_test.go": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107"
+    }
+  },
+  "findings": [
+    {
+      "kind": "chart_archive_consistency",
+      "runs": [
+        41339150618,
+        41339408824
+      ],
+      "assertion": "tools/package-vendored-charts.sh --check reported six common archives plus the stack phorvex archive stale.",
+      "upstream_payload_check": "All common-chart source files other than Chart.yaml/.helmignore matched archived payloads at both upstream sources; the observed CI failure is the normalized byte-consistency check.",
+      "integration_result": "PASS at0288 using GNUtar1.35+Helm3.16.4; regenerated merge packaging resolves this exact check. This is not a claim that every later charts-job step was run here.",
+      "non_authoritative_local_control": "GNUtar1.34 also reports unchanged Phoenix archive stale; retained as tool-version mismatch, not an integration defect."
+    },
+    {
+      "kind": "staging_render_unit",
+      "run": 41339150618,
+      "test": "TestAllSixStagingDeploymentsRenderTheVerifiedImage/attacks",
+      "assertion": "consumer_test.go:290 unbound authoritative rendered Deployment/p1-demo/demo-api image/web for catalogue-workload sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae",
+      "explanation": "3be retains the active quarantine family overlay. bee9 closes it, removes p1-demo scope/workload pin and selects identity-sa-rotate profile. The consumer test source is unchanged.",
+      "resolution_evidence": "bee9 go-unit job124946035111 succeeded. No benchmark source repair was needed for this failure."
+    },
+    {
+      "kind": "console_envtest_control",
+      "run": 41339408824,
+      "test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure",
+      "assertion": "m168_experiment_test.go:571 configured persistence failure was not reached",
+      "duration_seconds": 4.01,
+      "evidence": "Exact raw go-test event from artifact13097365056; test and arms_runner blob IDs are unchanged across c317,3be,bee9 and0288. Prior3be go-envtest job124945249389 succeeded.",
+      "inference": "Early termination before the injected completion-marker write is demonstrated. Timing/fsync sensitivity is plausible given the existing2-second-window comment and prior successful suite, but the retained output does not identify the earlier worker abort cause.",
+      "status": "Unresolved upstream test failure; not repaired, rerun, waived or declared harmless here. It is outside the changed benchmark readiness/reconciliation implementation."
+    },
+    {
+      "kind": "isolated_release_failure",
+      "run": 41339413354,
+      "job": 124946053348,
+      "assertion": "curl35 TLS unexpected EOF while fetching kubectl v1.31.4 checksum in container build; build/publish step failed.",
+      "proposal_effect": "Create digest-pin proposal, push proposal and open/update deployment PR were all skipped. This run did not advance values through that path; partial image publication is possible.",
+      "boundary": "Current live images must still be read independently; a source run or partially published image is not deployment proof."
+    }
+  ],
+  "commands": [
+    {
+      "command": "HELM_BIN=/workspace/.phorvex-tools/helm TMPDIR=/workspace/.phorvex-test-tmp bash tools/package-vendored-charts.sh --check",
+      "tar": "1.34",
+      "result": "FAIL_TOOL_VERSION_MISMATCH"
+    },
+    {
+      "command": "PATH=/workspace/.phorvex-tools/tar135/bin:$PATH HELM_BIN=/workspace/.phorvex-tools/helm TMPDIR=/workspace/.phorvex-test-tmp bash tools/package-vendored-charts.sh --check",
+      "tar": "1.35",
+      "helm": "v3.16.4+g7877b45",
+      "result": "PASS"
+    }
+  ],
+  "limitations": [
+    "No heavy Go suite was run by this diagnostic helper.",
+    "Only selected redacted log/assertion excerpts are retained; original log/artifact hashes bind extraction provenance.",
+    "The upstream M168 failure requires its own focused diagnosis if it repeats; this report does not authorize a broader product fix."
+  ]
+}

@@ -1,0 +1,26 @@
+BENCH-SELFSERVE composed bee9→0288 exact committed-source preflight then author L1/L2; prior a5d receipts preserved
+START coherent-current-preflight
+diff: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-4: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-5: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-6: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-7: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-8: FAIL
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-9: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-10: PASS
+preflight: FAIL; receipt=/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/preflight/receipt.json
+END coherent-current-preflight exit=1

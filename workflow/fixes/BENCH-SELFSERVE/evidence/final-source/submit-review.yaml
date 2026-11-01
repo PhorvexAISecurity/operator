@@ -1,0 +1,21 @@
+source:
+  branch: fix/benchmark-selfserve
+  base_sha: c3174a516bee6bf8eae39749825051c3cfcb8cc6
+  head_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+preflight: evidence/preflight/receipt.json
+checks:
+  implementation:
+    artifact: 04-diff.patch
+    command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv c3174a516bee6bf8eae39749825051c3cfcb8cc6 a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  l0:
+    artifact: evidence/preflight/receipt.json
+    command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-preflight.sh
+  l1:
+    artifact: evidence/final-source/l1.txt
+    command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-acceptance.sh
+  l2:
+    artifact: evidence/final-source/l2.txt
+    command: bash workflow/fixes/BENCH-SELFSERVE/evidence/final-source/run-acceptance.sh
+  positive_control:
+    artifact: evidence/final-source/l2.txt
+    command: Exact committed-source real PXMS/native replay publication, offline source hydration and current scope producer controls in run-acceptance.sh; live product acceptance remains independent

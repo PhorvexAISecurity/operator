@@ -28,6 +28,7 @@ from mathlab import stage_scope, snapshots
 SCHEMA = 'phorvex-bench.endpoint-study.v1'
 TRACE_SCHEMA = 'phorvex-bench.endpoint-trace.v1'
 LEGACY_V3_PROMPT_SHA = '4fedcc3e93ec6568564bdc9535928dd1b4cecbd41e49939aaaba518cd0f0d51b'
+TEN_DAY_V3_PROMPT_SHA = 'c4beaa309f609918a6002711d7dd3a48b8d305bc93f6f2d3db12dd347375e1e8'
 CONSTANTS = {'lookback': (1, 2592000), 'min': (1e-12, 1e9), 'max': (1e-12, 1e9),
              'eta': (1e-12, 1), 'g_max': (1e-12, 100), 'max_dt': (1e-12, 30), 'delta': (1e-12, 3600)}
 STUDY_SETTINGS = {'slo_target': (0, 1), 'window': (1, 2592000), 'worth_threshold': (0, 1e12)}
@@ -80,17 +81,54 @@ def typed(value, kind, path):
         for key,item in value.items(): typed(item,shape[key],path+'.'+key)
 
 
-def legacy_request(prompt, policy, ticks):
+def legacy_request(prompt, policy, ticks, sync=False):
     """Recognize only the exact reviewed upload, never fuzzy-map arbitrary prose."""
-    if hashlib.sha256(' '.join(prompt.split()).encode()).hexdigest() != LEGACY_V3_PROMPT_SHA:
+    digest = hashlib.sha256(' '.join(prompt.split()).encode()).hexdigest()
+    windows = {LEGACY_V3_PROMPT_SHA: 2592000, TEN_DAY_V3_PROMPT_SHA: 864000}
+    if digest not in windows:
         return None
     return {'schema': SCHEMA, 'title': 'V3 endpoint cost and adaptive lambda — recorded inputs',
-            'policy': policy, 'ticks': ticks, 'dataset': 'recorded', 'config': {}}
+            'policy': policy, 'ticks': ticks, 'sync': sync, 'dataset': 'recorded',
+            'study': {'window': windows[digest], 'slo_target': .999},
+            'config': {'lookback': 86400, 'min': .0001, 'max': 1000,
+                       'eta': math.log(1000/.0001)/3600, 'g_max': 1, 'max_dt': 30, 'delta': 30}}
+
+
+def legacy_conversion(prompt, request):
+    return {'schema': 'phorvex-bench.endpoint-compatibility.v1',
+            'normalization': 'UTF-8 prompt with whitespace collapsed; exact SHA-256 allowlist only',
+            'normalized_prompt_sha256': hashlib.sha256(' '.join(prompt.split()).encode()).hexdigest(),
+            'requested_policy': request['policy'], 'requested_ticks': request['ticks'], 'sync': request['sync'],
+            'contract': 'Existing source-pinned paired V2/V3 brain study; J=V-lambda_s*(E/R); original non-cost gates and worth threshold retained. No code generation or live actuation.',
+            'normalized_request': copy.deepcopy(request),
+            'unavailable_evidence': 'Active-policy attributed endpoint history and requested continuous W/L remain mandatory; absent data is BLOCKED.'}
+
+
+def request_context(request):
+    """Requested semantics survive every early refusal, including absent datasets."""
+    return {'requested_mode': 'PAIRED_BRAIN_REPLAY' if request.get('dataset') == 'recorded' else 'PAIRED_GO_REFERENCE',
+            'requested_policy': request['policy'], 'requested_ticks': request['ticks'],
+            'requested_sync': request.get('sync', False),
+            'required_windows': {'budget_seconds': request.get('study', {}).get('window'),
+                                 'burn_seconds': request.get('config', {}).get('lookback', 86400)},
+            'requested_study': copy.deepcopy(request.get('study', {})),
+            'requested_config': copy.deepcopy(request.get('config', {}))}
+
+
+def blocked(request, reason, preflight=None, **extra):
+    context = request_context(request)
+    return {'schema': 'phorvex-bench.endpoint-result.v1', 'state': 'BLOCKED', 'mode': context['requested_mode'],
+            **context, 'evidence': 'recorded-unavailable' if request.get('dataset') == 'recorded' else 'synthetic',
+            'phase': 'PREFLIGHT', 'reason': reason, 'preflight': preflight or {},
+            'v2_executed': False, 'v3_executed': False, 'both_arms_executed': False,
+            'changed_choices': None, 'comparable_ticks': None, 'noop': None,
+            'forecast_endpoint_seconds': None, 'counterfactual_actual_charges': None,
+            'limitations': ['Neither arm executed. Missing recorded evidence is unknown, not zero. No model tokens or Go builds were spent.'], **extra}
 
 
 def validate(request):
     r = copy.deepcopy(request)
-    fields(r, ('schema', 'title', 'policy', 'ticks', 'dataset', 'trace', 'config', 'study'), ('schema', 'title', 'policy'))
+    fields(r, ('schema', 'title', 'policy', 'ticks', 'dataset', 'trace', 'config', 'study', 'sync'), ('schema', 'title', 'policy'))
     if r['schema'] != SCHEMA or not isinstance(r['title'], str) or not 1 <= len(r['title']) <= 200:
         raise ValueError('unsupported endpoint study schema or title')
     if not isinstance(r['policy'], str) or not POLICY.fullmatch(r['policy']):
@@ -101,12 +139,17 @@ def validate(request):
         raise ValueError('dataset must be recorded; arbitrary paths are forbidden')
     r.setdefault('ticks', 64)
     integer(r['ticks'], 'ticks', 1, 5000)
+    if 'sync' in r and type(r['sync']) is not bool:
+        raise ValueError('sync must be boolean')
     r.setdefault('config', {})
     fields(r['config'], CONSTANTS)
     for key, value in r['config'].items():
         number(value, key, *CONSTANTS[key])
     if r['config'].get('min', .0001) >= r['config'].get('max', 1000):
         raise ValueError('lambda min must be below max')
+    if ('min' in r['config'] or 'max' in r['config']) and 'eta' not in r['config']:
+        r['config']['eta'] = math.log(r['config'].get('max', 1000)/r['config'].get('min', .0001))/3600
+        number(r['config']['eta'], 'derived eta', *CONSTANTS['eta'])
     if 'study' in r:
         fields(r['study'], STUDY_SETTINGS)
         for key, value in r['study'].items():
@@ -269,9 +312,6 @@ def recorded_readiness(data_dir, policy, limit, root):
         return {'status': 'BLOCKED', 'reason': str(error), 'required_inputs': REQUIRED}
     ns, name = stage_scope.policy(policy)
     data_dir = Path(data_dir)
-    current = data_dir / 'mathlab/bin/current.json'
-    if not current.is_file():
-        return {'status': 'BLOCKED', 'reason': 'No verified deployed replay binary is available.', 'required_inputs': REQUIRED}
     if sha256_file(ident['path']) != ident['binary_sha256']:
         raise ValueError('deployed replay binary hash mismatch')
     cohort = code_experiment.select_cohort(data_dir, {'namespace': ns, 'policy': name,
@@ -318,6 +358,8 @@ def export(root, result):
         w = csv.DictWriter(f, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
     title = 'Paired stage brain endpoint replay' if result.get('mode') == 'PAIRED_BRAIN_REPLAY' else 'Paired endpoint-cost Go reference experiment'
     summary = {'state': result['state'], 'evidence': result.get('evidence'), 'mode': result.get('mode'),
+               **{key: result.get(key) for key in ('requested_mode', 'requested_policy', 'requested_ticks', 'requested_sync',
+                                                  'required_windows', 'requested_study', 'requested_config', 'v2_executed', 'v3_executed', 'activity')},
                'capture_source': (result.get('runner') or {}).get('capture_control', {}).get('git_sha'),
                'study_source': (result.get('runner') or {}).get('git_sha'),
                'comparison_status': (result.get('runner') or {}).get('comparison_status'),
@@ -325,7 +367,9 @@ def export(root, result):
                'noop': result.get('noop'), 'forecast_endpoint_seconds': result.get('forecast_endpoint_seconds'),
                'reason': result.get('reason'), 'missing_reasons': result.get('missing_reasons'),
                'study': result.get('study'),
-               'limitations': result.get('limitations'), 'required_inputs': result.get('preflight', {}).get('required_inputs')}
+               'limitations': result.get('limitations'), 'required_inputs': result.get('preflight', {}).get('required_inputs'),
+               'missing_fields': result.get('preflight', {}).get('missing_fields'),
+               'diagnostic_capture': result.get('preflight', {}).get('diagnostic_capture')}
     page = '<!doctype html><meta charset="utf-8"><title>'+title+'</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:36px auto;padding:20px}pre{white-space:pre-wrap;background:#f0f4f6;padding:20px}a{color:#075ba8}</style>'
     page += '<h1>'+title+'</h1><p><strong>'+html.escape(result['state'])+'</strong> — no physical actuation or production deployment.</p>'
     page += '<pre>'+html.escape(json.dumps(summary, indent=2, ensure_ascii=False))+'</pre>'
@@ -338,16 +382,16 @@ def export(root, result):
             if p.is_file() and p.name != 'evidence.zip': z.write(p, p.relative_to(root))
 
 
-def run(request, root, data_dir=None, progress=lambda _: None, cancelled=lambda: False):
+def run(request, root, data_dir=None, progress=lambda _: None, cancelled=lambda: False, activity=lambda _: None):
     request = validate(request)
     with ExitStack() as readers:
         if request.get('dataset') == 'recorded' and data_dir:
             ns, name = stage_scope.policy(request['policy'])
             readers.enter_context(snapshots.cache_lock(data_dir, ns, name))
-        return _run(request, root, data_dir, progress, cancelled, readers.close)
+        return _run(request, root, data_dir, progress, cancelled, readers.close, activity)
 
 
-def _run(request, root, data_dir, progress, cancelled, release_cache):
+def _run(request, root, data_dir, progress, cancelled, release_cache, activity):
     request = validate(request); root = Path(root); root.mkdir(parents=True, exist_ok=True)
     (root/'request.json').write_text(json.dumps(request, ensure_ascii=False, indent=2)+'\n')
     if cancelled():
@@ -362,10 +406,7 @@ def _run(request, root, data_dir, progress, cancelled, release_cache):
         provenance = legacy_source.with_suffix('.manifest.json') if legacy_source else None
         if not provenance or not provenance.is_file():
             preflight = recorded_readiness(data_dir, request['policy'], request['ticks'], root) if data_dir else {'reason': 'MATHLAB_DATA_DIR is unavailable', 'required_inputs': REQUIRED}
-            result = {'schema': 'phorvex-bench.endpoint-result.v1', 'state': 'BLOCKED', 'mode': 'PAIRED_GO_REFERENCE',
-                      'evidence': 'recorded-unavailable', 'reason': preflight['reason'], 'preflight': preflight,
-                      'v2_executed': False, 'v3_executed': False, 'changed_choices': None, 'comparable_ticks': 0,
-                      'limitations': ['Both requested arms were stopped before execution because mandatory recorded inputs are unavailable. No model tokens or Go builds were spent.']}
+            result = blocked(request, preflight['reason'], preflight)
             export(root, result); return result
         if provenance.stat().st_size > 64*1024*1024: raise ValueError('installed manifest exceeds 64 MiB')
         meta = strict_json(provenance.read_text())
@@ -410,20 +451,15 @@ def _run(request, root, data_dir, progress, cancelled, release_cache):
     (root/'trace.json').write_text(json.dumps(trace, allow_nan=False)+'\n')
     (root/'config.json').write_text(json.dumps(request['config'])+'\n')
     if missing:
-        result = {'schema': 'phorvex-bench.endpoint-result.v1', 'state': 'BLOCKED', 'mode': 'PAIRED_BRAIN_REPLAY',
-                  'evidence': 'recorded', 'phase': 'PREFLIGHT', 'study': study,
-                  'reason': 'Requested study windows are not supported by the retained observed evidence.',
-                  'missing_reasons': missing, 'v2_executed': False, 'v3_executed': False,
-                  'changed_choices': None, 'comparable_ticks': 0, 'requested_ticks': len(trace['ticks']),
-                  'forecast_endpoint_seconds': None, 'counterfactual_actual_charges': None,
-                  'limitations': ['Study settings cannot create missing move history or duration samples. Neither requested arm executed.']}
+        result = blocked(request, 'Requested study windows are not supported by the retained observed evidence.',
+                         evidence='recorded', study=study, missing_reasons=missing)
         export(root, result); return result
     if trace['evidence'] == 'recorded':
         import code_experiment
         pin = stage_scope.load(data_dir, request['policy'])
         control = stage_scope.identity(data_dir, pin)
         engine = None
-        if trace['source_revision'] == control['git_sha']:
+        if trace['source_revision'] == control['git_sha'] and pin.get('study_engine_lane') != 'native-stage-image':
             identity = control
         else:
             engine = stage_scope.study_engine(data_dir, pin)
@@ -448,6 +484,7 @@ def _run(request, root, data_dir, progress, cancelled, release_cache):
         release_cache()  # Frozen bytes now survive managed-cache pruning.
         if engine:
             progress('verifying captured-stage and local-base baselines before the experimental brain arms')
+            activity('replay_started')
             for label, baseline in (('capture-control', control), ('base-local', engine['base_local'])):
                 output = root / (label + '.jsonl')
                 code_experiment.binary.run_isolated([baseline['path'], '-snapshots', str(frozen), '-out', str(output),
@@ -462,16 +499,18 @@ def _run(request, root, data_dir, progress, cancelled, release_cache):
         cmd = [identity['path'], '--endpoint-study', str(root / 'trace.json'),
                '--endpoint-study-config', str(root / 'config.json'), '--snapshots', str(frozen),
                '--out', str(root / 'result.json'), '--summary', str(root / 'summary.json')]
-        if engine:
+        cross_version = identity['git_sha'] != control['git_sha']
+        if cross_version:
             cmd.append('--allow-cross-version')
         identity = {**identity, 'stage_provenance': provenance, 'capture_control': control,
-                    'study_engine': engine, 'cross_version': bool(engine),
-                    'comparison_status': 'OBSERVATIONAL' if engine else 'MATCHED_REPLAY'}
+                    'study_engine': engine, 'cross_version': cross_version,
+                    'comparison_status': 'OBSERVATIONAL' if cross_version else 'MATCHED_REPLAY'}
     else:
         binary, identity = binary_identity()
         cmd = [str(binary), '-trace', str(root/'trace.json'), '-config', str(root/'config.json'),
                '-state-dir', str(root/'lambda-state'), '-out', str(root/'result.json')]
     progress('executing independent V2 and V3 arms in chronological order')
+    activity('replay_started')
     env = {'PATH': os.environ.get('PATH','/usr/bin:/bin'), 'HOME': str(root), 'KUBECONFIG': os.devnull,
            'LANG': 'C.UTF-8', 'AWS_EC2_METADATA_DISABLED': 'true'}
     process = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
@@ -481,6 +520,7 @@ def _run(request, root, data_dir, progress, cancelled, release_cache):
     if trace['evidence'] == 'recorded' and (result.get('mode') != 'PAIRED_BRAIN_REPLAY' or
             result.get('baseline_exact_count') != len(trace['ticks']) or set(result.get('snapshot_digests', [])) != set(digests)):
         raise ValueError('brain study did not prove exact baseline and snapshot parity for every requested tick')
+    result.update(request_context(request))
     result['runner'] = identity; result['trace_sha256'] = sha(root/'trace.json'); result['study'] = study
     export(root,result); return result
 

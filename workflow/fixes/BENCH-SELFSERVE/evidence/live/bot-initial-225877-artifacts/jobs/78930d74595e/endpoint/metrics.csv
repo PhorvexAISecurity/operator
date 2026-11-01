@@ -1,0 +1,7 @@
+state,reason,v2_executed,v3_executed
+BLOCKED,"Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313. W=864000 s; L=86400 s.
+STAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.
+REPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.
+RUNTIME_OBSERVATION_UNAVAILABLE: stage deployment rollout is incomplete; all desired replicas must be updated, ready and available Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.
+MOVE_ATTRIBUTION_UNAVAILABLE: The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it. Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.
+ENDPOINT_DATASET_UNAVAILABLE: No qualified normalized endpoint dataset is installed for the exact requested policy. Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments.",False,False

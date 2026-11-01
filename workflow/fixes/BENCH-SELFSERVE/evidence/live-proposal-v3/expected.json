@@ -1,0 +1,320 @@
+{
+  "deployments": [
+    {
+      "name": "staging-brain",
+      "uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "generation": 35,
+      "resourceVersion": "103426483",
+      "ready": 1,
+      "containers": [
+        {
+          "name": "brain",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+          "args": [
+            "--listen=:9090",
+            "--metrics-bind-address=:8080",
+            "--health-probe-bind-address=:8081",
+            "--gpu-envelope-max=0.2925",
+            "--shutdown-grace=20s",
+            "--log-level=info",
+            "--log-format=json",
+            "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+            "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+            "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+            "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "staging-phorvex",
+      "uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "generation": 86,
+      "resourceVersion": "103426769",
+      "ready": 1,
+      "containers": [
+        {
+          "name": "manager",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+          "args": [
+            "--base-interval=10s",
+            "--actions-supported-debounce=3",
+            "--calibration-shadow=true",
+            "--calibration-sample=5m",
+            "--calibration-refresh=30m",
+            "--calibration-lookback=168h",
+            "--calibration-export-dir=/var/run/phorvex-calibration",
+            "--metrics-bind-address=:8080",
+            "--health-probe-bind-address=:8081",
+            "--leader-elect=true",
+            "--brain-endpoint=staging-brain:9090",
+            "--sensor-endpoint=staging-sensor:9090",
+            "--actuator-endpoint=staging-actuator:9090",
+            "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+            "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+            "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+            "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+            "--policy-namespaces=phorvex-staging-demo,console-identity-shared",
+            "--max-retained-quarantines-per-namespace=1",
+            "--serving-security-mode=secure-required",
+            "--gpu-envelope-max=0.2925",
+            "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+            "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+            "--persistence-observer-identity=",
+            "--persistence-observer-namespaces=",
+            "--audit-json=/audit/live.jsonl",
+            "--audit-max-bytes=268435456",
+            "--audit-max-backups=4",
+            "--audit-source-addr=:8445",
+            "--audit-source-cert=/etc/audit-server/tls.crt",
+            "--audit-source-key=/etc/audit-server/tls.key",
+            "--audit-source-ca=/etc/audit-server/ca.crt",
+            "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "staging-phorvex-console",
+      "uid": "bf3cfe69-4c96-415b-84be-f929ef759602",
+      "generation": 55,
+      "resourceVersion": "103426741",
+      "ready": 1,
+      "containers": [
+        {
+          "name": "console",
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:b3872872f1e55fb6c18a38c91b7547dd1da1cb08b65afbe6e5749ed179e258e5",
+          "args": [
+            "-root=/data",
+            "-web=/app/web",
+            "-addr=:8090",
+            "-state-dir=/var/lib/phorvex-console",
+            "-audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445",
+            "-audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc",
+            "-audit-source-client-cert=/etc/audit-client/tls.crt",
+            "-audit-source-client-key=/etc/audit-client/tls.key",
+            "-audit-source-ca=/etc/audit-client/ca.crt",
+            "-metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+            "-auth-grants=/etc/phorvex-console/grants.json"
+          ]
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "name": "demo-api-defense",
+      "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+      "generation": 9,
+      "resourceVersion": "103438615",
+      "mode": "active"
+    },
+    {
+      "name": "stage-bench-defense",
+      "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+      "generation": 1,
+      "resourceVersion": "103438707",
+      "mode": "dryRun"
+    }
+  ],
+  "workloads": [
+    {
+      "name": "demo-api",
+      "uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+      "generation": 3,
+      "resourceVersion": "98515125",
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "demo-api"
+        }
+      },
+      "replicas": 3
+    },
+    {
+      "name": "stage-bench-api",
+      "uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+      "generation": 1,
+      "resourceVersion": "102895876",
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      },
+      "replicas": 3
+    }
+  ],
+  "services": [
+    {
+      "name": "demo-api",
+      "uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+      "generation": null,
+      "resourceVersion": "92134889",
+      "selector": {
+        "app.kubernetes.io/name": "demo-api"
+      }
+    },
+    {
+      "name": "stage-bench-api",
+      "uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+      "generation": null,
+      "resourceVersion": "102290061",
+      "selector": {
+        "app.kubernetes.io/name": "stage-bench-api"
+      }
+    }
+  ],
+  "appset_spec": {
+    "generators": [
+      {
+        "matrix": {
+          "generators": [
+            {
+              "list": {
+                "elements": [
+                  {
+                    "environment": "staging",
+                    "namespace": "phorvex-staging",
+                    "release": "staging",
+                    "server": "https://kubernetes.default.svc"
+                  }
+                ]
+              }
+            },
+            {
+              "list": {
+                "elements": [
+                  {
+                    "chart": "phorvex/charts/phorvex",
+                    "service": "manager"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-brain",
+                    "service": "brain"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-sensor",
+                    "service": "sensor"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-actuator",
+                    "service": "actuator"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-attacks",
+                    "service": "attacks"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-console",
+                    "service": "console"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "goTemplate": true,
+    "goTemplateOptions": [
+      "missingkey=error"
+    ],
+    "template": {
+      "metadata": {
+        "finalizers": [
+          "resources-finalizer.argocd.argoproj.io"
+        ],
+        "labels": {
+          "app.kubernetes.io/part-of": "phorvex",
+          "phorvex.ai/environment": "{{.environment}}",
+          "phorvex.ai/service": "{{.service}}"
+        },
+        "name": "phorvex-{{.service}}-{{.environment}}"
+      },
+      "spec": {
+        "destination": {
+          "namespace": "{{.namespace}}",
+          "server": "{{.server}}"
+        },
+        "ignoreDifferences": [
+          {
+            "group": "apiextensions.k8s.io",
+            "jsonPointers": [
+              "/status"
+            ],
+            "kind": "CustomResourceDefinition"
+          },
+          {
+            "jsonPointers": [
+              "/data"
+            ],
+            "kind": "ConfigMap",
+            "name": "agent-deny-guard",
+            "namespace": "p6-demo"
+          },
+          {
+            "jsonPointers": [
+              "/data"
+            ],
+            "kind": "Secret",
+            "name": "{{.release}}-phorvex-webhook-cert"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "jqPathExpressions": [
+              ".webhooks[]?.clientConfig.caBundle"
+            ],
+            "kind": "MutatingWebhookConfiguration"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "jqPathExpressions": [
+              ".webhooks[]?.clientConfig.caBundle"
+            ],
+            "kind": "ValidatingWebhookConfiguration"
+          }
+        ],
+        "project": "phorvex-services",
+        "sources": [
+          {
+            "helm": {
+              "releaseName": "{{.release}}",
+              "skipCrds": true,
+              "valueFiles": [
+                "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+                "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+                "$values/deploy/environments/{{.environment}}/catalogue-family.yaml"
+              ]
+            },
+            "path": "{{.chart}}",
+            "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+            "targetRevision": "main"
+          },
+          {
+            "ref": "values",
+            "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+            "targetRevision": "main"
+          }
+        ],
+        "syncPolicy": {
+          "automated": {
+            "enabled": true,
+            "prune": false,
+            "selfHeal": true
+          },
+          "retry": {
+            "backoff": {
+              "duration": "15s",
+              "factor": 2
+            },
+            "limit": 3
+          },
+          "syncOptions": [
+            "CreateNamespace=true",
+            "ServerSideApply=true",
+            "RespectIgnoreDifferences=true"
+          ]
+        }
+      }
+    }
+  }
+}

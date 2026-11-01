@@ -1,0 +1,8 @@
+checks:
+  incident:
+    artifact: evidence/incident.md
+    command: Independent exact original-upload parser and actual installed-stage stage_scope.load reproduction with successful existing-fixture control; retained routing.json and live-pin-control.json; reviewed current169-file and peer producer bindings
+  p3:
+    artifact: evidence/p3/verdict.md
+    result: PASS
+    command: Independently inspect canonical b1ef-to225877 diff, final actualOS lease controls, immutable producer/source controls and strict preflight; assert169 committed runtime hashes and bound peer/CI receipts in p3-225877-bindings.json

@@ -1,0 +1,48 @@
+{
+  "schema": "phorvex-bench.peer-runtime-upgrade-proposal.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:16:42.169533+00:00",
+  "verdict": "PASS_ALGORITHM_WITH_FRESH_SCOPE_PRECONDITIONS_REQUIRED",
+  "installer_sha256": "de6aebdcabd5cdf037449bfb657cc0c1fe18de6dbc79b571b15d28cf51772f27",
+  "reviewed_source_argument": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "reviewed_manifest_argument": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+  "checks": [
+    "Six expected owned unit hashes exactly match retained actuala5d installation receipt. Proposed units derive from168 reviewed runtime files; only bot WorkingDirectory changes in preserved private bot unit.",
+    "Exact release-origin/source manifest/content hashes,4.5GiB free reserve, native replay receipt, actual pin/live scope and explicitbee9 image/policy identities are required before owned service changes.",
+    "Stops owned timers, waits existing maintenance, re-observes identities and checks bot idle before/after stopping it; existing accepted jobs cannot be silently discarded.",
+    "Only six owned units are backed up/replaced; no cluster mutation,new service,global symlink,checkout,private config,owner,membership or legacy-current overwrite. Unrelated API/proxy/web state/PIDs and protected hashes checked after.",
+    "Observer restart explicitly creates a continuity gap; old journals retained and no history bridged. New continuous600s or requested history must be qualified before endpoint readiness.",
+    "Corrected rollback attempts every owned stop/copy/reload/start/verification even after transport/I/O errors and records RESTORATION_FAILED honestly. Six explicit failure/success simulations independently passed."
+  ],
+  "current_limitations": [
+    "Parent reports main advanced to1457be44 and capture/source conditions changed. This receipt is not authorization to ignore stalebee9 predicates or a claim of current readiness. Root must refresh/review exact source/scope proposal before any incompatible live attempt.",
+    "Coherent final preflight is pending for the new source; this is bounded runtime component/operation review, not formal completed campaign acceptance.",
+    "Actual installation, observer gap/closed journal/new session, all unit restoration and bot results require retained real receipts."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/install-runtime-lease-repair.py": {
+      "sha256": "de6aebdcabd5cdf037449bfb657cc0c1fe18de6dbc79b571b15d28cf51772f27",
+      "bytes": 10121
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/runtime-rollback-control.json": {
+      "sha256": "b1139462d2336721533f0410c55446b69fc4b206e4c6664deba943cbe699d2c6",
+      "bytes": 1624
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/runtime-rollback-control.py": {
+      "sha256": "f214b2e5b07b89bd9bc31a96ecb60ac580f2d9cc5c1d52a6ac29627a284812aa",
+      "bytes": 3825
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/commit-binding-71181310.json": {
+      "sha256": "b28a14a53e2da29d6a78b1cafcff407e5f699ac10ff572a4b4d54264cb735c37",
+      "bytes": 729
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/runtime-source-manifest.json": {
+      "sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+      "bytes": 28890
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-a5d8.json": {
+      "sha256": "d500d94ed2cdba9b485154a689552216fedcebff65b5589c9736a2507561ebe7",
+      "bytes": 60568
+    }
+  }
+}

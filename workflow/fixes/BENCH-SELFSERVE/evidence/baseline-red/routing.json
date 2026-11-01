@@ -1,0 +1,28 @@
+{
+  "at": "2026-11-01T17:30:46.758716+00:00",
+  "source": "fe6494022a65fcca236e405521685708eb104d9e",
+  "upload_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+  "actual_kind": "bench",
+  "options": [
+    "policy=phorvex-staging-demo/demo-api-defense",
+    "ticks=64",
+    "nosync"
+  ],
+  "normalized_prompt_sha256": "c4beaa309f609918a6002711d7dd3a48b8d305bc93f6f2d3db12dd347375e1e8",
+  "typed_endpoint_routed": false,
+  "red_predicate": "Exact reviewed10day endpoint request currently falls through to generic LLM/code lane",
+  "positive_control": {
+    "schema": "phorvex-bench.endpoint-study.v1",
+    "title": "Exact10day request schema control",
+    "policy": "phorvex-staging-demo/demo-api-defense",
+    "ticks": 64,
+    "dataset": "recorded",
+    "config": {
+      "lookback": 86400
+    },
+    "study": {
+      "window": 864000,
+      "slo_target": 0.999
+    }
+  }
+}

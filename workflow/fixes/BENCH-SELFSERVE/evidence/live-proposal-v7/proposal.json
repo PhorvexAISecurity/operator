@@ -1,0 +1,11 @@
+{
+  "source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "base": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "runtime_installed": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "runtime_files_identical": 169,
+  "operator_sha256": "91b3b62821c96ee47b4d13c7b2e6532d492345976d9d38d2fb4f0e4ce9ad5aa8",
+  "operation_sha256": "cbddcd06a0dbc19373d31961cc0ea2b4336cdae8bdb44b5e090ec6cd99a92a61",
+  "preconditions_sha256": "93bf225dcd7f6bfe3a854dc854af5cce1b9c1a43c01b23b88d238c91193d33a7",
+  "only_source_changes": "exact existing external eef chart/values refs\u2192reviewed2a9; currentb1ef images and activefamily preserved; approved capture/reader settings added; no prune",
+  "ceiling": "2026-11-01T23:25:00Z"
+}
