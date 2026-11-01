@@ -4,14 +4,14 @@
   "target": "staging-isolated",
   "targetDigest": "sha256:555f2dfa14f2ad66df7f4fc2617844b7d04804bd9a160f05cee0c88f08541f37",
   "environment": "staging",
-  "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-  "sourceTree": "e3aa727affb287aa626f745c8f4f0064cc45b991",
+  "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "sourceTree": "8aafe932359b0c1af30346f25a0cb1303a29910c",
   "authority": {
     "schema": 1,
     "target": "staging-isolated",
     "source": {
-      "commit": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-      "tree": "e3aa727affb287aa626f745c8f4f0064cc45b991",
+      "commit": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "tree": "8aafe932359b0c1af30346f25a0cb1303a29910c",
       "dispatchRef": "refs/heads/main",
       "serviceHelperTree": "bbdde10415f590e655e13be1221300327ba81af2",
       "files": {
@@ -96,24 +96,24 @@
         "validationImage": "operator",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.16.0",
       "build": {
         "dockerfile": "deploy/docker/operator.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.16.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/manager",
-        "tag": "staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -181,14 +181,14 @@
         "validationImage": "brain",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.10.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.10.0",
           "SERVICE=brain"
         ]
@@ -196,10 +196,10 @@
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/brain",
-        "tag": "staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.10.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.10.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -266,14 +266,14 @@
         "validationImage": "sensor",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.11.0",
           "SERVICE=sensor"
         ]
@@ -281,10 +281,10 @@
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/sensor",
-        "tag": "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -351,14 +351,14 @@
         "validationImage": "actuator",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/service.Dockerfile",
         "context": ".",
         "target": "",
         "args": [
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.11.0",
           "SERVICE=actuator"
         ]
@@ -366,10 +366,10 @@
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/actuator",
-        "tag": "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -436,7 +436,7 @@
         "validationImage": "console",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.16.0",
       "build": {
         "dockerfile": "deploy/docker/console.Dockerfile",
@@ -444,17 +444,17 @@
         "target": "",
         "args": [
           "CONSOLE_VERSION=0.16.0",
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.16.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/console",
-        "tag": "staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -523,7 +523,7 @@
         "validationImage": "attacks",
         "aliases": []
       },
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "0.11.0",
       "build": {
         "dockerfile": "deploy/docker/console.Dockerfile",
@@ -531,17 +531,17 @@
         "target": "attacks",
         "args": [
           "CONSOLE_VERSION=0.11.0",
-          "GIT_SHA=b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+          "GIT_SHA=be676c84d162528c10bacb84c8e6a11de30ade5d",
           "RELEASE_VERSION=0.11.0"
         ]
       },
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/attacks",
-        "tag": "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-0.11.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "deploy": {
@@ -603,7 +603,7 @@
     {
       "component": "agent-sim",
       "kind": "fixture",
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "fixture-v1",
       "build": {
         "dockerfile": "farm-fixtures/agentsim/Dockerfile",
@@ -620,10 +620,10 @@
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/agent-sim",
-        "tag": "staging-fixture-v1-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-fixture-v1-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-fixture-v1-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-fixture-v1-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "identity": {
@@ -660,7 +660,7 @@
     {
       "component": "catalogue-workload",
       "kind": "fixture",
-      "source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "source": "be676c84d162528c10bacb84c8e6a11de30ade5d",
       "version": "fixture-v1",
       "build": {
         "dockerfile": "farm-fixtures/catalogue-workload/Dockerfile",
@@ -677,10 +677,10 @@
       "image": {
         "registry": "753556437180.dkr.ecr.us-east-2.amazonaws.com",
         "repository": "phorvex/staging/catalogue-workload",
-        "tag": "staging-fixture-v1-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "tag": "staging-fixture-v1-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
         "tags": [
-          "staging-fixture-v1-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
-          "staging-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+          "staging-fixture-v1-git-be676c84d162528c10bacb84c8e6a11de30ade5d",
+          "staging-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
         ]
       },
       "identity": {
@@ -809,27 +809,27 @@
   "releases": {
     "manager": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
-      "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373"
+      "digest": "sha256:5bf50763bc0c2366ef09e0f437349748f115602404c3b31c5cdd5bdcf9538df4"
     },
     "brain": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
-      "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903"
+      "digest": "sha256:f82484e4500b88ef278e1201327c50425e63347e52a11b410088ddae6018f358"
     },
     "sensor": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor",
-      "digest": "sha256:0cae1dd1abbee9f62b2d82f0b51ad365bd1d4683318419998546997053142ca4"
+      "digest": "sha256:a84754379d9b3bb5367c357ff4b5161dfab070c0fab52c207009b4e5d3c675d1"
     },
     "actuator": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/actuator",
-      "digest": "sha256:8901d2218987c796143d33058e8cf542b44697709bbc0bda934fadae536cba95"
+      "digest": "sha256:cce3832d7d092cf60c053a011c92972602f7654bf4d7914f718dd560d7dc840d"
     },
     "console": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console",
-      "digest": "sha256:7fc7ce8760b28b5ed49d96f63e96234ba42dde66a45e36a950b8f5f8ff1c08a4"
+      "digest": "sha256:0ffc607dab5034811dc48da1e06d026950fdea7c175c3473a2484947c5ff27d2"
     },
     "attacks": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/attacks",
-      "digest": "sha256:8306d710ed07560b59b89f3dad03e353ac326a606dab7366f06df00f24d710b3"
+      "digest": "sha256:57b91dfb441408b600deeeab4114193a6beea531970737acc21ba30c582f5cce"
     },
     "agent-sim": {
       "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim",

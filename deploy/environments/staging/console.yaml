@@ -15,6 +15,6 @@ phorvex:
           note: Read-only source-pinned stage brain benchmark snapshot collection.
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console"
-      tag: "staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
-      releaseDigest: "sha256:7fc7ce8760b28b5ed49d96f63e96234ba42dde66a45e36a950b8f5f8ff1c08a4"
-      releaseSourceSHA: "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      tag: "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
+      releaseDigest: "sha256:0ffc607dab5034811dc48da1e06d026950fdea7c175c3473a2484947c5ff27d2"
+      releaseSourceSHA: "be676c84d162528c10bacb84c8e6a11de30ade5d"
