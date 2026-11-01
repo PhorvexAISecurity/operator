@@ -395,12 +395,16 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
             self.assertFalse(family["outputPolicy"]["enabled"])
             self.assertFalse(family_catalog["familyFixtures"]["enabled"])
             return
-        self.assertEqual(family_catalog["familyFixtures"]["profile"], "agent-action")
+        fixture = family_catalog["familyFixtures"]
+        profile = fixture["profile"]
+        self.assertIn(profile, DESTINATIONS)
         args = argparse.Namespace(
-            profile="agent-action", workload_image="", phorvex_image="",
+            profile=profile,
+            workload_image=fixture["images"]["workload"],
+            phorvex_image=fixture["images"]["phorvex"],
             agent_image=family_catalog["agentAction"]["image"],
-            python_image=render_catalogue_staging_values.DEFAULT_PYTHON,
-            kwok_image=render_catalogue_staging_values.DEFAULT_KWOK,
+            python_image=fixture["images"]["python"],
+            kwok_image=fixture["images"]["kwok"],
         )
         self.assertEqual(
             family,

@@ -341,6 +341,78 @@ class StagingTargetTests(unittest.TestCase):
     def test_argocd_route_is_exact_staging_six_service_set(self):
         RELEASE.verify_argocd(RELEASE.expected_target())
 
+    def test_active_catalogue_window_accepts_exact_source_pinned_fixture_profiles(self):
+        prepared = prepared_batch()
+        complete = RELEASE.complete(prepared, publication_results(prepared))
+        profiles = (
+            ("agent-action", "agent-sim", "--agent-image"),
+            ("identity-sa-rotate", "catalogue-workload", "--workload-image"),
+        )
+        for profile, component, image_flag in profiles:
+            with self.subTest(profile=profile):
+                release = complete["releases"][component]
+                image = f"{release['repository']}@{release['digest']}"
+                agent_release = complete["releases"]["agent-sim"]
+                agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
+                command = [
+                    "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
+                    "--profile", profile, "--agent-image", agent_image,
+                ]
+                if component == "catalogue-workload":
+                    command.extend((image_flag, image))
+                generated = subprocess.run(
+                    command, cwd=ROOT, check=True, text=True, capture_output=True,
+                ).stdout
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    overlay = root / "deploy/environments/staging/catalogue-family.yaml"
+                    overlay.parent.mkdir(parents=True)
+                    overlay.write_text(generated, encoding="utf-8")
+                    completed = mock.Mock(stdout=generated)
+                    with (
+                        mock.patch.object(RELEASE, "ROOT", root),
+                        mock.patch.object(RELEASE.subprocess, "run", return_value=completed) as render,
+                    ):
+                        consumers = RELEASE.active_catalogue_fixture_consumers(complete)
+                expected = {
+                    RELEASE.consumer_key(consumer): image
+                    for item in complete["components"] if item["component"] == component
+                    for consumer in item["deploy"]["consumers"] if consumer["profile"] == profile
+                }
+                self.assertEqual(consumers, expected)
+                rendered_command = render.call_args.args[0]
+                self.assertIn(["--agent-image", agent_image], [rendered_command[i:i + 2] for i in range(len(rendered_command) - 1)])
+                if component == "catalogue-workload":
+                    self.assertIn([image_flag, image], [rendered_command[i:i + 2] for i in range(len(rendered_command) - 1)])
+
+    def test_active_catalogue_window_rejects_wrong_identity_fixture_pin(self):
+        prepared = prepared_batch()
+        complete = RELEASE.complete(prepared, publication_results(prepared))
+        release = complete["releases"]["catalogue-workload"]
+        image = f"{release['repository']}@{release['digest']}"
+        agent_release = complete["releases"]["agent-sim"]
+        agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
+        generated = subprocess.run([
+            "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
+            "--profile", "identity-sa-rotate", "--agent-image", agent_image,
+            "--workload-image", image,
+        ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
+        values = yaml.safe_load(generated)
+        values["phorvex"]["console"]["attackCatalog"]["familyFixtures"]["images"]["workload"] = (
+            "registry.invalid.test/catalogue-workload@sha256:" + "0" * 64
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            overlay = root / "deploy/environments/staging/catalogue-family.yaml"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(yaml.safe_dump(values, sort_keys=False), encoding="utf-8")
+            with (
+                mock.patch.object(RELEASE, "ROOT", root),
+                mock.patch.object(RELEASE.subprocess, "run", return_value=mock.Mock(stdout=generated)),
+                self.assertRaisesRegex(ValueError, "differs from the exact generated overlay"),
+            ):
+                RELEASE.active_catalogue_fixture_consumers(complete)
+
     def test_argocd_rejects_template_generator_and_source_overrides(self):
         target = RELEASE.expected_target()
         source = yaml.safe_load((ROOT / target["deployment"]["applicationManifest"]).read_text())
