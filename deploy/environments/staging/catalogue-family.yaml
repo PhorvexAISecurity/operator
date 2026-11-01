@@ -37,7 +37,7 @@ phorvex:
       agentAction:
         enabled: false
         namespace: p6-demo
-        image: ''
+        image: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
       prometheusEvidence:
         enabled: true
     auth:
