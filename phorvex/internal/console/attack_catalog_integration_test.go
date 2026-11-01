@@ -342,12 +342,13 @@ func (p *testCatalogPreparation) TriggerMode() AttackCatalogTriggerMode     { re
 func (p *testCatalogPreparation) EvidenceTenant() string                    { return p.tenant }
 
 type testCatalogAdapter struct {
-	id             string
-	tenant         string
-	preflightErr   error
-	preflightCalls atomic.Int32
-	executeCalls   atomic.Int32
-	cleanupCalls   atomic.Int32
+	id                      string
+	tenant                  string
+	preflightErr            error
+	truncateSignalCreatedAt bool
+	preflightCalls          atomic.Int32
+	executeCalls            atomic.Int32
+	cleanupCalls            atomic.Int32
 }
 
 func (a *testCatalogAdapter) CatalogueID() string { return a.id }
@@ -376,6 +377,9 @@ func (a *testCatalogAdapter) Execute(_ context.Context, run AttackCatalogRunCont
 	}
 	createdAt := time.Now().UTC()
 	observedAt := createdAt
+	if a.truncateSignalCreatedAt {
+		createdAt = createdAt.Truncate(time.Second)
+	}
 	return AttackCatalogObservation{MutationStarted: true, Launched: true, DefensiveChainComplete: true,
 		Signal: AttackCatalogSignalResult{Created: true, Observed: true, Name: "test-signal", UID: "test-signal-uid", Creator: "test-creator", TargetUID: "test-target-uid",
 			CreatedAt: attackCatalogTime(createdAt), ObservedAt: attackCatalogTime(observedAt)},
@@ -617,6 +621,22 @@ func TestAttackCatalogueLifecyclePersistsResultPrometheusAndTriggerModeTogether(
 	}
 	if err = json.Unmarshal(rawSummary, &summary); err != nil || summary.CampaignVerdict != "PASS" {
 		t.Fatalf("strict verifier summary=%s err=%v", rawSummary, err)
+	}
+}
+
+func TestAttackCatalogueLifecycleAcceptsKubernetesSignalTimestampPrecision(t *testing.T) {
+	prometheus := testRunPrometheusServer(t)
+	defer prometheus.Close()
+	adapter := &testCatalogAdapter{id: "AML.T0024", tenant: "phorvex-test", truncateSignalCreatedAt: true}
+	cfg := Config{Service: ServiceAttacks, StateDir: t.TempDir(), AttackCatalogRunTimeout: time.Second,
+		RunPrometheusEvidence: PrometheusRunEvidenceConfig{Enabled: true, URL: prometheus.URL, Environment: "staging",
+			SettleDelay: time.Millisecond, RequestTimeout: time.Second, RangeStep: time.Second}}
+	fixture, id := launchTestCatalogAdapter(t, cfg, adapter)
+	status := waitCatalogRunTerminal(t, fixture.srv, id)
+	result, err := fixture.srv.runs.AttackCatalogResult(id)
+	if err != nil || result == nil || status.State != "done" || result.Verdict != "DEFENDED" ||
+		result.Signal.CreatedAt == nil || !result.Signal.CreatedAt.Equal(result.Signal.CreatedAt.Truncate(time.Second)) {
+		t.Fatalf("whole-second Kubernetes signal was not defended: status=%+v result=%+v err=%v", status, result, err)
 	}
 }
 

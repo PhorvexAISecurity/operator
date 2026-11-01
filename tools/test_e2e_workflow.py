@@ -25,7 +25,15 @@ class E2EWorkflowTests(unittest.TestCase):
         self.assertEqual(job['runs-on'], 'ubuntu-24.04')
         self.assertNotIn('if', job)
         self.assertNotIn('secrets.', raw)
+        self.assertEqual(job['env']['GOTOOLCHAIN'], 'local')
+        setup_go = [s for s in job['steps'] if s.get('uses', '').startswith('actions/setup-go@')]
+        self.assertEqual(len(setup_go), 1)
+        self.assertEqual(setup_go[0]['uses'],
+                         'actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5')
+        self.assertEqual(setup_go[0]['with']['go-version-file'], 'build/test-harness/go.mod')
+        self.assertEqual(setup_go[0]['with']['cache-dependency-path'], 'build/test-harness/go.sum')
         runs = '\n'.join(s.get('run', '') for s in job['steps'])
+        self.assertIn('pip install PyYAML==6.0.2 -r tools/benchmark-test-requirements.txt', runs)
         self.assertIn('unittest discover -s End-to-End/pipeline', runs)
         self.assertIn('unittest discover -s tools', runs)
         self.assertNotIn('pipeline/e2e.py', runs)

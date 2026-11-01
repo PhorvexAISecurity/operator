@@ -69,3 +69,16 @@ func TestAttackCatalogLegacyAMLResultRemainsReadable(t *testing.T) {
 		t.Fatal("legacy incomplete evidence was upgraded into the strict release contract")
 	}
 }
+
+func TestAttackCatalogSignalCreationAllowsOnlyKubernetesTimestampPrecision(t *testing.T) {
+	startedAt := time.Date(2026, 11, 1, 5, 50, 52, 448348215, time.UTC)
+	if !attackCatalogSignalCreationTimeValid(startedAt.Truncate(time.Second), startedAt) {
+		t.Fatal("same-second Kubernetes creationTimestamp was rejected")
+	}
+	if !attackCatalogSignalCreationTimeValid(startedAt.Add(time.Nanosecond), startedAt) {
+		t.Fatal("post-start signal timestamp was rejected")
+	}
+	if attackCatalogSignalCreationTimeValid(startedAt.Truncate(time.Second).Add(-time.Nanosecond), startedAt) {
+		t.Fatal("signal from an earlier second was accepted")
+	}
+}
