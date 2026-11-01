@@ -2,7 +2,7 @@ schema_version: 1
 protocol_version: 2
 delivery_version: 1
 fix_loop: lead_worker
-revision: 19
+revision: 21
 change_class: B
 approvals:
   pr_open: operations/AUTONOMY.md
@@ -96,7 +96,7 @@ fix_id: BENCH-STAGE
 issues: []
 title: Source-pinned stage brain benchmarks through the bot
 profile: standard
-state: PR_READY
+state: IN_PR
 roles:
   human_owner: hamihoriyat
   proposer: bench-v3-lead
@@ -123,8 +123,8 @@ implementation:
   head_sha: ec310e276e45e6a218f7520880e22c6c1c687817
   stacked_on: []
 pull_request:
-  url: null
-  reviewed_head: null
+  url: https://github.com/PhorvexSecurity/operator-refactored/pull/183
+  reviewed_head: ec310e276e45e6a218f7520880e22c6c1c687817
   merge_sha: null
   checks: pending
   patch_equivalence: pending
@@ -158,9 +158,9 @@ blockers: []
 residuals: []
 next_action:
   owner: coordinator
-  action: Push/open or update the reviewed PR under existing scope; record its actual
-    head and CI. No merge/deploy.
-updated_at: '2026-11-01T02:01:18+00:00'
+  action: Monitor PR 183 review and actual GitHub CI; stage benchmark services remain
+    active. Main merge requires separate authorization.
+updated_at: '2026-11-01T02:13:05+00:00'
 follow_up_to: BENCH-V3
 configuration_history:
 - at: '2026-10-31T22:25:19+00:00'
@@ -205,6 +205,11 @@ configuration_history:
   fields:
   - deployment
   approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+- at: '2026-11-01T02:12:23+00:00'
+  by: bench-v3-lead
+  fields:
+  - pull_request
+  approval_ref: null
 transitions:
 - from: TRIAGED
   to: DESIGNING
@@ -253,6 +258,15 @@ transitions:
   artifact: null
   note: Validated role handoff
   approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-11-01T02:13:05+00:00'
+  by: bench-v3-lead
+  artifact: evidence/delivery/pr-open.json
+  note: Reviewed source ec310; metadata-only published head a2a0 verified separately.
+    GitHub checks queued/running, no remote PASS claimed.
+  approval_ref: operations/AUTONOMY.md
   forced: false
 check_history:
 - check: decision

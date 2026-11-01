@@ -5839,3 +5839,47 @@ artifacts:
   retention: git
   description: Closed final packaging/check artifact; actual command, result and author
     remain in the artifact. This does not replace any formal signed check.
+- id: delivery-22b9a0b33a282a3d
+  path: evidence/delivery/metadata-source-equivalence-a2a0.json
+  bytes: 1169
+  sha256: c0729b419f05df41d9acb55239a2ed511cae646e84a657f4317736256fe329e4
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:08:57.879780+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  description: Actual PR delivery/metadata equivalence receipt; remote queued/running
+    checks are not a PASS claim.
+- id: delivery-8db173cffc971488
+  path: evidence/delivery/pr-open.json
+  bytes: 460
+  sha256: 2fbd8ff487dc0faf49db24e927edf090ea19a1e90980dcc15a2b69593464f622
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:12:13.272848+00:00'
+  evidence_class: FINAL
+  retention: git
+  source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  description: Actual PR delivery/metadata equivalence receipt; remote queued/running
+    checks are not a PASS claim.
+- id: delivery-84cae220c934d09d
+  path: evidence/delivery/pr-ci-at-open.json
+  bytes: 3716
+  sha256: 8321478ea9fae9624a711bce3171f715916ae4ab3143b2eb0aa04b6d171cc24c
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:12:22.824303+00:00'
+  evidence_class: CONTROL
+  retention: git
+  source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  description: Actual PR delivery/metadata equivalence receipt; remote queued/running
+    checks are not a PASS claim.
+- id: delivery-274e70518abb9c47
+  path: pr-delivery-config.json
+  bytes: 231
+  sha256: 0c84e32d0f01108a4bed13307911f7cdefcc06b7c17870d0ce8c930a322eebab
+  producer: bench-v3-lead
+  created_at: '2026-11-01T02:12:22.825850+00:00'
+  evidence_class: SYNC
+  retention: git
+  source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  description: Actual PR delivery/metadata equivalence receipt; remote queued/running
+    checks are not a PASS claim.

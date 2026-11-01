@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-01T02:08:57.879780+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS_METADATA_ONLY_SOURCE_EQUIVALENCE",
+  "reviewed_source": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "metadata_commit": "a2a0dcedc9aa5b7c2bd5b7e94967bc9aed4f39b0",
+  "changed_metadata_files": 592,
+  "changed_path_list_sha256": "e190339ac4917851c93adfe2d96b8158dc7909880afae66a0e66136fffbec9ec",
+  "identical_source_trees": {
+    "benchmark": "973061bf152b5f9de84d65a56e77554301c327b7",
+    "phorvex": "5fe0bc926902e9090f196f70592d4ebe400f4eb0",
+    ".github": "b2b2738d845adafe49a1e3dbb86f71433c84bca1",
+    "deploy": "8fa8f219237a032d894b3a426734f3e4086b2f9a",
+    "docs": "649e59e09ea759611a8a199876b40a080a4bc265",
+    "tools": "07b6b9f3b22a3c94cb9c4d45476bf296e5b90c14",
+    "workflow/tools": "eb329349dde4e23f1195fb5333f4bf82d12f509f",
+    "workflow/operations": "aa8167ec5e405c384a1f20f8c8ff76051592d4c3"
+  },
+  "raw_whitespace": "Additional metadata-only diff-check reports trailing whitespace in preserved byte-hashed terminal logs and a canonical archive diff; product source diff check passed in the coherent ec310 preflight. Original raw evidence is not rewritten."
+}
