@@ -32,6 +32,7 @@
                       "type": "string",
                       "enum": ["", "agent-action", "controller-stop", "credential", "datastore", "identity-sa-rotate", "image", "network-edge", "node-recycle", "pod-rotate", "quarantine", "sensitive-output", "serving-kv", "serving-rate"]
                     },
+                    "namespaceUID": {"type": "string"},
                     "cleanupPolicy": {"type": "string", "enum": ["Delete"]},
                     "images": {
                       "type": "object",
@@ -50,6 +51,18 @@
                       "then": {
                         "required": ["profile", "cleanupPolicy", "images"],
                         "properties": {"profile": {"minLength": 1}}
+                      }
+                    },
+                    {
+                      "if": {
+                        "required": ["enabled", "profile"],
+                        "properties": {"enabled": {"const": true}, "profile": {"const": "quarantine"}}
+                      },
+                      "then": {
+                        "required": ["namespaceUID"],
+                        "properties": {
+                          "namespaceUID": {"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"}
+                        }
                       }
                     }
                   ]

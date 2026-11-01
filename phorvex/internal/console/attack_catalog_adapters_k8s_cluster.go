@@ -53,13 +53,17 @@ type kubernetesK8sCatalogueCluster struct {
 	// actuatorIdentity / cleanupIdentity are the exact ServiceAccount usernames whose
 	// actuation and cleanup grants the preflight proves with SubjectAccessReview. Empty
 	// disables the catalogue (checked in Preflight) rather than silently skipping the proof.
-	actuatorIdentity string
-	cleanupIdentity  string
+	actuatorIdentity  string
+	cleanupIdentity   string
+	operatorNamespace string
 }
 
 func newKubernetesK8sCatalogueCluster(cfg Config, profile k8sCatalogueProfile) (k8sCatalogueCluster, error) {
 	if err := profile.validate(); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(cfg.AttackCatalogOperatorNamespace) == "" {
+		return nil, errors.New("Kubernetes catalogue operator namespace is not configured")
 	}
 	var rc *rest.Config
 	if cfg.ExperimentRESTConfig != nil {
@@ -112,7 +116,8 @@ func newKubernetesK8sCatalogueCluster(cfg Config, profile k8sCatalogueProfile) (
 	}
 	return &kubernetesK8sCatalogueCluster{profile: profile, kube: kube, eventKube: eventKube,
 		dynamic: dyn, eventDynamic: eventDyn, cleanupKube: cleanupKube, reader: reader,
-		actuatorIdentity: cfg.AttackCatalogActuatorPrincipal, cleanupIdentity: cfg.AttackCatalogCleanupPrincipal}, nil
+		actuatorIdentity: cfg.AttackCatalogActuatorPrincipal, cleanupIdentity: cfg.AttackCatalogCleanupPrincipal,
+		operatorNamespace: cfg.AttackCatalogOperatorNamespace}, nil
 }
 
 type k8sCatalogueAccess struct {
@@ -128,12 +133,13 @@ type k8sCatalogueAccess struct {
 	resource    string
 	subresource string
 	namespace   string
+	name        string
 }
 
 func requireK8sCatalogueAccess(ctx context.Context, checks ...k8sCatalogueAccess) error {
 	for _, check := range checks {
 		attrs := &authorizationv1.ResourceAttributes{Verb: check.verb, Group: check.group,
-			Resource: check.resource, Subresource: check.subresource, Namespace: check.namespace}
+			Resource: check.resource, Subresource: check.subresource, Namespace: check.namespace, Name: check.name}
 		var allowed, denied bool
 		var err error
 		if check.user == "" {
@@ -160,6 +166,9 @@ func requireK8sCatalogueAccess(ctx context.Context, checks ...k8sCatalogueAccess
 			if check.subresource != "" {
 				resource += "/" + check.subresource
 			}
+			if check.name != "" {
+				resource += "/" + check.name
+			}
 			return fmt.Errorf("Kubernetes catalogue preflight: %s lacks %s %s/%s in %q", who, check.verb, check.group, resource, check.namespace)
 		}
 	}
@@ -180,10 +189,18 @@ func (k *kubernetesK8sCatalogueCluster) Preflight(ctx context.Context, entry att
 	if profile.Family == k8sCatalogueFamilyQuarantine && (k.cleanupIdentity == "" || k.cleanupKube == nil) {
 		return k8sCatalogueFixture{}, errors.New("Kubernetes catalogue quarantine cleanup identity is not configured")
 	}
+	// Read the target Namespace only after proving that cluster-scoped read. Its immutable UID
+	// binds the exact quarantine ledger name used by resourceName-scoped RBAC below.
+	if err := requireK8sCatalogueAccess(ctx, k8sCatalogueAccess{kube: k.kube, verb: "get", resource: "namespaces", name: profile.Namespace}); err != nil {
+		return k8sCatalogueFixture{}, err
+	}
+	ns, err := k.kube.CoreV1().Namespaces().Get(ctx, profile.Namespace, metav1.GetOptions{})
+	if err != nil || ns.UID == "" || ns.DeletionTimestamp != nil {
+		return k8sCatalogueFixture{}, errors.New("fixed Kubernetes catalogue namespace is unavailable or terminating")
+	}
 	// (1) The attacks SA's OWN fixture-lifecycle authority: reads of the fixed workload and
 	// the lane event lifecycle. It holds NO actuation verb; those are proven below.
 	checks := []k8sCatalogueAccess{
-		{kube: k.kube, verb: "get", resource: "namespaces"},
 		{kube: k.kube, verb: "get", resource: "pods", namespace: profile.Namespace},
 		{kube: k.kube, verb: "list", resource: "pods", namespace: profile.Namespace},
 		{kube: k.kube, verb: "get", group: "apps", resource: "deployments", namespace: profile.Namespace},
@@ -199,13 +216,15 @@ func (k *kubernetesK8sCatalogueCluster) Preflight(ctx context.Context, entry att
 	// (2) The defender ACTUATOR identity holds the remediation verbs the brain will dispatch.
 	switch profile.Family {
 	case k8sCatalogueFamilyQuarantine:
+		quarantineLedger := k8sQuarantineCapacityLedgerName(string(ns.UID))
 		checks = append(checks,
 			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "update", resource: "pods", namespace: profile.Namespace},
 			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "create", group: "networking.k8s.io", resource: "networkpolicies", namespace: profile.Namespace},
-			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "update", resource: "configmaps", namespace: profile.Lane},
-			// The attacks SA additionally READS the lane capacity ledgers during the quarantine
-			// capacity preflight/oracle (read-only; the mutation stays on the actuator/cleanup SAs).
-			k8sCatalogueAccess{kube: k.kube, verb: "get", resource: "configmaps", namespace: profile.Lane},
+			k8sCatalogueAccess{kube: k.kube, user: k.actuatorIdentity, verb: "update", resource: "configmaps", namespace: k.operatorNamespace},
+			// The attacks SA reads only the two exact operator ledgers during the quarantine
+			// capacity preflight/oracle; mutation stays on the actuator/cleanup identities.
+			k8sCatalogueAccess{kube: k.kube, verb: "get", resource: "configmaps", namespace: k.operatorNamespace, name: "phorvex-shared-capacity"},
+			k8sCatalogueAccess{kube: k.kube, verb: "get", resource: "configmaps", namespace: k.operatorNamespace, name: quarantineLedger},
 		)
 	default:
 		// The pod-rotate / controller-stop families map to a native Pod Eviction.
@@ -216,18 +235,16 @@ func (k *kubernetesK8sCatalogueCluster) Preflight(ctx context.Context, entry att
 	// (3) The dedicated delete-only CLEANUP identity holds exactly the undo verbs used after a
 	// quarantine. It can never create/isolate/evict, so it cannot itself remediate.
 	if profile.Family == k8sCatalogueFamilyQuarantine {
+		quarantineLedger := k8sQuarantineCapacityLedgerName(string(ns.UID))
 		checks = append(checks,
 			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "delete", resource: "pods", namespace: profile.Namespace},
 			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "delete", group: "networking.k8s.io", resource: "networkpolicies", namespace: profile.Namespace},
-			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "update", resource: "configmaps", namespace: profile.Lane},
+			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "update", resource: "configmaps", namespace: k.operatorNamespace, name: "phorvex-shared-capacity"},
+			k8sCatalogueAccess{kube: k.kube, user: k.cleanupIdentity, verb: "update", resource: "configmaps", namespace: k.operatorNamespace, name: quarantineLedger},
 		)
 	}
 	if err := requireK8sCatalogueAccess(ctx, checks...); err != nil {
 		return k8sCatalogueFixture{}, err
-	}
-	ns, err := k.kube.CoreV1().Namespaces().Get(ctx, profile.Namespace, metav1.GetOptions{})
-	if err != nil || ns.UID == "" || ns.DeletionTimestamp != nil {
-		return k8sCatalogueFixture{}, errors.New("fixed Kubernetes catalogue namespace is unavailable or terminating")
 	}
 	deployment, err := k.kube.AppsV1().Deployments(profile.Namespace).Get(ctx, profile.Deployment, metav1.GetOptions{})
 	if err != nil || deployment.UID == "" || deployment.DeletionTimestamp != nil || deployment.Status.ObservedGeneration < deployment.Generation ||
@@ -341,7 +358,7 @@ func (k *kubernetesK8sCatalogueCluster) preflightK8sQuarantineCapacity(ctx conte
 		}},
 	}
 	for _, object := range objects {
-		cm, err := k.kube.CoreV1().ConfigMaps(profile.Lane).Get(ctx, object.name, metav1.GetOptions{})
+		cm, err := k.kube.CoreV1().ConfigMaps(k.operatorNamespace).Get(ctx, object.name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			continue
 		}
@@ -898,7 +915,7 @@ func (k *kubernetesK8sCatalogueCluster) removeExactQuarantineCapacityRecord(ctx 
 	name := k8sQuarantineCapacityLedgerName(fixture.NamespaceUID)
 	wantOp := k8sQuarantineCapacityOperationID(fixture)
 	for attempt := 0; attempt < 5; attempt++ {
-		cm, err := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Get(ctx, name, metav1.GetOptions{})
+		cm, err := k.kube.CoreV1().ConfigMaps(k.operatorNamespace).Get(ctx, name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return true
 		}
@@ -930,14 +947,14 @@ func (k *kubernetesK8sCatalogueCluster) removeExactQuarantineCapacityRecord(ctx 
 		}
 		next := cm.DeepCopy()
 		next.Data = map[string]string{"ledger": string(raw)}
-		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
+		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.operatorNamespace).Update(ctx, next, metav1.UpdateOptions{})
 		if apierrors.IsConflict(updateErr) {
 			continue
 		} else if updateErr != nil || updated.UID != cm.UID || updated.ResourceVersion == "" || updated.ResourceVersion == cm.ResourceVersion {
 			return false
 		}
 	}
-	cm, err := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Get(ctx, name, metav1.GetOptions{})
+	cm, err := k.kube.CoreV1().ConfigMaps(k.operatorNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return true
 	}
@@ -952,7 +969,7 @@ func (k *kubernetesK8sCatalogueCluster) removeExactQuarantineCapacityRecord(ctx 
 func (k *kubernetesK8sCatalogueCluster) removeExactSharedCapacityRecord(ctx context.Context, fixture k8sCatalogueFixture, decisionID string) bool {
 	const name = "phorvex-shared-capacity"
 	for attempt := 0; attempt < 5; attempt++ {
-		cm, err := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Get(ctx, name, metav1.GetOptions{})
+		cm, err := k.kube.CoreV1().ConfigMaps(k.operatorNamespace).Get(ctx, name, metav1.GetOptions{})
 		if apierrors.IsNotFound(err) {
 			return true
 		}
@@ -988,14 +1005,14 @@ func (k *kubernetesK8sCatalogueCluster) removeExactSharedCapacityRecord(ctx cont
 		}
 		next := cm.DeepCopy()
 		next.Data = map[string]string{"ledger": string(raw)}
-		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.profile.Lane).Update(ctx, next, metav1.UpdateOptions{})
+		updated, updateErr := k.cleanupKube.CoreV1().ConfigMaps(k.operatorNamespace).Update(ctx, next, metav1.UpdateOptions{})
 		if apierrors.IsConflict(updateErr) {
 			continue
 		} else if updateErr != nil || updated.UID != cm.UID || updated.ResourceVersion == "" || updated.ResourceVersion == cm.ResourceVersion {
 			return false
 		}
 	}
-	cm, err := k.kube.CoreV1().ConfigMaps(k.profile.Lane).Get(ctx, name, metav1.GetOptions{})
+	cm, err := k.kube.CoreV1().ConfigMaps(k.operatorNamespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return true
 	}

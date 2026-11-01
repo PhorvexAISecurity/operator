@@ -67,11 +67,16 @@ type Config struct {
 	// SA — holds the actuation/remediation verbs (quarantine: update pods, create networkpolicies,
 	// update configmaps; rotate: create pods/eviction). The red-team SA is never granted them.
 	AttackCatalogActuatorPrincipal string
+	// AttackCatalogOperatorNamespace is the exact namespace used by the active manager and
+	// actuator for quarantine/shared-capacity ledgers. It is deployment-owned and deliberately
+	// separate from the farm lane that supplies the trusted detector identity.
+	AttackCatalogOperatorNamespace string
 	// AttackCatalogCleanupPrincipal is the exact in-cluster ServiceAccount username of the
 	// dedicated delete-only cleanup identity the k8s_cluster adapter IMPERSONATES to remove
 	// actuator-created artifacts (the quarantined Pod, its owner-GC'd deny-all NetworkPolicy, and
 	// the quarantine/shared capacity ledger records). It holds only delete pods / delete
-	// networkpolicies / update configmaps in the lane namespace — NO create/isolate/evict power —
+	// networkpolicies / update the two exact capacity ledgers in the operator namespace — NO
+	// create/isolate/evict power —
 	// so it can undo a defense effect but can never itself remediate. Attack-owned artifacts (the
 	// SecurityEvent, armed fixtures) stay owned and cleaned by the attacks SA.
 	AttackCatalogCleanupPrincipal string
