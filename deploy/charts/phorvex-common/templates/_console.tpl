@@ -333,7 +333,7 @@ spec:
         app.kubernetes.io/component: {{ if $attacks }}attacks{{ else }}console{{ end }}
       {{- if and .Values.phorvex.console.auth.grants.enabled .Values.phorvex.console.auth.grants.create }}
       annotations:
-        checksum/console-grants: {{ .Values.phorvex.console.auth.grants.data | default "{\n  \"version\": 1,\n  \"subjects\": []\n}\n" | sha256sum | quote }}
+        checksum/console-grants: {{ include "phorvex-common.console.grantsData" . | sha256sum | quote }}
       {{- end }}
     spec:
       serviceAccountName: {{ $podServiceAccount }}
