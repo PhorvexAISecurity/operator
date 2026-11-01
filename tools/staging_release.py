@@ -935,6 +935,23 @@ def active_catalogue_fixture_consumers(
     if catalog.get("enabled") is not True or fixtures.get("enabled") is not True or not isinstance(profile, str):
         raise ValueError("active staging catalogue window is incomplete")
 
+    agent_release = batch["releases"]["agent-sim"]
+    agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
+    if profile == "identity-sa-rotate":
+        command = [
+            "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
+            "--profile", profile, "--agent-image", agent_image,
+        ]
+        generated = subprocess.run(
+            command, cwd=ROOT, check=True, text=True, capture_output=True,
+        ).stdout
+        if values != yaml.safe_load(generated):
+            raise ValueError(f"active {profile} catalogue window differs from the exact generated overlay")
+        # The reviewed identity fixture is owned by the shared phorvex-stack
+        # Application. The staging attacks chart selects and exercises it but
+        # must not render or claim its ServiceAccount, Deployment, or Policy.
+        return {}
+
     matching = []
     for name in FIXTURE_NAMES:
         fixture = next(item for item in batch["components"] if item["component"] == name)
@@ -947,8 +964,6 @@ def active_catalogue_fixture_consumers(
         )
     name, profile_consumers = matching[0]
     fixture_image = f"{batch['releases'][name]['repository']}@{batch['releases'][name]['digest']}"
-    agent_release = batch["releases"]["agent-sim"]
-    agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
     command = [
         "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
         "--profile", profile, "--agent-image", agent_image,
@@ -1096,6 +1111,11 @@ def verify_deployment(
         item = next(component for component in batch["components"] if component["component"] == name)
         profiles = list(dict.fromkeys(consumer["profile"] for consumer in item["deploy"]["consumers"]))
         for profile in profiles:
+            if profile == "identity-sa-rotate":
+                # This historical batch consumer predates the shared-fixture
+                # ownership boundary. Active identity windows are verified by
+                # active_catalogue_fixture_consumers and render no image owner.
+                continue
             documents = render_fixture(
                 profile, fixture_refs["catalogue-workload"], fixture_refs["agent-sim"]
             )

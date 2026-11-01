@@ -41,7 +41,8 @@
 {{- $pythonImage := dig "python" "" $images -}}
 {{- $kwokImage := dig "kwok" "" $images -}}
 {{- $imagePattern := "^[^[:space:]@]+@sha256:[0-9a-f]{64}$" -}}
-{{- if and (has $family (list "controller-stop" "credential" "identity-sa-rotate" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine")) (not (regexMatch $imagePattern $workloadImage)) }}{{- fail "selected family requires familyFixtures.images.workload as repository@sha256" }}{{- end }}
+{{- if and (has $family (list "controller-stop" "credential" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine")) (not (regexMatch $imagePattern $workloadImage)) }}{{- fail "selected family requires familyFixtures.images.workload as repository@sha256" }}{{- end }}
+{{- if and (eq $family "identity-sa-rotate") (ne $workloadImage "") }}{{- fail "identity-sa-rotate uses the externally owned reviewed identity fixture and must not package a workload image" }}{{- end }}
 {{- if and (has $family (list "datastore" "serving-kv" "serving-rate")) (not (regexMatch $imagePattern $phorvexImage)) }}{{- fail "selected family requires familyFixtures.images.phorvex as repository@sha256" }}{{- end }}
 {{- if and (has $family (list "sensitive-output" "serving-kv")) (not (regexMatch $imagePattern $pythonImage)) }}{{- fail "selected family requires immutable familyFixtures.images.python" }}{{- end }}
 {{- if and (eq $family "node-recycle") (not (regexMatch $imagePattern $kwokImage)) }}{{- fail "node-recycle requires immutable familyFixtures.images.kwok" }}{{- end }}
@@ -180,7 +181,7 @@ subjects:
   name: {{ $lane }}-attacks
   namespace: {{ $lane }}
 {{- end }}
-{{- if ne $family "agent-action" }}
+{{- if and (ne $family "agent-action") (ne $family "identity-sa-rotate") }}
 {{- range $namespace := $destinations }}
 {{- $isGeneric := has $family (list "controller-stop" "credential" "image" "network-edge" "node-recycle" "pod-rotate" "quarantine") -}}
 {{- if $isGeneric }}
@@ -307,44 +308,6 @@ spec:
     minAvailableReplicas: {{ if eq $family "network-edge" }}3{{ else if has $family (list "quarantine" "pod-rotate" "controller-stop" "node-recycle") }}2{{ else }}1{{ end }}
   triggers: {eventAgeHorizon: 1h, eventDriven: true, reactiveOnly: true}
 {{- end }}
-{{- end }}
-{{- if eq $family "identity-sa-rotate" }}
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: console-id-fixture
-  namespace: console-identity-shared
-  labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
-automountServiceAccountToken: false
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: console-id-fixture
-  namespace: console-identity-shared
-  labels: {app: console-id-fixture, phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}
-spec:
-  replicas: 2
-  selector: {matchLabels: {app: console-id-fixture}}
-  template:
-    metadata: {labels: {app: console-id-fixture, phorvex.ai/console-identity-fixture: console-id-fixture, data-class: internal}}
-    spec:
-      serviceAccountName: console-id-fixture
-      automountServiceAccountToken: false
-      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
-      containers:
-      - name: web
-        image: {{ $workloadImage | quote }}
-        ports: [{name: http, containerPort: 8080}]
-        volumeMounts: [{name: token, mountPath: /var/run/secrets/phorvex, readOnly: true}]
-        resources: {requests: {cpu: 10m, memory: 16Mi}, limits: {cpu: 200m, memory: 64Mi}}
-        securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
-      volumes:
-      - name: token
-        projected:
-          sources:
-          - serviceAccountToken: {path: token, audience: phorvex-staging-console, expirationSeconds: 600}
 {{- end }}
 {{- if eq $family "datastore" }}
 {{- $snapshot := "{\"records\":[{\"id\":\"benign-control\",\"content\":\"reviewed benign catalogue fixture\"}]}" -}}
