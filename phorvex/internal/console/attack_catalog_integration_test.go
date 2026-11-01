@@ -346,6 +346,7 @@ type testCatalogAdapter struct {
 	tenant                  string
 	preflightErr            error
 	truncateSignalCreatedAt bool
+	cleanupResults          []AttackCatalogCleanupResult
 	preflightCalls          atomic.Int32
 	executeCalls            atomic.Int32
 	cleanupCalls            atomic.Int32
@@ -391,7 +392,10 @@ func (a *testCatalogAdapter) Execute(_ context.Context, run AttackCatalogRunCont
 	}, nil
 }
 func (a *testCatalogAdapter) Cleanup(context.Context, AttackCatalogRunContext, AttackCatalogPreparation) AttackCatalogCleanupResult {
-	a.cleanupCalls.Add(1)
+	call := int(a.cleanupCalls.Add(1))
+	if call <= len(a.cleanupResults) {
+		return a.cleanupResults[call-1]
+	}
 	return AttackCatalogCleanupResult{Attempted: true, EventDeleted: true, MarkerDeleted: true, Verified: true,
 		Evidence: json.RawMessage(`{"absent":true}`)}
 }
@@ -621,6 +625,33 @@ func TestAttackCatalogueLifecyclePersistsResultPrometheusAndTriggerModeTogether(
 	}
 	if err = json.Unmarshal(rawSummary, &summary); err != nil || summary.CampaignVerdict != "PASS" {
 		t.Fatalf("strict verifier summary=%s err=%v", rawSummary, err)
+	}
+}
+
+func TestAttackCatalogueVerifiedPostflightPromotesEventuallyConsistentCleanup(t *testing.T) {
+	prometheus := testRunPrometheusServer(t)
+	defer prometheus.Close()
+	adapter := &testCatalogAdapter{id: "AML.T0024", tenant: "phorvex-test", cleanupResults: []AttackCatalogCleanupResult{
+		{Attempted: true, EventDeleted: true, MarkerDeleted: false, Verified: false,
+			Reason: "readiness and capacity observation has not converged"},
+		{Attempted: true, EventDeleted: true, MarkerDeleted: true, Verified: true,
+			Evidence: json.RawMessage(`{"absent":true,"readyRestored":true}`)},
+	}}
+	cfg := Config{Service: ServiceAttacks, StateDir: t.TempDir(), AttackCatalogRunTimeout: time.Second,
+		RunPrometheusEvidence: PrometheusRunEvidenceConfig{Enabled: true, URL: prometheus.URL, Environment: "staging",
+			SettleDelay: time.Millisecond, RequestTimeout: time.Second, RangeStep: time.Second}}
+	fixture, id := launchTestCatalogAdapter(t, cfg, adapter)
+	status := waitCatalogRunTerminal(t, fixture.srv, id)
+	result, err := fixture.srv.runs.AttackCatalogResult(id)
+	if err != nil || result == nil {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if status.State != "done" || status.CleanupStatus != "verified" || status.UnsafeToRetry ||
+		result.Verdict != "DEFENDED" || !result.Cleanup.Attempted || !result.Cleanup.Verified ||
+		!result.Cleanup.EventDeleted || !result.Cleanup.MarkerDeleted || result.Cleanup.CompletedAt == nil ||
+		result.Postflight == nil || !result.Postflight.Clean || adapter.cleanupCalls.Load() != 2 {
+		t.Fatalf("verified postflight did not become the terminal cleanup oracle: status=%+v result=%+v calls=%d",
+			status, result, adapter.cleanupCalls.Load())
 	}
 }
 

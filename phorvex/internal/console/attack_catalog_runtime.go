@@ -410,7 +410,18 @@ func (s *Server) executePreparedAttackCatalogueRun(ctx context.Context, run Atta
 		postflightCtx, postflightCancel := context.WithTimeout(context.Background(), cleanupTimeout)
 		postflightInventory := adapter.Cleanup(postflightCtx, run, prepared)
 		postflightCancel()
-		postflight, postflightErr = newAttackCatalogPostflight(result, postflightInventory, time.Now().UTC())
+		postflightCheckedAt := time.Now().UTC()
+		// Cleanup may be eventually consistent: the first bounded cleanup can
+		// remove every owned object while its immediate readiness/capacity read
+		// still observes stale state. The separate postflight call is the exact
+		// same adapter-owned cleanup oracle. When that later oracle verifies the
+		// complete absence/restoration contract, retain it as the terminal cleanup
+		// proof instead of persisting the earlier stale negative forever.
+		if !result.Cleanup.Verified && postflightInventory.Verified {
+			postflightInventory.CompletedAt = attackCatalogTime(postflightCheckedAt)
+			result.Cleanup = postflightInventory
+		}
+		postflight, postflightErr = newAttackCatalogPostflight(result, postflightInventory, postflightCheckedAt)
 		if postflightErr == nil {
 			result.Postflight = &postflight
 		}
