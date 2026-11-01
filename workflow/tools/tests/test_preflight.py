@@ -28,6 +28,62 @@ def current_ci(repo):
 
 
 class PreflightTests(unittest.TestCase):
+    def test_benchmark_only_change_selects_current_pinned_gating_recipe(self):
+        with sandbox() as (repo, root, baseline):
+            current_ci(repo)
+            run(['git', 'add', '.'], repo)
+            run(['git', 'commit', '-m', 'Current benchmark CI authority'], repo)
+            base = run(['git', 'rev-parse', 'HEAD'], repo)
+            file = repo/'benchmark/bot/service.py'
+            file.parent.mkdir(parents=True)
+            file.write_text('# benchmark-only change\n')
+            run(['git', 'add', 'benchmark'], repo)
+            run(['git', 'commit', '-m', 'Change only benchmark source'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            selected = preflight.plan(repo, base, head, pinned=True)
+            self.assertEqual(selected['changed_paths'], ['benchmark/bot/service.py'])
+            charts = [j for j in selected['jobs'] if j['id'].startswith('chart-')]
+            self.assertTrue(charts)
+            self.assertTrue(any("python -m unittest discover -s tools -p 'test_*.py' -v" == j['script'].strip() for j in charts))
+            self.assertTrue(all('benchmark_wrapper_sha256' in j for j in charts))
+            self.assertEqual([j['id'] for j in preflight.plan(repo, base, head, pinned=True, recipe_version=1)['jobs']], ['diff'])
+            # Current capability cannot silently pass when its wrapper is gone.
+            (repo/'tools/test_benchmark_regressions.py').write_bytes(b'')
+            with self.assertRaisesRegex(ValueError, 'benchmark gating wrapper missing'):
+                preflight.plan(repo, base, head)
+            # A later broken checkout does not reinterpret the pinned receipt.
+            self.assertEqual(preflight.plan(repo, base, head, pinned=True), selected)
+
+    def test_benchmark_only_historical_source_does_not_gain_new_jobs(self):
+        with sandbox() as (repo, root, baseline):
+            ci = current_ci(repo)
+            file = ci/'pr-validation.yml'
+            current = file.read_text()
+            historical = yaml.safe_load(current)
+            steps = historical['jobs']['charts']['steps']
+            historical['jobs']['charts']['steps'] = [s for s in steps if not s.get('uses', '').startswith('actions/setup-go@')]
+            for step in historical['jobs']['charts']['steps']:
+                if 'benchmark-test-requirements.txt' in step.get('run', ''):
+                    step['run'] = 'python -m pip install PyYAML==6.0.2'
+            file.write_text(yaml.safe_dump(historical))
+            (repo/'tools/test_benchmark_regressions.py').unlink()
+            run(['git', 'add', '.'], repo)
+            run(['git', 'commit', '-m', 'Historical chart authority'], repo)
+            base = run(['git', 'rev-parse', 'HEAD'], repo)
+            benchmark = repo/'benchmark/bot/service.py'
+            benchmark.parent.mkdir(parents=True)
+            benchmark.write_text('# historical benchmark change\n')
+            run(['git', 'add', 'benchmark'], repo)
+            run(['git', 'commit', '-m', 'Historical benchmark-only change'], repo)
+            head = run(['git', 'rev-parse', 'HEAD'], repo)
+            selected = preflight.plan(repo, base, head, pinned=True)
+            self.assertEqual([j['id'] for j in selected['jobs']], ['diff'])
+            current_ci_file = SOURCE_ROOT.parent/'tools/test_benchmark_regressions.py'
+            shutil.copy2(current_ci_file, repo/'tools/test_benchmark_regressions.py')
+            file.write_text(current)
+            self.assertEqual(preflight.plan(repo, base, head, pinned=True), selected)
+            self.assertTrue(any(j['id'].startswith('chart-') for j in preflight.plan(repo, base, head)['jobs']))
+
     def test_plan_selects_ci_versions_but_never_shared_jobs(self):
         with sandbox() as (repo,root,baseline):
             ci=repo/'.github/workflows';ci.mkdir(parents=True)

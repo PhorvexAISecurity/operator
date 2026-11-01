@@ -186,7 +186,17 @@ def plan(repo: Path, base: str, head: str, *, pinned: bool = False, recipe_versi
         if provision_hash:
             jobs[-1]['python_provision_sha256'] = provision_hash
     chart_paths = ('phorvex/', 'deploy/helm/', 'build/phoenix-extended/charts/', 'tools/', 'End-to-End/', '.github/workflows/ci.yml', '.github/workflows/pr-validation.yml', '.github/workflows/e2e-contract.yml')
-    if any(p.startswith(chart_paths) for p in paths):
+    benchmark_charts = False
+    if recipe_version == 2 and any(p.startswith('benchmark/') for p in paths):
+        # Historical receipts predate the benchmark wrapper. Select this new
+        # path only from the attested source's supported CI contract, never
+        # from a later checkout's wrapper or setup actions.
+        def source_exists(name):
+            return bool(git(repo, 'ls-tree', '--name-only', head, name).strip()) if pinned else (repo / name).is_file()
+        if not source_exists('.github/workflows/ci.yml') and source_exists('.github/workflows/pr-validation.yml'):
+            config = yaml.safe_load(source_bytes(repo / '.github/workflows/pr-validation.yml'))
+            benchmark_charts = bool(chart_benchmark_setup(repo, config['jobs']['charts']['steps'], source_bytes))
+    if benchmark_charts or any(p.startswith(chart_paths) for p in paths):
         legacy = repo / '.github/workflows/ci.yml'
         exists = bool(git(repo, 'ls-tree', '--name-only', head, '.github/workflows/ci.yml').strip()) if pinned else legacy.is_file()
         file = legacy if exists else repo / '.github/workflows/pr-validation.yml'

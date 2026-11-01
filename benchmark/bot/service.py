@@ -859,7 +859,7 @@ class BenchBot:
                 bad = ['%s: %s' % (c.get('id'), c.get('message')) for c in pf.get('checks', []) if c.get('status') == 'FAIL']
                 errs = ['%s %s' % (e.get('error_code'), e.get('reason')) for e in pf.get('errors', [])]
                 raise JobError('preflight failed:\n' + '\n'.join(bad + errs or [str(pf.get('status'))]))
-            self.step(job, 'replaying on the dashboard')
+            self.step(job, 'replaying the pinned stage brain')
             experiment = dash.create(request)
             done = dash.wait_experiment(experiment['id'], cancelled=job.cancel.is_set,
                                         progress=lambda m: self.step(job, m))
