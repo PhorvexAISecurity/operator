@@ -427,6 +427,8 @@ spec:
         # delete-only cleanup SA to undo actuator-created quarantine artifacts.
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL
           value: {{ printf "system:serviceaccount:%s:%s-actuator" .Release.Namespace .Release.Name | quote }}
+        - name: PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE
+          value: {{ default .Release.Namespace .Values.phorvex.operatorNamespace | quote }}
         - name: PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL
           value: {{ printf "system:serviceaccount:%s:%s-attacks-cleanup" .Release.Namespace .Release.Name | quote }}
         {{- if dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}

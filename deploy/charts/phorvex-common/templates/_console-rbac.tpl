@@ -103,6 +103,9 @@ subjects:
 {{- $scoped := .Values.phorvex.console.attackNamespaces }}
 {{- $attackCatalog := dig "attackCatalog" "enabled" false .Values.phorvex.console }}
 {{- $agentActionCatalog := dig "attackCatalog" "agentAction" "enabled" false .Values.phorvex.console }}
+{{- $operatorNamespace := default .Release.Namespace .Values.phorvex.operatorNamespace }}
+{{- $fixtureFamily := dig "attackCatalog" "familyFixtures" "profile" "" .Values.phorvex.console }}
+{{- $fixtureNamespaceUID := dig "attackCatalog" "familyFixtures" "namespaceUID" "" .Values.phorvex.console }}
 {{- /* The dedicated delete-only cleanup identity the k8s_cluster adapter impersonates to
    undo actuator-created quarantine artifacts. It is NOT the actuator (it cannot create /
    isolate / evict), so impersonating it can never remediate. */}}
@@ -161,10 +164,9 @@ rules:
 {{- end }}
 {{- end }}
 {{- /* The adapter also impersonates the delete-only cleanup SA to remove actuator-created
-   quarantine artifacts (the quarantined Pod, its owner-GC'd deny-all NetworkPolicy, the lane
-   capacity-ledger records). That identity holds only delete pods / delete networkpolicies /
-   update configmaps in the lane (below) — it can UNDO a defense but never actuate one — so this
-   impersonation grants the red-team SA no actuator/defender power. resourceNames-pinned. */}}
+   quarantine artifacts: lane-scoped Pod/NetworkPolicy deletes and resourceName-pinned ledger
+   updates in the operator namespace. It can UNDO this exact defense but never actuate one, so
+   this impersonation grants the red-team SA no actuator/defender power. */}}
 {{- $impersonatable := concat $detectorSANames (list $cleanupSA) }}
 {{- if $impersonatable }}
 - apiGroups: [""]
@@ -249,8 +251,8 @@ subjects:
 ---
 # The delete-only cleanup identity. The attacks service impersonates it (resourceName-pinned,
 # above) ONLY to remove actuator-created quarantine artifacts during exact cleanup. It holds no
-# create/isolate/evict grant, so it can never itself remediate; the per-lane Roles below bound it
-# to delete pods / delete networkpolicies / update configmaps in each attack namespace.
+# create/isolate/evict grant, so it can never itself remediate; the scoped Roles below bound it
+# to deleting Pods/NetworkPolicies in attack namespaces and updating ledgers in the operator namespace.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -259,6 +261,71 @@ metadata:
   labels:
     {{- include "phorvex.labels" . | nindent 4 }}
     app.kubernetes.io/component: attacks-cleanup
+{{- if and $attackCatalog (eq $fixtureFamily "quarantine") }}
+{{- if not (regexMatch "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$" $fixtureNamespaceUID) }}{{- fail "quarantine familyFixtures.namespaceUID must pin the API-assigned target namespace UID" }}{{- end }}
+{{- $quarantineLedgerName := printf "phorvex-quarantine-capacity-%s" (trunc 40 (sha256sum $fixtureNamespaceUID)) }}
+---
+# Capacity ledgers belong to the active manager/actuator stack, not the detector lane.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-ledger-read
+  namespace: {{ $operatorNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-shared-capacity", {{ $quarantineLedgerName | quote }}]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-ledger-read
+  namespace: {{ $operatorNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-attacks-ledger-read
+subjects:
+- kind: ServiceAccount
+  name: {{ $attacksSA }}
+  namespace: {{ .Release.Namespace }}
+---
+# The cleanup SA can remove exact run records by CAS update but cannot create,
+# delete or otherwise mutate operator ConfigMaps.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-cleanup-ledger
+  namespace: {{ $operatorNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["phorvex-shared-capacity", {{ $quarantineLedgerName | quote }}]
+  verbs: ["update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "phorvex.fullname" . }}-attacks-cleanup-ledger
+  namespace: {{ $operatorNamespace | quote }}
+  labels:
+    {{- include "phorvex.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "phorvex.fullname" . }}-attacks-cleanup-ledger
+subjects:
+- kind: ServiceAccount
+  name: {{ $cleanupSA }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
 {{- end }}
 {{- range $scoped }}
 {{- if not (and $agentActionCatalog (eq . "p6-demo")) }}
@@ -282,10 +349,9 @@ rules:
   resources: ["endpointslices"]
   verbs: ["get", "list"]
 # The k8s_cluster preflight GETs the exact-name quarantine NetworkPolicy to prove the
-# target is clean before a rotate/quarantine, and the quarantine capacity preflight +
-# physical oracle READ the lane's NetworkPolicies and capacity ConfigMaps. Read-only and
-# lane-scoped; the actuation verbs (create/delete networkpolicies, update configmaps,
-# delete pods) remain denied to the red-team SA and are proven against the actuator.
+# target is clean before a rotate/quarantine. Other fixed profiles read lane fixture
+# ConfigMaps; quarantine capacity ledgers are separately resourceName-pinned in the
+# operator namespace. These lane grants stay read-only.
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["get", "list"]
@@ -314,12 +380,11 @@ subjects:
   namespace: {{ $.Release.Namespace }}
 {{- if $attackCatalog }}
 ---
-# The delete-only cleanup identity's lane-bounded authority: remove the ACTUATOR-created
-# quarantine Pod and its owner-GC'd deny-all NetworkPolicy, and edit the lane capacity-ledger
-# ConfigMaps back out, during exact cleanup. These are the ONLY mutating verbs it holds, and it
-# holds them NOWHERE else — it can never create a NetworkPolicy, relabel/evict a Pod or otherwise
-# actuate a defense. The red-team attacks SA holds none of these; it impersonates this SA for the
-# undo (resourceName-pinned above). This keeps actuator-artifact cleanup off the red-team identity.
+# The delete-only cleanup identity's lane-bounded authority removes only the ACTUATOR-created
+# quarantine Pod and its owner-GC'd deny-all NetworkPolicy. Exact ledger updates are separately
+# resourceName-pinned in the operator namespace above. It can never create a NetworkPolicy,
+# relabel/evict a Pod or otherwise actuate a defense. The red-team attacks SA holds none of these;
+# it impersonates this SA for the exact undo only.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -334,9 +399,6 @@ rules:
 - apiGroups: ["networking.k8s.io"]
   resources: ["networkpolicies"]
   verbs: ["delete"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

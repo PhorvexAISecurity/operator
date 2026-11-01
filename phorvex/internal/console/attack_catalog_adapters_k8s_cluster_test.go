@@ -27,8 +27,9 @@ import (
 )
 
 const (
-	k8sCatalogueTestActuatorIdentity = "system:serviceaccount:phorvex-staging:staging-actuator"
-	k8sCatalogueTestCleanupIdentity  = "system:serviceaccount:phorvex-staging:staging-attacks-cleanup"
+	k8sCatalogueTestActuatorIdentity  = "system:serviceaccount:phorvex-staging:staging-actuator"
+	k8sCatalogueTestCleanupIdentity   = "system:serviceaccount:phorvex-staging:staging-attacks-cleanup"
+	k8sCatalogueTestOperatorNamespace = "phorvex-staging"
 )
 
 type realK8sCatalogueTestFixture struct {
@@ -111,7 +112,8 @@ func newRealK8sCatalogueTestFixture(t *testing.T, family string) realK8sCatalogu
 	dynamicClient := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme())
 	cluster := &kubernetesK8sCatalogueCluster{profile: profile, kube: kube, eventKube: kube, dynamic: dynamicClient,
 		eventDynamic: dynamicClient, cleanupKube: kube, reader: ctrlfake.NewClientBuilder().WithScheme(scheme).WithObjects(policy).Build(),
-		actuatorIdentity: k8sCatalogueTestActuatorIdentity, cleanupIdentity: k8sCatalogueTestCleanupIdentity}
+		actuatorIdentity: k8sCatalogueTestActuatorIdentity, cleanupIdentity: k8sCatalogueTestCleanupIdentity,
+		operatorNamespace: k8sCatalogueTestOperatorNamespace}
 	return realK8sCatalogueTestFixture{cluster: cluster, kube: kube, dynamic: dynamicClient, entry: entry, profile: profile}
 }
 
@@ -205,10 +207,10 @@ func TestK8sCatalogueRealPreflightRejectsNonemptyCapacityWithoutMutation(t *test
 			Action: string(model.ActionQuarantine), Phase: "uncertain"},
 	}}
 	raw, _ := json.Marshal(ledger)
-	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "phorvex-shared-capacity", Namespace: f.profile.Lane,
+	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "phorvex-shared-capacity", Namespace: k8sCatalogueTestOperatorNamespace,
 		UID: "shared-ledger-uid", ResourceVersion: "1", Labels: map[string]string{"phorvex.ai/shared-capacity": "v1"}},
 		Data: map[string]string{"ledger": string(raw)}}
-	if _, err := f.kube.CoreV1().ConfigMaps(f.profile.Lane).Create(context.Background(), cm, metav1.CreateOptions{}); err != nil {
+	if _, err := f.kube.CoreV1().ConfigMaps(k8sCatalogueTestOperatorNamespace).Create(context.Background(), cm, metav1.CreateOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	actionsBefore := len(f.kube.Actions())
@@ -223,7 +225,7 @@ func TestK8sCatalogueRealPreflightRejectsNonemptyCapacityWithoutMutation(t *test
 			t.Fatalf("failed preflight mutated Kubernetes state: %s %s", action.GetVerb(), action.GetResource().Resource)
 		}
 	}
-	got, err := f.kube.CoreV1().ConfigMaps(f.profile.Lane).Get(context.Background(), cm.Name, metav1.GetOptions{})
+	got, err := f.kube.CoreV1().ConfigMaps(k8sCatalogueTestOperatorNamespace).Get(context.Background(), cm.Name, metav1.GetOptions{})
 	if err != nil || got.Data["ledger"] != cm.Data["ledger"] {
 		t.Fatalf("failed preflight rewrote capacity ledger: got=%+v err=%v", got, err)
 	}
@@ -362,26 +364,26 @@ func TestK8sCatalogueExactCapacityCleanupPreservesOtherRecords(t *testing.T) {
 	quarantineRaw, _ := json.Marshal(quarantineLedger)
 	sharedRaw, _ := json.Marshal(sharedLedger)
 	objects := []*corev1.ConfigMap{
-		{ObjectMeta: metav1.ObjectMeta{Name: k8sQuarantineCapacityLedgerName(fixture.NamespaceUID), Namespace: f.profile.Lane,
+		{ObjectMeta: metav1.ObjectMeta{Name: k8sQuarantineCapacityLedgerName(fixture.NamespaceUID), Namespace: k8sCatalogueTestOperatorNamespace,
 			UID: "quarantine-ledger-uid", ResourceVersion: "1", Labels: map[string]string{"phorvex.ai/quarantine-capacity": "v1"}},
 			Data: map[string]string{"ledger": string(quarantineRaw)}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "phorvex-shared-capacity", Namespace: f.profile.Lane,
+		{ObjectMeta: metav1.ObjectMeta{Name: "phorvex-shared-capacity", Namespace: k8sCatalogueTestOperatorNamespace,
 			UID: "shared-ledger-uid", ResourceVersion: "1", Labels: map[string]string{"phorvex.ai/shared-capacity": "v1"}},
 			Data: map[string]string{"ledger": string(sharedRaw)}},
 	}
 	for _, object := range objects {
-		if _, err := f.kube.CoreV1().ConfigMaps(f.profile.Lane).Create(context.Background(), object, metav1.CreateOptions{}); err != nil {
+		if _, err := f.kube.CoreV1().ConfigMaps(k8sCatalogueTestOperatorNamespace).Create(context.Background(), object, metav1.CreateOptions{}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if !f.cluster.cleanupK8sQuarantineCapacity(context.Background(), fixture, "decision-id") {
 		t.Fatal("exact capacity records were not removed")
 	}
-	quarantineCM, err := f.kube.CoreV1().ConfigMaps(f.profile.Lane).Get(context.Background(), objects[0].Name, metav1.GetOptions{})
+	quarantineCM, err := f.kube.CoreV1().ConfigMaps(k8sCatalogueTestOperatorNamespace).Get(context.Background(), objects[0].Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sharedCM, err := f.kube.CoreV1().ConfigMaps(f.profile.Lane).Get(context.Background(), objects[1].Name, metav1.GetOptions{})
+	sharedCM, err := f.kube.CoreV1().ConfigMaps(k8sCatalogueTestOperatorNamespace).Get(context.Background(), objects[1].Name, metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,6 +407,7 @@ func TestK8sCatalogueExactCapacityCleanupPreservesOtherRecords(t *testing.T) {
 type capturedReview struct {
 	self                                        bool
 	user, verb, group, resource, sub, namespace string
+	name                                        string
 }
 
 // recordK8sCatalogueReviews replaces the fixture's allow-all authz reactors with
@@ -414,7 +417,7 @@ func recordK8sCatalogueReviews(f realK8sCatalogueTestFixture, out *[]capturedRev
 	f.kube.Fake.PrependReactor("create", "selfsubjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		r := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SelfSubjectAccessReview).DeepCopy()
 		ra := r.Spec.ResourceAttributes
-		c := capturedReview{self: true, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace}
+		c := capturedReview{self: true, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace, name: ra.Name}
 		*out = append(*out, c)
 		r.Status.Allowed = allow == nil || allow(c)
 		return true, r, nil
@@ -422,7 +425,7 @@ func recordK8sCatalogueReviews(f realK8sCatalogueTestFixture, out *[]capturedRev
 	f.kube.Fake.PrependReactor("create", "subjectaccessreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		r := action.(k8stesting.CreateAction).GetObject().(*authorizationv1.SubjectAccessReview).DeepCopy()
 		ra := r.Spec.ResourceAttributes
-		c := capturedReview{user: r.Spec.User, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace}
+		c := capturedReview{user: r.Spec.User, verb: ra.Verb, group: ra.Group, resource: ra.Resource, sub: ra.Subresource, namespace: ra.Namespace, name: ra.Name}
 		*out = append(*out, c)
 		r.Status.Allowed = allow == nil || allow(c)
 		return true, r, nil
@@ -465,29 +468,40 @@ func TestK8sCataloguePreflightProvesActuationAgainstDefenderNotAttacks(t *testin
 					t.Fatalf("actuation verb proven against an unexpected principal %q: %+v", r.user, r)
 				}
 			}
-			proven := func(user, verb, group, resource, sub, namespace string) bool {
+			proven := func(user, verb, group, resource, sub, namespace, name string) bool {
 				for _, r := range reviews {
-					if !r.self && r.user == user && r.verb == verb && r.group == group && r.resource == resource && r.sub == sub && r.namespace == namespace {
+					if !r.self && r.user == user && r.verb == verb && r.group == group && r.resource == resource && r.sub == sub && r.namespace == namespace && r.name == name {
 						return true
 					}
 				}
 				return false
 			}
 			if family == k8sCatalogueFamilyQuarantine {
+				quarantineLedger := k8sQuarantineCapacityLedgerName("namespace-uid")
+				for _, name := range []string{"phorvex-shared-capacity", quarantineLedger} {
+					seen := false
+					for _, r := range reviews {
+						seen = seen || (r.self && r.verb == "get" && r.resource == "configmaps" && r.namespace == k8sCatalogueTestOperatorNamespace && r.name == name)
+					}
+					if !seen {
+						t.Fatalf("quarantine ledger read was not resourceName-bound: %s", name)
+					}
+				}
 				want := []capturedReview{
 					{user: k8sCatalogueTestActuatorIdentity, verb: "update", resource: "pods", namespace: f.profile.Namespace},
 					{user: k8sCatalogueTestActuatorIdentity, verb: "create", group: "networking.k8s.io", resource: "networkpolicies", namespace: f.profile.Namespace},
-					{user: k8sCatalogueTestActuatorIdentity, verb: "update", resource: "configmaps", namespace: f.profile.Lane},
+					{user: k8sCatalogueTestActuatorIdentity, verb: "update", resource: "configmaps", namespace: k8sCatalogueTestOperatorNamespace},
 					{user: k8sCatalogueTestCleanupIdentity, verb: "delete", resource: "pods", namespace: f.profile.Namespace},
 					{user: k8sCatalogueTestCleanupIdentity, verb: "delete", group: "networking.k8s.io", resource: "networkpolicies", namespace: f.profile.Namespace},
-					{user: k8sCatalogueTestCleanupIdentity, verb: "update", resource: "configmaps", namespace: f.profile.Lane},
+					{user: k8sCatalogueTestCleanupIdentity, verb: "update", resource: "configmaps", namespace: k8sCatalogueTestOperatorNamespace, name: "phorvex-shared-capacity"},
+					{user: k8sCatalogueTestCleanupIdentity, verb: "update", resource: "configmaps", namespace: k8sCatalogueTestOperatorNamespace, name: quarantineLedger},
 				}
 				for _, w := range want {
-					if !proven(w.user, w.verb, w.group, w.resource, w.sub, w.namespace) {
+					if !proven(w.user, w.verb, w.group, w.resource, w.sub, w.namespace, w.name) {
 						t.Fatalf("quarantine actuation/cleanup verb not proven against its identity: %+v", w)
 					}
 				}
-			} else if !proven(k8sCatalogueTestActuatorIdentity, "create", "", "pods", "eviction", f.profile.Namespace) {
+			} else if !proven(k8sCatalogueTestActuatorIdentity, "create", "", "pods", "eviction", f.profile.Namespace, "") {
 				t.Fatalf("%s rotate eviction not proven against the actuator identity", family)
 			}
 		})

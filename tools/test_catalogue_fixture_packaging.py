@@ -32,6 +32,7 @@ SERVICE_CHARTS = {
     "console": ROOT / "deploy/charts/phorvex-console",
 }
 DIGEST = "sha256:" + "a" * 64
+QUARANTINE_NAMESPACE_UID = "45e2ab1b-5a45-42ab-8afe-87218f2c758d"
 IMAGES = {
     "workload": "registry.example.test/phorvex/catalogue-workload@" + DIGEST,
     "phorvex": "registry.example.test/phorvex/phorvex@" + DIGEST,
@@ -76,6 +77,7 @@ def configured_values(family: str) -> dict:
         "familyFixtures": {
             "enabled": True,
             "profile": family,
+            "namespaceUID": QUARANTINE_NAMESPACE_UID if family == "quarantine" else "",
             "cleanupPolicy": "Delete",
             "images": copy.deepcopy(IMAGES),
         },
@@ -196,6 +198,13 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
                             check=True, text=True, capture_output=True,
                         )
 
+    def test_quarantine_requires_api_assigned_namespace_uid_pin(self):
+        values = configured_values("quarantine")
+        values["phorvex"]["console"]["attackCatalog"]["familyFixtures"]["namespaceUID"] = ""
+        result = self.render("quarantine", values, check=False)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("namespaceUID", result.stderr)
+
     def test_family_specific_exact_contracts(self):
         identity = objects(self.render("identity-sa-rotate").stdout)
         self.assertFalse([
@@ -203,11 +212,58 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
             if item.get("metadata", {}).get("namespace") == "console-identity-shared"
             and item.get("kind") in {"ServiceAccount", "Deployment", "PhorvexPolicy"}
         ], "identity profile must not claim the externally owned shared fixture")
-        quarantine = objects(self.render("quarantine").stdout)
+        quarantine_values = configured_values("quarantine")
+        quarantine = objects(self.render("quarantine", quarantine_values).stdout)
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml") as override:
+            yaml.safe_dump(quarantine_values, override, sort_keys=False)
+            override.flush()
+            quarantine_rbac = objects(subprocess.run(
+                [HELM, "template", "staging", str(SERVICE_CHARTS["console"]),
+                 "--namespace", "phorvex-staging", "-f", str(STAGING),
+                 "-f", str(ROOT / "deploy/environments/staging/console.yaml"),
+                 "-f", override.name],
+                check=True, text=True, capture_output=True,
+            ).stdout)
         q_policy = next(item for item in quarantine if item.get("kind") == "PhorvexPolicy"
                         and item["metadata"]["namespace"] == "p1-demo")
         self.assertEqual(q_policy["spec"]["actions"]["enabled"], ["rotate", "quarantine"])
         self.assertEqual(q_policy["spec"]["selector"]["matchLabels"], {"app.kubernetes.io/name": "demo-api"})
+        attacks = next(
+            item for item in quarantine if item.get("kind") == "Deployment"
+            and any(
+                entry.get("name") == "PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE"
+                for container in item["spec"]["template"]["spec"].get("containers", [])
+                for entry in container.get("env", [])
+            )
+        )
+        container = attacks["spec"]["template"]["spec"]["containers"][0]
+        env = {entry["name"]: entry.get("value") for entry in container.get("env", [])}
+        self.assertEqual(env["PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE"], "phorvex-staging")
+        operator_roles = {
+            item["metadata"]["name"]: item for item in quarantine_rbac
+            if item.get("kind") == "Role" and item["metadata"].get("namespace") == "phorvex-staging"
+            and item["metadata"]["name"].endswith(("-attacks-ledger-read", "-attacks-cleanup-ledger"))
+        }
+        self.assertEqual(len(operator_roles), 2)
+        verbs = {
+            name.rsplit("-attacks-", 1)[1]: role["rules"][0]["verbs"]
+            for name, role in operator_roles.items()
+        }
+        self.assertEqual(verbs, {"ledger-read": ["get"], "cleanup-ledger": ["update"]})
+        expected_ledgers = {
+            "phorvex-shared-capacity",
+            "phorvex-quarantine-capacity-" + hashlib.sha256(
+                QUARANTINE_NAMESPACE_UID.encode("ascii")
+            ).hexdigest()[:40],
+        }
+        for role in operator_roles.values():
+            self.assertEqual(set(role["rules"][0]["resourceNames"]), expected_ledgers)
+        lane_cleanup = next(
+            item for item in quarantine_rbac if item.get("kind") == "Role"
+            and item["metadata"].get("namespace") == "p1-demo"
+            and item["metadata"]["name"].endswith("-attacks-cleanup")
+        )
+        self.assertFalse(any("configmaps" in rule.get("resources", []) for rule in lane_cleanup["rules"]))
         controller = objects(self.render("controller-stop").stdout)
         c_policy = next(item for item in controller if item.get("kind") == "PhorvexPolicy"
                         and item["metadata"]["namespace"] == "p4-demo")
@@ -409,6 +465,7 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
         self.assertIn(profile, DESTINATIONS)
         args = argparse.Namespace(
             profile=profile,
+            namespace_uid=fixture.get("namespaceUID", ""),
             workload_image=fixture["images"]["workload"],
             phorvex_image=fixture["images"]["phorvex"],
             agent_image=family_catalog["agentAction"]["image"],
@@ -425,6 +482,7 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
             with self.subTest(family=family):
                 args = argparse.Namespace(
                     profile=family,
+                    namespace_uid=QUARANTINE_NAMESPACE_UID if family == "quarantine" else "",
                     workload_image="" if family == "identity-sa-rotate" else IMAGES["workload"],
                     phorvex_image=IMAGES["phorvex"],
                     agent_image="registry.example.test/phorvex/agentsim@" + DIGEST,

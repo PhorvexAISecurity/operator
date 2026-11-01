@@ -53,6 +53,7 @@ SERVICE_COMMANDS = {
     "console": "/app/console",
     "attacks": "/app/attacks",
 }
+CATALOGUE_RENDER_NAMESPACE_UID = "11111111-2222-4333-8444-555555555555"
 
 
 def fixture_consumer(
@@ -714,6 +715,8 @@ def render_fixture(profile: str, workload: str, agent: str) -> list[dict[str, An
         "python3", str(ROOT / "tools/render_catalogue_staging_values.py"), "--profile", profile,
         "--workload-image", workload, "--agent-image", agent,
     ]
+    if profile == "quarantine":
+        command.extend(("--namespace-uid", CATALOGUE_RENDER_NAMESPACE_UID))
     overlay = subprocess.run(command, cwd=ROOT, check=True, text=True, capture_output=True).stdout
     with tempfile.NamedTemporaryFile("w", suffix=".yaml") as handle:
         handle.write(overlay)
@@ -968,6 +971,8 @@ def active_catalogue_fixture_consumers(
         "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
         "--profile", profile, "--agent-image", agent_image,
     ]
+    if profile == "quarantine":
+        command.extend(("--namespace-uid", str(fixtures.get("namespaceUID", ""))))
     if name == "catalogue-workload":
         command.extend(("--workload-image", fixture_image))
     generated = subprocess.run(

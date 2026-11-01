@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 STAGING = ROOT / "deploy/environments/staging/phorvex.yaml"
 PROFILE_SOURCE = ROOT / "deploy/charts/phorvex-attacks/files/catalogue-family-profiles.yaml"
 PIN = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
+NAMESPACE_UID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 DEFAULT_PYTHON = "docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d"
 DEFAULT_KWOK = "registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0"
 WORKLOAD_FAMILIES = {
@@ -47,6 +48,11 @@ def overlay(args: argparse.Namespace) -> dict:
     scopes = list(dict.fromkeys(base_namespaces + destinations))
     if args.profile == "identity-sa-rotate" and args.workload_image:
         raise ValueError("--workload-image must be empty for the externally owned identity fixture")
+    namespace_uid = getattr(args, "namespace_uid", "")
+    if args.profile == "quarantine" and not NAMESPACE_UID.fullmatch(namespace_uid):
+        raise ValueError("--namespace-uid must pin the API-assigned quarantine namespace UID")
+    if args.profile != "quarantine" and namespace_uid:
+        raise ValueError("--namespace-uid is only valid for the quarantine profile")
     workload = immutable("workload_image", args.workload_image, args.profile in WORKLOAD_FAMILIES)
     phorvex = immutable("phorvex_image", args.phorvex_image, args.profile in PHORVEX_FAMILIES)
     agent = immutable("agent_image", args.agent_image, args.profile == "agent-action")
@@ -75,6 +81,7 @@ def overlay(args: argparse.Namespace) -> dict:
                     "familyFixtures": {
                         "enabled": True,
                         "profile": args.profile,
+                        "namespaceUID": namespace_uid,
                         "cleanupPolicy": "Delete",
                         "images": {"workload": workload, "phorvex": phorvex, "guardrail": "", "python": python, "kwok": kwok},
                     },
@@ -107,6 +114,7 @@ def main() -> None:
     parser.add_argument("--workload-image", default="")
     parser.add_argument("--phorvex-image", default="")
     parser.add_argument("--agent-image", default="")
+    parser.add_argument("--namespace-uid", default="")
     parser.add_argument("--python-image", default=DEFAULT_PYTHON)
     parser.add_argument("--kwok-image", default=DEFAULT_KWOK)
     args = parser.parse_args()

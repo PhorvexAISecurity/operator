@@ -372,6 +372,7 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	// identity impersonated to undo actuator artifacts. Required when the launch adapter runs.
 	catalogActuatorPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL")
 	catalogCleanupPrincipal := read("PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL")
+	catalogOperatorNamespace := read("PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE")
 	if attackCatalogTenant != "" && (!strings.HasPrefix(attackCatalogTenant, identityfixture.NamespacePrefix) || len(validation.IsDNS1123Label(attackCatalogTenant)) != 0) {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT must name the fixed owned identity-fixture tenant")
 	}
@@ -386,6 +387,9 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	}
 	if attackCatalogEnabled && attackCatalogAuthorizationTenant == "" {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT is required when the launch adapter is enabled")
+	}
+	if attackCatalogEnabled && (catalogOperatorNamespace == "" || len(validation.IsDNS1123Label(catalogOperatorNamespace)) != 0) {
+		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE must name the exact operator namespace when enabled")
 	}
 	if agentActionEnabled && !attackCatalogEnabled {
 		return errors.New("PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTION_ENABLED requires the attack catalogue launch adapter")
@@ -433,6 +437,7 @@ func applyCatalogueV1Environment(cfg *console.Config, lookup func(string) (strin
 	cfg.AttackCatalogAgentSensorPrincipal = agentSensorPrincipal
 	cfg.AttackCatalogAgentActuatorPrincipal = agentActuatorPrincipal
 	cfg.AttackCatalogActuatorPrincipal = catalogActuatorPrincipal
+	cfg.AttackCatalogOperatorNamespace = catalogOperatorNamespace
 	cfg.AttackCatalogCleanupPrincipal = catalogCleanupPrincipal
 	runPrometheusEvidenceEnabled, err := readBool("PHORVEX_CONSOLE_RUN_PROMETHEUS_EVIDENCE_ENABLED")
 	if err != nil {
