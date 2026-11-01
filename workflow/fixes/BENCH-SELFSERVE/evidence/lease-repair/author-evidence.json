@@ -1,0 +1,45 @@
+{
+  "result": "PASS",
+  "source_base": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "source_manifest_sha256": "2ec5900dbac0a810b941d55a54f1948f812c108514c41490bf73ceba088353c6",
+  "tests": {
+    "command": "TMPDIR=/workspace/.phorvex-test-tmp PYTHONDONTWRITEBYTECODE=1 /workspace/.phorvex-tools/python312/python/bin/python3.12 -m unittest discover -s benchmark/worker -p test_endpoint_refresh.py -v",
+    "count": 24,
+    "skips": 0,
+    "elapsed_seconds": 57.14
+  },
+  "baseline": "Actual cross-process EX flock20.001s, intended uncaughtStageError/stale status at4dc; positive real fixtureREADY64 before blockage. Actual live counterpart retained independently by lead.",
+  "scope": "Actual lock and CLI controls; fixture replay/cluster transports remain explicit and are not live brain evidence. Full final committed-source preflight remains pending.",
+  "artifacts": [
+    {
+      "path": "evidence/lease-repair/source-manifest.json",
+      "sha256": "2ec5900dbac0a810b941d55a54f1948f812c108514c41490bf73ceba088353c6",
+      "bytes": 1168
+    },
+    {
+      "path": "evidence/lease-repair/runtime-source-manifest.json",
+      "sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+      "bytes": 28890
+    },
+    {
+      "path": "evidence/lease-repair/baseline-control.py",
+      "sha256": "1ae322b265d42eed2ed98453e5a9d72788261f0285c77521f1d1326774f44022",
+      "bytes": 2577
+    },
+    {
+      "path": "evidence/lease-repair/baseline-control.json",
+      "sha256": "fb8376dc42ff2d4b2c174b5b54fe98bc14efa1bd5cf9bed0b696e103fa37091f",
+      "bytes": 793
+    },
+    {
+      "path": "evidence/lease-repair/baseline-control.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "evidence/lease-repair/author-refresh-tests.txt",
+      "sha256": "4456e994432e245f93553a5f10c6b7615415e015aa961e48a5c4c7aa15929c56",
+      "bytes": 4234
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "observed_at": "2026-11-01T21:00:15.456279+00:00",
+  "job_id": 124975570673,
+  "log_bytes": 50696,
+  "log_sha256": "b2c22f56cdd50fd1dd694bfd2f9ca60db7bc718400edd9d173dcdc4cd6c8bb3b",
+  "excerpt_sha256": "f629881913b9e2d69f55833c6832c2c92b3310c139279cf37ec90f9b57af1f65",
+  "extraction": "Selected failure lines with bounded context; full log not retained."
+}

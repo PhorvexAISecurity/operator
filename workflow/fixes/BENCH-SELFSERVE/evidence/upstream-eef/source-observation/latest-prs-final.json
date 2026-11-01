@@ -1,0 +1,36 @@
+{
+  "observed_at": "2026-11-01T21:00:40.635672+00:00",
+  "api_path": "/pulls?state=all&sort=created&direction=desc&per_page=3",
+  "data": [
+    {
+      "number": 202,
+      "title": "deploy(staging): reopen quarantine catalogue window",
+      "state": "closed",
+      "merged_at": "2026-11-01T20:54:19Z",
+      "merge_commit_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/202",
+      "head_sha": "d783274c5b302ccce4e8cd959c6855a961c501b9",
+      "base_sha": "408944e2182a36affd18374865e1fdd392221192"
+    },
+    {
+      "number": 201,
+      "title": "deploy(staging): isolated release b1ef9ccdb258",
+      "state": "closed",
+      "merged_at": "2026-11-01T20:53:24Z",
+      "merge_commit_sha": "408944e2182a36affd18374865e1fdd392221192",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/201",
+      "head_sha": "30b24b0d9af4c9571e587c454510dd5238b269b3",
+      "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+    },
+    {
+      "number": 200,
+      "title": "chore(staging): close quarantine window for release",
+      "state": "closed",
+      "merged_at": "2026-11-01T20:33:34Z",
+      "merge_commit_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/200",
+      "head_sha": "831a4d47599aaeb5e5643beba12849b1c82444dd",
+      "base_sha": "4d9454a9083c3ef1995296e7931f4c098d8f496e"
+    }
+  ]
+}

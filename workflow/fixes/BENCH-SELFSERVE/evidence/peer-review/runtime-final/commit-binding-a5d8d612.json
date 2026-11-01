@@ -1,0 +1,14 @@
+{
+  "schema": "phorvex-bench.peer-committed-component.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T18:53:17.959005+00:00",
+  "source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "parent": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "manifest_sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67",
+  "paths": 43,
+  "all_git_objects_exact": true,
+  "commit_changed_inventory_exact": true,
+  "verdict": "PASS_COMPONENT_BINDING",
+  "component_verdict_sha256": "e1263baef13266a5bbba061f4212518fe1180a488c7d6b387fe28b28813fa04b",
+  "limit": "Coherent committed-source preflight and live acceptance remain pending."
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "phorvex-bench.inactive-image-control.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:52:15.073130+00:00",
+  "upstream": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "three_upstream_paths_exact": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "f9584ed398d2baf6cf4fb998ef6078d06d7ef48392687e6e5798ef3cbc2d3557"
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_integration_test.go",
+      "sha256": "e27477245387e077ebc57b49c9d57f9d5e4171a36fe0c871cf1d08b2933f54db"
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_runtime.go",
+      "sha256": "babc9bcfbd3656d498094126b3a492471d275e048784d31b6d144d6e8cbeb12e"
+    }
+  ],
+  "runtime43_unchanged": true,
+  "prior_default_and_archive_unchanged": true,
+  "actual_a5f_gate": {
+    "negative_exit": 1,
+    "negative_predicate": "strict generated identity overlay mismatch",
+    "positive_exit": 0,
+    "positive_consumers": 0
+  },
+  "only_field": {
+    "path": "phorvex.console.attackCatalog.agentAction.image",
+    "before": "",
+    "proposed": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8",
+    "enabled_unchanged": false
+  },
+  "composed_actual_three_overlay_render_equivalence": {
+    "brain": {
+      "rendered_objects": 5,
+      "unchanged": true
+    },
+    "manager": {
+      "rendered_objects": 19,
+      "unchanged": true
+    },
+    "console": {
+      "rendered_objects": 28,
+      "unchanged": true
+    },
+    "actuator": {
+      "rendered_objects": 19,
+      "unchanged": true
+    },
+    "sensor": {
+      "rendered_objects": 20,
+      "unchanged": true
+    },
+    "attacks": {
+      "rendered_objects": 13,
+      "unchanged": true
+    }
+  },
+  "limits": [
+    "Candidate change occurred only in private test checkout/override, not repository or cluster.",
+    "Only existing random admission certificate bytes normalized; every other rendered field compared.",
+    "This control supports a one-field repair; source freeze/commit and coherent preflight are still required."
+  ],
+  "verdict": "PASS_FOR_BOUNDED_ONE_FIELD_REPAIR_PROPOSAL"
+}

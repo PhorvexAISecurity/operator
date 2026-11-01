@@ -1,0 +1,13 @@
+92: 2026-11-01T20:43:33.5086104Z ##[group]Fetching the repository
+93: 2026-11-01T20:43:33.5100135Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +882c7e7df255ff3880b97d9622be06ad393873d9:refs/remotes/pull/198/merge
+94: 2026-11-01T20:43:36.4649268Z From https://github.com/PhorvexSecurity/operator-refactored
+95: 2026-11-01T20:43:36.4652977Z  * [new branch]        campaign/attacks-endpointslices          -> origin/campaign/attacks-endpointslices
+328: 2026-11-01T20:43:36.5168628Z ##[group]Checking out the ref
+329: 2026-11-01T20:43:36.5169594Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/198/merge
+330: 2026-11-01T20:43:37.3532531Z Note: switching to 'refs/remotes/pull/198/merge'.
+331: 2026-11-01T20:43:37.3533057Z 
+332: 2026-11-01T20:43:37.3533429Z You are in 'detached HEAD' state. You can look around, make experimental
+348: 2026-11-01T20:43:37.3610784Z ##[endgroup]
+349: 2026-11-01T20:43:37.3676169Z [command]/usr/bin/git log -1 --format=%H
+350: 2026-11-01T20:43:37.3718172Z 882c7e7df255ff3880b97d9622be06ad393873d9
+351: 2026-11-01T20:43:37.3730557Z ##[group]Removing auth

@@ -1,0 +1,67 @@
+{
+  "schema": "phorvex-bench.component-peer-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:41:01.281044+00:00",
+  "verdict": "PASS_FOR_SOURCE_COMMIT_AND_COHERENT_PREFLIGHT",
+  "upstream": "565c3ea44387d45641d36a4ace9615de62f59fa9",
+  "previous_head": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "source_manifest_sha256": "7ba803782e93e15487bb5217efd2eb84f395d760b498ab12eacba5363180de8b",
+  "review": [
+    "All10 staged and working paths match frozen manifest7ba80378; all43 runtime paths remain exact prior reviewed source.",
+    "Five upstream release/family paths byte-equal565, and other3 release values equal565 after removing only byte/semantic-unchanged previously reviewed capture/reader configuration. Current quarantine family is preserved; this is distinct from the earlier bee9 closed-family state.",
+    "Exactly one manager default namespaceUID empty string added; unchanged actual defaults tests on565 fail2 with passing sensor positive, then same3 tests PASS current source without skips. No assertions weakened.",
+    "Independent six-component default renders unchanged versus565. Actual three-valueFile overlay images all equal565. Brain/manager/console have only prior capture/reader deltas; actuator/sensor/attacks have zero deltas.",
+    "All existing final-overlay subjects retain exact entries/order and p1-demo scope; exactly one investor-only benchmark subject is appended for phorvex-staging-demo/default.",
+    "Canonical umbrella SHA d381a2ffdca69ed88cfcaadaac8a64ffe69d35aeec2782c3fb331d0af8907486 contains76 files; versus0288 exactly values.yaml changes,75 members byte-identical. Parsed values differ only new empty namespaceUID. All6 common archives remain identical reviewed payloads."
+  ],
+  "conditions": [
+    "Canonical must bind the source commit and run required coherent final-source preflight; earlier0288 failed receipt remains preserved and cannot be relabelled.",
+    "This source review does not establish current stage deployment, capture transport, native source reconciliation, real bot acceptance or endpoint attribution/history readiness. Root independently owns those live controls."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/composition-inputs.json": {
+      "sha256": "7ba803782e93e15487bb5217efd2eb84f395d760b498ab12eacba5363180de8b",
+      "bytes": 3539
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/targeted-tests.txt": {
+      "sha256": "9b3a270deff520ac736a6d1c4a72949fb88ba54631417c1026d7a46c57c68a20",
+      "bytes": 1906
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/package-check.txt": {
+      "sha256": "ce40d3af12db7c5fccc0cde5bc3ad1b6abf18150a1e6435c9a5e750b3b9f1753",
+      "bytes": 62
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-render-control.py": {
+      "sha256": "8012ef501de2d40e89dff1ffb3af4f6a74ce1556e21dba029107475a9b458d28",
+      "bytes": 5863
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-render-control.json": {
+      "sha256": "a3105a18cac941f66e97fdf131e5aee96b7bd95d1f1806eee9203c112e57ff3f",
+      "bytes": 23871
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-render-control.txt": {
+      "sha256": "ec639eaf5b45015956d80c38eb13de73d8bd6263d38548c4a71ba142e3aebda4",
+      "bytes": 950
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-composition.py": {
+      "sha256": "68df03ce7b592c96aead1610cfcb525e10e3ecefec7555f94773655981a3211c",
+      "bytes": 5601
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-composition.json": {
+      "sha256": "07414eb7487376490bee5ccaaf45b644638774ab64e2355c75d17bfbe9be4b61",
+      "bytes": 1054
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/independent-composition.txt": {
+      "sha256": "ef575a8e5a8c91026f5457e41007d8f8acdb94a190210a15edf4a772fba29c6b",
+      "bytes": 1183
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/baseline-565-tests.txt": {
+      "sha256": "d95c371325867d1ccbc2c9a44f0c72390d1983a0593deabf8b8c03895d3a0e3d",
+      "bytes": 1949
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-565/current-default-tests.txt": {
+      "sha256": "54daa7555b2b54783927e98095147438c5234e6ef12c16528d46545f2fd8494e",
+      "bytes": 450
+    }
+  }
+}

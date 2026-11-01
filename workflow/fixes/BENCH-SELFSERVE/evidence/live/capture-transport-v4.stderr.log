@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "<stdin>", line 5, in <module>
+  File "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7/benchmark/worker/runner.py", line 27, in <module>
+    from exporter import COST_FILE, GATES_FILE, export_workbooks, typed_links, template_paths
+  File "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7/benchmark/worker/exporter.py", line 16, in <module>
+    import openpyxl
+ModuleNotFoundError: No module named 'openpyxl'

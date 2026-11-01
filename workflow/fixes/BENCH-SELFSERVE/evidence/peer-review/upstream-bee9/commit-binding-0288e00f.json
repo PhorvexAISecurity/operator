@@ -1,0 +1,16 @@
+{
+  "schema": "phorvex-bench.peer-composition-commit.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:13:48.548922+00:00",
+  "source": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "parents": [
+    "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+    "bee9caccf3bae388d412e72adfe50ca9de41a486"
+  ],
+  "manifest_sha256": "77dbc19be5fa093a6725624fbd0833ea6b17c34a5c966879fd8799a18c6aa175",
+  "composed_blob_count": 72,
+  "all_exact": true,
+  "verdict": "PASS_COMPOSITION_BINDING",
+  "prior_review_sha256": "f0b798d5902d0bbc6f16cd9d114b10f428f3eb5e13fd5c9ab6f60a3131f7d1cb",
+  "limits": "This is source binding; coherent final gates/current stage acceptance remain pending."
+}

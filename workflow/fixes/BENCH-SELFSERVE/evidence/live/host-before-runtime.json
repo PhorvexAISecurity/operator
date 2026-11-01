@@ -1,0 +1,139 @@
+{
+  "at": "2026-11-01T18:13:35.276171+00:00",
+  "free_bytes": 7205142528,
+  "units": {
+    "phorvex-benchmark-api.service": {
+      "MainPID": "3936630",
+      "NRestarts": "0",
+      "ExecStart": "{ path=/home/hami/phorvex-benchmark/runtime/node/bin/node ; argv[]=/home/hami/phorvex-benchmark/runtime/node/bin/node dist/src/main.js ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/api",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-benchmark-api.service",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Mon 2026-10-12 18:51:46 UTC"
+    },
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "3879946",
+      "NRestarts": "0",
+      "ExecStart": "{ path=/home/hami/phorvex-benchmark/runtime/python/bin/python ; argv[]=/home/hami/phorvex-benchmark/runtime/python/bin/python -B service.py ; ignore_errors=no ; start_time=[Sun 2026-11-01 01:10:14 UTC] ; stop_time=[n/a] ; pid=3879946 ; code=(null) ; status=0/0 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-bot-3e11f4e7/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-benchmark-bot.service",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC"
+    },
+    "phorvex-benchmark-proxy.service": {
+      "MainPID": "3936645",
+      "NRestarts": "0",
+      "ExecStart": "{ path=/home/hami/phorvex-benchmark/runtime/caddy/caddy ; argv[]=/home/hami/phorvex-benchmark/runtime/caddy/caddy run --config /home/hami/phorvex-benchmark/config/Caddyfile --adapter caddyfile ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/config",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-benchmark-proxy.service",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Mon 2026-10-12 18:51:47 UTC"
+    },
+    "phorvex-benchmark-web.service": {
+      "MainPID": "3936644",
+      "NRestarts": "0",
+      "ExecStart": "{ path=/home/hami/phorvex-benchmark/runtime/node/bin/node ; argv[]=/home/hami/phorvex-benchmark/runtime/node/bin/node .next/standalone/server.js ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/current/benchmark/apps/web",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-benchmark-web.service",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Mon 2026-10-12 18:51:47 UTC"
+    },
+    "phorvex-stage-endpoint-refresh.service": {
+      "MainPID": "0",
+      "NRestarts": "0",
+      "ExecStart": "{ path=/home/hami/phorvex-benchmark/runtime/python/bin/python ; argv[]=/home/hami/phorvex-benchmark/runtime/python/bin/python /home/hami/phorvex-benchmark/releases/stage-bot-3e11f4e7/benchmark/worker/endpoint_refresh.py --data /home/hami/phorvex-benchmark/stage-data --repo /home/hami/phorvex-benchmark/operator-refactored --policy phorvex-staging-demo/stage-bench-defense --journal /home/hami/phorvex-benchmark/stage-data/observer/persistent-ef94-1a70/compressed-evidence.db --slo-target .9 --window 600 --lookback 600 --worth-threshold 0 --ticks 64 --timeout 900 ; ignore_errors=no ; start_time=[Sun 2026-11-01 18:12:59 UTC] ; stop_time=[Sun 2026-11-01 18:13:34 UTC] ; pid=1377685 ; code=exited ; status=2 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-bot-3e11f4e7",
+      "ActiveState": "failed",
+      "SubState": "failed",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-stage-endpoint-refresh.service",
+      "UnitFileState": "static",
+      "ActiveEnterTimestamp": ""
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "966115",
+      "NRestarts": "2",
+      "ExecStart": "{ path=/usr/bin/python3 ; argv[]=/usr/bin/python3 -m benchmark.stage.observe watch --scope /home/hami/phorvex-benchmark/stage-data/observer/persistent-ef94-1a70/scope.json --journal /home/hami/phorvex-benchmark/stage-data/observer/persistent-ef94-1a70/compressed-evidence.db --seconds 31536000 --encoding zlib-v1 --max-bytes 4294967296 ; ignore_errors=no ; start_time=[Sun 2026-11-01 14:38:51 UTC] ; stop_time=[n/a] ; pid=966115 ; code=(null) ; status=0/0 }",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-observer-1a70c2b1",
+      "ActiveState": "active",
+      "SubState": "running",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-stage-observer.service",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 14:38:51 UTC"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "FragmentPath": "/home/hami/.config/systemd/user/phorvex-stage-endpoint-refresh.timer",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC"
+    }
+  },
+  "job_observation": {
+    "queued_ids_not_in_terminal_history": [],
+    "terminal_records": 66,
+    "most_recent_terminal": [
+      {
+        "id": "d024b2f8a9fd",
+        "state": "DONE",
+        "finished": "2026-11-01T00:43:31Z",
+        "kind": "endpoint"
+      },
+      {
+        "id": "74240aadda51",
+        "state": "DONE",
+        "finished": "2026-11-01T00:43:31Z",
+        "kind": "batch"
+      },
+      {
+        "id": "5aeb716b562f",
+        "state": "BLOCKED",
+        "finished": "2026-11-01T00:43:35Z",
+        "kind": "endpoint"
+      },
+      {
+        "id": "84fcf64f961b",
+        "state": "BLOCKED",
+        "finished": "2026-11-01T00:43:35Z",
+        "kind": "batch"
+      },
+      {
+        "id": "c963f138052b",
+        "state": "DONE",
+        "finished": "2026-11-01T01:10:09Z",
+        "kind": "bench"
+      },
+      {
+        "id": "5fc1c1b0f192",
+        "state": "DONE",
+        "finished": "2026-11-01T01:10:13Z",
+        "kind": "batch"
+      },
+      {
+        "id": "9eed6b29c2f4",
+        "state": "FAILED",
+        "finished": "2026-11-01T15:37:29Z",
+        "kind": "bench"
+      },
+      {
+        "id": "c358534aed93",
+        "state": "FAILED",
+        "finished": "2026-11-01T15:37:37Z",
+        "kind": "batch"
+      }
+    ],
+    "claim": "Log/history admission check only; must repeat immediately before stopping polling."
+  },
+  "private_state_hashes": {
+    "owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+    "members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81"
+  },
+  "config_mode": "0o600"
+}

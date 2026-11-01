@@ -1,0 +1,90 @@
+{
+  "run_id": 41339408824,
+  "artifact_id": 13097365056,
+  "artifact_name": "envtest-evidence",
+  "artifact_api_url": "https://api.github.com/repos/PhorvexSecurity/operator-refactored/actions/artifacts/13097365056",
+  "archive_sha256": "9954e8925c2a74f68d24db57b5de2c3ed9cfaba9c8e7b06e0103b3d53a0cab5f",
+  "archive_bytes": 582937,
+  "members": [
+    {
+      "name": "go-test.jsonl",
+      "bytes": 9236877
+    },
+    {
+      "name": "go-test.jsonl.stderr.txt",
+      "bytes": 0
+    },
+    {
+      "name": "summary.json",
+      "bytes": 852694
+    }
+  ],
+  "failed_test_events": [
+    {
+      "Time": "2026-11-01T19:06:31.415430664Z",
+      "Action": "output",
+      "Package": "github.com/phorvex/phorvex/internal/console",
+      "Test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure",
+      "Output": "=== RUN   TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure\n"
+    },
+    {
+      "Time": "2026-11-01T19:06:35.423541953Z",
+      "Action": "output",
+      "Package": "github.com/phorvex/phorvex/internal/console",
+      "Test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure",
+      "Output": "    m168_experiment_test.go:571: configured persistence failure was not reached\n"
+    },
+    {
+      "Time": "2026-11-01T19:06:35.424089837Z",
+      "Action": "output",
+      "Package": "github.com/phorvex/phorvex/internal/console",
+      "Test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure",
+      "Output": "--- FAIL: TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure (4.01s)\n"
+    },
+    {
+      "Time": "2026-11-01T19:06:35.424183191Z",
+      "Action": "fail",
+      "Package": "github.com/phorvex/phorvex/internal/console",
+      "Test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure",
+      "Elapsed": 4.01
+    },
+    {
+      "Time": "2026-11-01T19:06:35.42459997Z",
+      "Action": "fail",
+      "Package": "github.com/phorvex/phorvex/internal/console",
+      "Test": "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker",
+      "Elapsed": 16.03
+    }
+  ],
+  "summary_keys": [
+    "allowed_skips",
+    "assets",
+    "command",
+    "exit",
+    "go_version",
+    "kube_controller_manager",
+    "packages",
+    "packages_run",
+    "problems",
+    "raw_output",
+    "required",
+    "result",
+    "scope",
+    "stderr",
+    "stderr_bytes",
+    "stderr_output",
+    "verdicts"
+  ],
+  "summary_status": {
+    "assets": "/home/runner/work/_temp/envtest/controller-tools/envtest",
+    "exit": 1,
+    "go_version": "go version go1.26.3 linux/amd64",
+    "kube_controller_manager": "/home/runner/work/_temp/kubernetes/kube-controller-manager",
+    "raw_output": "envtest-evidence/go-test.jsonl",
+    "result": "FAIL",
+    "scope": "local isolated envtest API servers plus pinned ReplicaSet/EndpointSlice controllers; not a shared cluster and not live acceptance",
+    "stderr": "",
+    "stderr_bytes": 0,
+    "stderr_output": "envtest-evidence/go-test.jsonl.stderr.txt"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "verdict": "UPLOADED_BATCH_OMISSIONS_REPRODUCED",
+  "source_sha256": "349bb4d0d8757cf9949f544df165b166384973a4744af8174d26618193515f28",
+  "actual_upload_parser_queue_batch_child_executed": true,
+  "actual_separate_process_flock": true,
+  "test_wait_only": 0,
+  "parent_state": "BLOCKED",
+  "child_state": "BLOCKED",
+  "child_headline": null,
+  "endpoint_files": [
+    "SHA256SUMS.json",
+    "evidence.zip",
+    "metrics.csv",
+    "readiness.json",
+    "report.html",
+    "request.json",
+    "result.json"
+  ],
+  "delivered_bundle_members": [
+    "SHA256SUMS.json",
+    "metrics.csv",
+    "readiness.json",
+    "report.html",
+    "request.json",
+    "result.json"
+  ],
+  "original_source_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+  "upload_original_retained": true,
+  "missing": [
+    "batch child headline",
+    "original request copy in result bundle",
+    "compatibility conversion receipt in result bundle"
+  ],
+  "scope": "Scripted external transports from existing producer fixture; no final flags/errors injected, no livecalls."
+}

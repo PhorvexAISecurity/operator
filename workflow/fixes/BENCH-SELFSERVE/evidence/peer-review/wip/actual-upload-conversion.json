@@ -1,0 +1,130 @@
+{
+  "schema": "phorvex-bench.peer-routing-control.v1",
+  "reviewer": "stage-review",
+  "scope": "Retained real prompt bytes through current parser/compatibility producer; no execution outcome claimed. Original10day is unchanged. Original30day file is correctly rejected for nonstage policy; a separately labelled explicit-stage selection proves its exact unchanged prompt mapping.",
+  "original_nonstage30day_rejection": "Benchmark policy must be in a stage namespace; use /policies to see the configured allowlist.",
+  "rows": [
+    {
+      "control": "original10day unchanged",
+      "input": "/data/uploads/0a2b1cbf1b92/4f223a3c3620-PHORVEX_V3_NEW_COST_LAMBDA_GREEDY_BENCH_10D _1_.txt",
+      "original_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+      "parsed_bytes_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+      "kind": "endpoint",
+      "request": {
+        "schema": "phorvex-bench.endpoint-study.v1",
+        "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+        "policy": "phorvex-staging-demo/demo-api-defense",
+        "ticks": 64,
+        "sync": false,
+        "dataset": "recorded",
+        "study": {
+          "window": 864000,
+          "slo_target": 0.999
+        },
+        "config": {
+          "lookback": 86400,
+          "min": 0.0001,
+          "max": 1000,
+          "eta": 0.004477248791932867,
+          "g_max": 1,
+          "max_dt": 30,
+          "delta": 30
+        }
+      },
+      "conversion": {
+        "schema": "phorvex-bench.endpoint-compatibility.v1",
+        "normalization": "UTF-8 prompt with whitespace collapsed; exact SHA-256 allowlist only",
+        "normalized_prompt_sha256": "c4beaa309f609918a6002711d7dd3a48b8d305bc93f6f2d3db12dd347375e1e8",
+        "requested_policy": "phorvex-staging-demo/demo-api-defense",
+        "requested_ticks": 64,
+        "sync": false,
+        "contract": "Existing source-pinned paired V2/V3 brain study; J=V-lambda_s*(E/R); original non-cost gates and worth threshold retained. No code generation or live actuation.",
+        "normalized_request": {
+          "schema": "phorvex-bench.endpoint-study.v1",
+          "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+          "policy": "phorvex-staging-demo/demo-api-defense",
+          "ticks": 64,
+          "sync": false,
+          "dataset": "recorded",
+          "study": {
+            "window": 864000,
+            "slo_target": 0.999
+          },
+          "config": {
+            "lookback": 86400,
+            "min": 0.0001,
+            "max": 1000,
+            "eta": 0.004477248791932867,
+            "g_max": 1,
+            "max_dt": 30,
+            "delta": 30
+          }
+        },
+        "unavailable_evidence": "Active-policy attributed endpoint history and requested continuous W/L remain mandatory; absent data is BLOCKED."
+      }
+    },
+    {
+      "control": "original30day prompt, explicit test-only stage policy selection",
+      "input": "/data/uploads/0a2b1cbf1b92/f2150c92c3ea-PHORVEX_V3_NEW_COST_LAMBDA_GREEDY_BENCH.txt",
+      "original_sha256": "c4f07c2b1635a89fbf60c37f318805e6a3169438bf6739b9448ba54f910f3687",
+      "parsed_bytes_sha256": "49abddf57dcaab39826422f005bc90960c29b45143b75410954e5e80b2c64155",
+      "kind": "endpoint",
+      "request": {
+        "schema": "phorvex-bench.endpoint-study.v1",
+        "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+        "policy": "phorvex-staging-demo/demo-api-defense",
+        "ticks": 64,
+        "sync": false,
+        "dataset": "recorded",
+        "study": {
+          "window": 2592000,
+          "slo_target": 0.999
+        },
+        "config": {
+          "lookback": 86400,
+          "min": 0.0001,
+          "max": 1000,
+          "eta": 0.004477248791932867,
+          "g_max": 1,
+          "max_dt": 30,
+          "delta": 30
+        }
+      },
+      "conversion": {
+        "schema": "phorvex-bench.endpoint-compatibility.v1",
+        "normalization": "UTF-8 prompt with whitespace collapsed; exact SHA-256 allowlist only",
+        "normalized_prompt_sha256": "4fedcc3e93ec6568564bdc9535928dd1b4cecbd41e49939aaaba518cd0f0d51b",
+        "requested_policy": "phorvex-staging-demo/demo-api-defense",
+        "requested_ticks": 64,
+        "sync": false,
+        "contract": "Existing source-pinned paired V2/V3 brain study; J=V-lambda_s*(E/R); original non-cost gates and worth threshold retained. No code generation or live actuation.",
+        "normalized_request": {
+          "schema": "phorvex-bench.endpoint-study.v1",
+          "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+          "policy": "phorvex-staging-demo/demo-api-defense",
+          "ticks": 64,
+          "sync": false,
+          "dataset": "recorded",
+          "study": {
+            "window": 2592000,
+            "slo_target": 0.999
+          },
+          "config": {
+            "lookback": 86400,
+            "min": 0.0001,
+            "max": 1000,
+            "eta": 0.004477248791932867,
+            "g_max": 1,
+            "max_dt": 30,
+            "delta": 30
+          }
+        },
+        "unavailable_evidence": "Active-policy attributed endpoint history and requested continuous W/L remain mandatory; absent data is BLOCKED."
+      }
+    }
+  ],
+  "source_hashes": {
+    "benchmark/bot/file_requests.py": "d0e73aa82edfd4174d59b249aabc3e642165b31e48a01cf6befb699b54b93b65",
+    "benchmark/bot/endpoint_study.py": "43ea31ff01ead67165b717c9537e4bf4c41cf9d9f4191a0a60382a1b3252aa66"
+  }
+}

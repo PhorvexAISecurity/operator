@@ -1,0 +1,8 @@
+{
+  "result": "PASS",
+  "require_worktree": true,
+  "base_sha": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "head_sha": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "checks": 8,
+  "sha256": "466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0"
+}

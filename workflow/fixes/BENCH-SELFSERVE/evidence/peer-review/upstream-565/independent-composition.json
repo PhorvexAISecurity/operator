@@ -1,0 +1,34 @@
+{
+  "schema": "phorvex-bench.independent-composition.v1",
+  "at": "2026-11-01T19:40:25.756057+00:00",
+  "reviewer": "stage-review",
+  "upstream": "565c3ea44387d45641d36a4ace9615de62f59fa9",
+  "previous_head": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "manifest_sha256": "7ba803782e93e15487bb5217efd2eb84f395d760b498ab12eacba5363180de8b",
+  "staged_and_working_paths_verified": 10,
+  "runtime_unchanged_paths": 43,
+  "upstream_exact_paths": 5,
+  "capture_settings_unchanged_paths": 3,
+  "namespace_default_delta": "Exactly one empty namespaceUID default, no test changes.",
+  "archive": {
+    "sha256": "d381a2ffdca69ed88cfcaadaac8a64ffe69d35aeec2782c3fb331d0af8907486",
+    "members": 76,
+    "changed_vs_0288": [
+      "phorvex/values.yaml"
+    ],
+    "other_75_members_byte_identical": true
+  },
+  "actual_565_baseline": {
+    "tests": 3,
+    "expected_failures": 2,
+    "positive_controls": 1,
+    "exit_code": 1
+  },
+  "current_same_three_tests": {
+    "tests": 3,
+    "failures": 0,
+    "skips": 0,
+    "exit_code": 0
+  },
+  "verdict": "PASS"
+}

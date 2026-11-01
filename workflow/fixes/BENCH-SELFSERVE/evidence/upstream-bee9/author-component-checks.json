@@ -1,0 +1,40 @@
+{
+  "result": "PASS",
+  "composition_sha256": "77dbc19be5fa093a6725624fbd0833ea6b17c34a5c966879fd8799a18c6aa175",
+  "working_and_staged_hashes_verified": 72,
+  "runtime43_unchanged": true,
+  "capture_tests": 7,
+  "catalogue_tests": 13,
+  "go_top_level_passes": 43,
+  "go_packages": 2,
+  "go_skips": 0,
+  "command": "GOTOOLCHAIN=local GOCACHE=/workspace/.phorvex-go/capture-cache GOPATH=/workspace/.phorvex-go/gopath GOMAXPROCS=2 TMPDIR=/workspace/.phorvex-test-tmp KUBECONFIG=/dev/null KUBEBUILDER_ASSETS= USE_EXISTING_CLUSTER=false /workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go -C phorvex test -mod=readonly -count=1 -timeout=10m ./cmd/internal/consoleserver ./internal/console -run Test(AttackCatalog|K8sCatalogue) -v",
+  "logs": [
+    {
+      "path": "evidence/upstream-bee9/package-write.txt",
+      "sha256": "6ab70b364f4c3a74b14dfb952445142af1d3bed8bec64fde1fb91d6ffc64e9da",
+      "bytes": 73
+    },
+    {
+      "path": "evidence/upstream-bee9/package-check.txt",
+      "sha256": "ce40d3af12db7c5fccc0cde5bc3ad1b6abf18150a1e6435c9a5e750b3b9f1753",
+      "bytes": 62
+    },
+    {
+      "path": "evidence/upstream-bee9/capture-tests.txt",
+      "sha256": "541c1c4194e9afa80d16b206425c203c59a03ff31b4c069add108fc0c56f65de",
+      "bytes": 1487
+    },
+    {
+      "path": "evidence/upstream-bee9/catalogue-tests.txt",
+      "sha256": "95c1009268f48bfc37255174f055628e784638484553fe4fdef5b5b7bdd5573f",
+      "bytes": 2420
+    },
+    {
+      "path": "evidence/upstream-bee9/go-namespace-tests.txt",
+      "sha256": "cf86d40f17864cd3c9a1248e0662ebf158acb8581febf9d29aecd68b6efcd8f7",
+      "bytes": 1041333
+    }
+  ],
+  "scope": "Author component checks only; full committed-source preflight and independent live verification are separate."
+}

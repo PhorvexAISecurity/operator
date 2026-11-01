@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-01T19:23:52.210116+00:00",
+  "result": "PASS",
+  "evidence_class": "BASELINE_INSTRUMENT_CONTROL",
+  "source_revision": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+  "runtime_source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "upstream_main": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "positive_control": "Fresh current-main healthy exact deployment image digest equals independently verified native replay image/source; fixed policies and owned services are present, capacity reserve maintained. Capture disabled on unmodified current main is the expected pre-mutation state, not readiness.",
+  "references": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/current-main-capture-preconditions.json",
+      "sha256": "97bbd72499ea9131f353609495dc1e6ce222ec0e43b7a2d1b2c42d45d11242b2"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/round2-runtime-baseline.json",
+      "sha256": "8fd2f273a12250c8c59553127122e6a9fba481dff7ee0c8da017457ce5fd4e34"
+    }
+  ],
+  "limits": [
+    "No new bot result or fresh64cohort claimed",
+    "No endpoint history or attribution claimed",
+    "Original61e native receipts remain historical controls"
+  ]
+}

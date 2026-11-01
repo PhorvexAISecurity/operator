@@ -1,0 +1,92 @@
+[
+  {
+    "name": "images (attacks)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130139"
+  },
+  {
+    "name": "images (sensor)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130089"
+  },
+  {
+    "name": "images (actuator)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130064"
+  },
+  {
+    "name": "images (console)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130002"
+  },
+  {
+    "name": "e2e-contract",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759552/job/124968129971"
+  },
+  {
+    "name": "go-envtest",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129957"
+  },
+  {
+    "name": "images (operator)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129956"
+  },
+  {
+    "name": "charts",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129947"
+  },
+  {
+    "name": "fixture-images",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129906"
+  },
+  {
+    "name": "lint",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129903"
+  },
+  {
+    "name": "images (brain)",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129888"
+  },
+  {
+    "name": "frontend",
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129882"
+  },
+  {
+    "name": "contract",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759547/job/124968129775"
+  },
+  {
+    "name": "go-unit",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129704"
+  },
+  {
+    "name": "verify",
+    "status": "in_progress",
+    "conclusion": null,
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759528/job/124968129570"
+  }
+]

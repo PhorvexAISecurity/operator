@@ -1,0 +1,44 @@
+{
+  "schema": "phorvex-bench.capture-upstream-peer-review.v1",
+  "reviewer": "stage-review",
+  "reviewed_at": "2026-11-01T17:45:38.211406+00:00",
+  "verdict": "PASS",
+  "commit": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "parent": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "original_component_verdict_sha256": "0e395cfdb131e0a8a305e0e36a4f40fe8ed547b2fe78d515b4cc9e08775722ee",
+  "frozen_source_manifest_sha256": "8b2dbfc604a776aef03133a7d28f23254ae710cc95348f0b2a1474116c68c685",
+  "family": {
+    "path": "deploy/environments/staging/catalogue-family.yaml",
+    "sha256": "141332d868af6d38de8805d3b68968039e2c2ae327d2fd90c8acf905c2d541be",
+    "committed_upstream_bytes_preserved": true
+  },
+  "checks": [
+    "Committed delta exactly16 previously reviewed paths, every blob hash matches original final manifest; previous verdict unchanged.",
+    "Independent rerender all6 components against new c317 base. Same authorized brain,manager,console deltas only; all current image pins preserved; full actuator/sensor/attacks renders identical.",
+    "Both current quarantine family subjects retain p1-demo grants and all other fields; only added benchmark investor subject scopes demo/default. No previous identity-family values restored.",
+    "All6 default renders equivalent under previously disclosed certificate-byte normalization; exact generator unchanged.",
+    "7 final-overlay/release-renderer/malformed/default tests independently PASS with no skips.",
+    "Archive payloads and member sets rechecked: exactly reviewed2 common helper files plus manager default values."
+  ],
+  "limits": [
+    "This is source integration acceptance. Any live ApplicationSet patch and effective chart/value-source combination require separate exact proposal review and live confirmation."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/capture-c317/independent-render-control.json": {
+      "sha256": "8010b5c48c9e8394fcc5b438dfb78b931537d24b4801735a36634df544941df9",
+      "bytes": 23669
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/capture-c317/independent-render-control.py": {
+      "sha256": "510df0bd8011b76393c07eb3d683f523879673662e782d1f094d07dc647b3c01",
+      "bytes": 5829
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/capture-c317/independent-render-control.txt": {
+      "sha256": "0f7b7edb13730ddcfca04bf60ccadf1da688f4dab960c1e7222b47a9aa3cea8d",
+      "bytes": 950
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/capture-c317/independent-targeted-tests.txt": {
+      "sha256": "b17d3570ea6a19294e47dfeed169f5e184341053c595dc6afbe696f1602ed6a0",
+      "bytes": 1487
+    }
+  }
+}

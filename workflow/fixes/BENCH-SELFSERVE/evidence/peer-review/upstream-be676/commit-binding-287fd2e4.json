@@ -1,0 +1,19 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:08:29.388803+00:00",
+  "commit": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "parents": [
+    "2a9a101a4470e8028c506325c03a9571a2a52db0",
+    "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  ],
+  "tree": "5d574e7aeeb7360cbfe51d608d0195c4ba9397e5",
+  "composition_manifest_sha256": "5c82a26c45f959a9ffd6026a42ab7dde7423985fbffb68ceb8d5fd5173836888",
+  "component_verdict_sha256": "a0281a93da2f2d19493e35a4146c8e30c006f7b330dedac06d3f243b8cd4f09c",
+  "runtime169_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "all3_commit_blobs_exact_upstream_and_manifest": true,
+  "all169_runtime_blobs_unchanged_and_verified": true,
+  "clean_isolated_worktree": true,
+  "commit_message_no_attribution": true,
+  "limits": "Mechanicalsourcebindingonly;currentheadchecks andliveacceptance separate. Installedruntimeorigin remains225877."
+}

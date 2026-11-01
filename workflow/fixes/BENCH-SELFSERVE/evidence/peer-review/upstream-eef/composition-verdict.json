@@ -1,0 +1,63 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:02:35.091391+00:00",
+  "scope": "Exact eight-path mechanical integration of eef current release into225877; no runtime logic edits.",
+  "upstream": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "previous_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "staged_tree": "e65d55fe7912385af2ec7b98392730435555ef61",
+  "source_manifest_sha256": "6b27f6b48c7b3eda8d840a5c126bd4bf78650766c8e8939ecc5af0a4a81f0595",
+  "runtime169_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "checks": [
+    "All eight worktree/index hashes verified; exact upstream four release files and all169 prior runtime bytes unchanged.",
+    "Brain imageprefix byte-exact eef plus unchanged capture/PVCsuffix; manager costcapture andConsole readergrant additions unchanged.",
+    "All active currentquarantine family settings, namespaceUID/workload and prioroperator subjects preserved. Onlydisabled agentimage restores known canonicalbatchpin; actual strictgatePASS1consumer.",
+    "Six actual default andthreeoverlay renders preserve every currentimage; onlycapture/reader deltas brain4,manager1,console2; actuator/sensor/attacks unchanged.",
+    "All seven packagedarchives byte-identical225; actualrenderpayloads separatelycompared to currentupstream."
+  ],
+  "render_change_counts": {
+    "brain": 4,
+    "manager": 1,
+    "console": 2,
+    "actuator": 0,
+    "sensor": 0,
+    "attacks": 0
+  },
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-eef/composition-inputs.json",
+      "sha256": "6b27f6b48c7b3eda8d840a5c126bd4bf78650766c8e8939ecc5af0a4a81f0595",
+      "bytes": 2045
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/source-verification.json",
+      "sha256": "4982fa5cdb80ebb3c594442baa5b9bf340c7bf5b9f5e2155b668df9d144e40b0",
+      "bytes": 2517
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/verify-composition.py",
+      "sha256": "32ae6f26cf79281bf6f7414ea8f3746efe53ec689a8344fa7448f892b050305a",
+      "bytes": 4001
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/independent-render-control.py",
+      "sha256": "c62aa56a484c5bee8b0b3cab6af562ff5e4ca10887ed745cbe14cf6c757c7e50",
+      "bytes": 5917
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/independent-render-control.json",
+      "sha256": "0dc644b658938e4a8a11afb1a9aef6e08bf0aed3fbf544384d8a6e24d37822e8",
+      "bytes": 23871
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-eef/render-output.txt",
+      "sha256": "ec639eaf5b45015956d80c38eb13de73d8bd6263d38548c4a71ba142e3aebda4",
+      "bytes": 950
+    }
+  ],
+  "limits": [
+    "Commit binding required after canonical sourcecommit.",
+    "This is sourcecomposition acceptance only; currentcluster/nativebaseline andbotresults are notclaimed.",
+    "Any subsequentmain/release change invalidates currentcomposition assumptions andneeds boundedreview."
+  ]
+}

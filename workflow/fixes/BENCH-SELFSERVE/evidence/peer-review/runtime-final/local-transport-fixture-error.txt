@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/reproduce-four-repairs.py", line 78, in <module>
+    record={'schema':'phorvex-bench.independent-four-repair-controls.v1','reviewer':'stage-review','hydration':hydration(),'cold_backlog':cold(),'service_uid':service(),'source_hashes':{n:digest(Path(n)) for n in ('benchmark/worker/stage_reconcile.py','benchmark/worker/stage_cli.py','benchmark/worker/mathlab/stage_scope.py','benchmark/worker/mathlab/snapshots.py','benchmark/worker/mathlab/recent_snapshots.py','benchmark/bot/request_readiness.py')}}
+                                                                                                               ^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/reproduce-four-repairs.py", line 37, in hydration
+    with mock.patch.object(reconcile.subprocess,'Popen',side_effect=transport):result=reconcile.ensure_source(partial,sha,time.monotonic()+30)
+                                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_reconcile.py", line 128, in ensure_source
+    if git(['cat-file','-e',source+'^{commit}'])[0]:fetch_objects([source],filtered=True)
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/stage_reconcile.py", line 125, in fetch_objects
+    raise stage_scope.StageError('source retrieval changed repository HEAD/config; no pin was published')
+mathlab.stage_scope.StageError: source retrieval changed repository HEAD/config; no pin was published

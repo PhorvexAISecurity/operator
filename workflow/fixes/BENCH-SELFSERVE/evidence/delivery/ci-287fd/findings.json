@@ -1,0 +1,106 @@
+{
+  "schema": "phorvex-bench.delivery-ci-observation.v1",
+  "terminal_observed_at": "2026-11-01T21:18:46.720975+00:00",
+  "overall": "SUCCESS",
+  "checks": {
+    "total": 16,
+    "success": 16,
+    "failure": 0,
+    "pending": 0
+  },
+  "workflows": [
+    {
+      "id": 41350473252,
+      "name": "Benchmark dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473252",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:11:12Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473175,
+      "name": "Native RBAC contract",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473175",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:11:28Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473231,
+      "name": "E2E harness contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473231",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:13:19Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473242,
+      "name": "PR source validation",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473242",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:18:35Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    }
+  ],
+  "pr": {
+    "number": 198,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "e2eb6cd606bd05651bca4d58cf4e58c2075abe15",
+    "updated_at": "2026-11-01T21:08:44Z",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+    "base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  },
+  "current_main_at_terminal": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "actual_tested_merge": {
+    "observed_at": "2026-11-01T21:10:27.112442+00:00",
+    "merge_sha": "e2eb6cd606bd05651bca4d58cf4e58c2075abe15",
+    "tree_sha": "5d574e7aeeb7360cbfe51d608d0195c4ba9397e5",
+    "parents": [
+      "be676c84d162528c10bacb84c8e6a11de30ade5d",
+      "287fd2e4cd97c1ef8a0475b16316b04c6938b518"
+    ],
+    "message": "Merge 287fd2e4cd97c1ef8a0475b16316b04c6938b518 into be676c84d162528c10bacb84c8e6a11de30ade5d",
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/e2eb6cd606bd05651bca4d58cf4e58c2075abe15",
+    "scope": "GitHub current PR merge-ref object; actual executed checkout will be independently read from completed CI log."
+  },
+  "checkout_proof": "Actual completed source-validation charts and E2E logs independently contain merge e2eb6cd6; exact parents be676c84+287fd2e4.",
+  "known_failure_positive_controls": {
+    "go_envtest": {
+      "result_write_failure": true,
+      "final_marker_failure": true
+    },
+    "go_unit": {
+      "servicerelease_package": true
+    },
+    "e2e": "Both attacks/console default-parity tests explicitly pass."
+  },
+  "source_drift_during_observation": false,
+  "scope": [
+    "Read-only GitHub REST and bounded job-log downloads; only local evidence files written.",
+    "No CI rerun/cancel, repository/source edit, Git ref mutation or live operation.",
+    "This seal binds actual287fd CI and its be676c84 synthetic merge, independently of historical225877 CI.",
+    "Source SHA287fd and successful CI image-build jobs do not identify any running stage image or prove bot delivery, endpoint history or security efficacy. Actual deployed image/source/runtime must be independently verified by the lead."
+  ],
+  "history": "Earlier ci-4116 RED and ci-225877 SUCCESS remain unchanged."
+}

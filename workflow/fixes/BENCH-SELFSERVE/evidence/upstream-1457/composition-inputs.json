@@ -1,0 +1,54 @@
+{
+  "previous_head": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "upstream": "1457be4433a719784523a68ec3dd982cb57af409",
+  "worktree": "/workspace/operator-benchmark-selfserve-1457",
+  "staged_tree": "6f4b192ae9292a3a9b427e988465f4b76425586f",
+  "component_paths": [
+    {
+      "path": "deploy/environments/staging/actuator.yaml",
+      "sha256": "2b6dbadc3b79540d43e29f8ef1f33bcb560d8dc18776021e8427439e3eae4f75",
+      "bytes": 431
+    },
+    {
+      "path": "deploy/environments/staging/attacks.yaml",
+      "sha256": "f460cd284729dd050b42c93e8b5145493aa0691b86011608205cbd9b36f593c5",
+      "bytes": 498
+    },
+    {
+      "path": "deploy/environments/staging/brain.yaml",
+      "sha256": "d88156e1ed99a555bd3ad49aa81df5250b831f4b4c79c4a6a0820e39f441acac",
+      "bytes": 708
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "de1451ffb47323af35af7c68fb1c8084ad65f741f4dd0b2231291a211a7d51a3",
+      "bytes": 2567
+    },
+    {
+      "path": "deploy/environments/staging/console.yaml",
+      "sha256": "2dc041db9e16ee17986ed35209096234d025042fbad56df02e82143098abea2f",
+      "bytes": 1033
+    },
+    {
+      "path": "deploy/environments/staging/manager.yaml",
+      "sha256": "556380a63fb8d467de89a0a8ff2a1279a568ed4385a0cb8a4dafba0bee3ce565",
+      "bytes": 558
+    },
+    {
+      "path": "deploy/environments/staging/sensor.yaml",
+      "sha256": "8a7108f0e6ddc81a618f82e2a9ca4d108c7b497482734c84bd39f459d95ff61e",
+      "bytes": 423
+    },
+    {
+      "path": "release/staging-batch.json",
+      "sha256": "a48b60e59ed9e72bb19e38e01318949d7905a3b2464079b23a3f196c236c263d",
+      "bytes": 30539
+    }
+  ],
+  "runtime168_unchanged": true,
+  "brain_resolution": "Exact upstream image file plus byte-identical approved capture/PVC suffix",
+  "family_resolution": "Current quarantine profile/namespaceUID/grants/workload, with canonical batch agent-sim image retained while disabled",
+  "strict_catalogue_gate": "PASS",
+  "active_fixture_consumer_count": 1,
+  "full_preflight": "711 coherent run still running in main worktree; composed source preflight pending commit/fast-forward"
+}

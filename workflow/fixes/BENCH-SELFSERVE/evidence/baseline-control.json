@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T17:35:03.259937+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS_BASELINE_CONTROL",
+  "purpose": "Actual access/source/native replay capability and known-policy controls before intervention; not a successful benchmark claim",
+  "source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "baseline_manifest_sha256": "a4cfeae1278100da0d7b58c36c68784b5861477635c5e522dd3698e663bf4c5d",
+  "baseline_files_verified": 10,
+  "actual_user_pin_red": "evidence/baseline-red/live-pin-control.json",
+  "actual_parser_red": "evidence/baseline-red/routing.json",
+  "original_inputs_preserved": true
+}

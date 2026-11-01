@@ -1,0 +1,35 @@
+{
+  "schema": "phorvex-bench.legacy-pointer-counterexample.v1",
+  "scope": "Actual unchanged pre-repair recorded_window method against the new atomic pin contract. Real PXMS-format headers and identity file checks; fake binary only supplies identity fixture, no kernel execution or empirical stage claim.",
+  "method_source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3:benchmark/bot/service.py:BenchBot.recorded_window",
+  "method_sha256": "b97acee632299ba130b5c22dc28d9704fc9e9c9d4fe62c94d7906930bbdc1944",
+  "cases": [
+    {
+      "case": "matching-legacy-positive",
+      "atomic_pin_identity_valid": true,
+      "atomic_pin_source": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result": "RETURNED",
+      "window": {
+        "since": "2026-11-01T18:00:00Z",
+        "git_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "case": "stale-legacy-negative",
+      "atomic_pin_identity_valid": true,
+      "atomic_pin_source": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result": "ERROR",
+      "error_type": "JobError",
+      "message": "no recorded ticks from deployed commit aaaaaaaaaaaa; sync current snapshots first"
+    },
+    {
+      "case": "missing-legacy-negative",
+      "atomic_pin_identity_valid": true,
+      "atomic_pin_source": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "result": "ERROR",
+      "error_type": "JobError",
+      "message": "no deployed brain-replay identity; sync first"
+    }
+  ],
+  "verdict": "RED_REPRODUCED_WITH_POSITIVE_CONTROL"
+}

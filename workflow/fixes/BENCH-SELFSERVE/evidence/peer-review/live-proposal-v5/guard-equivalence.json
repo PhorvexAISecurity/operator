@@ -1,0 +1,9 @@
+{
+  "script_sha256": "5b9d1524fcc8a91cd97121f4c173a3bc415df962ca50b4c792d09c8b2ace00b0",
+  "executable_ast_equal_to_v4_except_payload_output_directory_and_two_reviewed_predicate_replace_changes": true,
+  "exact_payload_matches_fresh_preconditions": true,
+  "before_template_sha256": "a77f350c0ef95e2b47d7e79b845afda3111b967de6484de4e4273532a68bef44",
+  "template_difference": "Exactly both1457 revisions\u21924116 and trailing newline; all existing template branches retained.",
+  "actual_go_template_cases_per_version": 24,
+  "missing_key_rejected": true
+}

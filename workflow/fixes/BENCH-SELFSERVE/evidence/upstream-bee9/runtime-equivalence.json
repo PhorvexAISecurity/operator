@@ -1,0 +1,32 @@
+{
+  "source_before": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "source_after": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "result": "PASS",
+  "trees": [
+    {
+      "path": "benchmark",
+      "before_tree_oid": "7a4d0d413a6f3fc8af5cfcd4b8271cb2f0ad8015",
+      "after_tree_oid": "7a4d0d413a6f3fc8af5cfcd4b8271cb2f0ad8015",
+      "equal": true
+    },
+    {
+      "path": "phorvex/internal/cost/endpoint",
+      "before_tree_oid": "b58b1649d840b8f9fa4f8726aa2713d93c0cb649",
+      "after_tree_oid": "b58b1649d840b8f9fa4f8726aa2713d93c0cb649",
+      "equal": true
+    },
+    {
+      "path": "phorvex/cmd/endpoint-v3",
+      "before_tree_oid": "c923a96ec996de78a4f0f8d2d5f898977abf1fbd",
+      "after_tree_oid": "c923a96ec996de78a4f0f8d2d5f898977abf1fbd",
+      "equal": true
+    },
+    {
+      "path": "phorvex/cmd/brain-replay",
+      "before_tree_oid": "61178502ab380544f05595118fb3a92bf5e23410",
+      "after_tree_oid": "61178502ab380544f05595118fb3a92bf5e23410",
+      "equal": true
+    }
+  ],
+  "meaning": "Entire committed benchmark runtime and relevant offline engine source trees are byte-identical; this is source equivalence, not a new live execution claim or substitute for final coherent preflight."
+}

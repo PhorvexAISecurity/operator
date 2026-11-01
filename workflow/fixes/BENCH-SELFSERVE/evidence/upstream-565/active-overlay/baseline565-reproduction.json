@@ -1,0 +1,59 @@
+{
+  "source": "565c3ea44387d45641d36a4ace9615de62f59fa9",
+  "source_inputs": [
+    {
+      "path": "tools/staging_release.py",
+      "sha256": "275a3e35fbf376e9f470047b19c6d8a9e0dbce059d9377e6cb31a2ea735706ea"
+    },
+    {
+      "path": "tools/render_catalogue_staging_values.py",
+      "sha256": "eb47b27dcccc3f5f36deb6783f0da6948274e901041974e89db019efbf3fee64"
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/files/catalogue-family-profiles.yaml",
+      "sha256": "fb06bd53a3f254ee0ec5a198ab113a10c9c847bc9280bd58f4ae703b55fc0d1d"
+    },
+    {
+      "path": "deploy/environments/staging/phorvex.yaml",
+      "sha256": "60cea1b6c7eb8f27a88160d8e06334776623afb8ca9fb4b79d345fe621d031d5"
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "99b82e56ec53b787c08696cd70c7a6165c135169df37f933b3a686bacd6a9074"
+    },
+    {
+      "path": "release/staging-batch.json",
+      "sha256": "363aae5c055324b54a42a00f0e1909007a4fb4db4c6d2039444685863d47591f"
+    }
+  ],
+  "source_inputs_equal_48b": true,
+  "gate_command": [
+    "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+    "-c",
+    "import json,staging_release as r; b=json.loads((r.ROOT/\"release/staging-batch.json\").read_text()); c=r.active_catalogue_fixture_consumers(b); print(json.dumps({\"consumers\":len(c),\"images\":sorted(set(c.values()))}))"
+  ],
+  "negative": {
+    "exit_code": 1,
+    "expected_error": "active quarantine catalogue window differs from the exact generated overlay",
+    "log_sha256": "3f2682d41fb27e9445bfdab0a54b9f7afb7b899867974eb7a51709db868891c8"
+  },
+  "positive": {
+    "exit_code": 0,
+    "canonical_generator_command": [
+      "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+      "tools/render_catalogue_staging_values.py",
+      "--profile",
+      "quarantine",
+      "--namespace-uid",
+      "45e2ab1b-5a45-42ab-8afe-87218f2c758d",
+      "--workload-image",
+      "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae",
+      "--agent-image",
+      "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+    ],
+    "only_changed_field": "phorvex.console.attackCatalog.agentAction.image",
+    "agentAction_enabled": false,
+    "log_sha256": "5a8fb70ee8856d26eaecad40e9993bb6de513183d8a0eaaf8a7d15556f3d3806"
+  },
+  "scope": "Isolated exact-source function producer controls only; repository and live state were not mutated. Existing strict gate remains unchanged."
+}

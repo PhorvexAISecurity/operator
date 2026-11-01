@@ -1,0 +1,11 @@
+{
+  "run_id": 41346759494,
+  "job_id": 124968129704,
+  "name": "go-unit",
+  "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129704",
+  "conclusion": "failure",
+  "original_log_bytes": 31430,
+  "original_log_sha256": "9a63e9c266903076072779c1c4131e5265193c8ba956458d86bc159d75cdaf31",
+  "excerpt_sha256": "bf5e057b866adf9e56a2bcf9c3e750003171f2aedf11e1e4da57d9ded8fa75e2",
+  "excerpt_lines": 5
+}

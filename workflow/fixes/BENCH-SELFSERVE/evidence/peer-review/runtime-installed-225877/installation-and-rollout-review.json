@@ -1,0 +1,84 @@
+{
+  "verdict": "PASS_INSTALLATION_CAPTURE_AND_ACTUAL_LEASE_HANDLING",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:57:04.285132+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "capture_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "checks": [
+    "Independently read actual host169file hashes,releaseorigin,all6unit hashes/workingdirectories andnativepin; match reviewed source and actual installer receipt.",
+    "ActualV6 selected3applications Healthy/Succeeded with225877source; currenta5fimages/capturePVC/twopolicyallowlist/costevidence andunchangedpolicyidentities verified. Latestclosedfamily managerarguments andreadergrant deployment retained.",
+    "Successful installer is supported by exact reviewed algorithm guards andreceipt: no pendingwork atthreeidleboundaries,protectedprivatehashes unchanged,explicitobserverrestart recorded. Checkout/globalcurrent/unrelatedAPIstate preservation are successfulalgorithm assertions; separate aftersnapshots are not stored inreceipt.",
+    "Actualnew225 refresher encountered20.094s globalleasewait, emittedBLOCKED/LEASE/STAGE_PIN_LEASE_BUSY andexited2 withsystemdResultsuccess; oldfailed latchcleared without resetting or relabeling priorfailure."
+  ],
+  "current_observation_limits": {
+    "not_all_apps_synced": {
+      "brain": 0,
+      "manager": 14,
+      "console": 22
+    },
+    "reason": "Only old Role/RoleBinding requiresPruning resources; no prune authorized/performed.",
+    "units_during_acceptance": "At20:55:41 bot andmaintenance timers werepaused byauthorized acceptance; observerPID unchanged. This is not finalrestoration evidence.",
+    "reconcile": "At20:55:41 oneshotExecMainStatus2/Resultsuccess; reason notqueried inindependentcontentread.",
+    "launch_is_not_result": true,
+    "endpoint_ready_not_claimed": true
+  },
+  "outstanding": [
+    "Final225 coherent preflight/L1/L2 strict receipt andnewauthor submit-review handoff replacing stalea5d signedchecks.",
+    "Actualoriginal10d result preservingbyteexactupload, W864000/L86400/policy64ticks/syncfalse, preciseBLOCKEDmissinghistory/attribution withnoLLM/build/replay.",
+    "Actualdemo64parameter positive rawreports/nativebaseline/controlprovenance andTelegram receipts.",
+    "Freshpostrestartcontinuousfixturehistory withsource/UID/asofseal, actual600/custom endpoint results; missingevidence muststayBLOCKED.",
+    "Finalownedunitsrestoration,timersenabled/active,readonlyscope/space/journalretention receipt,temporarycapturepin expiry/currentmain handling,private delivery cleanup.",
+    "Formal leadreview-verdict incident+P3 thenactualL3/campaign verdict; no currentCOMPLETEclaim."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json": {
+      "sha256": "fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15",
+      "bytes": 10178
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-v6-rollout-1.json": {
+      "sha256": "a950cad64b3c03cfb6fb38fe878a9b0b2d8b8fcaddd544aa6959c3f8fa76692d",
+      "bytes": 30425
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/post-install-runtime-225877.json": {
+      "sha256": "8707ea20a86a03e9cfbea5b7279eb950fd2de68a2b47dffc6f5ff5252d14fe25",
+      "bytes": 1656
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-staging-source-225877.json": {
+      "sha256": "53a999752093285777d22b40f397c8f3a02fce99bb99f5ca89c2f5dc0d2d44ff",
+      "bytes": 763
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-225877-console.log": {
+      "sha256": "2c4eb5a4f605a035756bfb2cd6c28982d5d803d1f13e6e1e507b4f1ebe164f32",
+      "bytes": 226
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-launch-225877.json": {
+      "sha256": "e5f5ba53a45807e1280e713945e70a9875935627bb1fbab64f264268a817616d",
+      "bytes": 292
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/install-runtime-current-a5f.py": {
+      "sha256": "420e74148d57af2f4ff7413b77490eee5bce5be9860ae1690edc60510586da6e",
+      "bytes": 10121
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v6/operational-verdict.json": {
+      "sha256": "e4c0fc68bfb785b91e18abe807d312ae514566bb78e43a49b3263f5a408cd4a3",
+      "bytes": 4958
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/bot-lease-repair/commit-binding-225877a8.json": {
+      "sha256": "096bb7f80f864c9c462e6e2001fa8ff5d317873a4c0b3b59258d6a8239fd11bb",
+      "bytes": 880
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/installed-content-live.json": {
+      "sha256": "e5cde5c54bae2a75e5a638c991a4dcfa73b251683c0afa8a3ea7820e7509770f",
+      "bytes": 2986
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/verify-installed-readonly.py": {
+      "sha256": "ab43fb9269cc6d0c121d638854a1d2d08db84f39297ed0816277bdb4a6cd8b19",
+      "bytes": 2444
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-installed-225877/review-receipts.py": {
+      "sha256": "978bb186435065f8c7e33444c3d86d016f088fc9eb67b017cfe0fd18a0fdb3eb",
+      "bytes": 7825
+    }
+  }
+}

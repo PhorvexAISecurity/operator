@@ -1,0 +1,503 @@
+{
+  "schema": "phorvex-bench.operator-document-acceptance.v1",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "phase": "initial",
+  "state": "FAIL",
+  "jobs": [
+    {
+      "request": "original-10d.txt",
+      "request_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+      "id": "4afff0df29a1",
+      "state": "BLOCKED",
+      "upload_id": "79a2dbfd71ea",
+      "validation": {
+        "id": "79a2dbfd71ea",
+        "source_name": "original-10d.txt",
+        "source_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+        "created": "2026-11-01T20:55:22Z",
+        "user": 1385091105,
+        "validation": "STRUCTURE_AND_PARAMETER_DOMAINS_PASS",
+        "mode": "RUN",
+        "experiments": [
+          {
+            "kind": "endpoint",
+            "text": "{\"schema\": \"phorvex-bench.endpoint-study.v1\", \"title\": \"V3 endpoint cost and adaptive lambda \u2014 recorded inputs\", \"policy\": \"phorvex-staging-demo/demo-api-defense\", \"ticks\": 64, \"sync\": false, \"dataset\": \"recorded\", \"study\": {\"window\": 864000, \"slo_target\": 0.999}, \"config\": {\"lookback\": 86400, \"min\": 0.0001, \"max\": 1000, \"eta\": 0.004477248791932867, \"g_max\": 1, \"max_dt\": 30, \"delta\": 30}}",
+            "conversion": {
+              "schema": "phorvex-bench.endpoint-compatibility.v1",
+              "normalization": "UTF-8 prompt with whitespace collapsed; exact SHA-256 allowlist only",
+              "normalized_prompt_sha256": "c4beaa309f609918a6002711d7dd3a48b8d305bc93f6f2d3db12dd347375e1e8",
+              "requested_policy": "phorvex-staging-demo/demo-api-defense",
+              "requested_ticks": 64,
+              "sync": false,
+              "contract": "Existing source-pinned paired V2/V3 brain study; J=V-lambda_s*(E/R); original non-cost gates and worth threshold retained. No code generation or live actuation.",
+              "normalized_request": {
+                "schema": "phorvex-bench.endpoint-study.v1",
+                "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+                "policy": "phorvex-staging-demo/demo-api-defense",
+                "ticks": 64,
+                "sync": false,
+                "dataset": "recorded",
+                "study": {
+                  "window": 864000,
+                  "slo_target": 0.999
+                },
+                "config": {
+                  "lookback": 86400,
+                  "min": 0.0001,
+                  "max": 1000,
+                  "eta": 0.004477248791932867,
+                  "g_max": 1,
+                  "max_dt": 30,
+                  "delta": 30
+                }
+              },
+              "unavailable_evidence": "Active-policy attributed endpoint history and requested continuous W/L remain mandatory; absent data is BLOCKED."
+            },
+            "line": 1
+          }
+        ],
+        "runtime_readiness": [
+          {
+            "schema": "phorvex-bench.request-readiness.v1",
+            "syntax": "VALID",
+            "status": "BLOCKED",
+            "requested_policy": "phorvex-staging-demo/demo-api-defense",
+            "requested_ticks": 64,
+            "requested_sync": false,
+            "requested_kind": "endpoint",
+            "reasons": [
+              {
+                "code": "STAGE_SOURCE_CHANGED",
+                "message": "running stage source/image/UID differs from installed pin",
+                "recovery": "Run stage reconciliation; preserve older cohorts as historical.",
+                "sync_can_help": false
+              },
+              {
+                "code": "REPLAY_SOURCE_UNAVAILABLE",
+                "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+                "recovery": "Reconcile the exact deployed source and image-extracted replay.",
+                "sync_can_help": false
+              },
+              {
+                "code": "RUNTIME_OBSERVATION_UNAVAILABLE",
+                "message": "stage deployment rollout is incomplete; all desired replicas must be updated, ready and available",
+                "recovery": "Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.",
+                "sync_can_help": false
+              },
+              {
+                "code": "MOVE_ATTRIBUTION_UNAVAILABLE",
+                "message": "The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it.",
+                "recovery": "Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.",
+                "sync_can_help": false
+              },
+              {
+                "code": "ENDPOINT_DATASET_UNAVAILABLE",
+                "message": "No qualified normalized endpoint dataset is installed for the exact requested policy.",
+                "recovery": "Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments.",
+                "sync_can_help": false
+              }
+            ],
+            "available_policies": [
+              "phorvex-staging-demo/demo-api-defense",
+              "phorvex-staging-demo/stage-bench-defense"
+            ],
+            "snapshot_count": 313,
+            "latest_captured_at": "2026-11-01T20:53:40.047095609Z",
+            "baseline_validation": "NOT_RUN",
+            "semantics": "Read-only prerequisite check; execution rechecks identity, hashes, exact replay and tests.",
+            "requested_mode": "PAIRED_BRAIN_REPLAY",
+            "required_windows": {
+              "budget_seconds": 864000,
+              "burn_seconds": 86400
+            },
+            "requested_study": {
+              "window": 864000,
+              "slo_target": 0.999
+            },
+            "requested_config": {
+              "lookback": 86400,
+              "min": 0.0001,
+              "max": 1000,
+              "eta": 0.004477248791932867,
+              "g_max": 1,
+              "max_dt": 30,
+              "delta": 30
+            },
+            "runtime": {
+              "schema": "phorvex-bench.runtime-readiness.v1",
+              "status": "BLOCKED",
+              "requested_policy": "phorvex-staging-demo/demo-api-defense",
+              "reasons": [
+                {
+                  "code": "STAGE_SOURCE_CHANGED",
+                  "message": "running stage source/image/UID differs from installed pin",
+                  "recovery": "Run stage reconciliation; preserve older cohorts as historical."
+                },
+                {
+                  "code": "REPLAY_SOURCE_UNAVAILABLE",
+                  "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+                  "recovery": "Reconcile the exact deployed source and image-extracted replay."
+                },
+                {
+                  "code": "RUNTIME_OBSERVATION_UNAVAILABLE",
+                  "message": "stage deployment rollout is incomplete; all desired replicas must be updated, ready and available",
+                  "recovery": "Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted."
+                }
+              ],
+              "pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d",
+              "actual_brain": {
+                "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+                "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+                "deployment": "staging-brain",
+                "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+                "container": "brain",
+                "pods": [
+                  {
+                    "name": "staging-brain-5db86554cd-mtv4s",
+                    "uid": "610471ac-12dd-474c-975b-624108a8aa02"
+                  }
+                ],
+                "embedded_version": {
+                  "service": "brain",
+                  "version": "0.10.0",
+                  "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+                }
+              },
+              "policy": {
+                "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+                "generation": 9,
+                "mode": "active",
+                "selector": {
+                  "matchLabels": {
+                    "app.kubernetes.io/name": "demo-api"
+                  }
+                },
+                "workload_name": "demo-api",
+                "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+                "workload_generation": 3,
+                "service_name": "demo-api",
+                "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+                "dry_run": false
+              },
+              "capture": {
+                "enabled": false,
+                "policies": [],
+                "directory": null,
+                "persistent_claim": null,
+                "persistent_claim_uid": null,
+                "cost_evidence": false
+              },
+              "available_policies": [
+                "phorvex-staging-demo/demo-api-defense",
+                "phorvex-staging-demo/stage-bench-defense"
+              ],
+              "allowed_policies": [
+                "phorvex-staging-demo/demo-api-defense",
+                "phorvex-staging-demo/stage-bench-defense"
+              ]
+            },
+            "policy_mode": "active",
+            "missing_fields": [
+              "ticks[].ledger.complete_from",
+              "ticks[].ledger.moves[].id",
+              "ticks[].ledger.moves[].attributed",
+              "ticks[].ledger.moves[].intervals[]",
+              "ticks[].candidates[].samples"
+            ],
+            "diagnostic_capture": {
+              "field": "inspection.endpoint_cost_evidence.endpoint_loss_status",
+              "source": "phorvex/internal/mathlab/inspect.go",
+              "limitation": "Replica-history capture reports endpoint loss unavailable; waiting alone does not create move-attributed endpoint intervals."
+            },
+            "pin_sha256": "sha256:8272636f60f43cdff62e00e7e8f5a8e9cace4183b27df07b9e9da5336fc2b0b0",
+            "available_pinned_policies": [
+              "phorvex-staging-demo/demo-api-defense",
+              "phorvex-staging-demo/stage-bench-defense"
+            ],
+            "latest_age_seconds": 117.9780285358429,
+            "max_age_seconds": 900
+          }
+        ],
+        "batch_id": "4afff0df29a1"
+      },
+      "batch": {
+        "batch_id": "4afff0df29a1",
+        "upload_id": "79a2dbfd71ea",
+        "state": "BLOCKED",
+        "results": [
+          {
+            "index": 1,
+            "kind": "endpoint",
+            "state": "BLOCKED",
+            "job": "78930d74595e",
+            "headline": "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313. W=864000 s; L=86400 s.\nSTAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.\nREPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.\nRUNTIME_OBSERVATION_UNAVAILABLE: stage deployment rollout is incomplete; all desired replicas must be updated, ready and available Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.\nMOVE_ATTRIBUTION_UNAVAILABLE: The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it. Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.\nENDPOINT_DATASET_UNAVAILABLE: No qualified normalized endpoint dataset is installed for the exact requested policy. Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments."
+          }
+        ],
+        "semantics": "Independent experiments, executed sequentially; each report has its own control."
+      }
+    },
+    {
+      "request": "demo-param-64.txt",
+      "request_sha256": "5034774d648ca710f765e2e574e946901a4999ac6065b3ae5c69bca20f6c842d",
+      "id": "eafee37d3ad7",
+      "state": "BLOCKED",
+      "upload_id": "1987f384f6cf",
+      "validation": {
+        "id": "1987f384f6cf",
+        "source_name": "demo-param-64.txt",
+        "source_sha256": "5034774d648ca710f765e2e574e946901a4999ac6065b3ae5c69bca20f6c842d",
+        "created": "2026-11-01T20:55:54Z",
+        "user": 1385091105,
+        "validation": "STRUCTURE_AND_PARAMETER_DOMAINS_PASS",
+        "mode": "RUN",
+        "experiments": [
+          {
+            "kind": "param",
+            "text": "P-FEA-006 1.0 1.2 1.5 policy=phorvex-staging-demo/demo-api-defense ticks=64 nosync",
+            "line": 5
+          }
+        ],
+        "runtime_readiness": [
+          {
+            "schema": "phorvex-bench.request-readiness.v1",
+            "syntax": "VALID",
+            "status": "BLOCKED",
+            "requested_policy": "phorvex-staging-demo/demo-api-defense",
+            "requested_ticks": 64,
+            "requested_sync": false,
+            "requested_kind": "param",
+            "reasons": [
+              {
+                "code": "STAGE_SOURCE_CHANGED",
+                "message": "running stage source/image/UID differs from installed pin",
+                "recovery": "Run stage reconciliation; preserve older cohorts as historical.",
+                "sync_can_help": false
+              },
+              {
+                "code": "REPLAY_SOURCE_UNAVAILABLE",
+                "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+                "recovery": "Reconcile the exact deployed source and image-extracted replay.",
+                "sync_can_help": false
+              },
+              {
+                "code": "STAGE_MANAGER_CHANGED",
+                "message": "running manager source/image/UID differs from installed evidence pin",
+                "recovery": "Run stage reconciliation after the manager rollout; cost evidence cannot inherit a different producer.",
+                "sync_can_help": false
+              },
+              {
+                "code": "CAPTURE_DISABLED",
+                "message": "requested policy is not enabled in the actual stage brain capture flags",
+                "recovery": "An operator must apply reviewed durable staging capture values; requests never patch the cluster.",
+                "sync_can_help": false
+              },
+              {
+                "code": "CAPTURE_STORAGE_UNAVAILABLE",
+                "message": "stage capture has no writable persistent claim mount",
+                "recovery": "Restore the approved stage capture PVC through reviewed staging values.",
+                "sync_can_help": false
+              },
+              {
+                "code": "COST_EVIDENCE_DISABLED",
+                "message": "manager cost-evidence capture is disabled",
+                "recovery": "Restore the reviewed staging manager capture-cost-evidence setting.",
+                "sync_can_help": false
+              }
+            ],
+            "available_policies": [
+              "phorvex-staging-demo/demo-api-defense",
+              "phorvex-staging-demo/stage-bench-defense"
+            ],
+            "snapshot_count": 313,
+            "latest_captured_at": "2026-11-01T20:53:40.047095609Z",
+            "baseline_validation": "NOT_RUN",
+            "semantics": "Read-only prerequisite check; execution rechecks identity, hashes, exact replay and tests.",
+            "runtime": {
+              "schema": "phorvex-bench.runtime-readiness.v1",
+              "status": "BLOCKED",
+              "requested_policy": "phorvex-staging-demo/demo-api-defense",
+              "reasons": [
+                {
+                  "code": "STAGE_SOURCE_CHANGED",
+                  "message": "running stage source/image/UID differs from installed pin",
+                  "recovery": "Run stage reconciliation; preserve older cohorts as historical."
+                },
+                {
+                  "code": "REPLAY_SOURCE_UNAVAILABLE",
+                  "message": "operator-refactored clone or pinned source is unavailable; fetch the exact stage source",
+                  "recovery": "Reconcile the exact deployed source and image-extracted replay."
+                },
+                {
+                  "code": "STAGE_MANAGER_CHANGED",
+                  "message": "running manager source/image/UID differs from installed evidence pin",
+                  "recovery": "Run stage reconciliation after the manager rollout; cost evidence cannot inherit a different producer."
+                },
+                {
+                  "code": "CAPTURE_DISABLED",
+                  "message": "requested policy is not enabled in the actual stage brain capture flags",
+                  "recovery": "An operator must apply reviewed durable staging capture values; requests never patch the cluster."
+                },
+                {
+                  "code": "CAPTURE_STORAGE_UNAVAILABLE",
+                  "message": "stage capture has no writable persistent claim mount",
+                  "recovery": "Restore the approved stage capture PVC through reviewed staging values."
+                },
+                {
+                  "code": "COST_EVIDENCE_DISABLED",
+                  "message": "manager cost-evidence capture is disabled",
+                  "recovery": "Restore the reviewed staging manager capture-cost-evidence setting."
+                }
+              ],
+              "pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d",
+              "actual_brain": {
+                "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+                "digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+                "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+                "deployment": "staging-brain",
+                "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+                "container": "brain",
+                "pods": [
+                  {
+                    "name": "staging-brain-5db86554cd-mtv4s",
+                    "uid": "610471ac-12dd-474c-975b-624108a8aa02"
+                  }
+                ],
+                "embedded_version": {
+                  "service": "brain",
+                  "version": "0.10.0",
+                  "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+                }
+              },
+              "policy": {
+                "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+                "generation": 9,
+                "mode": "active",
+                "selector": {
+                  "matchLabels": {
+                    "app.kubernetes.io/name": "demo-api"
+                  }
+                },
+                "workload_name": "demo-api",
+                "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b",
+                "workload_generation": 3,
+                "service_name": "demo-api",
+                "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+                "dry_run": false
+              },
+              "capture": {
+                "enabled": false,
+                "policies": [],
+                "directory": null,
+                "persistent_claim": null,
+                "persistent_claim_uid": null,
+                "cost_evidence": false
+              },
+              "available_policies": [
+                "phorvex-staging-demo/demo-api-defense",
+                "phorvex-staging-demo/stage-bench-defense"
+              ],
+              "allowed_policies": [
+                "phorvex-staging-demo/demo-api-defense",
+                "phorvex-staging-demo/stage-bench-defense"
+              ],
+              "actual_manager": {
+                "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0@sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+                "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+                "digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+                "image_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+                "git_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+                "deployment": "staging-phorvex",
+                "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+                "container": "manager",
+                "pods": [
+                  {
+                    "name": "staging-phorvex-5899db45cd-xd25b",
+                    "uid": "f30f4be9-d14c-4ad9-a92e-6c2dec8f08be"
+                  }
+                ],
+                "embedded_version": {
+                  "service": "manager",
+                  "version": "0.16.0",
+                  "gitSHA": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+                }
+              }
+            },
+            "pin_sha256": "sha256:8272636f60f43cdff62e00e7e8f5a8e9cace4183b27df07b9e9da5336fc2b0b0",
+            "available_pinned_policies": [
+              "phorvex-staging-demo/demo-api-defense",
+              "phorvex-staging-demo/stage-bench-defense"
+            ],
+            "latest_age_seconds": 165.33376121520996,
+            "max_age_seconds": 900
+          }
+        ],
+        "batch_id": "eafee37d3ad7"
+      },
+      "batch": {
+        "batch_id": "eafee37d3ad7",
+        "upload_id": "1987f384f6cf",
+        "state": "BLOCKED",
+        "results": [
+          {
+            "index": 1,
+            "kind": "param",
+            "state": "BLOCKED",
+            "job": "3d746803a828",
+            "headline": "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313.\nSTAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.\nREPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.\nSTAGE_MANAGER_CHANGED: running manager source/image/UID differs from installed evidence pin Run stage reconciliation after the manager rollout; cost evidence cannot inherit a different producer.\nCAPTURE_DISABLED: requested policy is not enabled in the actual stage brain capture flags An operator must apply reviewed durable staging capture values; requests never patch the cluster.\nCAPTURE_STORAGE_UNAVAILABLE: stage capture has no writable persistent claim mount Restore the approved stage capture PVC through reviewed staging values.\nCOST_EVIDENCE_DISABLED: manager cost-evidence capture is disabled Restore the reviewed staging manager capture-cost-evidence setting."
+          }
+        ],
+        "semantics": "Independent experiments, executed sequentially; each report has its own control."
+      }
+    }
+  ],
+  "origin": "Operator-supplied bytes through actual BenchBot.receive_document, actual parsing/readiness/queue/replay/report and real outbound Telegram; no incoming Telegram update is claimed.",
+  "expected_states": {
+    "original-10d.txt": "BLOCKED",
+    "demo-param-64.txt": "DONE"
+  },
+  "protected_before": {
+    "/home/hami/phorvex-benchmark/config/bot.env": "fb8ffda397d37c8807989a7ab38bf2b3b3c52728e1237bb3a00fc1cc9ff55d36",
+    "/home/hami/phorvex-benchmark/bot/owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+    "/home/hami/phorvex-benchmark/bot/members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81",
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11"
+  },
+  "observer_before": {
+    "MainPID": "1648552",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "protected_after": {
+    "/home/hami/phorvex-benchmark/config/bot.env": "fb8ffda397d37c8807989a7ab38bf2b3b3c52728e1237bb3a00fc1cc9ff55d36",
+    "/home/hami/phorvex-benchmark/bot/owner.json": "311d69909f67b7061b13bda8c6d657aad361e56c2c5739a376a7b1e625efef98",
+    "/home/hami/phorvex-benchmark/bot/members.json": "c5a7101a7381df24e743e48a16e84731d58c52edb16e2f3d9bcbd9261de9df81",
+    "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/current.json": "79fa7ea7b8d047069837873995e98d8a3b8e5d1576a14706adb111d344611d11"
+  },
+  "job_outcome": "FAIL",
+  "restored_units": {
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1661215",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    }
+  },
+  "observer_after": {
+    "MainPID": "1648552",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "restoration": "PASS",
+  "finished_at": "2026-11-01T20:57:28.943905+00:00"
+}

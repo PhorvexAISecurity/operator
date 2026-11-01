@@ -1,0 +1,19 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:43:13.888830+00:00",
+  "commit": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "parents": [
+    "4116c23e7b44e804596e7c711f1aa05d5662e896",
+    "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+  ],
+  "tree": "5fe444d139decc90aed6d26cbeebab37abb47c44",
+  "source_manifest_sha256": "63d6c607081f9de0bcf9feb8d86212c694e5f81b1751f14349b5e25339f8865b",
+  "runtime169_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "component_verdict_sha256": "51f4e5c6e133b7ee46c60264570ff267b3c364f18d05a8c77f55ebb1ea6f79af",
+  "seven_commit_blobs_match": true,
+  "all169_runtime_commit_blobs_match": true,
+  "clean_isolated_worktree": true,
+  "commit_message_verified_no_attribution": true,
+  "scope": "Source binding only; final coherent preflight and live acceptance remain separate."
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "phorvex-bench.independent-native-review.v1",
+  "reviewer": "stage-review",
+  "verdict": "PASS_FOR_RETAINED_ACTUAL_NATIVE_BASELINE_PROOF",
+  "receipt_sha256": "a60562104609af711eaff7857e8c41854405f426ed13f477d502f9325397a2b5",
+  "manifest_sha256": "3bf117f04d33b75eeb1dab99a488980580c3a28f42bf815d4eb0ce90fac2fbc9",
+  "source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+  "binary_sha256": "739b43a24c79ee7599ea02aab84ade4e23081d1881dd9db225d0e4c8ea192f86",
+  "policies": {
+    "demo-api-defense": {
+      "exact_baselines": 64,
+      "policy_uids": [
+        "6485e0b3-0f36-4737-b0f5-7e846375da9f"
+      ],
+      "selected_nonempty": 0,
+      "replay_sha256": "cc3f6356d11172fe7c925a201b6ed5390c2bd58ef530bfe5a698bf0e44af34de"
+    },
+    "stage-bench-defense": {
+      "exact_baselines": 64,
+      "policy_uids": [
+        "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+      ],
+      "selected_nonempty": 0,
+      "replay_sha256": "653fd146c26d45c35819ec21b4029f24ab3dfb4dd0cb58cf46e6cbb362459f31"
+    }
+  },
+  "limits": [
+    "Raw replay rows and receipt hashes independently checked; this was lead-produced image-native replay, not an actual bot submission.",
+    "Quiet 64-tick cohorts establish replay fidelity, not efficacy or long-window endpoint history."
+  ]
+}

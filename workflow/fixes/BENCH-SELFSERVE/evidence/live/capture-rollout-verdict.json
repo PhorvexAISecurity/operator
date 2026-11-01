@@ -1,0 +1,19 @@
+{
+  "schema": "phorvex-bench.capture-live-verdict.v1",
+  "reviewer": "bench-v3-lead",
+  "at": "2026-11-01T18:00:48.023767+00:00",
+  "result": "PASS_CAPTURE_CONFIGURATION_ROLLOUT",
+  "checks": {
+    "staging-brain": "same image/UID/previous args; capture-only additions; complete healthy rollout",
+    "staging-phorvex": "same image/UID/previous args; capture-only additions; complete healthy rollout",
+    "staging-phorvex-console": "same image/UID/previous args; capture-only additions; complete healthy rollout"
+  },
+  "policy_modes_uids_generations": "unchanged",
+  "existing_pvc": "same Bound UID",
+  "benchmark_grant": "one exact investor binding",
+  "source_images": "unchanged61e836",
+  "snapshot_download_and_replay": "NOT_YET_TESTED",
+  "temporary_chart_values_pin": "6ae898 until reviewed main integration; source watch required",
+  "inherited_app_sync": "manager/console OutOfSync existed before; Healthy and Succeeded, no condition",
+  "evidence_sha256": "66634da8779a9126ff7f539e8fd61beaa830e7665460cfdba3a5695f7a1c5674"
+}

@@ -1,0 +1,241 @@
+{
+  "observed_at": "2026-11-01T20:34:06.686404+00:00",
+  "requested_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "pr": {
+    "number": 198,
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "state": "open",
+    "draft": true,
+    "actual_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+    "base_sha": "1457be4433a719784523a68ec3dd982cb57af409"
+  },
+  "checks": [
+    {
+      "id": 124970047224,
+      "name": "PR validation",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-01T20:32:46Z",
+      "completed_at": "2026-11-01T20:32:49Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124970047224",
+      "output_summary": null
+    },
+    {
+      "id": 124968130139,
+      "name": "images (attacks)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:31:18Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130139",
+      "output_summary": null
+    },
+    {
+      "id": 124968130089,
+      "name": "images (sensor)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:28:35Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130089",
+      "output_summary": null
+    },
+    {
+      "id": 124968130064,
+      "name": "images (actuator)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:28:50Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130064",
+      "output_summary": null
+    },
+    {
+      "id": 124968130002,
+      "name": "images (console)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:31:03Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968130002",
+      "output_summary": null
+    },
+    {
+      "id": 124968129971,
+      "name": "e2e-contract",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:29:12Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759552/job/124968129971",
+      "output_summary": null
+    },
+    {
+      "id": 124968129957,
+      "name": "go-envtest",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:32:43Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129957",
+      "output_summary": null
+    },
+    {
+      "id": 124968129956,
+      "name": "images (operator)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:29:03Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129956",
+      "output_summary": null
+    },
+    {
+      "id": 124968129947,
+      "name": "charts",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:29:14Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129947",
+      "output_summary": null
+    },
+    {
+      "id": 124968129906,
+      "name": "fixture-images",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:29:07Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129906",
+      "output_summary": null
+    },
+    {
+      "id": 124968129903,
+      "name": "lint",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:17Z",
+      "completed_at": "2026-11-01T20:27:14Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129903",
+      "output_summary": null
+    },
+    {
+      "id": 124968129888,
+      "name": "images (brain)",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:18Z",
+      "completed_at": "2026-11-01T20:28:30Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129888",
+      "output_summary": null
+    },
+    {
+      "id": 124968129882,
+      "name": "frontend",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:17Z",
+      "completed_at": "2026-11-01T20:26:30Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129882",
+      "output_summary": null
+    },
+    {
+      "id": 124968129775,
+      "name": "contract",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:17Z",
+      "completed_at": "2026-11-01T20:28:12Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759547/job/124968129775",
+      "output_summary": null
+    },
+    {
+      "id": 124968129704,
+      "name": "go-unit",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-11-01T20:25:17Z",
+      "completed_at": "2026-11-01T20:32:10Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129704",
+      "output_summary": null
+    },
+    {
+      "id": 124968129570,
+      "name": "verify",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-01T20:25:17Z",
+      "completed_at": "2026-11-01T20:27:40Z",
+      "details_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759528/job/124968129570",
+      "output_summary": null
+    }
+  ],
+  "commit_status": {
+    "state": "pending",
+    "total_count": 0,
+    "contexts": []
+  },
+  "runs": [
+    {
+      "id": 41346759528,
+      "name": "Benchmark dashboard",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759528",
+      "created_at": "2026-11-01T20:25:15Z",
+      "updated_at": "2026-11-01T20:27:41Z"
+    },
+    {
+      "id": 41346759547,
+      "name": "Native RBAC contract",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759547",
+      "created_at": "2026-11-01T20:25:15Z",
+      "updated_at": "2026-11-01T20:28:12Z"
+    },
+    {
+      "id": 41346759552,
+      "name": "E2E harness contracts",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759552",
+      "created_at": "2026-11-01T20:25:15Z",
+      "updated_at": "2026-11-01T20:29:12Z"
+    },
+    {
+      "id": 41346759494,
+      "name": "PR source validation",
+      "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494",
+      "created_at": "2026-11-01T20:25:15Z",
+      "updated_at": "2026-11-01T20:32:50Z"
+    }
+  ]
+}

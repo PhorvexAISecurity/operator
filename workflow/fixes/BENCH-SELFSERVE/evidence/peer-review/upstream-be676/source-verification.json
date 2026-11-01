@@ -1,0 +1,30 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:07:38.751522+00:00",
+  "source_manifest_sha256": "5c82a26c45f959a9ffd6026a42ab7dde7423985fbffb68ceb8d5fd5173836888",
+  "previous_head": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "upstream": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "staged_tree": "5d574e7aeeb7360cbfe51d608d0195c4ba9397e5",
+  "paths": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "371c54d448038059835763b7f0b0a278d9ea61d2fb8b476314a0cf37bc88d5c2",
+      "bytes": 2403
+    },
+    {
+      "path": "phorvex/internal/console/prometheus_run_evidence.go",
+      "sha256": "adbaba3234cc392906f0db560fa6680cd30f5a5c1a3a13a893c3990546017d89",
+      "bytes": 28718
+    },
+    {
+      "path": "phorvex/internal/console/prometheus_run_evidence_test.go",
+      "sha256": "275f297165ef3af9754d17ed09537838266ade3916ff88f5aa2dc67791a1f3c9",
+      "bytes": 13211
+    }
+  ],
+  "all_three_index_worktree_blobs_exact_upstream": true,
+  "all169runtime_blobs_unchanged": true,
+  "capture_values_default_charts_archives_andrelease_unchanged": true,
+  "scope": "Mechanical composition/source preservation; the two incomingConsolePrometheus changes are existingupstream, no benchmarksourceimplementation authored here."
+}

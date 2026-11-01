@@ -1,0 +1,72 @@
+{
+  "schema": "phorvex-bench.peer-full-clone-advance-control.v1",
+  "reviewer": "stage-review",
+  "producer": "Real full clone with exact approved origin; only explicit fetch transport redirects via process-local url.insteadOf to local repository. Fetch target remains named origin, no credential/network. Prior remote.url override was invalid fixture and retained separately.",
+  "result": {
+    "source_revision": "ed7a704144a7d39d7e081b9181c3ddf1f8c88d83",
+    "fetched": true,
+    "checkout_head": "cb0851fc6b0d932b3d58f16bb72955d91619e1c9",
+    "offline_checkout_trees": [
+      {
+        "source_revision": "cb0851fc6b0d932b3d58f16bb72955d91619e1c9",
+        "tree": "525c1a3f8ee100a0ccadc19a84072a8e9feb10e1",
+        "blob_count": 1,
+        "decoded_blob_bytes": 3,
+        "materialized_blobs": 0,
+        "offline_objects_complete": true
+      },
+      {
+        "source_revision": "ed7a704144a7d39d7e081b9181c3ddf1f8c88d83",
+        "tree": "5d2a4adb5a58ffb4730dd212b6935ae105afb531",
+        "blob_count": 1,
+        "decoded_blob_bytes": 3,
+        "materialized_blobs": 1,
+        "offline_objects_complete": true
+      }
+    ]
+  },
+  "config_changed": false,
+  "config_before": "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n[remote \"origin\"]\n\turl = https://github.com/PhorvexSecurity/operator-refactored.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"master\"]\n\tremote = origin\n\tmerge = refs/heads/master\n",
+  "config_after": "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n[remote \"origin\"]\n\turl = https://github.com/PhorvexSecurity/operator-refactored.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"master\"]\n\tremote = origin\n\tmerge = refs/heads/master\n",
+  "head_unchanged": true,
+  "fetch_arguments": [
+    [
+      "git",
+      "-C",
+      "/workspace/.phorvex-test-tmp/peer-full-clone-advance-37nvsjie/clone",
+      "-c",
+      "fetch.parallel=1",
+      "-c",
+      "remote.origin.promisor=true",
+      "-c",
+      "remote.origin.partialclonefilter=blob:none",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--no-auto-maintenance",
+      "--no-recurse-submodules",
+      "--filter=blob:none",
+      "--stdin",
+      "origin"
+    ],
+    [
+      "git",
+      "-C",
+      "/workspace/.phorvex-test-tmp/peer-full-clone-advance-37nvsjie/clone",
+      "-c",
+      "fetch.parallel=1",
+      "-c",
+      "remote.origin.promisor=false",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--no-auto-maintenance",
+      "--no-recurse-submodules",
+      "--no-filter",
+      "--stdin",
+      "origin"
+    ]
+  ],
+  "source_sha256": "ba0690841cc36daa71e4cb6072dd799a397041db27d5539741c81e8e0243f1dc",
+  "root": "/workspace/.phorvex-test-tmp/peer-full-clone-advance-37nvsjie"
+}

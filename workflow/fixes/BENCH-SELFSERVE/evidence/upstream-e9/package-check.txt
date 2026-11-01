@@ -1,0 +1,1 @@
+all vendored chart archives are byte-reproducible and current

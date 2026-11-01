@@ -1,0 +1,39 @@
+{
+  "change_class": "B",
+  "roles": {
+    "proposer": "bench-v3-lead",
+    "skeptic": "bench-v3-lead",
+    "live_verifier": "bench-v3-lead",
+    "coordinator": "bench-v3-lead",
+    "human_owner": "hamihoriyat",
+    "implementer": "bench-v3-worker"
+  },
+  "baseline": {
+    "code_branch": "main",
+    "code_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+    "deployed_git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+  },
+  "implementation": {
+    "branch": "fix/benchmark-selfserve",
+    "base_sha": "fe6494022a65fcca236e405521685708eb104d9e"
+  },
+  "capabilities_required": {
+    "go_toolchain": true,
+    "cluster_access": true,
+    "deployment_authority": true
+  },
+  "verification": {
+    "required": [
+      "L0",
+      "L1",
+      "L2",
+      "L3"
+    ],
+    "live_required": true,
+    "soak_required": false
+  },
+  "approvals": {
+    "pr_open": "operations/AUTONOMY.md",
+    "deploy": "fixes/BENCH-SELFSERVE/AUTHORIZATION.md"
+  }
+}

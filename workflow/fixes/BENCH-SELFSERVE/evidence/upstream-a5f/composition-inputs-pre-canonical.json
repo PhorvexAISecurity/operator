@@ -1,0 +1,27 @@
+{
+  "previous_head": "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+  "upstream": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "component_paths": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "f9584ed398d2baf6cf4fb998ef6078d06d7ef48392687e6e5798ef3cbc2d3557",
+      "bytes": 2263
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_integration_test.go",
+      "sha256": "e27477245387e077ebc57b49c9d57f9d5e4171a36fe0c871cf1d08b2933f54db",
+      "bytes": 34164
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_runtime.go",
+      "sha256": "babc9bcfbd3656d498094126b3a492471d275e048784d31b6d144d6e8cbeb12e",
+      "bytes": 27385
+    }
+  ],
+  "runtime43_unchanged": true,
+  "all3_upstream_files_exact": true,
+  "capture_controls": "7 PASS",
+  "active_overlay_gate": "FAIL: disabled agentAction.image differs from canonical pinned value. No source correction yet.",
+  "gate_diagnostic": "evidence/upstream-a5f/active-overlay-result.json",
+  "full_preflight": "Not started for pending composition; prior48b run interrupted with observed chart6FAIL."
+}

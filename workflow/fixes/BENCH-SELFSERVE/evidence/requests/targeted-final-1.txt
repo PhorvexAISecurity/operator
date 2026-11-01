@@ -1,0 +1,30 @@
+test_actual_source_headers_positive_and_exact_insufficient_count (test_request_readiness.RequestReadinessTests.test_actual_source_headers_positive_and_exact_insufficient_count) ... ok
+test_generation_filter_excludes_old_same_uid_and_source_before_sampling (test_request_readiness.RequestReadinessTests.test_generation_filter_excludes_old_same_uid_and_source_before_sampling) ... ok
+test_live_capture_or_source_drift_blocks_despite_complete_cache (test_request_readiness.RequestReadinessTests.test_live_capture_or_source_drift_blocks_despite_complete_cache) ... ok
+test_missing_policy_does_not_fall_back_to_fixture (test_request_readiness.RequestReadinessTests.test_missing_policy_does_not_fall_back_to_fixture) ... ok
+test_old_image_uid_and_stale_headers_do_not_qualify (test_request_readiness.RequestReadinessTests.test_old_image_uid_and_stale_headers_do_not_qualify) ... ok
+test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort (test_request_readiness.RequestReadinessTests.test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort) ... ERROR
+test_real_upload_validate_and_execution_are_separate_and_no_model_runs (test_request_readiness.RequestReadinessTests.test_real_upload_validate_and_execution_are_separate_and_no_model_runs) ... ok
+test_source_change_after_validation_is_rechecked_before_model (test_request_readiness.RequestReadinessTests.test_source_change_after_validation_is_rechecked_before_model) ... ok
+test_declarative_endpoint_fields_support_independent_arbitrary_windows (test_selfserve_requests.SelfserveRequestTests.test_declarative_endpoint_fields_support_independent_arbitrary_windows) ... ok
+test_declarative_rejects_unknown_duplicate_and_non_numeric_fields (test_selfserve_requests.SelfserveRequestTests.test_declarative_rejects_unknown_duplicate_and_non_numeric_fields) ... ok
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+test_modified_prose_stays_generic_code_and_never_silently_maps (test_selfserve_requests.SelfserveRequestTests.test_modified_prose_stays_generic_code_and_never_silently_maps) ... ok
+test_original_thirty_day_compatibility_sets_explicit_slo_and_window (test_selfserve_requests.SelfserveRequestTests.test_original_thirty_day_compatibility_sets_explicit_slo_and_window) ... ok
+test_json_upload_runs_without_model_dashboard_or_go_and_sends_results (test_study.StudyUploadTest.test_json_upload_runs_without_model_dashboard_or_go_and_sends_results) ... ok
+test_missing_recorded_data_is_not_a_planner_failure (test_study.StudyUploadTest.test_missing_recorded_data_is_not_a_planner_failure) ... ok
+
+======================================================================
+ERROR: test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort (test_request_readiness.RequestReadinessTests.test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_request_readiness.py", line 146, in test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort
+    bot.dashboard.preflight(request)
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'preflight'
+
+----------------------------------------------------------------------
+Ran 16 tests in 1.578s
+
+FAILED (errors=1)

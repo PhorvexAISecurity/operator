@@ -1,0 +1,61 @@
+<!doctype html><meta charset="utf-8"><title>Paired stage brain endpoint replay</title><style>body{font:16px/1.6 system-ui;max-width:1000px;margin:36px auto;padding:20px}pre{white-space:pre-wrap;background:#f0f4f6;padding:20px}a{color:#075ba8}</style><h1>Paired stage brain endpoint replay</h1><p><strong>BLOCKED</strong> — no physical actuation or production deployment.</p><pre>{
+  &quot;state&quot;: &quot;BLOCKED&quot;,
+  &quot;evidence&quot;: &quot;recorded-unavailable&quot;,
+  &quot;mode&quot;: &quot;PAIRED_BRAIN_REPLAY&quot;,
+  &quot;requested_mode&quot;: &quot;PAIRED_BRAIN_REPLAY&quot;,
+  &quot;requested_policy&quot;: &quot;phorvex-staging-demo/demo-api-defense&quot;,
+  &quot;requested_ticks&quot;: 64,
+  &quot;requested_sync&quot;: false,
+  &quot;required_windows&quot;: {
+    &quot;budget_seconds&quot;: 864000,
+    &quot;burn_seconds&quot;: 86400
+  },
+  &quot;requested_study&quot;: {
+    &quot;window&quot;: 864000,
+    &quot;slo_target&quot;: 0.999
+  },
+  &quot;requested_config&quot;: {
+    &quot;lookback&quot;: 86400,
+    &quot;min&quot;: 0.0001,
+    &quot;max&quot;: 1000,
+    &quot;eta&quot;: 0.004477248791932867,
+    &quot;g_max&quot;: 1,
+    &quot;max_dt&quot;: 30,
+    &quot;delta&quot;: 30
+  },
+  &quot;v2_executed&quot;: false,
+  &quot;v3_executed&quot;: false,
+  &quot;activity&quot;: {
+    &quot;model_started&quot;: false,
+    &quot;tests_started&quot;: false,
+    &quot;build_started&quot;: false,
+    &quot;replay_started&quot;: false,
+    &quot;preflight_started&quot;: false
+  },
+  &quot;capture_source&quot;: null,
+  &quot;study_source&quot;: null,
+  &quot;comparison_status&quot;: null,
+  &quot;comparable_ticks&quot;: null,
+  &quot;changed_choices&quot;: null,
+  &quot;noop&quot;: null,
+  &quot;forecast_endpoint_seconds&quot;: null,
+  &quot;reason&quot;: &quot;Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313. W=864000 s; L=86400 s.\nSTAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.\nREPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.\nRUNTIME_OBSERVATION_UNAVAILABLE: stage deployment rollout is incomplete; all desired replicas must be updated, ready and available Check stage access/rollout and retry bounded readiness; no cluster mutation was attempted.\nMOVE_ATTRIBUTION_UNAVAILABLE: The requested active policy has no qualified move-attributed endpoint history. Generic brain snapshots cannot establish it. Keep this policy unchanged. Install a real attributed endpoint producer and collect its required continuous history; never borrow a fixture ledger.\nENDPOINT_DATASET_UNAVAILABLE: No qualified normalized endpoint dataset is installed for the exact requested policy. Collect source- and policy-bound endpoint evidence for both requested windows, then refresh that policy. Short fixture controls are separate experiments.&quot;,
+  &quot;missing_reasons&quot;: null,
+  &quot;study&quot;: null,
+  &quot;limitations&quot;: [
+    &quot;Neither arm executed. Missing recorded evidence is unknown, not zero. No model tokens or Go builds were spent.&quot;
+  ],
+  &quot;required_inputs&quot;: null,
+  &quot;missing_fields&quot;: [
+    &quot;ticks[].ledger.complete_from&quot;,
+    &quot;ticks[].ledger.moves[].id&quot;,
+    &quot;ticks[].ledger.moves[].attributed&quot;,
+    &quot;ticks[].ledger.moves[].intervals[]&quot;,
+    &quot;ticks[].candidates[].samples&quot;
+  ],
+  &quot;diagnostic_capture&quot;: {
+    &quot;field&quot;: &quot;inspection.endpoint_cost_evidence.endpoint_loss_status&quot;,
+    &quot;source&quot;: &quot;phorvex/internal/mathlab/inspect.go&quot;,
+    &quot;limitation&quot;: &quot;Replica-history capture reports endpoint loss unavailable; waiting alone does not create move-attributed endpoint intervals.&quot;
+  }
+}</pre><p>Null/blank means unavailable, never zero. Forecast cost is not realized counterfactual cost. Counts refer only to comparable ticks.</p><p><a href="metrics.csv">Candidate CSV</a> · <a href="result.json">Full JSON</a></p>

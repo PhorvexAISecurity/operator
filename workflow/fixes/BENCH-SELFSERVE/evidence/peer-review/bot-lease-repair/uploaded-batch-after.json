@@ -1,0 +1,41 @@
+{
+  "verdict": "PASS",
+  "source_sha256": "65aba1be1ed21f4bc0ccc729400130d7d3570d276f82b39bd8657ed1a7900ab6",
+  "actual_upload_parser_queue_batch_child_executed": true,
+  "actual_separate_process_flock": true,
+  "test_wait_only": 0,
+  "parent_state": "BLOCKED",
+  "child_state": "BLOCKED",
+  "child_headline": "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=unknown. W=864000 s; L=86400 s.\nSTAGE_PIN_LEASE_BUSY: stage pin is busy with active jobs or reconciliation; retry after it completes Retry this unchanged request after the current stage job or reconciliation completes.",
+  "endpoint_files": [
+    "SHA256SUMS.json",
+    "compatibility-conversion.json",
+    "evidence.zip",
+    "metrics.csv",
+    "original-request.md",
+    "readiness.json",
+    "report.html",
+    "request.json",
+    "result.json"
+  ],
+  "delivered_bundle_members": [
+    "SHA256SUMS.json",
+    "compatibility-conversion.json",
+    "metrics.csv",
+    "original-request.md",
+    "readiness.json",
+    "report.html",
+    "request.json",
+    "result.json"
+  ],
+  "original_source_sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+  "upload_original_retained": true,
+  "preserved": [
+    "batch child headline",
+    "byte-exact original request in result bundle",
+    "compatibility conversion receipt",
+    "independent budget864000/burn86400 windows",
+    "sync:false"
+  ],
+  "scope": "Scripted external transports from existing producer fixture; no final flags/errors injected, no livecalls."
+}

@@ -1,0 +1,54 @@
+{
+  "previous_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "upstream": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "worktree": "/workspace/operator-benchmark-selfserve-1457",
+  "staged_tree": "e65d55fe7912385af2ec7b98392730435555ef61",
+  "paths": [
+    {
+      "path": "deploy/environments/staging/actuator.yaml",
+      "sha256": "51ee8230a7462ac628dedde29537603bb8c40ad3ff8fa19eb8ed56b39d197ccb",
+      "bytes": 431
+    },
+    {
+      "path": "deploy/environments/staging/attacks.yaml",
+      "sha256": "a1ec4b3266718cbfe66e676caf5c1052db727792f1097810188a18e038bc5b6c",
+      "bytes": 498
+    },
+    {
+      "path": "deploy/environments/staging/brain.yaml",
+      "sha256": "d3c58ea9956c7786345791c573f2d2b4bd667b1cfbaba248e0b1b776bc8e27db",
+      "bytes": 708
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "de1451ffb47323af35af7c68fb1c8084ad65f741f4dd0b2231291a211a7d51a3",
+      "bytes": 2567
+    },
+    {
+      "path": "deploy/environments/staging/console.yaml",
+      "sha256": "cb62ba76fa21bcb0e0977ad3ed4e2ac63990575df079371597033f15dd982734",
+      "bytes": 1033
+    },
+    {
+      "path": "deploy/environments/staging/manager.yaml",
+      "sha256": "a34243dee500f9f92bae24c9c6f6a380f0011117eebb984a249701384e2e85a8",
+      "bytes": 558
+    },
+    {
+      "path": "deploy/environments/staging/sensor.yaml",
+      "sha256": "a4f2bf049ed23838a3b2df61e9358bd877e473c86b7f1c6c492ae4b5be28d5bf",
+      "bytes": 423
+    },
+    {
+      "path": "release/staging-batch.json",
+      "sha256": "7ec54c69548f4283ecc8db4bf50a9fd09ce705ccefeeed7b33db108c8fb08c2d",
+      "bytes": 30539
+    }
+  ],
+  "runtime169_unchanged": true,
+  "brain_resolution": "Exact current upstream image bytes plus unchanged approved capture/PVC suffix",
+  "family_resolution": "Exact incoming quarantine/UID/grants/workload values except already-reviewed disabled agentAction.image canonical current batch pin",
+  "strict_catalogue_gate": "PASS",
+  "active_fixture_consumers": 1,
+  "source_logic_edits": false
+}

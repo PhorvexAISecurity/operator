@@ -1,0 +1,15 @@
+test_same_source_review_reinstall_retains_previous_pinned_evidence (benchmark.worker.test_endpoint_refresh.RefreshTests.test_same_source_review_reinstall_retains_previous_pinned_evidence) ... FAIL
+
+======================================================================
+FAIL: test_same_source_review_reinstall_retains_previous_pinned_evidence (benchmark.worker.test_endpoint_refresh.RefreshTests.test_same_source_review_reinstall_retains_previous_pinned_evidence)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/worker/test_endpoint_refresh.py", line 213, in test_same_source_review_reinstall_retains_previous_pinned_evidence
+    self.assertEqual({p:Path(p).read_bytes() for p in original},original)
+AssertionError: {'/wo[387 chars]6":["5c9dd789150064131bacba7816be045cf82fe91a3[378 chars]ure'} != {'/wo[387 chars]6":["bf28af8742aed4f1b1c3e6b2ae88dcab027550ec5[362 chars]ure'}
+Diff is 25319 characters long. Set self.maxDiff to None to see it.
+
+----------------------------------------------------------------------
+Ran 1 test in 1.486s
+
+FAILED (failures=1)

@@ -1,0 +1,92 @@
+{
+  "schema": "phorvex-bench.independent-operator-proposal.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T18:54:56.646081+00:00",
+  "verdict": "PASS_FOR_AUTHORIZED_BOUNDED_LIVE_ATTEMPT",
+  "source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "source_manifest_sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67",
+  "scripts": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/install-reviewed-runtime.py",
+      "sha256": "6e699fd5cf245572aae4cac3de165e4feeedf5484873ce8c539c0bc36bb5763c"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/run-selfserve-bot-acceptance.py",
+      "sha256": "4ed509d87adab058aa026e6f6f1d890e02e3263a5d5eb407641bf40337b37a28"
+    }
+  ],
+  "guard_control": {
+    "producer": "Execute only the actual installer AST policy comparator against retained actual b080 runtime observations, then mutate each complete identity field. No command, filesystem or live mutation from the proposal was executed.",
+    "positive_actual_observation_pass": true,
+    "negative_mutations": [
+      {
+        "field": "uid",
+        "refused": true
+      },
+      {
+        "field": "generation",
+        "refused": true
+      },
+      {
+        "field": "mode",
+        "refused": true
+      },
+      {
+        "field": "selector",
+        "refused": true
+      },
+      {
+        "field": "workload_name",
+        "refused": true
+      },
+      {
+        "field": "workload_uid",
+        "refused": true
+      },
+      {
+        "field": "workload_generation",
+        "refused": true
+      },
+      {
+        "field": "service_name",
+        "refused": true
+      },
+      {
+        "field": "service_uid",
+        "refused": true
+      }
+    ]
+  },
+  "supporting_artifacts": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-probe-b3d55bdd.json",
+      "sha256": "b080a773ed58b7cf1adeec3a6caea27e189204293949c5569a6f354e05d6f95c"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/old-bot-unit-structure.json",
+      "sha256": "765b755eb095dda36b2adfab2edb05efc9e19ab7a648a021d16c1f9c69c4a2d8"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/commit-binding-a5d8d612.json",
+      "sha256": "30fb0f90acd4b987013b7352e42b0770b3318a7eb52368d3927aa03991609e98"
+    }
+  ],
+  "scope": [
+    "Installer verifies exact release manifest/source and known old unit hashes; changes only owned bot working directory/observer/refresh plus new reconcile units. Relative ExecStart service.py is bound by the actual old-unit structural receipt.",
+    "Initial and pre-stop stage identity compare includes policy/workload generations, Service UID/selectors and capture; final same_observation before unit installation. No cluster mutation, global-current symlink or private environment changes.",
+    "Idle job guards before/after stopping; actual64native reconciliation must succeed before new units start. Failed attempt restores owned units and retains pins/evidence with explicit unavailable-readiness limit.",
+    "Acceptance dispatches exact locally supplied original bytes through actual document parser/queue/execution and real outbound Telegram; only inbound download boundary is replaced and explicitly labelled.",
+    "Acceptance restores only selected originally-active timers and stopped bot; verifies restored active state and unchanged observer PID/state, with separate job outcome/restoration error."
+  ],
+  "closed_proposal_findings": [
+    "Installer now binds full observed workload/Service/policy identities.",
+    "Derived probe dry_run is validated and removed before comparing the exact identity map; otherwise positive proposal would always refuse.",
+    "Acceptance no longer starts unrelated precondition-failed inactive timers or hides restoration failures behind PASS."
+  ],
+  "limits": [
+    "This is proposal acceptance, not proof the installation/jobs completed. Root retains execution receipts and verifies actual output provenance, requested values/counts, exact baselines, cleanup and service health.",
+    "Idle guards reduce/detect concurrent accepted-job races; they do not establish a transactional no-interruption guarantee. Stop if post-stop pending-job guard trips.",
+    "A failed installer intentionally retains new pin/evidence while restoring old units; its receipt cannot claim the old runtime is ready.",
+    "No live10day completeness, active-demo attribution, efficacy, incoming Telegram-update transport or production/main-merge claim."
+  ]
+}

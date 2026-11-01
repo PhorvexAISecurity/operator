@@ -1,0 +1,7 @@
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.011s
+
+OK

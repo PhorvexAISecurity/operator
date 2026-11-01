@@ -1,0 +1,25 @@
+4116c23e7b44e804596e7c711f1aa05d5662e896
+Python 3.12.15
+test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject) ... ok
+test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc) ... ok
+test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain) ... ok
+test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants) ... ok
+test_default_empty_additions_preserve_grant_bytes_and_checksum (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_default_empty_additions_preserve_grant_bytes_and_checksum) ... ok
+test_invalid_or_ambiguous_additions_fail_closed (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_invalid_or_ambiguous_additions_fail_closed) ... ok
+test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 6.254s
+
+OK
+test_declarative_endpoint_fields_support_independent_arbitrary_windows (test_selfserve_requests.SelfserveRequestTests.test_declarative_endpoint_fields_support_independent_arbitrary_windows) ... ok
+test_declarative_rejects_unknown_duplicate_and_non_numeric_fields (test_selfserve_requests.SelfserveRequestTests.test_declarative_rejects_unknown_duplicate_and_non_numeric_fields) ... ok
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+test_modified_prose_stays_generic_code_and_never_silently_maps (test_selfserve_requests.SelfserveRequestTests.test_modified_prose_stays_generic_code_and_never_silently_maps) ... ok
+test_original_thirty_day_compatibility_sets_explicit_slo_and_window (test_selfserve_requests.SelfserveRequestTests.test_original_thirty_day_compatibility_sets_explicit_slo_and_window) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.026s
+
+OK

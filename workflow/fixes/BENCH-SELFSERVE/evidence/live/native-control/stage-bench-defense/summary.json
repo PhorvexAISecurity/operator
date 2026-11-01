@@ -1,0 +1,16 @@
+{
+  "schema_version": "math-lab.replay-summary.v1",
+  "replay_git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "replay_brain_image": "notAvailable",
+  "snapshots": 64,
+  "arms": [
+    "baseline"
+  ],
+  "results_by_status": {
+    "OK": 64
+  },
+  "baseline_checked": 64,
+  "baseline_reproduced": 64,
+  "version_mismatch": 0,
+  "decode_failures": 0
+}

@@ -1,0 +1,31 @@
+{
+  "at": "2026-11-01T19:54:18.005819+00:00",
+  "runtime_source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "units": {
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1465133",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1465130",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    }
+  },
+  "free_bytes": 6641176576,
+  "current_symlink": "/home/hami/phorvex-benchmark/releases/20261028-header-reader-54417066",
+  "result": "PASS_OWNED_SERVICES_AND_CAPACITY_NOT_REQUEST_READINESS"
+}

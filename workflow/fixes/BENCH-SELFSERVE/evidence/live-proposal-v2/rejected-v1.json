@@ -1,0 +1,6 @@
+{
+  "proposal": "../live-proposal/operation.json",
+  "actual_failure": "../live/capture-rollout-1.json",
+  "owned_patch_rollback": "../live/capture-proposal-rollback.json",
+  "reason": "Argo CD refuses different revisions of the same Git repository across source/value reference. No source or image change occurred."
+}

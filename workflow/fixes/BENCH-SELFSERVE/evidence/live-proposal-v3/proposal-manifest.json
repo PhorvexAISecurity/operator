@@ -1,0 +1,35 @@
+{
+  "schema": "phorvex-bench.proposal-manifest.v1",
+  "source": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "upstream_main": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "expected_live_source": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+  "files": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/operation.json",
+      "sha256": "953aaa5b421fd298983d0511b020a1f5810e2a7196d64fbccb7e0aed45b55168",
+      "bytes": 1605
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/expected.json",
+      "sha256": "1e91080cbb132bb01043970e342ce46636c2f7ec7a24c3aa5592279de1a70a04",
+      "bytes": 10471
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/templatePatch.yaml.gotmpl",
+      "sha256": "e850f10e50b886915f1437a9f6784fa211af9b395c973fb1b3135be3f35ddb07",
+      "bytes": 745
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v3.py",
+      "sha256": "33b4feabdb79c910afe0e0373522ac54a16fe85c0b553ac666339cd4592916d4",
+      "bytes": 13659
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/current-main-capture-preconditions.json",
+      "sha256": "97bbd72499ea9131f353609495dc1e6ce222ec0e43b7a2d1b2c42d45d11242b2",
+      "bytes": 14516
+    }
+  ],
+  "render_authority": "evidence/peer-review/upstream-bee9/independent-render-control.json",
+  "qualification": "Exact current overlay composition independently rendered; script guards published ref/main and current live identities immediately before mutation."
+}

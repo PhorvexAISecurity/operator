@@ -1,0 +1,1 @@
+{"at": "2026-11-01T17:55:44.404277+00:00", "status": "ROLLED_BACK_OWNED_TEMPLATE_PATCH", "cause": "Argo forbids different revisions of same repository in source/value reference; no workload change observed", "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5", "resourceVersion": "103357605", "generation": 10}

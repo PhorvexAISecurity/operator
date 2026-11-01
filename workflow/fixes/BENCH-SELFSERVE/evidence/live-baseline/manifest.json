@@ -1,0 +1,64 @@
+{
+  "execution_provenance": "SSH jh via existing config/askpass; scripts collect.py, followup.py and registry-and-grant.py fed to remote python3 on stdin. Commands recorded in raw-selected/followup/registry receipts. No credential material or download URL retained.",
+  "files": {
+    "collect.py": {
+      "bytes": 8844,
+      "sha256": "7904c014d73d3626074c96ec993dd758fe5f86a2398a491dcdd9529622cd1e2f"
+    },
+    "findings.json": {
+      "bytes": 14885,
+      "sha256": "b327e975799a6ce9f239f2f24d09b83a470b32b5f3250003b50b59606ef3f35a"
+    },
+    "followup-selected.json": {
+      "bytes": 10344,
+      "sha256": "a25b892017f65658636f977e59d4afac62cb421feaf01d0b972b9a01fd07214b"
+    },
+    "followup.py": {
+      "bytes": 4474,
+      "sha256": "12d9608224a469446b5726d8b6df5d37b6491696fb79cfc8cc5118849013759e"
+    },
+    "last-status-and-grant-history.json": {
+      "bytes": 526,
+      "sha256": "2d67626593444b9b196a7a3a77c3a33e6912d00a9ab491a0ee0ace3aa9761bfb"
+    },
+    "local-extraction-tool.json": {
+      "bytes": 303,
+      "sha256": "647dff5418bace6688e56248959308493cc66339effa85f257b371f584a3bf1f"
+    },
+    "raw-selected.json": {
+      "bytes": 23635,
+      "sha256": "2192bf213d6b74cc5cfe4f8ed20c20be83ae5e0b42ebc62ab882e6bc1459de9f"
+    },
+    "readonly-grant-advisory.json": {
+      "bytes": 1670,
+      "sha256": "831e85a9078c7b594d484febf24edd5e4411c9bbaab2bda8591ccca08a010d30"
+    },
+    "registry-and-grant.json": {
+      "bytes": 1523,
+      "sha256": "df9e0d28e192f75de70a8ee7fc2ac576b631cf51d9b2b92cb075b699c904d5a8"
+    },
+    "registry-and-grant.py": {
+      "bytes": 2813,
+      "sha256": "6bf32ec27d9641b03239d116f5f2cdfdbbdaf964b91c03ef3e7ba1518989efb3"
+    }
+  },
+  "schema": "phorvex-bench.selfserve-baseline-manifest.v1",
+  "scope": "Only workflow/fixes/BENCH-SELFSERVE/evidence/live-baseline written; cluster and runtime unchanged",
+  "source_reference_method": "Exact source_revision Git blobs; independent of concurrent worker edits.",
+  "source_references": {
+    "benchmark/worker/mathlab/binary.py": "b7ee30af90513d38dafe90da4e73dd4773a40c8c9261293f64f85659c0135827",
+    "deploy/argocd/services/applicationset.yaml": "933348ae6c015c24a201391b8fdd7daad6f28dfb5773152253ad7d9a5c36c475",
+    "deploy/charts/phorvex-common/templates/_console-grants.tpl": "0e3320f804e2b6f6869385a8c49fe7299d7d99304ad9ace3ae6a60251e3001a2",
+    "deploy/charts/phorvex-common/templates/_console.tpl": "171dc391ae80e29a5451e3a0ff2246610b0cedc369587c7612c9b987d84e2b85",
+    "deploy/environments/staging/brain.yaml": "2437f9190f3185672ebad275dbc3fc6a751c204e91a00513bc04e9725cfea8d9",
+    "deploy/environments/staging/catalogue-family.yaml": "d420e7ea143226fcbbb6747cc7fc29d0a40cedad2ef19b41d25c851468ac7221",
+    "deploy/environments/staging/console.yaml": "0a1ff53f927cd336c8bfcbb454f02b1c9c3244df2af045d691695de4e8711e7b",
+    "deploy/environments/staging/manager.yaml": "c35a0995e685099fe4bfe5018339cfb4efc2c16678219d80378c21ecc12beb40",
+    "deploy/environments/staging/phorvex.yaml": "9f8bdd265ff4ca2a64e9ed1a2b190c6229d6c1f12b6a02a5bb899a2e36d94255",
+    "phorvex/internal/console/auth_identity.go": "3e3d985f27bb3a4f9a8f808c09cba44e27318e13b3215ba0cdc62a9ac8fafbc7",
+    "phorvex/internal/console/routes.go": "46b3d868f8bc7f7c8e3f09c2750d4cc25a7015cd964024775db898b665721bd0",
+    "phorvex/tools/servicerelease/consumer.go": "e55d7f905fb37c4ee5aa3f792b638cbcce6714c1b668258cd9e3bb59e9bdb03a",
+    "tools/staging_release.py": "9b75b0292dedb4d1fc445fd212fb61a64b7fd71c52ae8ea8a5393792710f1fa3"
+  },
+  "source_revision": "fe6494022a65fcca236e405521685708eb104d9e"
+}

@@ -1,0 +1,11 @@
+{
+  "at": "2026-11-01T18:52:17.982662+00:00",
+  "unit": "phorvex-benchmark-bot.service",
+  "sha256": "a5d38dfa9cf504514b149f8705e90a8f6164c4c14a9e20cb0f4302e665afbbb9",
+  "structural_lines": [
+    "WorkingDirectory=/home/hami/phorvex-benchmark/releases/stage-bot-3e11f4e7/benchmark/bot",
+    "EnvironmentFile=/home/hami/phorvex-benchmark/config/bot.env",
+    "ExecStart=/home/hami/phorvex-benchmark/runtime/python/bin/python -B service.py"
+  ],
+  "private_environment_omitted": true
+}

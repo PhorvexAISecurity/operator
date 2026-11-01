@@ -1,0 +1,16 @@
+{
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:06:59.125323+00:00",
+  "status": "V7_INAPPLICABLE_MAIN_ADVANCED_NOT_APPLIED",
+  "prior_conditional_verdict_sha256": "fddb1ddbe3c1532991e26c3d82e0abbe67e7294a48a15cb32264e8ba13428ac0",
+  "prior_reviewed_main": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "new_main_reported_by_lead": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "basis": "Lead stop message received after conditional guard-bound review sealed. Existing exact main guard must refuse this superseded proposal. No V7 apply authorized against new main.",
+  "acceptance_driver_component_verdict": "PASS_UNCHANGED_REQUESTS_AND_RESTORATION",
+  "driver_sha256": "8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf",
+  "launcher_sha256": "6442b0ca15ae8b79cfde4f836a693417819e5860aaee030aae10b91dc8c09306",
+  "runtime_installed": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "actual_brain": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "driver_conditions": "Actual b1ef native reconciliation/freshscope and qualifiedhistory stillrequired beforelaunch; newcaptureV8 mustbeindependentlyreviewed. All169runtimebytes still225; no restart claim.",
+  "next_step": "Review exact three-path current-closure/upstream source composition, bindnewcommit, thennewV8scopeproposal. PreserveV7historicalreview unchanged."
+}

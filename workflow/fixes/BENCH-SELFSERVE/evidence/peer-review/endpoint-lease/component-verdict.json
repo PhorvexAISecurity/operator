@@ -1,0 +1,102 @@
+{
+  "schema": "phorvex-bench.peer-refresh-lease-component.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:12:47.669655+00:00",
+  "verdict": "PASS_FOR_SOURCE_COMMIT_AND_BOUNDED_RUNTIME_REPLACEMENT_REVIEW",
+  "base": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "source_manifest_sha256": "2ec5900dbac0a810b941d55a54f1948f812c108514c41490bf73ceba088353c6",
+  "runtime_manifest_sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+  "verified_runtime_files": 168,
+  "changed_paths": [
+    {
+      "path": "benchmark/worker/endpoint_refresh.py",
+      "sha256": "cc055cba0eb1ed3982a84b4a8fe35acb4c8c3086133b4db89fe48075486216f6",
+      "bytes": 30441,
+      "before_sha256": "d15b632bb9f7f9eb62b8abd48255c575124c56ed928a4f15e9a38538578747db"
+    },
+    {
+      "path": "benchmark/worker/mathlab/stage_scope.py",
+      "sha256": "47bf61c8e98d128bd4a9778467a41dddf89056d8911a0a24e8c5a2b9148d85ed",
+      "bytes": 19488,
+      "before_sha256": "25a17f34f6bd0bf7cb8f4507bb0cecf980ed8a8463da4579a7401cbd45f0b420"
+    },
+    {
+      "path": "benchmark/worker/test_endpoint_refresh.py",
+      "sha256": "64ce0f0d546b604a3f1768ea0403b02ed02448dcdecd7c8f75392ddffe82d4a3",
+      "bytes": 28038,
+      "before_sha256": "180d8a98ddf472026a69e46b69c61ad3709b5c0947f6e41c881ba6cdaafffc44"
+    }
+  ],
+  "independent_controls": [
+    "Exact4dc separate CLI global EX refusal exit1 after20.567s and per-policy refusal exit1 reproduced before change; stale status and last-good pointer preserved.",
+    "Four new regression tests independently rerun PASS/no skips: actual separate-process global EX20s\u2192structuredBLOCKED/LEASE/STAGE_PIN_LEASE_BUSY/CLI2, accurate wait/elapsed; released real-lock fixture reaches READY64 again.",
+    "No discovery/sync/replay occurs in early lease refusal; invalid requests still reject before status publication.",
+    "Real owner mutex with and without global contention preserves exact owner status/pointer bytes and mtime; independent additional actual CLI owner-contention exits2 without stderr.",
+    "Generic StageError, actual permission exception branch, invalid timeout and wrapper body exception are not reclassified as acquisition contention."
+  ],
+  "static_review": [
+    "StageLeaseBusy is a StageError subtype emitted only after the actual flock deadline. Catch surrounds only ExitStack.enter_context; successful acquisition remains held through refresh.",
+    "Known lease refusal passes existing study/bounds validation and acquires nonblocking policy status mutex before publishing. Occupied mutex returns without writing status or trace.",
+    "Footer extraction preserves prior current-dataset/status behavior; existing broad inner body exception handler is unchanged, not claimed newly narrowed. No observer, policy, chart, capture, bot or replay-pricing behavior changes.",
+    "Existing endpoint service SuccessExitStatus=2 remains unchanged; structured unavailable state is not relabelled READY."
+  ],
+  "limitations": [
+    "First independent regression invocation omitted required executable TMPDIR and failed fixture setup on noexec/tmp; retained separate log. Corrected environment rerun is passing evidence; this is not a product defect.",
+    "READY64 regression uses real journal/cache/normalizer with explicitly scripted replay and cluster transport boundaries. It is not a new real-brain or live-stage result.",
+    "Exact committed-source binding, coherent final preflight, reviewed unit replacement and actual runtime recovery remain separate required evidence."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/source-manifest.json": {
+      "sha256": "2ec5900dbac0a810b941d55a54f1948f812c108514c41490bf73ceba088353c6",
+      "bytes": 1168
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/runtime-source-manifest.json": {
+      "sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+      "bytes": 28890
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/author-evidence.json": {
+      "sha256": "5344202c0e519d5506ee106264a53fe42b4013e9c46cc53f57c9580c5cd5167c",
+      "bytes": 1952
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/lease-repair/author-refresh-tests.txt": {
+      "sha256": "4456e994432e245f93553a5f10c6b7615415e015aa961e48a5c4c7aa15929c56",
+      "bytes": 4234
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/baseline-lock-control.json": {
+      "sha256": "934518c4551b83dea206ddaff6b200c384f7eb4a4a843fd6af317ac6568cee98",
+      "bytes": 1273
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/baseline-lock-control.py": {
+      "sha256": "0ac0266e9932b4b5fa21e73fa51c71b14eb3735003c7ea598cab981457397078",
+      "bytes": 3150
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/global-pin-baseline-stderr.txt": {
+      "sha256": "d37da99ab56c88df26c877c356a00decb3d5432678100be7449108467e686a89",
+      "bytes": 1676
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/policy-status-baseline-stderr.txt": {
+      "sha256": "a4ae91ab75bd0b723b0104050f28b3235ca465489dbcfed410ea1bfce3b8bed8",
+      "bytes": 1360
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/independent-four-tests.txt": {
+      "sha256": "f24d4e52d4709621338e416b365894a521a3642a1239255d5cf2ff8511e85cb9",
+      "bytes": 829
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/independent-four-tests-noexec-setup-error.txt": {
+      "sha256": "3e74b03400f660c16ff891b2a93ca48d1ef55031ffcbe5e1f6bba0061818e482",
+      "bytes": 11029
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/policy-cli-control.py": {
+      "sha256": "e76b1f9a1fefe8b8843b62476d3ad35070eed633d968adfbcbba8fe08e29c9d7",
+      "bytes": 2595
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/policy-cli-control.json": {
+      "sha256": "904da4629e24936496109286874266512cba8b6fb63d73aaea4a47bf5c493834",
+      "bytes": 778
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/endpoint-lease/policy-current-stdout.json": {
+      "sha256": "83c00ad318613f126c698ce0776949f63d64736f1b8f3c84d242f80d85ad114a",
+      "bytes": 727
+    }
+  }
+}

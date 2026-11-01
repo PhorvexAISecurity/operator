@@ -1,0 +1,190 @@
+schema_version: 1
+intake_id: RPT-20261101-173500-bench-selfserve
+kind: INCIDENT
+title: Stage benchmark admission and deployment readiness regression
+state: FILED
+reporter: hamihoriyat
+approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+created_at: '2026-11-01T17:34:17+00:00'
+updated_at: '2026-11-01T18:02:07+00:00'
+pins:
+  source_main_sha: fe6494022a65fcca236e405521685708eb104d9e
+  source_release: null
+  deployed_image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28
+  deployed_digest: sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf
+  deployed_git_sha: 61e83673b8d4f143fca67e17b8a54dc4712f9b28
+  environment: operator-refactored stage namespaces and jh bot
+verification:
+  result: PASS
+  artifact: VERIFICATION.md
+  positive_control: PASS
+dedup:
+  status: reviewed
+  candidates:
+  - issue_id: M-140
+    score: 22
+    overlap:
+    - brain
+    - budget
+    - code
+    - 'false'
+    - has
+    - its
+    - lambda
+    - long
+    - manager
+    - model
+    - must
+    - not
+    - pass
+    - plus
+    - policy
+    - through
+    - was
+    - while
+    title: 'Tenant-state resurrection: a recreated policy inherits the old tenant''s
+      λ, cost model, and belief prior'
+  - issue_id: M-155
+    score: 21
+    overlap:
+    - batch
+    - before
+    - brain
+    - code
+    - demo
+    - failed
+    - failure
+    - its
+    - not
+    - pass
+    - regression
+    - stage
+    - was
+    - while
+    - would
+    title: 'The A05 e2e attack gate is a two-operator race: Phoenix''s SecurityEvent
+      controller can delete the redteam target before the brain''s next tick — the
+      attack DID react, just not in the decision stream, and the gate fails spuriously'
+  - issue_id: M-3
+    score: 19
+    overlap:
+    - active
+    - admission
+    - deployment
+    - dryrun
+    - failure
+    - 'false'
+    - has
+    - installed
+    - lambda
+    - main
+    - must
+    - not
+    - pass
+    - policy
+    - positive
+    - was
+    - while
+    title: No admission control on `PhorvexPolicy` spec values
+  - issue_id: M-116
+    score: 19
+    overlap:
+    - active
+    - actual
+    - admission
+    - calibration
+    - controls
+    - current
+    - failure
+    - 'false'
+    - installed
+    - journal
+    - labelled
+    - model
+    - not
+    - pass
+    - positive
+    - remain
+    - through
+    - was
+    - while
+    title: The guardrail tier false-positives on benign instruction-shaped probes
+  - issue_id: M-144
+    score: 19
+    overlap:
+    - before
+    - budget
+    - cannot
+    - capture
+    - code
+    - disabled
+    - its
+    - lambda
+    - must
+    - not
+    - plus
+    - policy
+    - positive
+    - repeated
+    - requires
+    - was
+    - would
+    title: λ decays to its floor and is structurally trapped there — after a brief
+      seed-decay, the cost stack becomes inert
+  determination: NEW
+  issue_id: null
+  artifact: DEDUP.md
+  human_ruling_ref: null
+promotion:
+  issue_id: M-195
+  fix_id: null
+  approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+roles:
+  human_owner: human-owner
+  investigator: bench-v3-lead
+  coordinator: bench-v3-lead
+next_action:
+  owner: coordinator
+  action: Continue in canonical issue M-195.
+transitions:
+- from: REPORTED
+  to: TRIAGED
+  at: '2026-11-01T17:59:32+00:00'
+  by: bench-v3-lead
+  artifact: REPORT.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: TRIAGED
+  to: VERIFYING
+  at: '2026-11-01T17:59:34+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFYING
+  to: VERIFIED
+  at: '2026-11-01T17:59:35+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: VERIFIED
+  to: DEDUP_REVIEW
+  at: '2026-11-01T17:59:37+00:00'
+  by: bench-v3-lead
+  artifact: VERIFICATION.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DEDUP_REVIEW
+  to: FILED
+  at: '2026-11-01T18:02:07+00:00'
+  by: bench-v3-lead
+  artifact: issues/entries/M-195.md
+  approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  human_ruling_ref: null
+  forced: false
+revision: 4

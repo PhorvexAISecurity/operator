@@ -1,0 +1,9 @@
+477: 2026-11-01T19:00:01.9200752Z stale vendored archive: phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz
+478: 2026-11-01T19:00:01.9217841Z stale vendored archive: deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz
+479: 2026-11-01T19:00:01.9223996Z stale vendored archive: deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz
+480: 2026-11-01T19:00:01.9245009Z stale vendored archive: deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz
+481: 2026-11-01T19:00:01.9262634Z stale vendored archive: deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz
+482: 2026-11-01T19:00:01.9284107Z stale vendored archive: deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz
+483: 2026-11-01T19:00:01.9321310Z stale vendored archive: deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz
+484: 2026-11-01T19:00:01.9361208Z run tools/package-vendored-charts.sh and commit every regenerated archive
+485: 2026-11-01T19:00:01.9493433Z ##[error]Process completed with exit code 1.

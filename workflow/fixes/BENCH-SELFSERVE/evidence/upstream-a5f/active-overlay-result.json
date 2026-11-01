@@ -1,0 +1,25 @@
+{
+  "result": "FAIL",
+  "upstream": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "catalogue_byte_equal_upstream": true,
+  "error": "active identity-sa-rotate catalogue window differs from the exact generated overlay",
+  "generator_command": [
+    "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+    "tools/render_catalogue_staging_values.py",
+    "--profile",
+    "identity-sa-rotate",
+    "--agent-image",
+    "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+  ],
+  "differences": [
+    {
+      "path": "/phorvex/console/attackCatalog/agentAction/image",
+      "actual": "",
+      "expected": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8"
+    }
+  ],
+  "agent_action_enabled": false,
+  "error_sha256": "26f09a3640104e5361fd16fcf432b74481a3f5b858e90d7860d6057780e71923",
+  "source_edits_performed": false,
+  "setup_note": "First diagnostic invocation omitted pinned Python on PATH for nested python3; that invocation raised a dependency subprocess error and is not incident evidence. This run uses exact3.12 PATH."
+}

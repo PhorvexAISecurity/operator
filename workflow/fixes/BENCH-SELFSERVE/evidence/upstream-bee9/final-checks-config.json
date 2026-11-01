@@ -1,0 +1,27 @@
+{
+  "description": "BENCH-SELFSERVE composed bee9\u21920288 exact committed-source preflight then author L1/L2; prior a5d receipts preserved",
+  "source_sha": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "cwd": "/workspace/operator-benchmark-selfserve",
+  "status": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/final-checks-status.json",
+  "log": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/final-checks.log",
+  "env": {},
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "coherent-current-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "author-L1-L2",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-bee9/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ]
+}

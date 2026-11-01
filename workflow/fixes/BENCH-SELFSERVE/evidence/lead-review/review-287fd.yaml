@@ -1,0 +1,8 @@
+checks:
+  incident:
+    artifact: evidence/incident.md
+    command: Review retained independent actual baseline producer and fixed real OS/native/identity controls; verify every committed runtime dependency unchanged from accepted225, with exact3 current upstream blobs and six current renders
+  p3:
+    artifact: evidence/p3/verdict.md
+    result: PASS
+    command: Independently review exact final287fd canonical diff/basebe676; assert169runtime hashes,3upstream blobs, current strict8of8 receipt353824d0,82author controls and actual16check CI mergee2eb6; currentlive acceptance kept separate

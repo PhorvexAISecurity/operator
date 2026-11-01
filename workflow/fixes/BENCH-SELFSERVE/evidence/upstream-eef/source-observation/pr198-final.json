@@ -1,0 +1,16 @@
+{
+  "observed_at": "2026-11-01T21:00:40.538312+00:00",
+  "api_path": "/pulls/198",
+  "data": {
+    "number": 198,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+    "updated_at": "2026-11-01T20:43:23Z",
+    "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+  }
+}

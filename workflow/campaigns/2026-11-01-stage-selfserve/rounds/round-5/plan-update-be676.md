@@ -1,0 +1,3 @@
+# Preregistered currentclosure addendum
+
+Before anyround5mutation: mainadvancedbe676 (PR203/204), so V7 was notapplied. Currentcapture source287fd composes exact3upstream paths; actualbrain/manager remainb1ef. Use independently reviewed V8operation/proposal in fixes/BENCH-SELFSERVE/evidence/live-proposal-v8, preservingexternalgen19structure and latestclosedfamily/grants/images. Cleanupneverreopensoldeefquarantine. Runtime stays225 (all169filesidentical287fd), no restart. H1–H4, exact original10d, fixture600/custom windows, restoredunits,4GiBreserve and23:25UTCceiling unchanged. Acceptance operators remain reviewed8d3c095/6442b0 with unique b1ef-r5 outputs.

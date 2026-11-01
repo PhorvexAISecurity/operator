@@ -1,0 +1,26 @@
+94: 2026-11-01T21:08:53.2707448Z ##[group]Fetching the repository
+95: 2026-11-01T21:08:53.2720482Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +e2eb6cd606bd05651bca4d58cf4e58c2075abe15:refs/remotes/pull/198/merge
+96: 2026-11-01T21:08:56.0149601Z From https://github.com/PhorvexSecurity/operator-refactored
+326: 2026-11-01T21:08:56.1081999Z  * [new tag]           sensor-v0.9.0                            -> sensor-v0.9.0
+327: 2026-11-01T21:08:56.1085099Z  * [new ref]           e2eb6cd606bd05651bca4d58cf4e58c2075abe15 -> pull/198/merge
+328: 2026-11-01T21:08:56.1091335Z ##[endgroup]
+333: 2026-11-01T21:08:56.1108014Z ##[group]Checking out the ref
+334: 2026-11-01T21:08:56.1110300Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/198/merge
+335: 2026-11-01T21:08:56.6244205Z Note: switching to 'refs/remotes/pull/198/merge'.
+336: 2026-11-01T21:08:56.6245198Z 
+353: 2026-11-01T21:08:56.6298829Z ##[endgroup]
+354: 2026-11-01T21:08:56.6369272Z [command]/usr/bin/git log -1 --format=%H
+355: 2026-11-01T21:08:56.6411779Z e2eb6cd606bd05651bca4d58cf4e58c2075abe15
+356: 2026-11-01T21:08:56.6421679Z ##[group]Removing auth
+1566: 2026-11-01T21:12:31.2067652Z test_it_reads_as_the_manager_configures_it (test_service_charts.ActuatorChartTests.test_it_reads_as_the_manager_configures_it) ... ok
+1567: 2026-11-01T21:12:31.2532081Z test_its_defaults_are_the_managers (test_service_charts.ActuatorChartTests.test_its_defaults_are_the_managers) ... ok
+1568: 2026-11-01T21:12:31.3477149Z test_one_replica_runs_hardened (test_service_charts.ActuatorChartTests.test_one_replica_runs_hardened) ... ok
+1574: 2026-11-01T21:12:33.8685223Z test_attack_namespaces_confine_what_the_attacks_service_changes (test_service_charts.AttacksServiceTests.test_attack_namespaces_confine_what_the_attacks_service_changes) ... ok
+1575: 2026-11-01T21:12:33.9320358Z test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers) ... ok
+1576: 2026-11-01T21:12:36.0606910Z test_the_attacks_service_holds_the_grants_the_console_fired_with (test_service_charts.AttacksServiceTests.test_the_attacks_service_holds_the_grants_the_console_fired_with) ... ok
+1589: 2026-11-01T21:12:40.5861911Z test_it_renders_only_where_the_console_is_separate (test_service_charts.ConsoleChartTests.test_it_renders_only_where_the_console_is_separate) ... ok
+1590: 2026-11-01T21:12:40.6594177Z test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... ok
+1591: 2026-11-01T21:12:43.2577726Z test_moving_the_console_changes_no_object (test_service_charts.ConsoleChartTests.test_moving_the_console_changes_no_object) ... ok
+1620: 2026-11-01T21:13:06.8397683Z test_it_reads_as_the_manager_configures_it (test_service_charts.SensorChartTests.test_it_reads_as_the_manager_configures_it) ... ok
+1621: 2026-11-01T21:13:06.8862088Z test_its_defaults_are_the_managers (test_service_charts.SensorChartTests.test_its_defaults_are_the_managers) ... ok
+1622: 2026-11-01T21:13:06.9597054Z test_one_replica_runs_hardened (test_service_charts.SensorChartTests.test_one_replica_runs_hardened) ... ok

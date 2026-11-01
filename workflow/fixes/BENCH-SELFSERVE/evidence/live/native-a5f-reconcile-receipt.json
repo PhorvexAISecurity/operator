@@ -1,0 +1,1853 @@
+{
+  "at": "2026-11-01T20:39:02.972743+00:00",
+  "result": "PASS_NATIVE_BASELINES_NOT_BOT_ACCEPTANCE",
+  "stage_pin": {
+    "brain": {
+      "container": "brain",
+      "deployment": "staging-brain",
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "embedded_version": {
+        "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+        "service": "brain",
+        "version": "0.10.0"
+      },
+      "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "pods": [
+        {
+          "name": "staging-brain-bcdbb8659-6xrzw",
+          "uid": "0d715b88-16d9-42fd-b830-f83de2741e86"
+        }
+      ],
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
+    },
+    "capture": {
+      "cost_evidence": true,
+      "directory": "/var/lib/phorvex/math-lab",
+      "enabled": true,
+      "persistent_claim": "staging-brain-mathlab",
+      "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ]
+    },
+    "console": {
+      "audience": "phorvex-staging-console",
+      "port": 80,
+      "service": "staging-phorvex-console",
+      "service_account": "staging-brain-benchmark"
+    },
+    "identity_binding": "stage-pin.replay.v1",
+    "installed_at": "2026-11-01T20:33:35.976811Z",
+    "kube_context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "manager": {
+      "container": "manager",
+      "deployment": "staging-phorvex",
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "embedded_version": {
+        "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+        "service": "manager",
+        "version": "0.16.0"
+      },
+      "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "image_digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+      "pods": [
+        {
+          "name": "staging-phorvex-854db95fcd-wmtg8",
+          "uid": "700c3487-9ba2-4fdf-880c-c0f0752b40d3"
+        }
+      ],
+      "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
+    },
+    "native_study": {
+      "baseline_evidence": [
+        {
+          "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:1e74f6f51667261436720378f2d634c3b3496ce3a21b13551dfabac5c93a09af.json",
+          "sha256": "8f37033a1cd8626dd1053620a5c5bc5bee434781e9d49e9cf495b1f76ca038b3"
+        },
+        {
+          "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:fa102322f692f7716980d62a852f2072ab0f0c4fe648be7f4b56e6e018456cba.json",
+          "sha256": "6b074ed388dd62f84a3537f5b769bd2477bc512d86fbef5a769b93a2a2388476"
+        }
+      ],
+      "binary_sha256": "ea9fc8f0b2ebcb7dabc6d866ba4b155a4085244da2c301155d5a8a05e8812874",
+      "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "schema": "phorvex-bench.native-study.v1",
+      "source_revision": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+    },
+    "policies": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "generation": 9,
+        "mode": "active",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "demo-api"
+          }
+        },
+        "service_name": "demo-api",
+        "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+        "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "workload_generation": 3,
+        "workload_name": "demo-api",
+        "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b"
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "generation": 1,
+        "mode": "dryRun",
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "stage-bench-api"
+          }
+        },
+        "service_name": "stage-bench-api",
+        "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+        "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "workload_generation": 1,
+        "workload_name": "stage-bench-api",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      }
+    },
+    "replay": {
+      "binary_sha256": "ea9fc8f0b2ebcb7dabc6d866ba4b155a4085244da2c301155d5a8a05e8812874",
+      "brain_image": "notAvailable",
+      "endpoint_study_mode": "PAIRED_BRAIN_REPLAY",
+      "extracted_at": "2026-11-01T20:30:14.887876Z",
+      "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "layer_digest": "sha256:b68b3eb32780dfd7eebfb6dc84ce0c8a259a6d11e7967320d0ac7a08f2b65b82",
+      "overridable_parameters": [
+        "P-FEA-006",
+        "P-FEA-005",
+        "P-OBJ-003"
+      ],
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc/brain-replay",
+      "platform_manifest_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+      "producer": "stage-brain-image",
+      "replay_schema": "math-lab.replay.v1",
+      "schema_version": "math-lab.replay-binary.v1",
+      "snapshot_schema": "math-lab.snapshot.v1",
+      "study_candidates_schema": "math-lab.study-candidates.v1"
+    },
+    "repository": "https://github.com/PhorvexSecurity/operator-refactored.git",
+    "schema": "phorvex-bench.stage-pin.v1",
+    "service_namespace": "phorvex-staging",
+    "study_engine_lane": "native-stage-image"
+  },
+  "reconciliation": {
+    "baseline_ticks": {
+      "phorvex-staging-demo/demo-api-defense": 64,
+      "phorvex-staging-demo/stage-bench-defense": 64
+    },
+    "capacity_after": {
+      "free_bytes": 6276141056,
+      "image_binary_cache_bytes": 158923100,
+      "native_baseline_bytes": 44090292,
+      "reserve_bytes": 4294967296,
+      "snapshot_cache_bytes": 77061273
+    },
+    "capacity_before": {
+      "free_bytes": 6303305728,
+      "image_binary_cache_bytes": 158923100,
+      "native_baseline_bytes": 29398195,
+      "reserve_bytes": 4294967296,
+      "snapshot_cache_bytes": 66956918
+    },
+    "elapsed_seconds": 259.035,
+    "finished_at": "2026-11-01T20:37:40.369981Z",
+    "observed": {
+      "brain": {
+        "container": "brain",
+        "deployment": "staging-brain",
+        "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+        "digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+        "embedded_version": {
+          "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+          "service": "brain",
+          "version": "0.10.0"
+        },
+        "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+        "image_digest": "sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+        "pods": [
+          {
+            "name": "staging-brain-bcdbb8659-6xrzw",
+            "uid": "0d715b88-16d9-42fd-b830-f83de2741e86"
+          }
+        ],
+        "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
+      },
+      "capture": {
+        "cost_evidence": true,
+        "directory": "/var/lib/phorvex/math-lab",
+        "enabled": true,
+        "persistent_claim": "staging-brain-mathlab",
+        "persistent_claim_uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+        "policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ]
+      },
+      "manager": {
+        "container": "manager",
+        "deployment": "staging-phorvex",
+        "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+        "digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+        "embedded_version": {
+          "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+          "service": "manager",
+          "version": "0.16.0"
+        },
+        "git_sha": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+        "image_digest": "sha256:7bc41b7c15df7eca1ea7ad9499ed087ef29e4d30fb89e6db09653eeea7ea1c97",
+        "pods": [
+          {
+            "name": "staging-phorvex-854db95fcd-wmtg8",
+            "uid": "700c3487-9ba2-4fdf-880c-c0f0752b40d3"
+          }
+        ],
+        "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
+      },
+      "policies": {
+        "phorvex-staging-demo/demo-api-defense": {
+          "generation": 9,
+          "mode": "active",
+          "selector": {
+            "matchLabels": {
+              "app.kubernetes.io/name": "demo-api"
+            }
+          },
+          "service_name": "demo-api",
+          "service_uid": "045aabbd-c330-4354-ba63-7b43fd928140",
+          "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+          "workload_generation": 3,
+          "workload_name": "demo-api",
+          "workload_uid": "2d8d5ebe-2ae1-434b-9a96-3d87b63a102b"
+        },
+        "phorvex-staging-demo/stage-bench-defense": {
+          "generation": 1,
+          "mode": "dryRun",
+          "selector": {
+            "matchLabels": {
+              "app.kubernetes.io/name": "stage-bench-api"
+            }
+          },
+          "service_name": "stage-bench-api",
+          "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+          "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+          "workload_generation": 1,
+          "workload_name": "stage-bench-api",
+          "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+        }
+      }
+    },
+    "observer_history": "Existing journals remain source/policy bound; a new source requires its own truthful observation segment. Active demo attribution is not synthesized.",
+    "phase": "COMPLETE",
+    "pin_reused": false,
+    "pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d",
+    "policies": [
+      "phorvex-staging-demo/demo-api-defense",
+      "phorvex-staging-demo/stage-bench-defense"
+    ],
+    "reasons": [],
+    "required_ticks": 64,
+    "retention": "Only ownership-registered same-source working snapshot caches may be pruned under global/policy leases. Native baseline cohorts, pins, reports and journals remain immutable; bounds/free reserve can block later requests and do not prove ten-day capacity.",
+    "schema": "phorvex-bench.reconcile.v1",
+    "source": {
+      "checkout_head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+      "fetched": false,
+      "offline_checkout_trees": [
+        {
+          "blob_count": 4999,
+          "decoded_blob_bytes": 82001803,
+          "materialized_blobs": 0,
+          "offline_objects_complete": true,
+          "source_revision": "ec310e276e45e6a218f7520880e22c6c1c687817",
+          "tree": "b9a0ce8363d60d5d30900853f8c101132e0200c9"
+        },
+        {
+          "blob_count": 5543,
+          "decoded_blob_bytes": 92305334,
+          "materialized_blobs": 0,
+          "offline_objects_complete": true,
+          "source_revision": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+          "tree": "73618ee983963006ddee1998086943a6b2ce6e1b"
+        }
+      ],
+      "source_revision": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+    },
+    "started_at": "2026-11-01T20:33:21.334757Z",
+    "status": "READY",
+    "sync": {
+      "phorvex-staging-demo/demo-api-defense": {
+        "already_held": 0,
+        "byte_limit_reached": false,
+        "corpus": {
+          "bytes": 6692472,
+          "economics_mode": {
+            "fixed-disruption-aversion-v1": 85
+          },
+          "finalized": 85,
+          "first_captured_at": "2026-11-01T20:26:47.179122818Z",
+          "git_sha": {
+            "a5f32f9dba5ed6e756f11b73ece968d54805c3e2": 85
+          },
+          "last_captured_at": "2026-11-01T20:33:54.116376211Z",
+          "parameter_manifest_hash": {
+            "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8": 85
+          },
+          "policy_overrides_hash": {
+            "sha256:9984250bf2371dc8de11789cfbce7fba91c7cf2dea8f1d57473bea36ce99390e": 85
+          },
+          "policy_uid": {
+            "6485e0b3-0f36-4737-b0f5-7e846375da9f": 85
+          },
+          "process_config_hash": {
+            "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010": 85
+          },
+          "snapshots": 85,
+          "with_unreplayable_fields": 0
+        },
+        "deferred_snapshots": 0,
+        "downloaded": 85,
+        "downloaded_bytes": 6692472,
+        "downloaded_digests": [
+          "afff448699292345ba3f775b55c2ecaf03ad4e3f9d9f65a653e1c46b14d17eaf",
+          "9655a6b6dbd2e6185d0246bbb0e3eaa697041463d4e25532fc25ab450bdbf0a7",
+          "941d0331869516c5f4cfe6325a6f665bc336f7a33608225720e9e46c4ce0c4ff",
+          "8a09c720112eeee55f2261a4238f1c7dfcbc1ddda06bcbf1475d95fe978f409f",
+          "93b670baa298fdadcf9ecf2bfd374f2fbd87804ee523521b4ac6583b57bd67a3",
+          "e7c0d0f415085fca706d0d813f032dd6b9420dd76407abc80721dca79560c919",
+          "c35d3b37dc2684dcdd08eebd527f7c0587583bb98c90c8e93d066cb98570d2ab",
+          "53d8e64875e0b27c8d92474f3bc0099e15b7986e25c628abce30add3c3400daf",
+          "46c9f9ba2b0a30c6bc0d2a3dd38a36a4ca85224c491d2adba2d682a556a67a98",
+          "aecf200c8f88b94c7be39017717068d1616e59de8d3f8ad606b3031dfc97b9b7",
+          "a0b695c173653b39a1cd7a6b8ca62f6515552336947bfca88b380c3aed023860",
+          "0fbf47172c0dec4fd6b816cda762df4261862929c42758020e0d8dc9925f24d4",
+          "a800361b6fb1297598fc8dfaa02529f60bf3476986794c8f28bcee6a66a65170",
+          "bebbd67ec0554a53d805886a416c9766340f7981d6869a594b4197cf2d588a0e",
+          "03cd90ce1f48dc4ae280c3c78aa1dbe2e38934a21be1c61a290a0648048b110a",
+          "f3a906a439a86d47ab7327b4d10fd28c4a4f3030a1df1461ddb480d30a144bcf",
+          "57f633fb7a2756f985cf6134bfb0c92947327b050965ded080d118b3848edf86",
+          "77d25ef6c783c0ff37d6ba80d45f7feb16f112a9dd236479483d35476595b912",
+          "3c105f5ac57303f16cefa2858dd1f874f3bcebd556befb27501b0c3d3d35ad67",
+          "b942728994a488a4014860152ccc3d51e2f53f4c7786f5019bbf82d317b68a51",
+          "5b185351c581af9d14c6bd3f5966729310917c939d801590efb6cb6c8f05f6bc",
+          "753b7d7cfb52df1911f2f4ffcc91b9b0d666c591cc48b0d5d19a9e930d12ab73",
+          "3e529d1ea0827b2dabb5c356a5686deac36bd5e88eec8ae16cc1244ea97d36be",
+          "bfebc8d5aa835124b15d7707bd5586c79cbf6905b6eee916d22c426654d1e54a",
+          "bf1278a8960feeec00574362d9aa6ff5b0e08e9c8b68a78b42c739dc30fc34ea",
+          "e7db38e81d08ba321924324c6e6255c8a20be378ebadc083d17ef167e617ac85",
+          "34030c7ff0a1b685eaf95e8007b881e9ca48c90f2f2ec21f43d4ddbc744cc238",
+          "2c9d74a0040c8c45f5e3d1b5256e83a09d836432894c88886c302d420d9db85e",
+          "73df543a811373c06080424b2a1ecb7ed30a76229b44ac7362d7f3624c29321d",
+          "9ce2c18c3366ea3b6b1227b4b6f474e1be4b90e28fd2d8f2281bd406a0f2de19",
+          "399859fa247101ec598d4d63916ae8855e1996a1ccbcad300a641512b90b25a0",
+          "f8f97c712560e99c62a160f28bd2cf87dd734ecf29d8cfee46edecc4b44dffb7",
+          "5f9dd8ea099817044b9b8d82e812153bd35ad993ed09daecd10bc92127337510",
+          "4fda321ae259a394c18c81aa828833ccef6c749c2dc2ee2d0899a56ffca737c7",
+          "b67668914e4c7353eed870b0b46a4e507182cea37599cfbe977e9d8e370a0dde",
+          "771b4b8f0ca4663fd894215249159b234711b302e8073eed9769fe574a46538b",
+          "ac6224f396b42e4c276ea7e43dfb969919693bb7fc228e8b4fbb14e9751e1aff",
+          "de0930402faef37e56538d6bb646f833badbe108d59c796b4d7c0b6fce174e1b",
+          "af46054f43881c2eddf995a0e084889d4623b1be05f899209fe913dd64a97e2d",
+          "dcda09dcdd9f957a950f3484d310922bb106706f184df6d05c7f4c46b4748e78",
+          "5ea73f5f6bd4b0af7ad655632468fdb432da84b9cfd3d9d85a28670012ad2b87",
+          "2638c8bce89e3dd2ebb2ec732a92dbcc7a0d13aee58de47829c93b161eeac85f",
+          "83b05038a683908b0ed8020c4230a0ebabb9c8a92142ea135b2937901a5cb00d",
+          "f55ba9762ae6b3542b41afb8feccb41e8a5526fe4c15ef997cf1c844cd9d8c2e",
+          "a890f336d49143329ef1258bed67dd68288a4e1243b2c0455e9dd9f48ceb6d3e",
+          "d839fffdf8ef15d84cc2e1c167b8457c2a802d4853e9cb0772afa69d87ad9f88",
+          "ec7afb83d6735e4d02ab177eaac4625ffe40d96595b94e1e3d635120a08ddbe0",
+          "ebbdf8ec2e37dd9cf6e6e5209ce5a8cd5c69b0ced3dd7178f29408d7c9c7ba34",
+          "cf38c1189611be40487c20c2d5ad86ceeccaa130de5ef1e363e0771dfb3314b9",
+          "c0f88dd331d0340ab835dec26e4dfe3654fc9e3b2b16117a524b74ea1210cece",
+          "9d9ac57cfdc1078652a4bd1a5ca631caeaac5f6e1f2b873fd087e0fa39a9abfa",
+          "9b7fadda611dcdfac6b0f8b911281edd30651a9a829bf75284122e02cbf6162e",
+          "137796c1783478ac7493a208b03365ea0f177edb05207c8eeb203692375608dd",
+          "6936f333f157bcf4eb2790d13604fe9f1f9296399d61a9687417f60fe2f7861e",
+          "0cbd89e72a055f7ba9c58ac1e9ee721696520912b5485cae9c5d1c3194533f12",
+          "dc46bd9dca36ab8ecb7d1d9e89b3665a95bae4a726bbcf33d204a33ddee38dfd",
+          "76a865c7e98bf3db1f74d2afcf99fb1d64ed340c6157da656d860b443a326ab3",
+          "f0f57e5da725c9796cc0f841da04e236deacc9c5503db61e2b0985e0413bf5ab",
+          "299657504755d6958e239c2719f28c6676c396d6771f2195fe5b0a0859bc9f4d",
+          "0490601d44636ada87861381d97ea6aa9c54ed40267ced56e5ba141c7b5cef5c",
+          "9c9c56beb8750fa0b6e90dd8e9b037c6748b170089164d5b939a6e88590e51dd",
+          "91e9e1152f5232053dc7bf0068c6d992dd8ea461d86066a89910650f05c3b49d",
+          "6ee32befa9aa5ac23e3ff6c7d5552e8d1ad671248b93738c2add6e7a9ecadf69",
+          "12047c17da7434e75b0026d634a254c2aa51ca290d17b37825417a2c0bfa6aa6",
+          "6ba6a78f590fc5df6599e4612a88c750edd581c4da3319e48f59b6b4929abf53",
+          "055226f10fc07fbdd9e2d83575f584516171b255295cb3e63c7fda3c709e8019",
+          "ab1d5ee6cad584fce9cc8d48744af12376502d94ca8930d9b0a7e9c09c002621",
+          "7b9c4eee25ec349b7845d7f6aa08335f80c458e96ce9d3c90e4ceacce939e8e4",
+          "162db3d0413278e2c6d4e4fb827f1b9b5f9373c1fa11ebff3589bb229d4641db",
+          "4a46604bdf21815b3bd2246e9c9e77fb5fe63498a888c49107dc234f0c301b34",
+          "d2b79cdb15a09af3399ffffbba5ef7bcf3b997cb3340f88516794d0a97a8e1c2",
+          "8bc981d3f121b60b52b0ff987aaf4da3f35fc9aa20b6ec8259b9e8683f65dafe",
+          "6b5d6327740d2ce2d34899d4bed153dd991b77de1fe3ac0287aa8f6c1aac521a",
+          "3211d38c869bd2baa37ce078787743ff568132dd0d36af37978fc0d203fecdec",
+          "164c31ecd93e61c202357be00fe8df639eb89c7561e93bea905792b1e2367909",
+          "1705641bc2783b37d75e27058339acc7e4c5caf49e56e95ff0dd720a9133dec8",
+          "dd775ef84e242b86a04ec2a0c3b6dbb8bb5834f6e0bd80853f21af6f4e30eae7",
+          "75967a4b9f2854b81ee52439caca32bcfa9e1df3795da9b63f46548342852f55",
+          "cca1a0a00419dbc7bbbc99928a4bf13cf8b31343d8f8a94ecbb21de8a755c686",
+          "dce9a70e94f24dc46e34880fcfc009b91d7a336014fa74789371954cf398cd09",
+          "a8c0eb8da5bd2705c442c654ccad19b8f3253212b60655f7f55c444d683d5e7b",
+          "9ac8db61e568063d2ef0653f30a06eabe7dbf0f1b6c20969198a3b8cef9bd66e",
+          "e0d6f5bd9e6ba23465bccc93673b6881f9ff37bd69ccc74090093047c2010e43",
+          "a7158901dc618b97a086e7e056cb2245a099a329b5b1b738aa5fac6c7dde3efe",
+          "adc0ad9e41e0e604ee7f6b1283db90adabc9ad82ba76bb269dd1be4182dea3c6"
+        ],
+        "expected_header": {
+          "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+          "captureIdentitySource": "recorder-process",
+          "finalized": true,
+          "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+          "policyGeneration": 9,
+          "policyUID": "6485e0b3-0f36-4737-b0f5-7e846375da9f"
+        },
+        "finished_at": "2026-11-01T20:34:46.986006Z",
+        "index_pages": 1,
+        "index_scanned": 85,
+        "latest_scan_complete": true,
+        "listed": 85,
+        "max_bytes": 33554432,
+        "more_available": false,
+        "namespace": "phorvex-staging-demo",
+        "next_since": null,
+        "pagination_blocked": null,
+        "policy": "demo-api-defense",
+        "recent_inventory": {
+          "index_pages": 1,
+          "index_scanned": 220,
+          "latest_scan_complete": true,
+          "more_available": false,
+          "next_since": null,
+          "pagination_blocked": null,
+          "progress_path": "/home/hami/phorvex-benchmark/stage-data/mathlab/reconcile-inventory/sha256:9fc1e19e05132a6fec7a636edeb9d82a1ec171c54c428a6f16bd9ab68bd510e1.json",
+          "recent_seconds": 3600,
+          "rejected": [
+            {
+              "digest": "73ae2a4f84c394d4c06379bf2a5a1511d707dde262d2c9a2142e470a5b5bd471",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c753fc575377f55a8696d211140fdcef2f2f80ed1741913ba1accb634810c9c2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ec84b40eadb6dcd5d2860665f322b1a97d4d8d4270fbcfe598419cbbb99290c1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2f4407c76cc55eedc69fcef5b63b38f8eb5c393ab134bf379024d414dc8bfd42",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e293985a1199f1fbcdc5223b768ddc1f9d7420e727b87f1e8fa6ea989c3e5fad",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "66ab08849807f63421d83991d0e29ecb4393508b7618815a8a5b2647fe6cbb6b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5cd52fbe28eeda2fdcc7e10035c0919a45877ba3ef410ee661eea1bfd1572331",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9d5738174eb52c8f12249219977ff4f7c17245436ec68834af7c37ab914735ea",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6345c42a758a3cac6381f3ed34b02a28a83f3691c8df6a2b0f723efea9acafd8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dc10ce136c0d8362085aab232f6db878fae4b438cb95ac8ecda868034f53eda9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2c75411ba0d3873c02371c4383d561f1583ef5859f92e8b4d97da9b7c1af41d2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ba449d91df5fae3a50ad1a0390fe25a8c3e8d756e9cdf612ef4ca61432ec43b7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5e6cf4c55de6f902ba40330fa6a935756995feab6c53bad6797811aa5af0a794",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dcdd77ed41737c025382f4c3e4847e1f2a0177b34a678ebb2245e85dc700b84b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "98605c1eb2d808ff35eb08ae7898ed5d04258687a4007108959d95a181dd19c7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e57c7f0e1da03678d7b5f4f3ecd80fbcfeb284b86a0627af4fe29b27c84d52b6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9429d66aabb1e066611986791757e4644eb44ce9bfaa9f056c162f0209c0f51c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b6e6d4e48ad0d7cc8a4915836519f0ff2713c0eb72bb49eda4748bfb5684aea9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4e1eaa7a8d303ad99705063961a97873101fc6b7877b49e71398093d24b196d2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ba3e806e90c3491b92a7464e0fb93d2a61c340c0d5f2e7fde29c3419ba73a2de",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8be1c034d9fc380f508bfc5ac2a04b477aec0dd81df46ca6db45b9cfc5179386",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "549248ed34522d74c687addaffbb47164910efa3179d86657a81cccce240d940",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "cb67eb3dbf0093242edb2e6384e02fc073859897f94fcee31c23983ef4e74297",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dc8722a3e319656f2b20b868bbaa313b31fc92d445733a43df22109426f61bbd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0ddb717aa5089f1667e1e641f6e28742794267070d532224fce989c5fc9fd830",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d532b18d6cf6bed555cf68d30e23d98a0bc5d9d3fd305a3aaf4f2e815720460e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1a5a7024a781cb210ac9d0866946d4883c14fb8dd2a31d15e919e36d365b2110",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "83b926176707bb917f060a121cb7e00f27808a9fa2ea929e11b56035548c8466",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d055a166a9e051ce310d7f8a2a266d51a6511716ece53b64cfa23f9f6a314224",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "db258121415b9f9e654627d2dce4beab8d87c29948659644bb2a886833dfbbb0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0714bc00a843cdb9bd763f038948718419019d41f1d5e990e3ab7a718f3641fb",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9eda0b1018b24f6fa5d482aec1dd01d310c37727e02e7156ab5dd7b0d2e194cf",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "290eeaf3b61dd13d5c0b1c53516daafd0d4d43c6dcf62c9e41ea8a72325ea751",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4e50aef843f4f40ef4efee8e491c786fb0ea7923a6ede416aa90bf35a3ee6c01",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a0e334dde070f354d836c5825d7593fa52d4d3f152c42db654368c64395be053",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a23fd99367a977c34a9fd95efeace0804415036f807c545985b81792ae80ad41",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "675631575b91a795cd61124d58036e5403c1d5ba51054de96ce10316772dfd14",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a9ed0d6e83d0c8f324064c5b68b9244ef7472b0b68d183e4e52742110f5d799f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a2c47ffee27ace26fa1cf4a6285784199a9dcdcdb3fc39cab8cade528e73824d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2c6b0a24cc70a8ce7e7a2cf2271a76e8348987cd6e55a6b1d3f9738ab84dde27",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e3befdb1e95dd375060c6025eda27cb99a271fbda6320d6de46724e1e723f528",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "355582611a948cbd74714a5061fb102bf762ddcb82b1f9a1bffb44087a4986db",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d39b8d54757237ad520fa993e9ebdd6b47ba5a983c2b0325e6a0647a5aef9045",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2dd82c60e3859fa1189bd7d08c679324390a460dd637c44f3eb4c2176ee63d01",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "be345e5ddb42379bf76c4ba5af0da20e70b55cc38db43efb06512038560b97e0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e9c9a346aca4ff6638881fde8e0fcb6c90f07f32396f317c3565f1ec4827a93c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1bb4f738f72ce1ec6a1d5e7391e21c6ec745671203ce711eeb4926f3d54f48e6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9b67b2e1275fa2903be4519d613d69a9e678d75815adedbdcdd22280212df406",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "cf98897c80c715ab97512d1941ae137e3ddc8ad551afddc7eb388092c1170317",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dcb7b27e540370a6e0a57cc1545505635b0a5b922112942ffe9b60698c0689ed",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "330a8acbe7d5c7f638c452af0fce176eb91bb3e9dbae4e6775bc95b01f50e0a6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "22b74dfd9480868d8b864b8d873d366b901f96d2f59898c156bb30be20e218ba",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f263528144dfe88fcdf9c9e4ce04a2384ffe7f1589471a85384901a0f6214841",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "fc5fa113ff8b35de0350516db5748683e6e7766376505de11b0278fbe8c96cda",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6e5bc4f0cbe73804b64b91715cf859d4bc9a77090b167f71c1f2b2a1286c3eba",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d9df694222f63e7ec0224201063b484ddf68dbca0ecab40dd363d902a02a8a61",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8cb845b5d96766bafc1ddc519e1589f486a93bfdb05e986afed2e6f7e5e96e7d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1f6105daab47f4eecdf9790de07aafc3a0b052ba140a6271768292689fbdd5b4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "78abcfa12557dbef8fc46ed71a181b253b603777fb3806d5af3c34e3bede8161",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4f62242d9cd9c059188e336ab1f4ce47efd7534daec33d2e8b8362907a5ff137",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a3b7a9af398db008cd7a449be2d31103a2596cec666ef775dec89346739a791d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "590d90fc09624dea0f44b1d2979fe53a1c1fd747fa10fbe84911513fab86d0ec",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "da85f2d41b783f322cfcec8eebf489b3524567b4d6fd377f11cc699d25209a7d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "59d99ac33bd9326914f32291ee693b40c8c67f3f85d7af7a69a5c3477a0744b9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b0e32ca501bc6323745755b818cd2690debffa592dd842b7349563494f01b081",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ef47e9349e8642799375a996780c5d921adc2aa1586cb92dee3f53a29336e211",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "3ecde6f1dcf055a5ecd73e958c557d3666a29272afcc1d81a399538413e9e86d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c78d053e3669afa9dd5a2183ec385b4441ffd20720e3c32623e89e0d25895c3e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "818f73cd71e37577a3983a8750bbfc85a354bbdb47c79ca777741990e530bffb",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "762f81d9212cf783bc05a91adda7466fa7fed0ebe7a165208c9023069ed04902",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1553d970b3f1b1eba3c08a3cb39ef2bb80ec8fbf3fe30ec621af5ba7dcf6ac33",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "29238d0c92d9d06b286af66a2491209feb38a16ec6a22638b0be8fbf3ba87d36",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1ef5e78f3a6c05fa5ac79027f0942c6714dfc08878f496a29f086098987ce1b7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f1e7e4667df5fc4c2f9f523be49be3b7350e15129c3e288b09bff08c4c9bc1bd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2cd0891e47a948a381e19898fc444ccb87d770b934adf26ac56e8c97cf953c85",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "629a96e603e926832f7b598aecec62954d25dd6a853da991f0e6480784583dc0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c02aea35122a8db500f416b4414a82c80a281554d6b05bade6e64092fb5767b7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1093bf5a89c7dfcead3f2a3f461f144ccb27ff6f77901fa6e5a3f1cd02d92987",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5d33f7caaf34d043986d12626665025b0caa586cb79f73f9901a8ab96f85cf2b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f9f197bc055552b821dd57adc1dda56aead3fd0eefa4d413cf74a4dceb056cb9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "968224dad42145ab1b8f13f0f4fd72430a4a09f7076b613ae2814af4c5d38f66",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5c95b79e75321823094afd2a4b157b0ced4e7612acba34c2e3fc73c25c45c7ff",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "68ed93f1bdc409586f0573233851e27494aa996c4375650401e80bafae731069",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "aa50169a227d7c25441317fa6904cd97c8810b084092dd1cfc1416a948e83896",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "235cb84c55072e95a715d3e50527a8970465e7f1da311714e97cfcf07e44b694",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "70ab20cbdcb20a495bc2248739d48dd723250e28e0246e6149fb2ea7a13fccfe",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "21fcc3c31511517b7abd411cb674fa845d6d4a53a88ac17f90719305b2bd145c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "332760fcd58e1bbc4b213b706f3e3b66f066f5e6f00ec2161bbbf5d24748dbc9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f152d9d2033619f46d76093c18864ab5d37dc6619926b6f1c83ab98cc7e4aac7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "253ee50c22e724f9e1692b19a51e35e7bdefdad6080090dca69714bc144dd722",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a9e11c2e108373530ddb835f42bf06dc8fa892070bdd8c926f0369984c552c49",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "cebf95c3de58125a7b25c41986da8f6786d7ac93e675e02c23eaa14f02df30dd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "be266befbfd6aaf43f83fce1053a0373868919357236eb101cf7464409feac3e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "220b4db82b041e16c455a22b4797e6f4bc9c045477e200fecdac13e5e1d10c04",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "521985eab3cf9cb031784bde70a431675d5ad1293c688f91a0bf2e24e955d861",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f96ac94f977503354121c774a935cc4e11387bf0e8e58a94bf4ed4015c7be0dc",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dba3669852e3ecd8ed2e9c946fa68f416dd7c6afaeac92efe0a5ab1e2070c090",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "51872eef92a86628d0aa092d8a77b91f399709a2888fda738a3e2f90f5b1e79b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2797db9eda0f2f5de68604af9bb1ff1b1317b076119c2d70312f3f78e228128f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "dc58bedfc72c64e0ce83a0c665a6ec3eb448ed0d1747b1de5f497944ad080c76",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7d534e0e481748ca0638bc0e9a8dd07d32a62bc9a74d5ce545cfa018050247b0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2c5a6604173b8e540dc5c35079776c86779deb6b47cb268ddfbda35c02f83b1b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "15242bb47e6e45605eb803bd2530e68d9a121023fb8b50b0b314f0a7cf53bfcb",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "80fec681c76d1e400ad26514c90c9dcf5ee5fee25653ecdc310b50518f264ccf",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5fcbe2527786ff2ef7905a647e40d6b2211817dc36261648094f73159786e4bd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "241c306fee60799b52c10d5485222fc7d2e46c0ebf9db662210ac74740dcfc75",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9121849c15ec33ad774b7ae7e74f7448e5a470fd76642b4e7198fcf53a451db7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "03fcb55b445df773c39c43e2539fade04b6b56d01bdf6289fdf7c7c8e2f00d8b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "3e1d04833350c8aacb29e5a068fa01100f772aca464d6d7a7c4fee1f04d10ab8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "445511dcf8462e32733b7de1c00195d4b390f2fff339393702be7fa0eeed6e5c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0fd529cf94b7c2a041525fbbe4b9310fb7aa514b61412690e0af3f9dc170084c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5d945779f72193873113e9c7a4970af919de7fe2ccaa176420c4017a9232d81f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d2407f84c82b882b74f673976648756573861064598bd2415fe60f5ed25aa5d3",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ae9398d6906e1005ea0ace0124d2928f9ed5f67733e5fe3964d16dd2f739dec6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c0b38f4178e272df4be4cb644be695f1a8007d10003bfd5e1862dac347a568b1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e20447e487715c0cebcd49421d696a4b3734aac7fd0cfdb02c641bedc53adeb8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "cc00ee0d9407b5a87088e22745785f20f3383a6c19556978649e0bbd8731a1f9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a4cf79ab9ccd61e12817fba833fe4c81b4a91cb39e1c575da7654d7900292dd8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c52849096ee43b212ef970b7f479278e2b6502bbcf7a3e27fe7cff35ef421588",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0c2fb83f26f4e73207c7080195cff11f7cf1ce77a1d6581d78f08dd4bbbc8502",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "af12798e4c13fc248ddbd8c222d7af27a429ae56dfc473c87f60932556d6ad77",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1153b90b5fc779f149a0fa9e8ffc76c60beebb62594fa60ef917f776ebc28110",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "045038cf9050869ae596fa811d71d9b1e94109208d14249e0714ef032421c841",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "267445df45fc7f404ea17064e334f7c497bad58f119ded34ba2a3c9cf5cab9a0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d95dc2845060cd6010d8e38b9e24e52a554dfd9251a121878d96a3e9db57d64a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "62a8ccbea2cce122e1835a56550d4be816c004be5f0dbb477381f18e355cf596",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2cc053c5ce3c9017d95cd08d1cd31b86a3faaaa5cbbca10be0f24bbc85e8b72a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c9fabda526805b5b98994ebb07d3c54c821de30a8626ad404822817a9b180508",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "048b8e7996504728710db5ac97b68451b89e48445ce889d9963a69115246ac6f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "40a9359e9bd47b4c3e27ee846919c597d4b085d3de918d683c39d080c7ff8ce7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "870c14a488a8827bdb805645cf3f0297b7ade5a0dc26250194206fcacad6d400",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "758d91c22d859149243cef9168653828a0ea8a37c0433b91ca0951038f775d82",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ab07367aa3b47802149dde6cb38ab954edf2cdc047f6e700aa2e70ae00302232",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a59972cf7682a8649c85ebf2ffcda49ba2506439f2a5e45efa68c69733494571",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c8835ff8716787e1900d89c424c23baf41a7633e9ce6d73564e00f6ad4001068",
+              "reason": "index header differs from pinned stage capture"
+            }
+          ],
+          "retained_headers": 85,
+          "semantics": "Operational latest-tick inventory only; requested study windows and journal history are unchanged.",
+          "since": "2026-11-01T19:33:58.695756Z",
+          "until": "2026-11-01T20:33:58.695756Z"
+        },
+        "rejected": [],
+        "schema_version": "math-lab.sync.v1",
+        "since": "2026-11-01T19:33:58.695756Z",
+        "started_at": "2026-11-01T20:33:59.903244Z",
+        "transferred_bytes": 6692472
+      },
+      "phorvex-staging-demo/stage-bench-defense": {
+        "already_held": 0,
+        "byte_limit_reached": false,
+        "corpus": {
+          "bytes": 8151078,
+          "economics_mode": {
+            "fixed-disruption-aversion-v1": 103
+          },
+          "finalized": 103,
+          "first_captured_at": "2026-11-01T20:26:47.179122818Z",
+          "git_sha": {
+            "a5f32f9dba5ed6e756f11b73ece968d54805c3e2": 103
+          },
+          "last_captured_at": "2026-11-01T20:35:24.755133032Z",
+          "parameter_manifest_hash": {
+            "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8": 103
+          },
+          "policy_overrides_hash": {
+            "sha256:9f683148e03118d1fa46659ed2be7b1455a812d15d93f9562268658bfd25379b": 103
+          },
+          "policy_uid": {
+            "621c056d-ae10-452c-8828-b2dd0bbb5cb3": 103
+          },
+          "process_config_hash": {
+            "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010": 103
+          },
+          "snapshots": 103,
+          "with_unreplayable_fields": 0
+        },
+        "deferred_snapshots": 0,
+        "downloaded": 103,
+        "downloaded_bytes": 8151078,
+        "downloaded_digests": [
+          "c0e63074c14d6e772289b9284d070c795771f8c0ac8dfa95fcff646513e19ec2",
+          "c3495e7edae1fd65a81938b10acf73329b2ab4ec543712a48998e67b0ea80fba",
+          "bfdbaf06b9a35681fc4e79e0fcf4a54d99d4d33ae901362092d22808e4d49056",
+          "0e29ec9622dc71be94920079af5a686a1ddd95ea3413b8b90b00df4e0aef2ec2",
+          "da5aba90906c71dd2f9a6b79eecf38f4f44e6d6a28d114b41a1d4187cf9ee1d6",
+          "87d763ee90ce940cca0fdd1115131d8033c482e132e69d71101406b431a7e1e7",
+          "ecedac7482c322867c3a90c1ef3e9492089c38ab74d94bb6e8ff3797860fa330",
+          "70f38fc5268367fc033bb4f1afd0c5469ea6132d583aa4695689b08421e9680c",
+          "7df524de666253a176884a697f93d6e2a904bb41e786bc33c2e9948474e2162b",
+          "2c4142ca745e1dadbc2b8ccd0c661e930b1fe18bd504d1b4ab6736f195fb3db3",
+          "1eaf5c732a71e1105b9acff982efb17450971451911519ae4a42d52be4938742",
+          "f3f2218f9e5eb4c816d689cbab6ae2c56614e9d4ad2958b4db9eeec5995cf2ed",
+          "e88996965dbc9a75002223f003d192910a2e05f66869101d9e363f95d26af70c",
+          "ffe1ad5175a0cba799e05293eab8ea3cee4e7f74839bee7e358da8820dcce3d7",
+          "7ba46a1de44d3c8664aa153a2ef3e9b68495fc2e74461fd6c22fac272e7cd927",
+          "058a9e6e3a9a46e32fb2170760c24a0809ea627d23b177725b1348a29c1b487d",
+          "f582297ab56a0f5c0dadecc0ff327c38ba280ac89d913c1aaf1ed539b129cd5a",
+          "d05874b19bd1222880c5c0d1f1435c00b7c3e690b08e38131b9a6dfc30b837cc",
+          "bdb7422c439ba559fc3373eb284e5417e088d80a1be93368714f2898390865eb",
+          "b1ca255bfba7bbd36bcd97e391613782c11a8ebf4a859f5a85a22fc82c968486",
+          "f23d82db9dc1e9e9c5b43a4c9ff0e4f9a86cf919f2a788c792ce642ad22eb16c",
+          "770395aa740cc6e3f1c818db3bbc143c987570f107720989e99d2cb787cc074b",
+          "e4b742a0f20824468ae0fcef112166dd9f98f51a8d9e365bb39bcf9ad0382adb",
+          "1fa8aca15a6f4f255d83b458c3fb6876b6df7395b736a938bb34551a57e80ac3",
+          "623aa9469041d038cb897f09b2c9d7d4723e619f7d91f192e6300616e0a81192",
+          "b438dae3dc366374afc00a600741168df2efc0828ceb00b3433185488a8d4235",
+          "074798de9d9559968e58df35dde9e7248e2f3fa5c875bd7c33c9f6e9f1bd7e1e",
+          "b2abc94a4f024b78df97ac7658caddc40a4b11c23f2d638615f3e81a977102d2",
+          "b7a53375f78bc2334d86287386c1268363e26020a19889071d1cc20fcac8c88a",
+          "992d2c8fc725765cd219d852e5d4947522d2a33be574275383fad288d9db98c4",
+          "cfa7ca55e11766341c5fac2c20455c279b50fb1bdd2d2b1957ff197ee8630e0f",
+          "81b90b50246aa1fa545b4bdd3ac1c4c4f0c82dea7cc2966abbbc7214061c9543",
+          "1c4418e7bd55c699661fdc3585f5ee52d2eac0372d6146d397742abdfba5c7aa",
+          "35b8c5cc223043164604d9e1d199434a02868472101458d6e53abe362b41d723",
+          "296d2c1122f44067db15430c93e5aae5062274c93dea7181c7049502be7bc975",
+          "b0d8d2931f22615f9b0e2799f2e6957b1eeba8a39232e1755d18e25ca6d6c383",
+          "ffe247575ccfd7bc39e6085b8e4fd4eb2b51e4e537cad45b9edd0bedd0008063",
+          "1ccb720dfed713e4a1317c775893e2659ee265d185857d41a60bc758165b1b84",
+          "2bda0a93906d69f403410bff53019d51ef48439984d9f49438df55afaf2858cc",
+          "6d92dbaed180a787664d7c262d15197479e34af54fdaad16e56195fa814c8cd4",
+          "a0b7d8c4759d3fd5ad458abfb84f91f664e81b5341b5c9445ff7ebba3d3fac9a",
+          "e053453bd2b2d54350dc450fb70ddf3fea58ba15835cfe151e817f694baf27f7",
+          "ddb8fc3da18fade714e252b1f7c634070b5992761da99f2f4cf345a6d58ff2d4",
+          "2d1e8876eb393d534da41ad659d7b98cdb1b81f4e6c0c0c3fa1f13038ba3c396",
+          "98e12a7e830be6ef85945fa4e12771ff146161f1321d0b593f5f491ccd136b89",
+          "f7bb598601570039a475e6d1aaa3b334d1131066e9cf536f0bb2e15f2e77fe38",
+          "2f005c6c049c5d81fde5698ff7c32cc7c9d0453e180c300a7fb28b4579d0921c",
+          "4f047c1630e91e33c85e244bb8210561d2c9d7155cf6538f6544743f26c3eae3",
+          "9495b2facc9b3a36692f200e0a2504ecdb4ffedb965748c36d6e349878d8172c",
+          "db3a79e401bd7cb5e5806b5822124b52daa156a4edf7415e48e876eba5600907",
+          "6e9a4df2aaeed4701e53bee5c3c60a1c42c8e53ff0fe0dd81189fb3695f2ee39",
+          "49769a212a0d58d2f37b4bbe2b17b4ac29d94064fff21a35fdd5d35e888ea603",
+          "e12c312dd4902c7727cbdcebf06f30351c39549f89af486bbe845bd9d9c860a6",
+          "a93d42e8817192ee9df1048181785c36d2ced7be535f318c1e2ceb7be6567992",
+          "80c8965c5c00f6d9a079f382c9087dfc127a8dbc866b112d31eaf85568d3be01",
+          "6cef1d20dca293bec19e6a77314570db7329d8d8bf817a572b036902a14ad069",
+          "d95faa27c066c6983be3a7e2b4280586bd57a875b7e183e4ccd7b35792905994",
+          "a799a270363cc59a5ce19a1e1ef6f9df4334ca83b28df00a34103ab60a8b375a",
+          "88f2ebe7fc32823cdf9a9830e891ca34e89247af1308db40c08f719185dd91a5",
+          "447be28e41c8fbe9db2b2084350e49ce511863187cc39229fb5be83dcd13d101",
+          "efab491e0f6df6bb780507faa33adb07abe94a37a7179d8043d51dc61dcf1623",
+          "4a15d61981a95d8b2ff23f56b7a87214ff53fa7ede2e78582589e1bdf61e5e8d",
+          "6060afcb4f854de109787273ed8aa3eb537b6647b503899e37951089895114a3",
+          "09df6d2dca7a6ac44caf15897f27974348460f4fe9fbc0974bdc86b7f391104f",
+          "d8cb5d4128d67e2a24305d5be8c6d137c4c9333fcb6663032cb3f90421a4db3e",
+          "fb6e3e7bdea6c2409bd5455fd404eb357b25f5cdd6269e73e5d0ce71346ca1a2",
+          "eae139a4b40005550909cc7d476ed5eac2977d6a467e2471611079da85400597",
+          "8d995cddeb229e6a8a19a63b7da27ecd9b881dab6d3ad805bd1c90f925c3f3dd",
+          "1e0a94ea51df8f7de49f297322c1480897905da057a0572e041225e08af7f82e",
+          "da022b7a6d08f85887a3984b55c6b38690d3df3aeb441c155cab5f577f510df1",
+          "5e114b88f51792246d8b74d4f089031f79d8391f65ccaeea1d41c2569072cc1b",
+          "4604e3ba9e7bffcc13292c63120998697097b74c444f01b779ce8056c08aa795",
+          "dc9aa053daad05a774cab25f3bf83c086b7aa1d2f9e9f3822c03301fee01f3de",
+          "50f1f04ae55f2caf45b798b3781a603313ba75ef8a3c613723499d7bc1b40f84",
+          "b5c773b91a7c006f773a235e6ffed3d85c5a7b09e13eeff555f1b81ed2c131b4",
+          "add2090c6b58ea78138f13fe1e7e0f405933d8a395ba612f6ebb62c663a476fc",
+          "6b9c8cfde64fa385a0aef365e95acd51fd0301c258247841daa2c8d47aa68a9c",
+          "c2946ff759cd556220b5ade954ba456151e969e7092d802377c9465966c9280c",
+          "671ddce280dffecf200ee9e834f419255e8be9f1402ac187c413dd18e2b9ca2a",
+          "49bb1d0301f96126c43b0d8c2233a20d0f516c71ddfd3e199749f55c06e265c5",
+          "46d1408b90c0d8e99b3b9f2d1a7baa859887c10bd1e9bfdc827d8172dd5c2820",
+          "50c0260ede78fe78876dcae4c3a1de3af0ef7d0b1826bf95963c618d8eac9057",
+          "f45955e6217e6477c0e916af055ebd2d274e5a03459179fa13a741ab749548ca",
+          "578da3479fb1ecd640d84f30bb40cd5ebb971a8707064e065572efd1631a5584",
+          "7b520d6271a1c4b1622990a0dfd1776cb5a1bb13a2aed82bd5febb62ff547d20",
+          "43451861f93c9130f5745591280d03883e8d3de7eef8dcd40b7a3b4ef8a9ce60",
+          "d4ec41197d8372ca1b24932a11d7be34acbe90544a4902b0b6d537a0b6dffcd4",
+          "1e49a076fd9d8b5a49ddeea503957a8e93b89f61ff4f0d6ed44c46dc4e6c88e5",
+          "ea19e71a8363ec7d01145e5b6198d8059cb16ccbb1edf75739818ef632444ec3",
+          "d33a36fcf41615463810eef25c922d9390ba11c5978006717be7a76270e39c8b",
+          "48c55ddbde5c97e22cdc3190172aac8e039d7962a2a5187eac03e84d0beb3bf9",
+          "0f0009d07cb0dea2063820dd8549f9b6659049465a4598175c34d372bf6080c3",
+          "111a2a024cf75b0852b527595bc219111fdc8ca452b2dc0b3b56dd748543ad28",
+          "bbd9b810f07d06049b74ffdce5d9649dce4903240358795d01d0d10047a0819f",
+          "0231d2418bc9a4398591c05a7a2d69c4cfcf84e0116fba1a9e7a4173bf418967",
+          "c928469e0e038a507801f3a0d298272812f5b2fd1bb89a88af7894029d1ea02f",
+          "6547e545e353a3f37a26b106f7bd4e9c3e5ac85c77e0534658ca6c0492731d13",
+          "6547eb6b6c14c76bbcee3a388c63bfbbfdd58949c18eee20602212567e15a74a",
+          "9eb004b38950ec1f0cb073cfbd81468ada943bc8019d5173ed2b5f854a2ea9fb",
+          "2aaa778feb98dad03bf7931bed7ee262290cbff5e1ed69dfcb74289e1a0f8165",
+          "8a65efe9f3f316e3d68a879d5d5e360b8daf38eeb14b976c0b7a7dd4a34e59dd",
+          "d61eb1de49a968245f41e12b1e73dd86d17923da7ff23216136fadd469ab1876",
+          "8cb400280693293933a427ca0c5a292841340055e541fc9834d7ed7b71afa256"
+        ],
+        "expected_header": {
+          "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2@sha256:07c4c9942c898025fc5db03cd71810d67f989025346860ec4054f02487b794fc",
+          "captureIdentitySource": "recorder-process",
+          "finalized": true,
+          "gitSHA": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+          "policyGeneration": 1,
+          "policyUID": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+        },
+        "finished_at": "2026-11-01T20:36:26.035408Z",
+        "index_pages": 1,
+        "index_scanned": 103,
+        "latest_scan_complete": true,
+        "listed": 103,
+        "max_bytes": 33554432,
+        "more_available": false,
+        "namespace": "phorvex-staging-demo",
+        "next_since": null,
+        "pagination_blocked": null,
+        "policy": "stage-bench-defense",
+        "recent_inventory": {
+          "index_pages": 1,
+          "index_scanned": 237,
+          "latest_scan_complete": true,
+          "more_available": false,
+          "next_since": null,
+          "pagination_blocked": null,
+          "progress_path": "/home/hami/phorvex-benchmark/stage-data/mathlab/reconcile-inventory/sha256:83acc273e7defaeb2da0ff23b573103b1a8ebb0b1e2e154ebf80b3beb156aa8d.json",
+          "recent_seconds": 3600,
+          "rejected": [
+            {
+              "digest": "fde3091419a06f2726893a53fc3b9434c4801c438c0785fd165b7f816472475b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e8aecb56b6f8fa58de773ac47da190e922f7530a96d104a896b2a7c250ffacfd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "254c0f0455cf4f465efbdd3e5cef5e02e58434ba0dea59b3dbeef697642631d8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7862fc8f7c464e7c1b1a9fe2b4e46296b4c6c060b4dc56a684b7be7b7dec6dd7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "881da07afd857b18ce44d56386fd3d9bf28a9ea153a830c4ff1ad3e76c2b1df4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7f106b9f8a456c3e63cb1419d1586971a04b6d3ad76e1de6a81efa8d05c98d18",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1d21c861f0717b484babff105f9907b66422d06ea152a358acfddb238972b17f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "eec9987e74031a0567520b57f12e9f8034979dd36ad9115ab371739cbcefb591",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ec734460dba7cf3489f471485509568a5c79271c0f3d514114275bd7c82053b3",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1fe05cd704a392e176df9e810cfafc2e987b269f4fe5e6c77e251135329199db",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2e115f81522f0a6ff2ab56bdd8fdb29f557a8dce48549539c186fde8078f5f7e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "51f8ff995501ef4b8ebc1967be8311d8e9deeae5de571886de2accc03e25f4dd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2e0a858b8c4f338b46f91db59e494dd6bf23477045eb22edf476b36b80e3d6de",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d2777e4182e97656c8bb4f26cd16ca995e18dff876bb65fbc75fc88e92acc1e6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "bc46a7df127bb6453c1f3ff9a62d85c91048c0a6bffa0bfae9648fa5fdacc7a7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e340bca344346a9c8a94f25765b72cafd8fd6ee2eafc3e6b5e9e0dd3b317d245",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "235939f90c502657aaf671ad5fcca3317b889583cf16ff077efb42f3593bd049",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9f3fd8d029b91047d10ecc802df6acae20255c130658cb5bd394d81d45eaf731",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "be1162164bb2f8b76ee6f21f5bc98a4fa43b898c772dad34664db1a8b8d64ddc",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "66a3a33b1005ead1a329c8f227c82918d7d2be3a750a3305e1c52c07fec5a7bd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "191dc7c5ad39628a62ba34ce17aef498b455a85fdc0bc50489f763afb01032ae",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "70873ec8ea620c0e9252395152d022e225cb1f4ebcbafc117a21915c82146050",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b0cebe3dc66a62bdf08e4da18aa488eea19b5ccf6922d78b09e071efe8897f26",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5d1192637b7b34cb0cc65602d3d1b905273e85acd6fb7136a423077fa1f4fc56",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5eb3beefd5049d4341e73db8e46add36b95013d3111b2cc32b1f6a7581be70dd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c4f3f41c0f5424614532af2a03c4f5c5f87057756fea38de91529134844cb810",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "24f681e97a14216191c653d290dc30beca31a85ee9fc4143b5b521d4973de69e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4d9775beb5f333ce0ea1f6ca650e94eb3b9bd770afd7e697d01a449813636e5f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0fe941f2b1902c60a1c62e2283cacc7f9e9388bb26e922e0207608e1a7191849",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "3c96f26e7f63182e3b79de756a95c93df7782b55c7162215c8fe0d91eb298382",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ad032970197ab0fd77778f68687f020e9b463ed32604a75a62b09756d36a33d6",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "85d77ce2f4b4f81fb3a4ac4887e7f5cd52e30474cc0deb4d76bd187ea9fcdfbd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c0c9cc75d98f18d35776ed20f5fb5eb03f82232c6bcfc9387633f66e170970a2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "3df84145c968aa7acace8decae6b9c99952e54e250cd2e3d4d75f5681f331d13",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0b354178756701a85ebb6c7ffd53d36baff1fbbfa0865f57484d8f471f8d4f8f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0bbb7bd824495f42ead28e0a95d11d797a99c87d20b596815dcbec267d5e020a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ff6fe5b9c2a0cb23fffeb6dcce38ac22e1d0b96a9ff5a5688011fc412abfe74a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "fb59dffd406d661ca9f5cae6e4c5f6888beb79b0daa75f42773d970eb32c5a6c",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "05e6536e27c80274ae70add36cc3b63077f152022a3dd34d09a90dca5c5ba5e2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d8d5a968a859807ad83f369a8e0476fc2514fefed03efc5180f2ca494223b670",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ca522503d445911a72d2bd356457f2cc2a47efd5d8ed87686ed295d0398b60fb",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9dd898f7c4b7821f1245d2b687f4ddcf79cbf68c3bf20731f5be7ef6dad687d8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1a1463289da79dadd395444c2b8941834a2ce094a70a380deec06dd063a815ee",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "93aa84c5e577ff78490a314b2c62fc0e6efb69fc297782b07400b211edc6cda4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4af4d80f0a80d1e1c024bdbe937182a0635161bfa6beb3cd885582bdda624b68",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "05fe8b25381d267f6f0dd6c7ae4e6ae5c4043598e1f5268fb45eef601058131b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "881aa66fe1c77d144657aab2931e500c7caafb9dd51e9ce3aeb406552c1131ca",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7d4ef82090feaa34db833d354d942736887afc62bbe822289036955aa6d9d704",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8faf45e7238814eabb9fe345e4321cf666389df1339c6513619b7a83387ba8e4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "c32f266440969b7bb0339c64cdef54871d1e4db0ee8480933ebb69ee85686b47",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "81cad4923b1463e8b123b0c04e403de561e56981c49194ab6092adbd6cf3eb23",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4c710318df4e072d1e8f901d272be6135dca8dd62990a1e0981c720bd607423e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4f47544b797b9342390bb68fb82e298859907497ad888809738114cd07b9a387",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b8e3a6549c76784c681ccd314cc5b57d1bfc75fa48b9bba95d7085713e020332",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "fd8866ddc606d793c84e1695f89be1b6ab3314f3040652a07379b2838f565339",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a22549de9ee58639aaebd6d3f38221b449c0de9dd82d69eb841425618af35869",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "722a64c237e13df02c78bd3ea96f891f3e79b277ce2cab711c11cec3280a0810",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "86708eab8b000bdfc97978f67c8ae710fbf2ef7b7bd1e73a46544649410e7cc4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6400aa8f67e23586e6bd80d19a569bbb838fffee068f7deebf0b71d3574230d1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "86feae15f6391f94d134b006590937d79167da112dc658ff18292469480330d2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "959cbf4e14226304ceb0d9ab15df5e98ad4c2acfdea77cdb4d2cccfa3f9715b3",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ef465b970fd277b82525201944f9f8b544bef5926a1b6b1ad426e08393c3062d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f0b58c91cc1f046fd2450fabf41e1c71ed167035b4d0ca5f51f28bcf6edb0314",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1d40a344c756b90e73a925376b37ce166f61a493b989b92e9ea1398a44c55f59",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ca91cc44f2b53e3a953b0f6ab7619988cd5dedf1fa3577499839c7d9663c8e06",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4b9ddb483a141ead861f1b26ca3f65dbbcae3dd4627c06133bb6dd3731482a97",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "001daccbc48816c3e44663e1c49f0e21979eef04a8dff42f40e61b05a9f337ef",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e966b1673553000def219f1e9babe5ab70e6badb307df3cb7c5927c16923b0d5",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "89b7e47ccb303c3012d313c9d56accbd1b177e49da1c6e4c5ded2c4b26311866",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "9da37d5967b4a0a0ee3365fd5d693d8c6855503d6dca692cc0e97c13e868ffbc",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ad220bf8315568259af69cb9e39f56dbede42ebf6f0ef8d323ba59b9657eb57d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d7ac4786a2a627f1c7933e12a14a4ee69f6d65fb2fd679b4b87b86ac56fbe893",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "86bed77052f21e324a790c12afd53f6cd7d9251712fc95e87e2a93a3a98f1840",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e1ac9509a3dbe349990156d498c224b1f955f503c77a46b19b8e24aa550ac000",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "ff19b64f6d04cb4f201708bc247b1a4a4ec7f22158f63f0cead1ed65f479f52a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e807befb3b1d2c78e9c0ec797368f0d7bfe0e7771d141386da105f09bf2fa9fe",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "18a39c3d2dbb70d4402034fd743d25efd035da6b2af6fe3e2964276684ed2856",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e61e3c8d2070325737b8aed031f0448b234fc4fefc4192e118b25749156379c1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d40d4fd11051c7f30454faf5415167fe6827a1bd80f840437d7831ee934bd305",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6c3767a95595b388f80d32c62247950a12196370256224082c46ba46af340c66",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "4d6b299607061f2c8aa4d2a6c819101ff41c5f8eecbf1340c341cc243421c8e8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5758d597259e7f7895ab0a5635cee5f31ff9ea7e29a0e15f951b26ae0dc5f3e2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "48623c76416018fea03d15ab13bab864e580b9ba03d04ce45b4597b9b96ed090",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "01a51f8a2b34053663b77fb744cc98b626c59b4e798ba0831752df045b2803fd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1903f1549fc9571cdc13272e6f7bcc3f4c4ce992c1786d31e9f67c7850637f55",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6bbb42a4c0890ee9f8bf6af48f2da16a492da17e45cbb2bcd57cc104ffaca820",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "fbda016011a7eaf30f6935670b390351d83528689b3816c03d6f11af4aa6d39d",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b1cb9c2ca582f27ec8ab00f5ae462fe0fff91e81b346300cd0b947e3b25669fc",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "885c0c7e5cb17027cc8f061f15edbdcc10f0a020fca2a4e744dbd8010d6c0cdd",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a0e9c3c03503ba84892313f67b816fa8bfeee048a49b06a5a5b4c3bf1e5aa1a0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8fb439d67bb5312abccf0d37f9a1913d989451073f402d4fec7cd9432b7d5aa2",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2aaf9cee92b6af57771b94896695b767b51a9a47c84b736ee10b3a25e22693c0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "a554451f0083c98429ccd7bfae7bbf7d8db965738ca5b3f9eef8b8851f6c2951",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5801b0e25d26a83494534369310bae964be307e8519e6ec6b7e1e3db68b58052",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "23a92a8351ad46423c42944225efade8ba0d0dab197ece1cbb4da9118404773e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "19dc019010621ab9fc5d782c8647d81f613427fbf4cd3c2d4e72eaa00d4a0fab",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b238e13519446d14b308d0f467415cdcb5b8cfe2b682be7791a437cd7ca5be05",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6f9bbc10af808e1dc4495c74d37ae29db0fd4e87c9517bb828fec6d4503ccdf1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6c8c590509919df3c74e56cbfa788fc16fff000c32274086599b54bd5ecbfa7f",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7f4aa0351edf0b421d37356472a359306ad06e4749d516beb9898e975df5bb07",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "2d2b76c9606b4dd5b5d14b3f17e30e72ef9f0b92c2345b71ea684c81109d0faa",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1703d361d48b333a64d93b2f5928fc48f694528d0d997b4dd80b5475becab975",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f60ed894a95ef8f05a98a5eefa06284660dcb9c313197cfaf75ace3ce02442e4",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8911bb27825f5ee4b63bdea80febacc9dbe36e1edb43eabdd4943042276e6166",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "0e51584e77ad3055789c6e0266404750ed0c8d38e5ed4f10d73a00f89d0c78bb",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f4023be756388686bde181ee75150f94daf797d24aeb2baea2972984fc5f21b7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "364acb873d351f3052c82d95688ba82506d878d54b2643c09d6b6f0fbc6fb6ee",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f88593fd7b6b15eb5c9c596445380bc6568d9632458509c09f129c1951d71c87",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e8af81e59531e9a2fd0bab702ce0215eaa6bd7662afae32ff608662552004f81",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7b11b9be6ed5eab354782c88b1432f25e65d22184c8d90160a243d42a3116ae1",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b8ec65146454ee835f8f93e1fc05fdf3ff7139e01ab92a4789f4237ce381f9e0",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d2fac64541bf975f2c05c6d1c185efe6168fe79c58eacb5c398eb1b11e16b774",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "02781316605df631a43255025f75af4a8898ed02c34cba5326c4a5d59fac270e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "71ce0a8699f393ccf2185f45f126275fe769de2a81a4f59c9a02bfe66cc7ead7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "04f626de774381c108603d9f04ef418d18e9611b369c9d110235f58e837610c8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f23c4e25a705909af89e598ece7b215c16484404dc896a3ebce88b6785428115",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "94d63e633dd55daca79d48114bf9468d7db750fb21797069c1d8dcc4343ea206",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "81b2b7f1adc583e2e5182875aaf3c5001f1e1df383f1fa6bc43bf743f0863ac8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "5d2cfe4cbbd6e8ca2ec99f2d260e1673a14d88b7973bb2b701ff69c10bdb7b0a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "da56268f4b8de32d2b6f19d0b7991c749e4947b308412f00cc64789873e1b8d9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b1b067c159a5e11569aa048afb0e67ad904ef332e27e763e7f53040e070d7b7a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "038af0c3c2b603565a6cc48d75061d9a8e82aad029cdf6c3b1b58a83b67f30df",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "6c02dfa72a93231526655db8dd624461d78d5eaebecbef9be5edde6a0bfc4c5a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "78669881d663999fed22d1cca7c68b6b050401ffc6c64f2674f6319250f9f3c9",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e98f418cf3e366a9b88c7a8df7ddf1bd64a936a4f077a1f14267bf6f29ed668b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "04de81d51ba6fa41186dc08d71e662e47084c41dd5c3c4ee715c312fdd3a117b",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "e0e707d8c605afc91ea5a0ea59b08f16da4eba7cc3538b5ceb87455ade87715e",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "1aa46ae65d5a7fe9a9dd992fad6b2226758a7d254169206c59499eb4828da9d7",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "b9c00e0bfca38689f8bde2a478a02df720df7a56102aa5f57a1e0129fd8bccc8",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "8f4244d901ba97766a1edb2a6502af4c281ebcf976c100d5cf2d10ce3f0990e5",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "d0b0aa305f3ab6d8fe34f04c1c2f21ef47886fd38b04e859877e179c8a9e68ed",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "7beff87a21ce3f58d4642236c48bbf14ea887e63b7216a8409a0d5e7dc53d2a5",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "625f6b96b821468e487a6a911fcb57494cf2d72a2010c73a0a9a98c8622fdd3a",
+              "reason": "index header differs from pinned stage capture"
+            },
+            {
+              "digest": "f2130eb08a196d2606280b740b7b34f50ae705167302435b841be496308c019b",
+              "reason": "index header differs from pinned stage capture"
+            }
+          ],
+          "retained_headers": 103,
+          "semantics": "Operational latest-tick inventory only; requested study windows and journal history are unchanged.",
+          "since": "2026-11-01T19:35:28.517678Z",
+          "until": "2026-11-01T20:35:28.517678Z"
+        },
+        "rejected": [],
+        "schema_version": "math-lab.sync.v1",
+        "since": "2026-11-01T19:35:28.517678Z",
+        "started_at": "2026-11-01T20:35:29.638763Z",
+        "transferred_bytes": 8151078
+      }
+    }
+  },
+  "baselines": [
+    {
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:1e74f6f51667261436720378f2d634c3b3496ce3a21b13551dfabac5c93a09af.json",
+      "sha256": "8f37033a1cd8626dd1053620a5c5bc5bee434781e9d49e9cf495b1f76ca038b3",
+      "policy": "phorvex-staging-demo/demo-api-defense",
+      "ticks": 64,
+      "binary_sha256": "ea9fc8f0b2ebcb7dabc6d866ba4b155a4085244da2c301155d5a8a05e8812874",
+      "snapshot_digests": [
+        "12047c17da7434e75b0026d634a254c2aa51ca290d17b37825417a2c0bfa6aa6",
+        "6ee32befa9aa5ac23e3ff6c7d5552e8d1ad671248b93738c2add6e7a9ecadf69",
+        "91e9e1152f5232053dc7bf0068c6d992dd8ea461d86066a89910650f05c3b49d",
+        "9c9c56beb8750fa0b6e90dd8e9b037c6748b170089164d5b939a6e88590e51dd",
+        "0490601d44636ada87861381d97ea6aa9c54ed40267ced56e5ba141c7b5cef5c",
+        "299657504755d6958e239c2719f28c6676c396d6771f2195fe5b0a0859bc9f4d",
+        "f0f57e5da725c9796cc0f841da04e236deacc9c5503db61e2b0985e0413bf5ab",
+        "76a865c7e98bf3db1f74d2afcf99fb1d64ed340c6157da656d860b443a326ab3",
+        "dc46bd9dca36ab8ecb7d1d9e89b3665a95bae4a726bbcf33d204a33ddee38dfd",
+        "0cbd89e72a055f7ba9c58ac1e9ee721696520912b5485cae9c5d1c3194533f12",
+        "6936f333f157bcf4eb2790d13604fe9f1f9296399d61a9687417f60fe2f7861e",
+        "137796c1783478ac7493a208b03365ea0f177edb05207c8eeb203692375608dd",
+        "9b7fadda611dcdfac6b0f8b911281edd30651a9a829bf75284122e02cbf6162e",
+        "9d9ac57cfdc1078652a4bd1a5ca631caeaac5f6e1f2b873fd087e0fa39a9abfa",
+        "c0f88dd331d0340ab835dec26e4dfe3654fc9e3b2b16117a524b74ea1210cece",
+        "cf38c1189611be40487c20c2d5ad86ceeccaa130de5ef1e363e0771dfb3314b9",
+        "ebbdf8ec2e37dd9cf6e6e5209ce5a8cd5c69b0ced3dd7178f29408d7c9c7ba34",
+        "ec7afb83d6735e4d02ab177eaac4625ffe40d96595b94e1e3d635120a08ddbe0",
+        "d839fffdf8ef15d84cc2e1c167b8457c2a802d4853e9cb0772afa69d87ad9f88",
+        "a890f336d49143329ef1258bed67dd68288a4e1243b2c0455e9dd9f48ceb6d3e",
+        "f55ba9762ae6b3542b41afb8feccb41e8a5526fe4c15ef997cf1c844cd9d8c2e",
+        "83b05038a683908b0ed8020c4230a0ebabb9c8a92142ea135b2937901a5cb00d",
+        "2638c8bce89e3dd2ebb2ec732a92dbcc7a0d13aee58de47829c93b161eeac85f",
+        "5ea73f5f6bd4b0af7ad655632468fdb432da84b9cfd3d9d85a28670012ad2b87",
+        "dcda09dcdd9f957a950f3484d310922bb106706f184df6d05c7f4c46b4748e78",
+        "af46054f43881c2eddf995a0e084889d4623b1be05f899209fe913dd64a97e2d",
+        "de0930402faef37e56538d6bb646f833badbe108d59c796b4d7c0b6fce174e1b",
+        "ac6224f396b42e4c276ea7e43dfb969919693bb7fc228e8b4fbb14e9751e1aff",
+        "771b4b8f0ca4663fd894215249159b234711b302e8073eed9769fe574a46538b",
+        "b67668914e4c7353eed870b0b46a4e507182cea37599cfbe977e9d8e370a0dde",
+        "4fda321ae259a394c18c81aa828833ccef6c749c2dc2ee2d0899a56ffca737c7",
+        "5f9dd8ea099817044b9b8d82e812153bd35ad993ed09daecd10bc92127337510",
+        "f8f97c712560e99c62a160f28bd2cf87dd734ecf29d8cfee46edecc4b44dffb7",
+        "399859fa247101ec598d4d63916ae8855e1996a1ccbcad300a641512b90b25a0",
+        "9ce2c18c3366ea3b6b1227b4b6f474e1be4b90e28fd2d8f2281bd406a0f2de19",
+        "73df543a811373c06080424b2a1ecb7ed30a76229b44ac7362d7f3624c29321d",
+        "2c9d74a0040c8c45f5e3d1b5256e83a09d836432894c88886c302d420d9db85e",
+        "34030c7ff0a1b685eaf95e8007b881e9ca48c90f2f2ec21f43d4ddbc744cc238",
+        "e7db38e81d08ba321924324c6e6255c8a20be378ebadc083d17ef167e617ac85",
+        "bf1278a8960feeec00574362d9aa6ff5b0e08e9c8b68a78b42c739dc30fc34ea",
+        "bfebc8d5aa835124b15d7707bd5586c79cbf6905b6eee916d22c426654d1e54a",
+        "3e529d1ea0827b2dabb5c356a5686deac36bd5e88eec8ae16cc1244ea97d36be",
+        "753b7d7cfb52df1911f2f4ffcc91b9b0d666c591cc48b0d5d19a9e930d12ab73",
+        "5b185351c581af9d14c6bd3f5966729310917c939d801590efb6cb6c8f05f6bc",
+        "b942728994a488a4014860152ccc3d51e2f53f4c7786f5019bbf82d317b68a51",
+        "3c105f5ac57303f16cefa2858dd1f874f3bcebd556befb27501b0c3d3d35ad67",
+        "77d25ef6c783c0ff37d6ba80d45f7feb16f112a9dd236479483d35476595b912",
+        "57f633fb7a2756f985cf6134bfb0c92947327b050965ded080d118b3848edf86",
+        "f3a906a439a86d47ab7327b4d10fd28c4a4f3030a1df1461ddb480d30a144bcf",
+        "03cd90ce1f48dc4ae280c3c78aa1dbe2e38934a21be1c61a290a0648048b110a",
+        "bebbd67ec0554a53d805886a416c9766340f7981d6869a594b4197cf2d588a0e",
+        "a800361b6fb1297598fc8dfaa02529f60bf3476986794c8f28bcee6a66a65170",
+        "0fbf47172c0dec4fd6b816cda762df4261862929c42758020e0d8dc9925f24d4",
+        "a0b695c173653b39a1cd7a6b8ca62f6515552336947bfca88b380c3aed023860",
+        "aecf200c8f88b94c7be39017717068d1616e59de8d3f8ad606b3031dfc97b9b7",
+        "46c9f9ba2b0a30c6bc0d2a3dd38a36a4ca85224c491d2adba2d682a556a67a98",
+        "53d8e64875e0b27c8d92474f3bc0099e15b7986e25c628abce30add3c3400daf",
+        "c35d3b37dc2684dcdd08eebd527f7c0587583bb98c90c8e93d066cb98570d2ab",
+        "e7c0d0f415085fca706d0d813f032dd6b9420dd76407abc80721dca79560c919",
+        "93b670baa298fdadcf9ecf2bfd374f2fbd87804ee523521b4ac6583b57bd67a3",
+        "8a09c720112eeee55f2261a4238f1c7dfcbc1ddda06bcbf1475d95fe978f409f",
+        "941d0331869516c5f4cfe6325a6f665bc336f7a33608225720e9e46c4ce0c4ff",
+        "9655a6b6dbd2e6185d0246bbb0e3eaa697041463d4e25532fc25ab450bdbf0a7",
+        "afff448699292345ba3f775b55c2ecaf03ad4e3f9d9f65a653e1c46b14d17eaf"
+      ]
+    },
+    {
+      "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/native-baselines/sha256:fa102322f692f7716980d62a852f2072ab0f0c4fe648be7f4b56e6e018456cba.json",
+      "sha256": "6b074ed388dd62f84a3537f5b769bd2477bc512d86fbef5a769b93a2a2388476",
+      "policy": "phorvex-staging-demo/stage-bench-defense",
+      "ticks": 64,
+      "binary_sha256": "ea9fc8f0b2ebcb7dabc6d866ba4b155a4085244da2c301155d5a8a05e8812874",
+      "snapshot_digests": [
+        "09df6d2dca7a6ac44caf15897f27974348460f4fe9fbc0974bdc86b7f391104f",
+        "6060afcb4f854de109787273ed8aa3eb537b6647b503899e37951089895114a3",
+        "4a15d61981a95d8b2ff23f56b7a87214ff53fa7ede2e78582589e1bdf61e5e8d",
+        "efab491e0f6df6bb780507faa33adb07abe94a37a7179d8043d51dc61dcf1623",
+        "447be28e41c8fbe9db2b2084350e49ce511863187cc39229fb5be83dcd13d101",
+        "88f2ebe7fc32823cdf9a9830e891ca34e89247af1308db40c08f719185dd91a5",
+        "a799a270363cc59a5ce19a1e1ef6f9df4334ca83b28df00a34103ab60a8b375a",
+        "d95faa27c066c6983be3a7e2b4280586bd57a875b7e183e4ccd7b35792905994",
+        "6cef1d20dca293bec19e6a77314570db7329d8d8bf817a572b036902a14ad069",
+        "80c8965c5c00f6d9a079f382c9087dfc127a8dbc866b112d31eaf85568d3be01",
+        "a93d42e8817192ee9df1048181785c36d2ced7be535f318c1e2ceb7be6567992",
+        "e12c312dd4902c7727cbdcebf06f30351c39549f89af486bbe845bd9d9c860a6",
+        "49769a212a0d58d2f37b4bbe2b17b4ac29d94064fff21a35fdd5d35e888ea603",
+        "6e9a4df2aaeed4701e53bee5c3c60a1c42c8e53ff0fe0dd81189fb3695f2ee39",
+        "db3a79e401bd7cb5e5806b5822124b52daa156a4edf7415e48e876eba5600907",
+        "9495b2facc9b3a36692f200e0a2504ecdb4ffedb965748c36d6e349878d8172c",
+        "4f047c1630e91e33c85e244bb8210561d2c9d7155cf6538f6544743f26c3eae3",
+        "2f005c6c049c5d81fde5698ff7c32cc7c9d0453e180c300a7fb28b4579d0921c",
+        "f7bb598601570039a475e6d1aaa3b334d1131066e9cf536f0bb2e15f2e77fe38",
+        "98e12a7e830be6ef85945fa4e12771ff146161f1321d0b593f5f491ccd136b89",
+        "2d1e8876eb393d534da41ad659d7b98cdb1b81f4e6c0c0c3fa1f13038ba3c396",
+        "ddb8fc3da18fade714e252b1f7c634070b5992761da99f2f4cf345a6d58ff2d4",
+        "e053453bd2b2d54350dc450fb70ddf3fea58ba15835cfe151e817f694baf27f7",
+        "a0b7d8c4759d3fd5ad458abfb84f91f664e81b5341b5c9445ff7ebba3d3fac9a",
+        "6d92dbaed180a787664d7c262d15197479e34af54fdaad16e56195fa814c8cd4",
+        "2bda0a93906d69f403410bff53019d51ef48439984d9f49438df55afaf2858cc",
+        "1ccb720dfed713e4a1317c775893e2659ee265d185857d41a60bc758165b1b84",
+        "ffe247575ccfd7bc39e6085b8e4fd4eb2b51e4e537cad45b9edd0bedd0008063",
+        "b0d8d2931f22615f9b0e2799f2e6957b1eeba8a39232e1755d18e25ca6d6c383",
+        "296d2c1122f44067db15430c93e5aae5062274c93dea7181c7049502be7bc975",
+        "35b8c5cc223043164604d9e1d199434a02868472101458d6e53abe362b41d723",
+        "1c4418e7bd55c699661fdc3585f5ee52d2eac0372d6146d397742abdfba5c7aa",
+        "81b90b50246aa1fa545b4bdd3ac1c4c4f0c82dea7cc2966abbbc7214061c9543",
+        "cfa7ca55e11766341c5fac2c20455c279b50fb1bdd2d2b1957ff197ee8630e0f",
+        "992d2c8fc725765cd219d852e5d4947522d2a33be574275383fad288d9db98c4",
+        "b7a53375f78bc2334d86287386c1268363e26020a19889071d1cc20fcac8c88a",
+        "b2abc94a4f024b78df97ac7658caddc40a4b11c23f2d638615f3e81a977102d2",
+        "074798de9d9559968e58df35dde9e7248e2f3fa5c875bd7c33c9f6e9f1bd7e1e",
+        "b438dae3dc366374afc00a600741168df2efc0828ceb00b3433185488a8d4235",
+        "623aa9469041d038cb897f09b2c9d7d4723e619f7d91f192e6300616e0a81192",
+        "1fa8aca15a6f4f255d83b458c3fb6876b6df7395b736a938bb34551a57e80ac3",
+        "e4b742a0f20824468ae0fcef112166dd9f98f51a8d9e365bb39bcf9ad0382adb",
+        "770395aa740cc6e3f1c818db3bbc143c987570f107720989e99d2cb787cc074b",
+        "f23d82db9dc1e9e9c5b43a4c9ff0e4f9a86cf919f2a788c792ce642ad22eb16c",
+        "b1ca255bfba7bbd36bcd97e391613782c11a8ebf4a859f5a85a22fc82c968486",
+        "bdb7422c439ba559fc3373eb284e5417e088d80a1be93368714f2898390865eb",
+        "d05874b19bd1222880c5c0d1f1435c00b7c3e690b08e38131b9a6dfc30b837cc",
+        "f582297ab56a0f5c0dadecc0ff327c38ba280ac89d913c1aaf1ed539b129cd5a",
+        "058a9e6e3a9a46e32fb2170760c24a0809ea627d23b177725b1348a29c1b487d",
+        "7ba46a1de44d3c8664aa153a2ef3e9b68495fc2e74461fd6c22fac272e7cd927",
+        "ffe1ad5175a0cba799e05293eab8ea3cee4e7f74839bee7e358da8820dcce3d7",
+        "e88996965dbc9a75002223f003d192910a2e05f66869101d9e363f95d26af70c",
+        "f3f2218f9e5eb4c816d689cbab6ae2c56614e9d4ad2958b4db9eeec5995cf2ed",
+        "1eaf5c732a71e1105b9acff982efb17450971451911519ae4a42d52be4938742",
+        "2c4142ca745e1dadbc2b8ccd0c661e930b1fe18bd504d1b4ab6736f195fb3db3",
+        "7df524de666253a176884a697f93d6e2a904bb41e786bc33c2e9948474e2162b",
+        "70f38fc5268367fc033bb4f1afd0c5469ea6132d583aa4695689b08421e9680c",
+        "ecedac7482c322867c3a90c1ef3e9492089c38ab74d94bb6e8ff3797860fa330",
+        "87d763ee90ce940cca0fdd1115131d8033c482e132e69d71101406b431a7e1e7",
+        "da5aba90906c71dd2f9a6b79eecf38f4f44e6d6a28d114b41a1d4187cf9ee1d6",
+        "0e29ec9622dc71be94920079af5a686a1ddd95ea3413b8b90b00df4e0aef2ec2",
+        "bfdbaf06b9a35681fc4e79e0fcf4a54d99d4d33ae901362092d22808e4d49056",
+        "c3495e7edae1fd65a81938b10acf73329b2ab4ec543712a48998e67b0ea80fba",
+        "c0e63074c14d6e772289b9284d070c795771f8c0ac8dfa95fcff646513e19ec2"
+      ]
+    }
+  ],
+  "stage_pin_sha256": "572ae5241b3a15d24edc46766cf3c75760273d2a9a2bc5eb03f1dfd49289114d"
+}

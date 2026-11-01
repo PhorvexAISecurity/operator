@@ -1,0 +1,26 @@
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... FAIL
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... FAIL
+
+======================================================================
+FAIL: test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_selfserve_requests.py", line 26, in test_exact_original_upload_preserves_ten_day_contract_without_codegen
+    self.assertEqual(tasks[0]['kind'], 'endpoint')
+AssertionError: 'bench' != 'endpoint'
+- bench
++ endpoint
+
+
+======================================================================
+FAIL: test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_selfserve_requests.py", line 43, in test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns
+    self.assertEqual(result.get('requested_mode'), 'PAIRED_BRAIN_REPLAY')
+AssertionError: None != 'PAIRED_BRAIN_REPLAY'
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.012s
+
+FAILED (failures=2)

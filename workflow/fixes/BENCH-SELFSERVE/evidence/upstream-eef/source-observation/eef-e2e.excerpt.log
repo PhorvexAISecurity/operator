@@ -1,0 +1,45 @@
+1497: 2026-11-01T20:57:00.1674543Z test_attack_namespaces_confine_policy_edits (test_service_charts.AttacksServiceTests.test_attack_namespaces_confine_policy_edits) ... ok
+1498: 2026-11-01T20:57:00.3897015Z test_attack_namespaces_confine_what_the_attacks_service_changes (test_service_charts.AttacksServiceTests.test_attack_namespaces_confine_what_the_attacks_service_changes) ... ok
+1499: 2026-11-01T20:57:00.4416286Z test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers) ... FAIL
+1500: 2026-11-01T20:57:02.3264200Z test_the_attacks_service_holds_the_grants_the_console_fired_with (test_service_charts.AttacksServiceTests.test_the_attacks_service_holds_the_grants_the_console_fired_with) ... ok
+1501: 2026-11-01T20:57:02.7647040Z test_the_attacks_service_mounts_the_grants_its_own_release_renders (test_service_charts.AttacksServiceTests.test_the_attacks_service_mounts_the_grants_its_own_release_renders) ... ok
+1502: 2026-11-01T20:57:03.2991577Z test_the_attacks_service_runs_the_consoles_pod (test_service_charts.AttacksServiceTests.test_the_attacks_service_runs_the_consoles_pod) ... ok
+1503: 2026-11-01T20:57:04.2072386Z test_the_attacks_service_targets_only_its_namespaces (test_service_charts.AttacksServiceTests.test_the_attacks_service_targets_only_its_namespaces) ... ok
+1504: 2026-11-01T20:57:04.9405660Z test_the_console_forwards_to_the_attacks_service_and_names_it_the_injector (test_service_charts.AttacksServiceTests.test_the_console_forwards_to_the_attacks_service_and_names_it_the_injector) ... ok
+1512: 2026-11-01T20:57:06.0062843Z test_the_brain_holds_no_kubernetes_credentials (test_service_charts.BrainChartTests.test_the_brain_holds_no_kubernetes_credentials) ... ok
+1513: 2026-11-01T20:57:06.0587265Z test_it_renders_only_where_the_console_is_separate (test_service_charts.ConsoleChartTests.test_it_renders_only_where_the_console_is_separate) ... ok
+1514: 2026-11-01T20:57:06.1182818Z test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... FAIL
+1515: 2026-11-01T20:57:08.1251534Z test_moving_the_console_changes_no_object (test_service_charts.ConsoleChartTests.test_moving_the_console_changes_no_object) ... ok
+1516: 2026-11-01T20:57:08.8551943Z test_the_console_can_be_exposed_on_its_own (test_service_charts.ConsoleIngressTests.test_the_console_can_be_exposed_on_its_own) ... ok
+1517: 2026-11-01T20:57:09.2590719Z test_the_manager_and_the_sensor_verify_the_named_guard (test_service_charts.ExternalIdentityPolicyTests.test_the_manager_and_the_sensor_verify_the_named_guard) ... ok
+1518: 2026-11-01T20:57:09.3153977Z test_trusted_detectors_need_a_guard (test_service_charts.ExternalIdentityPolicyTests.test_trusted_detectors_need_a_guard) ... ok
+1519: 2026-11-01T20:57:09.4311682Z test_a_release_digest_must_be_a_digest (test_service_charts.ImageDigestTests.test_a_release_digest_must_be_a_digest) ... ok
+1599: 2026-11-01T20:57:36.2136790Z 
+1600: 2026-11-01T20:57:36.2137272Z ======================================================================
+1601: 2026-11-01T20:57:36.2138813Z FAIL: test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers)
+1602: 2026-11-01T20:57:36.2140356Z ----------------------------------------------------------------------
+1603: 2026-11-01T20:57:36.2141223Z Traceback (most recent call last):
+1604: 2026-11-01T20:57:36.2142381Z   File "/home/runner/work/operator-refactored/operator-refactored/tools/test_service_charts.py", line 776, in test_its_defaults_are_the_managers
+1605: 2026-11-01T20:57:36.2143490Z     self.assertEqual(value, manager[key], key)
+1606: 2026-11-01T20:57:36.2144589Z AssertionError: {'ena[201 chars]'', 'namespaceUID': '', 'cleanupPolicy': 'Dele[6633 chars]''}}} != {'ena[201 chars]'', 'cleanupPolicy': 'Delete', 'images': {'wor[6613 chars]''}}}
+1607: 2026-11-01T20:57:36.2146062Z Diff is 12066 characters long. Set self.maxDiff to None to see it. : console
+1608: 2026-11-01T20:57:36.2146596Z 
+1609: 2026-11-01T20:57:36.2146886Z ======================================================================
+1610: 2026-11-01T20:57:36.2147761Z FAIL: test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers)
+1611: 2026-11-01T20:57:36.2149030Z ----------------------------------------------------------------------
+1612: 2026-11-01T20:57:36.2149632Z Traceback (most recent call last):
+1613: 2026-11-01T20:57:36.2150714Z   File "/home/runner/work/operator-refactored/operator-refactored/tools/test_service_charts.py", line 973, in test_its_defaults_are_the_managers
+1614: 2026-11-01T20:57:36.2151773Z     self.assertEqual(value, manager[key], key)
+1615: 2026-11-01T20:57:36.2152843Z AssertionError: {'ena[201 chars]'', 'namespaceUID': '', 'cleanupPolicy': 'Dele[6633 chars]''}}} != {'ena[201 chars]'', 'cleanupPolicy': 'Delete', 'images': {'wor[6613 chars]''}}}
+1616: 2026-11-01T20:57:36.2153964Z Diff is 12066 characters long. Set self.maxDiff to None to see it. : console
+1617: 2026-11-01T20:57:36.2154479Z 
+1618: 2026-11-01T20:57:36.2155043Z ----------------------------------------------------------------------
+1619: 2026-11-01T20:57:36.2155864Z Ran 450 tests in 124.660s
+1620: 2026-11-01T20:57:36.2156186Z 
+1621: 2026-11-01T20:57:36.2156486Z FAILED (failures=2, skipped=1, expected failures=9)
+1622: 2026-11-01T20:57:36.2379585Z ##[error]Process completed with exit code 1.
+1623: 2026-11-01T20:57:36.2492523Z Post job cleanup.
+1624: 2026-11-01T20:57:36.3452819Z [command]/usr/bin/git version
+1625: 2026-11-01T20:57:36.3533432Z git version 2.56.0
+1626: 2026-11-01T20:57:36.3598528Z Temporarily overriding HOME='/home/runner/work/_temp/309b2726-73df-4f03-ac42-b4a80f41f4d9' before making global git config changes
+1627: 2026-11-01T20:57:36.3599670Z Adding repository directory to the temporary git global config as a safe directory

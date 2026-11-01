@@ -1,0 +1,79 @@
+{
+  "schema": "phorvex-bench.delivery-ci-observation.v1",
+  "observed_at": "2026-11-01T20:36:07.402485+00:00",
+  "pr": 198,
+  "pr_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+  "head_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "actual_pr_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "draft": true,
+  "tested_merge_sha": "c768a0c04ba7d9597309d55b488b241b7e361e9d",
+  "tested_merge_parents": [
+    "1457be4433a719784523a68ec3dd982cb57af409",
+    "4116c23e7b44e804596e7c711f1aa05d5662e896"
+  ],
+  "overall": "NOT_GREEN: completed source-validation failure. Local tests are not substituted for these GitHub conclusions.",
+  "check_counts": {
+    "success": 14,
+    "failure": 2,
+    "cancelled": 0,
+    "skipped": 0,
+    "null": 0
+  },
+  "workflows": [
+    {
+      "id": 41346759528,
+      "name": "Benchmark dashboard",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759528"
+    },
+    {
+      "id": 41346759547,
+      "name": "Native RBAC contract",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759547"
+    },
+    {
+      "id": 41346759552,
+      "name": "E2E harness contracts",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759552"
+    },
+    {
+      "id": 41346759494,
+      "name": "PR source validation",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494"
+    }
+  ],
+  "failure": {
+    "run": 41346759494,
+    "job": 124968129704,
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129704",
+    "step": "Phorvex unit tests (not live E2E or envtest)",
+    "test": "TestAllSixStagingDeploymentsRenderTheVerifiedImage/attacks",
+    "location": "phorvex/tools/servicerelease/consumer_test.go:290",
+    "assertion": "component attacks has unbound authoritative rendered consumer apps/v1/Deployment/p1-demo/demo-api//spec/template/spec/containers/0/image/web selecting catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
+  },
+  "baseline_relationship": "The tested merge, PR4116, base1457 and latermain4d9454 share the same consumer-test blob and active quarantine profile/tenant/workload image. The full catalogue file differs only in agentAction.image between1457 and4116; the failing web workload selection is the same. This is the previously observed upstream active-quarantine consumer contract failure, not a new benchmark-helper test assertion.",
+  "previous_m168_failure": {
+    "current_status": "PASS",
+    "job": 124968129957,
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41346759494/job/124968129957",
+    "tests": [
+      "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/result_write_failure",
+      "TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure"
+    ],
+    "evidence": "Both subtests and parent explicitly pass in the completed go-envtest job; prior bee9 failure is retained separately and not overwritten."
+  },
+  "other_status": "charts, go-envtest, every image job, fixture-images, lint and frontend succeeded; Benchmark dashboard, Native RBAC contract and E2E harness contracts workflows succeeded. PR validation aggregate fails because go-unit failed.",
+  "limits": [
+    "No source edits, rerun, cancellation, live mutation or efficacy verdict performed.",
+    "The action is attached to exact PR head4116 but checkout executes synthetic merge c768a0c with base1457; source metadata and checkout log bind both.",
+    "Latermain4d9454 was inspected as source context, not silently treated as tested by this run.",
+    "Green image builds or local8/8 tests are not proof of current production/stage deployment or all-green CI."
+  ]
+}

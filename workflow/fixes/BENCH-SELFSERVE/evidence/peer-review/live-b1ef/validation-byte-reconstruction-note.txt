@@ -1,0 +1,1 @@
+Initial independent delivery reconstruction used postqueue VALIDATION record. Actual product sends VALIDATION bytes before adding batch_id, then persists postqueue record. Corrected reviewer control removes only later-added batch_id before identical JSON serialization; no product/result artifact edited. Initial control retained.

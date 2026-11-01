@@ -1,0 +1,15 @@
+{
+  "batch_id": "c358534aed93",
+  "upload_id": "0ba34886df9f",
+  "state": "FAILED",
+  "results": [
+    {
+      "index": 1,
+      "kind": "bench",
+      "state": "FAILED",
+      "job": "9eed6b29c2f4",
+      "headline": "policy is not in the installed stage capture pin; pin and sync it before running"
+    }
+  ],
+  "semantics": "Independent experiments, executed sequentially; each report has its own control."
+}

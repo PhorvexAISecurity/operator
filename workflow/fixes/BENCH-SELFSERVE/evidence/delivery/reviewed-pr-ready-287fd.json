@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T21:25:03.133664+00:00",
+  "action": "Published independently reviewed PR for source delivery; no merge",
+  "pull_request": {
+    "number": 198,
+    "url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "isDraft": false,
+    "headRefOid": "287fd2e4cd97c1ef8a0475b16316b04c6938b518"
+  },
+  "validation": "16/16 checks,4/4workflows,8/8local,82controls at exact287fd",
+  "live": "Current positive native/bot qualification pending; original10d unavailable data remains explicit"
+}

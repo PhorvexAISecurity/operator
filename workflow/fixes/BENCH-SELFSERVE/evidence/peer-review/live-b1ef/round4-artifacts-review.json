@@ -1,0 +1,121 @@
+{
+  "verdict": "PASS_INTEGRITY_AND_TRUTHFUL_NEGATIVE_REPORT_NOT_POSITIVE_ACCEPTANCE",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:16:49.757338+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "manifest_sha256": "a9cca02dd267c75a269d02bc2542ff18ef483abe01d95323b3e57edd2df937f0",
+  "files_verified": 24,
+  "original_child": "78930d74595e",
+  "original_batch": "4afff0df29a1",
+  "other_batch": "eafee37d3ad7",
+  "actual_campaign_outcome": "FAIL",
+  "both_batches": "BLOCKED",
+  "restoration": "PASS",
+  "original_exact_bytes_and_zip": true,
+  "original_required_windows_preserved": {
+    "budget_seconds": 864000,
+    "burn_seconds": 86400
+  },
+  "original_no_model_test_build_replay": true,
+  "unknown_metrics_remain_null": true,
+  "reason_codes": [
+    "STAGE_SOURCE_CHANGED",
+    "REPLAY_SOURCE_UNAVAILABLE",
+    "RUNTIME_OBSERVATION_UNAVAILABLE",
+    "MOVE_ATTRIBUTION_UNAVAILABLE",
+    "ENDPOINT_DATASET_UNAVAILABLE"
+  ],
+  "protected_files_observer_pid_restored_units_verified": true,
+  "outbound_telegram_messages": 26,
+  "outbound_documents": [
+    {
+      "name": "validation-79a2dbfd71ea.json",
+      "sha256": "ef602dcdc99bbacd7bd042b7e47840ed4a5b969905dc275b670466880c8f9b16",
+      "bytes": 9332,
+      "match_method": "deterministic_bytes_from_retained_validation_or_batch_using_unchanged_serializer"
+    },
+    {
+      "name": "blocked-78930d74595e-report.html",
+      "sha256": "a3176472b5d26bc809f10391d091ecb3da8bc20f98ef000299b3853758abcafd",
+      "bytes": 4180,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-78930d74595e-result.json",
+      "sha256": "d7561fa6dca2f9c199250c1808afc416ffd68a9f28c3f986efce197ad35846df",
+      "bytes": 9218,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-78930d74595e-metrics.csv",
+      "sha256": "ae439879afd1fb6b684014cd10f48dddc301ad5ea20a1e6d311035b2477f932b",
+      "bytes": 1292,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-78930d74595e-evidence.zip",
+      "sha256": "0824f343d941ca5d28e77fa64bd09bab9d5cc8caecb71835dcc65448004890c5",
+      "bytes": 15458,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "batch-4afff0df29a1.json",
+      "sha256": "ce12fdbeec0478d10ea46b7e8b703444bd5c62c3ec2aa848206147f5b84ff566",
+      "bytes": 1572,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "batch-4afff0df29a1.csv",
+      "sha256": "2a48d2069f8711c9e26cff65579ca312a98405874c0889cc9ec613dadea3b9d4",
+      "bytes": 80,
+      "match_method": "deterministic_bytes_from_retained_validation_or_batch_using_unchanged_serializer"
+    },
+    {
+      "name": "validation-1987f384f6cf.json",
+      "sha256": "bdca78f3b33433a4648cdbec3df831309484f717a73fe3f1aab5d8c0646ee38c",
+      "bytes": 8402,
+      "match_method": "deterministic_bytes_from_retained_validation_or_batch_using_unchanged_serializer"
+    },
+    {
+      "name": "blocked-3d746803a828-report.html",
+      "sha256": "e1450b8b189258fa6738ede0c86363612979cc9d7c3550e0fc37e895be97a18f",
+      "bytes": 11609,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-3d746803a828-result.json",
+      "sha256": "fa2667424813de650a7b9c8995676fc8de862d8842f42190757d3eba988c66a2",
+      "bytes": 9149,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-3d746803a828-metrics.csv",
+      "sha256": "72e0c7f96bc018ae836ccb7a99ba8499637468b1d2a223643181bcb7a9bc916e",
+      "bytes": 49,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "blocked-3d746803a828-evidence.zip",
+      "sha256": "2dc0020bd4c958614960a283513bee9e0b807f7f7dad57f18bfad3c75b030d8b",
+      "bytes": 6935,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "batch-eafee37d3ad7.json",
+      "sha256": "3592c5edb4173f16b6a4c25c717e85b6cf8c33036f6880378499b3dd706c9612",
+      "bytes": 1424,
+      "match_method": "retained_original_file"
+    },
+    {
+      "name": "batch-eafee37d3ad7.csv",
+      "sha256": "ba255c03c37ceb47a1de17a9b30d12fa9f48741a9c6ccf7ea0b8bcb32138e6bc",
+      "bytes": 77,
+      "match_method": "deterministic_bytes_from_retained_validation_or_batch_using_unchanged_serializer"
+    }
+  ],
+  "limits": [
+    "Real outbound receipts are retained; incoming document download was supplied by the declared operator transport boundary.",
+    "Ten document payload hashes match retainedrawfiles; two validationJSONs andtwo batchCSVs are byte-exact reconstructions from retainedactualrecords usingunchanged product serialization, matchingactualdeliveryhashes.",
+    "This failedround is preserved; no successfulparameter64/endpoint/ten-day acceptance inferred."
+  ]
+}

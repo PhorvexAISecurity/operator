@@ -1,0 +1,20 @@
+{
+  "kind": "ApplicationSet",
+  "namespace": "argocd",
+  "name": "phorvex-services",
+  "expected_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "test_fresh_resourceVersion": true,
+  "expected_existing_templatePatch": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: eef02325207c33cde90a377c390d1539c83cc3cc\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: eef02325207c33cde90a377c390d1539c83cc3cc\n{{- end }}",
+  "operation": "replace /spec/templatePatch",
+  "value": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 2a9a101a4470e8028c506325c03a9571a2a52db0\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 2a9a101a4470e8028c506325c03a9571a2a52db0\n{{- end }}",
+  "chart_source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "values_source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "values_reviewed_at": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "prune": false,
+  "temporary_source_pin": true,
+  "owner": "bench-v3-lead",
+  "expiry_condition": "Preserve exact external eef template and current actual b1ef images/family. Restore only if owned value still matches and current main remains reviewed eef; otherwise review latest settings and never reopen an obsolete family or overwrite external replacement.",
+  "prior_templatePatch_sha256": "baaf7eeaa80c76fa476b171c1ff7ef603f671864ad8aa797f403cddefec3b70d",
+  "previous_owned_template_sha256": null,
+  "cleanup_template": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: eef02325207c33cde90a377c390d1539c83cc3cc\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: eef02325207c33cde90a377c390d1539c83cc3cc\n{{- end }}"
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "phorvex-bench.peer-source-commit-binding.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:21:37.373830+00:00",
+  "verdict": "PASS",
+  "source": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "parents": [
+    "711813101692b2c083ba6975b8eca811e7e2ff30",
+    "1457be4433a719784523a68ec3dd982cb57af409"
+  ],
+  "tree": "6f4b192ae9292a3a9b427e988465f4b76425586f",
+  "component_paths": 8,
+  "unchanged_runtime_files": 168,
+  "main_worktree_preserved": "711813101692b2c083ba6975b8eca811e7e2ff30",
+  "source_manifest_sha256": "7d272b0fafe1ad7caa06d8f52d473338b636d589f4091e90a678f8c6a31ad865",
+  "runtime_manifest_sha256": "db67471ae3225c3f4ea2036a69abd460c11338cad642c7bc3275ca11437427c1",
+  "component_review_sha256": "aed0599d2eedb0a64dce21d44c1bf1864d29b294aae1ff63f013a914891e93f1",
+  "source_only_no_metadata": true,
+  "coherent_final_preflight_and_live_readiness": "Separate actual evidence pending"
+}

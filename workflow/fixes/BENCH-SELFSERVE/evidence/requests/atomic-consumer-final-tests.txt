@@ -1,0 +1,9 @@
+test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) ... ok
+test_endpoint_audit_uses_atomic_identity_without_legacy_current (test_request_readiness.RequestReadinessTests.test_endpoint_audit_uses_atomic_identity_without_legacy_current) ... ok
+test_check_reports_every_dependency_without_secrets (test_bot.BotTest.test_check_reports_every_dependency_without_secrets) ... ok
+test_parameter_window_excludes_other_source_revisions (test_bot.BotTest.test_parameter_window_excludes_other_source_revisions) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 3.389s
+
+OK

@@ -1,0 +1,18 @@
+test_real_history_qualifies_but_missing_engine_still_refuses_ready (test_request_readiness.EndpointHistoryReadinessTests.test_real_history_qualifies_but_missing_engine_still_refuses_ready) ... ok
+test_required_windows_retention_generation_and_freshness_fail_closed (test_request_readiness.EndpointHistoryReadinessTests.test_required_windows_retention_generation_and_freshness_fail_closed) ... ok
+test_actual_source_headers_positive_and_exact_insufficient_count (test_request_readiness.RequestReadinessTests.test_actual_source_headers_positive_and_exact_insufficient_count) ... ok
+test_broken_race_check_cannot_leave_job_running_or_relabel_internal_error (test_request_readiness.RequestReadinessTests.test_broken_race_check_cannot_leave_job_running_or_relabel_internal_error) ... ok
+test_generation_filter_excludes_old_same_uid_and_source_before_sampling (test_request_readiness.RequestReadinessTests.test_generation_filter_excludes_old_same_uid_and_source_before_sampling) ... ok
+test_late_identity_failure_retains_started_model_work (test_request_readiness.RequestReadinessTests.test_late_identity_failure_retains_started_model_work) ... ok
+test_live_capture_or_source_drift_blocks_despite_complete_cache (test_request_readiness.RequestReadinessTests.test_live_capture_or_source_drift_blocks_despite_complete_cache) ... ok
+test_missing_policy_does_not_fall_back_to_fixture (test_request_readiness.RequestReadinessTests.test_missing_policy_does_not_fall_back_to_fixture) ... ok
+test_old_image_uid_and_stale_headers_do_not_qualify (test_request_readiness.RequestReadinessTests.test_old_image_uid_and_stale_headers_do_not_qualify) ... ok
+test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort (test_request_readiness.RequestReadinessTests.test_parameter_cache_shrink_before_freeze_refuses_partial_requested_cohort) ... ok
+test_real_upload_validate_and_execution_are_separate_and_no_model_runs (test_request_readiness.RequestReadinessTests.test_real_upload_validate_and_execution_are_separate_and_no_model_runs) ... ok
+test_source_change_after_validation_is_rechecked_before_model (test_request_readiness.RequestReadinessTests.test_source_change_after_validation_is_rechecked_before_model) ... ok
+test_unfinished_content_addressed_snapshots_are_not_ready (test_request_readiness.RequestReadinessTests.test_unfinished_content_addressed_snapshots_are_not_ready) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.450s
+
+OK

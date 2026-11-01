@@ -1,0 +1,293 @@
+{
+  "run_id": 41348308738,
+  "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "jobs": [
+    {
+      "id": 124972802970,
+      "name": "fixture-images",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972802970",
+      "steps": []
+    },
+    {
+      "id": 124972803181,
+      "name": "images (sensor)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803181",
+      "steps": []
+    },
+    {
+      "id": 124972803217,
+      "name": "frontend",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803217",
+      "steps": []
+    },
+    {
+      "id": 124972803241,
+      "name": "go-envtest",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803241",
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Provision pinned Python 3.12 (SHA256-verified, relocatable)",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run azure/setup-helm@v4",
+          "number": 5,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Provision pinned envtest v1.34.0 binaries (SHA256-verified)",
+          "number": 6,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Provision pinned kube-controller-manager v1.34.0 (SHA256-verified)",
+          "number": 7,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Local API/controller test packages (seven complete suites; required controls)",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Retain raw envtest JSON evidence",
+          "number": 9,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "number": 17,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "number": 18,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "number": 19,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124972803249,
+      "name": "images (operator)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803249",
+      "steps": []
+    },
+    {
+      "id": 124972803256,
+      "name": "images (console)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803256",
+      "steps": []
+    },
+    {
+      "id": 124972803278,
+      "name": "lint",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803278",
+      "steps": []
+    },
+    {
+      "id": 124972803298,
+      "name": "charts",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803298",
+      "steps": []
+    },
+    {
+      "id": 124972803309,
+      "name": "images (attacks)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803309",
+      "steps": []
+    },
+    {
+      "id": 124972803396,
+      "name": "images (brain)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803396",
+      "steps": []
+    },
+    {
+      "id": 124972803418,
+      "name": "go-unit",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803418",
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-go@v5",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run azure/setup-helm@v4",
+          "number": 4,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Phorvex unit tests (not live E2E or envtest)",
+          "number": 5,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Services this change affects",
+          "number": 6,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Shared measurement-validity contract unit tests (stdlib only, no cluster)",
+          "number": 7,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Attack-harness unit tests (fake clients, not live E2E or envtest)",
+          "number": 8,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Extended Phoenix operator module unit tests (fake clients, no cluster)",
+          "number": 9,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Shared library unit tests",
+          "number": 10,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "EPSS ECR auth helper unit tests",
+          "number": 11,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Agent-sim fixture unit tests",
+          "number": 12,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-go@v5",
+          "number": 23,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "number": 24,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "number": 25,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "id": 124972803465,
+      "name": "images (actuator)",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803465",
+      "steps": []
+    },
+    {
+      "id": 124975254551,
+      "name": "PR validation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124975254551",
+      "steps": [
+        {
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require every source check to succeed",
+          "number": 2,
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "number": 3,
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}

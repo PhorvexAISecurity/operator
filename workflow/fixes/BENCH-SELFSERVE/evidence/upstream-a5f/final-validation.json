@@ -1,0 +1,21 @@
+{
+  "result": "PASS",
+  "source_base": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "source_head": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "strict_worktree_validation": true,
+  "preflight_checks": 8,
+  "runtime_source_blobs_verified": 43,
+  "author_suites": {
+    "l1": [
+      7,
+      6
+    ],
+    "l2": [
+      15,
+      18,
+      8
+    ]
+  },
+  "preflight_sha256": "3f419c6e7726391445fab12160bd2325c03d0a56bca94653b79cd224557faee5",
+  "reference": "Current committed-source local checks only; independent review and live acceptance are separate."
+}

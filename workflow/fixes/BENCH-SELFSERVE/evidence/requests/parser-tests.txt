@@ -1,0 +1,17 @@
+test_declarative_endpoint_fields_support_independent_arbitrary_windows (test_selfserve_requests.SelfserveRequestTests.test_declarative_endpoint_fields_support_independent_arbitrary_windows) ... ok
+test_declarative_rejects_unknown_duplicate_and_non_numeric_fields (test_selfserve_requests.SelfserveRequestTests.test_declarative_rejects_unknown_duplicate_and_non_numeric_fields) ... ok
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+test_modified_prose_stays_generic_code_and_never_silently_maps (test_selfserve_requests.SelfserveRequestTests.test_modified_prose_stays_generic_code_and_never_silently_maps) ... ok
+test_original_thirty_day_compatibility_sets_explicit_slo_and_window (test_selfserve_requests.SelfserveRequestTests.test_original_thirty_day_compatibility_sets_explicit_slo_and_window) ... ok
+test_all_completed_examples_parse_including_word (test_uploads.ParserTest.test_all_completed_examples_parse_including_word) ... ok
+test_command_list_and_strict_options (test_uploads.ParserTest.test_command_list_and_strict_options) ... ok
+test_file_formats_encodings_and_word_limits (test_uploads.ParserTest.test_file_formats_encodings_and_word_limits) ... ok
+test_invalid_fields_empty_sections_and_limits_are_rejected (test_uploads.ParserTest.test_invalid_fields_empty_sections_and_limits_are_rejected) ... ok
+test_optional_sections_and_multiline_change (test_uploads.ParserTest.test_optional_sections_and_multiline_change) ... ok
+test_registry_domains_and_duplicate_numeric_values (test_uploads.ParserTest.test_registry_domains_and_duplicate_numeric_values) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.115s
+
+OK

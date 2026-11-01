@@ -1,0 +1,80 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "files": [
+    {
+      "path": "actual-checkout.excerpt.log",
+      "bytes": 3249,
+      "sha256": "9823331bdef581629e41a24f86c75bdd3ac1d84e3e36c9549ddfc616e93829e2"
+    },
+    {
+      "path": "actual-checkout.provenance.json",
+      "bytes": 522,
+      "sha256": "8d13643736bcf07736d7caa5b52f555bf122427901cef4a8e9bc5779c7ee1e64"
+    },
+    {
+      "path": "final-source-jobs.json",
+      "bytes": 31435,
+      "sha256": "709f985d97a3be6b1cb81ce5375e000bf7b2de480c6623764c7de46182988148"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 4335,
+      "sha256": "70caf3dae3161913e7f3e0c02eb0ceac0f9447d580271c756c8dd39fab46feb2"
+    },
+    {
+      "path": "go-envtest-m168.excerpt.log",
+      "bytes": 954,
+      "sha256": "68d761382d6f06549675d996d7c99ed2e1404bf0b5ecbf22edad091124254110"
+    },
+    {
+      "path": "go-envtest-m168.provenance.json",
+      "bytes": 687,
+      "sha256": "2705b3c8e3470c7a65d771432024f3e1ce8115b2af7626052addffd74607ccf5"
+    },
+    {
+      "path": "go-unit-servicerelease.excerpt.log",
+      "bytes": 309,
+      "sha256": "ac1299abbc11f20b345aaf6d2dd13e8130d944fe6d0cf5bc9d0a063fe1441798"
+    },
+    {
+      "path": "go-unit-servicerelease.provenance.json",
+      "bytes": 504,
+      "sha256": "89e427798559b5a9cf0b9fcc61cba9c1b70349de077e2ad8d59b82f75c80c720"
+    },
+    {
+      "path": "initial-source-jobs.json",
+      "bytes": 26745,
+      "sha256": "c64d7c1ad5720a03c78c1c9299fca408391852efeb6f328f1cbae3ed50bf6831"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 3605,
+      "sha256": "2fd764d289b442b5afde1296a5e027f664b7995357ff95dce3738d33b583cb86"
+    },
+    {
+      "path": "latest-status.json",
+      "bytes": 8746,
+      "sha256": "f1e7558bc949b59fe9a4c964fabced63f55877049b901297e3c3ef1d84c2921e"
+    },
+    {
+      "path": "merge-ref-source.json",
+      "bytes": 637,
+      "sha256": "b438d64b493ee7a8e438cfc334e9895817453b63ee655254fb0223d9ec207c1f"
+    },
+    {
+      "path": "source-validation-checkout.excerpt.log",
+      "bytes": 1239,
+      "sha256": "78a8ca0112f54557bd96f7c31597d80a8738e98bdea40d705348920d0e946fae"
+    },
+    {
+      "path": "source-validation-checkout.provenance.json",
+      "bytes": 482,
+      "sha256": "0c584d031aea07975dc2bf1fc1f92b4f82ccba2cde51176f5958522ff56ca46b"
+    },
+    {
+      "path": "status-transitions.json",
+      "bytes": 24542,
+      "sha256": "d604c5598e5042fc512ba276154b9d3523df31553a1e95adc8e6c8e41404d4b6"
+    }
+  ]
+}

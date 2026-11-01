@@ -1,0 +1,69 @@
+{
+  "schema": "phorvex-bench.operational-proposal-peer-review.v3",
+  "reviewer": "stage-review",
+  "reviewed_at": "2026-11-01T19:27:11.146437+00:00",
+  "verdict": "PASS_FOR_BOUNDED_LIVE_ATTEMPT",
+  "source": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "preserved_main": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "go_template_cases": {
+    "total": 24,
+    "selected_staging_only": 3,
+    "empty_unmodified": 21,
+    "missing_key_rejected": true
+  },
+  "checks": [
+    "Exact operation/template/script hashes verified; embedded payload equals fresh19:21:37 actual preconditions and expected.json.",
+    "Template is prior V2 byte-for-byte except both source revisions. Actual Go template outputs preserve source repository/path/release/skipCrds/ordered three valueFiles and modify only both revisions for selected staging apps.",
+    "0288 source and actual full-overlay/default renders already independently reviewed and commit-bound; rechecked current closed family and staging/phorvex bytes equal bee9. Existing61e images, current grants and upstream namespace ledger/RBAC remain preserved.",
+    "Only one mutating kubectl call: JSON patch add of owned templatePatch, with fresh UID/resourceVersion tests after full AppSet spec comparison. Exact main/issue-ref guards precede mutation.",
+    "Fresh guards cover deployment UID/generation/images/args/observed complete rollout, policy UID/generation/mode, workload UID/generation/selector/replicas/readiness, Service UID/selector, all3 application Healthy/Succeeded, and4GiB reserve."
+  ],
+  "conditions": [
+    "Root executes only with current source/main and all fresh guards passing; campaign round2 preregistration/rebaseline required.",
+    "This temporary pin freezes3 staging applications. Root monitors upstream and removes this exact owned override before unreviewed subsequent stage release and after durable merge. It is not permanent main tracking.",
+    "Object reads and branch checks are observations, not a transaction across all resources. UID/RV CAS protects ApplicationSet mutation; any detected intervening image/policy/workload/service/main change stops the campaign and requires re-review.",
+    "No actual Argo admission, rollout, source readiness, bot job or endpoint-history result is established by this offline proposal review. Failed V1, removed V2 and historical a5d runtime install remain separately labelled."
+  ],
+  "artifacts": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/operation.json": {
+      "sha256": "953aaa5b421fd298983d0511b020a1f5810e2a7196d64fbccb7e0aed45b55168",
+      "bytes": 1605
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/templatePatch.yaml.gotmpl": {
+      "sha256": "e850f10e50b886915f1437a9f6784fa211af9b395c973fb1b3135be3f35ddb07",
+      "bytes": 745
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v3/expected.json": {
+      "sha256": "1e91080cbb132bb01043970e342ce46636c2f7ec7a24c3aa5592279de1a70a04",
+      "bytes": 10471
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v3.py": {
+      "sha256": "33b4feabdb79c910afe0e0373522ac54a16fe85c0b553ac666339cd4592916d4",
+      "bytes": 13659
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/current-main-capture-preconditions.json": {
+      "sha256": "97bbd72499ea9131f353609495dc1e6ce222ec0e43b7a2d1b2c42d45d11242b2",
+      "bytes": 14516
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/composition-verdict.json": {
+      "sha256": "f0b798d5902d0bbc6f16cd9d114b10f428f3eb5e13fd5c9ab6f60a3131f7d1cb",
+      "bytes": 4143
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-bee9/commit-binding-0288e00f.json": {
+      "sha256": "ba8ee7b67125aee01f8a51c3cbc880ae5271e70b00ab9a8522b2366ec9452609",
+      "bytes": 678
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v3/template-output.json": {
+      "sha256": "c99be2197df54243a7c0e61b5a2e400f1e5e9b739751efa42ba782ccd6d434e2",
+      "bytes": 4891
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v3/template-stderr.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v3/verify-proposal.py": {
+      "sha256": "cb273fc4783fe44db874c8f43949cb14158e2259002b8d995ac98a620b1d9e9e",
+      "bytes": 6787
+    }
+  }
+}

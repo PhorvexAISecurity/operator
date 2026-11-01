@@ -1,0 +1,56 @@
+{
+  "schema": "phorvex-bench.author-component-evidence.v1",
+  "author": "stage-observer",
+  "at": "2026-11-01T18:20:39.545001+00:00",
+  "source_manifest_sha256": "449fec50b24fc1eeef9686b584e930a8e815245b50a53f048560f84dd7e2cbcb",
+  "source_files": 17,
+  "tests": [
+    {
+      "log": "author-67-tests.log",
+      "sha256": "c84be99336914b754541360c2eea7d20eb4406152b7f01161d1dfbe61972c308"
+    },
+    {
+      "log": "author-deadline-controls.log",
+      "sha256": "b2a2a4a60b2f3fc8c7b9491ba63c0aee722a3ff45cd8740b37374364c5e1b10f"
+    },
+    {
+      "log": "review-evidence-reinstall-before.log",
+      "sha256": "cf9a187136f877027e372b5c2711b6a643ae3dd11705cd0e084d70c07004e947"
+    },
+    {
+      "log": "author-final-refresh20-tests.log",
+      "sha256": "3c5338250d86e82b9698d31ba5d36632f485741d4dfcbe096ffd640e86d90e87"
+    }
+  ],
+  "results": {
+    "main_controls": {
+      "tests": 67,
+      "status": "PASS",
+      "seconds": 57.715
+    },
+    "deadline_amendment_controls": {
+      "tests": 2,
+      "status": "PASS",
+      "seconds": 3.775
+    },
+    "same_source_review_reinstall_before": {
+      "tests": 1,
+      "status": "EXPECTED_FAIL",
+      "predicate": "Prior pinned review artifact bytes overwritten by repeated install"
+    },
+    "final_refresh_controls": {
+      "tests": 20,
+      "status": "PASS",
+      "seconds": 29.591
+    }
+  },
+  "scope": "Actual Git/promisor, serialized leases, actual hash-addressed PXMS bytes, real sync/freeze/replay subprocess plumbing, actual zlib journal/process transitions, observed reducer/normalizer, verified gzip archive extraction. Kubernetes/ECR/Console transports and study decision executable are explicitly scripted fixtures, not proof of product semantics.",
+  "independent_native_engine_evidence": "Lead retained real deployed61e exact native64/64 demo and64/64 fixture controls in evidence/live/native-control; author performed no live writes.",
+  "limits": [
+    "No new active-demo attribution or borrowed fixture ledger.",
+    "No calibration, cluster mutation, deployment or main merge by this helper.",
+    "Ten-day evidence/capacity/scan performance not established; request windows remain unchanged.",
+    "Retained historical pins/journals/native baseline cohorts are not silently evicted; capacity limits can block.",
+    "Independent final review and live healthy-runtime deadline measurement remain lead-owned."
+  ]
+}

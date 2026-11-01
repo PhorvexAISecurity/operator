@@ -1,0 +1,9 @@
+test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers (test_endpoint_refresh.RefreshTests.test_real_cli_pin_contention_reports_wait_preserves_dataset_and_recovers) ... ok
+test_lease_block_before_work_and_invalid_request_preserve_data (test_endpoint_refresh.RefreshTests.test_lease_block_before_work_and_invalid_request_preserve_data) ... ok
+test_another_refresh_owner_status_and_pointer_are_never_overwritten (test_endpoint_refresh.RefreshTests.test_another_refresh_owner_status_and_pointer_are_never_overwritten) ... ok
+test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease (test_endpoint_refresh.RefreshTests.test_noncontention_errors_and_body_exception_are_not_relabelled_as_lease) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 27.363s
+
+OK

@@ -1,0 +1,3 @@
+254: 2026-11-01T21:11:23.9166865Z ##[group]Run go -C phorvex test -mod=readonly -count=1 -timeout=15m ./...
+255: 2026-11-01T21:11:23.9167223Z [36;1mgo -C phorvex test -mod=readonly -count=1 -timeout=15m ./...[0m
+376: 2026-11-01T21:16:13.5619774Z ok  	github.com/phorvex/phorvex/tools/servicerelease	24.073s

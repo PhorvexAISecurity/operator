@@ -1,0 +1,15 @@
+schema_version: 2
+subject:
+  kind: campaign
+  id: 2026-11-01-stage-selfserve
+artifacts:
+- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz
+  sha256: 95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539
+- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json
+  sha256: afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53
+- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json
+  sha256: d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89
+- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json
+  sha256: fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15
+- path: workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json
+  sha256: a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8

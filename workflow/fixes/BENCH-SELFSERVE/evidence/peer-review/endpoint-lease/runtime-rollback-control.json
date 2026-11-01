@@ -1,0 +1,47 @@
+{
+  "schema": "phorvex-bench.peer-runtime-upgrade-rollback.v1",
+  "at": "2026-11-01T20:15:43.572966+00:00",
+  "reviewer": "stage-review",
+  "installer_sha256": "de6aebdcabd5cdf037449bfb657cc0c1fe18de6dbc79b571b15d28cf51772f27",
+  "expected_six_unit_hashes_match_actual_a5d_install_receipt": true,
+  "controls": [
+    {
+      "case": "all-recover",
+      "state": "INSTALLATION_ERROR",
+      "recovery_errors": 0,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    },
+    {
+      "case": "nonzero",
+      "state": "RESTORATION_FAILED",
+      "recovery_errors": 11,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    },
+    {
+      "case": "oserror",
+      "state": "RESTORATION_FAILED",
+      "recovery_errors": 11,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    },
+    {
+      "case": "timeout",
+      "state": "RESTORATION_FAILED",
+      "recovery_errors": 11,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    },
+    {
+      "case": "copy-error",
+      "state": "RESTORATION_FAILED",
+      "recovery_errors": 6,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    },
+    {
+      "case": "show-error",
+      "state": "RESTORATION_FAILED",
+      "recovery_errors": 4,
+      "all_owned_stops_copies_reload_starts_and_checks_attempted": true
+    }
+  ],
+  "scope": "Exact parsed rollback handler with explicit transport/filesystem doubles; no service, filesystem target or cluster mutation. This verifies failure reporting and best-effort continuation, not actual recovery.",
+  "verdict": "PASS"
+}

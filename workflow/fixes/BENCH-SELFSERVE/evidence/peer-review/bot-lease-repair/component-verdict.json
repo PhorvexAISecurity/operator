@@ -1,0 +1,81 @@
+{
+  "schema": "phorvex-bench.independent-component-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:42:36.745827+00:00",
+  "verdict": "PASS",
+  "scope": "Frozen bot acquisition-only lease handling plus exact upstream b1ef closed-family and four Go source files. No deployment/current runtime readiness claim.",
+  "source_manifest_sha256": "63d6c607081f9de0bcf9feb8d86212c694e5f81b1751f14349b5e25339f8865b",
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "staged_tree": "5fe444d139decc90aed6d26cbeebab37abb47c44",
+  "previous_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "upstream": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "findings_closed": [
+    "Actual pin acquisition timeout remains explicit BLOCKED even if reconciliation releases before a later readiness probe; no corroboration call erases the real cause.",
+    "Cancellation stays CANCELLED; unrelated acquisition/body failures preserve previous failure behavior.",
+    "Batch child headline retained; actual uploaded original bytes and compatibility receipt retained in delivered evidence ZIP.",
+    "Reference study refusal preserves reference mode; endpoint W864000/L86400/policy/ticks/syncfalse preserved, no model/build/replay, unknown values null.",
+    "Latest closed identity family and four upstream Go files are byte-exact b1ef; current stage images, all prior family grants and unrelated services preserved."
+  ],
+  "controls": {
+    "independent_focused_tests": 4,
+    "test_skips": 0,
+    "actual_os_lock_timeout_seconds": 20,
+    "actual_uploaded_batch_control": "PASS",
+    "strict_catalogue_actual_consumers": 0,
+    "helm_default_and_three_overlay_components": 6,
+    "render_change_counts": {
+      "brain": 4,
+      "manager": 1,
+      "console": 2,
+      "actuator": 0,
+      "sensor": 0,
+      "attacks": 0
+    },
+    "archived_payloads_compared": true,
+    "runtime169_hashes_verified": true
+  },
+  "artifacts": [
+    {
+      "path": "peer-review/bot-lease-repair/source-binding.json",
+      "sha256": "2dd995145ebdb17a7bc5ef7a84b817737d4df437939bb088e25dd548217832ed"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/independent-tests.txt",
+      "sha256": "a99c65f96c4550a58d5d8fb2bb47518c3730a4b659b989d1ee1293841e053013"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/uploaded-batch-before.json",
+      "sha256": "b2f005ea891be06a449088977373db63099a0f833919dc8e6fe48e277e32a060"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/uploaded-batch-after.json",
+      "sha256": "69cbbd89502a692a6287752f44aa1f57eb1b3424fa8ba79647c73def20b85c40"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/uploaded-batch-after.py",
+      "sha256": "676509ac4a99a280ca11ae8a32dd75d114f423a4ce326f7eed9e40ffc1b195b7"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/independent-extension-assertion-note.txt",
+      "sha256": "48965eae3421b9ff2653e5b637f08e47b40b6b746a7767382125ac8a5f7b1442"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/independent-render-control.py",
+      "sha256": "8c60a377fe6ab1d9e64ba660258d08215cf6f2fef6ec5e155ac60eff65798b20"
+    },
+    {
+      "path": "peer-review/bot-lease-repair/independent-render-control.json",
+      "sha256": "ce3df72959a1da88f3c8311035e6584d1504e3eb2ec6271d27d303506a72f02f"
+    }
+  ],
+  "author_evidence": {
+    "path": "bot-lease-repair/author-evidence.json",
+    "sha256": "3ab2105687718e39de08b6bafff63df4230c7a3665453607411781e004e58ac9"
+  },
+  "limitations": [
+    "External transports are scripted in local producer fixtures; actual OS locking, parsing, queue/batch, PXMS, native fixture and report archive execute. This is not live Telegram or live-brain acceptance.",
+    "Existing random admission certificate values normalized during render comparison; underlying template bytes unchanged.",
+    "Initial independent uploaded-file assertion assumed .txt although helper uploads .md; corrected test-only extension assumption and retained initial script/note.",
+    "Commit binding, coherent final source preflight and current live capture/runtime acceptance remain separate required steps."
+  ]
+}

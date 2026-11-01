@@ -1,0 +1,12 @@
+{
+  "verdict": "PASS_LOCAL_COHERENT_PREFLIGHT_ONLY",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:57:48.294185+00:00",
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "base": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "checks": 8,
+  "strict_require_worktree": true,
+  "receipt_path": "workflow/fixes/BENCH-SELFSERVE/evidence/upstream-b1ef/preflight/receipt.json",
+  "receipt_sha256": "37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a",
+  "limits": "Dedicated author L1/L2 and current-source workflow handoff remain separate. No live bot positive acceptance claim."
+}

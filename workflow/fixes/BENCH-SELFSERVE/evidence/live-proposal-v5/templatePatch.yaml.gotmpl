@@ -1,0 +1,17 @@
+{{- if and (eq .environment "staging") (or (eq .service "brain") (eq .service "manager") (eq .service "console")) }}
+spec:
+  sources:
+  - helm:
+      releaseName: '{{.release}}'
+      skipCrds: true
+      valueFiles:
+      - $values/deploy/environments/{{.environment}}/phorvex.yaml
+      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml
+      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml
+    path: '{{.chart}}'
+    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+    targetRevision: 4116c23e7b44e804596e7c711f1aa05d5662e896
+  - ref: values
+    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+    targetRevision: 4116c23e7b44e804596e7c711f1aa05d5662e896
+{{- end }}

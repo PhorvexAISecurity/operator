@@ -1,0 +1,18 @@
+{
+  "state": "FAILED",
+  "pid": 500673,
+  "source_sha": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "started_at": "2026-11-01T19:18:33.371117+00:00",
+  "results": [
+    {
+      "name": "coherent-current-preflight",
+      "exit_code": 1,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 590.589,
+  "step": "coherent-current-preflight",
+  "child_pid": 500674,
+  "exit_code": 1,
+  "finished_at": "2026-11-01T19:28:23.960311+00:00"
+}

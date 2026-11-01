@@ -1,0 +1,7 @@
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator-refactored/pull/198
+  reviewed_head: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+  checks: PASS
+next_action:
+  owner: coordinator
+  action: Retain reviewed PR delivery; merge only after separate user authorization and continue actual stage benchmark verification.

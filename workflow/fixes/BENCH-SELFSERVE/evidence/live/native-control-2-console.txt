@@ -1,0 +1,3 @@
+{"policy": "demo-api-defense", "state": "PASS", "exact_baselines": 64}
+{"policy": "stage-bench-defense", "state": "PASS", "exact_baselines": 64}
+{"state": "PASS", "receipt_sha256": "a60562104609af711eaff7857e8c41854405f426ed13f477d502f9325397a2b5", "path": "/home/hami/phorvex-benchmark/stage-data/live/selfserve-native-control-2/receipt.json"}

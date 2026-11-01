@@ -1,0 +1,6 @@
+15727: 2026-11-01T21:17:14.6316237Z   run github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker
+15728: 2026-11-01T21:17:14.6318622Z   run github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/result_write_failure
+15729: 2026-11-01T21:17:26.6511456Z  pass github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/result_write_failure
+15730: 2026-11-01T21:17:26.6513005Z   run github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure
+15731: 2026-11-01T21:17:38.6760113Z  pass github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure
+15732: 2026-11-01T21:17:38.6762184Z  pass github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker

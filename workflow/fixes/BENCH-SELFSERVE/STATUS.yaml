@@ -1,0 +1,496 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 30
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+  deploy: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: bench-v3-lead
+    artifact: 03-decision.md
+    sha256: db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c
+    source_sha: fe6494022a65fcca236e405521685708eb104d9e
+    at: '2026-11-01T17:32:49+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+    rationale: Current user remediation scope covers durable stage capture access;
+      no new execution authority or weaker evidence requirement
+  red:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/baseline-red.md
+    sha256: a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3
+    source_sha: fe6494022a65fcca236e405521685708eb104d9e
+    at: '2026-11-01T17:31:32+00:00'
+  base_review:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/upstream-be676/base-review.md
+    sha256: a2e4c7bdd5a13bc3ded53e369356532d743bc5dc10c25d77a768ebca7faee0d0
+    source_sha: be676c84d162528c10bacb84c8e6a11de30ade5d
+    at: '2026-11-01T21:09:16+00:00'
+    baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+  preflight:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/upstream-be676/preflight/receipt.json
+    sha256: 353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:46+00:00'
+  implementation:
+    result: PASS
+    by: bench-v3-worker
+    artifact: 04-diff.patch
+    sha256: 46724a4b57658efee5cbfe1169eddffe7339068ef4bc69a05766ad5bf8b53af2
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:46+00:00'
+  l0:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/upstream-be676/preflight/receipt.json
+    sha256: 353824d0b96f6ceb17c1ef8a0f6b4360aa42bc7dfd969992d52ceb8c728b82d3
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:46+00:00'
+  l1:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/upstream-be676/l1.txt
+    sha256: 02065d9fa05fa94f90e3b9fafa6fbdac2a52af061596f889705fb86914db8b01
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:47+00:00'
+  l2:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/upstream-be676/l2.txt
+    sha256: 29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:47+00:00'
+  positive_control:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/upstream-be676/l2.txt
+    sha256: 29580b37ce3ed119abc8f0a4e6089d0bf9285080c8d1c8be44d6a515becdd5aa
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:22:47+00:00'
+  incident:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/incident.md
+    sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:23:39+00:00'
+    baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+  p3:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/p3/verdict.md
+    sha256: e31b15c828bdff2b31be92bf45b61f0817a522069a886f55e952daee6a17cb73
+    source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+    at: '2026-11-01T21:23:40+00:00'
+    incident_sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+fix_id: BENCH-SELFSERVE
+issues: []
+title: Durable stage benchmark readiness for requested policies and release changes
+profile: standard
+state: IN_PR
+roles:
+  human_owner: hamihoriyat
+  proposer: bench-v3-lead
+  implementer: bench-v3-worker
+  skeptic: bench-v3-lead
+  live_verifier: bench-v3-lead
+  coordinator: bench-v3-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: true
+  deployment_authority: true
+baseline:
+  code_branch: main
+  code_sha: fe6494022a65fcca236e405521685708eb104d9e
+  deployed_image: null
+  deployed_git_sha: 61e83673b8d4f143fca67e17b8a54dc4712f9b28
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/benchmark-selfserve
+  base_sha: be676c84d162528c10bacb84c8e6a11de30ade5d
+  head_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+  stacked_on: []
+pull_request:
+  url: https://github.com/PhorvexSecurity/operator-refactored/pull/198
+  reviewed_head: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+  merge_sha: null
+  checks: PASS
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: live_verifier
+  action: Continue current native and real bot controls; retain source reviewed PR198;
+    main merge requires explicit authorization
+updated_at: '2026-11-01T21:26:13+00:00'
+follow_up_to: BENCH-STAGE
+configuration_history:
+- at: '2026-11-01T17:25:14+00:00'
+  by: bench-v3-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+- at: '2026-11-01T18:50:58+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T19:03:40+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T19:14:32+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T19:41:19+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T19:58:04+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T20:13:16+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T20:25:20+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T20:43:14+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T20:57:35+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T21:03:50+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T21:08:26+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T21:22:45+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T21:26:01+00:00'
+  by: bench-v3-lead
+  fields:
+  - next_action
+  - pull_request
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-11-01T17:25:43+00:00'
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-11-01T17:26:06+00:00'
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-11-01T19:03:42+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-11-01T19:03:57+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-11-01T21:00:51+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-11-01T21:01:07+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IMPLEMENTED
+  at: '2026-11-01T21:22:22+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Current-source implementation return after upstream composition; historical225
+    P3 remains preserved; no gate bypass.
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-11-01T21:22:49+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-11-01T21:23:42+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-11-01T21:23:57+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: PR_READY
+  to: IN_PR
+  at: '2026-11-01T21:26:13+00:00'
+  by: bench-v3-lead
+  artifact: evidence/delivery/reviewed-pr-ready-287fd.json
+  note: Current source P3 and all required source checks passed; actual live obligations
+    remain open
+  approval_ref: operations/AUTONOMY.md
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 971466fdb0011b7e3b9a09db71925c291dfc3abda1eebd5b9b987c6a7c8c5b53
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  at: '2026-11-01T17:26:01+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+- check: base_review
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/upstream-integration/base-review.md
+  sha256: 6f9483d81a932792d1977fb04fd8b28fbf8d2325c9551d8157ee0df0aba9b7b7
+  source_sha: c3174a516bee6bf8eae39749825051c3cfcb8cc6
+  at: '2026-11-01T19:03:27+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: base_review
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/upstream-bee9/base-review.md
+  sha256: 63cfb1870f19ed7b8f7ce91f9416fbce81d590b8ff450e45e05e22e9f6ce6c67
+  source_sha: bee9caccf3bae388d412e72adfe50ca9de41a486
+  at: '2026-11-01T19:17:00+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: base_review
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/upstream-a5f/base-review.md
+  sha256: d1540cc0ece6e0514abaf100e6eb9fd1dd2ffe3635b1df8d90e185c81332d594
+  source_sha: a5f32f9dba5ed6e756f11b73ece968d54805c3e2
+  at: '2026-11-01T19:58:26+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: base_review
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/upstream-1457/base-review.md
+  sha256: 5cf7dfd2c1466932bb6e492a10b3980fe1b4dfcf66af4f9134b568661266a16e
+  source_sha: 1457be4433a719784523a68ec3dd982cb57af409
+  at: '2026-11-01T20:26:08+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: preflight
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/preflight/receipt.json
+  sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: implementation
+  result: PASS
+  by: bench-v3-worker
+  artifact: 04-diff.patch
+  sha256: 1ff1b68d382ec1efa297ebe56be6d7075e7343131d3a06583281aed9f7681ebc
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: l0
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/preflight/receipt.json
+  sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: l1
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/final-source/l1.txt
+  sha256: 089866873ae2f9832a61fda8f7b30b23ebfcc18255c1b30a3de18d7ccc29310e
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: l2
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/final-source/l2.txt
+  sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: positive_control
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/final-source/l2.txt
+  sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+  source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  at: '2026-11-01T19:03:41+00:00'
+- check: base_review
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/upstream-b1ef/base-review.md
+  sha256: 60b89c13760229ea921b3d71e23d618e03c3da51003e7c5192b57330f54bfa11
+  source_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  at: '2026-11-01T20:47:40+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: implementation
+  result: PASS
+  by: bench-v3-worker
+  artifact: 04-diff.patch
+  sha256: 8fde779bd69073a83f4b7ff90965e0ed51f36e3af59a171f8bdbf207e4e42fc2
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:37+00:00'
+- check: preflight
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/upstream-b1ef/preflight/receipt.json
+  sha256: 37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:37+00:00'
+- check: implementation
+  result: PASS
+  by: bench-v3-worker
+  artifact: 04-diff.patch
+  sha256: 46724a4b57658efee5cbfe1169eddffe7339068ef4bc69a05766ad5bf8b53af2
+  source_sha: 287fd2e4cd97c1ef8a0475b16316b04c6938b518
+  at: '2026-11-01T21:22:16+00:00'
+- check: l0
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/upstream-b1ef/preflight/receipt.json
+  sha256: 37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:37+00:00'
+- check: l1
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/upstream-b1ef/l1.txt
+  sha256: df5290a915e7821e2cced41076f3d371e111088a32b61accbf300541bd01323a
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:37+00:00'
+- check: l2
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/upstream-b1ef/l2.txt
+  sha256: 5ccc89d23f83f699518f4b26a54570e4609b0998c9397f447c4d3525a19d17c4
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:37+00:00'
+- check: positive_control
+  result: PASS
+  by: bench-v3-worker
+  artifact: evidence/upstream-b1ef/l2.txt
+  sha256: 5ccc89d23f83f699518f4b26a54570e4609b0998c9397f447c4d3525a19d17c4
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T20:57:38+00:00'
+- check: incident
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/incident.md
+  sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T21:00:49+00:00'
+  baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+- check: p3
+  result: PASS
+  by: bench-v3-lead
+  artifact: evidence/p3/verdict.md
+  sha256: 204a473f57ef22f39f0b3d170588de9814223603116775fe15829acfa4276e60
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  at: '2026-11-01T21:00:49+00:00'
+  incident_sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+handoff:
+  id: BENCH-SELFSERVE:28:review
+  from: bench-v3-lead
+  to: bench-v3-lead
+  role: coordinator
+  kind: review
+  revision: 28

@@ -1,0 +1,48 @@
+schema_version: 2
+campaign_id: 2026-11-01-stage-selfserve
+profile: workflow-v2
+question: Verify durable stage capture and real bot requests across source/policy
+  readiness
+state: DRAFT
+owner: hamihoriyat
+approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+created_at: '2026-11-01T17:25:57+00:00'
+updated_at: '2026-11-01T17:25:57+00:00'
+scope:
+  environment: phorvex-dev-eks:phorvex-staging,phorvex-staging-demo; jh benchmark
+    host
+  source_release: v0.4.88
+  included_fixes:
+  - BENCH-SELFSERVE
+  duration_ceiling: 6 hours; bounded offline jobs, no physical actuation
+  cost_ceiling: Existing stage resources only; no new nodes; bounded 64-tick controls
+    and 4GiB host reserve
+  permission: controlled-mutation
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex:0.4.119
+  digest: sha256:97ec2447ba6ae2aba9e9391ebf21dfbc3b5d262ccdfb519b3746dfb77398f48d
+  embedded_git_sha: 61e83673b8d4f143fca67e17b8a54dc4712f9b28
+safety:
+  stop_conditions:
+  - Unexpected scope/UID changes, incomplete rollout, disk reserve or evidence integrity
+    violation
+  phase_approval_ref: null
+  unresolved: []
+  cleanup: pending
+positive_control: pending
+rounds:
+- id: round-1
+  state: PLANNED
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: bench-v3-lead
+  independent_reviewer: stage-review
+  coordinator: bench-v3-lead
+next_action:
+  owner: campaign-lead
+  action: Complete hypotheses and safety pre-registration.
+transitions: []

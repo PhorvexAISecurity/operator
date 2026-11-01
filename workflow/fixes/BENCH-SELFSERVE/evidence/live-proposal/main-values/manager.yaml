@@ -1,0 +1,8 @@
+# The manager chart's own staging values (phorvex/charts/phorvex), merged after phorvex.yaml.
+# The release (phase 5c) writes the published manager image here, under `phorvex.image`.
+phorvex:
+  image:
+    repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
+    tag: "staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28"
+    releaseDigest: "sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33"
+    releaseSourceSHA: "61e83673b8d4f143fca67e17b8a54dc4712f9b28"

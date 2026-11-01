@@ -1,0 +1,33 @@
+{
+  "schema": "phorvex-bench.peer-owned-pin-removal.v2",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T19:30:58.571371+00:00",
+  "verdict": "PASS_FOR_REMOVAL_OF_EXACT_OWNED_OVERRIDE",
+  "script": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/remove-owned-v3-pin-for-image-release.py",
+    "sha256": "1c14eb4d839a230cafb1f5d84fa07970d3ae737609fb1ca1c1a50b69aff8f020"
+  },
+  "prior_reviewed_script_sha256": "8c8e4eb5d3b19d4e9e9670a1f192d08675c0c8df7aa1126e54335333eaa6b591",
+  "exact_ast_delta": [
+    {
+      "old": "8fee86293373b85c8e1e2c42601f1424b81ca1bae3fe42cb70cb185cd63bba64",
+      "new": "e850f10e50b886915f1437a9f6784fa211af9b395c973fb1b3135be3f35ddb07"
+    },
+    {
+      "old": "Concurrent reviewed upstream PR191 and PR192 close the quarantine window; remove only this campaign owned pin so current main operator settings are not held back. Runtime installation success remains separate from bot acceptance.",
+      "new": "Concurrent upstream PR193 pins new bee9 isolated images at main e9d796a5; remove only this campaign owned V3 pin so the actual release can roll. No new-source bot acceptance has occurred."
+    }
+  ],
+  "owned_template_sha256": "e850f10e50b886915f1437a9f6784fa211af9b395c973fb1b3135be3f35ddb07",
+  "expected_applicationset_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "checks": [
+    "Exactly two string constants change: owned V3 template hash and descriptive PR193 cause; all executable AST nodes otherwise identical to independently accepted removal8c8.",
+    "Fresh exact UID and owned template content hash required, followed by UID/resourceVersion/full-template-value JSON patch tests and remove only /spec/templatePatch.",
+    "Underlying main source/template remains unchanged; no direct workload, policy, runtime, source, journal or unrelated AppSet setting mutation.",
+    "Post-response requires templatePatch absent. This fulfills temporary pin expiry after the external image release."
+  ],
+  "limits": [
+    "Root retains actual CAS and subsequent current-main rollout/readiness receipts; this proposal review proves neither live execution nor benchmark readiness.",
+    "V3 applied receipt is APPLIED_ROLLOUT_PENDING, not success. Earlier evidence is preserved unchanged."
+  ]
+}

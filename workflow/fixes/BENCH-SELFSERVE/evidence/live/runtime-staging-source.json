@@ -1,0 +1,31 @@
+{
+  "commit": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "at": "2026-11-01T18:53:51.888173+00:00",
+  "archive_scope": "complete git archive of exact reviewed source commit",
+  "files": {
+    "source.tar.gz": {
+      "sha256": "0a3bcb6b60c032a8f60a22056b9a0c2b59029dd3da82efe7d6db9f5bba08e934",
+      "bytes": 17890209
+    },
+    "reviewed-source-manifest.json": {
+      "sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67",
+      "bytes": 8482
+    },
+    "install-reviewed-runtime.py": {
+      "sha256": "6e699fd5cf245572aae4cac3de165e4feeedf5484873ce8c539c0bc36bb5763c",
+      "bytes": 10365
+    },
+    "run-selfserve-bot-acceptance.py": {
+      "sha256": "4ed509d87adab058aa026e6f6f1d890e02e3263a5d5eb407641bf40337b37a28",
+      "bytes": 7917
+    },
+    "runtime-probe-b3d55bdd.json": {
+      "sha256": "b080a773ed58b7cf1adeec3a6caea27e189204293949c5569a6f354e05d6f95c",
+      "bytes": 8608
+    },
+    "original-10d.txt": {
+      "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+      "bytes": 13522
+    }
+  }
+}

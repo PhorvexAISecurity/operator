@@ -1,0 +1,14 @@
+{
+  "runtime": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "runtime_equal_capture_source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "actual_brain": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "acceptance_script_sha256": "8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf",
+  "launcher_sha256": "6442b0ca15ae8b79cfde4f836a693417819e5860aaee030aae10b91dc8c09306",
+  "script_delta": "Only unique output namespace b1ef-r5; requests, engine, outboundrecipient and allrestoration protections identical reviewed4ed script",
+  "launcher_delta": "Unique unit/script namespace/hash and actualb1ef pin; existing trusted env propagation/sanitizederrors/installed runtimeWD guards unchanged",
+  "phases": [
+    "initial",
+    "fixture"
+  ],
+  "original_request_unchanged": true
+}

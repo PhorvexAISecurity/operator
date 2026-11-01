@@ -1,0 +1,352 @@
+{
+  "at": "2026-11-01T17:52:05.480648+00:00",
+  "apps": [
+    {
+      "name": "phorvex-brain-staging",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/brain.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "deploy/charts/phorvex-brain",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6"
+        ],
+        "status": "Synced"
+      },
+      "health": {
+        "lastTransitionTime": "2026-11-01T10:05:20Z",
+        "status": "Healthy"
+      },
+      "operationPhase": "Succeeded",
+      "conditions": null
+    },
+    {
+      "name": "phorvex-manager-staging",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/manager.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "phorvex/charts/phorvex",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6"
+        ],
+        "status": "OutOfSync"
+      },
+      "health": {
+        "lastTransitionTime": "2026-11-01T17:23:48Z",
+        "status": "Healthy"
+      },
+      "operationPhase": "Succeeded",
+      "conditions": null
+    },
+    {
+      "name": "phorvex-console-staging",
+      "sync": {
+        "comparedTo": {
+          "destination": {
+            "namespace": "phorvex-staging",
+            "server": "https://kubernetes.default.svc"
+          },
+          "ignoreDifferences": [
+            {
+              "group": "apiextensions.k8s.io",
+              "jsonPointers": [
+                "/status"
+              ],
+              "kind": "CustomResourceDefinition"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "ConfigMap",
+              "name": "agent-deny-guard",
+              "namespace": "p6-demo"
+            },
+            {
+              "jsonPointers": [
+                "/data"
+              ],
+              "kind": "Secret",
+              "name": "staging-phorvex-webhook-cert"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "MutatingWebhookConfiguration"
+            },
+            {
+              "group": "admissionregistration.k8s.io",
+              "jqPathExpressions": [
+                ".webhooks[]?.clientConfig.caBundle"
+              ],
+              "kind": "ValidatingWebhookConfiguration"
+            }
+          ],
+          "source": {
+            "repoURL": ""
+          },
+          "sources": [
+            {
+              "helm": {
+                "releaseName": "staging",
+                "skipCrds": true,
+                "valueFiles": [
+                  "$values/deploy/environments/staging/phorvex.yaml",
+                  "$values/deploy/environments/staging/console.yaml",
+                  "$values/deploy/environments/staging/catalogue-family.yaml"
+                ]
+              },
+              "path": "deploy/charts/phorvex-console",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            },
+            {
+              "ref": "values",
+              "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+              "targetRevision": "main"
+            }
+          ]
+        },
+        "revisions": [
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+          "c3174a516bee6bf8eae39749825051c3cfcb8cc6"
+        ],
+        "status": "OutOfSync"
+      },
+      "health": {
+        "lastTransitionTime": "2026-11-01T17:23:43Z",
+        "status": "Healthy"
+      },
+      "operationPhase": "Succeeded",
+      "conditions": null
+    }
+  ],
+  "deployments": [
+    {
+      "name": "staging-brain",
+      "generation": 33,
+      "replicas": 1,
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T10:05:19Z",
+            "lastUpdateTime": "2026-11-01T10:05:19Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-22T10:03:41Z",
+            "lastUpdateTime": "2026-11-01T10:05:19Z",
+            "message": "ReplicaSet \"staging-brain-679b7c684b\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 33,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    },
+    {
+      "name": "staging-phorvex",
+      "generation": 84,
+      "replicas": 1,
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T17:23:48Z",
+            "lastUpdateTime": "2026-11-01T17:23:48Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-31T08:36:36Z",
+            "lastUpdateTime": "2026-11-01T17:23:48Z",
+            "message": "ReplicaSet \"staging-phorvex-d48d69656\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 84,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    },
+    {
+      "name": "staging-phorvex-console",
+      "generation": 53,
+      "replicas": 1,
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-01T17:23:43Z",
+            "lastUpdateTime": "2026-11-01T17:23:43Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-10-22T15:03:41Z",
+            "lastUpdateTime": "2026-11-01T17:23:43Z",
+            "message": "ReplicaSet \"staging-phorvex-console-59f7f5b866\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 53,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    }
+  ]
+}
