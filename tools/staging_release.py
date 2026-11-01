@@ -931,32 +931,41 @@ def active_catalogue_fixture_consumers(
     agent = catalog.get("agentAction", {}) if isinstance(catalog, dict) else {}
     if not any((catalog.get("enabled"), fixtures.get("enabled"), agent.get("enabled"))):
         return {}
-    if not (
-        catalog.get("enabled") is True
-        and fixtures.get("enabled") is True
-        and fixtures.get("profile") == "agent-action"
-        and agent.get("enabled") is True
-    ):
-        raise ValueError("active staging catalogue window is not the supported agent-action profile")
+    profile = fixtures.get("profile")
+    if catalog.get("enabled") is not True or fixtures.get("enabled") is not True or not isinstance(profile, str):
+        raise ValueError("active staging catalogue window is incomplete")
 
-    fixture = next(item for item in batch["components"] if item["component"] == "agent-sim")
-    fixture_image = (
-        f"{batch['releases']['agent-sim']['repository']}@"
-        f"{batch['releases']['agent-sim']['digest']}"
-    )
-    generated = subprocess.run([
+    matching = []
+    for name in FIXTURE_NAMES:
+        fixture = next(item for item in batch["components"] if item["component"] == name)
+        consumers = [consumer for consumer in fixture["deploy"]["consumers"] if consumer["profile"] == profile]
+        if consumers:
+            matching.append((name, consumers))
+    if len(matching) != 1:
+        raise ValueError(
+            f"active staging catalogue profile {profile!r} does not select one source-pinned fixture component"
+        )
+    name, profile_consumers = matching[0]
+    fixture_image = f"{batch['releases'][name]['repository']}@{batch['releases'][name]['digest']}"
+    agent_release = batch["releases"]["agent-sim"]
+    agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
+    command = [
         "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
-        "--profile", "agent-action", "--agent-image", fixture_image,
-    ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
+        "--profile", profile, "--agent-image", agent_image,
+    ]
+    if name == "catalogue-workload":
+        command.extend(("--workload-image", fixture_image))
+    generated = subprocess.run(
+        command, cwd=ROOT, check=True, text=True, capture_output=True,
+    ).stdout
     if values != yaml.safe_load(generated):
-        raise ValueError("active agent-action catalogue window differs from the exact generated overlay")
+        raise ValueError(f"active {profile} catalogue window differs from the exact generated overlay")
     consumers = {
         consumer_key(consumer): fixture_image
-        for consumer in fixture["deploy"]["consumers"]
-        if consumer["profile"] == "agent-action"
+        for consumer in profile_consumers
     }
     if not consumers:
-        raise ValueError("active agent-action catalogue window has no source-pinned fixture consumer")
+        raise ValueError(f"active {profile} catalogue window has no source-pinned fixture consumer")
     return consumers
 
 
