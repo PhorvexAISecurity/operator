@@ -18,6 +18,7 @@ func TestAttackCatalogEnvironmentRequiresFixedProfilePath(t *testing.T) {
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT"] = "console-identity-test"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL"] = "system:serviceaccount:phorvex-test:phorvex-test-actuator"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL"] = "system:serviceaccount:phorvex-test:phorvex-test-attacks-cleanup"
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE"] = "phorvex-test"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE"] = "/tmp/client-choice.json"
 	if err := applyCatalogueV1Environment(&cfg, lookup); err == nil {
 		t.Fatal("caller-variable profile path was accepted")
@@ -46,6 +47,7 @@ func TestAttackCatalogPrometheusEvidenceRequiresPinnedDeploymentSource(t *testin
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE"] = "/etc/phorvex-attack-catalog/identity-profile.json"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL"] = "system:serviceaccount:phorvex-test:phorvex-test-actuator"
 	values["PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL"] = "system:serviceaccount:phorvex-test:phorvex-test-attacks-cleanup"
+	values["PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE"] = "phorvex-test"
 	if err := applyCatalogueV1Environment(&cfg, lookup); err == nil {
 		t.Fatal("Prometheus evidence was enabled without its URL and environment")
 	}
@@ -73,6 +75,7 @@ func TestAttackCatalogAgentActionRequiresImmutableImageAndExactPrincipals(t *tes
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_AGENT_ACTUATOR_PRINCIPAL": "system:serviceaccount:p6:p6-actuator",
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL":       "system:serviceaccount:p6:p6-actuator",
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL":        "system:serviceaccount:p6:p6-attacks-cleanup",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE":       "p6",
 	}
 	lookup := func(key string) (string, bool) { value, ok := values[key]; return value, ok }
 	var cfg console.Config
@@ -105,6 +108,7 @@ func TestAttackCatalogRemediationPrincipalsAreRequiredExactAndDistinct(t *testin
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_AUTHORIZATION_TENANT": "phorvex-test",
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_TENANT":      "console-identity-test",
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_IDENTITY_PROFILE":     "/etc/phorvex-attack-catalog/identity-profile.json",
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE":   "phorvex-test",
 	}
 	clone := func(extra map[string]string) func(string) (string, bool) {
 		values := map[string]string{}
@@ -131,6 +135,13 @@ func TestAttackCatalogRemediationPrincipalsAreRequiredExactAndDistinct(t *testin
 		t.Fatal("missing cleanup principal was accepted while the launch adapter is enabled")
 	}
 	if err := applyCatalogueV1Environment(&cfg, clone(map[string]string{
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL": actuator,
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL":  cleanup,
+		"PHORVEX_CONSOLE_ATTACK_CATALOG_OPERATOR_NAMESPACE": "",
+	})); err == nil {
+		t.Fatal("missing operator namespace was accepted while the launch adapter is enabled")
+	}
+	if err := applyCatalogueV1Environment(&cfg, clone(map[string]string{
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_ACTUATOR_PRINCIPAL": "phorvex-test/actuator",
 		"PHORVEX_CONSOLE_ATTACK_CATALOG_CLEANUP_PRINCIPAL":  cleanup,
 	})); err == nil {
@@ -149,7 +160,8 @@ func TestAttackCatalogRemediationPrincipalsAreRequiredExactAndDistinct(t *testin
 	})); err != nil {
 		t.Fatalf("valid distinct remediation principals refused: %v", err)
 	}
-	if cfg.AttackCatalogActuatorPrincipal != actuator || cfg.AttackCatalogCleanupPrincipal != cleanup {
+	if cfg.AttackCatalogActuatorPrincipal != actuator || cfg.AttackCatalogCleanupPrincipal != cleanup ||
+		cfg.AttackCatalogOperatorNamespace != "phorvex-test" {
 		t.Fatalf("remediation principals not retained: %+v", cfg)
 	}
 }

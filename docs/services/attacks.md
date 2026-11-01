@@ -141,11 +141,13 @@ Generate a complete values overlay rather than editing scopes by hand:
 ```sh
 tools/render_catalogue_staging_values.py \
   --profile quarantine \
+  --namespace-uid API_ASSIGNED_P1_DEMO_NAMESPACE_UID \
   --workload-image REGISTRY/catalogue-workload@sha256:<64hex> \
   > deploy/environments/staging/catalogue-family.yaml
 ```
 
-`--workload-image` is required for workload profiles, `--phorvex-image` for
+`--namespace-uid` is required for quarantine and pins the exact API-assigned target
+namespace UID used to resourceName-bound its operator ledgers. `--workload-image` is required for workload profiles, `--phorvex-image` for
 datastore/serving profiles, and `--agent-image` for agent-action. All supplied
 images must be complete immutable references. Python and KWOK have reviewed
 digest defaults, and can be replaced only with another immutable reference.
