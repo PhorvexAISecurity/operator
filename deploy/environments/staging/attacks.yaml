@@ -3,5 +3,5 @@
 # only where the console is enabled (docs/services/attacks.md).
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/attacks"
-  tag: "staging-0.11.0-git-a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
-  digest: "sha256:5fdc271cc9f751a5c721b3fb4cacdbeceb9d44a84a94a316ae2900de436b1eb1"
+  tag: "staging-0.11.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+  digest: "sha256:8306d710ed07560b59b89f3dad03e353ac326a606dab7366f06df00f24d710b3"
