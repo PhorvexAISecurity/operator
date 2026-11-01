@@ -3,13 +3,63 @@ subject:
   kind: campaign
   id: 2026-11-01-stage-selfserve
 artifacts:
-- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz
+- id: round4-retained-1-95c96a874646
+  path: evidence/references/bot-initial-225877-artifacts.tar.gz
+  bytes: 53615
   sha256: 95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539
-- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json
+  producer: bench-v3-lead (unchanged retained copy; original producer is in the artifact)
+  created_at: '2026-11-01T21:33:29.390919+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-artifacts.tar.gz
+  description: Byte-identical retained copy indexed at created_at. Original execution,
+    author, source and outcome remain unchanged; failed acceptance stays failed and
+    historical evidence is not current readiness.
+- id: round4-retained-2-afc75b6d92a8
+  path: evidence/references/bot-initial-225877-collection-verdict.json
+  bytes: 825
   sha256: afc75b6d92a82fc627304d1ac3c8a1156bbd6c50b124d20cb83988c41e080b53
-- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json
+  producer: bench-v3-lead (unchanged retained copy; original producer is in the artifact)
+  created_at: '2026-11-01T21:33:29.390919+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/bot-initial-225877-collection-verdict.json
+  description: Byte-identical retained copy indexed at created_at. Original execution,
+    author, source and outcome remain unchanged; failed acceptance stays failed and
+    historical evidence is not current readiness.
+- id: round4-retained-3-d5e8baac237a
+  path: evidence/references/capture-during-initial-225877.json
+  bytes: 18466
   sha256: d5e8baac237af06b1bc9a45d1c4f9e6d9b99523e71f493b4f8a9513d66cbca89
-- path: workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json
+  producer: bench-v3-lead (unchanged retained copy; original producer is in the artifact)
+  created_at: '2026-11-01T21:33:29.390919+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/capture-during-initial-225877.json
+  description: Byte-identical retained copy indexed at created_at. Original execution,
+    author, source and outcome remain unchanged; failed acceptance stays failed and
+    historical evidence is not current readiness.
+- id: round4-retained-4-fdd4698ba485
+  path: evidence/references/runtime-install-receipt-225877.json
+  bytes: 10178
   sha256: fdd4698ba485c34f7f8077a2ee78aef825c2d0067567ec67ca97d0e96150cb15
-- path: workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json
+  producer: bench-v3-lead (unchanged retained copy; original producer is in the artifact)
+  created_at: '2026-11-01T21:33:29.390919+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/live/runtime-install-receipt-225877.json
+  description: Byte-identical retained copy indexed at created_at. Original execution,
+    author, source and outcome remain unchanged; failed acceptance stays failed and
+    historical evidence is not current readiness.
+- id: round4-retained-5-a0854d1db4b3
+  path: evidence/references/manifest.json
+  bytes: 2194
   sha256: a0854d1db4b3dd07a29c8c5189d8aed1097dd6cc0a420b134d6c5bd5fa0fcca8
+  producer: bench-v3-lead (unchanged retained copy; original producer is in the artifact)
+  created_at: '2026-11-01T21:33:29.390919+00:00'
+  evidence_class: CAMPAIGN
+  retention: git
+  original_path: workflow/fixes/BENCH-SELFSERVE/evidence/delivery/ci-225877/manifest.json
+  description: Byte-identical retained copy indexed at created_at. Original execution,
+    author, source and outcome remain unchanged; failed acceptance stays failed and
+    historical evidence is not current readiness.
