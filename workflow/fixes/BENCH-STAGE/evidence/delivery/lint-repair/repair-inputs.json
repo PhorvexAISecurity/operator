@@ -1,0 +1,25 @@
+{
+  "producer": "bench-v3-worker",
+  "recorded_at": "2026-11-01T02:17:00.645488+00:00",
+  "delivery_base_sha": "32ebfee98fe434530d7867c9215e28471106256c",
+  "reviewed_implementation_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "original_ci_log": {
+    "path": "original-github-lint.log",
+    "sha256": "dfc0bd031744eecd1923b2bf3a128d42e8f5bef4f015ce61ba25e107d20de2a3",
+    "bytes": 46763
+  },
+  "source_delta": {
+    "path": "phorvex/cmd/endpoint-v3/main.go",
+    "before_sha256": "a99888c633f0f9fc716ffdc8335088bbaf3f9e9cecdf7046b8000cfac5a52bb0",
+    "after_sha256": "593ab17a24dfee201ea7f0e504b63492e51319819083f4db9a1d1c68600a7fce",
+    "description": "One blank line separates standard-library and third-party imports; no import or token is reordered."
+  },
+  "raw_evidence_relocation": {
+    "old_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go",
+    "new_path": "workflow/fixes/BENCH-STAGE/evidence/clock-repair/clock-parity.go.txt",
+    "sha256": "5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205",
+    "bytes": 968,
+    "reproduction": "Copy clock-parity.go.txt byte-for-byte to a temporary clock-parity.go and run with the exact Go1.26.3 binary. Historical output, result, receipt signatures and old source paths in original records remain unchanged."
+  },
+  "scope": "Formatting-only delivery correction plus byte-preserving raw evidence relocation. No formatter/CI rule change, no historical source repin and no relabelling live results."
+}

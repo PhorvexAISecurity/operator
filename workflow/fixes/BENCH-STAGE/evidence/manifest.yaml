@@ -818,7 +818,7 @@ artifacts:
     original source are stated inside its receipt/log; indexing alone is not a final-head
     acceptance claim.
 - id: retained-129f2c701b9f9aef
-  path: evidence/clock-repair/clock-parity.go
+  path: evidence/clock-repair/clock-parity.go.txt
   bytes: 968
   sha256: 5d1d42f2d2335b121ea09098206d4a8fda6eb3271b196a6806393c8b101c3205
   producer: bench-v3-worker
@@ -5883,3 +5883,47 @@ artifacts:
   source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
   description: Actual PR delivery/metadata equivalence receipt; remote queued/running
     checks are not a PASS claim.
+- id: lint-delivery-ca0b7435a0ac3a31
+  path: evidence/delivery/lint-repair/original-github-lint.log
+  bytes: 46763
+  sha256: dfc0bd031744eecd1923b2bf3a128d42e8f5bef4f015ce61ba25e107d20de2a3
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:17:00.645266+00:00'
+  evidence_class: CONTROL
+  retention: git
+  description: Bounded formatting-delivery correction. Original reviewed source and
+    historical/live evidence are not relabelled; raw clock source bytes are retained
+    under explicit document naming.
+- id: lint-delivery-89775e5b7fdf5de0
+  path: evidence/delivery/lint-repair/repair-inputs.json
+  bytes: 1502
+  sha256: 3398e9c1a1a07a44d08b36ee645615d8bbaf482e84f9bd6b6dd821592ce34823
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:17:00.647546+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  description: Bounded formatting-delivery correction. Original reviewed source and
+    historical/live evidence are not relabelled; raw clock source bytes are retained
+    under explicit document naming.
+- id: lint-delivery-dd5f37054582b852
+  path: evidence/delivery/lint-repair/token-ast-equivalence.json
+  bytes: 446
+  sha256: 2f1e9542f9b1a7f20d8a46d987779285247fed13ded34dc1bc8d71f4fa984e35
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:17:34.719263+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  description: Bounded formatting-delivery correction. Original reviewed source and
+    historical/live evidence are not relabelled; raw clock source bytes are retained
+    under explicit document naming.
+- id: lint-delivery-74c4b7cd7131982c
+  path: evidence/delivery/lint-repair/verify-token-ast.go.txt
+  bytes: 2880
+  sha256: 9157a7cc29163b0af96d8bc92b105482388b56876ac94b8029a6af118140645d
+  producer: bench-v3-worker
+  created_at: '2026-11-01T02:18:01.757760+00:00'
+  evidence_class: EQUIVALENCE
+  retention: git
+  description: Bounded formatting-delivery correction. Original reviewed source and
+    historical/live evidence are not relabelled; raw clock source bytes are retained
+    under explicit document naming.
