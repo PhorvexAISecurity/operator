@@ -1,0 +1,9 @@
+test_original_endpoint_request_and_cancel_are_preserved_under_contention (test_job_lease.JobLeaseTests.test_original_endpoint_request_and_cancel_are_preserved_under_contention) ... ok
+test_real_timeout_remains_blocked_after_release_and_successful_readiness (test_job_lease.JobLeaseTests.test_real_timeout_remains_blocked_after_release_and_successful_readiness) ... ok
+test_reference_study_lease_refusal_retains_reference_mode (test_job_lease.JobLeaseTests.test_reference_study_lease_refusal_retains_reference_mode) ... ok
+test_unrelated_acquisition_and_body_errors_keep_existing_failure_handling (test_job_lease.JobLeaseTests.test_unrelated_acquisition_and_body_errors_keep_existing_failure_handling) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 27.147s
+
+OK

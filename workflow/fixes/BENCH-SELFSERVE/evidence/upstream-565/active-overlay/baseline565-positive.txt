@@ -1,0 +1,1 @@
+{"consumers": 1, "images": ["753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"]}

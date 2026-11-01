@@ -1,0 +1,19 @@
+{
+  "verdict": "PASS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:03:10.917704+00:00",
+  "commit": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "parents": [
+    "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "eef02325207c33cde90a377c390d1539c83cc3cc"
+  ],
+  "tree": "e65d55fe7912385af2ec7b98392730435555ef61",
+  "composition_manifest_sha256": "6b27f6b48c7b3eda8d840a5c126bd4bf78650766c8e8939ecc5af0a4a81f0595",
+  "component_verdict_sha256": "bca71aad18d674da14071d19b4f25826390771bdd697ef7d9e7362b760de44cf",
+  "runtime169_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "all8_commit_blobs_verified": true,
+  "all169_runtime_blobs_unchanged_and_verified": true,
+  "clean_isolated_worktree": true,
+  "commit_message_verified_no_attribution": true,
+  "limits": "Source composition binding only; finalcurrent-sourcepreflight andliveacceptance remain separate."
+}

@@ -1,0 +1,145 @@
+[bench]
+policy: phorvex-staging-demo/demo-api-defense
+ticks: 64
+sync: false
+change:
+Implement and benchmark V3 ONLY: exactly the V2 endpoint-second cost, SLO-based admission, security
+gain V, and deterministic greedy selection, PLUS the NEW adaptive lambda controller affecting
+J=V-lambda_eff*E. Do not implement entropy, history-aware picker, stochastic timing or priced-worth
+rejection. This is an isolated experimental patch, not a production deployment. Keep the original
+behavior accessible as baseline and preserve the runner's automatic restoration. FIRST INSPECT THE
+REAL REPOSITORY. Locate the existing candidate generation, security gain/provenance/fact
+invalidation, action registry, economics.go, decision selection, readiness/EndpointSlice data, SLO
+configuration, move history, budget journal and replay tests. Use existing types/APIs; do not invent
+names or claim that proposed features already exist. Record file paths and which data actually
+exist. Do not implement fake stubs that silently return success. If a mandatory input is missing,
+report BLOCKED with the exact missing field/path; do not replace it with invented measurements. V3
+SECURITY GAIN (IDENTICAL TO V2). For each feasible candidate m, calculate V(m) as the EXISTING
+incremental, provenance-adjusted weighted coverage of facts actually invalidatable by that action in
+the current snapshot, with any old cost penalty removed. Deduplicate fact identities across
+pods/actions before summing. An action that cannot invalidate a fact contributes zero for that fact.
+Do not assume rotate invalidates every kind of fact. Use the actual existing fact-to-actuator
+mapping and provenance evidence; do not manufacture q,d or verification data. If a new
+verified-effect matrix is not present, retain the existing grounded coverage/provenance semantics,
+explicitly report the limitation, and do not claim verified 24-hour coverage. V must be in security
+points, not endpoint-seconds. V3 BUDGET (IDENTICAL TO V2). Per workload use R=(1-s)*W*N
+endpoint-seconds, where N is workload spec.replicas (NOT currently ready pods), s is the policy SLO
+target (study default .999), and W=864000 seconds (10 days) is an explicit shadow-study window
+override for BOTH V2 and V3. Use the same effective study s, W and N in budget admission, history
+filtering and lambda normalization. Record the original accepted policy window separately; do not
+modify the deployed policy or represent this override as tenant acceptance. In acting mode, missing
+accepted SLO refuses hygiene/response; do not silently treat a default as tenant acceptance. Used =
+deduplicated settled measured endpoint-seconds in the rolling W window; held = reservations for open
+moves, with overdue holds at least actual measured loss so far. R_left=R-used-held. Admission
+requires rho<=R_left (or rho=0). Atomic reservations and open-to-settled transfer must not
+double-charge. If the authoritative ledger is absent, implement a truthful shadow estimator and
+report that acting admission is BLOCKED; do not invent settled charges. HISTORY READINESS FOR THE
+10-DAY STUDY. At each replay timestamp t, require complete retained measured budget history covering
+[t-864000,t] and complete attributed lambda spend history covering [t-86400,t], including relevant
+open moves and intervals crossing the left boundary. Restrict settled charges to their overlap with
+the study window; preserve the no-double-charge rule. Do not require 30 days of history for this
+study. Do not interpret 10 days as replay execution duration: ticks remains 64 and recorded
+timestamps drive dt. Report required and available history bounds and gaps. If even 10 days are
+unavailable, return BLOCKED with the missing coverage; do not fill missing history with zero or
+silently shorten the window further. Apply identical effective study settings and completeness
+checks to both arms. V3 COST (IDENTICAL TO V2). k is number of served endpoints actually taken out
+of service by candidate; quarantine k=1 even when unserved, unless workload has no endpoints (then
+k=0). Partition duration samples by workload UID and action; newest 200 settled within W, excluding
+suspect lineage; censored samples must be retained. Class prior T_class: GPU-serving 130s; stateful
+(StatefulSet/PVC) 141s; stateless Deployment/ReplicaSet without GPU/PVC 43s; unknown 400s. For n<29,
+T_mid=T_class and T_upper=max(T_class, largest finite sample); any censored sample makes upper bound
+unavailable. For n>=29, T_mid=median of usable observed durations and T_upper is the r-th order
+statistic with censored durations sorted as +infinity, where r is the smallest integer satisfying
+P[Binomial(n,0.9)<r]>=0.95. If the selected r-th duration is censored/infinite, mark BOUND_MISSING.
+Do not replace missing bounds with arbitrary numbers. Set D=T_upper, T_rb=T_upper (explicit study
+proxy, NOT measured rollback), H_tail=k*T_upper, watchdog delta=30s. Let x be overdue moves out of
+n; p_f=1 for n=0 or x=n, otherwise the upper 95% Clopper-Pearson beta quantile BetaInv(.95,x+1,n-x),
+computed with a tested numeric implementation (no made-up constant). Compute
+rho=k*(D+delta+T_rb)+H_tail; C_flow=k*T_mid; C_norm=p_f*(k*(D-T_mid+delta+T_rb)+H_tail);
+E=C_flow+C_norm. All quantities are endpoint-seconds. E is the ranking cost estimate, rho is the
+hard admission reservation; never substitute E for rho. For k=0, preserve documented zero-endpoint
+behavior. If exact duration/history information is unavailable, label candidate BOUND_MISSING rather
+than inventing samples. ACTION-SPECIFIC RULES. rotate and request-drain use standard formulas.
+Quarantine has H_eff=min(cap,R_left-delta-3*T_rot), D=H_eff+T_rot, T_rb=T_rot, H_tail=T_rot,
+T_mid=H_eff+T_midrot, rho=H_eff+delta+3*T_rot; refuse BUDGET when H_eff<=0 and BOUND_MISSING if
+rotate bound absent. kv-reset: k=1 if served; measured charge is zero when it stays served, but DO
+NOT assume a zero cold-start reservation or invent an unapproved kv-reset prior. Preserve
+singleton/last-endpoint hygiene refusal and report the known kv-reset limitation. Other actuator
+classes must use documented bounds or remain unsupported/BLOCKED; never pretend all actions are
+rotate. GATES AND PRIORITY. Retain binding/installability, open-move, PDB, capacity, worth,
+one-move-per-pod, max B=1, singleton/last-endpoint, quorum, bound and budget checks, and state
+recheck. Deterministic urgent containment comes before optional hygiene; never price or randomize
+containment. Do not silently implement unapproved C1-C5 containment fixes. If containment cannot be
+admitted, preserve/refine NO_SAFE_CONTAINMENT_ACTION reporting without bypassing gates. No 24-hour
+coverage guarantee or new scheduling/anti-neglect controller in V2; those require separate validated
+implementations. GREEDY. Among optional candidates that pass ALL hard gates, choose maximum finite
+J; for equal J prefer higher V, then lower E, then stable candidate ID. At lambda_eff=0 this must
+reproduce V2 selection and tie-breaking. V3 objective is J=V-lambda_eff*E; compare J, not V, after
+feasibility gates. Containment is selected deterministically before optional pricing. Preserve
+containment priority and NOOP/refusal behavior. For optional feasible candidates, rank by J; a lower
+E may outweigh a higher V only through the stated lambda price. At lambda_eff=0, rank by V with
+lower E used only to break equal-V ties. Remove the old 1.2 ceiling, C_Hi, old 0.4/0.6 norm/flow
+penalty, old beta/dual move-count lambda ONLY from the new V3 path; do not delete the legacy
+baseline path. Avoid adding new production behavior by default: put V3 behind an experimental flag,
+enabled only for its isolated benchmark arm. V3 must not alter production or actuate without
+separate authorization. NEW LAMBDA CONTROLLER (DO NOT REUSE LEGACY dual.go): One lambda per
+(workload UID, policy). Update once per policy tick from an atomic snapshot, using trusted endpoint
+loss, NOT reserved rho, expected E, move count, pod self-reported request rate or forecast spending.
+Define L=86400 seconds (study candidate, one day), W=864000 seconds (the same 10-day shadow-study
+override used for admission), R=(1-s)*W*spec.replicas endpoint-seconds. S(t)=sum of deduplicated
+measured endpoint-seconds from settled moves in [t-L,t], PLUS accrued measured endpoint-seconds on
+open moves during that lookback. When a move settles, replace its open contribution with the settled
+contribution for the same underlying time intervals, never count both. Exclude containment from S
+only (study choice); containment still counts in authoritative R used/held. If attribution of
+unready intervals to an actual move is missing, do not treat arbitrary pod readiness loss as trusted
+move spend; report missing telemetry and keep lambda inactive rather than guessing. Compute
+b=S*W/(L*R); g=max(-1,min(b-1,G_max));
+lambda_next=clamp(lambda_prev*exp(eta*dt*g),lambda_min,lambda_max). Study-only candidates: G_max=1,
+lambda_min=0.0001, lambda_max=1000, eta=ln(lambda_max/lambda_min)/3600 per second,
+dt=clamp(snapshot_time-last_update,0,30 seconds), lambda_0=lambda_min. At exactly lambda_min,
+lambda_eff=0. These numerical values are NOT approved production calibration. Handle NaN/Inf,
+missing R, backwards clocks, duplicate ticks, restart, and failed durable state writes by disabling
+the cost term and reporting the exact reason; do not silently substitute fabricated spend or
+timestamps. Record lambda_prev, lambda_next, b, g, dt, S, R, and state-write outcome. Update and
+score from one coherent snapshot; replay with recorded timestamps. PRICE SCALING. The study
+candidates above are SCALED lambda_s values measured in security points. For this benchmark use
+J=V-lambda_s*(E/R), equivalently J=V-lambda_eff*E with lambda_eff=lambda_s/R (security points per
+endpoint-second). R is the SAME effective 10-day study budget used by shadow admission; production
+accepted SLO settings remain unchanged. This is an explicit study-form choice for V3, not an
+approved production pricing decision. Do not insert lambda_s directly into V-lambda_s*E, because
+that mixes units and changes the experiment by a factor of R. For invalid/nonpositive R, no pricing
+and refuse moves under the normal budget gates. If E=0, its price is zero. For unavailable/nonfinite
+E, apply the existing BOUND_MISSING/refusal rule, not an artificial zero price. No lambda penalty
+for containment. Do not apply a priced-worth gate (theta2): retain V2's v>theta rule. Lambda changes
+only optional greedy ordering, never admission or mandatory containment. If lambda remains at floor
+and no decisions change, report the true zero effect; do not force lambda upward to manufacture
+differences. COMPARISON CONTRACT. This single benchmark job must contain a self-contained V2
+reference arm (new cost, V-only greedy, lambda=0) and V3 arm (IDENTICAL cost, gates, V, candidate
+set, tie rules and greedy, lambda enabled). Include untouched legacy only as an optional diagnostic
+reference. Both V2 and V3 must use identical snapshots and independently initialized state. V3
+lambda state evolves only from trustworthy measured evidence, never from counterfactual actions that
+the shadow arm did not actually execute. On a fixed recorded trace, replayed spend is shared
+exogenous evidence; selected-but-not-executed actions have unknown future cost and verified effects.
+If V2 code is absent because earlier benchmark patches were reverted, implement V2 and V3 together
+in this ONE isolated checkout. Do not assume prior patches persisted. No physical actuation without
+explicit authorization and an isolated target. TEST AND EVIDENCE. Retain V2's unit tests with the
+study budget updated to R=3456 eps for N=4,s=.999,W=864000 seconds (10 days); cold stateless
+k=1,D=T_rb=T_mid=43,H_tail=43,delta=30,p_f=1 => rho=159,E=159; p_f=0 => rho=159,E=43;
+censored/invalid BOUND_MISSING; order statistic and Clopper-Pearson; no double charge; incremental V
+and dedup facts; hard gates and containment. Add lambda tests: (1) S=0 implies g=-1 and lambda
+decays/clamps at floor; (2) S=L*R/W implies b=1,g=0, lambda unchanged; (3) S=2*L*R/W implies
+b=2,g=1, lambda rises; (4) dt max 30s; (5) lambda at floor yields J=V and identical V2 decisions;
+(6) controlled example R=1000, lambda_s=100, candidates A(V=10,E=100) and B(V=9,E=1) gives J_A=0,
+J_B=8.9, so V3 picks B while V2 picks A; (7) containment bypasses price; (8) missing telemetry,
+clock backwards, failed write and open-to-settled transfer never silently activate price; (9) zero
+price when E=0; (10) no entropy, history picker or priced-worth rejection. Run Go tests and matched
+64-tick replay. Report baseline commit, code diff, tests, whether BOTH arms truly executed, per-tick
+candidate V/E/rho/R/used/held, lambda_s/lambda_eff/S/b/g/dt/J, gate/refusal, V2 vs V3 picks,
+changed-choice count, NOOP, forecast cost, and separately actual measured charges and verified facts
+when available. Report lambda saturation and missing-data reasons. Do not call replay
+counterfactuals observed live outcomes. If implementation is blocked, report exact missing code
+path/input and mark BLOCKED, never PASS. SOURCE AND SAFETY. The supplied JSON study files are
+experimental fixtures, not authoritative deployed telemetry. Study values are not production
+approvals. Preserve existing hard safety gates and refusal behavior; no unapproved containment fixes
+C1-C5. Restore checkout after the benchmark. Keep the change scoped to V3 plus its self-contained V2
+reference. Do not implement V4 or V5.

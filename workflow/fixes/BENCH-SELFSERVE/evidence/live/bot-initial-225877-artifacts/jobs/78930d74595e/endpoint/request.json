@@ -1,0 +1,21 @@
+{
+  "schema": "phorvex-bench.endpoint-study.v1",
+  "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+  "policy": "phorvex-staging-demo/demo-api-defense",
+  "ticks": 64,
+  "sync": false,
+  "dataset": "recorded",
+  "study": {
+    "window": 864000,
+    "slo_target": 0.999
+  },
+  "config": {
+    "lookback": 86400,
+    "min": 0.0001,
+    "max": 1000,
+    "eta": 0.004477248791932867,
+    "g_max": 1,
+    "max_dt": 30,
+    "delta": 30
+  }
+}

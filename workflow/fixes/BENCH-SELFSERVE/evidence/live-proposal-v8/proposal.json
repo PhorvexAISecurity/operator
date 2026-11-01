@@ -1,0 +1,11 @@
+{
+  "source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "runtime_installed": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "actual_brain": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "operator_sha256": "e091cfd759cd4596e1ad7193f09956c6e1425559053fb97544c825beefab008c",
+  "operation_sha256": "7cff85d49687f00c3f0d248b825e3a43026d498d2ed1c53f68747b48489a987a",
+  "preconditions_sha256": "93bf225dcd7f6bfe3a854dc854af5cce1b9c1a43c01b23b88d238c91193d33a7",
+  "source_binding": "peer-review/upstream-be676/commit-binding-287fd2e4.json",
+  "changes": "V7 neverapplied; retainallguards, onlycurrentreviewedsource/currentmain/cleanupclosedfamily/outdir change. Exactactualpreconditions rechecked immediatelybeforeCAS."
+}

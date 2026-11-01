@@ -1,0 +1,20 @@
+{
+  "source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "result": "EXPECTED_RED",
+  "real_process_exclusive_flock": true,
+  "positive_control": {
+    "state": "READY",
+    "ticks": 64
+  },
+  "negative": {
+    "error_type": "StageError",
+    "error": "stage pin is busy with active jobs or reconciliation; retry after it completes",
+    "elapsed_seconds": 20.001047603960615,
+    "status_stale": true,
+    "pointer_unchanged": true,
+    "sync_calls": 0
+  },
+  "status_sha256": "71abf9a8dd37ce50dc7e3c8acc3c2937c642c2889f207cf5d3887708bf1c3911",
+  "pointer_sha256": "a8e0557270d2b2ed1c74c2a46405842f441943845ce379d9acb7d21e9cf69bce",
+  "limit": "Real journal/normalizer/PXMS and actual OS lock; external cluster and replay CLI are explicit existing test transports, not live-brain proof."
+}

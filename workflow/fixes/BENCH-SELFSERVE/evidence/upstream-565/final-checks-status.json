@@ -1,0 +1,13 @@
+{
+  "state": "INTERRUPTED",
+  "pid": 514551,
+  "source_sha": "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+  "started_at": "2026-11-01T19:41:59.656993+00:00",
+  "results": [],
+  "elapsed_seconds": 360.665,
+  "step": "coherent-current-preflight",
+  "child_pid": 514552,
+  "signal": 15,
+  "exit_code": 143,
+  "finished_at": "2026-11-01T19:48:00.321483+00:00"
+}

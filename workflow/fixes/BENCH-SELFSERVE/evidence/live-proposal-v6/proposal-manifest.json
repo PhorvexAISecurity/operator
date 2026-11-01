@@ -1,0 +1,33 @@
+{
+  "source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "upstream_main": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "actual_image_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "previous_owned_template_sha256": "962ac858b9897bc58b011177e72e79001c747ce1fefc8b218f147e00fd092beb",
+  "files": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/operation.json",
+      "sha256": "ad5b5c68d6f663eecd68fa9bb5fe8372e4a2b6e57c9448ffbab03d5f25faafc8",
+      "bytes": 3547
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/expected.json",
+      "sha256": "bf2a744208d02df3e8bb11a3b370390e19738105ac1ab1079d527d864dfc6639",
+      "bytes": 11568
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v6/templatePatch.yaml.gotmpl",
+      "sha256": "22b756e2f469dbe70fd7d0e15b634984d64d065caf100820fb3d2dbad10a955c",
+      "bytes": 745
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v6.py",
+      "sha256": "c287d2e378b5ee398ed772d9055fc2264142c8f8bd7edfcb1523aec7fca7cd1d",
+      "bytes": 16683
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-v5-before-closure-preconditions.json",
+      "sha256": "ef85768227d0f79da3e9586c07f5763217903d94bf494bab2e76f7e0655123b3",
+      "bytes": 18502
+    }
+  ]
+}

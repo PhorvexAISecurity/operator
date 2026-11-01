@@ -1,0 +1,12 @@
+{
+  "result": "PASS",
+  "source_tree": "6f4b192ae9292a3a9b427e988465f4b76425586f",
+  "manifest_sha256": "7d272b0fafe1ad7caa06d8f52d473338b636d589f4091e90a678f8c6a31ad865",
+  "capture_tests": 7,
+  "skips": 0,
+  "strict_catalogue_gate": "PASS",
+  "command": "PATH=exact Python3.12.15/Helm3.16.4/tar1.35 TMPDIR=/workspace/.phorvex-test-tmp python3.12 -m unittest discover -s tools -p test_stage_benchmark_capture.py -v",
+  "cwd": "/workspace/operator-benchmark-selfserve-1457",
+  "log_sha256": "963921280fc9994a68699fb79bdfea50e5528ef5b16a1a4a3c62f505689430c4",
+  "scope": "Composed source controls only; full final preflight and live acceptance remain separate."
+}

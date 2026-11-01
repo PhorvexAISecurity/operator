@@ -1,0 +1,6 @@
+{
+  "bundle_bytes": 808960,
+  "bundle_sha256": "af5b1f202c833c95158ef37785f84a289bc26b204bb386b5fd34f27522801bf5",
+  "source_manifest_sha256": "b3d55bdd0490d72f4cc1e938cde74f00d95724e6583a3a6e8ac7fc8eec90c531",
+  "purpose": "repeat isolated actual-runtime test after batched observation repair"
+}

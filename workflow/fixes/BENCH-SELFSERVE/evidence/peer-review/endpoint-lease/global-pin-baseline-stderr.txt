@@ -1,0 +1,23 @@
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/mathlab/stage_scope.py", line 74, in pin_lock
+    fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+BlockingIOError: [Errno 11] Resource temporarily unavailable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 494, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 484, in main
+    result = refresh(args.data, args.repo, args.policy, args.journal, target=args.slo_target,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 314, in refresh
+    with stage_scope.pin_lock(data_dir, timeout=20):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/contextlib.py", line 137, in __enter__
+    return next(self.gen)
+           ^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/mathlab/stage_scope.py", line 78, in pin_lock
+    raise StageError('stage pin is busy with active jobs or reconciliation; retry after it completes')
+mathlab.stage_scope.StageError: stage pin is busy with active jobs or reconciliation; retry after it completes

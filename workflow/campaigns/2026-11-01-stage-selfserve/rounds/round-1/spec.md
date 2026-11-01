@@ -1,0 +1,11 @@
+# Preregistered round1
+
+Hypotheses:H1–H4. Baseline: actualuserbatch c358534aed93, uploaded10daydocument, oldef94fixture-only pin and current61ecapture-disabled deployment. Target: same current stage image and originaldemo policy; separatedryRunfixture only fordeclaredendpointpositivecontrol.
+
+Observation: obtain at least64distinct current-source ticks at recorded5second cadence; endpointpositive needs requestedshortcontinuoushistory plus64eligible ticks. Exact10dayrequestmustretainW864000/L86400 andexplicitlyremainunavailable withoutthat evidence. Operator willnot backdatejournal or changeactivepolicy mode.
+
+Instruments: nativeimagebrain-replay,authenticatedConsolecapture, hash-boundobserverjournal, actualBenchBotqueue/execution and Telegramdelivery. Baselinepositivecontrol: embeddedversion/endpointcapability ofactualrunningbrain, validexistingfixturepin, validatedstructured10dayrequestschema. Actualpositive: baseline-exactdemo parametercomparison and explicitshortfixtureendpointstudy.
+
+Mutations: onlyreviewedcaptureHelmsettings/PVCreuse, scopedAppSetoverride ifneededbeforePRmerge, ownedhostsource/replay/bot/observer/reconcilerconfiguration andboundedofflinejobs. No physicalactuation. Approval:fixes/BENCH-SELFSERVE/AUTHORIZATION.md. Stoponunexpectednamespace/image/UID/non-taskchanges, incomplete rollout, free disk<4GiB orhashfailure.
+
+Retainoriginalrawcommands/reportsandhashes; nooverwriteofoldresults. Cleanuppercampaignledger; preserveintendedruntimeandrawhistory. Independentreviewrequiresrealproducerpositivecontrols andhonestlimits, notjustchangedstatuslabels.

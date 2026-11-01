@@ -1,0 +1,44 @@
+schema_version: 1
+hypotheses:
+- id: H1
+  claim: Current61e stage capture and same-source replay work for exact requested
+    demo policy
+  falsifier: Missing capture, mixed source/UID or fewer than64exact baseline ticks
+  sample_unit: Source-bound request/recorded tick and deployment configuration
+  minimum_observations: 64
+  positive_control: Exact running version command and separate known fixture policy
+    inventory
+  acceptance_threshold: 64 distinct exactdemo snapshots with64exact replay decisions
+    and immutable provenance
+- id: H2
+  claim: Exact ten-day upload yields truthful actionable admission without LLM work
+    or settings loss
+  falsifier: FAILED missingpin, silentpolicy/windowchange, inventedhistory, modelcalled
+    despite knownrequiredhistorymissing
+  sample_unit: Source-bound request/recorded tick and deployment configuration
+  minimum_observations: 1
+  positive_control: Same-source real positive parameter request on exactdemo policy
+  acceptance_threshold: Originalbytes preserved; W864000/L86400/policy/ticks/sync
+    preserved; BLOCKED withrequiredandavailable evidence, armsnotexecuted
+- id: H3
+  claim: Structured endpoint knobs execute matched short replay on an explicitly identified
+    measured fixture
+  falsifier: Parameters ignored, source/history gap bridged, borrowedactivepolicyhistory,
+    false COMPLETE
+  sample_unit: Source-bound request/recorded tick and deployment configuration
+  minimum_observations: 64
+  positive_control: Declared short fixture settings with exact baseline on current
+    source
+  acceptance_threshold: 64 exactsourcecomparablefixtureticks; no claim of original10daycompletion
+    or efficacy
+- id: H4
+  claim: Capture survives staging release values generation and local runtime detects/reconciles
+    source drift
+  falsifier: Generatedrelease dropscapture, pinadvance mixesoldcohort, stale data
+    relabellednew or unsignedcrosssource engine used
+  sample_unit: Source-bound request/recorded tick and deployment configuration
+  minimum_observations: 1
+  positive_control: Actualoldpin vs currentliveimage mismatch before repair; exactsame-source
+    postrepair identity
+  acceptance_threshold: Durablevalues andrenderPASS; currentinstalledpin/replay agreeswithactualimage;
+    olddataretained

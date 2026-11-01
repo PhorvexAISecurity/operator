@@ -591,7 +591,7 @@ class Reducer:
         if at < self.at:
             raise EvidenceError("snapshot precedes applied evidence")
         result = {"at": at, "source_revision": self.scope["source_revision"], "policy_uid": self.scope["policy_uid"],
-                  "policy_generation": self.policy_generation,
+                  "policy_generation": self.policy_generation, "workload_generation": self.generation,
                   "workload_uid": self.scope["workload_uid"], "spec_replicas": self.replicas,
                   "class": self.class_name, "ready_pod_uids": sorted(self.ready),
                   "complete_from": self.coverage_from, "watermark": min(self.watermarks.values()) if len(self.watermarks) == len(STREAMS) else None,

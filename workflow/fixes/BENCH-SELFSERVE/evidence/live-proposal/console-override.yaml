@@ -1,0 +1,14 @@
+phorvex:
+  console:
+    auth:
+      grants:
+        extraSubjects:
+        - issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+          subject: system:serviceaccount:phorvex-staging:staging-brain-benchmark
+          roles:
+          - investor
+          tenants:
+          - phorvex-staging-demo
+          targets:
+          - default
+          note: Read-only source-pinned stage brain benchmark snapshot collection.

@@ -1,0 +1,71 @@
+{
+  "schema": "phorvex-bench.evidence-manifest.v1",
+  "source": "actual PR198 head225877 CI observation",
+  "files": [
+    {
+      "path": "checkout-source.excerpt.log",
+      "bytes": 1207,
+      "sha256": "1a72214c19923070a01310fe6eab8ad902becd69abc2ae54f9bddd37ee2a5feb"
+    },
+    {
+      "path": "final-source-jobs.json",
+      "bytes": 8510,
+      "sha256": "d1d2bb837bc810e948a994d1de319830edbc9b7b93ebf0a4992707acc42b1067"
+    },
+    {
+      "path": "findings.json",
+      "bytes": 2719,
+      "sha256": "955b3381b9e40dfc3fff39bbd824cf7f99fa71c8dd25ef9068555158bbcefcb2"
+    },
+    {
+      "path": "go-envtest-m168.excerpt.log",
+      "bytes": 954,
+      "sha256": "350660218a19e2349ffbf95d1ebfb0e3cbd41a519c9aece5c72ac8af56176e01"
+    },
+    {
+      "path": "go-envtest-m168.provenance.json",
+      "bytes": 381,
+      "sha256": "d99f0e128c6332d5fdfd45c50b553cbdb9cbb2b3ceeaab3e1061fb7e934a35e1"
+    },
+    {
+      "path": "go-unit-servicerelease.excerpt.log",
+      "bytes": 309,
+      "sha256": "22d4880eb47e5d696b05ad91316c32a966cf2ec2fd2bee9135d940626eb0bc61"
+    },
+    {
+      "path": "go-unit-servicerelease.provenance.json",
+      "bytes": 406,
+      "sha256": "eea7fea53b05b62a625c9bb6d321aeee76abc73e7c57b7af49eeab37b6c112ee"
+    },
+    {
+      "path": "initial-source-jobs.json",
+      "bytes": 5011,
+      "sha256": "80c63f5ac4c891ef08f052b659f29afb8a40cde712b37f9697ddf17838095aba"
+    },
+    {
+      "path": "initial-status.json",
+      "bytes": 8102,
+      "sha256": "06fbd5eab2e08ffab5429dfb2b1861d956baf5fe1f63cf2d099398f44711846d"
+    },
+    {
+      "path": "latest-status.json",
+      "bytes": 8549,
+      "sha256": "88943969ee64521bf6cb2254546e3a8fad3138feb9c4565ece0d4ed0dc425121"
+    },
+    {
+      "path": "source-bindings.json",
+      "bytes": 1077,
+      "sha256": "5e973f2f3ca638bb1881a67360fba2e6e85d321a39e37cd38faca7aca84b28bb"
+    },
+    {
+      "path": "status-transitions.json",
+      "bytes": 7388,
+      "sha256": "3c888e21ec12ba2824e63752f2b725d15f7a966ed3cf8beec6268abb26a48e29"
+    },
+    {
+      "path": "tested-merge-source.json",
+      "bytes": 722,
+      "sha256": "1713cb47752ca891f30356038cd4ed940e7541cf67da5f7e4b1f5dedec530c57"
+    }
+  ]
+}

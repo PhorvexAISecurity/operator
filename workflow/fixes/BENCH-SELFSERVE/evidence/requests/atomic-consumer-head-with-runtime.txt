@@ -1,0 +1,7 @@
+test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) ... ok
+test_endpoint_audit_uses_atomic_identity_without_legacy_current (test_request_readiness.RequestReadinessTests.test_endpoint_audit_uses_atomic_identity_without_legacy_current) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 2.266s
+
+OK

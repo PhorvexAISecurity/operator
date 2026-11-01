@@ -1,0 +1,919 @@
+{
+  "schema": "phorvex-bench.capture-rollout-inspection.v1",
+  "at": "2026-11-01T19:10:11.301731+00:00",
+  "free_bytes": 6866604032,
+  "appset": {
+    "identity": {
+      "name": "phorvex-services",
+      "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+      "generation": 12,
+      "resourceVersion": "103426329"
+    },
+    "templatePatch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "status": {
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-10-22T09:18:11Z",
+          "message": "All applications have been generated successfully",
+          "reason": "ApplicationSetUpToDate",
+          "status": "False",
+          "type": "ErrorOccurred"
+        },
+        {
+          "lastTransitionTime": "2026-10-22T09:18:11Z",
+          "message": "Successfully generated parameters for all Applications",
+          "reason": "ParametersGenerated",
+          "status": "True",
+          "type": "ParametersGenerated"
+        },
+        {
+          "lastTransitionTime": "2026-10-22T09:18:11Z",
+          "message": "All applications have been generated successfully",
+          "reason": "ApplicationSetUpToDate",
+          "status": "True",
+          "type": "ResourcesUpToDate"
+        }
+      ],
+      "health": {
+        "message": "All applications have been generated successfully",
+        "status": "Healthy"
+      },
+      "resources": [
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-actuator-staging",
+          "namespace": "argocd",
+          "status": "OutOfSync",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-attacks-staging",
+          "namespace": "argocd",
+          "status": "OutOfSync",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-brain-staging",
+          "namespace": "argocd",
+          "status": "Synced",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-console-staging",
+          "namespace": "argocd",
+          "status": "OutOfSync",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-manager-staging",
+          "namespace": "argocd",
+          "status": "OutOfSync",
+          "version": "v1alpha1"
+        },
+        {
+          "group": "argoproj.io",
+          "health": {
+            "status": "Healthy"
+          },
+          "kind": "Application",
+          "name": "phorvex-sensor-staging",
+          "namespace": "argocd",
+          "status": "OutOfSync",
+          "version": "v1alpha1"
+        }
+      ],
+      "resourcesCount": 6
+    }
+  },
+  "app-brain": {
+    "identity": {
+      "name": "phorvex-brain-staging",
+      "uid": "cf609874-de56-4d97-b92d-170650933d32",
+      "generation": 5187,
+      "resourceVersion": "103426530"
+    },
+    "sources": [
+      {
+        "helm": {
+          "releaseName": "staging",
+          "skipCrds": true,
+          "valueFiles": [
+            "$values/deploy/environments/staging/phorvex.yaml",
+            "$values/deploy/environments/staging/brain.yaml",
+            "$values/deploy/environments/staging/catalogue-family.yaml"
+          ]
+        },
+        "path": "deploy/charts/phorvex-brain",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      },
+      {
+        "ref": "values",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      }
+    ],
+    "health": {
+      "lastTransitionTime": "2026-11-01T19:08:45Z",
+      "status": "Healthy"
+    },
+    "sync_status": "Synced",
+    "revisions": [
+      "bee9caccf3bae388d412e72adfe50ca9de41a486",
+      "bee9caccf3bae388d412e72adfe50ca9de41a486"
+    ],
+    "operation": "Succeeded",
+    "conditions": null,
+    "outofsync_resources": []
+  },
+  "app-manager": {
+    "identity": {
+      "name": "phorvex-manager-staging",
+      "uid": "2e6e3ccf-b2f6-46ad-855a-25a6e77ac9b9",
+      "generation": 5509,
+      "resourceVersion": "103426771"
+    },
+    "sources": [
+      {
+        "helm": {
+          "releaseName": "staging",
+          "skipCrds": true,
+          "valueFiles": [
+            "$values/deploy/environments/staging/phorvex.yaml",
+            "$values/deploy/environments/staging/manager.yaml",
+            "$values/deploy/environments/staging/catalogue-family.yaml"
+          ]
+        },
+        "path": "phorvex/charts/phorvex",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      },
+      {
+        "ref": "values",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      }
+    ],
+    "health": {
+      "lastTransitionTime": "2026-11-01T19:08:57Z",
+      "status": "Healthy"
+    },
+    "sync_status": "OutOfSync",
+    "revisions": [
+      "bee9caccf3bae388d412e72adfe50ca9de41a486",
+      "bee9caccf3bae388d412e72adfe50ca9de41a486"
+    ],
+    "operation": "Succeeded",
+    "conditions": null,
+    "outofsync_resources": [
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-catalogue-credential-revoke",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-agent-action-deny",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-output-policy-activation",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-catalogue-credential-revoke",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-actuator-routine",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-agent-action-deny",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-output-policy-activation",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      }
+    ]
+  },
+  "app-console": {
+    "identity": {
+      "name": "phorvex-console-staging",
+      "uid": "463fd824-9791-4e74-b8c5-09b41b00a3ad",
+      "generation": 5033,
+      "resourceVersion": "103426749"
+    },
+    "sources": [
+      {
+        "helm": {
+          "releaseName": "staging",
+          "skipCrds": true,
+          "valueFiles": [
+            "$values/deploy/environments/staging/phorvex.yaml",
+            "$values/deploy/environments/staging/console.yaml",
+            "$values/deploy/environments/staging/catalogue-family.yaml"
+          ]
+        },
+        "path": "deploy/charts/phorvex-console",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      },
+      {
+        "ref": "values",
+        "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+        "targetRevision": "main"
+      }
+    ],
+    "health": {
+      "lastTransitionTime": "2026-11-01T19:08:56Z",
+      "status": "Healthy"
+    },
+    "sync_status": "OutOfSync",
+    "revisions": [
+      "bee9caccf3bae388d412e72adfe50ca9de41a486",
+      "bee9caccf3bae388d412e72adfe50ca9de41a486"
+    ],
+    "operation": "Succeeded",
+    "conditions": null,
+    "outofsync_resources": [
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-attacks-cleanup",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-attacks-cleanup",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p1-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p2-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p4-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-attacks-target",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      },
+      {
+        "group": "rbac.authorization.k8s.io",
+        "kind": "RoleBinding",
+        "name": "staging-phorvex-console-policy-edit",
+        "namespace": "p6-demo",
+        "requiresPruning": true,
+        "status": "OutOfSync",
+        "version": "v1"
+      }
+    ]
+  },
+  "staging-brain": {
+    "identity": {
+      "name": "staging-brain",
+      "uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "generation": 35,
+      "resourceVersion": "103426483"
+    },
+    "status": {
+      "availableReplicas": 1,
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-10-22T10:03:41Z",
+          "lastUpdateTime": "2026-11-01T17:59:32Z",
+          "message": "ReplicaSet \"staging-brain-5fcd75df99\" has successfully progressed.",
+          "reason": "NewReplicaSetAvailable",
+          "status": "True",
+          "type": "Progressing"
+        },
+        {
+          "lastTransitionTime": "2026-11-01T19:08:45Z",
+          "lastUpdateTime": "2026-11-01T19:08:45Z",
+          "message": "Deployment has minimum availability.",
+          "reason": "MinimumReplicasAvailable",
+          "status": "True",
+          "type": "Available"
+        }
+      ],
+      "observedGeneration": 35,
+      "readyReplicas": 1,
+      "replicas": 1,
+      "terminatingReplicas": 0,
+      "updatedReplicas": 1
+    },
+    "securityContext": {
+      "runAsNonRoot": true,
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "volumes": [
+      {
+        "name": "grpc-tls",
+        "secret": {
+          "defaultMode": 420,
+          "secretName": "staging-brain-grpc-tls"
+        }
+      }
+    ],
+    "containers": [
+      {
+        "name": "brain",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+        "args": [
+          "--listen=:9090",
+          "--metrics-bind-address=:8080",
+          "--health-probe-bind-address=:8081",
+          "--gpu-envelope-max=0.2925",
+          "--shutdown-grace=20s",
+          "--log-level=info",
+          "--log-format=json",
+          "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+          "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+          "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+          "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+        ],
+        "volumeMounts": [
+          {
+            "mountPath": "/etc/phorvex/grpc-tls",
+            "name": "grpc-tls",
+            "readOnly": true
+          }
+        ],
+        "identity_env": [
+          {
+            "name": "PHORVEX_BRAIN_IMAGE",
+            "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf"
+          }
+        ]
+      }
+    ]
+  },
+  "staging-phorvex": {
+    "identity": {
+      "name": "staging-phorvex",
+      "uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "generation": 86,
+      "resourceVersion": "103426769"
+    },
+    "status": {
+      "availableReplicas": 1,
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-10-31T08:36:36Z",
+          "lastUpdateTime": "2026-11-01T17:59:48Z",
+          "message": "ReplicaSet \"staging-phorvex-6dddc96964\" has successfully progressed.",
+          "reason": "NewReplicaSetAvailable",
+          "status": "True",
+          "type": "Progressing"
+        },
+        {
+          "lastTransitionTime": "2026-11-01T19:08:57Z",
+          "lastUpdateTime": "2026-11-01T19:08:57Z",
+          "message": "Deployment has minimum availability.",
+          "reason": "MinimumReplicasAvailable",
+          "status": "True",
+          "type": "Available"
+        }
+      ],
+      "observedGeneration": 86,
+      "readyReplicas": 1,
+      "replicas": 1,
+      "terminatingReplicas": 0,
+      "updatedReplicas": 1
+    },
+    "securityContext": {
+      "fsGroup": 65532,
+      "fsGroupChangePolicy": "OnRootMismatch",
+      "runAsNonRoot": true
+    },
+    "volumes": [
+      {
+        "name": "grpc-tls",
+        "secret": {
+          "defaultMode": 420,
+          "secretName": "staging-dispatcher-grpc-tls"
+        }
+      },
+      {
+        "name": "audit",
+        "persistentVolumeClaim": {
+          "claimName": "staging-phorvex-audit"
+        }
+      },
+      {
+        "name": "audit-server",
+        "secret": {
+          "defaultMode": 420,
+          "secretName": "staging-phorvex-audit-server"
+        }
+      },
+      {
+        "emptyDir": {},
+        "name": "calibration-evidence"
+      }
+    ],
+    "containers": [
+      {
+        "name": "manager",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33",
+        "args": [
+          "--base-interval=10s",
+          "--actions-supported-debounce=3",
+          "--calibration-shadow=true",
+          "--calibration-sample=5m",
+          "--calibration-refresh=30m",
+          "--calibration-lookback=168h",
+          "--calibration-export-dir=/var/run/phorvex-calibration",
+          "--metrics-bind-address=:8080",
+          "--health-probe-bind-address=:8081",
+          "--leader-elect=true",
+          "--brain-endpoint=staging-brain:9090",
+          "--sensor-endpoint=staging-sensor:9090",
+          "--actuator-endpoint=staging-actuator:9090",
+          "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+          "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+          "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+          "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+          "--policy-namespaces=phorvex-staging-demo,console-identity-shared",
+          "--max-retained-quarantines-per-namespace=1",
+          "--serving-security-mode=secure-required",
+          "--gpu-envelope-max=0.2925",
+          "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+          "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+          "--persistence-observer-identity=",
+          "--persistence-observer-namespaces=",
+          "--audit-json=/audit/live.jsonl",
+          "--audit-max-bytes=268435456",
+          "--audit-max-backups=4",
+          "--audit-source-addr=:8445",
+          "--audit-source-cert=/etc/audit-server/tls.crt",
+          "--audit-source-key=/etc/audit-server/tls.key",
+          "--audit-source-ca=/etc/audit-server/ca.crt",
+          "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc"
+        ],
+        "volumeMounts": [
+          {
+            "mountPath": "/etc/phorvex/grpc-tls",
+            "name": "grpc-tls",
+            "readOnly": true
+          },
+          {
+            "mountPath": "/audit",
+            "name": "audit"
+          },
+          {
+            "mountPath": "/etc/audit-server",
+            "name": "audit-server",
+            "readOnly": true
+          },
+          {
+            "mountPath": "/var/run/phorvex-calibration",
+            "name": "calibration-evidence"
+          }
+        ],
+        "identity_env": [
+          {
+            "name": "PHORVEX_BRAIN_IMAGE",
+            "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33"
+          }
+        ]
+      }
+    ]
+  },
+  "staging-phorvex-console": {
+    "identity": {
+      "name": "staging-phorvex-console",
+      "uid": "bf3cfe69-4c96-415b-84be-f929ef759602",
+      "generation": 55,
+      "resourceVersion": "103426741"
+    },
+    "status": {
+      "availableReplicas": 1,
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-10-22T15:03:41Z",
+          "lastUpdateTime": "2026-11-01T17:59:32Z",
+          "message": "ReplicaSet \"staging-phorvex-console-7f4fcdc885\" has successfully progressed.",
+          "reason": "NewReplicaSetAvailable",
+          "status": "True",
+          "type": "Progressing"
+        },
+        {
+          "lastTransitionTime": "2026-11-01T19:08:56Z",
+          "lastUpdateTime": "2026-11-01T19:08:56Z",
+          "message": "Deployment has minimum availability.",
+          "reason": "MinimumReplicasAvailable",
+          "status": "True",
+          "type": "Available"
+        }
+      ],
+      "observedGeneration": 55,
+      "readyReplicas": 1,
+      "replicas": 1,
+      "terminatingReplicas": 0,
+      "updatedReplicas": 1
+    },
+    "securityContext": {
+      "fsGroup": 65532,
+      "runAsNonRoot": true
+    },
+    "volumes": [
+      {
+        "emptyDir": {},
+        "name": "console-tmp"
+      },
+      {
+        "name": "console-state",
+        "persistentVolumeClaim": {
+          "claimName": "staging-phorvex-console-state"
+        }
+      },
+      {
+        "name": "audit-client",
+        "secret": {
+          "defaultMode": 420,
+          "secretName": "staging-phorvex-audit-client"
+        }
+      },
+      {
+        "configMap": {
+          "defaultMode": 288,
+          "name": "staging-phorvex-console-grants"
+        },
+        "name": "console-grants"
+      }
+    ],
+    "containers": [
+      {
+        "name": "console",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:b3872872f1e55fb6c18a38c91b7547dd1da1cb08b65afbe6e5749ed179e258e5",
+        "args": [
+          "-root=/data",
+          "-web=/app/web",
+          "-addr=:8090",
+          "-state-dir=/var/lib/phorvex-console",
+          "-audit-source-url=https://staging-phorvex-audit-source.phorvex-staging.svc:8445",
+          "-audit-source-server-dns=staging-phorvex-audit-source.phorvex-staging.svc",
+          "-audit-source-client-cert=/etc/audit-client/tls.crt",
+          "-audit-source-client-key=/etc/audit-client/tls.key",
+          "-audit-source-ca=/etc/audit-client/ca.crt",
+          "-metrics-allow=kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+          "-auth-grants=/etc/phorvex-console/grants.json"
+        ],
+        "volumeMounts": [
+          {
+            "mountPath": "/etc/audit-client",
+            "name": "audit-client",
+            "readOnly": true
+          },
+          {
+            "mountPath": "/tmp",
+            "name": "console-tmp"
+          },
+          {
+            "mountPath": "/var/lib/phorvex-console",
+            "name": "console-state"
+          },
+          {
+            "mountPath": "/etc/phorvex-console",
+            "name": "console-grants",
+            "readOnly": true
+          }
+        ],
+        "identity_env": []
+      }
+    ]
+  },
+  "grants": {
+    "identity": {
+      "name": "staging-phorvex-console-grants",
+      "uid": "b5e870c8-2fde-4c69-a4da-c3e4b4523538",
+      "generation": null,
+      "resourceVersion": "103426438"
+    },
+    "sha256": "67831f053e75a33c8e4437d092361dff936a8745e76ee92d6f4ae79dead3b2f4",
+    "data": {
+      "version": 1,
+      "subjects": [
+        {
+          "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB",
+          "subject": "71fb8550-3041-702a-5735-a33baf8836c8",
+          "roles": [
+            "operator"
+          ],
+          "tenants": [
+            "console-identity-shared"
+          ],
+          "targets": [
+            "default"
+          ],
+          "note": "The production console's operator, confined to staging's demo tenant."
+        },
+        {
+          "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+          "subject": "system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e",
+          "roles": [
+            "operator"
+          ],
+          "tenants": [
+            "console-identity-shared"
+          ],
+          "targets": [
+            "default"
+          ],
+          "note": "Staging End-to-End runs against the demo tenant; token minted per run, never stored."
+        }
+      ]
+    }
+  },
+  "pvc": {
+    "identity": {
+      "name": "staging-brain-mathlab",
+      "uid": "dab89cf9-6bea-4211-9487-f87c84fa0f5f",
+      "generation": null,
+      "resourceVersion": "102305250"
+    },
+    "status": {
+      "accessModes": [
+        "ReadWriteOnce"
+      ],
+      "capacity": {
+        "storage": "2Gi"
+      },
+      "phase": "Bound"
+    }
+  },
+  "demo-api-defense": {
+    "identity": {
+      "name": "demo-api-defense",
+      "uid": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+      "generation": 9,
+      "resourceVersion": "103428090"
+    },
+    "mode": "active"
+  },
+  "stage-bench-defense": {
+    "identity": {
+      "name": "stage-bench-defense",
+      "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+      "generation": 1,
+      "resourceVersion": "103428086"
+    },
+    "mode": "dryRun"
+  }
+}

@@ -1,0 +1,10 @@
+105: 2026-11-01T20:25:22.2341287Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+106: 2026-11-01T20:25:22.2409484Z ##[group]Checking out the ref
+107: 2026-11-01T20:25:22.2411632Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/198/merge
+108: 2026-11-01T20:25:22.8031261Z Note: switching to 'refs/remotes/pull/198/merge'.
+109: 2026-11-01T20:25:22.8052389Z 
+126: 2026-11-01T20:25:22.8084973Z ##[endgroup]
+127: 2026-11-01T20:25:22.8144147Z [command]/usr/bin/git log -1 --format=%H
+128: 2026-11-01T20:25:22.8183257Z c768a0c04ba7d9597309d55b488b241b7e361e9d
+129: 2026-11-01T20:25:22.8193319Z ##[group]Removing auth
+130: 2026-11-01T20:25:22.8206021Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand

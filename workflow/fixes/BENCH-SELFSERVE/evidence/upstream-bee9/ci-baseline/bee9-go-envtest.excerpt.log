@@ -1,0 +1,3 @@
+15706: 2026-11-01T19:06:35.4244664Z  fail github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker/final_marker_failure
+15707: 2026-11-01T19:06:35.4248442Z  fail github.com/phorvex/phorvex/internal/console TestM168ArmsWorkerRequiresDurableResultAndCompletionMarker
+17505: 2026-11-01T19:07:11.1212672Z ##[error]Process completed with exit code 1.

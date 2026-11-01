@@ -1,0 +1,15 @@
+{
+  "batch_id": "eafee37d3ad7",
+  "upload_id": "1987f384f6cf",
+  "state": "BLOCKED",
+  "results": [
+    {
+      "index": 1,
+      "kind": "param",
+      "state": "BLOCKED",
+      "job": "3d746803a828",
+      "headline": "Runtime BLOCKED: phorvex-staging-demo/demo-api-defense; requested ticks=64, available=313.\nSTAGE_SOURCE_CHANGED: running stage source/image/UID differs from installed pin Run stage reconciliation; preserve older cohorts as historical.\nREPLAY_SOURCE_UNAVAILABLE: operator-refactored clone or pinned source is unavailable; fetch the exact stage source Reconcile the exact deployed source and image-extracted replay.\nSTAGE_MANAGER_CHANGED: running manager source/image/UID differs from installed evidence pin Run stage reconciliation after the manager rollout; cost evidence cannot inherit a different producer.\nCAPTURE_DISABLED: requested policy is not enabled in the actual stage brain capture flags An operator must apply reviewed durable staging capture values; requests never patch the cluster.\nCAPTURE_STORAGE_UNAVAILABLE: stage capture has no writable persistent claim mount Restore the approved stage capture PVC through reviewed staging values.\nCOST_EVIDENCE_DISABLED: manager cost-evidence capture is disabled Restore the reviewed staging manager capture-cost-evidence setting."
+    }
+  ],
+  "semantics": "Independent experiments, executed sequentially; each report has its own control."
+}

@@ -1,0 +1,7 @@
+{
+  "at": "2026-11-01T21:08:38.152343+00:00",
+  "state": "NOT_APPLIED",
+  "reason": "Main advanced to be676c84d162528c10bacb84c8e6a11de30ade5d; exactmain guard would reject eef proposal. New upstream closes quarantine and changes2ConsoleGo files; actualbrainb1ef unchanged.",
+  "next": "ReviewV8 currentclosure preservingactualb1efimages and installed225runtime; nohistory/source substitution",
+  "driver_review": "peer-review/live-proposal-v7/supersession-and-driver-verdict.json"
+}

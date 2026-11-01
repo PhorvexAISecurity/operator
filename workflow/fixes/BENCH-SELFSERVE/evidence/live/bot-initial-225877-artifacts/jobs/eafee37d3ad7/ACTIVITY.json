@@ -1,0 +1,14 @@
+{
+  "state": "BLOCKED",
+  "phase": "Experiment 1/1 (param)",
+  "started": {
+    "model_started": false,
+    "tests_started": false,
+    "build_started": false,
+    "replay_started": false,
+    "preflight_started": false
+  },
+  "model_token_count": null,
+  "build_cost": null,
+  "replay_cost": null
+}

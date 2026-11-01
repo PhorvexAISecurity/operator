@@ -1,0 +1,19 @@
+{
+  "result": "INTERRUPTED",
+  "reason": "Lead requested integration of new external main be676c84 before final-source validation; owned runner received SIGTERM and recorded143. No completed receipt or PASS inferred.",
+  "interrupted_source": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "upstream": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "artifacts": [
+    {
+      "path": "evidence/upstream-eef/final-checks-status.json",
+      "bytes": 357,
+      "sha256": "cf389856ba9f96009329ca3ca59be9a267280a70afd5f41fa30c39fc9e23acb7"
+    },
+    {
+      "path": "evidence/upstream-eef/final-checks.log",
+      "bytes": 2238,
+      "sha256": "be6410e05deb21329fb8cbdde09f2017ede85f3e9266c1efa15484c2edf5dd84"
+    }
+  ],
+  "recorded_at": "2026-11-01T21:07:35.316171+00:00"
+}

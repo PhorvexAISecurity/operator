@@ -1,0 +1,18 @@
+{
+  "schema": "phorvex-bench.acceptance-inputs.v1",
+  "producer": "bench-v3-worker",
+  "scripts": {
+    "verify.sh": "6ae71a2eadf151bb05ecb860511d021f7f149740574f5327f417f4f79b16cb0f",
+    "evidence/final-source/run-preflight.sh": "5792a82ee11cb02a13522c3b4474d85fa9656462ea0e70bc95c5e396558fc785",
+    "evidence/final-source/run-acceptance.sh": "5b22dc9b7a15489e3f5644ad3f71307bd7379055c37cd5daa84943ee5b04b7a3",
+    "evidence/final-source/owned-runner.py": "b406cce591d169de57fb29223e26a4c74031a21f9811f0e9cfdea4008e935e6a"
+  },
+  "required_positive_controls": [
+    "test_actual_stage_brain_records_both_policies_on_existing_pvc",
+    "test_exact_original_upload_preserves_ten_day_contract_without_codegen",
+    "test_actual_source_headers_positive_and_exact_insufficient_count",
+    "test_real_history_qualifies_but_missing_engine_still_refuses_ready",
+    "test_native_exact_replay_publication_and_readonly_probe"
+  ],
+  "semantics": "Final committed-source preflight executes selected current CI gates; dedicated L1/L2 execute actual renderer/parser/PXMS/journal and source/native-publication controls with remote transports explicitly scripted. Real product native-stage acceptance is separate lead evidence, never inferred from fixtures."
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "phorvex-bench.operational-proposal-peer-review.v1",
+  "reviewer": "stage-review",
+  "reviewed_at": "2026-11-01T17:53:04.164959+00:00",
+  "verdict": "PASS",
+  "scope": "Exact proposed ApplicationSet templatePatch and effective Helm inputs; not proof that deployment has executed or succeeded.",
+  "proposal_manifest_sha256": "24925a92aca48d13b6d88dc963613c97f5b268a02ef6a35e75ac23b1c6362e6f",
+  "operation_sha256": "326f72473c2ff4e4cd40ab50dd79f8d64f98cc52a4c3c9d3a47cab2960d92097",
+  "template_sha256": "042c633747e95d985ad1c5e6784a6f626bcd50fc66eb2aaf848143c7a2fe26a9",
+  "before_sha256": "2664d3cedf1fc293d4d16616707d2b81f1367aadad364b4eaee43bff901eabfa",
+  "chart_source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "main_values_reviewed_at": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "go_template_cases": {
+    "total": 24,
+    "staging_modified": 3,
+    "unmodified": 21,
+    "missing_key_rejected": true
+  },
+  "effective_source_changes": "Only source0 targetRevision and narrow helm.valuesObject change for staging brain/manager/console. Original source1 main, all three valueFiles, release/skipCrds, repo/path remain exactly equal. No patch to any other Application spec field or generator.",
+  "renders": {
+    "brain": {
+      "exact_main_and_proposed_render_match": true,
+      "resource_set_preserved": true,
+      "images": [
+        "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf"
+      ]
+    },
+    "manager": {
+      "exact_main_and_proposed_render_match": true,
+      "resource_set_preserved": true,
+      "images": [
+        "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:da27f8d92181003872b73d09f88e4540d56f598deabeed66bbca2cf5f4160f33"
+      ]
+    },
+    "console": {
+      "exact_main_and_proposed_render_match": true,
+      "resource_set_preserved": true,
+      "images": [
+        "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:b3872872f1e55fb6c18a38c91b7547dd1da1cb08b65afbe6e5749ed179e258e5"
+      ]
+    }
+  },
+  "grant_result": "Both current quarantine/p1-demo family subjects fully preserved, one exact investor demo/default reader appended. No old identity-family scopes restored.",
+  "operational_conditions": [
+    "Lead must use fresh UID/resourceVersion compare-and-swap and verify existing templatePatch still absent, exact policyUID/image/source and rollout/disk conditions before applying.",
+    "Initial before.json showed upstream manager/console rollout Progressing; this source verdict does not establish later health.",
+    "Values source intentionally remains main; unexpected subsequent main changes require checking effective desired state. Temporary chart pin must be tracked for eventual GitOps handover.",
+    "No prune and no live writes performed by reviewer. Actual capture/download/benchmark acceptance remains required."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal/template-control.go.txt": {
+      "sha256": "cfcf2c6abada70105511aa5ee1b96d72ab1122a02c956f76721187bfb0468193",
+      "bytes": 1096
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal/template-output.json": {
+      "sha256": "3b131355f849535703e186161816f0e61894e7d9721cdba863c125537218d491",
+      "bytes": 5811
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal/verify-proposal-output.txt": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal/verify-proposal.py": {
+      "sha256": "67bf05ee63a1f9164283a666f83b7458fbba5336f1fd7337f2f0788c673bdde7",
+      "bytes": 8926
+    }
+  }
+}

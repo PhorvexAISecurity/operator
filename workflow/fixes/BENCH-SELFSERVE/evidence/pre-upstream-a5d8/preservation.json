@@ -1,0 +1,26 @@
+{
+  "source_head": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "purpose": "Preserve prior signed source/submission artifacts before upstream integration; existing preflight and component receipts remain in original paths.",
+  "artifacts": [
+    {
+      "path": "STATUS.yaml",
+      "sha256": "4dbfb51ce8f10e30a5ce3f0c9e8bc5a284e6dca5176df2a8f7c060d1bc119dba",
+      "bytes": 6172
+    },
+    {
+      "path": "04-diff.patch",
+      "sha256": "1ff1b68d382ec1efa297ebe56be6d7075e7343131d3a06583281aed9f7681ebc",
+      "bytes": 3137682
+    },
+    {
+      "path": "05-evidence.md",
+      "sha256": "e20aaa844b7ce269ab665989416821a64215fcf196fd6d12cd85c281f675a6cd",
+      "bytes": 4734
+    },
+    {
+      "path": "evidence/manifest.yaml",
+      "sha256": "9d67e8fdff91cf9f8b90b5136e75899daab61f4da81990f4ca5e0f15f41126dc",
+      "bytes": 5132
+    }
+  ]
+}

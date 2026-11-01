@@ -1,0 +1,23 @@
+{
+  "state": "DONE",
+  "pid": 551702,
+  "source_sha": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "started_at": "2026-11-01T20:25:34.817779+00:00",
+  "results": [
+    {
+      "name": "coherent-current-preflight",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "author-L1-L2",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 711.854,
+  "step": "author-L1-L2",
+  "child_pid": 563419,
+  "exit_code": 0,
+  "finished_at": "2026-11-01T20:37:26.671804+00:00"
+}

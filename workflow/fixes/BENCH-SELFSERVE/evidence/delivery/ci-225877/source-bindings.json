@@ -1,0 +1,26 @@
+{
+  "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "tested_merge_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+  "files": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "upstream_blob": "85dcbb8cd7963f8748530a0b5705cd1f815af282",
+      "head_blob": "85dcbb8cd7963f8748530a0b5705cd1f815af282",
+      "tested_merge_blob": "85dcbb8cd7963f8748530a0b5705cd1f815af282"
+    },
+    {
+      "path": "phorvex/tools/servicerelease/consumer_test.go",
+      "upstream_blob": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107",
+      "head_blob": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107",
+      "tested_merge_blob": "770951eeb2628a9fea9aea1d2b0b1816c9d5e107"
+    },
+    {
+      "path": "phorvex/internal/console/m168_experiment_test.go",
+      "upstream_blob": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "head_blob": "97cc149ffec5e37b54048859010d707ecd3f24f0",
+      "tested_merge_blob": "97cc149ffec5e37b54048859010d707ecd3f24f0"
+    }
+  ],
+  "catalogue_closure_byte_exact": true
+}

@@ -1,0 +1,5 @@
+{
+  "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-a5f/independent-overlay-control.json",
+  "sha256": "cff539954480ee765055d5569ec235a61f163765f7fee71e914e900a38a84e71",
+  "verdict": "PASS_FOR_BOUNDED_ONE_FIELD_REPAIR_PROPOSAL"
+}

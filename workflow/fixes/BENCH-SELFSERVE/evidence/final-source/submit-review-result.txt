@@ -1,0 +1,2 @@
+BENCH-SELFSERVE: OFFLINE_VERIFIED; revision=9; next=skeptic
+/workspace/operator-refactored/.git/phorvex-workflow/bus/inbox/bench-v3-lead/000003-bench-v3-worker-bench-selfserve-submit-at-revision-9.md

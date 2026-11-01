@@ -1,0 +1,5 @@
+# Round3 aborted by concurrent external release and override replacement
+
+Actualcapturetransport and exact deployed configuration passed before externalrelease. Source-native reconciliation correctly refused atomicpublication duringthetransition; no completed botrequest isclaimed. The V4override was externallyreplaced, notremoved bythislead. Preserveallreceipts and oldnativecohorts; do notundo theunowned1457template. Rootmonitoring missedthebackgroundheadnotification untiltheactualcaptureloss; replacementmonitorstarted1463andallmutationguardsremainfresh-source-bound.
+
+Round3isABORTED. Anewroundrequiresactuala5fembeddedidentity/current1457family, reviewedsourcecompositionandpreservationoftheexistingexternaltemplate. Theendpointrefreshleasefailurefoundduringthisroundhasanindependentlyreviewedthree-filefix711; currentfullchecksarepending. No requestpolicy/windowrewrite or10daycompletionclaim.

@@ -1,0 +1,8 @@
+{
+  "at": "2026-11-01T18:07:54.923409+00:00",
+  "prior": "native-control-attempt-1.json",
+  "reason": "First read began before64 new-source snapshots had accumulated. No replay ran; original incomplete control is retained.",
+  "new_attempt": "selfserve-native-control-2",
+  "bounds": "Same64 finalized exact-source ticks per policy, unchanged exact-baseline assertion and300s replay budget; new collected data only.",
+  "retries": 1
+}

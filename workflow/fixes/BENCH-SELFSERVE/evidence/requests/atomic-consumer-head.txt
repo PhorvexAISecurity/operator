@@ -1,0 +1,31 @@
+test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) ... 
+  test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) (legacy_missing=False) ... FAIL
+  test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) (legacy_missing=True) ... FAIL
+test_endpoint_audit_uses_atomic_identity_without_legacy_current (test_request_readiness.RequestReadinessTests.test_endpoint_audit_uses_atomic_identity_without_legacy_current) ... ok
+
+======================================================================
+FAIL: test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) (legacy_missing=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_request_readiness.py", line 241, in test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file
+    self.assertEqual(self.history()[-1]['state'],'DONE',self.history()[-1])
+AssertionError: 'FAILED' != 'DONE'
+- FAILED
++ DONE
+ : {'id': '5b2bac378ce2', 'kind': 'param', 'user': '1001 (@u1001)', 'state': 'FAILED', 'created': '2026-11-01T18:42:23Z', 'finished': '2026-11-01T18:42:23Z', 'request': 'P-FEA-006 1.5 policy=phorvex-staging-demo/demo-api-defense ticks=6 nosync', 'batch_id': None, 'headline': 'the stage runtime needs BOT_REPO and MATHLAB_DATA_DIR; run stage_cli.py pin and sync'}
+
+======================================================================
+FAIL: test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file (test_request_readiness.RequestReadinessTests.test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file) (legacy_missing=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_request_readiness.py", line 241, in test_real_parameter_pipeline_uses_atomic_identity_with_stale_or_absent_legacy_file
+    self.assertEqual(self.history()[-1]['state'],'DONE',self.history()[-1])
+AssertionError: 'FAILED' != 'DONE'
+- FAILED
++ DONE
+ : {'id': '6daa6b704945', 'kind': 'param', 'user': '1001 (@u1001)', 'state': 'FAILED', 'created': '2026-11-01T18:42:23Z', 'finished': '2026-11-01T18:42:23Z', 'request': 'P-FEA-006 1.5 policy=phorvex-staging-demo/demo-api-defense ticks=6 nosync', 'batch_id': None, 'headline': 'the stage runtime needs BOT_REPO and MATHLAB_DATA_DIR; run stage_cli.py pin and sync'}
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.394s
+
+FAILED (failures=2)

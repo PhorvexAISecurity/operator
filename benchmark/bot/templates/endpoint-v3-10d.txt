@@ -1,0 +1,14 @@
+[endpoint]
+title: V2 versus V3 — requested ten-day endpoint study
+policy: phorvex-staging-demo/demo-api-defense
+ticks: 64
+sync: false
+dataset: recorded
+study.window: 864000
+config.lookback: 86400
+study.slo_target: 0.999
+config.min: 0.0001
+config.max: 1000
+config.g_max: 1
+config.max_dt: 30
+config.delta: 30

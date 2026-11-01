@@ -42,9 +42,13 @@ def select_cohort(data_dir, request, entries=None):
     wanted = set(cohort.get('digests') or [])
     out = []
     for e in entries:
+        if cohort.get('require_finalized') and e['header'].get('finalized') is not True:
+            continue
         if cohort.get('git_sha') and e['header'].get('gitSHA') != cohort['git_sha']:
             continue
         if cohort.get('policy_uid') and e['header'].get('policyUID') != cohort['policy_uid']:
+            continue
+        if cohort.get('policy_generation') is not None and e['header'].get('policyGeneration') != cohort['policy_generation']:
             continue
         if cohort.get('brain_image') and e['header'].get('brainImage') != cohort['brain_image']:
             continue

@@ -134,13 +134,17 @@ def threshold_diff(old, new):
 
 
 def make_snapshot(directory, git_sha, risk, recorded_selected, captured_at, brain_image=None,
-                  capture_identity_source='recorder-process'):
+                  capture_identity_source='recorder-process', policy_generation=None):
     header = json.dumps({'schema': 'math-lab.snapshot.v1', 'capturedAt': captured_at, 'gitSHA': git_sha, 'namespace': 'phorvex-staging-demo',
                          'policyName': 'demo-api-defense', 'policyUID': 'u', 'economicsMode': 'legacy-runtime-lambda-v1',
                          'brainImage': brain_image if brain_image is not None else stage_image(git_sha),
                          'captureIdentitySource': capture_identity_source,
                          'processConfigHash': 'p', 'parameterManifestHash': 'm', 'policyOverridesHash': 'o',
                          'finalized': True}).encode()
+    if policy_generation is not None:
+        value = json.loads(header)
+        value['policyGeneration'] = policy_generation
+        header = json.dumps(value).encode()
     data = b'PXMLSNP1' + struct.pack('>I', len(header)) + header + json.dumps(
         {'risk': risk, 'recorded_selected': recorded_selected}).encode()
     digest = hashlib.sha256(data).hexdigest()

@@ -1,0 +1,5 @@
+# Repeated stage benchmark admission failure
+
+Uploaded batch c358534aed93 failed child9eed6b29c2f4 before model/replay: policy is not in the installed stage capture pin. The actual upload targets phorvex-staging-demo/demo-api-defense,64ticks,sync:false and explicitly requires measured10day budget/1day lambda history. Main has advanced through merged PR183 and staged release61e836. Current bot remains3e11 with oldef94 fixture-only pin; current brain/manager release61e836 has capture/relay settings disabled. Syntax PASS was reported while operational prerequisites were unavailable. The exact uploaded prose differs from the single legacy hash router and would enter generic code generation.
+
+The active demo policy is not an isolated dryRun calibration fixture. Its missing attributed endpoint history must remain missing; the dedicated fixture's journal cannot be substituted. Remediation must prove actual capture and replay on the requested policy and produce an exact, detailed unavailable-history report for the long study, plus separately labelled positive controls.

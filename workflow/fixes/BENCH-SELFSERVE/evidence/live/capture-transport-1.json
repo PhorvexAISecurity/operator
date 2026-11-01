@@ -1,0 +1,94 @@
+{
+  "schema": "phorvex-bench.capture-transport.v1",
+  "at": "2026-11-01T18:01:31.794343+00:00",
+  "reader_module_release": "3e11f4e7",
+  "authority": "actual authenticated Console index and blob GET; no cache/pin mutation",
+  "policies": {
+    "demo-api-defense": {
+      "listed": 18,
+      "index_sha256": "f7b0239a236036a540be4cbd1d1a0551e2510ee9d92360ce0bbb2620fbbed1ff",
+      "sample_digest": "7de19335b656dc9e326247f88d9ef50365409a7f339387fe46da17d7e12917fd",
+      "sample_bytes": 78605,
+      "sample_header": {
+        "schema": "math-lab.snapshot.v1",
+        "capturedAt": "2026-11-01T18:01:32.03888843Z",
+        "decidedAt": "2026-11-01T18:01:33.341364456Z",
+        "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+        "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+        "captureIdentitySource": "recorder-process",
+        "tickID": "826c56c9dd9716744c6bac0dfb714f08",
+        "tenant": "phorvex-staging-demo",
+        "namespace": "phorvex-staging-demo",
+        "policyName": "demo-api-defense",
+        "policyUID": "6485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "policyGeneration": 9,
+        "owner": "uid\u00006485e0b3-0f36-4737-b0f5-7e846375da9f",
+        "parameterSetID": "phorvex-production-decision-parameters/phorvex-staging-demo/demo-api-defense@6485e0b3-0f36-4737-b0f5-7e846375da9f:9",
+        "parameterManifestHash": "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8",
+        "policyOverridesHash": "sha256:9984250bf2371dc8de11789cfbce7fba91c7cf2dea8f1d57473bea36ce99390e",
+        "processConfig": {
+          "engine": "p1",
+          "flow-residual-classes": "",
+          "gpu-envelope-max": "0.2925",
+          "recon-profile": "ucw-recon"
+        },
+        "processConfigHash": "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010",
+        "reconProfile": "ucw-recon",
+        "contextProvider": "sensed-context",
+        "gpuEnvelopeMax": 0.2925,
+        "economicsMode": "fixed-disruption-aversion-v1",
+        "assets": [
+          "phorvex-staging-demo/demo-api-7c788969c-dpfdk",
+          "phorvex-staging-demo/demo-api-7c788969c-nnkcn",
+          "phorvex-staging-demo/demo-api-7c788969c-bd94s"
+        ],
+        "selected": null,
+        "finalized": true
+      },
+      "status": "PASS"
+    },
+    "stage-bench-defense": {
+      "listed": 19,
+      "index_sha256": "7fb3d6580c7d3dff70b69ffadb86713b2445911ccd174653bad4ad46cbfd20c9",
+      "sample_digest": "77e6c336164e31ecdd491f20498bf35b7ce9afeb9f2e2517900eecb0a21ef7e9",
+      "sample_bytes": 78902,
+      "sample_header": {
+        "schema": "math-lab.snapshot.v1",
+        "capturedAt": "2026-11-01T18:01:37.03999144Z",
+        "decidedAt": "2026-11-01T18:01:38.79048818Z",
+        "gitSHA": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+        "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+        "captureIdentitySource": "recorder-process",
+        "tickID": "99a00fe9d377ec1ef5c56ccc7e7500e1",
+        "tenant": "stage-brain-benchmark",
+        "namespace": "phorvex-staging-demo",
+        "policyName": "stage-bench-defense",
+        "policyUID": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "policyGeneration": 1,
+        "owner": "uid\u0000621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "parameterSetID": "phorvex-production-decision-parameters/phorvex-staging-demo/stage-bench-defense@621c056d-ae10-452c-8828-b2dd0bbb5cb3:1",
+        "parameterManifestHash": "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8",
+        "policyOverridesHash": "sha256:9f683148e03118d1fa46659ed2be7b1455a812d15d93f9562268658bfd25379b",
+        "processConfig": {
+          "engine": "p1",
+          "flow-residual-classes": "",
+          "gpu-envelope-max": "0.2925",
+          "recon-profile": "ucw-recon"
+        },
+        "processConfigHash": "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010",
+        "reconProfile": "ucw-recon",
+        "contextProvider": "sensed-context",
+        "gpuEnvelopeMax": 0.2925,
+        "economicsMode": "fixed-disruption-aversion-v1",
+        "assets": [
+          "phorvex-staging-demo/stage-bench-api-f9b895d7-7sjgg",
+          "phorvex-staging-demo/stage-bench-api-f9b895d7-99htk",
+          "phorvex-staging-demo/stage-bench-api-f9b895d7-fntvf"
+        ],
+        "selected": null,
+        "finalized": true
+      },
+      "status": "PASS"
+    }
+  }
+}

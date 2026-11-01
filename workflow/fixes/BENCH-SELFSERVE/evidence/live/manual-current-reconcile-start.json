@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-01T20:33:20.431894+00:00",
+  "operation": "start-existing-owned-reconciler-once",
+  "unit": "phorvex-stage-reconcile.service",
+  "before": {
+    "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+    "ActiveState": "inactive",
+    "SubState": "dead"
+  },
+  "outcome": "START_REQUESTED_NOT_READINESS",
+  "reason": "Current a5f capture has accumulated beyond the earlier50/64 state; existing bounded controller performs all fresh source/capacity/lease/identity guards. No source pins or cluster settings are manually modified."
+}

@@ -1,0 +1,9 @@
+test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject) ... ok
+test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc) ... ok
+test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain) ... ok
+test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 1.737s
+
+OK

@@ -1,0 +1,40 @@
+{
+  "previous_head": "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+  "upstream": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "component_paths": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "371c54d448038059835763b7f0b0a278d9ea61d2fb8b476314a0cf37bc88d5c2",
+      "bytes": 2403
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_integration_test.go",
+      "sha256": "e27477245387e077ebc57b49c9d57f9d5e4171a36fe0c871cf1d08b2933f54db",
+      "bytes": 34164
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_runtime.go",
+      "sha256": "babc9bcfbd3656d498094126b3a492471d275e048784d31b6d144d6e8cbeb12e",
+      "bytes": 27385
+    }
+  ],
+  "runtime43_unchanged": true,
+  "all3_upstream_files_exact": false,
+  "capture_controls": "7 PASS",
+  "active_overlay_gate": "PASS: unchanged strict generator comparison; zero active fixture consumers",
+  "gate_diagnostic": "evidence/upstream-a5f/active-overlay-result.json",
+  "full_preflight": "Pending final committed-source run",
+  "two_upstream_go_files_exact": true,
+  "authorized_only_catalogue_delta": {
+    "path": "phorvex.console.attackCatalog.agentAction.image",
+    "before": "",
+    "after": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8",
+    "enabled": false
+  },
+  "independent_control": "evidence/peer-review/upstream-a5f/independent-overlay-control.json",
+  "head_sha": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "commit_parents": [
+    "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+    "a5f32f9dba5ed6e756f11b73ece968d54805c3e2"
+  ]
+}

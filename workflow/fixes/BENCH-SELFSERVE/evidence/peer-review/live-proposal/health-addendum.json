@@ -1,0 +1,17 @@
+{
+  "schema": "phorvex-bench.capture-proposal-health-addendum.v1",
+  "reviewer": "stage-review",
+  "reviewed_at": "2026-11-01T17:53:47.093641+00:00",
+  "result": "PASS_OBSERVED_HEALTH",
+  "proposal_verdict_sha256": "500d8edb89f8676a737a54c014b5e119baf7e6b754cf11d3968e954e84d3c883",
+  "input": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal/fresh-health.json",
+    "sha256": "d757a93c2a992f1581f9e3e4209071147d43111ef8fd835adfebed9a00d26b62",
+    "observed_at": "2026-11-01T17:52:05.480648+00:00"
+  },
+  "observation": "All3 Application health values Healthy, operation phases Succeeded, no conditions; all3 Deployments have observedGeneration=current generation and desired/current/updated/ready/available replicas1. This closes the earlier Progressing observation at this read time.",
+  "limits": [
+    "Manager and Console still report OutOfSync; no cause asserted by this reviewer.",
+    "This read does not replace fresh pre-apply guards, post-apply configuration/rollout checks or real capture acceptance."
+  ]
+}

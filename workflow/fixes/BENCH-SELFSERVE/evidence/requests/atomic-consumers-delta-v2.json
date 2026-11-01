@@ -1,0 +1,29 @@
+{
+  "prior_manifest": "evidence/final-source/integrated-source-inputs-v2.json",
+  "method": "Reconstructed exact pre-amendment bytes verified against all three frozen SHA256 values before diffing; no historical file rewritten. New test assertions also check /check repository and Go against the atomic identity.",
+  "paths": [
+    {
+      "path": "benchmark/bot/service.py",
+      "before_sha256": "d36bc983f22a1767ea0ba4f58ca74ba67ddce6d574a6e9fd4f707723fe29ab4a",
+      "after_sha256": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b"
+    },
+    {
+      "path": "benchmark/bot/endpoint_study.py",
+      "before_sha256": "9cd61a8df9a667064c464f406d266c90ebae08892d22e22aa3f18871bb613592",
+      "after_sha256": "ea57d00a583039199e9ae5b875d7ae8507d1102b0bf4c1e9fa80d8afcdfdace4"
+    },
+    {
+      "path": "benchmark/bot/test_request_readiness.py",
+      "before_sha256": "26151e9f7693d0f035264fea6c23ef80f08b3bceb02c2595a271600da0e9aaa9",
+      "after_sha256": "7642d6a5c274909d14f43ad02f7e1c54f54f574eb59d37e10ea9782a54bb1e7d"
+    }
+  ],
+  "patch_sha256": "1aa65ac0b3664e12ccbac0238ceb2d574b4669a6d3bf46eb514dc4b0c79aaefa",
+  "author_control": {
+    "path": "evidence/requests/atomic-consumer-final-tests.txt",
+    "sha256": "29fa1b3ba557c8bb9ee9425eb04b2c53ea125bb030282838c058ce21000acf20",
+    "tests": 4,
+    "result": "PASS"
+  },
+  "prior_failed_controls": "Initial parameter test lacked its runtime adapter and failed in setup; retained raw failure is not incident RED. Parent actual-host RED and endpoint audit RED are separate evidence."
+}

@@ -1,0 +1,8 @@
+543: 2026-11-01T20:55:09.5796685Z HEAD is now at b7630de2 release: pin batch source 76fe5b2118fa
+544: 2026-11-01T20:55:11.1545354Z servicerelease: component manager deployment chart/values consumer drifted from pinned source
+545: 2026-11-01T20:55:11.1574973Z ##[error]Process completed with exit code 1.
+546: 2026-11-01T20:55:11.1698679Z Post job cleanup.
+547: 2026-11-01T20:55:11.2719673Z [command]/usr/bin/git version
+548: 2026-11-01T20:55:11.2788591Z git version 2.56.0
+549: 2026-11-01T20:55:11.2852082Z Temporarily overriding HOME='/home/runner/work/_temp/fe807981-e2eb-40b3-a343-89d49cc9af2c' before making global git config changes
+550: 2026-11-01T20:55:11.2883842Z Adding repository directory to the temporary git global config as a safe directory

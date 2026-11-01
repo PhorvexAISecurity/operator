@@ -1,0 +1,29 @@
+{
+  "schema": "phorvex-bench.peer-atomic-check-control.v1",
+  "reviewer": "stage-review",
+  "producer": "Real source advance Git/PXMS/pinned executable producer fixture; external dependency/model probes scripted without network. No live-stage proof claimed.",
+  "current_source": "b75b9fc485317e7309029815968404ad8a23057c",
+  "cases": [
+    {
+      "legacy_absent": false,
+      "exit": 0,
+      "dependency_lines": [
+        "PASS stage brain-replay     brain b75b9fc48531; 6 recorded ticks for phorvex-staging-demo/demo-api-defense from this commit (up to 5000 inspected)",
+        "PASS operator repository    /workspace/.phorvex-test-tmp/bot-service-t2ft95eu/operator holds the deployed commit b75b9fc48531, untagged",
+        "PASS go                     go version go1.26.4 linux/amd64; replay uses go1.26.10"
+      ],
+      "legacy_preserved": true
+    },
+    {
+      "legacy_absent": true,
+      "exit": 0,
+      "dependency_lines": [
+        "PASS stage brain-replay     brain b75b9fc48531; 6 recorded ticks for phorvex-staging-demo/demo-api-defense from this commit (up to 5000 inspected)",
+        "PASS operator repository    /workspace/.phorvex-test-tmp/bot-service-t2ft95eu/operator holds the deployed commit b75b9fc48531, untagged",
+        "PASS go                     go version go1.26.4 linux/amd64; replay uses go1.26.10"
+      ],
+      "legacy_preserved": true
+    }
+  ],
+  "service_sha256": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b"
+}

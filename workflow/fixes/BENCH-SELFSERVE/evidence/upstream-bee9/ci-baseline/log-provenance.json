@@ -1,0 +1,82 @@
+{
+  "schema": "phorvex-bench.upstream-ci-baseline.v1",
+  "observed_at": "2026-11-01T19:13:14.543299+00:00",
+  "access": "GitHub REST GET only; redirect log fetched without API authorization header",
+  "runs": [
+    {
+      "id": 41339408824,
+      "name": "PR source validation",
+      "head_sha": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339408824",
+      "created_at": "2026-11-01T18:59:31Z",
+      "updated_at": "2026-11-01T19:09:24Z"
+    },
+    {
+      "id": 41339150618,
+      "name": "PR source validation",
+      "head_sha": "3be59316aa641be615f70f487e2d5612c55d474b",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339150618",
+      "created_at": "2026-11-01T18:56:20Z",
+      "updated_at": "2026-11-01T19:03:41Z"
+    },
+    {
+      "id": 41339413354,
+      "name": "Staging isolated release",
+      "head_sha": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+      "event": "workflow_dispatch",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339413354",
+      "created_at": "2026-11-01T18:59:35Z",
+      "updated_at": "2026-11-01T18:59:40Z"
+    }
+  ],
+  "jobs": [
+    {
+      "run_id": 41339150618,
+      "job_id": 124945249404,
+      "name": "3be-charts",
+      "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339150618/job/124945249404",
+      "original_log_bytes": 46586,
+      "original_log_sha256": "d5dfa00cdd136b5cdca1f45256f00e77b34ddd4feef1e26451781dfe7a44115e",
+      "excerpt_sha256": "1743c86a8e9154f15037525f376c49f4a107bf6c79fbd25b5c30781f86c4ed14",
+      "excerpt_lines": 9
+    },
+    {
+      "run_id": 41339150618,
+      "job_id": 124945249620,
+      "name": "3be-go-unit",
+      "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339150618/job/124945249620",
+      "original_log_bytes": 30688,
+      "original_log_sha256": "58ba54047c8b8d39b6f291cfdaff0680104da90f292edd23d963209ed0a9d583",
+      "excerpt_sha256": "c5d242044c7d4467309483693723a58a9791520fd23dd9ba00717732fb6d82b5",
+      "excerpt_lines": 5
+    },
+    {
+      "run_id": 41339408824,
+      "job_id": 124946034945,
+      "name": "bee9-charts",
+      "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339408824/job/124946034945",
+      "original_log_bytes": 46806,
+      "original_log_sha256": "9d667fce4ef2ed8d41cc3681f1aa93bdf2626d6de2b1559c3c776ec2df49d165",
+      "excerpt_sha256": "652fdd1c292ef139672d385e9762b5d495f7fbf11ab4ee0c82320da0b9ccaba9",
+      "excerpt_lines": 9
+    },
+    {
+      "run_id": 41339408824,
+      "job_id": 124946035083,
+      "name": "bee9-go-envtest",
+      "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339408824/job/124946035083",
+      "original_log_bytes": 2824314,
+      "original_log_sha256": "e2eaa7d45367a509aa66158ab8951e1d0f1bd7c27e3e96af4d3a574bd9ba59ed",
+      "excerpt_sha256": "7dfcb49ffe9bbe5c7b8bf139c6215cdb8c6be21d59864d5090c0cbde70c1a215",
+      "excerpt_lines": 3
+    }
+  ]
+}

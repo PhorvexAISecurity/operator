@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-01T21:05:08.665174+00:00",
+  "result": "PASS",
+  "evidence_class": "BASELINE_INSTRUMENT_CONTROL",
+  "source_revision": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "image_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+  "upstream_main": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "runtime_installed": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "positive_control": "Fresh actual embedded stage image/native paired replay agree; all3 appsHealthy/Succeeded and original policy/workload/Service identities preserved. Capture absent is expected pre-mutation state; currentnative64/history/bot readiness not claimed.",
+  "references": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/b1ef-eef-capture-preconditions.json",
+      "sha256": "93bf225dcd7f6bfe3a854dc854af5cce1b9c1a43c01b23b88d238c91193d33a7"
+    }
+  ],
+  "limits": [
+    "Prior a5f64+64 and earlierhistories remain historical",
+    "No original10d success, current native baseline or endpointcoverage claimed"
+  ]
+}

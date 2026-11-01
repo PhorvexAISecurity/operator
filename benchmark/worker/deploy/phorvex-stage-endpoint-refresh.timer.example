@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh measured stage fixture benchmarks periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+Persistent=true
+Unit=phorvex-stage-endpoint-refresh.service
+
+[Install]
+WantedBy=timers.target

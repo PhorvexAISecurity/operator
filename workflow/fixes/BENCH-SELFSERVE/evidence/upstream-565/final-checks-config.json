@@ -1,0 +1,27 @@
+{
+  "description": "BENCH-SELFSERVE final565\u219248b exact committed-source preflight then author L1/L2; prior a5dPASS/0288FAIL receipts preserved",
+  "source_sha": "48b02fadf34decc26d3e3e4f16fce0eb0b8f3df5",
+  "cwd": "/workspace/operator-benchmark-selfserve",
+  "status": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/final-checks-status.json",
+  "log": "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/final-checks.log",
+  "env": {},
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "coherent-current-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "author-L1-L2",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-565/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ]
+}

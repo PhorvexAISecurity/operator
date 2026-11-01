@@ -1,0 +1,21 @@
+{
+  "observed_at": "2026-11-01T20:59:55.606425+00:00",
+  "api_path": "/actions/runs/41349223280/jobs?per_page=100",
+  "data": [
+    {
+      "id": 124975570618,
+      "name": "e2e-contract",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223280/job/124975570618",
+      "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "failed_steps": [
+        {
+          "name": "Chart isolation, detector permissions and workflow regressions",
+          "conclusion": "failure",
+          "number": 8
+        }
+      ]
+    }
+  ]
+}

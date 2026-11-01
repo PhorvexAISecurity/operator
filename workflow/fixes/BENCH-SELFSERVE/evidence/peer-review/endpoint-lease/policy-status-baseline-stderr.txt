@@ -1,0 +1,20 @@
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 348, in _refresh
+    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+BlockingIOError: [Errno 11] Resource temporarily unavailable
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 494, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 484, in main
+    result = refresh(args.data, args.repo, args.policy, args.journal, target=args.slo_target,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 315, in refresh
+    return _refresh(data_dir, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/.phorvex-test-tmp/lease-peer-baseline-pe3solw0/source/benchmark/worker/endpoint_refresh.py", line 350, in _refresh
+    raise RefreshBlocked("REFRESH_ALREADY_RUNNING") from exc
+RefreshBlocked: REFRESH_ALREADY_RUNNING

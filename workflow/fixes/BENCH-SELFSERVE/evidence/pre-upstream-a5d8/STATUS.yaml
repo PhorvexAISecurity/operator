@@ -1,0 +1,219 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 9
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+  deploy: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: bench-v3-lead
+    artifact: 03-decision.md
+    sha256: db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c
+    source_sha: fe6494022a65fcca236e405521685708eb104d9e
+    at: '2026-11-01T17:32:49+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+    rationale: Current user remediation scope covers durable stage capture access;
+      no new execution authority or weaker evidence requirement
+  red:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/baseline-red.md
+    sha256: a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3
+    source_sha: fe6494022a65fcca236e405521685708eb104d9e
+    at: '2026-11-01T17:31:32+00:00'
+  base_review:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/upstream-integration/base-review.md
+    sha256: 6f9483d81a932792d1977fb04fd8b28fbf8d2325c9551d8157ee0df0aba9b7b7
+    source_sha: c3174a516bee6bf8eae39749825051c3cfcb8cc6
+    at: '2026-11-01T19:03:27+00:00'
+    baseline_sha: fe6494022a65fcca236e405521685708eb104d9e
+  preflight:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+  implementation:
+    result: PASS
+    by: bench-v3-worker
+    artifact: 04-diff.patch
+    sha256: 1ff1b68d382ec1efa297ebe56be6d7075e7343131d3a06583281aed9f7681ebc
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+  l0:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 466d6100731ce9647b7c34cb48a6e03ee3117cde3591e079f4b9f9e4376dbda0
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+  l1:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l1.txt
+    sha256: 089866873ae2f9832a61fda8f7b30b23ebfcc18255c1b30a3de18d7ccc29310e
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+  l2:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l2.txt
+    sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+  positive_control:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l2.txt
+    sha256: 3bf7b0eb0f2b998c0f3d827cac01d4850e3a3bb1c2801f3577cc32c4a69f82d1
+    source_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+    at: '2026-11-01T19:03:41+00:00'
+fix_id: BENCH-SELFSERVE
+issues: []
+title: Durable stage benchmark readiness for requested policies and release changes
+profile: standard
+state: OFFLINE_VERIFIED
+roles:
+  human_owner: hamihoriyat
+  proposer: bench-v3-lead
+  implementer: bench-v3-worker
+  skeptic: bench-v3-lead
+  live_verifier: bench-v3-lead
+  coordinator: bench-v3-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: true
+  deployment_authority: true
+baseline:
+  code_branch: main
+  code_sha: fe6494022a65fcca236e405521685708eb104d9e
+  deployed_image: null
+  deployed_git_sha: 61e83673b8d4f143fca67e17b8a54dc4712f9b28
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/benchmark-selfserve
+  base_sha: c3174a516bee6bf8eae39749825051c3cfcb8cc6
+  head_sha: a5d8d6121ed7a285d79f76b5aba4f7dad506725e
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: null
+  digest: null
+  git_sha: null
+  rolled_out_at: null
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: pending
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: pending
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: skeptic
+  action: Independently review the source delta, incident and submitted checks; return
+    review-verdict.
+updated_at: '2026-11-01T19:04:12+00:00'
+follow_up_to: BENCH-STAGE
+configuration_history:
+- at: '2026-11-01T17:25:14+00:00'
+  by: bench-v3-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+- at: '2026-11-01T18:50:58+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T19:03:40+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-11-01T17:25:43+00:00'
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-11-01T17:26:06+00:00'
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-11-01T19:03:42+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-11-01T19:03:57+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 971466fdb0011b7e3b9a09db71925c291dfc3abda1eebd5b9b987c6a7c8c5b53
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  at: '2026-11-01T17:26:01+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+handoff:
+  id: BENCH-SELFSERVE:9:submit
+  from: bench-v3-worker
+  to: bench-v3-lead
+  role: skeptic
+  kind: submit
+  revision: 9

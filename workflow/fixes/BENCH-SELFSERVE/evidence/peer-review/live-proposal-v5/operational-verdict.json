@@ -1,0 +1,75 @@
+{
+  "schema": "phorvex-bench.operational-proposal-peer-review.v5",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:24:52.485609+00:00",
+  "verdict": "PASS_FOR_BOUNDED_LIVE_ATTEMPT",
+  "source": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "upstream": "1457be4433a719784523a68ec3dd982cb57af409",
+  "actual_image_source": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "replaces_external_template_sha256": "a77f350c0ef95e2b47d7e79b845afda3111b967de6484de4e4273532a68bef44",
+  "template_cases": {
+    "per_version": 24,
+    "selected_staging": 3,
+    "unchanged_empty": 21,
+    "missing_key_rejected": true
+  },
+  "checks": [
+    "Exact proposal manifest/payload/fresh20:21:24 precondition hashes verified. Actual ApplicationSet generation16/UID/current external template preserved in expected object.",
+    "Executable AST remains accepted V4 except exact payload/output directory, None\u2192exact existing template predicate and add\u2192replace patch. Full-spec and fresh UID/RV CAS retained; all deployment/policy/workload/Service/main/publishedsource/health/disk guards retained.",
+    "Actual Go evaluation of both old/proposed templates proves exactly2 revisions1457\u21924116 for same3 staging apps; other21 branches remain empty. All repository/path/release/skipCrds/valueFiles fields unchanged.",
+    "Committed source4116 independently reviewed; currenta5f images/digests equal actual runtime, embeddedbrain/manager revisions and native candidate/paired capability verified in retained current precondition receipt. Native baseline/reconciliation still separately required.",
+    "Policy/workload/Service UID/generation/mode/selectors unchanged. Current quarantine family and p1 grants preserved by source/render proof, plus only authorized benchmark capture/reader additions."
+  ],
+  "conditions": [
+    "Root applies only after round4 preregistration/rebaseline and fresh guards pass. This remains one bounded ApplicationSet template replacement, no prune.",
+    "Prior external template must be retained byte-exact. Cleanup may restore it only while exact owned V5 value remains and after reviewing actual release conditions; never remove an unowned replacement or restore stale source across an unreviewed release.",
+    "Monitor main/effective images and stop for changed scope. ApplicationSet CAS is atomic only for that object, not all observed resources.",
+    "Actual Argo rollout, authenticated capture, native reconciliation, runtime installation, bot terminal results and fresh endpoint history remain separate required evidence."
+  ],
+  "evidence": {
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v5/proposal-manifest.json": {
+      "sha256": "449bd55a578c04bfeff057d3384b306f1f84e445a4b5bb8a36d3dd2d05deb6a1",
+      "bytes": 1366
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v5/operation.json": {
+      "sha256": "18e4ec339f4caf22a897c7b9c4fe4c9c02f29389a49b046379c092c7f44eeaa4",
+      "bytes": 2556
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v5/expected.json": {
+      "sha256": "c52651e249757dd9480badd449b648ce6371dc4542c8c862388db2c8ad338fa7",
+      "bytes": 11272
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live-proposal-v5/templatePatch.yaml.gotmpl": {
+      "sha256": "962ac858b9897bc58b011177e72e79001c747ce1fefc8b218f147e00fd092beb",
+      "bytes": 745
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/apply-reviewed-capture-v5.py": {
+      "sha256": "5b9d1524fcc8a91cd97121f4c173a3bc415df962ca50b4c792d09c8b2ace00b0",
+      "bytes": 15452
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/live/a5f-1457-capture-preconditions.json": {
+      "sha256": "e507c85c65fb7cc749b366280aca79e9c8a1f2a727cef7fe0a016cf25f5e0ed4",
+      "bytes": 18199
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/upstream-1457/commit-binding-4116c23e.json": {
+      "sha256": "b1985255b4ce75827fdce0c70b04a5d7c754116a0e1e3b42c05a455594960578",
+      "bytes": 923
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/guard-equivalence.json": {
+      "sha256": "157a20ea9ceb11339b6a7b2bcb39802f47c82e316c205aa09c12c31d0f376056",
+      "bytes": 558
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/before-template-output.json": {
+      "sha256": "1e1dc09303659024e85a71a7d4deebc1bac358949c5e160e58f417c6ab33a433",
+      "bytes": 4843
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/proposed-template-output.json": {
+      "sha256": "3b1997aa96848d039a0e3643d364a158f587bb7907a14674b668c1490c5cd959",
+      "bytes": 4891
+    },
+    "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal-v5/verify-proposal.py": {
+      "sha256": "1e14bc1b2bfbdec2222339857ab318eb5c20082616dd6dcea246f146580edf1f",
+      "bytes": 6878
+    }
+  }
+}

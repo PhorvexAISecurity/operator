@@ -1,0 +1,24 @@
+test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject) ... ok
+test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc) ... ok
+test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain) ... ok
+test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants) ... ok
+test_default_empty_additions_preserve_grant_bytes_and_checksum (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_default_empty_additions_preserve_grant_bytes_and_checksum) ... ok
+test_invalid_or_ambiguous_additions_fail_closed (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_invalid_or_ambiguous_additions_fail_closed) ... ok
+test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) ... ok
+test_capture_process_image_is_the_actual_brain_digest (test_service_charts.BrainChartTests.test_capture_process_image_is_the_actual_brain_digest) ... ok
+test_capture_rejects_an_unscoped_policy (test_service_charts.BrainChartTests.test_capture_rejects_an_unscoped_policy) ... ok
+test_math_lab_capture_gets_a_volume (test_service_charts.BrainChartTests.test_math_lab_capture_gets_a_volume) ... ok
+test_one_brain_runs_hardened (test_service_charts.BrainChartTests.test_one_brain_runs_hardened) ... ok
+test_only_the_manager_reaches_the_brain (test_service_charts.BrainChartTests.test_only_the_manager_reaches_the_brain) ... ok
+test_the_brain_decides_as_the_manager_configures_it (test_service_charts.BrainChartTests.test_the_brain_decides_as_the_manager_configures_it) ... ok
+test_the_brain_defaults_are_the_managers (test_service_charts.BrainChartTests.test_the_brain_defaults_are_the_managers) ... ok
+test_the_brain_holds_no_kubernetes_credentials (test_service_charts.BrainChartTests.test_the_brain_holds_no_kubernetes_credentials) ... ok
+test_it_renders_only_where_the_console_is_separate (test_service_charts.ConsoleChartTests.test_it_renders_only_where_the_console_is_separate) ... ok
+test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... ok
+test_moving_the_console_changes_no_object (test_service_charts.ConsoleChartTests.test_moving_the_console_changes_no_object) ... ok
+test_every_chart_vendors_the_current_library (test_service_charts.VendoredLibraryTests.test_every_chart_vendors_the_current_library) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 18.185s
+
+OK

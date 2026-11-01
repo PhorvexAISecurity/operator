@@ -1,0 +1,17 @@
+{
+  "kind": "ApplicationSet",
+  "namespace": "argocd",
+  "name": "phorvex-services",
+  "expected_uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5",
+  "test_fresh_resourceVersion": true,
+  "expected_existing_templatePatch": null,
+  "operation": "add /spec/templatePatch",
+  "value": "{{- if and (eq .environment \"staging\") (or (eq .service \"brain\") (eq .service \"manager\") (eq .service \"console\")) }}\nspec:\n  sources:\n  - helm:\n      releaseName: '{{.release}}'\n      skipCrds: true\n      valueFiles:\n      - $values/deploy/environments/{{.environment}}/phorvex.yaml\n      - $values/deploy/environments/{{.environment}}/{{.service}}.yaml\n      - $values/deploy/environments/{{.environment}}/catalogue-family.yaml\n    path: '{{.chart}}'\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 4dc325d300993d0aaec5f5a6d607951cdadd3f62\n  - ref: values\n    repoURL: https://github.com/PhorvexSecurity/operator-refactored.git\n    targetRevision: 4dc325d300993d0aaec5f5a6d607951cdadd3f62\n{{- end }}\n",
+  "chart_source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "values_source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "values_reviewed_at": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "prune": false,
+  "temporary_source_pin": true,
+  "owner": "bench-v3-lead",
+  "expiry_condition": "Remove this exact owned override after durable change is merged; stop and remove before allowing any unreviewed subsequent staging image/family release. Lead monitors main and effective images during this bounded campaign. No permanent main-tracking claim."
+}

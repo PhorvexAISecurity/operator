@@ -1,0 +1,3 @@
+{"policy": "phorvex-staging-demo/demo-api-defense", "status": "READY", "seconds": 36.300667867064476, "reason_codes": []}
+{"policy": "phorvex-staging-demo/stage-bench-defense", "status": "BLOCKED", "seconds": 60.21099101938307, "reason_codes": ["RUNTIME_OBSERVATION_UNAVAILABLE"]}
+{"state": "FAIL", "observe_seconds": 45.898832857608795, "receipt": "/home/hami/phorvex-benchmark/stage-data/live/selfserve-runtime-probe-449fec50/receipt.json", "sha256": "59d3a6b66bebbf8599ce325e2de054843838f97e7bf73f83250dd9cb0b0b0ac8"}

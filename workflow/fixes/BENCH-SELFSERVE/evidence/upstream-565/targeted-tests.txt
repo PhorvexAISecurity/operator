@@ -1,0 +1,15 @@
+test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers) ... ok
+test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... ok
+test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_final_family_overlay_keeps_separate_read_only_benchmark_subject) ... ok
+test_actual_stage_brain_records_both_policies_on_existing_pvc (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_brain_records_both_policies_on_existing_pvc) ... ok
+test_actual_stage_manager_exports_cost_observations_to_remote_brain (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_actual_stage_manager_exports_cost_observations_to_remote_brain) ... ok
+test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_addition_update_changes_pod_checksum_and_does_not_add_kubernetes_grants) ... ok
+test_default_empty_additions_preserve_grant_bytes_and_checksum (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_default_empty_additions_preserve_grant_bytes_and_checksum) ... ok
+test_invalid_or_ambiguous_additions_fail_closed (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_invalid_or_ambiguous_additions_fail_closed) ... ok
+test_official_next_release_pin_preserves_all_capture_and_reader_settings (test_stage_benchmark_capture.StageBenchmarkCaptureTests.test_official_next_release_pin_preserves_all_capture_and_reader_settings) ... ok
+test_quarantine_requires_api_assigned_namespace_uid_pin (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_quarantine_requires_api_assigned_namespace_uid_pin) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 7.295s
+
+OK

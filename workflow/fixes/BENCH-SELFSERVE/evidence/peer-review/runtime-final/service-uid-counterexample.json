@@ -1,0 +1,21 @@
+{
+  "schema": "phorvex-bench.peer-service-scope-control.v1",
+  "reviewer": "stage-review",
+  "source_sha256": "4ec32fdc86467ba1f0c69d447477b2dbe603b8cf4e95b295e60606a4bed384e9",
+  "producer": "Actual Journal/list/watch/settled calibration reducer and normalizer from existing producer fixture; current Service observation supplied at API boundary, no cluster changes. Engine absent in both cases, not replaced with a passing mock.",
+  "normalized_scope_service_uid": "service-uid",
+  "normalized_scope_workload_uid": "deployment-uid",
+  "normalization_state": "READY",
+  "trace_sha256": "e451ccedc545330edbc1c226c6f263fc22a736fe8a9dd6de1118a4b25399616b",
+  "positive_current_service": "service-uid",
+  "recreated_current_service": "service-recreated-peer-control",
+  "positive_reasons": [
+    "ENDPOINT_ENGINE_UNAVAILABLE"
+  ],
+  "recreated_reasons": [
+    "ENDPOINT_ENGINE_UNAVAILABLE"
+  ],
+  "required_predicate": "Current recorded endpoint readiness must reject a normalized Service UID different from actual current Service UID, while preserving old reports as historical. Missing UID is unverified.",
+  "observed_defect": "Service UID recreation adds no rejection reason even though the real normalized scope retains the previous Service UID. Existing missing-engine reason is explicitly unrelated and preserved.",
+  "result": "EXPECTED_SERVICE_SCOPE_REFUSAL_ABSENT"
+}

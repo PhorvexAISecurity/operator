@@ -1,0 +1,181 @@
+{
+  "schema": "phorvex-bench.independent-bot-lease-race.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:31:20.927408+00:00",
+  "source_hashes": {
+    "benchmark/bot/service.py": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b",
+    "benchmark/bot/request_readiness.py": "1b1d5e413d1919fff348d0628ba269d0918c2d8914e612a894e53e20e27f1998",
+    "benchmark/bot/stage_runtime.py": "93c38c3111d51f38bc48b3137e63a39e6073a9bec2b995fc58595b7be75f7cff",
+    "benchmark/worker/mathlab/stage_scope.py": "47bf61c8e98d128bd4a9778467a41dddf89056d8911a0a24e8c5a2b9148d85ed"
+  },
+  "head_at_run": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "producer": "Real reconciliation, Git source, PXMS content, native receipt, readonly readiness, StageRuntime and BenchBot queue/execute boundary; scripted external transports only.",
+  "positive": {
+    "state": "DONE",
+    "ticks": 2,
+    "activity": {
+      "state": "DONE",
+      "phase": "sending benchmark reports and attachments",
+      "started": {
+        "model_started": false,
+        "tests_started": false,
+        "build_started": false,
+        "replay_started": true,
+        "preflight_started": true
+      },
+      "model_token_count": null,
+      "build_cost": null,
+      "replay_cost": null
+    }
+  },
+  "counterexample": {
+    "state": "FAILED",
+    "elapsed_seconds": 20.057,
+    "lock_error": {
+      "type": "StageLeaseBusy",
+      "message": "stage pin is busy with active jobs or reconciliation; retry after it completes",
+      "wait_seconds": 20.000864328001626,
+      "source": "actual unchanged pin_lock/flock timeout"
+    },
+    "rechecked_readiness": {
+      "schema": "phorvex-bench.request-readiness.v1",
+      "syntax": "VALID",
+      "status": "READY",
+      "requested_policy": "phorvex-staging-demo/demo-api-defense",
+      "requested_ticks": 2,
+      "requested_sync": false,
+      "requested_kind": "param",
+      "reasons": [],
+      "available_policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "snapshot_count": 2,
+      "latest_captured_at": "2026-11-01T20:30:50.288119Z",
+      "baseline_validation": "NOT_RUN",
+      "semantics": "Read-only prerequisite check; execution rechecks identity, hashes, exact replay and tests.",
+      "runtime": {
+        "schema": "phorvex-bench.runtime-readiness.v1",
+        "status": "READY",
+        "requested_policy": "phorvex-staging-demo/demo-api-defense",
+        "reasons": [],
+        "pin_sha256": "0435f6573b8d493b79983a8b6c3b4afd46a2d4843c8e92c3960b3f1aaf4502b9",
+        "actual_brain": {
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-git-700df785fa44084185cb51eb4c13ace997a85d7b@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain",
+          "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "image_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "git_sha": "700df785fa44084185cb51eb4c13ace997a85d7b",
+          "deployment": "staging-brain",
+          "deployment_uid": "brain-uid",
+          "container": "brain",
+          "pods": [
+            {
+              "name": "brain-pod",
+              "uid": "brain-pod-uid"
+            }
+          ],
+          "embedded_version": {
+            "service": "brain",
+            "gitSHA": "700df785fa44084185cb51eb4c13ace997a85d7b"
+          }
+        },
+        "policy": {
+          "uid": "policy-0",
+          "generation": 1,
+          "mode": "active",
+          "selector": {
+            "matchLabels": {
+              "app": "demo-api"
+            }
+          },
+          "workload_name": "demo-api",
+          "workload_uid": "workload-demo-api",
+          "workload_generation": 1,
+          "service_name": "demo-api",
+          "service_uid": "service-demo-api",
+          "dry_run": false
+        },
+        "capture": {
+          "enabled": true,
+          "policies": [
+            "phorvex-staging-demo/demo-api-defense",
+            "phorvex-staging-demo/stage-bench-defense"
+          ],
+          "directory": "/capture",
+          "persistent_claim": "staging-brain-mathlab",
+          "persistent_claim_uid": "capture-pvc-uid",
+          "cost_evidence": true
+        },
+        "available_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "allowed_policies": [
+          "phorvex-staging-demo/demo-api-defense",
+          "phorvex-staging-demo/stage-bench-defense"
+        ],
+        "actual_manager": {
+          "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-git-700df785fa44084185cb51eb4c13ace997a85d7b@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager",
+          "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "image_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+          "git_sha": "700df785fa44084185cb51eb4c13ace997a85d7b",
+          "deployment": "staging-phorvex",
+          "deployment_uid": "manager-uid",
+          "container": "manager",
+          "pods": [
+            {
+              "name": "manager-pod",
+              "uid": "manager-pod-uid"
+            }
+          ],
+          "embedded_version": {
+            "service": "manager",
+            "gitSHA": "700df785fa44084185cb51eb4c13ace997a85d7b"
+          }
+        }
+      },
+      "pin_sha256": "sha256:efeb2f53bb64ffd196656403b2ea70e4b939699128e65edeae90cfb9c51b064f",
+      "available_pinned_policies": [
+        "phorvex-staging-demo/demo-api-defense",
+        "phorvex-staging-demo/stage-bench-defense"
+      ],
+      "latest_age_seconds": 30.635986804962158,
+      "max_age_seconds": 900
+    },
+    "activity": {
+      "state": "FAILED",
+      "phase": "",
+      "started": {
+        "model_started": false,
+        "tests_started": false,
+        "build_started": false,
+        "replay_started": false,
+        "preflight_started": false
+      },
+      "model_token_count": null,
+      "build_cost": null,
+      "replay_cost": null
+    },
+    "new_experiments": 0,
+    "history": {
+      "id": "e7a14fba1b93",
+      "kind": "param",
+      "user": "1001 (@u1001)",
+      "state": "FAILED",
+      "created": "2026-11-01T20:31:00Z",
+      "finished": "2026-11-01T20:31:20Z",
+      "request": "P-FEA-006 1.5 policy=phorvex-staging-demo/demo-api-defense ticks=2 nosync",
+      "batch_id": null,
+      "headline": "stage pin is busy with active jobs or reconciliation; retry after it completes"
+    }
+  },
+  "interleaving": "Separate OS process holds EX; genuine20s pin_lock raises StageLeaseBusy; at actual fresh-readiness entry release EX and call original readiness. No readiness status/error/result is fabricated.",
+  "limits": [
+    "Kubernetes object transport, ECR binary retrieval, Console bytes and replay executable are explicit test fixtures; no live brain efficacy or actual Telegram delivery claimed.",
+    "Failure is in state classification after actual lock timeout, not the correctness of the changed-parameter replay.",
+    "No product edits or live mutations."
+  ],
+  "verdict": "COUNTEREXAMPLE_REPRODUCED"
+}

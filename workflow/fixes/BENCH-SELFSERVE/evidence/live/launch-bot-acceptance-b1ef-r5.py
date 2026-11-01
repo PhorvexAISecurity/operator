@@ -1,0 +1,26 @@
+# Lead-owned launcher: inherit existing trusted bot unit environment privately.
+import hashlib,json,pathlib,re,shlex,subprocess,sys
+phase,source=sys.argv[1:];assert phase in ('initial','fixture') and re.fullmatch('[a-f0-9]{40}',source)
+root=pathlib.Path('/home/hami/phorvex-benchmark')
+script=root/'stage-data/live/selfserve-b1ef-r5/run-selfserve-bot-acceptance-b1ef-r5.py'
+assert hashlib.sha256(script.read_bytes()).hexdigest()=='8d3c09514c43bf5e0eb16081919a27df6ec125170cda1bb449ce3f9370d03ebf'
+release=root/'releases'/('stage-selfserve-'+source[:12]);pin=json.loads((root/'stage-data/mathlab/stage.json').read_text())
+assert pin['brain']['git_sha']=='b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0','Current stage pin not reconciled to actual b1ef'
+unit='phorvex-selfserve-acceptance-'+phase+'-'+source[:12]+'-b1ef-r5'
+def run(args):
+    try:
+        result=subprocess.run(args,capture_output=True,text=True,check=False,timeout=30)
+    except (OSError,subprocess.SubprocessError):
+        raise RuntimeError('Private-environment operation unavailable; command and output withheld') from None
+    if result.returncode:
+        raise RuntimeError('Private-environment operation failed with exit code '+str(result.returncode)+'; command and output withheld') from None
+    return result
+props=run(['systemctl','--user','show','phorvex-benchmark-bot.service','--property=Environment,EnvironmentFiles,WorkingDirectory']).stdout
+props=dict(x.split('=',1) for x in props.splitlines() if '=' in x)
+assert props['WorkingDirectory']==str(release/'benchmark/bot')
+assert props['EnvironmentFiles']==str(root/'config/bot.env')+' (ignore_errors=no)'
+args=['systemd-run','--user','--unit='+unit,'--description=Reviewed stage benchmark document acceptance','--service-type=exec','--property=WorkingDirectory='+str(release/'benchmark/bot'),'--property=EnvironmentFile='+str(root/'config/bot.env')]
+for env in shlex.split(props['Environment']):args.append('--setenv='+env)
+args += [str(root/'runtime/python/bin/python'),'-B',str(script),source,phase]
+result=run(args)
+print(json.dumps({'state':'LAUNCHED','unit':unit,'runtime_source':source,'capture_source':pin['brain']['git_sha'],'script_sha256':hashlib.sha256(script.read_bytes()).hexdigest()}))

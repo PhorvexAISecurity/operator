@@ -1,0 +1,97 @@
+{
+  "schema": "phorvex-bench.upstream-integration.v1",
+  "previous_head": "0288e00ffe51c2a23f30742b4f6dcd2b8a733d65",
+  "upstream": "565c3ea44387d45641d36a4ace9615de62f59fa9",
+  "runtime43_unchanged": true,
+  "image_release_fields_match_upstream": true,
+  "catalogue_family_byte_equal_upstream": true,
+  "original_capture_and_reader_settings_preserved": true,
+  "correction": "One manager familyFixtures.namespaceUID empty default; unchanged assertion contracts. Canonical regeneration changes only umbrella archive.",
+  "component_paths": [
+    {
+      "path": "deploy/environments/staging/actuator.yaml",
+      "bytes": 431,
+      "sha256": "90e2d443bcd8906a2e14a267a8f2426d9046611f0a1916122d4b63e2163f1372"
+    },
+    {
+      "path": "deploy/environments/staging/attacks.yaml",
+      "bytes": 498,
+      "sha256": "218965682e3595bef0698d0b7cc6ff2da89b726634754e4d225ee6f367dd6aec"
+    },
+    {
+      "path": "deploy/environments/staging/brain.yaml",
+      "bytes": 708,
+      "sha256": "14062091adc9d05ffce05a9fecc5084fac2e99dfc435d2c6f40d820d9725e077"
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "bytes": 2427,
+      "sha256": "99b82e56ec53b787c08696cd70c7a6165c135169df37f933b3a686bacd6a9074"
+    },
+    {
+      "path": "deploy/environments/staging/console.yaml",
+      "bytes": 1033,
+      "sha256": "217367842afbcf006b853151b1a7422dfa2bb2cf72879282f055db9359bfd8c8"
+    },
+    {
+      "path": "deploy/environments/staging/manager.yaml",
+      "bytes": 558,
+      "sha256": "80e4e7cb765795671e1987f723e04d0134643a883e2ee84400223b3f9d28299b"
+    },
+    {
+      "path": "deploy/environments/staging/sensor.yaml",
+      "bytes": 423,
+      "sha256": "bc852b2f4ba126665becfad06e3c3049e4b5be81b8f5e9533868bee76ab80417"
+    },
+    {
+      "path": "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+      "bytes": 84756,
+      "sha256": "d381a2ffdca69ed88cfcaadaac8a64ffe69d35aeec2782c3fb331d0af8907486"
+    },
+    {
+      "path": "phorvex/charts/phorvex/values.yaml",
+      "bytes": 43160,
+      "sha256": "81af45ebcd197d784f8a01d9b33b0446ed69e2112599bdab16e3a1966e566389"
+    },
+    {
+      "path": "release/staging-batch.json",
+      "bytes": 30539,
+      "sha256": "363aae5c055324b54a42a00f0e1909007a4fb4db4c6d2039444685863d47591f"
+    }
+  ],
+  "tests": {
+    "targeted": 10,
+    "result": "PASS",
+    "skipped": 0,
+    "baseline": "Exact e9 source executed2original parity assertions failing+1sensor positive control. All5 input blobs are byte-identical in565; no new565 execution claimed."
+  },
+  "baseline_source_equivalence_verified": true,
+  "source_test_files_changed": false,
+  "toolchain": {
+    "tar": "GNU tar1.35",
+    "helm": "3.16.4",
+    "python": "3.12.15"
+  },
+  "logs": [
+    {
+      "path": "evidence/upstream-565/package-write.txt",
+      "sha256": "6ab70b364f4c3a74b14dfb952445142af1d3bed8bec64fde1fb91d6ffc64e9da",
+      "bytes": 73
+    },
+    {
+      "path": "evidence/upstream-565/package-check.txt",
+      "sha256": "ce40d3af12db7c5fccc0cde5bc3ad1b6abf18150a1e6435c9a5e750b3b9f1753",
+      "bytes": 62
+    },
+    {
+      "path": "evidence/upstream-565/targeted-tests.txt",
+      "sha256": "9b3a270deff520ac736a6d1c4a72949fb88ba54631417c1026d7a46c57c68a20",
+      "bytes": 1906
+    }
+  ],
+  "superseded_e9_freeze": {
+    "path": "evidence/upstream-e9/composition-inputs.json",
+    "sha256": "8dfb5e260795654608ee3de0962aad45b654e0039c6c2253a7ebb6f9e21bd3c5"
+  },
+  "full_preflight": "Pending source commit and coherent run;0288 failed7/8 receipt remains immutable."
+}

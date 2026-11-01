@@ -1,0 +1,406 @@
+{
+  "previous_head": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "merged_upstream": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "shared_original_base": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "runtime43_unchanged": true,
+  "upstream_only_paths_exact": [
+    "deploy/charts/phorvex-attacks/values.schema.json",
+    "deploy/charts/phorvex-common/templates/_console-rbac.tpl",
+    "deploy/environments/staging/catalogue-family.yaml",
+    "deploy/environments/staging/phorvex.yaml",
+    "docs/services/attacks.md",
+    "phorvex/cmd/internal/consoleserver/attack_catalog_env_test.go",
+    "phorvex/cmd/internal/consoleserver/consoleserver.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster_test.go",
+    "phorvex/internal/console/config.go",
+    "tools/render_catalogue_staging_values.py",
+    "tools/staging_release.py",
+    "tools/test_catalogue_fixture_packaging.py"
+  ],
+  "overlap_paths": [
+    "deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-attacks/values.yaml",
+    "deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-common/templates/_console.tpl",
+    "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-console/values.yaml",
+    "deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz",
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+    "phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz"
+  ],
+  "conflicts": [
+    "deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz",
+    "deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz",
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+    "phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz"
+  ],
+  "resolution": "Only generated archive conflicts; all regenerated from composed source using the existing canonical script. Textual overlap auto-merged with both changes retained.",
+  "package_check": "all vendored chart archives are byte-reproducible and current",
+  "composed_inputs": [
+    {
+      "path": "benchmark/bot/ENDPOINT-V3.md",
+      "sha256": "bcf4c799cf355ad8edd28de7ca512d531598b948d6839de98fa80ee7b78b98d8",
+      "bytes": 9338
+    },
+    {
+      "path": "benchmark/bot/README.md",
+      "sha256": "456ae937b05bcee74ed0258fc58d0552bfb1a67c32399cd6247e570b8347c028",
+      "bytes": 12806
+    },
+    {
+      "path": "benchmark/bot/endpoint_study.py",
+      "sha256": "ea57d00a583039199e9ae5b875d7ae8507d1102b0bf4c1e9fa80d8afcdfdace4",
+      "bytes": 35513
+    },
+    {
+      "path": "benchmark/bot/file_requests.py",
+      "sha256": "d0e73aa82edfd4174d59b249aabc3e642165b31e48a01cf6befb699b54b93b65",
+      "bytes": 16112
+    },
+    {
+      "path": "benchmark/bot/guide-en.html",
+      "sha256": "9c73a988800018f19188d9dfa01c12aae14a5600fbdd8beda9082fc792f63900",
+      "bytes": 203254
+    },
+    {
+      "path": "benchmark/bot/guide-en.pdf",
+      "sha256": "967b046193f63a05568ec61c6d08e89a128b39e20e81188a26e1bec386d15335",
+      "bytes": 561661
+    },
+    {
+      "path": "benchmark/bot/guide-fa.html",
+      "sha256": "51311caca5be704ce33ca6161401703138846358eb77596f44d4d91d7a96a327",
+      "bytes": 230900
+    },
+    {
+      "path": "benchmark/bot/guide-fa.pdf",
+      "sha256": "4293767162e5c3bec62d46111c7970922a7927afcc8f601e33f1006c0b484f68",
+      "bytes": 647477
+    },
+    {
+      "path": "benchmark/bot/request_readiness.py",
+      "sha256": "1b1d5e413d1919fff348d0628ba269d0918c2d8914e612a894e53e20e27f1998",
+      "bytes": 20115
+    },
+    {
+      "path": "benchmark/bot/service.py",
+      "sha256": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b",
+      "bytes": 78383
+    },
+    {
+      "path": "benchmark/bot/stage_runtime.py",
+      "sha256": "93c38c3111d51f38bc48b3137e63a39e6073a9bec2b995fc58595b7be75f7cff",
+      "bytes": 5459
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-10d.txt",
+      "sha256": "a9d64d343190e74845954a3f8080b866959f08f1e771cffa985ba4d55c4ff10e",
+      "bytes": 309
+    },
+    {
+      "path": "benchmark/bot/templates/endpoint-v3-fixture-600s.txt",
+      "sha256": "b5eba185bb170a14f6815c3eda534eae3442612c47534b2ff472640b499e1667",
+      "bytes": 259
+    },
+    {
+      "path": "benchmark/bot/test_bot.py",
+      "sha256": "8538cecabeae56492d1a3f340f0dedb8bd12537d270caa5dbd387a3526ef1da3",
+      "bytes": 44979
+    },
+    {
+      "path": "benchmark/bot/test_endpoint_study.py",
+      "sha256": "3c287a9d074496f5dcf490ac70b604c5459468469aa378f8b4e214f79b601d22",
+      "bytes": 18361
+    },
+    {
+      "path": "benchmark/bot/test_request_readiness.py",
+      "sha256": "7642d6a5c274909d14f43ad02f7e1c54f54f574eb59d37e10ea9782a54bb1e7d",
+      "bytes": 20313
+    },
+    {
+      "path": "benchmark/bot/test_selfserve_requests.py",
+      "sha256": "f059d72ebbbc1c4e9d31bfca48cb2b9fd2c62380916ee7a805fcb2dcf57b9ecc",
+      "bytes": 5797
+    },
+    {
+      "path": "benchmark/bot/test_study.py",
+      "sha256": "c4dbb5a0f442de7b6bf98e5a050cbb55738abf770a6f36a993dfd0e0ab8902bc",
+      "bytes": 16448
+    },
+    {
+      "path": "benchmark/bot/test_uploads.py",
+      "sha256": "7ef727be9169daed97b2caf9058b71b053914d548fa96642ef3f9e2741c6638b",
+      "bytes": 15030
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-10d-original.txt",
+      "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+      "bytes": 13522
+    },
+    {
+      "path": "benchmark/bot/testdata/endpoint-v3-30d-original.txt",
+      "sha256": "c4f07c2b1635a89fbf60c37f318805e6a3169438bf6739b9448ba54f910f3687",
+      "bytes": 12132
+    },
+    {
+      "path": "benchmark/bot/testkit.py",
+      "sha256": "46320c779be26d9a564c525207edf6c4a05f2bff009b632b9f3d5e47180f3a19",
+      "bytes": 11260
+    },
+    {
+      "path": "benchmark/stage/evidence.py",
+      "sha256": "314123805cb13eee81bc5808a53411511524458f569786accf00c657c0c5c999",
+      "bytes": 37604
+    },
+    {
+      "path": "benchmark/stage/normalize.py",
+      "sha256": "7d60ce044ba073e3fe586186d272ec2908acae0db3ea22daf695ac909957f4b1",
+      "bytes": 14900
+    },
+    {
+      "path": "benchmark/worker/deploy/README.md",
+      "sha256": "c9e9b7dcfe7f214bab1509060ae696adf9c32f4604dc742e33efafe11235f9c0",
+      "bytes": 5377
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.service.example",
+      "sha256": "8f1f60af93a857c85db8beecabbc2093e6607e136ca9c112ea39d967dd8cd3db",
+      "bytes": 1032
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.timer.example",
+      "sha256": "f128a13ebf3160841a2a937194c2c4228760ec8774f9b1cd594bf0be0e3f9ab2",
+      "bytes": 215
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-observer.service.example",
+      "sha256": "5042a2219f1477d0e36158a6bf27d304e1df91bb71224465ebc080e93cd039e5",
+      "bytes": 942
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.service.example",
+      "sha256": "bd858706cb191073bd2823ab76f80df6de0db644c266d51fbf2cd4c3d68a189a",
+      "bytes": 781
+    },
+    {
+      "path": "benchmark/worker/deploy/phorvex-stage-reconcile.timer.example",
+      "sha256": "61a408ab2e4a0a1827bc55dfd8a0ea54754a249afad2e7e36f65843c430074c1",
+      "bytes": 206
+    },
+    {
+      "path": "benchmark/worker/endpoint_refresh.py",
+      "sha256": "d15b632bb9f7f9eb62b8abd48255c575124c56ed928a4f15e9a38538578747db",
+      "bytes": 28940
+    },
+    {
+      "path": "benchmark/worker/mathlab/binary.py",
+      "sha256": "18637c57cc09c21ae3ff797914421e8accb7c674fb110295f9e97eb9c0fb3fd1",
+      "bytes": 10731
+    },
+    {
+      "path": "benchmark/worker/mathlab/experiment.py",
+      "sha256": "389f323e8ef15cbba42646dd2f58957b2ce93a8cf4cc8133c0824e57fe0623a6",
+      "bytes": 21744
+    },
+    {
+      "path": "benchmark/worker/mathlab/recent_snapshots.py",
+      "sha256": "dd8587c697ea316e2bf5082eb7c62da3a331b63a8ca525add1aa0d6e7e91aae8",
+      "bytes": 4729
+    },
+    {
+      "path": "benchmark/worker/mathlab/snapshots.py",
+      "sha256": "1221dbfd4c431b2b5a9cad3e80d07f7a5f7ed7afece1afbd803d17c339a671fc",
+      "bytes": 15735
+    },
+    {
+      "path": "benchmark/worker/mathlab/stage_scope.py",
+      "sha256": "25a17f34f6bd0bf7cb8f4507bb0cecf980ed8a8463da4579a7401cbd45f0b420",
+      "bytes": 19376
+    },
+    {
+      "path": "benchmark/worker/stage_cli.py",
+      "sha256": "2e9637b8f39a62837f9e7fc3aa40077bb9c471807029eae093d87c80b8c5dc26",
+      "bytes": 36797
+    },
+    {
+      "path": "benchmark/worker/stage_observer_runtime.py",
+      "sha256": "6c064a2dd5886a073b6dd742b9daaabb079005530fd974c054ed22e11594490f",
+      "bytes": 10051
+    },
+    {
+      "path": "benchmark/worker/stage_reconcile.py",
+      "sha256": "ba0690841cc36daa71e4cb6072dd799a397041db27d5539741c81e8e0243f1dc",
+      "bytes": 30262
+    },
+    {
+      "path": "benchmark/worker/test_endpoint_refresh.py",
+      "sha256": "180d8a98ddf472026a69e46b69c61ad3709b5c0947f6e41c881ba6cdaafffc44",
+      "bytes": 21551
+    },
+    {
+      "path": "benchmark/worker/test_recent_snapshots.py",
+      "sha256": "ac7b3a18e618b74f8fa3bb6461ddeb738f1ee588a7304948c7fa0b815f296152",
+      "bytes": 4918
+    },
+    {
+      "path": "benchmark/worker/test_stage_observer_runtime.py",
+      "sha256": "360bc4e7bf6e1ce816aad74f90dc9887b8fba49ae774ec914056b6ef7562908b",
+      "bytes": 9643
+    },
+    {
+      "path": "benchmark/worker/test_stage_reconcile.py",
+      "sha256": "9313bc5e617ad60f2bd2fddd38390d9b9145be008552997177843fc524e9a333",
+      "bytes": 26094
+    },
+    {
+      "path": "deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/values.schema.json",
+      "sha256": "5fabcb6f7874b1ce57e0e13ceb6708141874fd979c88beeaac9b6b7013022e51",
+      "bytes": 3666
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/values.yaml",
+      "sha256": "642cc049a072a768d8aa63af025dfa3f75964f662e85972793c87c31ab73f590",
+      "bytes": 22316
+    },
+    {
+      "path": "deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "deploy/charts/phorvex-common/templates/_console-grants.tpl",
+      "sha256": "32ef42c850270c8531f75828ad2b340db4f54b09874fb5316236a72c86df8296",
+      "bytes": 5180
+    },
+    {
+      "path": "deploy/charts/phorvex-common/templates/_console-rbac.tpl",
+      "sha256": "4998c18c2d01c30511691a811294f814fbc012f8aa02ae8c82169c534e325bcb",
+      "bytes": 39075
+    },
+    {
+      "path": "deploy/charts/phorvex-common/templates/_console.tpl",
+      "sha256": "b871e77c470b5b7f78435eb6dccdf12a3c398fc549ef331053cb1490940510f7",
+      "bytes": 83674
+    },
+    {
+      "path": "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "deploy/charts/phorvex-console/values.yaml",
+      "sha256": "f2d4f634e1523db48d91838e7cd68af4cf76a8a2d3518d8ab83cf55d8c6ed097",
+      "bytes": 23820
+    },
+    {
+      "path": "deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "deploy/environments/staging/brain.yaml",
+      "sha256": "20f6bcb240af9a157531012099b40c9e0fcecc398e6fe258ed29ed1d573fce51",
+      "bytes": 708
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "616098e35ef2a28c8926a5b9291dd31711b300d3c5cfe4bb9edbbebb46abc3a9",
+      "bytes": 2402
+    },
+    {
+      "path": "deploy/environments/staging/console.yaml",
+      "sha256": "eff88a3df9432ec3e51cb8d6935408ec6e7829ef72f6e42a5bbefe8a23eb2e25",
+      "bytes": 1033
+    },
+    {
+      "path": "deploy/environments/staging/manager.yaml",
+      "sha256": "c5f123a5b77befab8dbceb802f5b76a29c043d23826cebffd9cd40d3fb4811dd",
+      "bytes": 558
+    },
+    {
+      "path": "deploy/environments/staging/phorvex.yaml",
+      "sha256": "60cea1b6c7eb8f27a88160d8e06334776623afb8ca9fb4b79d345fe621d031d5",
+      "bytes": 11495
+    },
+    {
+      "path": "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+      "sha256": "0996d95651da8a8fd29fc26d1634a5665d96565628cbf420cf338a6dd7b7faa6",
+      "bytes": 84754
+    },
+    {
+      "path": "docs/services/attacks.md",
+      "sha256": "ba87c3110fe2e969ddbc373a8ee0ae562504fc030f2e6379eee137be48b112ce",
+      "bytes": 11335
+    },
+    {
+      "path": "phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz",
+      "sha256": "050ef09b42ee24ac03cb0eda02576c4649e342a08f738e248936e6a4c839172f",
+      "bytes": 30179
+    },
+    {
+      "path": "phorvex/charts/phorvex/values.yaml",
+      "sha256": "951687e19d6bd89e3fd40491b6d5ced8b3ed67a9e67f235e97a5beefdb2f8f14",
+      "bytes": 43135
+    },
+    {
+      "path": "phorvex/cmd/internal/consoleserver/attack_catalog_env_test.go",
+      "sha256": "62e3c82cc5c3853f9d8e8e3dd085e6d022f5c34b352ddad145a47389a6116237",
+      "bytes": 9559
+    },
+    {
+      "path": "phorvex/cmd/internal/consoleserver/consoleserver.go",
+      "sha256": "3dd031d4ffd29dbec1d2f1ad4119da3883d2f963188af5f857e9bc49fa1c651f",
+      "bytes": 48989
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s_cluster.go",
+      "sha256": "f1cfb26d2e2dbfbbde11d902a1789e6f3f6591511031416f9c98c61b298a5700",
+      "bytes": 51062
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s_cluster_test.go",
+      "sha256": "14cd481326bc30fee0c1a534f18589acd6546ccfddd4fcd238a8d132306af2be",
+      "bytes": 32192
+    },
+    {
+      "path": "phorvex/internal/console/config.go",
+      "sha256": "064c879f9933cc31b4dab979cd1ca834896815d337f88242015ab50401997a5a",
+      "bytes": 17375
+    },
+    {
+      "path": "tools/render_catalogue_staging_values.py",
+      "sha256": "eb47b27dcccc3f5f36deb6783f0da6948274e901041974e89db019efbf3fee64",
+      "bytes": 5929
+    },
+    {
+      "path": "tools/staging_release.py",
+      "sha256": "275a3e35fbf376e9f470047b19c6d8a9e0dbce059d9377e6cb31a2ea735706ea",
+      "bytes": 60908
+    },
+    {
+      "path": "tools/test_catalogue_fixture_packaging.py",
+      "sha256": "4c525ce04de76ceeecccadfc7919280bff69f30082a81364afcb12a749e9484e",
+      "bytes": 28435
+    },
+    {
+      "path": "tools/test_stage_benchmark_capture.py",
+      "sha256": "47c6b34baf8f2ad0addb4743a2654473406572d6f29446bead60fa0ed26fc91a",
+      "bytes": 9436
+    }
+  ]
+}

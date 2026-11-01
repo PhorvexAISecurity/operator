@@ -1,0 +1,19 @@
+{
+  "at": "2026-11-01T17:30:47.031368+00:00",
+  "runtime_release": "stage-bot-3e11f4e7",
+  "checks": [
+    {
+      "policy": "phorvex-staging-demo/demo-api-defense",
+      "result": "BLOCKING_EXCEPTION",
+      "error": "policy is not in the installed stage capture pin; pin and sync it before running"
+    },
+    {
+      "policy": "phorvex-staging-demo/stage-bench-defense",
+      "result": "PIN_PRESENT",
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "policies": [
+        "phorvex-staging-demo/stage-bench-defense"
+      ]
+    }
+  ]
+}

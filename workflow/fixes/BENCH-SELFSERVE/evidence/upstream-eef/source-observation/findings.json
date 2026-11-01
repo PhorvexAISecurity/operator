@@ -1,0 +1,179 @@
+{
+  "schema": "phorvex-bench.upstream-source-observation.v1",
+  "observed_at": "2026-11-01T21:00:40.388669+00:00",
+  "mode": "Read-only GitHub REST; no source, Git ref, workflow or live mutations. Local writes limited to this evidence directory.",
+  "main_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+  "baseline_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "exact_commits": [
+    {
+      "sha": "30b24b0d9af4c9571e587c454510dd5238b269b3",
+      "parents": [
+        "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+      ],
+      "message": "deploy(staging): pin isolated release b1ef9ccdb258",
+      "date": "2026-11-01T20:51:20Z",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/30b24b0d9af4c9571e587c454510dd5238b269b3"
+    },
+    {
+      "sha": "408944e2182a36affd18374865e1fdd392221192",
+      "parents": [
+        "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+        "30b24b0d9af4c9571e587c454510dd5238b269b3"
+      ],
+      "message": "Merge pull request #201 from PhorvexSecurity/release/staging-isolated-b1ef9ccdb258\n\ndeploy(staging): isolated release b1ef9ccdb258",
+      "date": "2026-11-01T20:53:24Z",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/408944e2182a36affd18374865e1fdd392221192"
+    },
+    {
+      "sha": "d783274c5b302ccce4e8cd959c6855a961c501b9",
+      "parents": [
+        "408944e2182a36affd18374865e1fdd392221192"
+      ],
+      "message": "deploy(staging): reopen quarantine catalogue window",
+      "date": "2026-11-01T20:54:11Z",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/d783274c5b302ccce4e8cd959c6855a961c501b9"
+    },
+    {
+      "sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "parents": [
+        "408944e2182a36affd18374865e1fdd392221192",
+        "d783274c5b302ccce4e8cd959c6855a961c501b9"
+      ],
+      "message": "Merge pull request #202 from PhorvexSecurity/deploy/reopen-quarantine-b1ef9ccdb258\n\ndeploy(staging): reopen quarantine catalogue window",
+      "date": "2026-11-01T20:54:19Z",
+      "url": "https://github.com/PhorvexSecurity/operator-refactored/commit/eef02325207c33cde90a377c390d1539c83cc3cc"
+    }
+  ],
+  "changed_paths": [
+    "deploy/environments/staging/actuator.yaml",
+    "deploy/environments/staging/attacks.yaml",
+    "deploy/environments/staging/brain.yaml",
+    "deploy/environments/staging/catalogue-family.yaml",
+    "deploy/environments/staging/console.yaml",
+    "deploy/environments/staging/manager.yaml",
+    "deploy/environments/staging/sensor.yaml",
+    "release/staging-batch.json"
+  ],
+  "scope": {
+    "product_code_changes": false,
+    "pr201": "Eight release paths: six service image YAML pins advance a5f to b1ef; staging-batch source/tree/build tags/digests advance; catalogue-family clears the disabled agentAction image.",
+    "pr202": "Only catalogue-family.yaml: reopens quarantine in p1-demo, adds that scope to policy/actuator/attack namespaces, selects p1 detector and p1 tenant grants, fixes namespaceUID and workload digest.",
+    "image_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "brain_digest": "sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903",
+    "manager_digest": "sha256:30a95d3e67309c6774b8deccfc7db5b7a0d5013df876eb2ada1622a08969a373",
+    "capture": "The upstream diff changes release pins/catalogue, not benchmark capture configuration. Presence or loss of live capture is outside this GitHub-only observation."
+  },
+  "closure_outlook": {
+    "latest_pr": 202,
+    "newer_closure_pr_observed": false,
+    "claim": "No evidence establishes an imminent closure. Latest main and PR202 explicitly leave quarantine open; future external changes remain unknown."
+  },
+  "pr198": {
+    "number": 198,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merge_commit_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+    "updated_at": "2026-11-01T20:43:23Z",
+    "head_sha": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+    "base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "actual_head_checks_success": 16,
+    "actual_head_checks_total": 16,
+    "comparison_to_current_main": {
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/compare/eef02325207c33cde90a377c390d1539c83cc3cc...225877a8ecb4c11eb39980ba932c114f7a8068a4",
+      "status": "diverged",
+      "ahead_by": 8,
+      "behind_by": 4,
+      "total_commits": 8,
+      "base_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "merge_base_sha": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+      "file_paths": [
+        "benchmark/bot/ENDPOINT-V3.md",
+        "benchmark/bot/README.md",
+        "benchmark/bot/endpoint_study.py",
+        "benchmark/bot/file_requests.py",
+        "benchmark/bot/guide-en.html",
+        "benchmark/bot/guide-en.pdf",
+        "benchmark/bot/guide-fa.html",
+        "benchmark/bot/guide-fa.pdf",
+        "benchmark/bot/request_readiness.py",
+        "benchmark/bot/service.py",
+        "benchmark/bot/stage_runtime.py",
+        "benchmark/bot/templates/endpoint-v3-10d.txt",
+        "benchmark/bot/templates/endpoint-v3-fixture-600s.txt",
+        "benchmark/bot/test_bot.py",
+        "benchmark/bot/test_endpoint_study.py",
+        "benchmark/bot/test_job_lease.py",
+        "benchmark/bot/test_request_readiness.py",
+        "benchmark/bot/test_selfserve_requests.py",
+        "benchmark/bot/test_study.py",
+        "benchmark/bot/test_uploads.py",
+        "benchmark/bot/testdata/endpoint-v3-10d-original.txt",
+        "benchmark/bot/testdata/endpoint-v3-30d-original.txt",
+        "benchmark/bot/testkit.py",
+        "benchmark/stage/evidence.py",
+        "benchmark/stage/normalize.py",
+        "benchmark/worker/deploy/README.md",
+        "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.service.example",
+        "benchmark/worker/deploy/phorvex-stage-endpoint-refresh.timer.example",
+        "benchmark/worker/deploy/phorvex-stage-observer.service.example",
+        "benchmark/worker/deploy/phorvex-stage-reconcile.service.example",
+        "benchmark/worker/deploy/phorvex-stage-reconcile.timer.example",
+        "benchmark/worker/endpoint_refresh.py",
+        "benchmark/worker/mathlab/binary.py",
+        "benchmark/worker/mathlab/experiment.py",
+        "benchmark/worker/mathlab/recent_snapshots.py",
+        "benchmark/worker/mathlab/snapshots.py",
+        "benchmark/worker/mathlab/stage_scope.py",
+        "benchmark/worker/stage_cli.py",
+        "benchmark/worker/stage_observer_runtime.py",
+        "benchmark/worker/stage_reconcile.py",
+        "benchmark/worker/test_endpoint_refresh.py",
+        "benchmark/worker/test_recent_snapshots.py",
+        "benchmark/worker/test_stage_observer_runtime.py",
+        "benchmark/worker/test_stage_reconcile.py",
+        "deploy/charts/phorvex-actuator/charts/phorvex-common-0.1.0.tgz",
+        "deploy/charts/phorvex-attacks/charts/phorvex-common-0.1.0.tgz",
+        "deploy/charts/phorvex-attacks/values.yaml",
+        "deploy/charts/phorvex-brain/charts/phorvex-common-0.1.0.tgz",
+        "deploy/charts/phorvex-common/templates/_console-grants.tpl",
+        "deploy/charts/phorvex-common/templates/_console.tpl",
+        "deploy/charts/phorvex-console/charts/phorvex-common-0.1.0.tgz",
+        "deploy/charts/phorvex-console/values.yaml",
+        "deploy/charts/phorvex-sensor/charts/phorvex-common-0.1.0.tgz",
+        "deploy/environments/staging/brain.yaml",
+        "deploy/environments/staging/console.yaml",
+        "deploy/environments/staging/manager.yaml",
+        "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+        "phorvex/charts/phorvex/charts/phorvex-common-0.1.0.tgz",
+        "phorvex/charts/phorvex/values.yaml",
+        "tools/test_stage_benchmark_capture.py"
+      ]
+    },
+    "mergeability_limit": "API still exposes base b1ef and synthetic merge882c; its clean/true result does not establish mergeability or CI validation against new eef. Existing225877 CI seal stays historical."
+  },
+  "upstream_ci": {
+    "release_run": 41349223291,
+    "release_failure": "Prepared batch validation: component manager deployment chart/values consumer drifted from pinned source. publish and release-pr jobs skipped.",
+    "e2e_run": 41349223280,
+    "e2e_failure": "Two existing attacks/console default parity assertions fail on console.familyFixtures.namespaceUID mismatch; 450 tests,2failures,1skip,9expected failures. Source files involved are unchanged by b1ef\u2192eef.",
+    "source_validation": {
+      "id": 41349223405,
+      "name": "PR source validation",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223405",
+      "created_at": "2026-11-01T20:54:22Z",
+      "updated_at": "2026-11-01T20:54:33Z"
+    }
+  },
+  "workflow_tool_limit": "Requested doctor and brief were attempted with system Python and existing preflight interpreter; both stop before execution because PyYAML is unavailable. No dependencies were installed or workflow state changed.",
+  "evidence_limits": [
+    "No cluster/ECR inspection performed here; image digests are exact release source values, not independently observed running state.",
+    "No new merged eef CI or security efficacy claim.",
+    "No external mutation or workflow rerun/cancel."
+  ]
+}

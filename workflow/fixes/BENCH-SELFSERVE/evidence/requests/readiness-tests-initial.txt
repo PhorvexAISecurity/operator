@@ -1,0 +1,27 @@
+test_request_readiness (unittest.loader._FailedTest.test_request_readiness) ... ERROR
+test_declarative_endpoint_fields_support_independent_arbitrary_windows (test_selfserve_requests.SelfserveRequestTests.test_declarative_endpoint_fields_support_independent_arbitrary_windows) ... ok
+test_declarative_rejects_unknown_duplicate_and_non_numeric_fields (test_selfserve_requests.SelfserveRequestTests.test_declarative_rejects_unknown_duplicate_and_non_numeric_fields) ... ok
+test_exact_original_upload_preserves_ten_day_contract_without_codegen (test_selfserve_requests.SelfserveRequestTests.test_exact_original_upload_preserves_ten_day_contract_without_codegen) ... ok
+test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns (test_selfserve_requests.SelfserveRequestTests.test_missing_dataset_report_keeps_requested_mode_windows_and_unknowns) ... ok
+test_modified_prose_stays_generic_code_and_never_silently_maps (test_selfserve_requests.SelfserveRequestTests.test_modified_prose_stays_generic_code_and_never_silently_maps) ... ok
+test_original_thirty_day_compatibility_sets_explicit_slo_and_window (test_selfserve_requests.SelfserveRequestTests.test_original_thirty_day_compatibility_sets_explicit_slo_and_window) ... ok
+
+======================================================================
+ERROR: test_request_readiness (unittest.loader._FailedTest.test_request_readiness)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_request_readiness
+Traceback (most recent call last):
+  File "/workspace/.phorvex-tools/python312/python/lib/python3.12/unittest/loader.py", line 137, in loadTestsFromName
+    module = __import__(module_name)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/test_request_readiness.py", line 11, in <module>
+    import request_readiness as readiness
+  File "/workspace/operator-benchmark-selfserve/benchmark/bot/request_readiness.py", line 15, in <module>
+    from mathlab import snapshots, stage_scope
+ModuleNotFoundError: No module named 'mathlab'
+
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.018s
+
+FAILED (errors=1)

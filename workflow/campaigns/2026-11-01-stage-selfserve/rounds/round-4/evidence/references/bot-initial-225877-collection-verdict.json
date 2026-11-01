@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-01T21:03:15.354027+00:00",
+  "runtime_source": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "state": "LIVE_ACCEPTANCE_NOT_PASSED",
+  "original_request_preserved": true,
+  "original_result": "BLOCKED",
+  "parameter_control": "BLOCKED",
+  "activity_started": {
+    "model_started": false,
+    "tests_started": false,
+    "build_started": false,
+    "replay_started": false,
+    "preflight_started": false
+  },
+  "actual_outbound_telegram_messages": 26,
+  "actual_outbound_documents": 14,
+  "restoration": "PASS",
+  "archive_sha256": "95c96a874646d6fbaf317766e28130811e6ce72db69a53c1a0eeb93b203f3539",
+  "cause": "External main PR201/202 changed actual brain a5f to b1ef and replaced owned V6 capture template with unowned eef configuration; current capture disabled. No fixture endpoint request was run."
+}

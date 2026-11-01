@@ -1,0 +1,22 @@
+{
+  "prior_manifest": "evidence/final-source/integrated-source-inputs-v2.json",
+  "method": "Reconstructed exact pre-amendment bytes verified against all three frozen SHA256 values before diffing; no historical file rewritten.",
+  "paths": [
+    {
+      "path": "benchmark/bot/service.py",
+      "before_sha256": "d36bc983f22a1767ea0ba4f58ca74ba67ddce6d574a6e9fd4f707723fe29ab4a",
+      "after_sha256": "112bc7d97962430d9eb360590cbd12b71ee20c23b5bbfb46ed6375965930195b"
+    },
+    {
+      "path": "benchmark/bot/endpoint_study.py",
+      "before_sha256": "9cd61a8df9a667064c464f406d266c90ebae08892d22e22aa3f18871bb613592",
+      "after_sha256": "ea57d00a583039199e9ae5b875d7ae8507d1102b0bf4c1e9fa80d8afcdfdace4"
+    },
+    {
+      "path": "benchmark/bot/test_request_readiness.py",
+      "before_sha256": "26151e9f7693d0f035264fea6c23ef80f08b3bceb02c2595a271600da0e9aaa9",
+      "after_sha256": "d8e6cdebde02617eb4afac46d5e0fc9a88e00f64e59d5b639dc378e1e7d91a59"
+    }
+  ],
+  "patch_sha256": "b05921694e550e3ea830be0e56c2034396bdbb8ebbfe8faa10cd1868a009baf7"
+}

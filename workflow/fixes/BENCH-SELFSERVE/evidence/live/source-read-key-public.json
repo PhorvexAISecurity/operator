@@ -1,0 +1,5 @@
+{
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO7HIkOuwfufZnBnArEFYajSZCV3NZXveTgZL4X8NddP phorvex-stage-benchmark-readonly-20261101",
+  "fingerprint": "256 SHA256:9IrEw3SJ91DLia7gx1WFpTdgNMDCVRHAR78a8moYqas phorvex-stage-benchmark-readonly-20261101 (ED25519)",
+  "private_key_path": "/home/hami/phorvex-benchmark/config/source-read-key/id_ed25519"
+}

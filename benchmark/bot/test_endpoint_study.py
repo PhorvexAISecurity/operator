@@ -1,9 +1,12 @@
 """Real paired Go execution, truthful evidence and bot upload/routing regressions."""
 import copy
+import hashlib
 import json
 from pathlib import Path
 import shutil
 import sys
+import struct
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -114,7 +117,7 @@ class EndpointStudyTest(unittest.TestCase):
         with mock.patch.object(endpoint, 'subprocess') as process:
             result = endpoint.run(req, self.tmp/'history-blocked', data)
             process.run.assert_not_called()
-        self.assertEqual((result['state'], result['comparable_ticks']), ('BLOCKED', 0))
+        self.assertEqual((result['state'], result['comparable_ticks']), ('BLOCKED', None))
         self.assertFalse(result['v2_executed']); self.assertFalse(result['v3_executed'])
         self.assertIn('retained continuous history=640.0 s', str(result['missing_reasons']))
         self.assertEqual(before, (installed.read_bytes(), pointer.read_bytes()))
@@ -130,6 +133,51 @@ class EndpointStudyTest(unittest.TestCase):
         self.assertFalse(r['v2_executed']); self.assertFalse(r['v3_executed'])
         for name in ('evidence.zip', 'result.json', 'metrics.csv', 'report.html'):
             self.assertTrue((self.tmp/'missing'/name).is_file())
+
+    def test_native_lane_keeps_verified_receipt_without_cross_version_flag(self):
+        # Real PXMS selection/freeze and baseline subprocesses; only the native
+        # registry and paired transport are scripted. Actual stage engine proof
+        # belongs to live acceptance, not this command-routing control.
+        trace, metadata = self.observed_trace()
+        data, policy = self.tmp/'native-data', 'phorvex-staging-demo/stage-bench-defense'
+        pin = testkit.write_stage_pin(data, trace['source_revision'], policy, 'policy-uid')
+        pin['study_engine_lane'] = 'native-stage-image'
+        (data/'mathlab/stage.json').write_text(json.dumps(pin))
+        directory = data/'mathlab/snapshots'/policy
+        old = testkit.make_snapshot(directory, trace['source_revision'], 4, True, '1970-01-01T00:10:50Z')
+        source = directory/(old+'.pxms'); raw = source.read_bytes(); n = struct.unpack('>I',raw[8:12])[0]
+        header = json.loads(raw[12:12+n]); header.update(policyName='stage-bench-defense',policyUID='policy-uid')
+        encoded = json.dumps(header).encode(); raw = raw[:8]+struct.pack('>I',len(encoded))+encoded+raw[12+n:]
+        digest = hashlib.sha256(raw).hexdigest(); source.unlink(); (directory/(digest+'.pxms')).write_bytes(raw)
+        trace['ticks'][0]['id'] = digest
+        metadata['snapshot_digests'] = [digest]; metadata['bindings'][0]['snapshot_digest'] = digest
+        metadata['scope']['image_digest'] = pin['brain']['image_digest']
+        install(trace,metadata,data,'real normalizer fixture with explicit transport test cohort')
+        engine = {'lane':'native-stage-image','candidate':pin['replay'],'base_local':pin['replay'],
+                  'baseline_evidence':[{'path':'scripted registry receipt'}]}
+        calls, activity = [], []
+        original_run = subprocess.run
+        def paired(command, **kwargs):
+            if '--endpoint-study' not in command:
+                return original_run(command, **kwargs)
+            calls.append(command)
+            output = Path(command[command.index('--out')+1])
+            output.write_text(json.dumps({'state':'COMPLETE','mode':'PAIRED_BRAIN_REPLAY','evidence':'recorded',
+                'baseline_exact_count':1,'snapshot_digests':[digest],'comparable_ticks':1,'ticks':[]}))
+            return subprocess.CompletedProcess(command,0,'','')
+        request = {**example('recorded'),'policy':policy,'ticks':1,'config':{'lookback':300}}
+        with mock.patch.object(endpoint.stage_scope,'study_engine',return_value=engine), \
+             mock.patch.object(endpoint.subprocess,'run',side_effect=paired):
+            result = endpoint.run(request,self.tmp/'native-result',data,activity=activity.append)
+        self.assertEqual(len(calls),1)
+        self.assertNotIn('--allow-cross-version',calls[0])
+        self.assertFalse(result['runner']['cross_version'])
+        self.assertEqual(result['runner']['comparison_status'],'MATCHED_REPLAY')
+        self.assertEqual(result['runner']['study_engine']['lane'],'native-stage-image')
+        self.assertEqual(activity,['replay_started','replay_started'])
+        for label in ('capture-control','base-local'):
+            rows=[json.loads(line) for line in (self.tmp/'native-result'/(label+'.jsonl')).read_text().splitlines()]
+            self.assertEqual(len(rows),1); self.assertTrue(rows[0]['baseline_check']['reproduced'])
 
     def test_nested_input_errors_are_rejected_before_queueing(self):
         for field,value in [('k','1'),('facts_known',1),('samples',[{'duration':'bad'}]),('gates',['ok',False]),('typo',1)]:
@@ -219,7 +267,7 @@ class EndpointBotTest(unittest.TestCase):
         self.assertEqual(job.state, 'BLOCKED')
         batch = json.loads((job.dir/'BATCH.json').read_text())
         self.assertEqual(batch['results'][0]['state'], 'BLOCKED')
-        self.assertEqual(len(self.fake.documents()), 6)
+        self.assertEqual(len(self.fake.documents()), 7)  # Includes the separate runtime validation report.
         self.assertTrue(any('BLOCKED' in t for t in self.fake.texts()))
 
     def test_exact_reviewed_prompt_routes_before_llm_and_storage_guards(self):

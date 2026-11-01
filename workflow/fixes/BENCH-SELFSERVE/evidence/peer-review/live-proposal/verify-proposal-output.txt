@@ -1,0 +1,11 @@
+{
+  "verdict": "PASS",
+  "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/live-proposal/operational-verdict.json",
+  "sha256": "500d8edb89f8676a737a54c014b5e119baf7e6b754cf11d3968e954e84d3c883",
+  "go_template_cases": {
+    "total": 24,
+    "staging_modified": 3,
+    "unmodified": 21,
+    "missing_key_rejected": true
+  }
+}

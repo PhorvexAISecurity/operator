@@ -1,0 +1,23 @@
+{
+  "verdict": "PASS_CAPTURE_ROLLOUT_AT_RECORDED_TIME",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T21:17:27.197026+00:00",
+  "observed_at": "2026-11-01T21:12:35.281750+00:00",
+  "capture_source": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "actual_image_source": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "receipt_sha256": "7b5e280c414a2c03938717aaf606fd57e50f63ec1eea4582075787f95cdbdc5e",
+  "all_three_complete_healthy_succeeded": true,
+  "two_policy_capture_pvc_cost_evidence_verified": true,
+  "exact_current_closed_family_and_benchmark_grant": true,
+  "policy_modes_uid_generation_unchanged": true,
+  "outofsync_historical_pruning_only": {
+    "brain": 0,
+    "manager": 14,
+    "console": 22
+  },
+  "free_bytes": 6096916480,
+  "limits": [
+    "Currentnativebaseline/endpointcohort andbotacceptance stillpending; later sourcechange invalidatescurrentreadiness.",
+    "No prune/allSynced/securityefficacy claim."
+  ]
+}

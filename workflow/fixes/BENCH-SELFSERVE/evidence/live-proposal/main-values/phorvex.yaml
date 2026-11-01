@@ -1,0 +1,243 @@
+# Staging: the split services beside the production stack on the production
+# cluster, in the namespace phorvex-staging under the release name staging
+# (ADR-0001, deploy/argocd/services/README.md).
+#
+# Every chart reads this file: the manager chart's keys under `phorvex`, which the
+# brain, sensor and actuator charts read under the same name, so the values their
+# handshakes compare are set once.
+phorvex:
+  # The manager reaches each service through its chart's Service, in the same
+  # namespace; each chart is released as `staging`.
+  services:
+    brain:
+      endpoint: staging-brain:9090
+    sensor:
+      endpoint: staging-sensor:9090
+    actuator:
+      endpoint: staging-actuator:9090
+    # The console forwards the attack routes to the attacks service, whose account
+    # injects the workload signals and holds the attack grants (docs/services/attacks.md).
+    attacks:
+      endpoint: staging-attacks:8090
+  # The dispatcher's gRPC to the brain, sensor and actuator runs over mutual TLS
+  # (docs/services/service-tls.md). deploy/eks/provision-service-mtls.sh wrote the
+  # four Secrets (NAMESPACE=phorvex-staging RELEASE=staging).
+  serviceTLS:
+    enabled: true
+
+  # Beside production, staging must leave production's policies and requests alone.
+  # It reconciles, ticks and authorizes only the PhorvexPolicies of the demo's
+  # namespace (deploy/demo) and the identity-rotate fixture's shared namespace
+  # (identityRotate, below). The services never defend their own namespace: the
+  # actuator refuses to quarantine in it.
+  policyNamespaces: [phorvex-staging-demo, console-identity-shared]
+  # It acts with its own hands: the native backend creates no SecurityEvent or AMTD
+  # for production's Phoenix to act on, and changes workloads only in the demo's
+  # namespace, so its kill switch is off and it rotates and quarantines demo-api.
+  actuator: native
+  actuatorNamespaces: [phorvex-staging-demo, console-identity-shared]
+  # Exact catalogue profiles extend these three namespace lists in one reviewed
+  # values overlay. No p1-p6 lane is authorized by this base configuration.
+  agentActionDeny:
+    enabled: false
+    namespaces: []
+  # Stateful rotation family (docs/stateful-rotation.md): claim and VolumeSnapshot
+  # grants in the actuator namespaces for deploy/demo's nats-demo StatefulSet.
+  statefulRotation:
+    enabled: true
+  outputPolicy:
+    enabled: false
+    targetNamespace: ""
+    configMapName: ""
+    configMapNames: []
+  globalKillSwitch: false
+
+  # LIGHT identity-rotate (actuator/handlers_k8s.go, identity_rotation.go): the
+  # actuator deletes and recreates the dedicated fixture ServiceAccount
+  # console-id-fixture (a new UID) and removes its legacy token Secrets,
+  # invalidating a stolen pod-bound token. The fixture (Deployment+SA, both named
+  # console-id-fixture) lives in the shared namespace console-identity-shared; the
+  # sensor's observation builder (identityfixture.Observe) reads the profile below.
+  identityRotate:
+    enabled: true
+    targetNamespace: console-identity-shared
+    serviceAccountName: console-id-fixture
+    profile:
+      journalNamespace: phorvex-staging
+      namespace: console-identity-shared
+      namespaceUID: fe759ca8-6039-4899-be8c-14e45b0b0613
+      policyName: console-id-fixture
+      policyUID: ac3a6044-a88f-42b0-abe0-fc5a0fbdadcc
+      # 0 = bind to the live, fully-reconciled generation of the pinned-UID policy.
+      # A hard-pinned generation drifts the moment the policy is re-applied or
+      # re-reconciled (this pin read 2 while the live policy was generation 3,
+      # which failed every identity-sa-rotate observation); the identity name is
+      # still pinned by policyName + policyUID above.
+      policyGeneration: 0
+      eksCluster: phorvex-dev-eks
+      awsRegion: us-east-2
+  # Admission webhooks and policies are cluster-wide: staging's would also admit
+  # production's requests.
+  admissionWebhook:
+    enabled: false
+  eventIdentityPolicy:
+    enabled: false
+    # Production's guard stamps and checks every SecurityEvent on the cluster, staging's
+    # too. The manager and the sensor refuse to start unless it is in force.
+    external: phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0
+  # The attacks service's signals are the evidence staging's services act on.
+  trustedDetectors: [phorvex-staging/staging-attacks]
+  # The decision history the console and the attacks service read (mTLS, below).
+  # Production's budget: five 256Mi segments on a 5Gi volume. Three Pods write
+  # about 290Mi of decisions an hour, so the history covers about four hours.
+  audit:
+    enabled: true
+    maxBytes: 268435456
+    persistence:
+      enabled: true
+      storageClass: gp2-csi
+      size: 5Gi
+
+  # Telemetry from the cluster's Prometheus.
+  prometheusUrl: http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+
+  # Scraped by the cluster's Prometheus under environment=staging, with the
+  # "Phorvex services — staging" dashboard and severity-info alerts
+  # (deploy/monitoring/README.md).
+  metrics:
+    podMonitor:
+      enabled: true
+      environment: staging
+      # Production's PhorvexCostNaNUnactionable sums this counter over every
+      # namespace; staging's own name keeps its cost failures off production's receiver.
+      metricRelabelings:
+      - action: replace
+        sourceLabels: [__name__]
+        regex: phorvex_cost_nan_unactionable_total
+        targetLabel: __name__
+        replacement: phorvex_staging_cost_nan_unactionable_total
+    dashboard:
+      enabled: true
+    rules:
+      enabled: true
+
+  console:
+    enabled: true
+    # Its own chart and Application deploy it (deploy/charts/phorvex-console).
+    separate: true
+    # Exec, workload changes and policy edits stay in the demo's namespace and the
+    # identity-rotate fixture's shared namespace (phorvex.identityRotate).
+    attackNamespaces: [phorvex-staging-demo, console-identity-shared]
+    attackCatalog:
+      # A reviewed family overlay enables exactly one of the 13 profiles. Keeping
+      # this off makes all 192 exact adapters unavailable in base staging.
+      enabled: false
+      authorizationTenant: ""
+      familyFixtures:
+        enabled: false
+        profile: ""
+        cleanupPolicy: Delete
+        images:
+          workload: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/catalogue-workload@sha256:1120e8dd968bee806df0b727d694778c21464772c7b7e963119effde8b8cc6ae"
+          phorvex: ""
+          guardrail: ""
+          python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
+          kwok: registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0
+      agentAction:
+        enabled: false
+        namespace: p6-demo
+        image: ""
+      prometheusEvidence:
+        enabled: false
+    state:
+      persistence:
+        storageClass: gp2-csi
+        size: 4Gi
+    # The console's and the attacks service's mTLS link to the manager's audit source.
+    # The Secrets come from deploy/eks/provision-audit-mtls.sh, run for this namespace.
+    auditTransport:
+      serverSecretName: staging-phorvex-audit-server
+      clientSecretName: staging-phorvex-audit-client
+      serverDNSName: staging-phorvex-audit-source.phorvex-staging.svc
+      clientDNSName: staging-phorvex-console.phorvex-staging.svc
+    auth:
+      # The ALB below signs the identity: its ARN, the user pool and its app client.
+      alb:
+        signerArn: arn:aws:elasticloadbalancing:us-east-2:753556437180:loadbalancer/app/k8s-phorvexs-stagingp-140f47b908/42ff0e6e1afd5c83
+        issuer: https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB
+        clientId: 5njtljkiehde7iesciehr6a562
+        region: us-east-2
+      # The staging End-to-End identity (docs/CONSOLE-AUTH.md, "DevOps handoff"): a
+      # token-less ServiceAccount with no RBAC, whose short-lived projected tokens are
+      # console credentials only. The cluster's OIDC issuer signs them; the audience is
+      # staging's own, so production's e2e tokens are refused here and these there.
+      #   kubectl -n phorvex-staging create token staging-phorvex-console-e2e \
+      #     --audience phorvex-staging-console --duration 10m
+      oidc:
+        issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+        audience: phorvex-staging-console
+        jwksUrl: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401/keys
+      e2eIdentity:
+        enabled: true
+      trustedOrigins: [https://staging-console.phorvex.ai]
+      grants:
+        enabled: true
+        create: true
+        data: |
+          {
+            "version": 1,
+            "subjects": [
+              {
+                "issuer": "https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB",
+                "subject": "71fb8550-3041-702a-5735-a33baf8836c8",
+                "roles": [
+                  "operator"
+                ],
+                "tenants": [
+                  "phorvex-staging-demo"
+                ],
+                "targets": [
+                  "default"
+                ],
+                "note": "The production console's operator, confined to staging's demo tenant."
+              },
+              {
+                "issuer": "https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401",
+                "subject": "system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e",
+                "roles": [
+                  "operator"
+                ],
+                "tenants": [
+                  "phorvex-staging-demo"
+                ],
+                "targets": [
+                  "default"
+                ],
+                "note": "Staging End-to-End runs against the demo tenant; token minted per run, never stored."
+              }
+            ]
+          }
+    # staging-console.phorvex.ai: its own ALB, behind the console user pool through its
+    # own app client (phorvex-staging-console-alb), with production's certificate,
+    # subnets and security group. external-dns writes the record.
+    ingress:
+      enabled: true
+      className: alb
+      host: staging-console.phorvex.ai
+      annotations:
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+        alb.ingress.kubernetes.io/ssl-redirect: "443"
+        alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:753556437180:certificate/6f771a0d-5c30-4897-bcba-9422024cd3b6
+        alb.ingress.kubernetes.io/subnets: subnet-0e2c4f3f433045f81,subnet-08bd0af4dcc7672e2
+        alb.ingress.kubernetes.io/security-groups: sg-098aac8d74e88e2fe
+        alb.ingress.kubernetes.io/manage-backend-security-group-rules: "true"
+        alb.ingress.kubernetes.io/auth-type: cognito
+        alb.ingress.kubernetes.io/auth-scope: openid
+        alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
+        alb.ingress.kubernetes.io/auth-idp-cognito: '{"userPoolARN":"arn:aws:cognito-idp:us-east-2:753556437180:userpool/us-east-2_JfwlBPRbB","userPoolClientID":"5njtljkiehde7iesciehr6a562","userPoolDomain":"phorvex-console-753556437180"}'
+        external-dns.alpha.kubernetes.io/hostname: staging-console.phorvex.ai
+
+# The brain, sensor and actuator admit the scrape from the cluster's Prometheus.
+metricsScraperNamespaces: [monitoring]

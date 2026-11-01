@@ -1,0 +1,35 @@
+{
+  "baseline_source": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "command": [
+    "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+    "-m",
+    "unittest",
+    "test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers",
+    "test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers",
+    "-v"
+  ],
+  "result": "EXPECTED_RED",
+  "exit_code": 1,
+  "tests": 2,
+  "exact_source_inputs": [
+    {
+      "path": "tools/test_service_charts.py",
+      "sha256": "ec70f7643b5d4879777910e397505f14afd90515ef90758092572a539f07f63a"
+    },
+    {
+      "path": "phorvex/charts/phorvex/values.yaml",
+      "sha256": "ca5fb912ac596d7f44b4adac246c02e77a375bba2bf90b5ffba6f393975e790d"
+    },
+    {
+      "path": "deploy/charts/phorvex-console/values.yaml",
+      "sha256": "82caf512ab56b56cb0dc9bfd5694a84e3a9eb051dc2dc8874f1bdc73c7b58116"
+    },
+    {
+      "path": "deploy/charts/phorvex-attacks/values.yaml",
+      "sha256": "b096bf6d774a1e47c1429cbf8c1ea955f7b46a812325c0f60d21a79bdd5c6c85"
+    }
+  ],
+  "positive_control": "All familyFixture defaults exactly match after adding only the upstream-defined empty namespaceUID; baseline manager lacks that key while both split charts contain it. This is an analytical fixture relevance control, not a patched baseline test.",
+  "missing_field": "phorvex.console.attackCatalog.familyFixtures.namespaceUID",
+  "log_sha256": "978ff6bb0448f06c69342bbafb7353903839644d2b76cba04296d087a8217808"
+}

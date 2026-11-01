@@ -1,0 +1,105 @@
+{
+  "main": {
+    "sha": "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  },
+  "pr": {
+    "number": 198,
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "mergeable": true,
+    "mergeable_state": "unstable",
+    "merge_commit_sha": "e2eb6cd606bd05651bca4d58cf4e58c2075abe15",
+    "updated_at": "2026-11-01T21:08:44Z",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+    "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+    "base_sha": "be676c84d162528c10bacb84c8e6a11de30ade5d"
+  },
+  "merge-ref": {
+    "ref": "refs/pull/198/merge",
+    "sha": "e2eb6cd606bd05651bca4d58cf4e58c2075abe15"
+  },
+  "checks": [
+    {
+      "id": 124979341399,
+      "name": "e2e-contract",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473231/job/124979341399",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "started_at": "2026-11-01T21:08:50Z",
+      "completed_at": null
+    },
+    {
+      "id": 124979341325,
+      "name": "verify",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473252/job/124979341325",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "started_at": "2026-11-01T21:08:50Z",
+      "completed_at": null
+    },
+    {
+      "id": 124979341001,
+      "name": "contract",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473175/job/124979341001",
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "started_at": "2026-11-01T21:08:50Z",
+      "completed_at": null
+    }
+  ],
+  "runs": [
+    {
+      "id": 41350473175,
+      "name": "Native RBAC contract",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473175",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:08:50Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473242,
+      "name": "PR source validation",
+      "status": "pending",
+      "conclusion": null,
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473242",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:08:48Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473231,
+      "name": "E2E harness contracts",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473231",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:08:50Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    },
+    {
+      "id": 41350473252,
+      "name": "Benchmark dashboard",
+      "status": "in_progress",
+      "conclusion": null,
+      "head_sha": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473252",
+      "created_at": "2026-11-01T21:08:47Z",
+      "updated_at": "2026-11-01T21:08:51Z",
+      "event": "pull_request",
+      "run_attempt": 1
+    }
+  ],
+  "observed_at": "2026-11-01T21:10:04.112219+00:00"
+}

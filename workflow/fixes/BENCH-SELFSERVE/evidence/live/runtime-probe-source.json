@@ -1,0 +1,6 @@
+{
+  "bundle_bytes": 768000,
+  "bundle_sha256": "b342361951927397262a212f46e6605b7dc8abdf041587ebbeb4d2d1e6b09f8f",
+  "source_manifest_sha256": "449fec50b24fc1eeef9686b584e930a8e815245b50a53f048560f84dd7e2cbcb",
+  "purpose": "isolated actual-runtime timing; no active pin/service changes"
+}

@@ -1,0 +1,56 @@
+{
+  "observed_at": "2026-11-01T20:59:30.980746+00:00",
+  "api_path": "/pulls?state=open&per_page=100",
+  "data": [
+    {
+      "number": 198,
+      "title": "fix(benchmark): keep stage capture and request readiness consistent",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/198",
+      "updated_at": "2026-11-01T20:43:23Z",
+      "state": "open",
+      "draft": true,
+      "head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+      "base": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0"
+    },
+    {
+      "number": 97,
+      "title": "feat: cost-harvest / throttle actuator (pipeline #3)",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/97",
+      "updated_at": "2026-10-25T08:14:02Z",
+      "state": "open",
+      "draft": false,
+      "head": "c1e9d5f0bf186a90f26b6fc947936fa003d7126a",
+      "base": "0eeb7f255846b2a96e69983ebbd8a3c093d05b1e"
+    },
+    {
+      "number": 96,
+      "title": "feat(actuator): controller-stop \u2014 synchronous whole-owner removal for persistence footholds",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/96",
+      "updated_at": "2026-10-25T06:02:36Z",
+      "state": "open",
+      "draft": false,
+      "head": "0eeb7f255846b2a96e69983ebbd8a3c093d05b1e",
+      "base": "0324edf74a97b4574f025a1d3b8bb14171de479d"
+    },
+    {
+      "number": 94,
+      "title": "HOLD: prepare all dev-eks tenant scopes; block unsafe overlap",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/94",
+      "updated_at": "2026-10-24T15:51:13Z",
+      "state": "open",
+      "draft": false,
+      "head": "0017bb1e5afda0d1dfd9c90d660356665614700e",
+      "base": "aa1f711a029ba57eb08087798a344d168f7d82ff"
+    },
+    {
+      "number": 92,
+      "title": "proposal(PHVX-289): comparison-enabling crm-refund-revoke in cost-v1 (do not merge)",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/pull/92",
+      "updated_at": "2026-10-23T22:26:26Z",
+      "state": "open",
+      "draft": false,
+      "head": "22f1f0eaaa0519abf979eb48cd87bcb45defeefc",
+      "base": "675619cd3cc670ffa806efa5fcf44e6fd7af0bef"
+    }
+  ]
+}

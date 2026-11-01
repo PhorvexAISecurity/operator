@@ -1,0 +1,104 @@
+{
+  "reviewer": "stage-review",
+  "at": "2026-11-01T17:27:27.599731+00:00",
+  "source_sha": "fe6494022a65fcca236e405521685708eb104d9e",
+  "actual_upload": {
+    "path": "/data/uploads/0a2b1cbf1b92/4f223a3c3620-PHORVEX_V3_NEW_COST_LAMBDA_GREEDY_BENCH_10D _1_.txt",
+    "sha256": "2e0a40127b9b9b65f7d42e5fa4eb1f155d8a1819aced313b8f39435ab493a9a3",
+    "kind": "bench",
+    "parsed_options": [
+      "policy=phorvex-staging-demo/demo-api-defense",
+      "ticks=64",
+      "nosync"
+    ],
+    "normalized_prompt_sha256": "c4beaa309f609918a6002711d7dd3a48b8d305bc93f6f2d3db12dd347375e1e8",
+    "recognized_by_legacy_route": false
+  },
+  "known_legacy_mapping_control": {
+    "original_upload_sha256": "c4f07c2b1635a89fbf60c37f318805e6a3169438bf6739b9448ba54f910f3687",
+    "normalized_prompt_sha256": "4fedcc3e93ec6568564bdc9535928dd1b4cecbd41e49939aaaba518cd0f0d51b",
+    "mapped_request": {
+      "schema": "phorvex-bench.endpoint-study.v1",
+      "title": "V3 endpoint cost and adaptive lambda \u2014 recorded inputs",
+      "policy": "phorvex-staging-demo/demo-api-defense",
+      "ticks": 64,
+      "dataset": "recorded",
+      "config": {}
+    },
+    "actual_old_600_trace_sha256": "817abc18b2c79ee3dfb2184bed27c1b66d87236d4b52da61add9157fbd484641",
+    "effective_window_on_installed_short_trace": 600.0,
+    "effective_slo_on_installed_short_trace": 0.9,
+    "required_history_reported": 86400,
+    "expected_explicit_10d_request": {
+      "schema": "phorvex-bench.endpoint-study.v1",
+      "title": "Exact uploaded 10-day study",
+      "policy": "phorvex-staging-demo/demo-api-defense",
+      "ticks": 64,
+      "dataset": "recorded",
+      "study": {
+        "window": 864000,
+        "slo_target": 0.999,
+        "worth_threshold": 0
+      },
+      "config": {
+        "lookback": 86400,
+        "min": 0.0001,
+        "max": 1000,
+        "eta": 0.004477248791932867,
+        "g_max": 1,
+        "max_dt": 30,
+        "delta": 30
+      }
+    },
+    "meaning": "Legacy callback does not encode requested/default study W or s; installed normalization assumptions can flow through unchanged. This is a routing/default-preservation counterexample, not acceptance of old fixture data for the requested demo policy."
+  },
+  "typed_missing_dataset_control": {
+    "result": {
+      "schema": "phorvex-bench.endpoint-result.v1",
+      "state": "BLOCKED",
+      "mode": "PAIRED_GO_REFERENCE",
+      "evidence": "recorded-unavailable",
+      "reason": "stage is not pinned; run stage_cli.py pin against operator-refactored and the stage brain",
+      "preflight": {
+        "status": "BLOCKED",
+        "reason": "stage is not pinned; run stage_cli.py pin against operator-refactored and the stage brain",
+        "required_inputs": [
+          {
+            "field": "ticks[].spec_replicas",
+            "reason": "Exact historical workload spec.replicas and UID; observed/ready pod count is not a substitute."
+          },
+          {
+            "field": "ticks[].ledger",
+            "reason": "Coherent measured endpoint-loss intervals attributed to actual move IDs, including open/settled revisions and known coverage."
+          },
+          {
+            "field": "ticks[].candidates",
+            "reason": "Complete candidate set from the pinned generator, grounded fact-to-actuator/provenance mapping and all non-cost hard gates."
+          },
+          {
+            "field": "ticks[].candidates[].samples",
+            "reason": "Qualified workload/action duration samples, censoring, overdue and suspect-lineage evidence; unknown history is not n=0."
+          },
+          {
+            "field": "ticks[].slo",
+            "reason": "Accepted SLO or explicitly labelled study assumptions; neither creates missing history or admission authority."
+          }
+        ]
+      },
+      "v2_executed": false,
+      "v3_executed": false,
+      "changed_choices": null,
+      "comparable_ticks": 0,
+      "limitations": [
+        "Both requested arms were stopped before execution because mandatory recorded inputs are unavailable. No model tokens or Go builds were spent."
+      ]
+    },
+    "report_has_window": false,
+    "request_json_preserves_window": true
+  },
+  "limits": [
+    "No live operations or external model/Telegram calls.",
+    "Temporary no-dataset control intentionally uses isolated local paths; production readiness remains root live evidence.",
+    "No dryRun/attribution guard bypass proposed."
+  ]
+}

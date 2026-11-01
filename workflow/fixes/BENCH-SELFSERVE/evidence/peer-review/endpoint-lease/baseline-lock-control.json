@@ -1,0 +1,34 @@
+{
+  "schema": "phorvex-bench.independent-refresh-lease-baseline.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T20:07:22.420971+00:00",
+  "source": "4dc325d300993d0aaec5f5a6d607951cdadd3f62",
+  "cases": [
+    {
+      "case": "global-pin",
+      "separate_actual_cli_process": true,
+      "actual_flock_held": true,
+      "exit_code": 1,
+      "elapsed_seconds": 20.567,
+      "no_structured_stdout": true,
+      "status_and_pointer_bytes_and_mtimes_preserved": true,
+      "stale_owner_status": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "d37da99ab56c88df26c877c356a00decb3d5432678100be7449108467e686a89"
+    },
+    {
+      "case": "policy-status",
+      "separate_actual_cli_process": true,
+      "actual_flock_held": true,
+      "exit_code": 1,
+      "elapsed_seconds": 0.464,
+      "no_structured_stdout": true,
+      "status_and_pointer_bytes_and_mtimes_preserved": true,
+      "stale_owner_status": true,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "a4ae91ab75bd0b723b0104050f28b3235ca465489dbcfed410ea1bfce3b8bed8"
+    }
+  ],
+  "verdict": "INCIDENT_AND_POLICY_CONTENTION_REPRODUCED",
+  "no_live_mutation": true
+}

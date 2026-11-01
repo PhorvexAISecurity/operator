@@ -1,0 +1,13 @@
+{
+  "manifest_sha256": "63d6c607081f9de0bcf9feb8d86212c694e5f81b1751f14349b5e25339f8865b",
+  "staged_tree": "5fe444d139decc90aed6d26cbeebab37abb47c44",
+  "paths": [
+    "benchmark/bot/service.py",
+    "benchmark/bot/test_job_lease.py",
+    "deploy/environments/staging/catalogue-family.yaml",
+    "phorvex/internal/console/attack_catalog_adapters_k8s.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster_test.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_test.go"
+  ]
+}

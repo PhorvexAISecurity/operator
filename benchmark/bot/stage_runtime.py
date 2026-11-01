@@ -19,6 +19,10 @@ class StageRuntime:
         pin = stage_scope.load(self.cfg.data, repo=self.cfg.repo)
         return {'policies': [{'policy': p} for p in sorted(pin['policies'])]}
 
+    def request_readiness(self, requested):
+        import request_readiness
+        return request_readiness.inspect(self.cfg.data, self.cfg.repo, requested)
+
     def sync(self, policy):
         sync_stage(self.cfg.data, self.cfg.repo, policy)
         return None  # Synchronous bounded collection; no legacy API queue.
@@ -31,6 +35,9 @@ class StageRuntime:
         request.update(schema_version='math-lab.experiment.v1', namespace=ns, policy=name)
         request['cohort'] = {**request.get('cohort', {}), **stage_scope.cohort_filter(pin, ns + '/' + name)}
         entries = experiment.select_cohort(self.cfg.data, request)
+        wanted = request['cohort'].get('max_snapshots')
+        if wanted is not None and len(entries) != wanted:
+            raise stage_scope.StageError('stage cohort changed or contains fewer snapshots than requested; sync and retry the full requested cohort')
         request['stage_provenance'] = stage_scope.cohort(pin, ns + '/' + name, entries)
         request['cohort']['digests'] = [e['digest'] for e in entries]
         return request, ident, entries
@@ -66,7 +73,11 @@ class StageRuntime:
         if prepared is None:
             raise stage_scope.StageError('stage request must pass preflight before creation')
         try:
-            ident = stage_scope.identity(self.cfg.data)
+            pin = stage_scope.load(self.cfg.data, request['policy'], self.cfg.repo)
+            ident = stage_scope.identity(self.cfg.data, pin)
+            from mathlab.common import sha256_json
+            if sha256_json(pin) != prepared['stage_provenance']['pin_sha256']:
+                raise stage_scope.StageError('stage pin changed after preflight; submit again')
             if ident['git_sha'] != prepared['cohort']['git_sha']:
                 raise stage_scope.StageError('stage source changed after preflight; submit again')
         except Exception:

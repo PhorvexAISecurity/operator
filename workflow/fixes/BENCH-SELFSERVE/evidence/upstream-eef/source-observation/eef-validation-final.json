@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-11-01T21:00:40.499933+00:00",
+  "api_path": "/actions/runs/41349223405",
+  "data": {
+    "id": 41349223405,
+    "name": "PR source validation",
+    "status": "in_progress",
+    "conclusion": null,
+    "head_sha": "eef02325207c33cde90a377c390d1539c83cc3cc",
+    "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41349223405",
+    "created_at": "2026-11-01T20:54:22Z",
+    "updated_at": "2026-11-01T20:54:33Z"
+  }
+}

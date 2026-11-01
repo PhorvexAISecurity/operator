@@ -1,0 +1,199 @@
+schema_version: 2
+campaign_id: 2026-11-01-stage-selfserve
+profile: workflow-v2
+question: Verify durable stage capture and real bot requests across source/policy
+  readiness
+state: RUNNING
+owner: hamihoriyat
+approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+created_at: '2026-11-01T17:25:57+00:00'
+updated_at: '2026-11-01T21:09:59+00:00'
+scope:
+  environment: phorvex-dev-eks:phorvex-staging,phorvex-staging-demo; jh benchmark
+    host
+  source_release: staging isolated61e83673; brain0.10.0 manager0.16.0
+  included_fixes:
+  - BENCH-SELFSERVE
+  duration_ceiling: 6 hours; bounded offline jobs, no physical actuation
+  cost_ceiling: Existing stage resources only; no new nodes; bounded 64-tick controls
+    and 4GiB host reserve
+  permission: controlled-mutation
+pins:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  digest: sha256:d208a9a53acd16cc146dce4c72b26d7614620862f2e1cecc1f526259033a1903
+  embedded_git_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+safety:
+  stop_conditions:
+  - Unexpected scope/UID changes, incomplete rollout, disk reserve or evidence integrity
+    violation
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  unresolved: []
+  cleanup: pending
+positive_control: PASS
+rounds:
+- id: round-1
+  state: ABORTED
+- id: round-2
+  state: ABORTED
+- id: round-3
+  state: ABORTED
+- id: round-4
+  state: ABORTED
+- id: round-5
+  state: RUNNING
+findings: []
+verdict:
+  result: pending
+  artifact: verdict.md
+  reviewer: null
+roles:
+  campaign_lead: bench-v3-lead
+  independent_reviewer: stage-review
+  coordinator: bench-v3-lead
+next_action:
+  owner: campaign-lead
+  action: Apply independently reviewed V8 under fresh guards, reconcile actual b1ef
+    and execute exact original/parameter/fixture bot controls
+transitions:
+- from: DRAFT
+  to: APPROVED
+  at: '2026-11-01T17:29:17+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/spec.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: APPROVED
+  to: BASELINED
+  at: '2026-11-01T17:35:14+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/evidence/baseline-control.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T17:36:19+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  note: null
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-11-01T19:21:04+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-1/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Round1 acceptance interrupted by concurrent upstream change; no completed
+    benchmark is claimed
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-11-01T19:23:52+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-2/evidence/baseline-control.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T19:26:55+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-2/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  note: Current immutable61e source rebaselined after upstream overlay closure; original
+    ten-day request unchanged
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-11-01T19:54:32+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-2/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Actual upstream stage image changed before bot acceptance; no completed benchmark
+    claimed
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-11-01T19:54:46+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/evidence/baseline-control.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T19:58:15+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  note: Fresh actual bee9 release rebaselined; original ten-day request unchanged;
+    final composed source4dc
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-11-01T20:20:49+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-3/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: External stage source and owned override changed before actual bot acceptance
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-11-01T20:23:17+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-4/evidence/baseline-control.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T20:24:28+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-4/spec.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  note: Actual a5f release and external1457 template freshly rebaselined; exact original
+    request unchanged
+  forced: false
+- from: RUNNING
+  to: PAUSED
+  at: '2026-11-01T21:03:21+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-4/analysis.md
+  approval_ref: null
+  phase_approval_ref: null
+  note: Actual bot controls refused source/capture drift during external PR201/202
+    release; positive acceptance not claimed
+  forced: false
+- from: PAUSED
+  to: BASELINED
+  at: '2026-11-01T21:05:17+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-5/evidence/baseline-control.json
+  approval_ref: null
+  phase_approval_ref: null
+  note: null
+  forced: false
+- from: BASELINED
+  to: RUNNING
+  at: '2026-11-01T21:09:59+00:00'
+  by: bench-v3-lead
+  artifact: rounds/round-5/plan-update-be676.md
+  approval_ref: null
+  phase_approval_ref: fixes/BENCH-SELFSERVE/AUTHORIZATION.md
+  note: Current main closure be676 changes only composition; actual image b1ef and
+    original requests preserved; installed225 runtime unchanged
+  forced: false

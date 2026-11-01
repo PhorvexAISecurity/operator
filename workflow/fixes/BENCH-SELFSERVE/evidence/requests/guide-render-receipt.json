@@ -1,0 +1,44 @@
+{
+  "schema": "phorvex-bench.guide-render.v1",
+  "verification": "Actual PDF text extracted with PyMuPDF; request fields and independent-window guidance retained",
+  "guides": [
+    {
+      "language": "en",
+      "html": "benchmark/bot/guide-en.html",
+      "html_sha256": "9c73a988800018f19188d9dfa01c12aae14a5600fbdd8beda9082fc792f63900",
+      "pdf": "benchmark/bot/guide-en.pdf",
+      "pdf_sha256": "967b046193f63a05568ec61c6d08e89a128b39e20e81188a26e1bec386d15335",
+      "pdf_bytes": 561661,
+      "pages": 26,
+      "extracted_text_sha256": "79e7d361630df1cb8dce158585010e66ee9403f12c3c1468bc7bbc149a3e6321",
+      "markers_verified": [
+        "864000",
+        "86400",
+        "study.window",
+        "config.lookback",
+        "sync: false",
+        "[endpoint]",
+        "BLOCKED"
+      ]
+    },
+    {
+      "language": "fa",
+      "html": "benchmark/bot/guide-fa.html",
+      "html_sha256": "51311caca5be704ce33ca6161401703138846358eb77596f44d4d91d7a96a327",
+      "pdf": "benchmark/bot/guide-fa.pdf",
+      "pdf_sha256": "4293767162e5c3bec62d46111c7970922a7927afcc8f601e33f1006c0b484f68",
+      "pdf_bytes": 647477,
+      "pages": 25,
+      "extracted_text_sha256": "8c4c355b5be925da772b0ccd473f64bdedc78a6ed94d9524048f465e78ca2a93",
+      "markers_verified": [
+        "864000",
+        "86400",
+        "study.window",
+        "config.lookback",
+        "sync: false",
+        "[endpoint]",
+        "BLOCKED"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/workspace/.phorvex-test-tmp/bench565-overlay-dzy4toy6/tools/staging_release.py", line 982, in active_catalogue_fixture_consumers
+    raise ValueError(f"active {profile} catalogue window differs from the exact generated overlay")
+ValueError: active quarantine catalogue window differs from the exact generated overlay

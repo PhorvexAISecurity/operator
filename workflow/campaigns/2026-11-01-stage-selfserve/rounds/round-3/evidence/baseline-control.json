@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-01T19:54:45.577940+00:00",
+  "result": "PASS",
+  "evidence_class": "BASELINE_INSTRUMENT_CONTROL",
+  "source_revision": "bee9caccf3bae388d412e72adfe50ca9de41a486",
+  "image_digest": "sha256:3200cb0e57130468ebdf73ba22b02d4e531d2cf25fe92cc7fb895672659aa2bf",
+  "runtime_source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "upstream_main": "a5f32f9dba5ed6e756f11b73ece968d54805c3e2",
+  "positive_control": "Actual running image digest and embedded source agree with in-pod native replay version/capability; three applications healthy on current main; original policy/workload/Service identities and modes preserved; owned services active and capacity reserve maintained.",
+  "references": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/bee9-a5f-capture-preconditions.json",
+      "sha256": "7cb0462ad93f8057c1840ca5ea7b9263789fdd2fe0c54f3bb30eb63850f4c08f"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/live/round3-runtime-baseline.json",
+      "sha256": "90317cb38cf47726d2bf3f502847d01474f8eff63bef70fb34a4096fe4ce3a02"
+    }
+  ],
+  "limits": [
+    "Capture disabled on unmodified current main is expected pre-mutation state, not request readiness",
+    "No fresh native baseline, history or successful bot request yet",
+    "Old61e receipts cannot substitute for bee9 history"
+  ]
+}

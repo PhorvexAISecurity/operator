@@ -1,0 +1,20 @@
+{
+  "source_head": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "source_base": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "capture_component": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "runtime_component_paths": 43,
+  "total_changed_paths": 59,
+  "runtime_manifest": {
+    "path": "evidence/final-source/integrated-source-inputs-v3.json",
+    "sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67"
+  },
+  "independent_component_verdict": {
+    "path": "evidence/peer-review/runtime-final/component-verdict-83671526.json",
+    "sha256": "e1263baef13266a5bbba061f4212518fe1180a488c7d6b387fe28b28813fa04b"
+  },
+  "committed_blobs_verified": true,
+  "author": "hamihoriyat <hami.horiyat.software@gmail.com>",
+  "message": "Make stage benchmark readiness and source reconciliation self-service",
+  "push_performed_by_worker": false,
+  "final_preflight": "separate pending coherent receipt"
+}

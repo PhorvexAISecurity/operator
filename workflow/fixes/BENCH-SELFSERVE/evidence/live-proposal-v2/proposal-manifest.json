@@ -1,0 +1,13 @@
+{
+  "schema": "phorvex-benchmark.capture-deploy-proposal.v2",
+  "source": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "preserved_current_main": "c3174a516bee6bf8eae39749825051c3cfcb8cc6",
+  "artifacts": {
+    "brain-render-proposed.yaml": "1b5afc4cb8daa81ca77d12d9a3f28cbbb636f8555e8f025e2d33e8c5c4b7712b",
+    "console-render-proposed.yaml": "01f91a0cc5b379b32bf98969d192ded1b615e3c6dd4da7673f6a518baacf7d25",
+    "manager-render-proposed.yaml": "f78e5f4cac28b61e2975e5ad3396ea306901476af9c2151a733355a79f14b8ae",
+    "operation.json": "9d54ef95c45eb97e69181ab1aa0d590ac63ac49ced56f9560b1d9c438c2f722a",
+    "rejected-v1.json": "74a8ef28ad138920237b872d669d4f7aa499e158cf5c1f71c79f6537da352a51",
+    "templatePatch.yaml.gotmpl": "8fee86293373b85c8e1e2c42601f1424b81ca1bae3fe42cb70cb185cd63bba64"
+  }
+}

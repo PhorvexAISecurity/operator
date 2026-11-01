@@ -12,7 +12,7 @@ from xml.etree import ElementTree as ET
 def stage_policy(value):
     ns = value.split('/')[0]
     if not re.search(r'(?:^|-)(?:stage|staging)(?:-|$)', ns):
-        raise RequestError('Benchmark policy must be in a stage namespace; use phorvex-staging-demo/demo-api-defense.')
+        raise RequestError('Benchmark policy must be in a stage namespace; use /policies to see the configured allowlist.')
 
 MAX_FILE_BYTES = 2 * 1024 * 1024
 MAX_TEXT_BYTES = 256 * 1024
@@ -146,7 +146,7 @@ def command_spec(command, policy, ticks):
             raise RequestError('bench change must contain 10 to 16000 characters.')
         if any(w == 'nosync' or w.startswith(('policy=', 'ticks=')) for w in rest):
             raise RequestError('Place bench options before the change description.')
-        return {'kind': kind, 'text': options(fields, policy, ticks) + ' ' + prompt}
+        return bench_spec(fields, policy, ticks, prompt)
     if not rest or not PARAMETER.fullmatch(rest[0]):
         raise RequestError('param needs a parameter ID such as P-FEA-006.')
     parameter, values = rest.pop(0), []
@@ -160,7 +160,52 @@ def command_spec(command, policy, ticks):
 def heading(line):
     label = re.sub(r'^#{1,6}\s+', '', line).strip().lower()
     label = label.removeprefix('[').removesuffix(']').removesuffix(':').strip()
-    return 'bench' if label == 'bench' else 'param' if label in ('param', 'params', 'parameters') else None
+    return label if label in ('bench', 'endpoint') else 'param' if label in ('param', 'params', 'parameters') else None
+
+
+def bench_spec(fields, policy, ticks, prompt):
+    import endpoint_study
+    prefix = options(fields, policy, ticks)
+    request = endpoint_study.legacy_request(prompt, fields.get('policy', policy), int(fields.get('ticks', ticks)),
+                                            fields.get('sync', 'true').lower() == 'true')
+    if request is None:
+        return {'kind': 'bench', 'text': prefix + ' ' + prompt}
+    return {'kind': 'endpoint', 'text': json.dumps(endpoint_study.validate(request), ensure_ascii=False),
+            'conversion': endpoint_study.legacy_conversion(prompt, request)}
+
+
+def endpoint_section(section, policy, ticks):
+    import endpoint_study
+    fields = {}
+    for line, text in section['lines']:
+        match = re.fullmatch(r'([a-z][a-z0-9_.]*)\s*:\s*(.*)', text)
+        if not match:
+            raise RequestError('Line %d: endpoint needs one lowercase key: value per line.' % line)
+        key, value = match.groups()
+        if key in fields:
+            raise RequestError('Line %d: repeated endpoint field %s.' % (line, key))
+        fields[key] = value
+    allowed = {'policy', 'ticks', 'sync', 'title', 'dataset'} | {'config.' + key for key in endpoint_study.CONSTANTS} | {'study.' + key for key in endpoint_study.STUDY_SETTINGS}
+    if set(fields) - allowed:
+        raise RequestError('Unknown endpoint fields: ' + ', '.join(sorted(set(fields) - allowed)))
+    options({key: fields[key] for key in ('policy', 'ticks', 'sync') if key in fields}, policy, ticks)
+    request = {'schema': endpoint_study.SCHEMA, 'title': fields.get('title', 'Paired V2/V3 endpoint study'),
+               'policy': fields.get('policy', policy), 'ticks': int(fields.get('ticks', ticks)),
+               'sync': fields.get('sync', 'false').lower() == 'true',
+               'dataset': fields.get('dataset', 'recorded'), 'config': {}}
+    for key, value in fields.items():
+        if '.' not in key:
+            continue
+        if not NUMBER.fullmatch(value) or not math.isfinite(float(value)):
+            raise RequestError('%s must be a finite ASCII number in seconds where applicable.' % key)
+        group, name = key.split('.', 1)
+        number = float(value)
+        request.setdefault(group, {})[name] = int(number) if number.is_integer() else number
+    try:
+        request = endpoint_study.validate(request)
+    except ValueError as error:
+        raise RequestError('Endpoint validation: ' + str(error)) from error
+    return {'kind': 'endpoint', 'text': json.dumps(request, ensure_ascii=False), 'line': section['line']}
 
 
 def parse(text, policy='phorvex-staging-demo/demo-api-defense', ticks=500):
@@ -209,6 +254,9 @@ def parse(text, policy='phorvex-staging-demo/demo-api-defense', ticks=500):
             else:
                 current['lines'].append((number, line))
         for section in sections:
+            if section['kind'] == 'endpoint':
+                tasks.append(endpoint_section(section, policy, ticks))
+                continue
             fields, params, prompt = {}, [], None
             for number, line in section['lines']:
                 if line.startswith('#'):
@@ -240,7 +288,7 @@ def parse(text, policy='phorvex-staging-demo/demo-api-defense', ticks=500):
                 change = ' '.join(prompt or [])
                 if not 10 <= len(change) <= 16000:
                     raise RequestError('Line %d: bench needs change: and 10 to 16000 characters of description.' % section['line'])
-                tasks.append({'kind': 'bench', 'text': prefix + ' ' + change, 'line': section['line']})
+                tasks.append({**bench_spec(fields, policy, ticks, change), 'line': section['line']})
             else:
                 if not params:
                     raise RequestError('Line %d: params needs at least one parameter ID and trial values.' % section['line'])

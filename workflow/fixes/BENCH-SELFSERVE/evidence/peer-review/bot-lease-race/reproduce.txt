@@ -1,0 +1,8 @@
+{
+  "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/bot-lease-race/counterexample.json",
+  "sha256": "f3ce9aef180184c2438e65bd2b8136cc568207f5d7f537b4592d4f440f3d6b6e",
+  "positive": "DONE",
+  "race": "FAILED",
+  "rechecked": "READY",
+  "elapsed_seconds": 20.057
+}

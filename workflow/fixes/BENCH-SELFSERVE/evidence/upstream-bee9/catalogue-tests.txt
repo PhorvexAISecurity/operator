@@ -1,0 +1,18 @@
+test_agent_action_is_immutable_scoped_and_has_no_command_surface (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_agent_action_is_immutable_scoped_and_has_no_command_surface) ... ok
+test_every_family_fully_configured_render_is_bounded (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_every_family_fully_configured_render_is_bounded) ... ok
+test_every_family_overlay_renders_for_all_affected_services (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_every_family_overlay_renders_for_all_affected_services) ... ok
+test_family_specific_exact_contracts (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_family_specific_exact_contracts) ... ok
+test_partial_or_unscoped_states_fail_closed (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_partial_or_unscoped_states_fail_closed) ... ok
+test_quarantine_requires_api_assigned_namespace_uid_pin (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_quarantine_requires_api_assigned_namespace_uid_pin) ... ok
+test_sensitive_output_empty_or_missing_source_fails_closed (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_sensitive_output_empty_or_missing_source_fails_closed) ... ok
+test_sensitive_output_fixture_source_is_populated_and_wired (test_catalogue_fixture_packaging.CatalogueFixtureRenderTests.test_sensitive_output_fixture_source_is_populated_and_wired) ... ok
+test_chart_schema_and_build_inputs_are_immutable (test_catalogue_fixture_packaging.CatalogueFixtureSourceTests.test_chart_schema_and_build_inputs_are_immutable) ... ok
+test_generated_profiles_cover_exact_catalogue_once (test_catalogue_fixture_packaging.CatalogueFixtureSourceTests.test_generated_profiles_cover_exact_catalogue_once) ... ok
+test_overlay_generator_emits_no_yaml_aliases (test_catalogue_fixture_packaging.CatalogueFixtureSourceTests.test_overlay_generator_emits_no_yaml_aliases) ... ok
+test_overlay_generator_packages_every_profile_and_exact_grant_scope (test_catalogue_fixture_packaging.CatalogueFixtureSourceTests.test_overlay_generator_packages_every_profile_and_exact_grant_scope) ... ok
+test_staging_base_or_exact_reviewed_window_is_fail_closed (test_catalogue_fixture_packaging.CatalogueFixtureSourceTests.test_staging_base_or_exact_reviewed_window_is_fail_closed) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 28.450s
+
+OK

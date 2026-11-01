@@ -1,0 +1,170 @@
+schema_version: 1
+fix_id: BENCH-SELFSERVE
+artifacts:
+- id: check-red
+  path: evidence/baseline-red.md
+  sha256: a8f547ec116d5e50b32ce5b1c509f3cdf8a683cf8c876457f2a9af75027d7be3
+  bytes: 1798
+  producer: bench-v3-lead
+  created_at: '2026-11-01T17:31:32+00:00'
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  command: Exact main parser/hash-routing and typed-schema control; actual installed
+    jh stage_scope.load for requested demo policy versus known fixture policy
+  evidence_class: RED
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-decision
+  path: 03-decision.md
+  sha256: db44d61cc29c44e07e0b485dc884bc9672c76d913897e670f92dfbb0161fde6c
+  bytes: 7139
+  producer: bench-v3-lead
+  created_at: '2026-11-01T17:32:49+00:00'
+  source_sha: fe6494022a65fcca236e405521685708eb104d9e
+  command: 'Lead plan amended from actual final Helm-overlay counterexample: default-empty
+    additive readonly benchmark subject; independent source/component review and full
+    scoped checks required'
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-base_review
+  path: evidence/upstream-b1ef/base-review.md
+  sha256: 60b89c13760229ea921b3d71e23d618e03c3da51003e7c5192b57330f54bfa11
+  bytes: 2500
+  producer: bench-v3-lead
+  created_at: '2026-11-01T20:47:40+00:00'
+  source_sha: b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+  command: git diff --exit-code b1ef 225877 for five upstream paths; inspect exact
+    acquisition-only bot diff and independently reproduced OS-lock/original-upload
+    controls; review six service renders,169-runtime commit binding and retained actual
+    CI/native receipts
+  evidence_class: DESIGN
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-preflight
+  path: evidence/upstream-b1ef/preflight/receipt.json
+  sha256: 37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a
+  bytes: 13444
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:37+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: workflow.py preflight BENCH-SELFSERVE --run
+  evidence_class: PREFLIGHT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-implementation
+  path: 04-diff.patch
+  sha256: 8fde779bd69073a83f4b7ff90965e0ed51f36e3af59a171f8bdbf207e4e42fc2
+  bytes: 3170716
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:37+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: git diff --binary --full-index --no-color --no-ext-diff --no-textconv b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0
+    225877a8ecb4c11eb39980ba932c114f7a8068a4
+  evidence_class: IMPLEMENTATION
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l0
+  path: evidence/upstream-b1ef/preflight/receipt.json
+  sha256: 37baeacfff4cd440350ffe5b9c2e42f0e9dce0fe2460a9b091ebddd733fff32a
+  bytes: 13444
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:37+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/upstream-b1ef/run-preflight.sh
+  evidence_class: L0
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l1
+  path: evidence/upstream-b1ef/l1.txt
+  sha256: df5290a915e7821e2cced41076f3d371e111088a32b61accbf300541bd01323a
+  bytes: 2787
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:37+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/upstream-b1ef/run-acceptance.sh
+  evidence_class: L1
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-l2
+  path: evidence/upstream-b1ef/l2.txt
+  sha256: 5ccc89d23f83f699518f4b26a54570e4609b0998c9397f447c4d3525a19d17c4
+  bytes: 12769
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:37+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: bash workflow/fixes/BENCH-SELFSERVE/evidence/upstream-b1ef/run-acceptance.sh
+  evidence_class: L2
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-positive_control
+  path: evidence/upstream-b1ef/l2.txt
+  sha256: 5ccc89d23f83f699518f4b26a54570e4609b0998c9397f447c4d3525a19d17c4
+  bytes: 12769
+  producer: bench-v3-worker
+  created_at: '2026-11-01T20:57:38+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: Exact committed-source real PXMS/native replay publication, offline source
+    hydration and current scope producer controls in run-acceptance.sh; live product
+    acceptance remains independent
+  evidence_class: CONTROL
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-incident
+  path: evidence/incident.md
+  sha256: f5e1427df136cf81faa4eae58b619a3fd98563e458205341287a6ebab8481a4a
+  bytes: 2935
+  producer: bench-v3-lead
+  created_at: '2026-11-01T21:00:49+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: Independent exact original-upload parser and actual installed-stage stage_scope.load
+    reproduction with successful existing-fixture control; retained routing.json and
+    live-pin-control.json; reviewed current169-file and peer producer bindings
+  evidence_class: INCIDENT
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null
+- id: check-p3
+  path: evidence/p3/verdict.md
+  sha256: 204a473f57ef22f39f0b3d170588de9814223603116775fe15829acfa4276e60
+  bytes: 1811
+  producer: bench-v3-lead
+  created_at: '2026-11-01T21:00:49+00:00'
+  source_sha: 225877a8ecb4c11eb39980ba932c114f7a8068a4
+  command: Independently inspect canonical b1ef-to225877 diff, final actualOS lease
+    controls, immutable producer/source controls and strict preflight; assert169 committed
+    runtime hashes and bound peer/CI receipts in p3-225877-bindings.json
+  evidence_class: P3
+  expected_result: PASS
+  actual_result: PASS
+  positive_control_for: null
+  retention: git
+  sensitivity: null

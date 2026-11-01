@@ -1,0 +1,5 @@
+schema_version: 2
+subject:
+  kind: campaign
+  id: 2026-11-01-stage-selfserve
+artifacts: []

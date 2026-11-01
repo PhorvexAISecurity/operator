@@ -1,0 +1,39 @@
+{
+  "run_id": 41339413354,
+  "jobs": [
+    {
+      "id": 124946053348,
+      "name": "publish",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41339413354/job/124946053348",
+      "steps": [
+        {
+          "name": "Build and publish the exact eight-component batch",
+          "conclusion": "failure",
+          "number": 15
+        },
+        {
+          "name": "Create a staging-only digest-pin proposal",
+          "conclusion": "skipped",
+          "number": 16
+        },
+        {
+          "name": "Push the staging proposal without persisting credentials",
+          "conclusion": "skipped",
+          "number": 17
+        },
+        {
+          "name": "Open or update the reviewed staging deployment PR",
+          "conclusion": "skipped",
+          "number": 18
+        },
+        {
+          "name": "Post Run actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5",
+          "conclusion": "skipped",
+          "number": 37
+        }
+      ]
+    }
+  ]
+}

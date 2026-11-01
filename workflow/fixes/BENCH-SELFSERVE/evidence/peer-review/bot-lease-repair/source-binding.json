@@ -1,0 +1,59 @@
+{
+  "verdict": "PASS",
+  "source_manifest_sha256": "63d6c607081f9de0bcf9feb8d86212c694e5f81b1751f14349b5e25339f8865b",
+  "runtime_manifest_sha256": "58d20116ecb6f4ef601da836e0033b8ce63218159226de4ee742c95390ef5cff",
+  "source_base": "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+  "previous_head": "4116c23e7b44e804596e7c711f1aa05d5662e896",
+  "staged_tree": "5fe444d139decc90aed6d26cbeebab37abb47c44",
+  "source_paths": [
+    {
+      "path": "benchmark/bot/service.py",
+      "sha256": "65aba1be1ed21f4bc0ccc729400130d7d3570d276f82b39bd8657ed1a7900ab6",
+      "bytes": 80657
+    },
+    {
+      "path": "benchmark/bot/test_job_lease.py",
+      "sha256": "e127a4cf018237803716483aea88df421798cfe5d05879dc49531cca77d6c44a",
+      "bytes": 9773
+    },
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "371c54d448038059835763b7f0b0a278d9ea61d2fb8b476314a0cf37bc88d5c2",
+      "bytes": 2403
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s.go",
+      "sha256": "c3c308d3021e5ac8b700e9e56162caba7c505ed3a23772c72deaccf32b7f3005",
+      "bytes": 30616
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s_cluster.go",
+      "sha256": "161e1551199f614ce13df2cfb428656657b446aa174b505e38dab1c8fcf7ffee",
+      "bytes": 55458
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s_cluster_test.go",
+      "sha256": "465bf3da55a4f80e9b57c60403abc9d958565f22169edc09a853ceb49230358f",
+      "bytes": 33832
+    },
+    {
+      "path": "phorvex/internal/console/attack_catalog_adapters_k8s_test.go",
+      "sha256": "14892993ca4500d3109f8c482ed92bcfd0e3b5da78b96d7507c48560744a53f3",
+      "bytes": 20680
+    }
+  ],
+  "source_worktree_and_index_hashes_verified": true,
+  "runtime169_hashes_verified": true,
+  "only_runtime_changes": [
+    "benchmark/bot/service.py",
+    "benchmark/bot/test_job_lease.py"
+  ],
+  "upstream_five_paths_byte_exact": [
+    "deploy/environments/staging/catalogue-family.yaml",
+    "phorvex/internal/console/attack_catalog_adapters_k8s.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_cluster_test.go",
+    "phorvex/internal/console/attack_catalog_adapters_k8s_test.go"
+  ],
+  "note": "Current b1ef catalogue already contains canonical disabled agent image; final file is byte-exact upstream, not a new local field delta."
+}

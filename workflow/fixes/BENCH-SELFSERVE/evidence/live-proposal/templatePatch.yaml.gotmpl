@@ -1,0 +1,49 @@
+{{- if and (eq .environment "staging") (or (eq .service "brain") (eq .service "manager") (eq .service "console")) }}
+spec:
+  sources:
+  - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+    targetRevision: 6ae89857369468d4ca39a6856d9fd55c3b5debd3
+    path: '{{.chart}}'
+    helm:
+      releaseName: '{{.release}}'
+      skipCrds: true
+      valueFiles:
+      - '$values/deploy/environments/{{.environment}}/phorvex.yaml'
+      - '$values/deploy/environments/{{.environment}}/{{.service}}.yaml'
+      - '$values/deploy/environments/{{.environment}}/catalogue-family.yaml'
+      valuesObject:
+{{- if eq .service "brain" }}
+        phorvex:
+          mathLab:
+            capturePolicies:
+            - phorvex-staging-demo/demo-api-defense
+            - phorvex-staging-demo/stage-bench-defense
+            captureMaxBytes: 1073741824
+        mathLabStore:
+          existingClaim: staging-brain-mathlab
+{{- end }}
+{{- if eq .service "manager" }}
+        phorvex:
+          mathLab:
+            captureCostEvidence: true
+{{- end }}
+{{- if eq .service "console" }}
+        phorvex:
+          console:
+            auth:
+              grants:
+                extraSubjects:
+                - issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+                  subject: system:serviceaccount:phorvex-staging:staging-brain-benchmark
+                  roles:
+                  - investor
+                  tenants:
+                  - phorvex-staging-demo
+                  targets:
+                  - default
+                  note: Read-only source-pinned stage brain benchmark snapshot collection.
+{{- end }}
+  - repoURL: https://github.com/PhorvexSecurity/operator-refactored.git
+    targetRevision: main
+    ref: values
+{{- end }}

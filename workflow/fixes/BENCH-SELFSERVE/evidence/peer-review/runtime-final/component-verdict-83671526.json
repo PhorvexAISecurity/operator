@@ -1,0 +1,71 @@
+{
+  "schema": "phorvex-bench.independent-runtime-component-review.v1",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T18:50:41.656393+00:00",
+  "verdict": "PASS_FOR_REVIEWED_SOURCE_COMMIT_AND_BOUNDED_RUNTIME_ACCEPTANCE",
+  "component_parent": "6ae89857369468d4ca39a6856d9fd55c3b5debd3",
+  "manifest": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/final-source/integrated-source-inputs-v3.json",
+    "sha256": "8367152664a4c24e93a12b0656c0312dcaaadc7857cafe3c437430ca3cb25d67",
+    "paths": 43,
+    "working_tree_and_staged_blobs_exact": true
+  },
+  "author_affected_suite": {
+    "path": "workflow/fixes/BENCH-SELFSERVE/evidence/final-source/integrated-author-tests-v3.json",
+    "sha256": "f52a5e1b5258b9498fbb36bc396c0d2bf18e99e9f1384e4232e9bbd3deb47ff7",
+    "bot_tests": 190,
+    "skips": 0,
+    "state": "PASS",
+    "scope": "Final affected bot suite plus unchanged worker/stage component receipts; not coherent final-commit preflight."
+  },
+  "independent_evidence": [
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/four-repairs-verdict-d967c2dd.json",
+      "sha256": "85db5f0c8e38132676323bf1fa4ebf7058d987df841a710eeca4fb8043966398"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/atomic-delta-independent.json",
+      "sha256": "6690fbac03933789400100993fb74157707ae97721cdf62ccc0b927be445a8bf"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/atomic-consumer-tests.txt",
+      "sha256": "290a607fbca04de19e1d7d2a2096ce4a910ebe0290692a04e23db97535cc1602"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/atomic-final-assertions-test.txt",
+      "sha256": "749713081bf1c8357aff78ddbb52a2b939a11510a3cd9eeb02026930a4f804d0"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/atomic-check-producer.json",
+      "sha256": "370c22d84e0f6d6842264acb2eaef52aee960775b71421bbeef49d521a7c07f8"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/native-replay-review.json",
+      "sha256": "ea02276b3a48aadb2f838c631879f376c6dae50c62f0aac33711332bdda375a1"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/bot-focused-tests.txt",
+      "sha256": "a73449eb06aa7e56b7a200681a41e75679cc51b93f1b05fb00ebefbc07ceaa36"
+    },
+    {
+      "path": "workflow/fixes/BENCH-SELFSERVE/evidence/peer-review/runtime-final/helper-focused-tests.txt",
+      "sha256": "943da889abeb082bfb6bffd085c8ab60cb13724a78afcaace41a48e0b394e1bf"
+    }
+  ],
+  "review_coverage": [
+    "Exact uploaded10d/30d compatibility bytes, generic altered prose remains code, bounded structured endpoint parameters and independent W/L.",
+    "Read-only validation, real Git no-lazy source observation, finalized/hash/source/image/policy generation filters, exact requested freeze count, early/late activity reporting and structured truthful BLOCKED.",
+    "Atomic native pin/immutable baseline and reviewed-engine evidence, actual128-row native fidelity proof distinct from cross-source review, concurrent leases, failed publication/retention, supervisor source/Service/workload scope transitions.",
+    "The four runtime producer failures and actual healthy timing are closed by the separately hash-bound repair review.",
+    "Atomic identity consumer correction independently reversed to exact prior frozen bytes; parameter pipeline, audit and /check accept new pin with stale/absent legacy current while preserving historical artifact."
+  ],
+  "unresolved_component_defects": [],
+  "limits_and_followups": [
+    "This is source component acceptance, not campaign/P3 completion or a deployment authorization beyond recorded scope.",
+    "Canonical must commit exactly these43 blobs and root must bind the resulting commit before runtime staging.",
+    "Exact coherent committed-source preflight and independent runtime installer review remain required.",
+    "Actual real bot exact-demo64 parameter replay, unchanged original10d structured BLOCKED and separately declared short fixture endpoint control remain required.",
+    "No active-demo attributed history/10day completion, efficacy, tick independence or never-fails claim.",
+    "Historical source/engine/journal/cohort artifacts stay intact; no production/main merge or policy-mode/calibration authorization is implied."
+  ]
+}

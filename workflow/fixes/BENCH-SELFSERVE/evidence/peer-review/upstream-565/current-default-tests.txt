@@ -1,0 +1,8 @@
+test_its_defaults_are_the_managers (test_service_charts.AttacksServiceTests.test_its_defaults_are_the_managers) ... ok
+test_its_defaults_are_the_managers (test_service_charts.ConsoleChartTests.test_its_defaults_are_the_managers) ... ok
+test_its_defaults_are_the_managers (test_service_charts.SensorChartTests.test_its_defaults_are_the_managers) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.565s
+
+OK

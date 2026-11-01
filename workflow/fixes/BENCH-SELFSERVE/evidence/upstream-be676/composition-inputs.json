@@ -1,0 +1,26 @@
+{
+  "previous_head": "2a9a101a4470e8028c506325c03a9571a2a52db0",
+  "upstream": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "worktree": "/workspace/operator-benchmark-selfserve-1457",
+  "staged_tree": "5d574e7aeeb7360cbfe51d608d0195c4ba9397e5",
+  "paths": [
+    {
+      "path": "deploy/environments/staging/catalogue-family.yaml",
+      "sha256": "371c54d448038059835763b7f0b0a278d9ea61d2fb8b476314a0cf37bc88d5c2",
+      "bytes": 2403
+    },
+    {
+      "path": "phorvex/internal/console/prometheus_run_evidence.go",
+      "sha256": "adbaba3234cc392906f0db560fa6680cd30f5a5c1a3a13a893c3990546017d89",
+      "bytes": 28718
+    },
+    {
+      "path": "phorvex/internal/console/prometheus_run_evidence_test.go",
+      "sha256": "275f297165ef3af9754d17ed09537838266ade3916ff88f5aa2dc67791a1f3c9",
+      "bytes": 13211
+    }
+  ],
+  "runtime169_unchanged": true,
+  "resolution": "All three incoming paths byte-identical to upstream; closed family naturally retains canonical disabled agent image; no worker source logic edits",
+  "observed_at": "2026-11-01T21:07:02.580977+00:00"
+}

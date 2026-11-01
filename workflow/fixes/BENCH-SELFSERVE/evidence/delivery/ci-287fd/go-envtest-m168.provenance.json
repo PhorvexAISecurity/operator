@@ -1,0 +1,14 @@
+{
+  "observed_at": "2026-11-01T21:19:39.743416+00:00",
+  "job_id": 124979767671,
+  "run_id": 41350473242,
+  "job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41350473242/job/124979767671",
+  "original_log_bytes": 2828569,
+  "original_log_sha256": "8a5035fa9aac7dc17a5c14f439055bf870c1295facf88fe0f0b3b1d40402d80e",
+  "excerpt_sha256": "68d761382d6f06549675d996d7c99ed2e1404bf0b5ecbf22edad091124254110",
+  "extraction_note": "Exact parent/subtest lines from the actual structured Go log; explicit run/pass events, not inference from aggregate status.",
+  "actual_positive_controls": {
+    "result_write_failure": true,
+    "final_marker_failure": true
+  }
+}

@@ -158,6 +158,7 @@ def normalize(scope, records, exports, target, window, lookback, worth_threshold
         bindings.append({"snapshot_digest": row["snapshot_digest"], "original_tick_id": row["tick_id"],
                          "at": at, "candidate_export_sha256": digest(row), "journal_seq": obs["journal_seq"],
                          "journal_hash": obs["journal_hash"], "watch_session": reducer.session,
+                         "policy_generation": obs["policy_generation"], "workload_generation": obs["workload_generation"],
                          "sealed_until": obs["watermark"], "complete_from": obs["complete_from"]})
     trace = {"schema": "phorvex-bench.endpoint-trace.v1", "evidence": "recorded", "source_revision": producer_source, "ticks": ticks}
     metadata = {"schema": "phorvex-stage.normalization.v1", "state": "READY" if not missing else "BLOCKED",

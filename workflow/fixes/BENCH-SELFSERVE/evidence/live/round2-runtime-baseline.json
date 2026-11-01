@@ -1,0 +1,58 @@
+{
+  "at": "2026-11-01T19:23:21.543648+00:00",
+  "result": "PASS_INSTRUMENT_BASELINE_NOT_REQUEST_READY",
+  "runtime_source": "a5d8d6121ed7a285d79f76b5aba4f7dad506725e",
+  "identity": {
+    "binary_sha256": "739b43a24c79ee7599ea02aab84ade4e23081d1881dd9db225d0e4c8ea192f86",
+    "brain_image": "notAvailable",
+    "endpoint_study_mode": "PAIRED_BRAIN_REPLAY",
+    "extracted_at": "2026-11-01T18:56:41.096671Z",
+    "git_sha": "61e83673b8d4f143fca67e17b8a54dc4712f9b28",
+    "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-61e83673b8d4f143fca67e17b8a54dc4712f9b28@sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+    "image_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+    "layer_digest": "sha256:de185c5cb71c57ee1b64b6d9e07c09ca2e5ac17339b49fce3a19b1e12d629d7c",
+    "overridable_parameters": [
+      "P-FEA-006",
+      "P-FEA-005",
+      "P-OBJ-003"
+    ],
+    "path": "/home/hami/phorvex-benchmark/stage-data/mathlab/bin/sha256-ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf/brain-replay",
+    "platform_manifest_digest": "sha256:ebb6d245afc52528155eee999e130972c1aa78f14f03a19b86118508acefd1bf",
+    "producer": "stage-brain-image",
+    "replay_schema": "math-lab.replay.v1",
+    "schema_version": "math-lab.replay-binary.v1",
+    "snapshot_schema": "math-lab.snapshot.v1",
+    "study_candidates_schema": "math-lab.study-candidates.v1"
+  },
+  "pin_sha256": "1c63baccffcd94623fb474df49cba81515bd8669f47ba925c2439bdec7f7506a",
+  "allowed_policies": [
+    "phorvex-staging-demo/demo-api-defense",
+    "phorvex-staging-demo/stage-bench-defense"
+  ],
+  "units": {
+    "phorvex-benchmark-bot.service": {
+      "MainPID": "1465133",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7/benchmark/bot",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-observer.service": {
+      "MainPID": "1465130",
+      "NRestarts": "0",
+      "WorkingDirectory": "/home/hami/phorvex-benchmark/releases/stage-selfserve-a5d8d6121ed7",
+      "ActiveState": "active",
+      "SubState": "running"
+    },
+    "phorvex-stage-reconcile.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting"
+    }
+  },
+  "free_bytes": 6817775616,
+  "qualification": "Native image/source identity and active owned services only. Current main capture is disabled; fresh request readiness and observer continuity must be established after the reviewed capture proposal. No previous cohort is called a new bot result."
+}

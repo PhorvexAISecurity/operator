@@ -1,0 +1,15 @@
+{
+  "requested_head": "225877a8ecb4c11eb39980ba932c114f7a8068a4",
+  "merge_sha": "882c7e7df255ff3880b97d9622be06ad393873d9",
+  "tree_sha": "5fe444d139decc90aed6d26cbeebab37abb47c44",
+  "parents": [
+    "b1ef9ccdb258f0a94b0dad575a17cc3a4c25cab0",
+    "225877a8ecb4c11eb39980ba932c114f7a8068a4"
+  ],
+  "checkout_job_id": 124972803298,
+  "checkout_job_url": "https://github.com/PhorvexSecurity/operator-refactored/actions/runs/41348308738/job/124972803298",
+  "original_log_sha256": "b74f218ed441ca3b9dc128794174521ff263ab025c36b34997f435a1ecdd4f94",
+  "original_log_bytes": 214290,
+  "excerpt_sha256": "1a72214c19923070a01310fe6eab8ad902becd69abc2ae54f9bddd37ee2a5feb",
+  "merge_sha_observed_in_actual_checkout_log": true
+}

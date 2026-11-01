@@ -1,0 +1,16 @@
+{
+  "note": "Runner description retains preceding-run human label finaleef\u21922a9 because copied JSON encoded the Unicode arrow. This label is not the attested source. No raw log or configuration is rewritten after launch. source_sha, STATUS pins, all command paths and receipt validation bind current be676\u2192287fd.",
+  "source_head": "287fd2e4cd97c1ef8a0475b16316b04c6938b518",
+  "source_base": "be676c84d162528c10bacb84c8e6a11de30ade5d",
+  "config_sha256": "33f1352dbe89e6a3e771b5ff01f72702f96383a2a58000e0bbd91e0b3b1783a7",
+  "commands": [
+    [
+      "bash",
+      "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/run-preflight.sh"
+    ],
+    [
+      "bash",
+      "/workspace/operator-benchmark-selfserve/workflow/fixes/BENCH-SELFSERVE/evidence/upstream-be676/run-acceptance.sh"
+    ]
+  ]
+}

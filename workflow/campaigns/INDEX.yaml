@@ -32,3 +32,7 @@ campaigns:
     directory: campaigns/2026-10-31-stage-brain-benchmark
     state: CLOSED
     profile: workflow-v2
+  2026-11-01-stage-selfserve:
+    directory: campaigns/2026-11-01-stage-selfserve
+    state: RUNNING
+    profile: workflow-v2
