@@ -1,0 +1,16 @@
+{
+  "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "at": "2026-10-31T23:47:40.776476+00:00",
+  "images": {
+    "brain": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "archive_sha256": "abcc1ed14a4e8a18f5ecc93a2d4c2c8c413eeea11a5246f7b40ab1b85ea34180"
+    },
+    "manager": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "digest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "archive_sha256": "5e3a1ac1262774cf7139484a2c4a7c4cead22a94fb24e5e602c4d67fc04eac07"
+    }
+  }
+}

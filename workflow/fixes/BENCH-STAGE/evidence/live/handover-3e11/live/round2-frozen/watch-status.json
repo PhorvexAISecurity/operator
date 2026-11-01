@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 3753173,
+  "source_sha": "1a70c2b1167e0725b90f7b0219488ca315abaa26",
+  "started_at": "2026-10-31T23:54:42.871062+00:00",
+  "results": [
+    {
+      "name": "fresh-stage-observation",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 1824.804,
+  "step": "fresh-stage-observation",
+  "child_pid": 3753174,
+  "exit_code": 0,
+  "finished_at": "2026-11-01T00:25:07.672910+00:00"
+}

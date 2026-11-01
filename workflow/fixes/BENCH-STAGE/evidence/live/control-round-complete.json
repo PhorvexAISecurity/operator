@@ -1,0 +1,9 @@
+{
+  "at": "2026-10-31T23:31:51.383693+00:00",
+  "action": "end source9b5 observation control round before new source baseline",
+  "process": "already-stopped",
+  "backup_sha256": "14ccb15eb6b360439502fed546a4cdad33f177d3e5a516e59278524718e66bf2",
+  "backup_bytes": 5885952,
+  "source_revision": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "live_benchmark_acceptance": false
+}

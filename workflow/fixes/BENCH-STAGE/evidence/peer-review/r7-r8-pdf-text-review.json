@@ -1,0 +1,24 @@
+{
+  "reviewer": "stage_review",
+  "result": "PASS_PDF_TEXT",
+  "results": [
+    {
+      "language": "en",
+      "pages": 25,
+      "extracted_characters": 46564,
+      "html_sha256": "9bfd4dd147725e1a0888024f10c781fd5a3c355167458a934dc83bea2f249e72",
+      "pdf_sha256": "a080be19b80997728b206cec427d6266d2d12ecac4d5945eec751749aec06e94",
+      "independent_window_text_present": true,
+      "retained_history_requirement_present": true
+    },
+    {
+      "language": "fa",
+      "pages": 24,
+      "extracted_characters": 42938,
+      "html_sha256": "28596747b419bc49d726790ae133370c78e876b2200646dfc815b2e19059ca8d",
+      "pdf_sha256": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183",
+      "independent_window_text_present": true,
+      "retained_history_requirement_present": true
+    }
+  ]
+}

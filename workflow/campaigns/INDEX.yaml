@@ -28,3 +28,7 @@ campaigns:
     directory: campaigns/2026-10-29-console-catalogue-smoke
     state: APPROVED
     profile: workflow-v2
+  2026-10-31-stage-brain-benchmark:
+    directory: campaigns/2026-10-31-stage-brain-benchmark
+    state: CLOSED
+    profile: workflow-v2

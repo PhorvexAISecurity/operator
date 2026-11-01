@@ -1,0 +1,33 @@
+{
+  "at": "2026-11-01T00:32:28.491655+00:00",
+  "services": {
+    "brain": {
+      "deployment_uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "pod_uid": "e1b7f2cb-7fe1-4dfa-9943-a1ff99c274de",
+      "pod": "staging-brain-b4d544d55-kc9sz",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "version": {
+        "service": "brain",
+        "version": "stage-benchmark-relay",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+      },
+      "ready": true
+    },
+    "manager": {
+      "deployment_uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "pod_uid": "b0da8699-621f-4422-bfec-9ccce8deefd0",
+      "pod": "staging-phorvex-58695ffd75-5vq2j",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "version": {
+        "service": "manager",
+        "version": "stage-benchmark-relay",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+      },
+      "ready": true
+    }
+  },
+  "result": "PASS",
+  "reason": "independent fresh runtime pins after node drains; source unchanged"
+}

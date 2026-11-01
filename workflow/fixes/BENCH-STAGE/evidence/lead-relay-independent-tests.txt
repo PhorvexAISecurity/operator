@@ -1,0 +1,6 @@
+Independent lead execution against isolated relay source; exact manifest hashes verified before execution.
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.556s
+ok  	github.com/phorvex/phorvex/internal/brainsvc	0.049s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/audittransport	0.073s
+ok  	github.com/phorvex/phorvex/cmd/brain	0.051s [no tests to run]
+ok  	github.com/phorvex/phorvex/internal/mathlab	0.275s

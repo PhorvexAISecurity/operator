@@ -1,0 +1,42 @@
+{
+  "schema": "phorvex-bench.engine-build.v1",
+  "build_helper_sha256": "3c89061971f9a1a2366081c2ae320dfd085ac9dbb5f063d8d2c58c70330d739b",
+  "engines": {
+    "base": {
+      "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "binary": "/workspace/.phorvex-test-tmp/stage-study-engines/base-brain-replay",
+      "sha256": "fcdaeea0a9298b0e34f68c2564269553f371ff96930862bb822b294402dc45d2",
+      "version": {
+        "brainImage": "notAvailable",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1"
+      },
+      "toolchain": "go1.26.10"
+    },
+    "candidate": {
+      "source": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+      "binary": "/workspace/.phorvex-test-tmp/stage-study-engines/candidate-brain-replay",
+      "sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857",
+      "version": {
+        "brainImage": "notAvailable",
+        "endpointStudyMode": "PAIRED_BRAIN_REPLAY",
+        "gitSHA": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1",
+        "studyCandidatesSchema": "math-lab.study-candidates.v1"
+      },
+      "toolchain": "go1.26.10"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+Coherent final committed-source ec310 preflight after schema-correct campaign metadata doctor PASS, followed by dedicated L1/L2. Source unchanged; prior partial and complete failed attempts remain separately retained.
+START exact-current-ci-preflight
+diff: PASS
+workflow: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-4: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-5: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-6: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-7: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-8: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-9: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+chart-10: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-phorvex: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-affected-services: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-build-metricvalidity: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-build-test-harness: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-build-phoenix-extended: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-libs-logging: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-build-integrations-epss-ecr-auth-runtime: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-unit-farm-fixtures-agentsim: PASS
+WARNING: Kubernetes configuration file is group-readable. This is insecure. Location: /dev/null
+WARNING: Kubernetes configuration file is world-readable. This is insecure. Location: /dev/null
+go-build-vet-phorvex: PASS
+preflight: PASS; receipt=/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/preflight/receipt.json
+END exact-current-ci-preflight exit=0
+START issue-specific-acceptance
+END issue-specific-acceptance exit=0

@@ -1,0 +1,21 @@
+schema_version: 2
+subject:
+  kind: campaign
+  id: 2026-10-31-stage-brain-benchmark
+artifacts:
+- path: evidence/baseline-current.json
+  sha256: b76dbdf1fcdebd3d630746a2ddb734d09c03f2227bf25b8be9efa295e7bd9569
+  bytes: 957
+  retention: git
+  id: round-1-108fdc357354
+  producer: bench-v3-lead
+  created_at: '2026-11-01T00:54:49.087722+00:00'
+  evidence_class: RED
+- path: evidence/control-round-complete.json
+  sha256: 6256f19e619086137dd4bd100ed22eeb505ec865ccd2f301141df06dd25cc420
+  bytes: 377
+  retention: git
+  id: round-1-f0719012f4dc
+  producer: bench-v3-lead
+  created_at: '2026-11-01T00:54:49.087722+00:00'
+  evidence_class: CONTROL

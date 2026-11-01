@@ -1,0 +1,28 @@
+{
+  "state": "DONE",
+  "pid": 296345,
+  "source_sha": "cd3e48b819b7d9cf9f227a30dbcb5472b42181bc + relay working diff",
+  "started_at": "2026-10-31T23:16:27.947945+00:00",
+  "results": [
+    {
+      "name": "real-recorder-rpc-http-relay-and-rollout",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "producer-identity-and-baseline-parity",
+      "exit_code": 0,
+      "timed_out": false
+    },
+    {
+      "name": "architecture",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 39.804,
+  "step": "architecture",
+  "child_pid": 296847,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:17:07.751708+00:00"
+}

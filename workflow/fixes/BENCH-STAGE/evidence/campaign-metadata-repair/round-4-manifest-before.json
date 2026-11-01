@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "subject": {
+    "kind": "campaign",
+    "id": "2026-10-31-stage-brain-benchmark",
+    "round": "round-4"
+  },
+  "recorded_at": "2026-11-01T01:20:14.554407+00:00",
+  "artifacts": [
+    {
+      "path": "evidence/code-bot-acceptance.json",
+      "sha256": "f3f7837d9d77b4e31b8703684aaf06ffdfcedbe77d6302e6cacf9c41490747f0",
+      "bytes": 818,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/code-replay-independent-review.json",
+      "sha256": "61990fee5f7d781aefd5e2b26f733b4317587469e34377748a223374e5e38507",
+      "bytes": 4778,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/code-tests-independent.json",
+      "sha256": "7608e124ad1deedc138f44dbacfe010de76c2359d8d5c5b1f845ee7e660f2233",
+      "bytes": 1827,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/delivery-validation.json",
+      "sha256": "0ac82e683adb340f1a114fe504a27662dc16901a15b64b1965eb793b0f0cf5ae",
+      "bytes": 4866,
+      "retention": "git-compact-receipt"
+    }
+  ]
+}

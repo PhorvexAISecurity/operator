@@ -1,0 +1,49 @@
+{
+  "at": "2026-11-01T01:28:42.124901+00:00",
+  "removed_auth_absent": true,
+  "job_scratch": {
+    "4b8171ea3c83": {
+      "candidate-src": false,
+      "base-src": false,
+      "go-home": false
+    },
+    "c963f138052b": {
+      "candidate-src": false,
+      "base-src": false,
+      "go-home": false
+    }
+  },
+  "transient_units": {
+    "phorvex-stage-code-retry-3e11.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-endpoint-bot-acceptance-3e11.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    },
+    "phorvex-stage-refresh-300-control.service": {
+      "Result": "success",
+      "ActiveState": "inactive",
+      "SubState": "dead"
+    }
+  },
+  "retained_candidate_bundle": {
+    "path": "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/candidate.git.bundle",
+    "sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+    "bytes": 2517
+  },
+  "retained_configuration": [
+    "phorvex-benchmark-bot.service",
+    "phorvex-stage-observer.service",
+    "phorvex-stage-endpoint-refresh.timer",
+    "stage fixture deployment/service/PDB/dryRun policy",
+    "source-pinned images and 2Gi PVC",
+    "private data journals, source cohorts and replay binaries",
+    "private bot.env and prior rollback versions"
+  ],
+  "not_touched": "unrelated px-amtd and other user processes, legacy data/config, original SSH helpers and unrelated Argo applications",
+  "result": "PASS_CAMPAIGN_TRANSIENT_CLEANUP; retained configuration explicit"
+}

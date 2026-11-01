@@ -1,0 +1,18 @@
+{
+  "schema": "phorvex-bench.study-engine-review.v1",
+  "result": "PASS",
+  "reviewer": "bench-v3-lead",
+  "source_revision": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "base_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "candidate_binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857",
+  "base_binary_sha256": "fcdaeea0a9298b0e34f68c2564269553f371ff96930862bb822b294402dc45d2",
+  "evidence_sha256": [
+    "3e486c36baa81edaff48485fd10ce5b8bc5dc2d01f01212a71184e58698cd4c9",
+    "e02917510ff58f106b0484a20e6aa9d4e4c3aac90a06875792ab9366fd0497e8",
+    "b4d1ed41f65e7ca24837942438244ec08fb963e7d8680f5851f451d474fc051d",
+    "6839e09df1fb68332164865ba95563f42dc73eea228c555cd6dc871038a1b13c",
+    "51c087475985d87b46f9e760e3c6ec6583efeec717a3267ad3ab1fca3a9aab50",
+    "90e8660c8e935e484389c704bb71b128e11db872ef30fe921aab671b676c1b00"
+  ],
+  "scope": "Independently reviewed and tested offline experimental brain engine component. Actual capture identity, exact recorded baseline equivalence and all-tick coverage are mandatory at each run. Full integrated PR preflight remains separate."
+}

@@ -1,0 +1,176 @@
+[
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:17:50Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-44-44.us-east-2.compute.internal"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:17:50Z",
+    "message": "Node ip-172-27-44-44.us-east-2.compute.internal status is now: NodeNotSchedulable",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:17:50Z",
+      "name": "ip-172-27-44-44.us-east-2.compute.internal.18e3c3b7b7edf54b",
+      "namespace": "default",
+      "resourceVersion": "102381093",
+      "uid": "0d59142b-99af-498f-a39a-4c59f971c922"
+    },
+    "reason": "NodeNotSchedulable",
+    "reportingComponent": "kubelet",
+    "reportingInstance": "ip-172-27-44-44.us-east-2.compute.internal",
+    "source": {
+      "component": "kubelet",
+      "host": "ip-172-27-44-44.us-east-2.compute.internal"
+    },
+    "type": "Normal"
+  },
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:22:28Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:22:28Z",
+    "message": "Node ip-172-27-58-153.us-east-2.compute.internal status is now: NodeNotSchedulable",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:22:28Z",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal.18e3c3f8641c6461",
+      "namespace": "default",
+      "resourceVersion": "102385997",
+      "uid": "22ed7ce4-ea2a-4290-8d75-ecc71c65df22"
+    },
+    "reason": "NodeNotSchedulable",
+    "reportingComponent": "kubelet",
+    "reportingInstance": "ip-172-27-58-153.us-east-2.compute.internal",
+    "source": {
+      "component": "kubelet",
+      "host": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "type": "Normal"
+  },
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:23:30Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:23:30Z",
+    "message": "Shutdown manager detected shutdown event",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:23:30Z",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal.18e3c406fdb07ad2",
+      "namespace": "default",
+      "resourceVersion": "102387210",
+      "uid": "1be3c4e2-4873-4152-b068-e821835a1a74"
+    },
+    "reason": "Shutdown",
+    "reportingComponent": "kubelet",
+    "reportingInstance": "ip-172-27-58-153.us-east-2.compute.internal",
+    "source": {
+      "component": "kubelet",
+      "host": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "type": "Normal"
+  },
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:23:30Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:23:30Z",
+    "message": "Node ip-172-27-58-153.us-east-2.compute.internal status is now: NodeNotReady",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:23:30Z",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal.18e3c406fdbedf38",
+      "namespace": "default",
+      "resourceVersion": "102387212",
+      "uid": "6f54d52c-e191-47fb-b0c5-087e57d38c45"
+    },
+    "reason": "NodeNotReady",
+    "reportingComponent": "kubelet",
+    "reportingInstance": "ip-172-27-58-153.us-east-2.compute.internal",
+    "source": {
+      "component": "kubelet",
+      "host": "ip-172-27-58-153.us-east-2.compute.internal"
+    },
+    "type": "Normal"
+  },
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:23:56Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal",
+      "uid": "73e0cc80-5cb5-4dc7-b7d1-f3ed1300dd09"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:23:56Z",
+    "message": "Deleting node ip-172-27-58-153.us-east-2.compute.internal because it does not exist in the cloud provider",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:23:56Z",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal.18e3c40ce71d41a9",
+      "namespace": "default",
+      "resourceVersion": "102387813",
+      "uid": "a0202b93-e8f0-47c6-aebc-8d679a91530e"
+    },
+    "reason": "DeletingNode",
+    "reportingComponent": "cloud-node-lifecycle-controller",
+    "reportingInstance": "",
+    "source": {
+      "component": "cloud-node-lifecycle-controller"
+    },
+    "type": "Normal"
+  },
+  {
+    "apiVersion": "v1",
+    "count": 1,
+    "eventTime": null,
+    "firstTimestamp": "2026-11-01T00:23:57Z",
+    "involvedObject": {
+      "apiVersion": "v1",
+      "kind": "Node",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal",
+      "uid": "73e0cc80-5cb5-4dc7-b7d1-f3ed1300dd09"
+    },
+    "kind": "Event",
+    "lastTimestamp": "2026-11-01T00:23:57Z",
+    "message": "Node ip-172-27-58-153.us-east-2.compute.internal event: Removing Node ip-172-27-58-153.us-east-2.compute.internal from Controller",
+    "metadata": {
+      "creationTimestamp": "2026-11-01T00:23:57Z",
+      "name": "ip-172-27-58-153.us-east-2.compute.internal.18e3c40d27c48aac",
+      "namespace": "default",
+      "resourceVersion": "102387836",
+      "uid": "0aa23607-2d90-4a48-a5b9-74a2a5d57e2b"
+    },
+    "reason": "RemovingNode",
+    "reportingComponent": "node-controller",
+    "reportingInstance": "",
+    "source": {
+      "component": "node-controller"
+    },
+    "type": "Normal"
+  }
+]

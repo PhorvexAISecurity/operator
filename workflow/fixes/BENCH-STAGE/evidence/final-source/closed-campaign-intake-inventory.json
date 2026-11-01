@@ -1,0 +1,373 @@
+{
+  "producer": "bench-v3-worker",
+  "recorded_at": "2026-11-01T02:03:57.936921+00:00",
+  "purpose": "Closed metadata packaging inventory; original signers and results are preserved in the bound artifacts. All four reviewed round manifests were verified without modification.",
+  "round_manifests": [
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml",
+      "sha256": "d3b7bf108848937c27ede0f3043577999a393a71f8275a67a0dd15f97539ad78",
+      "artifact_count": 2,
+      "unchanged": true
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml",
+      "sha256": "cc08bfdff8f5df3152dd06036dd4487a8329503981f669e11c751a8d90cfc8b2",
+      "artifact_count": 2,
+      "unchanged": true
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml",
+      "sha256": "bdbf693b8d257f62f1418f23f9b806aca656b3440fa96ae80e5a06c9d4debf84",
+      "artifact_count": 8,
+      "unchanged": true
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/manifest.yaml",
+      "sha256": "e0d04abfdbff84833591abe96e9c8dc3775edc76c5063a25839e1bf16bd8de78",
+      "artifact_count": 4,
+      "unchanged": true
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/CAMPAIGN.md",
+      "bytes": 2208,
+      "sha256": "20d1aaeb9bb31c3f6966a2c5edb3db3e8839fb5a08691ef91fa6816607ed1435"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/STATUS.yaml",
+      "bytes": 5947,
+      "sha256": "9fa054e0c92b3be16cd3df5a943b5fc35e363d0dc86c66877d6a5f2df0139492"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/cleanup-final.md",
+      "bytes": 3013,
+      "sha256": "5e24c004d1c1ec3cad996c27ca6f13311afce608db3326af6a3166e6c8023512"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/findings/README.md",
+      "bytes": 584,
+      "sha256": "907f7986bc1c4c808c1a1895e00937c9a3709ae049623f93d6c867ef4a151308"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/findings/clock-precision.md",
+      "bytes": 987,
+      "sha256": "46f235a4a62643652dfc259c0b31925e986410061de12a6a3548410c207bf414"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/findings/runtime-deadline.md",
+      "bytes": 1014,
+      "sha256": "61a99f57fe3250fcaa1cf2ae8c32786ab20d3083641b5e2ae0ec995e49a6540b"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/findings/vendored-chart.md",
+      "bytes": 874,
+      "sha256": "6a7ea0745173dd00b5d4f34a8f76ad2a321b021bb5bb5914086740b99bac10c9"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/hypotheses.yaml",
+      "bytes": 1964,
+      "sha256": "6f991d8195bf086705fe16c13e1ab270ace670b978047398a980885366c7b0ed"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/analysis.md",
+      "bytes": 525,
+      "sha256": "703c7070d8854e8fae1572b7ea88bcb03c01f798dcdb79282955e6ca7f7dde8a"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/cleanup.md",
+      "bytes": 781,
+      "sha256": "f48bf68b362d92d8924dc2ee46254890783b438399fc6648e8712d83a62c902d"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/baseline-current.json",
+      "bytes": 957,
+      "sha256": "b76dbdf1fcdebd3d630746a2ddb734d09c03f2227bf25b8be9efa295e7bd9569"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/control-round-complete.json",
+      "bytes": 377,
+      "sha256": "6256f19e619086137dd4bd100ed22eeb505ec865ccd2f301141df06dd25cc420"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml",
+      "bytes": 640,
+      "sha256": "d3b7bf108848937c27ede0f3043577999a393a71f8275a67a0dd15f97539ad78"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/observations.md",
+      "bytes": 737,
+      "sha256": "32fc84c7eddc5156ebac821c5eb12b5a87858f373b8127a9527107dc3f8fc071"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/review.md",
+      "bytes": 2918,
+      "sha256": "8d8b2e3c34342e8df84a7716d586498453e6b2a031c1bfd6245605f398e3b5a6"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/spec.md",
+      "bytes": 213,
+      "sha256": "5477728cfc5a5cf2a18435774b5fb012d3e87580af093d0d0e8c0c9dcd460459"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/analysis.md",
+      "bytes": 682,
+      "sha256": "0010e9ae6ea4362c1d539e8222d7124f64d07502510123f9abf48b5c9fcbd57a"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/cleanup.md",
+      "bytes": 781,
+      "sha256": "f48bf68b362d92d8924dc2ee46254890783b438399fc6648e8712d83a62c902d"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/console-receipt.json",
+      "bytes": 2257,
+      "sha256": "1c84e92a1c7fa618a79226b5390242a09e939b6d14775594a0b58bc462a94853"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml",
+      "bytes": 628,
+      "sha256": "cc08bfdff8f5df3152dd06036dd4487a8329503981f669e11c751a8d90cfc8b2"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/runtime-receipt.json",
+      "bytes": 3696,
+      "sha256": "ac349c723985eb1b6baa3d5f05296f89239a5bbd7b30673847b917abb285ce38"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/observations.md",
+      "bytes": 894,
+      "sha256": "c713621ced83ec6cc107b324e72cd8ef170ab8708a60f9aeb9f7b57ecd2943ec"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/review.md",
+      "bytes": 3221,
+      "sha256": "9ec2da60c32bf8d4ca18486f15fd6384b4019eb3ab5ac2351fe74f2097fad168"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/spec.md",
+      "bytes": 2149,
+      "sha256": "a054ebdf3c921029fe68222432db0edad52d0ff3a8ce22cfa4007651feea4f08"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/analysis.md",
+      "bytes": 509,
+      "sha256": "b0b2deaffba3b613e8584fcb173206242b736b2d9d0887c6bfebfe7391e53961"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/cleanup.md",
+      "bytes": 781,
+      "sha256": "f48bf68b362d92d8924dc2ee46254890783b438399fc6648e8712d83a62c902d"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/calibration-3.json",
+      "bytes": 387,
+      "sha256": "e5ace5cd167fa1a5c18b732014fcc02c9f4964e499caee8ce678170238f013f8"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/endpoint-bot-acceptance.json",
+      "bytes": 3203,
+      "sha256": "55c91b34970696a0a4b41b51809f1eae36338e29b03f7a2e8a26ccd9a2a4c03c"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/handover.json",
+      "bytes": 714,
+      "sha256": "2ea3d97eeebf53842feabf2942526e3afd7cbe505dbe0f6e71fcfddf853c8e3e"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml",
+      "bytes": 2249,
+      "sha256": "bdbf693b8d257f62f1418f23f9b806aca656b3440fa96ae80e5a06c9d4debf84"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/node-events.json",
+      "bytes": 5815,
+      "sha256": "66673c222e07e782f5c00a2a6dfba978dac52804d51c6f908a9ffdd0faf19f2a"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/round2-frozen-receipt.json",
+      "bytes": 1275,
+      "sha256": "632d4801a6d831d33f7083ad77ced018176183d8cb3c2677a3268062b43c661b"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/runtime-after-drain.json",
+      "bytes": 1676,
+      "sha256": "7268f7152f4636c19fa7ae8447452724d9b1b31fb126be5348098da70609d3f4"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/second-generation-receipt.json",
+      "bytes": 832,
+      "sha256": "8533a47c557517b7d69709ca281111660fffe1ca6f35005d55fd391c39287eb0"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/service-launch-receipt.json",
+      "bytes": 1015,
+      "sha256": "11b20f91ceb07aff6b06734beba4c8a910ff2af149cec11b6a4b32023f5a06e8"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/handover-addendum.md",
+      "bytes": 1609,
+      "sha256": "353d9cb29b832a5695606c7d717fc83dcd898bcce173e05492f1bee0c201c35e"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/observations.md",
+      "bytes": 2050,
+      "sha256": "c6d3751d66d702f1de3cd235d9b493bfbb63c9be342e8ae200fd38fd04c41953"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/review.md",
+      "bytes": 4353,
+      "sha256": "7443dfaa4571443a1b4a00890cc0b324a0d833cc258ca4fc49197fe9f688ce27"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/spec.md",
+      "bytes": 2107,
+      "sha256": "ff13a9bbe3b93d7bf4a267ae351878bbe90d97deeb87a815aae86a6e1e9d0714"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/analysis.md",
+      "bytes": 1037,
+      "sha256": "872a86a865cc49bf7cb3bcfcb42a7a25663468bc6119dc1dffd37593ecaa0029"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/cleanup.md",
+      "bytes": 916,
+      "sha256": "5c254d467dae6fc23be1ccfaf98b09dca5cf2abaeb1b7e11e0f95021e5cdda76"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/code-bot-acceptance.json",
+      "bytes": 818,
+      "sha256": "f3f7837d9d77b4e31b8703684aaf06ffdfcedbe77d6302e6cacf9c41490747f0"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/code-replay-independent-review.json",
+      "bytes": 4778,
+      "sha256": "61990fee5f7d781aefd5e2b26f733b4317587469e34377748a223374e5e38507"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/code-tests-independent.json",
+      "bytes": 1827,
+      "sha256": "7608e124ad1deedc138f44dbacfe010de76c2359d8d5c5b1f845ee7e660f2233"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/delivery-validation.json",
+      "bytes": 4866,
+      "sha256": "0ac82e683adb340f1a114fe504a27662dc16901a15b64b1965eb793b0f0cf5ae"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/evidence/manifest.yaml",
+      "bytes": 1206,
+      "sha256": "e0d04abfdbff84833591abe96e9c8dc3775edc76c5063a25839e1bf16bd8de78"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/observations.md",
+      "bytes": 2602,
+      "sha256": "29369f41d6074c0c516aac7b4bc8ae9f6ec600f5f764f210a7444562aa1d5c36"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/review.md",
+      "bytes": 4100,
+      "sha256": "5c9f393eec4873b7cee56b3fcb781e13edce07c667a095a479991a576091fe69"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/rounds/round-4/spec.md",
+      "bytes": 2003,
+      "sha256": "66d8cb60abbff5a30bd0bb2e7c50b012e7acae8fb74807743017cfb27bf1e381"
+    },
+    {
+      "path": "workflow/campaigns/2026-10-31-stage-brain-benchmark/verdict.md",
+      "bytes": 7338,
+      "sha256": "51bc6d901fe1970ad441235a231c180b6ecf286d31b30385699f61fbd34ca9e9"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/DEDUP.md",
+      "bytes": 465,
+      "sha256": "f7d8a568d62cb0f48389af6cf46cf65b616f15f8ab83f4ad5b1b4d29b26440ec"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/REPORT.md",
+      "bytes": 987,
+      "sha256": "46f235a4a62643652dfc259c0b31925e986410061de12a6a3548410c207bf414"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/STATUS.yaml",
+      "bytes": 1627,
+      "sha256": "2b40e5d31da83266716582dee326f7ce78b8856cccf7d818e24854a620b485d5"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/VERIFICATION.md",
+      "bytes": 528,
+      "sha256": "91d275244cd18dbd24b5125dceede60bedd65ba650a7c39ffc31cde2250da41b"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/evidence/manifest.yaml",
+      "bytes": 2054,
+      "sha256": "02dac775977357f925763b3e283d4432f513aece6ea59eff69bd9ec41151c65c"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005200-stage-clock/evidence/observed-evidence.json",
+      "bytes": 3407,
+      "sha256": "f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/DEDUP.md",
+      "bytes": 465,
+      "sha256": "f7d8a568d62cb0f48389af6cf46cf65b616f15f8ab83f4ad5b1b4d29b26440ec"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/REPORT.md",
+      "bytes": 874,
+      "sha256": "6a7ea0745173dd00b5d4f34a8f76ad2a321b021bb5bb5914086740b99bac10c9"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/STATUS.yaml",
+      "bytes": 1585,
+      "sha256": "a5bddafffe09b2509fd85fc9340e6225c478b8dea015a2ce8a8f18f73a807f23"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/VERIFICATION.md",
+      "bytes": 529,
+      "sha256": "42baf99b3eec42fed766ea44c51da4a1971fe7e28b2788cc40fd2d9494e1b2d4"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/evidence/manifest.yaml",
+      "bytes": 2064,
+      "sha256": "ee60c1b9973082175b324e8c5bf6f5979678f3bae37b3a3c6e6ba1289a716a1e"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005201-stage-vendored-chart/evidence/observed-evidence.json",
+      "bytes": 3284,
+      "sha256": "67a8fb3e9db59b3503c54d1e094d7b00dd8351907b8a0b0d3e704992ece7e4e8"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/DEDUP.md",
+      "bytes": 465,
+      "sha256": "f7d8a568d62cb0f48389af6cf46cf65b616f15f8ab83f4ad5b1b4d29b26440ec"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/REPORT.md",
+      "bytes": 1014,
+      "sha256": "61a99f57fe3250fcaa1cf2ae8c32786ab20d3083641b5e2ae0ec995e49a6540b"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/STATUS.yaml",
+      "bytes": 1632,
+      "sha256": "43717e9e12de597d292858cdfc5f1e87e2ae8e255ed1b7a1c302c1f1906a2681"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/VERIFICATION.md",
+      "bytes": 518,
+      "sha256": "cdc5f24dac005fb18f4cd0a4872197913b5267cb6d2d515e91748bb39d9c1759"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/evidence/manifest.yaml",
+      "bytes": 2067,
+      "sha256": "3612639b1deb5c5fc3399ac360e5d6bca91e5267b8255a00f20c5568c4951576"
+    },
+    {
+      "path": "workflow/intake/RPT-20261101-005202-stage-runtime-deadline/evidence/observed-evidence.json",
+      "bytes": 2337,
+      "sha256": "e2e9e79038d354c2517a1cfd1b0300704193c62e1aa34a4fd5e966dbaae9ea0e"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "reviewer": "stage_review",
+  "result": "PASS_ORIGINAL_COUNTEREXAMPLE_AFTER_FIX",
+  "source_base": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "preflight_sha256": "6ec658adf23701b810b13580024347834367c76e6faf240c65e49f2d43f04928",
+  "changed_path": "benchmark/bot/service.py",
+  "planned_jobs": [
+    "diff",
+    "chart-4",
+    "chart-5",
+    "chart-6",
+    "chart-7",
+    "chart-8",
+    "chart-9",
+    "chart-10"
+  ],
+  "benchmark_wrapper_scheduled": true,
+  "recipe1_jobs": [
+    "diff"
+  ],
+  "control": "Re-ran the original independent real temporary Git fixture without changing its benchmark-only stimulus. The current recipe now schedules the benchmark gate, while historical recipe1 remains unchanged."
+}

@@ -1,0 +1,200 @@
+{
+  "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "clean_tree": true,
+  "go_version": "go1.26.10",
+  "platform": "linux/amd64",
+  "cgo_enabled": false,
+  "release_version": "stage-benchmark-relay",
+  "runtime_base": "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99",
+  "builder_source": "docker.io/library/golang:1.26@sha256:670bb5aa5349ae03b8516764718486f4f16399134bdc9acd0c46a23f043ab05c",
+  "recipe": "User-level static build matching reviewed Dockerfiles, OCI composition recorded separately; isolated stage development image, not official main release",
+  "commands": [
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "run",
+      "./cmd/pendingcheck",
+      "-root",
+      ".",
+      "-inventory",
+      "PENDING-INVENTORY.md"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=ef94fad362dabb51469211388ef80cdfa6eee1d4 -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=stage-benchmark-relay",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/manager",
+      "./cmd"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=ef94fad362dabb51469211388ef80cdfa6eee1d4 -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=stage-benchmark-relay",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/service",
+      "./cmd/brain"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w -X github.com/phorvex/phorvex/internal/buildinfo.linkedGitSHA=ef94fad362dabb51469211388ef80cdfa6eee1d4 -X github.com/phorvex/phorvex/internal/buildinfo.linkedVersion=stage-benchmark-relay",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/brain-replay",
+      "./cmd/brain-replay"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/phorvex-recovery",
+      "./cmd/recovery"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/phorvex-mig-allocation-helper",
+      "./cmd/mig-allocation-helper"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/loss-observer",
+      "./cmd/loss-observer"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/current-inventory-observer",
+      "./cmd/current-inventory-observer"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/persistence-observer",
+      "./cmd/persistence-observer"
+    ],
+    [
+      "/workspace/.phorvex-go/go/bin/go",
+      "build",
+      "-trimpath",
+      "-ldflags=-s -w",
+      "-o",
+      "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/cost-budget-admin",
+      "./cmd/cost-budget-admin"
+    ]
+  ],
+  "env": {
+    "PATH": "/workspace/.phorvex-go/go/bin:/usr/bin:/bin",
+    "LANG": "C.UTF-8",
+    "GOTOOLCHAIN": "local",
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOTMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOMAXPROCS": "2",
+    "GOFLAGS": "-p=2",
+    "CGO_ENABLED": "0",
+    "GOOS": "linux",
+    "GOARCH": "amd64"
+  },
+  "binaries": {
+    "manager": {
+      "sha256": "517ab1813ea3a09713dda02615bf8e092ab7266ea66f6403527d0a8353bf9336",
+      "size": 67915938,
+      "embedded_version": {
+        "service": "manager",
+        "version": "stage-benchmark-relay",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+      }
+    },
+    "service": {
+      "sha256": "b03f2c1c0fd5a1d4a291ee425c6659626bd9ecc5d1f6f7c77d275d95cc1c4380",
+      "size": 41017506,
+      "embedded_version": {
+        "service": "brain",
+        "version": "stage-benchmark-relay",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+      }
+    },
+    "brain-replay": {
+      "sha256": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+      "size": 39575714,
+      "embedded_version": {
+        "brainImage": "notAvailable",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "overridableParameters": [
+          "P-FEA-006",
+          "P-FEA-005",
+          "P-OBJ-003"
+        ],
+        "replaySchema": "math-lab.replay.v1",
+        "snapshotSchema": "math-lab.snapshot.v1"
+      }
+    },
+    "phorvex-recovery": {
+      "sha256": "1849c227b08a600240e3997615eacf475b2e57c7a6ec1a2ba51c69c9e086c7f9",
+      "size": 47759522
+    },
+    "phorvex-mig-allocation-helper": {
+      "sha256": "496e43183e4d93f489191ffd677ff9eb785ad7fb21fe66d83927c2b6fd1414f5",
+      "size": 10330274
+    },
+    "loss-observer": {
+      "sha256": "3b53121e609db0f0fe921741d5bf91f6a13ed572e4c7bd124578732ff80aca90",
+      "size": 37253282
+    },
+    "current-inventory-observer": {
+      "sha256": "a11d80ce485ef262900118143ecaad2a476077af848086eaab8b4ed3c456324b",
+      "size": 37273762
+    },
+    "persistence-observer": {
+      "sha256": "86da8cbb5dd0978e369fa20f2e0abeda5c743996d8d186ef047f9b06695589ee",
+      "size": 37318818
+    },
+    "cost-budget-admin": {
+      "sha256": "2011bd0d532bb0967a272f6362cad8b5991006fc5d5c2cc4aa0774bfb412bc89",
+      "size": 47571106
+    }
+  },
+  "layers": {
+    "brain": {
+      "sha256": "bfb7972f14c9a0b2a39cf60966bdfed15a9d88a10de0cc808fbcdb521ca2c752",
+      "files": [
+        "brain-replay",
+        "service"
+      ],
+      "size": 80599040
+    },
+    "manager": {
+      "sha256": "b73189f9bc6c43a0ca5f00c2308422e979d4448b20b1aaadb0e5abf23e53408f",
+      "files": [
+        "brain-replay",
+        "cost-budget-admin",
+        "current-inventory-observer",
+        "loss-observer",
+        "manager",
+        "persistence-observer",
+        "phorvex-mig-allocation-helper",
+        "phorvex-recovery"
+      ],
+      "size": 325007360
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "reviewer": "stage_review",
+  "result": "PASS_ACTUAL_FAILED_COHORT_BEFORE_AFTER",
+  "failure_receipt_sha256": "569e14da58a3050ff55791fff19100a47fc581ee34d81d44edf31b8264e3d352",
+  "snapshot_digest": "7b1e7f11466d6c5075d057cc66f43a00444ff873c9569f4f0247a039004fb48a",
+  "snapshot_in_actual_failed_selection": true,
+  "policy": "phorvex-staging-demo/stage-bench-defense",
+  "decided_at": "2026-11-01T00:06:31.717543556Z",
+  "old_committed_source": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+  "old_clock_at": 1793491591,
+  "actual_export_at": 1793491591.7175436,
+  "repaired_clock_at": 1793491591.7175436,
+  "baseline_reproduced": true,
+  "candidate_set_complete": true,
+  "snapshot_source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "export_source_revision": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "candidate_binary_sha256": "e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857",
+  "export_sha256": "0f7d5c9802e7d110fdab24cbc63846f87b6060c5a99e09669a84246ff7c768bd",
+  "repair_source_sha256": "bf6f9edfc4d533f65aee7ed4574502be19b490f24415c23704dcb8296edea3be",
+  "control": "Original real failed-cohort snapshot downloaded read-only and content hash verified; exact committed old parser disagrees while repaired parser strictly equals the actual candidate exporter. No mocked final clock or baseline flag."
+}

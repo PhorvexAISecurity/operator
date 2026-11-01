@@ -1,0 +1,151 @@
+{
+  "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "crane_sha256": "8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992",
+  "recipe": "source-matched local OCI composition; not bit-identical Docker reproduction",
+  "base": "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99",
+  "base_platform_digest": "sha256:433bb346cd0b6b8346462f879adaa4ac0fbb463a72901b46736ede4aeca3dadc",
+  "images": {
+    "brain": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "manifest_digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "archive_sha256": "abcc1ed14a4e8a18f5ecc93a2d4c2c8c413eeea11a5246f7b40ab1b85ea34180",
+      "archive_size": 30884864,
+      "config_sha256": "f1291812f32fc31eda63fb86d51a492cd842bf1812b59510b9bc8d2c28ca9de3",
+      "config": {
+        "Entrypoint": [
+          "/service"
+        ],
+        "User": "65532:65532",
+        "WorkingDir": "/"
+      },
+      "binary_sha256": {
+        "brain-replay": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+        "service": "b03f2c1c0fd5a1d4a291ee425c6659626bd9ecc5d1f6f7c77d275d95cc1c4380"
+      },
+      "validation": "crane validate full plus exported filesystem binary hash verification PASS"
+    },
+    "manager": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "manifest_digest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "archive_sha256": "5e3a1ac1262774cf7139484a2c4a7c4cead22a94fb24e5e602c4d67fc04eac07",
+      "archive_size": 119519232,
+      "config_sha256": "aa514655e121ffeb4a2ba71b4521403db3964d560b85714e06339b637a26ef12",
+      "config": {
+        "Entrypoint": [
+          "/manager"
+        ],
+        "User": "65532:65532",
+        "WorkingDir": "/"
+      },
+      "binary_sha256": {
+        "brain-replay": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+        "cost-budget-admin": "2011bd0d532bb0967a272f6362cad8b5991006fc5d5c2cc4aa0774bfb412bc89",
+        "current-inventory-observer": "a11d80ce485ef262900118143ecaad2a476077af848086eaab8b4ed3c456324b",
+        "loss-observer": "3b53121e609db0f0fe921741d5bf91f6a13ed572e4c7bd124578732ff80aca90",
+        "manager": "517ab1813ea3a09713dda02615bf8e092ab7266ea66f6403527d0a8353bf9336",
+        "persistence-observer": "86da8cbb5dd0978e369fa20f2e0abeda5c743996d8d186ef047f9b06695589ee",
+        "phorvex-mig-allocation-helper": "496e43183e4d93f489191ffd677ff9eb785ad7fb21fe66d83927c2b6fd1414f5",
+        "phorvex-recovery": "1849c227b08a600240e3997615eacf475b2e57c7a6ec1a2ba51c69c9e086c7f9"
+      },
+      "validation": "crane validate full plus exported filesystem binary hash verification PASS"
+    }
+  },
+  "commands": [
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "config",
+      "--platform",
+      "linux/amd64",
+      "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "digest",
+      "--platform",
+      "linux/amd64",
+      "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "mutate",
+      "--platform",
+      "linux/amd64",
+      "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99",
+      "--append",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/brain-binaries.tar",
+      "--entrypoint",
+      "/service",
+      "--user",
+      "65532:65532",
+      "--workdir",
+      "/",
+      "--label",
+      "org.opencontainers.image.revision=ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "--label",
+      "org.opencontainers.image.version=stage-benchmark-relay",
+      "--tag",
+      "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "--output",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/brain-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "validate",
+      "--tarball",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/brain-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "digest",
+      "--tarball",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/brain-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "export",
+      "-",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/brain-rootfs.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "mutate",
+      "--platform",
+      "linux/amd64",
+      "gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99",
+      "--append",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/manager-binaries.tar",
+      "--entrypoint",
+      "/manager",
+      "--user",
+      "65532:65532",
+      "--workdir",
+      "/",
+      "--label",
+      "org.opencontainers.image.revision=ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "--label",
+      "org.opencontainers.image.version=stage-benchmark-relay",
+      "--tag",
+      "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "--output",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/manager-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "validate",
+      "--tarball",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/manager-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "digest",
+      "--tarball",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/manager-image.tar"
+    ],
+    [
+      "/home/hami/phorvex-benchmark/runtime/crane/crane",
+      "export",
+      "-",
+      "/home/hami/phorvex-benchmark/stage-data/deployment/relay-ef94fad3/manager-rootfs.tar"
+    ]
+  ]
+}

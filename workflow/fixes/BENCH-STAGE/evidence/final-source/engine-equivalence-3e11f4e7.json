@@ -1,0 +1,7 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "built_engine_source_sha": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "engine_dependency_changed_paths": [],
+  "result": "IDENTICAL_ENGINE_SOURCE_INPUTS",
+  "note": "Actual engine identity remains d552; only worker clock plus earlier UI/docs/CI changes occurred after its reviewed source. Brain capture remains actual ef94 and is not relabelled."
+}

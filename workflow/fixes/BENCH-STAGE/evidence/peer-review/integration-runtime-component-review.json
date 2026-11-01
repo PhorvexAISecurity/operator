@@ -1,0 +1,49 @@
+{
+  "schema": "phorvex-bench.independent-final-delta-review.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-11-01T00:03:29.108113+00:00",
+  "source_sha": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+  "result": "PASS_RUNTIME_COMPONENT_FOR_AUTHORIZED_STAGE_BENCHMARK",
+  "scope": "Narrow final integration runtime delta acceptance, relying on earlier accepted components and parent-reviewed core engine. This is not final PR/P3 acceptance or a full-source-preflight receipt.",
+  "source_manifest_sha256": "7ece7317f3b76aa99651c06c6b7bbb917cb509e9b7b9d59c6c9e367d56639f3b",
+  "source_paths_verified_at_commit": 67,
+  "tests": {
+    "docs_and_messages": 7,
+    "ci_adapter": 4,
+    "skipped": 0,
+    "logs": {
+      "final-docs-message-tests.log": "503ba3531007bc087fa1866ba7f044a2d68f659741e6a3539b641a760641ca1c",
+      "final-ci-adapter-tests-corrected.log": "a44b133a3dce90388e5f1fe6b5809a1e17a98fc25a799b232a8b8d96622575a7"
+    }
+  },
+  "accepted_component_evidence": {
+    "r1-component-review.json": "51c087475985d87b46f9e760e3c6ec6583efeec717a3267ad3ab1fca3a9aab50",
+    "r5-pagination-review.json": "807ed0ed13db21bd3aefc287c69ce551f815a6717512021a7805665f605d9cb0",
+    "r6-sync-review.json": "f069d36d7f5cfcdd2683c3d23a074f698e1583062319d39776e55bec7e4e4964",
+    "refresh-component-review.json": "fc330c6ebecdb50a51736248bcd49d782e1419030e35b6944b6e0630077c092d",
+    "storage-component-review.json": "4d1f78b1d4047b13811a1da05697545732d01c0e7bb2dc2c66dea5c5c9ae6ff7",
+    "relay-oci-review.json": "265e952f828ff1453e7b775be63b7c19270195ebccb41403a1713c3ae6a1d3d0"
+  },
+  "findings": [
+    "Three revised error messages point to the stage pin/sync recovery path without changing refusal predicates.",
+    "Committed final guide HTML/PDF hashes match the final rendering receipt; original30d remains explicitly history/storage/runtime-readiness pending.",
+    "Current integration selects all relevant chart/benchmark checks because tools and CI are in the proposal delta.",
+    "No runtime defect found in the bounded final delta that blocks authorized real stage replay on exact source348 with verified pins/engine and qualified evidence."
+  ],
+  "open_before_final_delivery": [
+    {
+      "id": "R7",
+      "kind": "documentation",
+      "detail": "Opening guide sentence incorrectly requires config.lookback equality with normalized window. Both W/L actually vary independently subject to retained continuous coverage. Correct both guides and regenerate PDFs."
+    },
+    {
+      "id": "R8",
+      "kind": "local-preflight-selection",
+      "detail": "chart_paths omits benchmark/. Concrete benchmark-only change schedules only diff, bypassing local bot/worker/stage checks; source-bound dispatch regression needed without changing historical receipt plans.",
+      "evidence": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-ci-benchmark-path-control.json",
+      "sha256": "ea7def3479015930b95c580f321de3d55708262832eb7146830d327784bb4c10"
+    }
+  ],
+  "initial_test_invocation_correction": "The first CI-adapter invocation lacked the repository tests directory on PYTHONPATH and could not import test_operations. Its failure log is retained; corrected repository import path ran all four targeted controls successfully.",
+  "required_next": "Keep actual live results bound to348, continue canonical full-source preflight and live acceptance, resolve R7/R8 before final PR/P3. Original30d readiness remains unestablished."
+}

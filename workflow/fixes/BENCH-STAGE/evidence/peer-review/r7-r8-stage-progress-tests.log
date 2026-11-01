@@ -1,0 +1,6 @@
+test_param_runs_through_the_dashboard_and_returns_files (benchmark.bot.test_bot.BotTest.test_param_runs_through_the_dashboard_and_returns_files) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 0.028s
+
+OK

@@ -1,0 +1,26 @@
+{
+  "schema": "phorvex-bench.collector-freeze.v1",
+  "result": "PASS",
+  "changes": [
+    "Both receipt phases preserved under separate labels",
+    "Selected job and batch child filtering, duplicate job IDs deduplicated",
+    "Exact endpoint custom and 600-second request files included",
+    "Original 30-day pending template retained"
+  ],
+  "tests": {
+    "passed": 2,
+    "skipped": 0,
+    "scope": "Local collector-only fixtures; no endpoint live acceptance claim"
+  },
+  "files": {
+    "workflow/fixes/BENCH-STAGE/evidence/delivery/collect-bot-delivery.py": "ed3e006271acc470d2631f0627808522db50812532f52b44c0b2526d48523dbf",
+    "workflow/fixes/BENCH-STAGE/evidence/delivery/test_delivery_collector.py": "721b98f91c85032b40dd75c8e29d5a242c11d0ef0d60a0630594595ec9d40bf2",
+    "workflow/fixes/BENCH-STAGE/evidence/delivery/OPERATOR.md": "a13cabfc5a23a36bb762371ac5a1ae4d2073ea00bd3c26d7fb3d5286ac4e3940",
+    "workflow/fixes/BENCH-STAGE/evidence/delivery/USER-GUIDANCE-fa.txt": "00dd6d79dc222a17e2d899e112f8093113912c846a969b9815c9e4d4c6d60096",
+    "workflow/fixes/BENCH-STAGE/evidence/delivery/collector-endpoint-receipts-tests.txt": "909fe26099d06cbf307204e0b41e3fe88ede3732dce612332ef25fc2aa23844c",
+    "workflow/fixes/BENCH-STAGE/evidence/live/requests/stage-endpoint-custom.json": "ee9a3a631d625aede89880e40bc303c798d7bf7800f6298db42c09d2077bdc55",
+    "workflow/fixes/BENCH-STAGE/evidence/live/requests/stage-endpoint-600.json": "846d0651ee2bdd2386a4bc73cccd7aec8bf483b7c21ed6069463eb99c5ef4efe"
+  },
+  "remote_collection_performed": false,
+  "next_action": "Lead supplies final terminal job IDs before collection; explicit --job options replace defaults."
+}

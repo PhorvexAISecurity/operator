@@ -1,0 +1,5 @@
+ok  	github.com/phorvex/phorvex/internal/actionset	0.076s
+ok  	github.com/phorvex/phorvex/internal/decision	48.277s
+ok  	github.com/phorvex/phorvex/internal/mathlab	3.072s
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.496s
+ok  	github.com/phorvex/phorvex/internal/archtest	0.412s

@@ -1,0 +1,34 @@
+{
+  "schema": "phorvex-bench.collection-check.v1",
+  "result": "PASS",
+  "checks": [
+    "All ZIP members accounted for",
+    "Every SHA256 matches",
+    "Collector source hash matches executed frozen script",
+    "Known credential patterns absent",
+    "Excluded source/input/log paths absent",
+    "Private filesystem permissions"
+  ],
+  "control_tests": {
+    "passed": 2,
+    "failed": 0,
+    "scope": "Collector-only fixture controls; not benchmark acceptance"
+  },
+  "archive": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-parameters-v2.zip",
+  "archive_sha256": "84448860777c98e87a45dc64e49718744bd6a0c220ade46a89814eca457bb11b",
+  "archive_bytes": 4649087,
+  "files": 47,
+  "collection_state": "PENDING_JOBS",
+  "pending_jobs": [
+    "474cff3249df",
+    "4b8171ea3c83"
+  ],
+  "omitted": [],
+  "source_files": {
+    "collect-bot-delivery.py": "0eb91f87979352aeac3beb2604d9278f285ec463b39876e9a115c6806f6f10aa",
+    "OPERATOR.md": "c7b58d1dc23ddbb2d769c830ed537084893a30a961097cdc619daa59f003ae7c",
+    "USER-GUIDANCE-fa.txt": "cb5b6dffa7f5d63de4a5f58246081c12599f3364fb98629deb4d6ff194fe68f9",
+    "test_delivery_collector.py": "496d912710048a83529fdc421cb3a2431634a0012b820c9aa46caf680156b9b9"
+  },
+  "note": "The archive is an interim parameter collection. Final recollection after pending jobs finish will include the later historical-catalog note in USER-GUIDANCE-fa.txt. Root owns independent benchmark verification and final delivery."
+}

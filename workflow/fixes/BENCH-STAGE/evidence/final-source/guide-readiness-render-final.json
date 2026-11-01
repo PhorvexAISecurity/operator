@@ -1,0 +1,43 @@
+{
+  "environment": {
+    "FONTCONFIG_FILE": "/workspace/.phorvex-tools/browser-libs/fonts.conf",
+    "LD_LIBRARY_PATH": "/workspace/.phorvex-tools/browser-libs/root/usr/lib/x86_64-linux-gnu:/workspace/.phorvex-tools/browser-libs/root/lib/x86_64-linux-gnu"
+  },
+  "results": [
+    {
+      "language": "en",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-en.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-en.html"
+      ],
+      "exit_code": 0,
+      "pages": 25,
+      "extracted_characters": 46517,
+      "html_sha256": "d17592108c0d20af1ee3f938764ad2d47557a52d215649d5c597d4a7f2cc27c7",
+      "pdf_sha256": "f4a72f65a8d090ca33d6061dd957badc3bd8fdaa72898f9e46bcba8c61914c63",
+      "pdf_bytes": 549955
+    },
+    {
+      "language": "fa",
+      "command": [
+        "/home/node/.cache/ms-playwright/chromium_headless_shell-1248/chrome-headless-shell-linux64/chrome-headless-shell",
+        "--no-sandbox",
+        "--disable-gpu",
+        "--no-pdf-header-footer",
+        "--print-to-pdf=/workspace/operator-benchmark-stage/benchmark/bot/guide-fa.pdf",
+        "file:///workspace/operator-benchmark-stage/benchmark/bot/guide-fa.html"
+      ],
+      "exit_code": 0,
+      "pages": 24,
+      "extracted_characters": 42910,
+      "html_sha256": "2cad6bf6bc68214c393cd843035ce9320061f875579954138ab59e883fc82d01",
+      "pdf_sha256": "ef6d3dfc1254e8b2a269961504fe2d7888588118b30f536515f1c17962269b0a",
+      "pdf_bytes": 632595
+    }
+  ],
+  "supersedes": "Earlier full-Chrome rendering; this uses the existing headless-shell/font configuration."
+}

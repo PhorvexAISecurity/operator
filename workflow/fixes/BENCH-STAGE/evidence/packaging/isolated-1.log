@@ -1,0 +1,2 @@
+  Chart.yaml, Chart.lock and dependencies match
+all vendored chart archives are byte-reproducible and current

@@ -1,0 +1,7 @@
+.............................................................{"error": "New runs and queued launches are paused: Producer reconciliation pending. History, plans, exports and metrics remain available. Hami/Milad must reconcile the stated issue, then deliberately clear BENCHMARK_MUTATIONS_PAUSED_REASON in server configuration and reload the API while the queue is idle."}
+.......
+----------------------------------------------------------------------
+Ran 68 tests in 23.715s
+
+OK
+{"uniqueTraces": 0, "candidateCostRows": 0, "actionGateRows": 0, "traceConflicts": [], "costChecksFailed": 0, "realizedCostsAvailable": 0, "precision": "abs1e-10 + rel1e-9", "templateSHA256": {"Phorvex_Cost_Measured_vs_Expected_RAW_TEMPLATE.xlsx": "461c0ecfd945ccb2a4dc29da6a8027d24cab3e2e67b2ccf28a3c977cda476347", "Phorvex_Tick_Action_Gates_RAW_TEMPLATE.xlsx": "8095276386f4ed457f4279cf07f4428c7f9b8e3eac0d86154b20fc79c5af4f1a"}}

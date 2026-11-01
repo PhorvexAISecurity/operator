@@ -1,0 +1,44 @@
+{
+  "schema": "phorvex-bench.independent-control.v1",
+  "reviewer": "/root/stage_review",
+  "kind": "actual snapshot bytes with mock read-only Console emulating Store.List oldest-first inclusive since+limit",
+  "remote_old_image_ticks": 2,
+  "remote_matching_ticks": 1,
+  "attempts": [
+    {
+      "since": null,
+      "listed": 2,
+      "downloaded": 0,
+      "rejected": [
+        {
+          "digest": "3460a53f8df97907c9b9f2410194b48abb7cf052243e7ac923863651197450fb",
+          "reason": "snapshot source, brain image or policy UID differs from the pinned stage capture"
+        },
+        {
+          "digest": "624c1d52e699d2775fb7814763307de3c0ca9d799e8600666e6fff39200a1a97",
+          "reason": "snapshot source, brain image or policy UID differs from the pinned stage capture"
+        }
+      ],
+      "more_available": true
+    },
+    {
+      "since": null,
+      "listed": 2,
+      "downloaded": 0,
+      "rejected": [
+        {
+          "digest": "3460a53f8df97907c9b9f2410194b48abb7cf052243e7ac923863651197450fb",
+          "reason": "snapshot source, brain image or policy UID differs from the pinned stage capture"
+        },
+        {
+          "digest": "624c1d52e699d2775fb7814763307de3c0ca9d799e8600666e6fff39200a1a97",
+          "reason": "snapshot source, brain image or policy UID differs from the pinned stage capture"
+        }
+      ],
+      "more_available": true
+    }
+  ],
+  "matching_local_count": 0,
+  "expected": "bounded traversal reaches current-image third tick, or explicit cursor/progress prevents repeating first page forever",
+  "source_sha256": "9956cd69b561f54e331229bab4427cd6c400604dc3125c322dbc8f2ffe7734cf"
+}

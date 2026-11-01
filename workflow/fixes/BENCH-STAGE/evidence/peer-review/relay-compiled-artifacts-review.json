@@ -1,0 +1,69 @@
+{
+  "result": "PASS_COMPILED_ARTIFACTS",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:35:29.933184+00:00",
+  "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "checkout": "/workspace/.phorvex-test-tmp/stage-relay-build-ef94fad3",
+  "build_dir": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3",
+  "build_receipt_sha256": "31ff1c7e215fd2b04f99d9199b9c5269a3a92e84173754d186bf2605e7420fce",
+  "clean_tree": true,
+  "component19_source_hashes_match": true,
+  "experimental_endpoint_source_absent": true,
+  "binary_count": 9,
+  "layer_count": 2,
+  "binaries": {
+    "manager": {
+      "sha256": "517ab1813ea3a09713dda02615bf8e092ab7266ea66f6403527d0a8353bf9336",
+      "go_buildinfo_sha256": "b80223ab4b4bd697de800e349b4c41420fe9552c9b337c53aa307f07d6d8cbb6",
+      "vcs_fields": []
+    },
+    "service": {
+      "sha256": "b03f2c1c0fd5a1d4a291ee425c6659626bd9ecc5d1f6f7c77d275d95cc1c4380",
+      "go_buildinfo_sha256": "f9b2b163106494697e66ca7bdaefa91258d303a1f039ead5f9e18b8ee2978a3f",
+      "vcs_fields": []
+    },
+    "brain-replay": {
+      "sha256": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+      "go_buildinfo_sha256": "b4c18423894c1b17e2d085300beb81e636ce059f409984b427237855eddc6289",
+      "vcs_fields": []
+    },
+    "phorvex-recovery": {
+      "sha256": "1849c227b08a600240e3997615eacf475b2e57c7a6ec1a2ba51c69c9e086c7f9",
+      "go_buildinfo_sha256": "a8cda4010e89694694aeed318ad4c3e3540de8e998952b00776702591bfae26f",
+      "vcs_fields": []
+    },
+    "phorvex-mig-allocation-helper": {
+      "sha256": "496e43183e4d93f489191ffd677ff9eb785ad7fb21fe66d83927c2b6fd1414f5",
+      "go_buildinfo_sha256": "50410634e2cfa35f704d4a11e98885ffa5a90151352a11e41024d1c9a5e2d225",
+      "vcs_fields": []
+    },
+    "loss-observer": {
+      "sha256": "3b53121e609db0f0fe921741d5bf91f6a13ed572e4c7bd124578732ff80aca90",
+      "go_buildinfo_sha256": "57452e469040487b9934d7de39f3d51c88627bb10c1d6a3c0d167cc4f5814760",
+      "vcs_fields": []
+    },
+    "current-inventory-observer": {
+      "sha256": "a11d80ce485ef262900118143ecaad2a476077af848086eaab8b4ed3c456324b",
+      "go_buildinfo_sha256": "0f61a2c79d6cf1916efa5743c8c4825e09085ea2f15fce468f4eae63026a2a1b",
+      "vcs_fields": []
+    },
+    "persistence-observer": {
+      "sha256": "86da8cbb5dd0978e369fa20f2e0abeda5c743996d8d186ef047f9b06695589ee",
+      "go_buildinfo_sha256": "4957abf94752a0c957805a56d20bb5c1659f1184db0fee312a031af77d4ceb67",
+      "vcs_fields": []
+    },
+    "cost-budget-admin": {
+      "sha256": "2011bd0d532bb0967a272f6362cad8b5991006fc5d5c2cc4aa0774bfb412bc89",
+      "go_buildinfo_sha256": "54f63dce243841416daf447c8a58c0fa5d6d17e497ec4495d82a8a36c19e9212",
+      "vcs_fields": []
+    }
+  },
+  "checks": [
+    "All binary hashes and lengths match receipt.",
+    "Actual Go build metadata reports Go1.26.10, linux/amd64 and CGO0.",
+    "All three version-bearing executables independently return the exact source revision and recorded version metadata.",
+    "Layer inventories, file types, root ownership, executable modes and extracted hashes match."
+  ],
+  "initial_check_correction": "An initial reviewer check incorrectly required optional Go vcs.revision/vcs.modified metadata and stopped at manager. These fields are absent, not mismatched. Exact source is evidenced by the verified clean checkout, matching component file hashes, build command receipt, linked source versions and all artifact hashes. No claim of Go VCS metadata was retained.",
+  "remaining": "OCI composition/digest/config/exported binaries review and isolated stage live rollout; no deployment verdict in this receipt."
+}

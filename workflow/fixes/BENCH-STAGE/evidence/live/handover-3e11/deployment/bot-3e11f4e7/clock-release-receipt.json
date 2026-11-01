@@ -1,0 +1,11 @@
+{
+  "at": "2026-11-01T00:20:07.801677+00:00",
+  "source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "archive_sha256": "a5492f163c9fe98377b796081fd08ca0867da13f0abd075ddcbd9baef1f8bf4a",
+  "review_sha256": "f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56",
+  "old_service_sha256": "bfb9fdecdbab079cb451fa2e4ed5c47df4825cf62ff2a45e8028d7669a1eb620",
+  "new_service_sha256": "cf17deaddf85345580d84709005f7626ab3311f93c9b66378b63dee2636c175d",
+  "brain_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "engine_source": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "action": "Install reviewed exact-clock refresh; retain strict comparison; manual service retry on real current bounded journal"
+}

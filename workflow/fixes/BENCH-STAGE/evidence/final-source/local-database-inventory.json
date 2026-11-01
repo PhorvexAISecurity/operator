@@ -1,0 +1,17 @@
+{
+  "note": "Original and derived journals remain outside Git; hashes only for retention inventory, not a completeness claim.",
+  "files": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/storage-controls/control-journal-compressed.db",
+      "bytes": 2916352,
+      "sha256": "0cd2f637edb8f348ee973a5c91a0f530a185618059b31f2d1252e981fc772c52",
+      "retention": "local-original"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/control-journal.db",
+      "bytes": 5885952,
+      "sha256": "14ccb15eb6b360439502fed546a4cdad33f177d3e5a516e59278524718e66bf2",
+      "retention": "local-original"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+...............................................................................................................................................................fatal: bad object ffffffffffffffffffffffffffffffffffffffff
+..............................................................................................................................................
+----------------------------------------------------------------------
+Ran 301 tests in 355.874s
+
+OK
+fix index: PASS
+issues render: PASS
+doctor: 93 error(s), 20 warning(s)
+WARN: 221 archived records (fixes 197, campaigns 7 with 52 rounds, assessments 17) are verified only against PhorvexSecurity/operator@65af1c99; here doctor checks their structure, frozen STATUS digests and retained evidence, not removed evidence or source-commit pins (see ARCHIVE.yaml)
+WARN: M-25: legacy record lacks verify.sh
+WARN: T0-C: local-original evidence unavailable evidence/live/01-post-deploy-0.4.80-17082b7.jsonl
+WARN: T0-C: local-original evidence unavailable evidence/live/02-validator-strict-v3-0.4.80.json
+WARN: T0-C: local-original evidence unavailable evidence/live/02-validator-strict-v3-0.4.80.md
+WARN: T0-C: legacy record lacks verify.sh
+WARN: T1-B: legacy record lacks verify.sh
+WARN: T1-C: legacy record lacks verify.sh
+WARN: T1-D: legacy record lacks verify.sh
+WARN: T1-E: legacy record lacks verify.sh
+WARN: T1-M020: legacy record lacks verify.sh
+WARN: T1-M023: legacy record lacks verify.sh
+WARN: T1-M028: legacy record lacks verify.sh
+WARN: T1-M160: legacy record lacks verify.sh
+WARN: M-36: main-pending state is ahead of all linked fix records
+WARN: origin/main advanced to 9b5a3eb0e9b1; sync-main is required
+WARN: 25 local-original artifact(s) are unavailable in this clone
+WARN: 126 historical anatomy join(s) need semantic review
+WARN: 34 newly filed issue(s) await anatomy join review
+WARN: anatomy is stale relative to the observed deployed source; release sync required
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema <root>: Additional properties are not allowed ('original_evidence', 'recorded_at' were unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.0: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.0: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.0: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.0: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.0.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.1: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.1: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.1: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.1: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema artifacts.1.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: schema subject: Additional properties are not allowed ('round' was unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: subject mismatch; expected campaign:2026-10-31-stage-brain-benchmark
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-1/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema <root>: Additional properties are not allowed ('original_evidence', 'recorded_at' were unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.0: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.0: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.0: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.0: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.0.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.1: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.1: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.1: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.1: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema artifacts.1.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: schema subject: Additional properties are not allowed ('round' was unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: subject mismatch; expected campaign:2026-10-31-stage-brain-benchmark
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-2/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema <root>: Additional properties are not allowed ('original_evidence', 'recorded_at' were unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.0: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.0: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.0: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.0: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.0.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.1: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.1: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.1: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.1: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.1.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.2: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.2: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.2: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.2: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.2.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.3: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.3: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.3: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.3: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.3.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.4: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.4: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.4: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.4: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.4.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.5: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.5: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.5: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.5: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.5.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.6: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.6: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.6: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.6: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.6.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.7: 'id' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.7: 'producer' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.7: 'created_at' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.7: 'evidence_class' is a required property
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema artifacts.7.retention: 'git-compact-receipt' is not one of ['git', 'artifact-store', 'local-original']
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: schema subject: Additional properties are not allowed ('round' was unexpected)
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: subject mismatch; expected campaign:2026-10-31-stage-brain-benchmark
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: duplicate/empty artifact id None
+FAIL: campaigns/2026-10-31-stage-brain-benchmark/rounds/round-3/evidence/manifest.yaml: unknown retention 'git-compact-receipt'

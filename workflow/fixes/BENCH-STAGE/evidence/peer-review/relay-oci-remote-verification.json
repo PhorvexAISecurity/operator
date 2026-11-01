@@ -1,0 +1,109 @@
+{
+  "schema": "phorvex-bench.independent-oci-inspection.v1",
+  "reviewer": "stage_review",
+  "created_at": "2026-10-31T23:44:59.176512+00:00",
+  "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "crane_sha256": "8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992",
+  "build_receipt_sha256": "31ff1c7e215fd2b04f99d9199b9c5269a3a92e84173754d186bf2605e7420fce",
+  "composition_receipt_sha256": "5a825c98ee6b262404fb60d51b615a7ce26af76adcb2341dd87a5eb172467883",
+  "runtime_base_config_sha256": "0a2f4c688090d2a660f55dec3808f6bb85246b9ec1f78ced5d43275a1fb2287d",
+  "base_platform_digest": "sha256:433bb346cd0b6b8346462f879adaa4ac0fbb463a72901b46736ede4aeca3dadc",
+  "images": {
+    "brain": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "manifest_digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "archive_sha256": "abcc1ed14a4e8a18f5ecc93a2d4c2c8c413eeea11a5246f7b40ab1b85ea34180",
+      "archive_size": 30884864,
+      "config_sha256": "f1291812f32fc31eda63fb86d51a492cd842bf1812b59510b9bc8d2c28ca9de3",
+      "runtime_config": {
+        "Entrypoint": [
+          "/service"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+        ],
+        "Labels": {
+          "org.opencontainers.image.revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+          "org.opencontainers.image.version": "stage-benchmark-relay"
+        },
+        "User": "65532:65532",
+        "WorkingDir": "/"
+      },
+      "rootfs_diff_ids": [
+        "sha256:9486261b5a13f63ca6904b36721527ac8f19df53d300560138d69ae9b4c203de",
+        "sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda",
+        "sha256:92a3b02188b326c1b10a0a375d3c0019dff4ee8ff02a4b51a7e640bb9400932f",
+        "sha256:ef430e4865b6130e131d5777c1d072fdcc89478668d10ab41a18549e0fdc88b5",
+        "sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412",
+        "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+        "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+        "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+        "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+        "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+        "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+        "sha256:187cfc6d1e3e8a40a5e64653bcd3239c140807dcf1c09e48021178705a5a6139",
+        "sha256:0762a1f6557d1e88a761ab05aa7f65a10dc0e559913ea13befb873d907e1a396",
+        "sha256:bfb7972f14c9a0b2a39cf60966bdfed15a9d88a10de0cc808fbcdb521ca2c752"
+      ],
+      "binary_sha256": {
+        "brain-replay": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+        "service": "b03f2c1c0fd5a1d4a291ee425c6659626bd9ecc5d1f6f7c77d275d95cc1c4380"
+      },
+      "full_crane_validation": "PASS",
+      "independent_streamed_rootfs_verification": "PASS"
+    },
+    "manager": {
+      "tag": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "manifest_digest": "sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "archive_sha256": "5e3a1ac1262774cf7139484a2c4a7c4cead22a94fb24e5e602c4d67fc04eac07",
+      "archive_size": 119519232,
+      "config_sha256": "aa514655e121ffeb4a2ba71b4521403db3964d560b85714e06339b637a26ef12",
+      "runtime_config": {
+        "Entrypoint": [
+          "/manager"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt"
+        ],
+        "Labels": {
+          "org.opencontainers.image.revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+          "org.opencontainers.image.version": "stage-benchmark-relay"
+        },
+        "User": "65532:65532",
+        "WorkingDir": "/"
+      },
+      "rootfs_diff_ids": [
+        "sha256:9486261b5a13f63ca6904b36721527ac8f19df53d300560138d69ae9b4c203de",
+        "sha256:621c35e751a51a9a9dc3e80aa0b7fe8be2a93402ea6ccd307d30852cd7776cda",
+        "sha256:92a3b02188b326c1b10a0a375d3c0019dff4ee8ff02a4b51a7e640bb9400932f",
+        "sha256:ef430e4865b6130e131d5777c1d072fdcc89478668d10ab41a18549e0fdc88b5",
+        "sha256:275a30dd8ce958b21daa9ad962c6fbc09f98306ee2f486b65c9075dc257b1412",
+        "sha256:4d049f83d9cf21d1f5cc0e11deaf36df02790d0e60c1a3829538fb4b61685368",
+        "sha256:af5aa97ebe6ce1604747ec1e21af7136ded391bcabe4acef882e718a87c86bcc",
+        "sha256:6f1cdceb6a3146f0ccb986521156bef8a422cdbb0863396f7f751f575ba308f4",
+        "sha256:bd3cdfae1d3fdd83a2231d608969b38b82349777c2fff9a7c12d54f8ac5c9b38",
+        "sha256:4cde6b0bb6f50a5f255eef7b2a42162c661cf776b803225dcac9a659e396bb6b",
+        "sha256:ad51d0769d16ba578106a177987dfe3d2e02c1668c852b795b2f6b024068242a",
+        "sha256:187cfc6d1e3e8a40a5e64653bcd3239c140807dcf1c09e48021178705a5a6139",
+        "sha256:0762a1f6557d1e88a761ab05aa7f65a10dc0e559913ea13befb873d907e1a396",
+        "sha256:b73189f9bc6c43a0ca5f00c2308422e979d4448b20b1aaadb0e5abf23e53408f"
+      ],
+      "binary_sha256": {
+        "brain-replay": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb",
+        "cost-budget-admin": "2011bd0d532bb0967a272f6362cad8b5991006fc5d5c2cc4aa0774bfb412bc89",
+        "current-inventory-observer": "a11d80ce485ef262900118143ecaad2a476077af848086eaab8b4ed3c456324b",
+        "loss-observer": "3b53121e609db0f0fe921741d5bf91f6a13ed572e4c7bd124578732ff80aca90",
+        "manager": "517ab1813ea3a09713dda02615bf8e092ab7266ea66f6403527d0a8353bf9336",
+        "persistence-observer": "86da8cbb5dd0978e369fa20f2e0abeda5c743996d8d186ef047f9b06695589ee",
+        "phorvex-mig-allocation-helper": "496e43183e4d93f489191ffd677ff9eb785ad7fb21fe66d83927c2b6fd1414f5",
+        "phorvex-recovery": "1849c227b08a600240e3997615eacf475b2e57c7a6ec1a2ba51c69c9e086c7f9"
+      },
+      "full_crane_validation": "PASS",
+      "independent_streamed_rootfs_verification": "PASS"
+    }
+  },
+  "remote_writes": false,
+  "result": "PASS_OCI_ARTIFACTS"
+}

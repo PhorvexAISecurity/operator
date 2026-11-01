@@ -1,0 +1,15 @@
+{
+  "at": "2026-10-31T23:01:35.973946+00:00",
+  "receipt": {
+    "http_status": 409,
+    "acknowledged": false,
+    "returned_uid": null,
+    "response_kind": "Status",
+    "reason": "Conflict",
+    "resource_version": null,
+    "deletion_timestamp": null
+  },
+  "actual_uid_before": "38677032-a920-4979-87f6-a00e682f6b42",
+  "actual_uid_after": "38677032-a920-4979-87f6-a00e682f6b42",
+  "deletion_timestamp": null
+}

@@ -1,0 +1,29 @@
+{
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "description": "Coherent final committed-source preflight at ec310 after the independently reviewed deterministic vendored-chart correction, followed by dedicated issue-specific acceptance. Complete prior3e11 receipt remains FAIL; no logs are spliced into this run.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-ec310e27-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-ec310e27-status.json",
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ],
+  "launch_prerequisite": "Exact reviewed archive hash and one-file committed delta verified; runtime sources are identical to actual3e11 stage acceptance. Lead authorized full coherent rerun.",
+  "launch_authorized_at": "2026-11-01T01:10:11.537121+00:00"
+}

@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 308390,
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4 + frozen core and endpoint kernel working diff",
+  "started_at": "2026-10-31T23:31:25.999522+00:00",
+  "results": [
+    {
+      "name": "full-integrated-core-and-transport",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 114.602,
+  "step": "full-integrated-core-and-transport",
+  "child_pid": 308397,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:33:20.601239+00:00"
+}

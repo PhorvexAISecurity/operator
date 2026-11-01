@@ -1,0 +1,58 @@
+{
+  "result": "PASS_SOURCE_AND_TEST_GATES_REPLAY_PENDING",
+  "checked_at": "2026-11-01T01:10:35.847300+00:00",
+  "candidate_commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+  "base_commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "evidence": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/candidate-bundle-review.json",
+      "sha256": "64cb8f5479b48e3c840c597aa2a1e58c095ef77cf7b50e6ca809126c1e8b096e"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/raw-test-log-audit.json",
+      "sha256": "9fedb07113010f4605546b703cb68b34562eeed1d94b9b681c57a535b2e1a33d"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/code-attempt-1/receipt.json",
+      "sha256": "e2e9e79038d354c2517a1cfd1b0300704193c62e1aa34a4fd5e966dbaae9ea0e"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/code-attempt-2/brain.diff",
+      "sha256": "a92ebd74b1bb3e88cf265f6891c3236865acdf2e6ccbbcbcd3b9b3abc342b4b9"
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/live/code-attempt-2/TESTS.json",
+      "sha256": "9cf8b1c6e70eb04ca1ebd1aa12256292afeeb3a77974b4ef6c7ba12501bf2d82"
+    }
+  ],
+  "static_helper_review": {
+    "formula": "rho=k*(D+delta+T_rb)+H_tail; C_flow=k*T_mid; C_norm=p_f*(k*(D-T_mid+delta+T_rb)+H_tail); E=C_flow+C_norm",
+    "validation": "All inputs finite/nonnegative; integer-valued k; p_f<=1; D>=T_mid; all outputs finite/nonnegative. Inputs are explicit, no hidden duration/history/endpoint derivation.",
+    "test_scope": "A/B/C/D arithmetic cases, zero and fractional durations, nonfinite/negative inputs, fractional k, p_f>1, D<T_mid, arithmetic overflow.44 helper test/subtest pass events in raw candidate log.",
+    "active_selector_integration": false
+  },
+  "attempts": {
+    "first": {
+      "state": "FAILED",
+      "base_pass": 465,
+      "candidate_pass": 508,
+      "candidate_fail": 1,
+      "inherited_skips": 2,
+      "failure": "Unchanged TestExactRuntimeMatrix timed out one500ms child check. Preserved as a separate failed attempt."
+    },
+    "second": {
+      "state": "TEST_GATES_PASS",
+      "base_pass": 465,
+      "candidate_pass": 509,
+      "candidate_fail": 0,
+      "inherited_skips": 2,
+      "deadline_control": "Exact same existing test Git blob; TestExactRuntimeMatrix passed both base and candidate. No deadline/test edits or skip additions."
+    }
+  },
+  "limits": [
+    "No repeat-until-green: exactly one separate preregistered retry, fresh model output and candidate identity.",
+    "Passing retry does not prove contention as the first failure root cause.",
+    "The pure helper is not invoked by active replay and cannot substantiate a completed integrated V2 implementation.",
+    "Final H2/campaign acceptance requires exact64tick actual control/base/candidate replay, complete delivered result and restored service/refresh cleanup evidence."
+  ]
+}

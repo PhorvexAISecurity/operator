@@ -1,0 +1,28 @@
+{
+  "schema": "phorvex-bench.component-review.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:08:41.076597+00:00",
+  "component": "local isolated-stage OCI build recipe",
+  "result": "PASS_STATIC_RECIPE",
+  "files_sha256": {
+    "workflow/fixes/BENCH-STAGE/evidence/build-stage-relay-images.py": "b9ed279e147147a36f4873bc8307ec928cd91a26eaf4ef50237ba3e2f2798d10",
+    "deploy/docker/service.Dockerfile": "ce86e7eba6d5d4e4b6620f56ae82f05b53193096bd7fcbfafe2f60d663568d9f",
+    "deploy/docker/operator.Dockerfile": "b0d372973d76d6aee9255f248e8f4ec81493d8c746530c2cd3a4904e10083074"
+  },
+  "findings": [],
+  "verified": [
+    "Exact clean source precondition",
+    "Go version check and static linux/amd64 build flags",
+    "Pending-inventory gate",
+    "Correct manager/brain companion inventory",
+    "Linked identity flags versus plain admin flags",
+    "Bounded fresh output, binary hashes and embedded identity",
+    "Deterministic root-owned executable tar entries",
+    "Same pinned distroless runtime base"
+  ],
+  "limitations": [
+    "No binaries or OCI images produced/reviewed by this component verdict.",
+    "Local source-matched build can include host VCS metadata absent in Docker context; bit-identical Docker reproduction is not claimed.",
+    "Final platform/config/layer/extracted binary digest and clean source checks remain required before artifact advisory."
+  ]
+}

@@ -1,0 +1,7 @@
+Independent clean local base and reviewed experimental engine, no image-binary reuse; Go 1.26.10
+START build-clean-base-and-candidate
+base fcdaeea0a9298b0e34f68c2564269553f371ff96930862bb822b294402dc45d2
+candidate e3030a914e41f96d2eab8bc6389e473844b48b282415d5e52740958f275aa857
+{"binary": "/workspace/.phorvex-test-tmp/stage-study-engines/candidate-source/benchmark/endpointv3/bin/endpoint-v3", "binary_sha256": "6100aaba13ac8aca710ee62798725692f72c3f930aad90511a857da812bf88c3", "source_files": 10}
+PASS
+END build-clean-base-and-candidate exit=0

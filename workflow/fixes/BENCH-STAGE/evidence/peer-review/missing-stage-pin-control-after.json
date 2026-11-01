@@ -1,0 +1,15 @@
+{
+  "schema": "phorvex-bench.independent-control.v1",
+  "reviewer": "/root/stage_review",
+  "control_kind": "synthetic testkit, fake Go/replay; guard reachability only",
+  "reviewed_at": "2026-10-31T23:03:42.634105+00:00",
+  "stage_pin_exists": false,
+  "stage_provenance_attached": true,
+  "result": "PASS",
+  "actual_result": "StageError before replay",
+  "reason": "stage is not pinned; run stage_cli.py pin against operator-refactored and the stage brain",
+  "files_sha256": {
+    "benchmark/bot/code_experiment.py": "6ad8159f499838d434939c235f9fae380587c96cfeb9774c18f6f4df3f6e5a24",
+    "benchmark/worker/mathlab/experiment.py": "2d8275e748b6897fca99f09dd318aeb81c01aabe6b470548c7dd9f68c2c0b565"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-01T00:19:02.603376+00:00",
+  "collector_source": "1a70c2b1167e0725b90f7b0219488ca315abaa26",
+  "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "journal": "/home/hami/phorvex-benchmark/stage-data/observer/persistent-ef94-1a70/compressed-evidence.db",
+  "scope_sha256": "77425cd40827bb441193b9a0b53a613b3998f8a5c58de667d2d18f820fe0f880",
+  "unit_sha256": "d67049d417541279a1c6b03497530fb8b9813037bd7bbad596fd4afa7a88906c",
+  "encoding": "zlib-v1",
+  "encoded_capacity_bytes": 4294967296,
+  "free_disk_guard_bytes": 4294967296,
+  "duration_seconds": 31536000,
+  "mode": "persistent read-only configuration; no physical calibration automation",
+  "independent_new_segment": true,
+  "continuity_or_30d_processing_guarantee": false,
+  "initial_calibration_samples": 0,
+  "refresh_handover": "Current timer remains paused for clock repair and still points to bounded validation journal; re-point to this journal after round2 result capture. No history merging or continuity bridging."
+}

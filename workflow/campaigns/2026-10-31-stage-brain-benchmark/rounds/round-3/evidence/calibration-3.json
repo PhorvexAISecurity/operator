@@ -1,0 +1,12 @@
+{
+  "http_status": 200,
+  "acknowledged": true,
+  "returned_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+  "response_kind": "Pod",
+  "reason": null,
+  "resource_version": "102392682",
+  "deletion_timestamp": "2026-11-01T00:29:40Z",
+  "id": "calibration-ae24648058404084bd3820ee5481134c",
+  "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+  "operation": "uid-preconditioned-delete"
+}

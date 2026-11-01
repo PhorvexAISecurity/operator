@@ -1,0 +1,100 @@
+{
+  "cluster_mutations": false,
+  "component": "post-retry automatic recovery",
+  "files": {
+    "blocked-0110.json": {
+      "bytes": 27187,
+      "sha256": "7fdab169007d4aaed072fa2c521b4af7fe113014657284e5f056a07567f476e9"
+    },
+    "causal-journal-records.json": {
+      "bytes": 120024,
+      "sha256": "7eb1d64f86326dcc7339c35da565568282961f5647e13407069a41e78b3c2281"
+    },
+    "cluster-read.json": {
+      "bytes": 26445,
+      "sha256": "5cb026ab12fe6a33f5eec79280523f7b0df734384478010fa51e3b6246297d07"
+    },
+    "final-runtime-read.json": {
+      "bytes": 17495,
+      "sha256": "61e99658b9b6e76c1146a55b431d4b0f4ba553a90988cb1048244e4fb6ece672"
+    },
+    "fixture-identities.json": {
+      "bytes": 7805,
+      "sha256": "c991b519f6d420124b4e3377b07a255546f08ae30acf14377d6a0028692983ad"
+    },
+    "initial-read.json": {
+      "bytes": 58143,
+      "sha256": "03304ee5a720bb44a87aa4351c7828deac3b1b5609625b3417cde947197c0401"
+    },
+    "investigation.json": {
+      "bytes": 6332,
+      "sha256": "ae8b892eddf21f9444e128e7b1e16e9a38cc2dd294a5387e63d8c628322dde89"
+    },
+    "node-events.json": {
+      "bytes": 4268,
+      "sha256": "d0507d1b91cc8e18350e645dc0826caff939344dfb300d4b49d79b1bfa5caf0b"
+    },
+    "read-0123.json": {
+      "bytes": 55372,
+      "sha256": "e45d16a849c091fdfbf40296796f6a357dc52638f7efcf4dbe14b122a6e1f884"
+    },
+    "read-0124.json": {
+      "bytes": 45216,
+      "sha256": "a67d9479f46746de50e45b212aef3f1a8efd068368e8302c845d72747843220f"
+    },
+    "read-0126.json": {
+      "bytes": 45216,
+      "sha256": "0c37cd20f81b9c7cab60a06cb1a7aa5ec652ab96822baba6b5712e8bc4e14ed3"
+    },
+    "read-0127.json": {
+      "bytes": 60216,
+      "sha256": "e664cef4a1f8aec37bd10db07ad5fbd21f67a6703302e9272433b181e8bc61db"
+    },
+    "recovery-cohort-headers.json": {
+      "bytes": 131040,
+      "sha256": "e0653120b2a50d2f22489ea77c1de81f1cce2f6bdd46815dd422bf1faee89461"
+    },
+    "recovery-manifest.json": {
+      "bytes": 42545,
+      "sha256": "4ecf96ee02b13602397f687977ce2ecdd03eb056d6fdcd62f0c4462fa921d972"
+    },
+    "recovery-status.json": {
+      "bytes": 15093,
+      "sha256": "2ff3b2b3e21512d903c9a98aebb399a6ee76b4f164f90b1c58d8db1fe7c624f7"
+    },
+    "recovery-trace.json": {
+      "bytes": 251475,
+      "sha256": "bdbd1e0c6bafb630ca5e3325549d980e9605d4a7e314a9223581594c410ceab1"
+    },
+    "recovery-verification.json": {
+      "bytes": 36743,
+      "sha256": "1ae0662b53c41f4cf14f4ba4773535aecf78508796cef9818b1dd72a8af6837b"
+    },
+    "reducer-transitions.json": {
+      "bytes": 6661,
+      "sha256": "f56e1719441fd44eb86be4604d9db9be33d28b389054cf81321df2ea59d3fcc7"
+    }
+  },
+  "private_originals": [
+    {
+      "bytes": 6676480,
+      "path": "/workspace/.phorvex-test-tmp/post-retry-final-journal.db",
+      "prefix": {
+        "hash": "bcfb4f8614ea03ae20137febdc744be0eaf2b8d2977312155d41d13a2af23906",
+        "seq": 2464
+      },
+      "sha256": "66506af6bd72c12852bb0f68e800a7ba0013e94d1635989934b5a2b4a4b7c251",
+      "verified_records": 2464
+    },
+    {
+      "archive_sha256": "1dcfe069122a719728851bfb48c80e3980c7dae3fad4bc7aff899e3ca17bf8de",
+      "hash_and_header_verified": 64,
+      "path": "/workspace/.phorvex-test-tmp/post-retry-recovery",
+      "snapshots": 64
+    }
+  ],
+  "schema": "phorvex-stage.read-only-investigation-manifest.v1",
+  "source_files_modified": false,
+  "source_revision": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "status": "PASS"
+}

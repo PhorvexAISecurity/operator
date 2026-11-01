@@ -1,0 +1,22 @@
+{
+  "result": "PASS_EXACT_CANDIDATE_BUNDLE_AND_SCOPE",
+  "bundle_sha256": "885ca6eedb0b757bd0a5610161d527f35585117a6e41571841add34898caecda",
+  "bundle_bytes": 2517,
+  "candidate_commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+  "parent_commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "verified_tag": "bench-c963f138052b",
+  "changed_paths": [
+    "A\tphorvex/internal/model/economics_endpoint_seconds_v2.go",
+    "A\tphorvex/internal/model/economics_endpoint_seconds_v2_test.go"
+  ],
+  "diff_added_content_matches_exact_git_blobs": true,
+  "helper_references_only_in_new_definition_and_test": true,
+  "unchanged_exact_runtime_matrix_blob": "a2e0eec69de8b0940bc036347c34489e010242f9",
+  "retained_planner_diff_sha256": "a92ebd74b1bb3e88cf265f6891c3236865acdf2e6ccbbcbcd3b9b3abc342b4b9",
+  "exact_git_diff_sha256": "74fbb7c4eb3d0e8f8f9b5f8e6e95dbdcb2e7f700431ddcac2494264d94ad2f95",
+  "candidate_source_blobs": {
+    "phorvex/internal/model/economics_endpoint_seconds_v2.go": "739261dbb6e256e9a4b447e6666611fceac6048c",
+    "phorvex/internal/model/economics_endpoint_seconds_v2_test.go": "55888adb1ac8db0474cbbb3b3cf2a90adfeecf0e"
+  },
+  "scope": "Inspected in isolated local bare repository with read-only base object alternate. No active source, refs, remote repository or deployment changed. Complete build/replay acceptance remains pending."
+}

@@ -1,0 +1,28 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "description": "Prepared final committed-source preflight after the reviewed decision-clock repair, followed by issue-specific acceptance. Launch is gated on actual stage refresh PASS; earlier interrupted runs remain separate.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-3e11f4e7-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-3e11f4e7-status.json",
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ],
+  "launch_prerequisite": "Await lead confirmation of actual stage refresh PASS at this clock source; no launch performed by preparing this file."
+}

@@ -1,0 +1,79 @@
+[
+  {
+    "service": "manager",
+    "namespace": "phorvex-staging",
+    "name": "staging-phorvex",
+    "securityContext": {
+      "runAsNonRoot": true,
+      "fsGroup": 65532,
+      "fsGroupChangePolicy": "OnRootMismatch"
+    },
+    "containers": [
+      {
+        "name": "manager",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7",
+        "capture_args": [
+          "--math-lab-capture-cost-evidence=true"
+        ]
+      }
+    ]
+  },
+  {
+    "service": "brain",
+    "namespace": "phorvex-staging",
+    "name": "staging-brain",
+    "securityContext": {
+      "runAsNonRoot": true,
+      "fsGroup": 65532,
+      "fsGroupChangePolicy": "OnRootMismatch",
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "containers": [
+      {
+        "name": "brain",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:1ee0c571784e489c0591b8810c7f287c3efd653707ab0c833af389614c5da148",
+        "capture_args": [
+          "--math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense",
+          "--math-lab-capture-dir=/var/lib/phorvex/math-lab",
+          "--math-lab-capture-max-bytes=1073741824"
+        ]
+      }
+    ]
+  },
+  {
+    "service": "sensor",
+    "namespace": "phorvex-staging",
+    "name": "staging-sensor",
+    "securityContext": {
+      "runAsNonRoot": true,
+      "seccompProfile": {
+        "type": "RuntimeDefault"
+      }
+    },
+    "containers": [
+      {
+        "name": "sensor",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor:staging-0.11.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093",
+        "capture_args": []
+      }
+    ]
+  },
+  {
+    "service": "console",
+    "namespace": "phorvex-staging",
+    "name": "staging-phorvex-console",
+    "securityContext": {
+      "runAsNonRoot": true,
+      "fsGroup": 65532
+    },
+    "containers": [
+      {
+        "name": "console",
+        "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console:staging-0.16.0-git-bb92355cf7b6c4a696f44caf52bd5fa1268e7303@sha256:67ae8c81da98b21e51fc514c6c0726982eced06a06bd0fd23724a28def6ba785",
+        "capture_args": []
+      }
+    ]
+  }
+]

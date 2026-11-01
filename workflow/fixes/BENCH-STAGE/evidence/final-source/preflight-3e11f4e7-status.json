@@ -1,0 +1,18 @@
+{
+  "state": "FAILED",
+  "pid": 325178,
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "started_at": "2026-11-01T00:28:44.776223+00:00",
+  "results": [
+    {
+      "name": "exact-current-ci-preflight",
+      "exit_code": 1,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 2369.342,
+  "step": "exact-current-ci-preflight",
+  "child_pid": 325180,
+  "exit_code": 1,
+  "finished_at": "2026-11-01T01:08:14.118464+00:00"
+}

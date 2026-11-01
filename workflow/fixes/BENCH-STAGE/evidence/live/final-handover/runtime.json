@@ -1,0 +1,435 @@
+{
+  "at": "2026-11-01T01:18:56.673240+00:00",
+  "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+  "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "scope": "read-only stage handover",
+  "services": {
+    "phorvex-benchmark-bot.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC",
+      "unit_sha256": "a5d38dfa9cf504514b149f8705e90a8f6164c4c14a9e20cb0f4302e665afbbb9"
+    },
+    "phorvex-stage-observer.service": {
+      "ActiveState": "active",
+      "SubState": "running",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 00:19:02 UTC",
+      "unit_sha256": "d67049d417541279a1c6b03497530fb8b9813037bd7bbad596fd4afa7a88906c"
+    },
+    "phorvex-stage-endpoint-refresh.timer": {
+      "ActiveState": "active",
+      "SubState": "waiting",
+      "UnitFileState": "enabled",
+      "ActiveEnterTimestamp": "Sun 2026-11-01 01:10:14 UTC",
+      "unit_sha256": "23e380d0ffcdf61e6a4785870c385e174a46c0ba996c8ac4889ace301d60c4f1"
+    }
+  },
+  "runtime": {
+    "brain": {
+      "deployment": "staging-brain",
+      "uid": "4057afaa-f682-47ef-bdda-ea754316aa09",
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-22T10:03:41Z",
+            "lastUpdateTime": "2026-10-31T23:48:31Z",
+            "message": "ReplicaSet \"staging-brain-b4d544d55\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          },
+          {
+            "lastTransitionTime": "2026-11-01T01:08:56Z",
+            "lastUpdateTime": "2026-11-01T01:08:56Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          }
+        ],
+        "observedGeneration": 29,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      },
+      "pods": [
+        {
+          "name": "staging-brain-b4d544d55-pcl2l",
+          "uid": "0f2bda5c-0dcf-4df0-b408-cec4aba20869",
+          "node": "ip-172-27-62-202.us-east-2.compute.internal",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+          "version": {
+            "service": "brain",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ]
+    },
+    "manager": {
+      "deployment": "staging-phorvex",
+      "uid": "2c18eb3a-779e-467e-8b59-42fa5e4d05e7",
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-10-31T08:36:36Z",
+            "lastUpdateTime": "2026-10-31T23:48:57Z",
+            "message": "ReplicaSet \"staging-phorvex-58695ffd75\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          },
+          {
+            "lastTransitionTime": "2026-11-01T00:18:10Z",
+            "lastUpdateTime": "2026-11-01T00:18:10Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          }
+        ],
+        "observedGeneration": 79,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      },
+      "pods": [
+        {
+          "name": "staging-phorvex-58695ffd75-5vq2j",
+          "uid": "b0da8699-621f-4422-bfec-9ccce8deefd0",
+          "node": "ip-172-27-11-194.us-east-2.compute.internal",
+          "image_id": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+          "version": {
+            "service": "manager",
+            "version": "stage-benchmark-relay",
+            "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4"
+          }
+        }
+      ]
+    }
+  },
+  "linger": {
+    "Linger": "yes"
+  },
+  "fixture": {
+    "uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+    "ready": 3,
+    "pods": [
+      {
+        "name": "stage-bench-api-f9b895d7-47tcs",
+        "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212",
+        "node": "ip-172-27-62-202.us-east-2.compute.internal"
+      },
+      {
+        "name": "stage-bench-api-f9b895d7-fntvf",
+        "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+        "node": "ip-172-27-11-194.us-east-2.compute.internal"
+      },
+      {
+        "name": "stage-bench-api-f9b895d7-hkbkv",
+        "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923",
+        "node": "ip-172-27-47-45.us-east-2.compute.internal"
+      }
+    ]
+  },
+  "disk_free_bytes": 8413392896,
+  "repo": {
+    "head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+    "clean": true
+  },
+  "code_retry": {
+    "previous_failed_batch": "474cff3249df",
+    "retry_policy": "one new actual model/queue attempt after owned refresh ends; original deadline unchanged",
+    "origin": "operator-submitted acceptance jobs using the actual BenchBot queue/execution and real Telegram delivery; no Telegram incoming update is claimed",
+    "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+    "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "state": "PASS",
+    "jobs": [
+      {
+        "request": "stage-v2a-helper-64.txt",
+        "request_sha256": "e239d8f531473fba18756b32210a0c4d06d39a99f1f4b946b3721490d7fdadd1",
+        "id": "5fc1c1b0f192",
+        "state": "DONE",
+        "origin": "operator acceptance, not Telegram ingestion",
+        "batch": {
+          "batch_id": "5fc1c1b0f192",
+          "upload_id": "operator-submitted-e239d8f53147",
+          "state": "DONE",
+          "results": [
+            {
+              "index": 1,
+              "kind": "bench",
+              "state": "DONE",
+              "job": "c963f138052b",
+              "headline": "changed decisions 0.0% [0.0-5.7] (0/64)"
+            }
+          ],
+          "semantics": "Independent experiments, executed sequentially; each report has its own control."
+        }
+      }
+    ],
+    "finished_at": "2026-11-01T01:10:13.881331+00:00"
+  },
+  "refresh_at_inspection": {
+    "bounds": {
+      "corpus_bytes": 2147483648,
+      "generation_bytes": 536870912,
+      "observation_age_seconds": 600,
+      "timeout_seconds": 900,
+      "work_bytes": 536870912
+    },
+    "cache_before_sync": {
+      "managed_remaining": 320,
+      "protected_current": 64,
+      "removed": 191,
+      "retained_newest": 256
+    },
+    "current_dataset": {
+      "snapshot_digests": [
+        "966db8a4c1597c0a3f394856f9e39a660b2b2b94e274e61ba776af16c23f68dc",
+        "4ffec486e7971e10e82374a5b1ebf12f5250a3eece72e0816616a2754b2eb599",
+        "4454b8bd6d4b3172c116141e2566a602cc22cd84bbeb7079aea6209c6f440ea0",
+        "952625f444728199ff9b69588f08f06ceb2ea0cc413d31c70d06519eac0b6946",
+        "33e7f439591bf28e560169fb5400ceb9b1aa91ed7f4ef6b63b5b14a376f7b6f2",
+        "69422da59eb79059310d9418d09ffab8363660c892a2e6fe992791467597ebe2",
+        "670127743acc838ceb4e23d9df2b41c8270e13245a0428414e9866ef6afb29ba",
+        "93a1b5175ee8449e2244d3792bc20172a9781aa457314d2500c46d5d9b27d87b",
+        "2b41d7441f90ce9c459644345f852f9931b5e475921231402af4f52e9aff5069",
+        "ed2ab337fdadba57699bd060fbba0e1bef23daf38af78b0aa108530f62573130",
+        "452b03fc8c0ace84a6190b48125ac7bcd1ac82d7ba52c389f46afe942762634c",
+        "018023695446a2fb7e9e4c4f50551c3801801a5e44d40d5288344f9a8f440f2b",
+        "23b70bdf44732fdb9ee460267e9582c1a85aa45c162bf2a89d99ad21b0bbc4ed",
+        "932d9f1c71c2c1212450f017bec6b37594c2f57c20be1a2be0eaf2ee0a92602e",
+        "a7d96a675984fe366c5e2f67f73efd023a2ef2c1d2f0117f6c0d6353ca04b350",
+        "c43d2f7cdb0d24e53734881e6a942453c86ed4b87233e6cedb2ab311fe9dffd7",
+        "7974abcbd3e92fafc14ed4de8d1270b0efe8f61af2224a9eafc6612fca988f03",
+        "fdad55d295f789ded9e64c7bd228456e457efc52693a851b2297b7319cb9cfe5",
+        "b6a13f459f9fc1ac9d68a32291c0b7817f5f9c72b655f68bdee650365351c05b",
+        "45d06ca52a9192b45f512a8b9884b7c82a1aeed07c55685e6e22feb706841705",
+        "ab17c2a182fbaa3ebee04b3913abc31479ba98bc9178cd9070a7f92439727c15",
+        "5ed1236719d75a95f951116de2138ff455ffcca751b8b5ef92021c425bb121b3",
+        "624d6e60c19a158d69e1e13c9d61e839ed678244c26b16d7eb45b5a9b11ee73a",
+        "a14f776105debd39ee1a5ad3cd2af9146565a436894ac599bac694a4a13017d5",
+        "f6d4889d669054d3fb76df43b8de34bba446ab48193b36ac6b0e6271dabf2e10",
+        "914664c34358495b5605f7243a0924f3d8cac3d762389d67a1038f35167e24cd",
+        "5b895111a2060896049eba544116a1ca8a3c7db7c4f774960036eb629473d6e0",
+        "583a13a6fc7b77c94c7d373c810c036f3f7dea5f19355e1ad80dc1d454fb0667",
+        "68d49fc42e37ac81979b7e6303f1a0bb2fbdafb4fa8eea1def3295ee708b2445",
+        "8fd8c5a15e95eab3fe4a12976d5e890541817fa6234afc7b266b5d143a8e9be4",
+        "5b4236ad3e7e910736bdeefdd2ee24cfa2a262daa64d19bec242cedbae9cfd26",
+        "a16eddae51c92e9e05c49d314fa966593ac0e1c7fa02ebc074db16900f99b0a1",
+        "5d1e905ffb74da1b088637ea45242846064309acb846c357bb5e24d67ed74519",
+        "c856a15d3ad47c7c2cc0f8a02e8c470ad8e2d85bd846d9b4f67ca09d3b6bcc18",
+        "9729d1c091f49ea8629b1ffd8af759991ef6faeb554aaf68df7defb814c894f9",
+        "41db198a5aeca1756acceb1989198d6c4742b6b003c1e35338e5a84201b91acf",
+        "49b68f1bf7836b25f05e67190a2d0ffeaa3258e56d39051b2e190907e88970bd",
+        "3ea631c3b0ee7f49dea7d1e93e39a5599d42db9d80b49b484aa05be891baf146",
+        "e1c5d4407e0fea932048dd049d3e8a845502a6036b8d49becec3694670e0d817",
+        "adb03670e59b59617603dd91ae357dc7a4ee4e46448cfe06195661ea2a5cbfc5",
+        "b15ae4537f0e65a8bc0e49d43f7bd1ad40935cf1f878dab3dc4197a8d05ab6be",
+        "92e8e205e3a3a3e78d1d836891e9f842cac5bd5fbc1f41565a395a161a17489c",
+        "d8519b8a3b702c29216d8900489c6fd66537bf21ee234964cbbf5e77cf325e9a",
+        "f5ad3d985ff9fc4b772f99072c4f57418e0d6496022fcbe185879e1ea2c8cf1a",
+        "458c43eb40c4348a282adc06bd6f2833c7fdf994484cec8dadf834ed77badc1c",
+        "07b7d7c0678d38d5ee484f1624e3a2f6c71ca594eec1e4ea61d48e11a5ec088e",
+        "fee196411a2b8e1a94e4ab29ff4f13f1d690367c7af0f4ab920c45f113ae7896",
+        "8766403824422fc6cc05c0069022f9ef7e3aaa097c41e55b68172847e4557dae",
+        "b2020f747e547ea864e7ae3269fed0391f128c1722efd526d6be3340e6c2188f",
+        "ef3123551397931b06fba7b334804738ad457597242531a5ef903b512bf13ee8",
+        "a4f556a3e73fc9127fa58baa8b36d1a671e32d0cca9586f9525439f9031c5ac9",
+        "5ff5cc4c97144786c3d4c93b4f8708bc08e9abcd45d43ac836d36128b2bc5921",
+        "224c1cf53d73c2bbcdbc1f4be8c0d91c48e7b5a4a147dd09da1b343fb2169835",
+        "43a0104edb59988ec5ffe98d5122b8b0c0563c2e6c9f4ab554eaecc124b92554",
+        "880539b9205401dd5bd08538f17e22c927ac29820eb52716c7f71181621af123",
+        "405ddef6dbe6855738155e0fc46622e8574ae1079c8319155b13873c4f408aa4",
+        "d547b70c40c81dd28659b23b67723c8849275ea5b4438c965136dc92e0298762",
+        "de48e028a87a2cd2c232a024d935eb86ece077af0052f4c0976fa7dc3249083e",
+        "8989776665959a3460ea4f549543a51ae495924471a0356763418ae5c8ceafaa",
+        "cfc364f1b332920332c9dc03a2b8c87883956a019d65c8c175be318d378a7435",
+        "5c0c61fa270e32554e8286787fe15f3807c0abb34138110fb0bf7e62470ebe6f",
+        "5507048683705f956fff45cb630d4de2a259ab781be5e5a95cad4e99c05118a4",
+        "b1996459370afe618a81d6e5f11897a6507925a0268772001acb587e6d0e8fa2",
+        "1eca2369f59f9f85839c6e3e43cb8f88b04fd596af2409bae3b62b01a0f351b0"
+      ],
+      "snapshot_source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "source_revision": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+      "trace_file": "stage-bench-defense.aff38a220edee5dae0a70df94ca89e5969d684dc25e113d823c4e17a8ed0aab7.trace.json",
+      "trace_sha256": "aff38a220edee5dae0a70df94ca89e5969d684dc25e113d823c4e17a8ed0aab7"
+    },
+    "elapsed_seconds": 80.845,
+    "error_type": "RefreshBlocked",
+    "finished_at": "2026-11-01T01:17:30.590352Z",
+    "observed_segment": {
+      "complete_from": 1793495306.4060414,
+      "journal_prefix": {
+        "hash": "f07f58481e5f3cbeac627c0769c7ec0ca1722b0e37f2d7bd8a936dd6092eee31",
+        "seq": 2091
+      },
+      "sealed_until": 1793495787.4798064,
+      "session": "a0b816ff152b4944b08de1e506829059"
+    },
+    "phase": "SELECT",
+    "policy": "phorvex-staging-demo/stage-bench-defense",
+    "reason": "OBSERVED_HISTORY_INSUFFICIENT: available=481.07376503944397 required=600.0",
+    "requested_ticks": 64,
+    "schema": "phorvex-stage.endpoint-refresh.v1",
+    "started_at": "2026-11-01T01:16:09.745322Z",
+    "state": "BLOCKED",
+    "study_settings": {
+      "lookback": 600.0,
+      "target": 0.9,
+      "window": 600.0,
+      "worth_threshold": 0.0
+    },
+    "sync": {
+      "already_held": 1,
+      "byte_limit_reached": false,
+      "corpus": {
+        "bytes": 32054323,
+        "economics_mode": {
+          "fixed-disruption-aversion-v1": 407
+        },
+        "finalized": 407,
+        "first_captured_at": "2026-11-01T00:38:48.529966969Z",
+        "git_sha": {
+          "ef94fad362dabb51469211388ef80cdfa6eee1d4": 407
+        },
+        "last_captured_at": "2026-11-01T01:16:32.775973172Z",
+        "parameter_manifest_hash": {
+          "sha256:661b5f62a6f0802792043b3ffdccbfb620ad4e864ebc9236c3881aa1bb3312b8": 407
+        },
+        "policy_overrides_hash": {
+          "sha256:9f683148e03118d1fa46659ed2be7b1455a812d15d93f9562268658bfd25379b": 407
+        },
+        "policy_uid": {
+          "621c056d-ae10-452c-8828-b2dd0bbb5cb3": 407
+        },
+        "process_config_hash": {
+          "sha256:da4ff1035e62d4efcbbeaec77c99bc52b491d1c261e73245f03e55b7505f4010": 407
+        },
+        "snapshots": 407,
+        "with_unreplayable_fields": 0
+      },
+      "deferred_snapshots": 0,
+      "downloaded": 87,
+      "downloaded_bytes": 6813607,
+      "downloaded_digests": [
+        "1b9b19c2079bf29f913f06fdd7d49bf0dcec0c5757897e29e688738c60bef888",
+        "1b0b7ad8bc098c7cf41c219b4e4a776a6c36295a94ee7fba637a9270a7fc24e7",
+        "d83c2447df17d2ebe7b3df5357b3862449ab044c2e2e3522ef6a79b81d7b95e7",
+        "1d66b81ea33274d395dd5240ec40f311a86a77d40f68edf3f7575dc8f146408a",
+        "38428b922994d7d97887eb7fc7e56d4fffbdb6ef3270d345d82845dc04ffb028",
+        "8e0c5e90ac23bec66f50f19d737a661844674eaab8679a0dda96f389be33517f",
+        "125e2b32153810615544248dbfc1ea641c1fcaf811e5a38d381c74ede16a68b0",
+        "a6f02d481d0c2edcc26a97c836c6cc9edc045cf183e661b5579e13380d7edb9e",
+        "fee49a55484ad7edfa92a5601b8ba3a1d02efdd3427e26f346643835a8ccc12b",
+        "ac28bb5d091c0c22665c2d3a268247665c2989eb1dd27e391568f21c9a18ce47",
+        "3354db792b740a05eba8c7ac03cacb3c9d6961c75cc10c95da79f231b88fed06",
+        "23f077cc7c8b0e0823afe4fa8463ad9b64fc04e51a2a1f4d0695a84b14379f4a",
+        "aa569010e7fdc009d723acc6e1db434d2149ccad18a1c0ac832338381099ccdd",
+        "758e1c329ce67d03d5d2ab7811637e0a1e4b75b05aa4915a26ac91240b5fb133",
+        "cfbb7b3f9087ea4c3475b4c263eb7a825a403838a8c823a3f92c588f2890d186",
+        "9220cdc9a4d11bcdc58ec31dfa8751c83d18cafb378edc87d2edfd9dbfe0709f",
+        "9fc09a4d977c4865f9ddbe0f93d29a28a384b38beb745479175c176eee246491",
+        "f30448234858f112c801961bc5e8d863a45265bf33395c500304955c4da2813b",
+        "ee4e4f595ae3eb77e1fb4d0ccc7874000c74281d6549240fc35c50774dd2ac39",
+        "5604e9bdf0b6484a17c9fe90b2031b50000b04ce7d5f86a987c48026f4cd8ec6",
+        "11a22dc853e3f949d26600d5a2d614b92ade60a4a0aca141984e663cd8b5ee6f",
+        "c8fbabfbc14be85498bfb2744e0fbec5df2e0d601ae4d7bd6e7e6b8d9846b8a9",
+        "de4a5d892f92e40597679316d1c1a57a1679e0876a8dbfcc750ecf5d04dc66c4",
+        "c511b41c5ac7ab85557ebd3e39f306a95cf5c9f931c8ca2bd0a7b4957d63ddaa",
+        "989ed4d04734d3cd8fd77753395b6bc351f2704f16e6c9888e26a1338d2884b3",
+        "883be923b779cd1fc36fb094bceac335d1b7f8fc379410a1db747c4dfedb18fa",
+        "47961fb57312eb16344e7afb62da5f65a480ef18f61d3b0a83696b39d3b0ca31",
+        "d465943f7a594a7638af61a6edbf7765a87df8e558b4e315fa67d080a431b50d",
+        "8b2b3650c0b9f83b555f49d3ec7d946309e8c40ca5a1389a26b12a2cb0607fef",
+        "f5fa86178e2b4876d47a9a457f9e8b101a2661434e6237db3436c6dfde8d5ba3",
+        "3d624e5d8b74124f3e7b62d0c31bcf91f73d1c8b49dfd5bf9932f291195e9271",
+        "5f446d4c834147d123d5f311a3d9b07b8182b9225825d7976f68d6ee0e59d17b",
+        "1f549983290323b96ec94f9e6542c1d8a47df0e61550cc303ac94c6405a50886",
+        "1f5e28fc2d0e7a49828179f8c63ffd7a7774ffdcd3fef63a918a3587d9adb31c",
+        "af6c7565e9d53898c538680d06198b96de8cc5dddad89d127cc41f92921c7462",
+        "a97d8fdb1daec3f2ca848e29b6a2e03d89484cdffd485aa344383228098eab99",
+        "03c2daf8fc7c25fadf0270ce4fd8a8376d4746d77b84c24e3d7db16bdf24afe4",
+        "201df91d63425c3accc7edd1b0ca85a0824e9ad56e46eed5242bddf464dd6991",
+        "6c5fbb78441814dba35ff82237dc1d33bb23150a44ef285d5e657a4deddfca78",
+        "6783cf22a88e3ff604abf8ddabd88a303c9eedd2920675365328c6da23bc4523",
+        "e0910ad7067b0928b81772421437b23b62da10cba84a94203eb8007b1f976628",
+        "b9eb34c26a04b807467b0a904f5d5a2d359c1398a4b7cc3eb2e003060c2075ba",
+        "d5d0e1df9f233e9f129118b9e9598e4564da4ecd5bef0a0a71a86f131e5fedfe",
+        "df370afc23a3dd63416c8ff6944cbc72327c6f9365de3d56e906fdb28e75bc07",
+        "7b0d158b35f5ae659c43b9a7b3c49f6022f2f49a61d97ba27178111065258dc6",
+        "076846e48616e230ab51170b1792efb2eb19a10e9a9afc7e64af9bf7738db050",
+        "dc680db1327c5a420b8b71fb5f3bbea8651f83e877d167a6c78b667e9f88f6d8",
+        "d78e21a809c4958974eee189892cd2f1954dfa3684ba88a6c306e4f192461425",
+        "1c12ae29778f6208efa8d41dc3881ae7d6009ed0df4b6f441fc2b9a17b2fc8d9",
+        "9f58d6eba9e3d530cd870070a092e25ff1ee877ad18eaa30e48662e73b8f626b",
+        "99a2ec8882d1d543cae9b04ddd1068d79fd7d0e37f031b65b7f51fa5265a60fd",
+        "005173ab7ee69c7507a23864bc43cd4a9650c610c2b44f96c4b480b3aa69788e",
+        "e408f50b9afce7a013114d7db7eb6e80bf0e5ec82950f4fc43a3dcdf1b4181fa",
+        "90f7cf1876f67822d6525ce1111b30310384bdb3c33c074c89a029c8f7df4c04",
+        "aac33eb4167c0d9cafbc49e965f73aaefc3c0e6f417e3604e82368759b04fa05",
+        "c312af287fe65e8c6831c849070e3d451a31d6add0e8fac15f3f5b8a5c449aec",
+        "692870692a9f55584d677633e13c994010aca749c290980bdad86c1f6e1554e7",
+        "6246ce5e0a0012f00915860f13a3f16dfedbea9614e9168b1f3a53c7345d22cd",
+        "5ed51141e54b84266104022d2427251af60f23ce49e7df64a498abce0aef63b3",
+        "293b9b697100d1969c53fdc1ddc94b2a1f72bbcdc4fb606bea99fb78df41b4b5",
+        "30230defd8c1f5c129a647b1702590950812639959fb6fb878a6297dfdca451d",
+        "c48bc349f8336ee387d52023ba2014e3a07825c771522a09022725e14c0a75e7",
+        "3ad605066f7f9a840d0ed9214d15c130a434722169190f54f5ab121c6e8a4269",
+        "fafb11fd67186839261233f9ca0a93ab3a7521d5b7f17f4fe280f61219575d7d",
+        "f71817710ad03a0e757adbe288da7fa23c9107a3e4cbc2a6dca0dc2de5885c23",
+        "e7be50be3524d2e506ae085ff528bf1d28f3256df79d6eebb0be7c37652d81ef",
+        "6771c42f8fe2e828bd5ee4d1a043221bb11a4af25b5bc9ef5ee0b1562bc19249",
+        "ee8ff1643a25c1b4b7bcb3e2e008dd67dad493038a0eff60748f46b84d858c4b",
+        "d7ca836608d9a5412c71d515e9940fa7e875bac10c547ebcb9973e07543331cc",
+        "6a72d67fa6dca022ee886fb8310af70749b2f617eeffc8afb12f4c4a82578a17",
+        "a6b1f56445fc1d3fc29fd25928249958df2832360ee15389db3890984e586d6c",
+        "a677ffb892798969f0a69f79085189e61b4d061818cca76615dd9a4d0df940c0",
+        "846702bf4bf3c883bea32054a3dc41f87e7c8b6565a9be55428344d6d23cca4d",
+        "3e4403c568c240232c102a0fda5735de68c914d1ed5896efcf722c2deff077cd",
+        "cbc7e65a54af647ceb93ad2ab95ebe91b76b20ef8402fce4cec0b05f985c6227",
+        "48e3c3e9f32faf372e425fe5f58c70af33520fe51acaaccdad3295ffd5fc4c98",
+        "1e00f4c31f38b69113c39ac48f2fd8660521ee5a37a217ef6c440bf7ac3e63cb",
+        "e006dc88d566b0c99e3eeab0250384b446ab123984e465113132fd23c9548f3a",
+        "6c9b9dbbf587784abde4778694c082a4d9cac345e6029467d41a914341a8af99",
+        "716a9c2ed3049c79c4c619f56eecda934f08f677eb4cb663c14e8ff4ded6e413",
+        "55ebfb4486671eedd87eec2ed0da1bf269f25e89af513983b20dc44900e103bf",
+        "45ec7ca717f267e478d414632b75c9199896bf0244d2e801438f6a0035ad8ab0",
+        "70bfd90851b9e6779a06d486e3ac50c64fab09b87a8cb411f7a926ff025b006f",
+        "1c0c22f9d78a60ebefd535a3ec8e7dce434b11f0245ddec8a14e8fb2c8819666",
+        "32d7b677567a3b47ebc837f2edefc7890d4e69bb35c13bbf7e2d7dd54d9376ec",
+        "6f487becad6175eb12accf085b854b0d1ba265155c3b4b8d1026dd574beb6c03",
+        "59a7fa361f0f45ad48a90c25883e95c86791ee7e9503625c5b90c28c0004ecde"
+      ],
+      "expected_header": {
+        "brainImage": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+        "captureIdentitySource": "recorder-process",
+        "gitSHA": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "policyUID": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+      },
+      "finished_at": "2026-11-01T01:17:26.048206Z",
+      "index_pages": 1,
+      "index_scanned": 88,
+      "listed": 88,
+      "max_bytes": 536870912,
+      "more_available": false,
+      "namespace": "phorvex-staging-demo",
+      "next_since": null,
+      "pagination_blocked": null,
+      "policy": "stage-bench-defense",
+      "rejected": [],
+      "schema_version": "math-lab.sync.v1",
+      "since": "2026-11-01T01:09:17.724650185Z",
+      "started_at": "2026-11-01T01:16:38.007834Z",
+      "transferred_bytes": 6813607
+    }
+  },
+  "result": "PASS_SERVICES_AND_RUNTIME; refresh recovery verified separately"
+}

@@ -1,0 +1,23 @@
+{
+  "runs": [
+    {
+      "status_path": "preflight-status.json",
+      "sha256": "cec0605d1fed949082623b2bd6526c68b5221c6f75c217379460f4a3756b304c",
+      "source_sha": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+      "finished_at": "2026-11-01T00:01:58.776165+00:00",
+      "state": "INTERRUPTED",
+      "exit_code": 143,
+      "reason": "Stopped for reviewed independent W/L documentation and benchmark-only CI-selection correction before final source commit."
+    },
+    {
+      "status_path": "preflight-de426ee1-status.json",
+      "sha256": "350065e7884ba6e7f85a45a21f6f2a872253422144be2842752e92919761735d",
+      "source_sha": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+      "finished_at": "2026-11-01T00:14:30.522202+00:00",
+      "state": "INTERRUPTED",
+      "exit_code": 143,
+      "reason": "Stopped at lead request after real stage refresh exposed decision-clock truncation; preserve old run and rerun full checks only after repaired live refresh succeeds."
+    }
+  ],
+  "note": "Partial logs are retained, not combined into a passing receipt. Neither run completed final acceptance."
+}

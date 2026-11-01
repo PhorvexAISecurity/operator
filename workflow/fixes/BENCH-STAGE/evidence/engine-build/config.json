@@ -1,0 +1,26 @@
+{
+  "description": "Independent clean local base and reviewed experimental engine, no image-binary reuse; Go 1.26.10",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "source_sha": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/engine-build/status.json",
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/engine-build/build.log",
+  "total_timeout_seconds": 1500,
+  "env": {
+    "GOPATH": "/workspace/.phorvex-go/gopath",
+    "GOMODCACHE": "/workspace/.phorvex-go/gopath/pkg/mod",
+    "TMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOTMPDIR": "/workspace/.phorvex-test-tmp",
+    "GOCACHE": "/workspace/.phorvex-go/capture-cache",
+    "GOMAXPROCS": "2"
+  },
+  "steps": [
+    {
+      "name": "build-clean-base-and-candidate",
+      "command": [
+        "/usr/bin/python3",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/engine-build/build-reviewed-engines.py"
+      ],
+      "timeout_seconds": 1500
+    }
+  ]
+}

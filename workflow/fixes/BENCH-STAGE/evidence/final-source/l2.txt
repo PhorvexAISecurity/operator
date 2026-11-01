@@ -1,0 +1,74 @@
+=== RUN   TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged
+--- PASS: TestOptionalCostCaptureFrozenAndLegacyReplayUnchanged (0.15s)
+=== RUN   TestEndpointStudyUsesRealPreCostPopulationAndExactBaseline
+--- PASS: TestEndpointStudyUsesRealPreCostPopulationAndExactBaseline (0.19s)
+=== RUN   TestEndpointStudyCrossSourceIsExplicitAndRetainsBothIdentities
+--- PASS: TestEndpointStudyCrossSourceIsExplicitAndRetainsBothIdentities (0.10s)
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/fact
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/gate
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/population
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/tick
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/workload
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/baseline
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/spec
+=== RUN   TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/source
+--- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls (0.79s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/fact (0.12s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/gate (0.12s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/population (0.12s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/tick (0.11s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/workload (0.12s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/baseline (0.05s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/spec (0.09s)
+    --- PASS: TestEndpointStudyRejectsChangedSourceFieldsAndMissingControls/source (0.07s)
+=== RUN   TestEndpointStudyDoesNotBackdateHistory
+--- PASS: TestEndpointStudyDoesNotBackdateHistory (0.12s)
+=== RUN   TestEndpointStudyMissingPriceCannotBeComparable
+=== RUN   TestEndpointStudyMissingPriceCannotBeComparable/censored-duration
+=== RUN   TestEndpointStudyMissingPriceCannotBeComparable/quarantine-hold
+--- PASS: TestEndpointStudyMissingPriceCannotBeComparable (0.25s)
+    --- PASS: TestEndpointStudyMissingPriceCannotBeComparable/censored-duration (0.11s)
+    --- PASS: TestEndpointStudyMissingPriceCannotBeComparable/quarantine-hold (0.14s)
+=== RUN   TestEndpointStudyRetainsReactiveOnlyGate
+--- PASS: TestEndpointStudyRetainsReactiveOnlyGate (0.05s)
+=== RUN   TestBaselineReplayReproducesProductionExactlyAndDeterministically
+--- PASS: TestBaselineReplayReproducesProductionExactlyAndDeterministically (0.15s)
+=== RUN   TestRecorderProcessIdentityDoesNotRelabelDecisionPolicy
+--- PASS: TestRecorderProcessIdentityDoesNotRelabelDecisionPolicy (0.24s)
+=== RUN   TestRecorderRejectsUnprovenExplicitProducerIdentity
+--- PASS: TestRecorderRejectsUnprovenExplicitProducerIdentity (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/mathlab	2.099s
+=== RUN   TestRemoteSnapshotRelayUsesRealRecorderStoreAndAuditRoute
+--- PASS: TestRemoteSnapshotRelayUsesRealRecorderStoreAndAuditRoute (0.12s)
+=== RUN   TestSnapshotRelayDefaultsAndMalformedRequestsFailClosed
+--- PASS: TestSnapshotRelayDefaultsAndMalformedRequestsFailClosed (0.01s)
+=== RUN   TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart
+=== RUN   TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart/old-protocol-false
+=== RUN   TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart/old-protocol-true
+--- PASS: TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart (0.03s)
+    --- PASS: TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart/old-protocol-false (0.01s)
+    --- PASS: TestSnapshotRelayRecoversAcrossBrainRolloutWithoutManagerRestart/old-protocol-true (0.03s)
+=== RUN   TestSnapshotRelayChunkingHashAndServerBounds
+--- PASS: TestSnapshotRelayChunkingHashAndServerBounds (0.26s)
+=== RUN   TestSnapshotClientValidatesPeerChunksAndDeadline
+=== RUN   TestSnapshotClientValidatesPeerChunksAndDeadline/timeout
+=== RUN   TestSnapshotClientValidatesPeerChunksAndDeadline/oversized
+=== RUN   TestSnapshotClientValidatesPeerChunksAndDeadline/tampered
+--- PASS: TestSnapshotClientValidatesPeerChunksAndDeadline (0.04s)
+    --- PASS: TestSnapshotClientValidatesPeerChunksAndDeadline/timeout (0.02s)
+    --- PASS: TestSnapshotClientValidatesPeerChunksAndDeadline/oversized (0.01s)
+    --- PASS: TestSnapshotClientValidatesPeerChunksAndDeadline/tampered (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/internal/brainclient	0.525s
+=== RUN   TestEndpointCLIExplicitCrossSourceAndJSONResult
+--- PASS: TestEndpointCLIExplicitCrossSourceAndJSONResult (0.11s)
+=== RUN   TestEndpointCLIRejectsMixedSnapshotSources
+--- PASS: TestEndpointCLIRejectsMixedSnapshotSources (0.04s)
+=== RUN   TestStudyJSONRejectsAmbiguousOrUnknownInput
+--- PASS: TestStudyJSONRejectsAmbiguousOrUnknownInput (0.00s)
+=== RUN   TestReplayIdentityCannotBeOverriddenByEnvironment
+--- PASS: TestReplayIdentityCannotBeOverriddenByEnvironment (0.00s)
+PASS
+ok  	github.com/phorvex/phorvex/cmd/brain-replay	0.203s

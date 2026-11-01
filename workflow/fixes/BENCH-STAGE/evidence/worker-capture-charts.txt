@@ -1,0 +1,22 @@
+test_capture_rejects_an_unscoped_policy (tools.test_service_charts.BrainChartTests.test_capture_rejects_an_unscoped_policy) ... ok
+test_math_lab_capture_gets_a_volume (tools.test_service_charts.BrainChartTests.test_math_lab_capture_gets_a_volume) ... ok
+test_one_brain_runs_hardened (tools.test_service_charts.BrainChartTests.test_one_brain_runs_hardened) ... ok
+test_only_the_manager_reaches_the_brain (tools.test_service_charts.BrainChartTests.test_only_the_manager_reaches_the_brain) ... ok
+test_the_brain_decides_as_the_manager_configures_it (tools.test_service_charts.BrainChartTests.test_the_brain_decides_as_the_manager_configures_it) ... ok
+test_the_brain_defaults_are_the_managers (tools.test_service_charts.BrainChartTests.test_the_brain_defaults_are_the_managers) ... ok
+test_the_brain_holds_no_kubernetes_credentials (tools.test_service_charts.BrainChartTests.test_the_brain_holds_no_kubernetes_credentials) ... ok
+test_a_remote_actuator_leaves_the_manager_the_dispatchers_share (tools.test_service_charts.ManagerRemoteModeTests.test_a_remote_actuator_leaves_the_manager_the_dispatchers_share) ... ok
+test_a_remote_actuator_reads_its_own_files_and_credentials (tools.test_service_charts.ManagerRemoteModeTests.test_a_remote_actuator_reads_its_own_files_and_credentials) ... ok
+test_a_remote_brain_records_the_math_lab (tools.test_service_charts.ManagerRemoteModeTests.test_a_remote_brain_records_the_math_lab) ... ok
+test_code_exec_admission_needs_the_in_process_actuator (tools.test_service_charts.ManagerRemoteModeTests.test_code_exec_admission_needs_the_in_process_actuator) ... ok
+test_cost_observation_is_explicit_and_works_without_local_capture (tools.test_service_charts.ManagerRemoteModeTests.test_cost_observation_is_explicit_and_works_without_local_capture) ... ok
+test_the_manager_acts_in_process_by_default (tools.test_service_charts.ManagerRemoteModeTests.test_the_manager_acts_in_process_by_default) ... ok
+test_the_manager_outlasts_its_wait_for_the_services (tools.test_service_charts.ManagerRemoteModeTests.test_the_manager_outlasts_its_wait_for_the_services) ... ok
+test_the_manager_reaches_each_remote_service (tools.test_service_charts.ManagerRemoteModeTests.test_the_manager_reaches_each_remote_service) ... ok
+test_the_remote_manager_shares_the_services_handshake_configuration (tools.test_service_charts.ManagerRemoteModeTests.test_the_remote_manager_shares_the_services_handshake_configuration) ... ok
+test_the_split_services_together_hold_exactly_the_in_process_access (tools.test_service_charts.ManagerRemoteModeTests.test_the_split_services_together_hold_exactly_the_in_process_access) ... ok
+
+----------------------------------------------------------------------
+Ran 17 tests in 70.206s
+
+OK

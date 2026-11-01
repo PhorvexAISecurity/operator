@@ -1,0 +1,8 @@
+{
+  "at": "2026-11-01T00:32:45.313850+00:00",
+  "bot_release": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "unit_sha256": "a5d38dfa9cf504514b149f8705e90a8f6164c4c14a9e20cb0f4302e665afbbb9",
+  "activation": "unit updated while daemon inactive; existing348acceptance runner will start daemon initsfinally; active acceptance remains348source",
+  "persistent_state": "owner/members/offset/job history and privateconfig retained unchanged",
+  "scope": "operator-refactored stage-only data"
+}

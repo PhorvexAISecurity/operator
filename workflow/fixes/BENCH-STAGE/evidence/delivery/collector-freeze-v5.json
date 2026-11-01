@@ -1,0 +1,12 @@
+{
+  "schema": "phorvex-bench.collector-freeze.v1",
+  "result": "PASS",
+  "change": "Include lead-authored USER-RESULTS-fa.txt as RESULTS-fa.txt; read latest file only at collection time",
+  "checks": [
+    "Script syntax valid",
+    "Lead results summary exists"
+  ],
+  "collector_sha256": "2923d2738ba9c191f634add2b9d5a91127190fc4088dcafbfe8042ac01d44894",
+  "remote_collection_performed": false,
+  "next_action": "Lead updates actual build/replay result and authorizes final collection"
+}

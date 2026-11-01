@@ -1,0 +1,13 @@
+{
+  "state": "INTERRUPTED",
+  "pid": 321330,
+  "source_sha": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+  "started_at": "2026-11-01T00:12:16.977063+00:00",
+  "results": [],
+  "elapsed_seconds": 133.545,
+  "step": "exact-current-ci-preflight",
+  "child_pid": 321331,
+  "signal": 15,
+  "exit_code": 143,
+  "finished_at": "2026-11-01T00:14:30.522202+00:00"
+}

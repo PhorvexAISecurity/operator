@@ -1,0 +1,33 @@
+{
+  "schema": "phorvex-bench/candidate/v1",
+  "runId": "4b8171ea3c83",
+  "baseTag": null,
+  "baseCommit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "candidateBranch": "bench-candidate/4b8171ea3c83",
+  "candidateTag": "bench-4b8171ea3c83",
+  "candidateCommit": "0816b904ce28323c11e270d514e5d2234538b2c8",
+  "repo": "/home/hami/phorvex-benchmark/bot/jobs/4b8171ea3c83/candidate-src",
+  "changedPaths": [
+    {
+      "status": "A",
+      "path": "phorvex/internal/model/endpoint_seconds_v2.go"
+    },
+    {
+      "status": "A",
+      "path": "phorvex/internal/model/endpoint_seconds_v2_test.go"
+    }
+  ],
+  "planner": "openai",
+  "model": "gpt-6.1-sol",
+  "promptSha256": "6988f031335e3d44b2f66d512ca823a9dd9779be0b15cab8986a8c9b18c86a6f",
+  "diffSha256": "6c71143f38c59f5e2df363b267b36dbf3ae90a711bbe0e9eed2cf0de3515c82f",
+  "createdAt": "2026-11-01T00:15:20Z",
+  "guardrails": {
+    "scope": "phorvex/**/*.go, excluding phorvex/tools/; existing _test.go files are immutable; new test files allowed",
+    "base": "detached clone of the working repo",
+    "allowDelete": false,
+    "noMerge": true,
+    "noPush": true,
+    "worksOnWorkingRepo": false
+  }
+}

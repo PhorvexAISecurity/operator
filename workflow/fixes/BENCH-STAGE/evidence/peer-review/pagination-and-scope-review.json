@@ -1,0 +1,32 @@
+{
+  "schema": "phorvex-bench.component-review.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:18:16.849471+00:00",
+  "component": "R5 bounded pagination plus latest stage/custom-settings qualification",
+  "result": "FAIL",
+  "files_sha256": {
+    "benchmark/worker/mathlab/snapshots.py": "6a4bb432e2797f83a69e8f28c987ed772df9d79751deb251a21b73d35a445678",
+    "benchmark/bot/test_stage_runtime.py": "3c4dc14a3be7c6cc9aafaa51339ab099f9eec44355a7745188b3ffa64b2011eb",
+    "benchmark/bot/endpoint_study.py": "810ea0cb7d7bb417a5804136306464d77fe1c96a3c8e487549c81caf777b2a53",
+    "benchmark/worker/mathlab/stage_scope.py": "dae33e911ca12a4c83e80bb770b09b86c990e4cb7263d1a5abe93a8666b22c52",
+    "benchmark/worker/mathlab/experiment.py": "b5b32f09a128a58749975870c562ef0b9ae2be4ba3a2ca306271ef6e0706e54f",
+    "benchmark/bot/code_experiment.py": "6ad8159f499838d434939c235f9fae380587c96cfeb9774c18f6f4df3f6e5a24",
+    "benchmark/stage/normalize.py": "fb48cccb44cb4aea122d57f44239479d94419b5ed8804f20270105950d4ab083",
+    "benchmark/stage/test_evidence.py": "85158ce74859043f366a67cc0d99e4adad08c3c5198d8cea326b68a73f179305"
+  },
+  "tests": {
+    "run": 12,
+    "failures": 0,
+    "errors": 1,
+    "skips": 0
+  },
+  "incident_reproduction": "sync-old-image-page-control-after.json",
+  "observations": [
+    "Old-image first page now traverses safely to current-image capture.",
+    "Inclusive equal-time boundary grows page instead of skipping by epsilon; untraversable5000 group remains explicit.",
+    "Continuation retained per exact expected header with bounded page work.",
+    "Accepted bytes still verified by digest and actual source/image/UID/producer marker.",
+    "Custom W/L coverage and retention remain required; no invented original30d availability."
+  ],
+  "excluded": "Relay producer/lifecycle, new ongoing refresh/atomic generation and image/live artifact review remain separate pending work."
+}

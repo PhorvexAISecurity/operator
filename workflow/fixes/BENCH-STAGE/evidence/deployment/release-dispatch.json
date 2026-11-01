@@ -1,0 +1,6 @@
+{
+  "source": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "workflow": "staging-isolated-release.yml",
+  "status": "dispatch-accepted",
+  "scope": "existing reviewed main stage images only"
+}

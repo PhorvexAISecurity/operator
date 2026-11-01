@@ -1,0 +1,129 @@
+{
+  "schema": "phorvex-stage.final-operational-handover.v1",
+  "at": "2026-11-01T01:32:01.690422+00:00",
+  "by": "bench-v3-lead",
+  "result": "PASS_SCOPED_STAGE_HANDOVER",
+  "repository": "PhorvexSecurity/operator-refactored",
+  "namespaces": [
+    "phorvex-staging",
+    "phorvex-staging-demo"
+  ],
+  "source_tip": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "components": {
+    "capture": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "offline_endpoint_engine": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+    "bot_refresh": "3e11f4e7ca8424c31a387b53e04942a18ee7d977"
+  },
+  "positive_experiments": {
+    "parameter": 3,
+    "endpoint": 2,
+    "code": 1,
+    "ticks_each": 64
+  },
+  "retained_negative_outcomes": [
+    "original code test deadline FAILED",
+    "original30day request BLOCKED",
+    "three post-eviction refresh BLOCKED before genuine recovery"
+  ],
+  "automatic_recovery": {
+    "automatic_run": {
+      "elapsed_seconds": 120.807,
+      "finished_at": "2026-11-01T01:26:40.512865Z",
+      "phase": "COMPLETE",
+      "started_at": "2026-11-01T01:24:39.706213Z",
+      "state": "READY",
+      "ticks": 64
+    },
+    "current_move_counts": {
+      "censored": 0,
+      "open": 0,
+      "settled": 1
+    },
+    "generation_prefix": {
+      "hash": "8b0e7c3b305cb4d2c7f3574d76afd83c17e74cc157a3231df629ed0681b4fbf0",
+      "seq": 2372
+    },
+    "history": {
+      "all64_asof_state_verified": true,
+      "complete_from": 1793495306.4060414,
+      "cross_gap_bridge": false,
+      "first_decision": 1793495969.5669713,
+      "last_decision": 1793496284.9029255,
+      "lookback": 600,
+      "sealed_until": 1793496289.840831,
+      "window": 600
+    },
+    "trace_sha256": "bdbd1e0c6bafb630ca5e3325549d980e9605d4a7e314a9223581594c410ceab1"
+  },
+  "cleanup": {
+    "remote_transients": "PASS",
+    "remote_temporary_auth": "REMOVED",
+    "open_or_censored_moves": 0,
+    "physical_calibration_deletes_total": 3,
+    "retained_services": "bot,read-only observer,periodic refresh",
+    "retained_resources": "isolated fixture,source-pinned images,2Gi PVC,journals,cohorts,binaries,reports,bundle",
+    "local_delivery_auth": "temporary only until pending branch/PR publication; not runtime dependency",
+    "unrelated_work": "preserved"
+  },
+  "source_acceptance": "coherent ec310 preflight and formalP3 still pending; this receipt makes no source-CI/merge/production-release claim",
+  "artifacts": {
+    "live/final-handover/runtime.json": {
+      "sha256": "6c52b9af4da11b846700c0382ff1a8741cb024925857c76c12aef430b1535a55",
+      "bytes": 21799
+    },
+    "live/final-handover/repository-final-code-handover.json": {
+      "sha256": "2d7a6f11aa8c5a3ad420d93c831b1a03b933cc373c2ac9b2f6285217bb7e1b68",
+      "bytes": 629
+    },
+    "live/final-handover/ledger-and-scope.json": {
+      "sha256": "27e8bf84b59f4a883dbd57bd890ce732182cc3f92573b628594c4ca58c717188",
+      "bytes": 11822
+    },
+    "live/final-handover/transient-cleanup.json": {
+      "sha256": "84c5fe60197c02ac8c2d2d4849d67196678c84c50e693cae7fc28b30d556413d",
+      "bytes": 1585
+    },
+    "live/final-handover/remote-auth-cleanup.json": {
+      "sha256": "d017f93495946f1c7313ce2af9e8def67dfa98180fb446a2dbc555fc112edc45",
+      "bytes": 491
+    },
+    "live/post-retry-refresh/manifest.json": {
+      "sha256": "9b2529646e835ac645edb6ac4c9ba937dcfba53b1cc9910544b3855acf2cc683",
+      "bytes": 3447
+    },
+    "live/post-retry-refresh/investigation.json": {
+      "sha256": "ae8b892eddf21f9444e128e7b1e16e9a38cc2dd294a5387e63d8c628322dde89",
+      "bytes": 6332
+    },
+    "live/post-retry-refresh/recovery-verification.json": {
+      "sha256": "1ae0662b53c41f4cf14f4ba4773535aecf78508796cef9818b1dd72a8af6837b",
+      "bytes": 36743
+    },
+    "peer-review/final-handover/runtime-readback.json": {
+      "sha256": "232a07a80248e371e119f6acb78695254964b4dfddb672068cd7d4331f3fd0f0",
+      "bytes": 3842
+    },
+    "peer-review/final-handover/ledger-scope-readback.json": {
+      "sha256": "940227d6e04713e5a2a30a44ce081c06ea00c7b7fa9b4f8dcb2313750a3ca0dc",
+      "bytes": 5194
+    },
+    "peer-review/final-handover/transient-cleanup-readback.json": {
+      "sha256": "d3d3f19cb59ae5b77eabef1825ecf679f0c9806443a9fcc01034662a837e6cbc",
+      "bytes": 1943
+    },
+    "peer-review/code-retry/replay-delivery-review.json": {
+      "sha256": "61990fee5f7d781aefd5e2b26f733b4317587469e34377748a223374e5e38507",
+      "bytes": 4778
+    },
+    "delivery/final-collection-validation.json": {
+      "sha256": "0ac82e683adb340f1a114fe504a27662dc16901a15b64b1965eb793b0f0cf5ae",
+      "bytes": 4866
+    }
+  },
+  "limits": [
+    "No complete30day history/capacity proof",
+    "No activeV3/completeHistorypicker deployment",
+    "No measured realized counterfactual effects or guaranteed future success",
+    "Operator-submitted realbotqueue/Telegramdelivery, notincomingTelegramingestion"
+  ]
+}

@@ -1,0 +1,7 @@
+[params]
+policy: phorvex-staging-demo/stage-bench-defense
+ticks: 64
+sync: true
+P-FEA-006: 1.0 1.2 1.5
+P-FEA-005: 300 900 1800
+P-OBJ-003: unset 0 1.2 10

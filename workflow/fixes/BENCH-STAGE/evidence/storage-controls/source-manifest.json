@@ -1,0 +1,40 @@
+{
+  "compatibility": "Journal(path), scope, records(cutoff), read_snapshot and decoded event shape preserved. New explicit zlib-v1 only; old plain data/meta not migrated.",
+  "created_at": "2026-10-31T23:49:51.976856+00:00",
+  "evidence": {
+    "journal-api-refresh-compatibility.log": "dad4a4bf19475427493fbb206d7f46aabe3a037c307c70e8c81c34fb2dff1c98",
+    "real-compression-control.json": "f54211ed4a730e66a0302da58ebbcab8af86bd1c6c9b4852b964a31dbb00faf8",
+    "stage-compression-tests.log": "5d2587d2737bf45ef538e02aeb182fef6e60e2290f2ce2e99e5df79eb9306799"
+  },
+  "limitations": [
+    "Actual 30-day continuity is not present.",
+    "Same-rate 30-day physical storage estimate is about4.11GB, not a guarantee.",
+    "Measured full-scan projection is about18minutes for30days; current refresh total budget and several full passes do not establish original30day readiness."
+  ],
+  "live_changes": false,
+  "real_control": {
+    "derived_sha256": "0cd2f637edb8f348ee973a5c91a0f530a185618059b31f2d1252e981fc772c52",
+    "original_sha256": "14ccb15eb6b360439502fed546a4cdad33f177d3e5a516e59278524718e66bf2",
+    "raw_databases": "local-only originals/derived evidence; retain hashes, do not commit raw databases"
+  },
+  "review": "pending independent reviewer binding to these exact sources",
+  "schema": "phorvex-stage.compression-source-control.v1",
+  "sources": {
+    "benchmark/stage/README.md": "4319b7a8f549afa66727e6d319fef591b54674404762ba988868b8d0e523c26a",
+    "benchmark/stage/evidence.py": "20dafaa390ffd45bef96d6735729de3efe209e79b8693630b49361beee983008",
+    "benchmark/stage/observe.py": "1cfe6f63747468babaf054a94106aa80f5f7f489d0c9bed3b25750fd5647c747",
+    "benchmark/stage/stage-observer.service.example": "8ac8ae9afe0fb1abab4790410da7b9c2499bd82220c716770f650e9d9c44e57d",
+    "benchmark/stage/test_storage.py": "4f518591094c89f4c27fa1d4c740ed27321c55e83072accecb318fac46244099"
+  },
+  "tests": {
+    "refresh_api": {
+      "boundary": "Existing refresh external-transport fixtures with unchanged Journal API; compressed records and normalization parity are covered by stage tests.",
+      "passed": 14,
+      "skipped": 0
+    },
+    "stage": {
+      "passed": 45,
+      "skipped": 0
+    }
+  }
+}

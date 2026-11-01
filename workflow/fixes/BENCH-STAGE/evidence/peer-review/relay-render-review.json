@@ -1,0 +1,92 @@
+{
+  "rendered": {
+    "brain": {
+      "sha256": "7c53129393526fbd4092d9141928a5aaca552fb7f1400da59f3b44355260b833",
+      "deployment": "staging-brain",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+      "args": [
+        "--listen=:9090",
+        "--metrics-bind-address=:8080",
+        "--health-probe-bind-address=:8081",
+        "--gpu-envelope-max=0.2925",
+        "--shutdown-grace=20s",
+        "--log-level=info",
+        "--log-format=json",
+        "--math-lab-capture-policies=phorvex-staging-demo/demo-api-defense,phorvex-staging-demo/stage-bench-defense",
+        "--math-lab-capture-dir=/var/lib/phorvex/math-lab",
+        "--math-lab-capture-max-bytes=1073741824",
+        "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+        "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+        "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+        "--grpc-tls-peer=staging-dispatcher.phorvex-staging.svc"
+      ],
+      "security_context": {
+        "runAsNonRoot": true,
+        "fsGroup": 65532,
+        "fsGroupChangePolicy": "OnRootMismatch",
+        "seccompProfile": {
+          "type": "RuntimeDefault"
+        }
+      }
+    },
+    "manager": {
+      "sha256": "16a0db03eafadbeb95983d05b6c944876b4ec36aea276bc83f1bbfc2b508ecee",
+      "deployment": "staging-phorvex",
+      "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e",
+      "args": [
+        "--base-interval=10s",
+        "--actions-supported-debounce=3",
+        "--calibration-shadow=true",
+        "--calibration-sample=5m",
+        "--calibration-refresh=30m",
+        "--calibration-lookback=168h",
+        "--calibration-export-dir=/var/run/phorvex-calibration",
+        "--metrics-bind-address=:8080",
+        "--health-probe-bind-address=:8081",
+        "--leader-elect=true",
+        "--brain-endpoint=staging-brain:9090",
+        "--sensor-endpoint=staging-sensor:9090",
+        "--actuator-endpoint=staging-actuator:9090",
+        "--grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt",
+        "--grpc-tls-key=/etc/phorvex/grpc-tls/tls.key",
+        "--grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt",
+        "--prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090",
+        "--policy-namespaces=phorvex-staging-demo,console-identity-shared,p6-demo",
+        "--max-retained-quarantines-per-namespace=1",
+        "--serving-security-mode=secure-required",
+        "--gpu-envelope-max=0.2925",
+        "--pcie-class-table={\"Tesla T4\":{\"gen\":3,\"width\":16}}",
+        "--trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks",
+        "--persistence-observer-identity=",
+        "--persistence-observer-namespaces=",
+        "--audit-json=/audit/live.jsonl",
+        "--audit-max-bytes=268435456",
+        "--audit-max-backups=4",
+        "--audit-source-addr=:8445",
+        "--audit-source-cert=/etc/audit-server/tls.crt",
+        "--audit-source-key=/etc/audit-server/tls.key",
+        "--audit-source-ca=/etc/audit-server/ca.crt",
+        "--audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc",
+        "--math-lab-capture-cost-evidence=true"
+      ],
+      "security_context": {
+        "runAsNonRoot": true,
+        "fsGroup": 65532,
+        "fsGroupChangePolicy": "OnRootMismatch"
+      }
+    }
+  },
+  "result": "PASS_RENDER_AND_PATCH",
+  "reviewer": "stage_review",
+  "changed_services": [
+    "manager",
+    "brain"
+  ],
+  "checks": [
+    "Both rendered object sets match independent Helm rendering from clean reviewed ef94 source with stage values and exact override files.",
+    "The immutable brain image is supplied identically to container.image and PHORVEX_BRAIN_IMAGE.",
+    "Only two stage capture policies, one GiB bound and existing persistent claim are configured; mTLS and nonroot/writable-volume identity are retained.",
+    "The staged ApplicationSet patch tests previous state and changes only manager and brain entries."
+  ],
+  "initial_check_correction": "Initial local rendering omitted the installed PodMonitor API capability and was correctly refused by the chart. Re-run supplied monitoring.coreos.com/v1/PodMonitor, matching stage rendering. No product correction or guard bypass was performed."
+}

@@ -1,0 +1,18 @@
+{
+  "state": "DONE",
+  "pid": 313343,
+  "source_sha": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "started_at": "2026-10-31T23:43:48.008040+00:00",
+  "results": [
+    {
+      "name": "build-clean-base-and-candidate",
+      "exit_code": 0,
+      "timed_out": false
+    }
+  ],
+  "elapsed_seconds": 37.35,
+  "step": "build-clean-base-and-candidate",
+  "child_pid": 313344,
+  "exit_code": 0,
+  "finished_at": "2026-10-31T23:44:25.358239+00:00"
+}

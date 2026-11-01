@@ -1,0 +1,42 @@
+{
+  "reviewer": "stage-review",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "result": "CONDITIONAL_DRAFT_ONLY",
+  "files": [
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-source-component-closure.md",
+      "sha256": "6fbcd38a530bdf9b01afe4238f0334e4ec84eeedaf780f925a9f1962655585a3",
+      "bytes": 8763
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-source-component-closure.json",
+      "sha256": "47d693524292c461b71d33bdb3fd0e6113e2d6fd7f3978f10b2464d2340efeb5",
+      "bytes": 5746
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/round-1/review.md",
+      "sha256": "dee327a097b14ae6471a2c9d8d566b273fd60192ef612e17a268a49f89edb400",
+      "bytes": 1363
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/round-2/review.md",
+      "sha256": "a5072e82d728b5c9ca4c483f0b0df98ae04cea3faff5824554fdc75431dfed5c",
+      "bytes": 1713
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/round-3/review.md",
+      "sha256": "53a1ffc9d31eb69c63c22f6da681115c6e99bc08259d6c07ec33b21692c75979",
+      "bytes": 2854
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/round-4/review.md",
+      "sha256": "27dda7803176140f0107812944754de0db64cfd4d2a679407ada71739bc17adc",
+      "bytes": 2589
+    },
+    {
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/campaign-drafts/verdict.md",
+      "sha256": "a20780e7363357e3ce5e006665d400a3f94df2922a8c8bfe705a5c3031df8688",
+      "bytes": 2947
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "commands": {
+    "go": [
+      "/workspace/.phorvex-go/gopath/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+      "version"
+    ],
+    "helm": [
+      "/workspace/.phorvex-tools/helm",
+      "version",
+      "--short"
+    ],
+    "tar": [
+      "/workspace/.phorvex-tools/tar135/bin/tar",
+      "--version"
+    ],
+    "python311": [
+      "/workspace/.phorvex-tools/python311/python/bin/python3.11",
+      "-c",
+      "import sys,yaml,jsonschema,importlib.metadata;print(sys.version.split()[0],yaml.__version__,importlib.metadata.version(\"jsonschema\"))"
+    ],
+    "python312": [
+      "/workspace/.phorvex-tools/python312/python/bin/python3.12",
+      "-c",
+      "import sys,yaml,openpyxl,et_xmlfile;print(sys.version.split()[0],yaml.__version__,openpyxl.__version__,et_xmlfile.__version__)"
+    ]
+  },
+  "observed": {
+    "go": "go version go1.26.3 linux/amd64",
+    "helm": "v3.16.4+g7877b45",
+    "tar": "tar (GNU tar) 1.35",
+    "python311": "3.11.17 6.0.3 4.26.0",
+    "python312": "3.12.15 6.0.2 3.1.5 2.0.0"
+  },
+  "state": "VERIFIED_PREPARATION_ONLY",
+  "workflow_python_requirements": "PyYAML>=6.0,<7; jsonschema>=4.10,<5",
+  "preparation_note": "Initial manual assertion incorrectly expected charts PyYAML6.0.2 for workflow Python3.11; actual6.0.3 satisfies unchanged workflow requirements. No tool/package was modified."
+}

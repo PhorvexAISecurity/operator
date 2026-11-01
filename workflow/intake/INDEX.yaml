@@ -346,3 +346,24 @@ intakes:
     state: REPORTED
     issue_id: null
     aliases: []
+  RPT-20261101-005200-stage-clock:
+    directory: intake/RPT-20261101-005200-stage-clock
+    kind: BUG
+    title: Fractional decision clock rejected a real stage candidate export
+    state: VERIFIED
+    issue_id: null
+    aliases: []
+  RPT-20261101-005201-stage-vendored-chart:
+    directory: intake/RPT-20261101-005201-stage-vendored-chart
+    kind: BUG
+    title: Vendored stage capture subchart differed from reviewed source
+    state: VERIFIED
+    issue_id: null
+    aliases: []
+  RPT-20261101-005202-stage-runtime-deadline:
+    directory: intake/RPT-20261101-005202-stage-runtime-deadline
+    kind: OBSERVATION
+    title: Stage code-benchmark candidate hit unchanged runtime deadline
+    state: VERIFIED
+    issue_id: null
+    aliases: []

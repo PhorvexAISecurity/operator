@@ -1,0 +1,19 @@
+{
+  "origin": "operator-submitted acceptance jobs using the actual BenchBot queue/execution and real Telegram delivery; no Telegram incoming update is claimed",
+  "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "state": "PASS",
+  "finished_at": "2026-11-01T01:10:13.881331+00:00",
+  "previous_failed_batch": "474cff3249df",
+  "retry_policy": "one new actual model/queue attempt after owned refresh ends; original deadline unchanged",
+  "phase": "code-bot-retry",
+  "jobs": [
+    {
+      "id": "5fc1c1b0f192",
+      "state": "DONE",
+      "request": "stage-v2a-helper-64.txt",
+      "request_sha256": "e239d8f531473fba18756b32210a0c4d06d39a99f1f4b946b3721490d7fdadd1",
+      "origin": "operator acceptance, not Telegram ingestion"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+--- current
++++ regenerated
+@@ -4592,6 +4592,7 @@
+         - --math-lab-capture-policies=vllm/vllm-defense
+         - --math-lab-capture-dir=/audit/math-lab
+         - --math-lab-capture-max-bytes=1073741824
++        - --math-lab-capture-cost-evidence=true
+         env:
+         - name: POD_NAMESPACE
+           valueFrom:

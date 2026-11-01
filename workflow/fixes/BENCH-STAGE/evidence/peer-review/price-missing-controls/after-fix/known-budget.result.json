@@ -1,0 +1,131 @@
+{
+  "schema": "phorvex-bench.endpoint-result.v1",
+  "state": "COMPLETE",
+  "mode": "PAIRED_GO_REFERENCE",
+  "evidence": "synthetic",
+  "source_revision": "independent-review-control",
+  "config": {
+    "lookback": 86400,
+    "min": 0.0001,
+    "max": 1000,
+    "eta": 0.004477248791932867,
+    "g_max": 1,
+    "max_dt": 30,
+    "delta": 30
+  },
+  "ticks": [
+    {
+      "tick_id": "tick",
+      "at": 3000000,
+      "workload_uid": "workload",
+      "policy_uid": "policy",
+      "state": "COMPLETE",
+      "budget": {
+        "R": 0.10368000052096704,
+        "used": 0,
+        "held": 0,
+        "R_left": 0.10368000052096704,
+        "S": 0,
+        "acting_admission": "BLOCKED: shadow ledger is not authoritative"
+      },
+      "lambda": {
+        "lambda_prev": 0.0001,
+        "lambda_next": 0.0001,
+        "lambda_eff": 0,
+        "b": 0,
+        "g": -1,
+        "dt": 0,
+        "S": 0,
+        "R": 0.10368000052096704,
+        "state_write": "COMMITTED",
+        "reason": "AT_FLOOR_UNPRICED",
+        "at_floor": true,
+        "at_ceiling": false
+      },
+      "v2": {
+        "arm": "v2",
+        "executed": true,
+        "pick": null,
+        "noop_reason": "NO_FEASIBLE_CANDIDATE",
+        "candidates": [
+          {
+            "candidate_id": "a",
+            "action": "rotate",
+            "V": 10,
+            "J": 10,
+            "cost": {
+              "E": 159,
+              "rho": 159,
+              "T_mid": 43,
+              "T_upper": 43,
+              "p_f": 1,
+              "C_flow": 43,
+              "C_norm": 116,
+              "sample_count": 0,
+              "rollback": "STUDY_PROXY_T_UPPER"
+            },
+            "admitted": false,
+            "selected": false,
+            "containment": false,
+            "refusals": [
+              "BUDGET"
+            ]
+          }
+        ]
+      },
+      "v3": {
+        "arm": "v3",
+        "executed": true,
+        "pick": null,
+        "noop_reason": "NO_FEASIBLE_CANDIDATE",
+        "candidates": [
+          {
+            "candidate_id": "a",
+            "action": "rotate",
+            "V": 10,
+            "J": 10,
+            "cost": {
+              "E": 159,
+              "rho": 159,
+              "T_mid": 43,
+              "T_upper": 43,
+              "p_f": 1,
+              "C_flow": 43,
+              "C_norm": 116,
+              "sample_count": 0,
+              "rollback": "STUDY_PROXY_T_UPPER"
+            },
+            "admitted": false,
+            "selected": false,
+            "containment": false,
+            "refusals": [
+              "BUDGET"
+            ]
+          }
+        ]
+      },
+      "changed": false
+    }
+  ],
+  "comparable_ticks": 1,
+  "changed_choices": 0,
+  "noop": {
+    "v2": 1,
+    "v3": 1
+  },
+  "forecast_endpoint_seconds": {
+    "v2": 0,
+    "v3": 0
+  },
+  "counterfactual_actual_charges": null,
+  "counterfactual_verified_facts": null,
+  "missing_reasons": {},
+  "limitations": [
+    "Offline Go experiment on explicitly supplied candidate facts/gates and telemetry; not a deployed production V3 implementation.",
+    "V2 and V3 use identical new endpoint costs, budget gates and candidates. Only optional ordering is priced in V3; B=1.",
+    "No entropy, history picker, counterfactual spend feedback or priced-worth gate. Counterfactual actual costs and verified security effects are unknown.",
+    "Class priors, rollback proxy, lambda constants and explicitly declared SLO defaults are study assumptions, not production approval.",
+    "Candidate producers must establish real fact-to-action mapping, all non-cost safety gates, containment priority and historical telemetry. An uploaded fixture does not prove production provenance.",
+    "An arm's executed flag means its scoring code ran. Only comparable ticks with complete required inputs contribute to changed choices, NOOP counts or forecast totals."
+  ]
+}

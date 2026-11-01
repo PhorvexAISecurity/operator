@@ -1,0 +1,32 @@
+package main
+
+import (
+    "encoding/json"
+    "math"
+    "os"
+    "runtime"
+    "time"
+)
+
+func main() {
+    values := []string{
+        "1970-01-01T00:00:00Z",
+        "1970-01-01T00:00:01.000000001Z",
+        "1969-12-31T23:59:59.999999999Z",
+        "2026-10-31T23:50:13Z",
+        "2026-10-31T23:50:13.0944622Z",
+        "2026-10-31T23:50:13.09446222Z",
+        "2026-10-31T23:50:13.094462223Z",
+        "2026-11-01T03:20:13.094462223+03:30",
+        "2026-10-31T19:50:13.094462223-04:00",
+        "1970-01-01T00:00:00.1+00:01",
+    }
+    out := json.NewEncoder(os.Stdout)
+    for _, value := range values {
+        stamp, err := time.Parse(time.RFC3339Nano, value)
+        if err != nil { panic(err) }
+        at := float64(stamp.UnixNano()) / 1e9
+        if err := out.Encode(map[string]any{"timestamp":value, "unix_ns":stamp.UnixNano(), "at":at,
+            "float_bits":math.Float64bits(at), "go_version":runtime.Version()}); err != nil { panic(err) }
+    }
+}

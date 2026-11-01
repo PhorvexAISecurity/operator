@@ -1,0 +1,40 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "name": "staging-brain-mathlab",
+        "namespace": "phorvex-staging",
+        "labels": {
+          "app.kubernetes.io/part-of": "stage-brain-benchmark"
+        }
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "storageClassName": "gp2-csi",
+        "resources": {
+          "requests": {
+            "storage": "2Gi"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ServiceAccount",
+      "metadata": {
+        "name": "staging-brain-benchmark",
+        "namespace": "phorvex-staging",
+        "labels": {
+          "app.kubernetes.io/part-of": "stage-brain-benchmark"
+        }
+      },
+      "automountServiceAccountToken": false
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "subject": {
+    "kind": "campaign",
+    "id": "2026-10-31-stage-brain-benchmark",
+    "round": "round-3"
+  },
+  "recorded_at": "2026-11-01T00:54:49.178759+00:00",
+  "artifacts": [
+    {
+      "path": "evidence/calibration-3.json",
+      "sha256": "e5ace5cd167fa1a5c18b732014fcc02c9f4964e499caee8ce678170238f013f8",
+      "bytes": 387,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/endpoint-bot-acceptance.json",
+      "sha256": "55c91b34970696a0a4b41b51809f1eae36338e29b03f7a2e8a26ccd9a2a4c03c",
+      "bytes": 3203,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/handover.json",
+      "sha256": "2ea3d97eeebf53842feabf2942526e3afd7cbe505dbe0f6e71fcfddf853c8e3e",
+      "bytes": 714,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/node-events.json",
+      "sha256": "66673c222e07e782f5c00a2a6dfba978dac52804d51c6f908a9ffdd0faf19f2a",
+      "bytes": 5815,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/round2-frozen-receipt.json",
+      "sha256": "632d4801a6d831d33f7083ad77ced018176183d8cb3c2677a3268062b43c661b",
+      "bytes": 1275,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/runtime-after-drain.json",
+      "sha256": "7268f7152f4636c19fa7ae8447452724d9b1b31fb126be5348098da70609d3f4",
+      "bytes": 1676,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/second-generation-receipt.json",
+      "sha256": "8533a47c557517b7d69709ca281111660fffe1ca6f35005d55fd391c39287eb0",
+      "bytes": 832,
+      "retention": "git-compact-receipt"
+    },
+    {
+      "path": "evidence/service-launch-receipt.json",
+      "sha256": "11b20f91ceb07aff6b06734beba4c8a910ff2af149cec11b6a4b32023f5a06e8",
+      "bytes": 1015,
+      "retention": "git-compact-receipt"
+    }
+  ],
+  "original_evidence": "Private rawjournal/cohort paths and hashes are recorded in corresponding BENCH-STAGE live/peerreviewreceipts; no rawdb iscommitted."
+}

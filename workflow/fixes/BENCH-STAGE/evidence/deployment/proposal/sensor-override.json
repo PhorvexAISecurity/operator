@@ -1,0 +1,7 @@
+{
+  "image": {
+    "repository": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/sensor",
+    "tag": "staging-0.11.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+    "digest": "sha256:39c0f3e8c8d223f7ed4daf18a33ffb794d32c35ab1827b1506705f9c546f6093"
+  }
+}

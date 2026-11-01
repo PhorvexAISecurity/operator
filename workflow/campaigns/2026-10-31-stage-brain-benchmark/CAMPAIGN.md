@@ -1,0 +1,11 @@
+# Stage brain benchmark verification
+
+User authority: fixes/BENCH-STAGE/AUTHORIZATION.md. Stage services and dedicated stage-bench-api fixture in phorvex-staging-demo only. Source is operator-refactored. Existing production, other namespaces and existing demo policies are not mutated. Existing demo-api records may be read separately. Source/image pins are refreshed before each collection round.
+
+Hypotheses and falsifiers are in hypotheses.yaml. Collect64 actual recorded ticks after capture is enabled and source verified. Run exact baseline, actual dynamic parameter and candidate-code experiments via the bot. Endpoint comparison uses one workload UID, B1, explicit study SLO/window/lookback and a dry-run policy. Collector-owned calibration deletes are distinct from brain-issued actions and do not prove security mitigation. No traffic attack or synthetic SecurityEvent injection is planned. Synthetic kernel controls remain labelled synthetic.
+
+Ceilings:6hours validation, at most3small fixture pods and2Gi snapshotPVC, at most30sequential UID-preconditioned calibration deletes with each<=180seconds, each collection segment<=30minutes. No new cluster. Start from actual readiness and preserve observation gaps; a restart or unexplained change resets qualification. Stop on scope/source/UID drift, unhealthy benign control, unexplained mutation, storage bound or deadline. No zero imputation or full30day history assertion.
+
+Lead owns live actions and cleanup. Record before/after manifests and every mutation in rounds/round-1/evidence/mutations.jsonl. Persistent capture/storage and bot changes are intentional authorized service configuration, retained with rollback instructions; temporary measurement jobs/portforwards/tokens are removed. Dedicated fixture is retained only if needed for ongoing requested benchmarks and explicitly reported; otherwise scale down after evidence capture. Existing data is preserved.
+
+Observations, analysis and independent review remain separate. Worker authors do not sign their own source/live acceptance. Final campaign review will use an independent non-author reviewer once implementation helpers hand off. No successful result or cleanup is pre-asserted.

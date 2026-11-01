@@ -1,0 +1,43 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "isolated_source_tree": "/workspace/.phorvex-test-tmp/bench-stage-vendored-wjmeixh5",
+  "archive_sha256": "bbbb2e7202443cc78dcb79bf5079b0ae3839ae9f73f7ab572c17d2c6bb002f4f",
+  "source_paths": [
+    "deploy/charts",
+    "phorvex/charts/phorvex",
+    "build/phoenix-extended/charts/phoenix",
+    "deploy/helm/phorvex-stack",
+    "tools/package-vendored-charts.sh",
+    "tools/check-vendored-chart.sh"
+  ],
+  "commands": [
+    {
+      "command": [
+        "bash",
+        "tools/package-vendored-charts.sh"
+      ],
+      "exit_code": 0,
+      "log": "isolated-0.log"
+    },
+    {
+      "command": [
+        "bash",
+        "tools/check-vendored-chart.sh"
+      ],
+      "exit_code": 0,
+      "log": "isolated-1.log"
+    }
+  ],
+  "changed_archives": [
+    {
+      "path": "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz",
+      "before_sha256": "95b006c92c9d5a3ac3461c22e8cf58e786d492ddba234800a60278a7d8244017",
+      "after_sha256": "012cdcc459fa585f63768227b5d418c2c428e53ff2fc210076c657d19bbab036",
+      "bytes": 83671
+    }
+  ],
+  "tar_version": "tar (GNU tar) 1.35",
+  "helm_version": "v3.16.4+g7877b45",
+  "result": "PASS_ISOLATED_REGENERATION",
+  "note": "Main worktree source unchanged while coherent3e11 preflight continues. Only required generated subchart changes; no lock/version or other archive modifications."
+}

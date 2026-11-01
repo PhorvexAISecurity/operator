@@ -1,0 +1,8 @@
+{
+  "deployment": {
+    "image": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+    "digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+    "git_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "rolled_out_at": "2026-10-31T23:49:07.055708+00:00"
+  }
+}

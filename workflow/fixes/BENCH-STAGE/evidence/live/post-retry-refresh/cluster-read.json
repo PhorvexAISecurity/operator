@@ -1,0 +1,679 @@
+{
+  "events": {
+    "body": {
+      "apiVersion": "v1",
+      "items": [
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:28Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386056",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:28Z",
+          "message": "Successfully assigned phorvex-staging-demo/stage-bench-api-f9b895d7-25bpm to ip-172-27-47-45.us-east-2.compute.internal",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:28Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c3f891afeec8",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386069",
+            "uid": "9205e958-430f-4028-ae30-7e22e34fe197"
+          },
+          "reason": "Scheduled",
+          "reportingComponent": "default-scheduler",
+          "reportingInstance": "",
+          "source": {
+            "component": "default-scheduler"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:29Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386063",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:29Z",
+          "message": "Pulling image \"nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0\"",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:29Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c3f8c70dbc54",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386133",
+            "uid": "c483b098-41c0-4d69-8410-788a7fcce3b5"
+          },
+          "reason": "Pulling",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:31Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386063",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:31Z",
+          "message": "Successfully pulled image \"nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0\" in 1.447s (1.447s including waiting). Image size: 20986061 bytes.",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:31Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c3f91d54e0c6",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386182",
+            "uid": "e7c39fc2-7f20-4576-bf8b-f2cc9145fa7c"
+          },
+          "reason": "Pulled",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:31Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386063",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:31Z",
+          "message": "Container created",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:31Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c3f91fa29234",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386186",
+            "uid": "c69c83c3-2d03-43dd-ba7a-078f4f7f1f2c"
+          },
+          "reason": "Created",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:31Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386063",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:31Z",
+          "message": "Container started",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:31Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c3f927343562",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386190",
+            "uid": "e762fa46-8a9d-4ad1-8836-10a375876494"
+          },
+          "reason": "Started",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:10Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-25bpm",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386063",
+            "uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:10Z",
+          "message": "Stopping container web",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:10Z",
+            "name": "stage-bench-api-f9b895d7-25bpm.18e3c4561e0fd399",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392686",
+            "uid": "4c47faf0-c977-48db-8e04-9121185af82e"
+          },
+          "reason": "Killing",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:23Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428270",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:23Z",
+          "message": "Successfully assigned phorvex-staging-demo/stage-bench-api-f9b895d7-47tcs to ip-172-27-62-202.us-east-2.compute.internal",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:23Z",
+            "name": "stage-bench-api-f9b895d7-47tcs.18e3c679e5eb574c",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428281",
+            "uid": "2f41dbaa-131b-4664-8c51-9b9fd8d60653"
+          },
+          "reason": "Scheduled",
+          "reportingComponent": "default-scheduler",
+          "reportingInstance": "",
+          "source": {
+            "component": "default-scheduler"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:24Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428274",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:24Z",
+          "message": "Pulling image \"nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0\"",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:24Z",
+            "name": "stage-bench-api-f9b895d7-47tcs.18e3c67a16934a40",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428337",
+            "uid": "4358e1ed-33bb-436c-993e-1147f40eccf0"
+          },
+          "reason": "Pulling",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-62-202.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-62-202.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:25Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428274",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:25Z",
+          "message": "Successfully pulled image \"nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0\" in 1.378s (1.378s including waiting). Image size: 20986061 bytes.",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:25Z",
+            "name": "stage-bench-api-f9b895d7-47tcs.18e3c67a68b90fe0",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428364",
+            "uid": "97f7dbe5-a4fb-440c-9f8b-092c5a6654bb"
+          },
+          "reason": "Pulled",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-62-202.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-62-202.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:25Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428274",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:25Z",
+          "message": "Container created",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:25Z",
+            "name": "stage-bench-api-f9b895d7-47tcs.18e3c67a6a81516a",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428366",
+            "uid": "655f42c1-d376-4535-8987-fb9b7e521a95"
+          },
+          "reason": "Created",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-62-202.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-62-202.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:25Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428274",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:25Z",
+          "message": "Container started",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:25Z",
+            "name": "stage-bench-api-f9b895d7-47tcs.18e3c67a71bc7189",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428369",
+            "uid": "615d6c66-11e0-44fb-907b-d96e6bf4e261"
+          },
+          "reason": "Started",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-62-202.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-62-202.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:23Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-5wlvd",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102380987",
+            "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:23Z",
+          "message": "Stopping container web",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:23Z",
+            "name": "stage-bench-api-f9b895d7-5wlvd.18e3c679e1821119",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428265",
+            "uid": "47f13a5c-a28e-4884-b7a0-c01211eb0c57"
+          },
+          "reason": "Killing",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-62-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-62-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:10Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-hkbkv",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392688",
+            "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:10Z",
+          "message": "Successfully assigned phorvex-staging-demo/stage-bench-api-f9b895d7-hkbkv to ip-172-27-47-45.us-east-2.compute.internal",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:10Z",
+            "name": "stage-bench-api-f9b895d7-hkbkv.18e3c45621016d1f",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392692",
+            "uid": "2274681f-93f6-41af-8d08-00515da4a4bd"
+          },
+          "reason": "Scheduled",
+          "reportingComponent": "default-scheduler",
+          "reportingInstance": "",
+          "source": {
+            "component": "default-scheduler"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:11Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-hkbkv",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392689",
+            "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:11Z",
+          "message": "Container image \"nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0\" already present on machine and can be accessed by the pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:11Z",
+            "name": "stage-bench-api-f9b895d7-hkbkv.18e3c4564d63ef3f",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392717",
+            "uid": "98f808d2-82ed-4625-8874-0b44974e8251"
+          },
+          "reason": "Pulled",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:11Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-hkbkv",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392689",
+            "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:11Z",
+          "message": "Container created",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:11Z",
+            "name": "stage-bench-api-f9b895d7-hkbkv.18e3c4564e84b71e",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392719",
+            "uid": "98767052-7122-45ea-a976-6eb8c6b70946"
+          },
+          "reason": "Created",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:11Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-hkbkv",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392689",
+            "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:11Z",
+          "message": "Container started",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:11Z",
+            "name": "stage-bench-api-f9b895d7-hkbkv.18e3c45651f3102f",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392720",
+            "uid": "b87a3fc7-b3f7-481a-b957-aaf78fd064c2"
+          },
+          "reason": "Started",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-47-45.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-47-45.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:28Z",
+          "involvedObject": {
+            "apiVersion": "v1",
+            "fieldPath": "spec.containers{web}",
+            "kind": "Pod",
+            "name": "stage-bench-api-f9b895d7-tw48t",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102362333",
+            "uid": "21d9a1cc-f24f-4c4c-b497-d2389c8b748b"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:28Z",
+          "message": "Stopping container web",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:28Z",
+            "name": "stage-bench-api-f9b895d7-tw48t.18e3c3f88cd38f45",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386055",
+            "uid": "b1260a9b-7085-41c3-93df-4949535d88c7"
+          },
+          "reason": "Killing",
+          "reportingComponent": "kubelet",
+          "reportingInstance": "ip-172-27-58-153.us-east-2.compute.internal",
+          "source": {
+            "component": "kubelet",
+            "host": "ip-172-27-58-153.us-east-2.compute.internal"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:22:28Z",
+          "involvedObject": {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "stage-bench-api-f9b895d7",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102381131",
+            "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:22:28Z",
+          "message": "Created pod: stage-bench-api-f9b895d7-25bpm",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:22:28Z",
+            "name": "stage-bench-api-f9b895d7.18e3c3f88e8934f4",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386060",
+            "uid": "4512c996-5b5c-449c-80c5-05adf298fceb"
+          },
+          "reason": "SuccessfulCreate",
+          "reportingComponent": "replicaset-controller",
+          "reportingInstance": "",
+          "source": {
+            "component": "replicaset-controller"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T00:29:10Z",
+          "involvedObject": {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "stage-bench-api-f9b895d7",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102386224",
+            "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T00:29:10Z",
+          "message": "Created pod: stage-bench-api-f9b895d7-hkbkv",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:29:10Z",
+            "name": "stage-bench-api-f9b895d7.18e3c45620c34776",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392691",
+            "uid": "5c208078-05c6-44e8-b63e-372b90f64716"
+          },
+          "reason": "SuccessfulCreate",
+          "reportingComponent": "replicaset-controller",
+          "reportingInstance": "",
+          "source": {
+            "component": "replicaset-controller"
+          },
+          "type": "Normal"
+        },
+        {
+          "apiVersion": "v1",
+          "count": 1,
+          "eventTime": null,
+          "firstTimestamp": "2026-11-01T01:08:23Z",
+          "involvedObject": {
+            "apiVersion": "apps/v1",
+            "kind": "ReplicaSet",
+            "name": "stage-bench-api-f9b895d7",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102392769",
+            "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+          },
+          "kind": "Event",
+          "lastTimestamp": "2026-11-01T01:08:23Z",
+          "message": "Created pod: stage-bench-api-f9b895d7-47tcs",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:23Z",
+            "name": "stage-bench-api-f9b895d7.18e3c679e44a88a9",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428272",
+            "uid": "a5beb751-1421-4223-9c28-9e5669651868"
+          },
+          "reason": "SuccessfulCreate",
+          "reportingComponent": "replicaset-controller",
+          "reportingInstance": "",
+          "source": {
+            "component": "replicaset-controller"
+          },
+          "type": "Normal"
+        }
+      ],
+      "kind": "List",
+      "metadata": {
+        "resourceVersion": ""
+      }
+    },
+    "error": "",
+    "rc": 0
+  },
+  "fixture": {
+    "body": {
+      "apiVersion": "v1",
+      "items": [],
+      "kind": "List",
+      "metadata": {
+        "resourceVersion": ""
+      }
+    },
+    "error": "",
+    "rc": 0
+  },
+  "kubectl": "/usr/local/bin/kubectl",
+  "original_response_sha256": "f6b07376994f7390262b267e4d05cc2eb136ae747475886b5bf90366593831dc",
+  "read_at": 1793496055.7459338,
+  "selection": "Only fixture events retained; original full namespace event response held privately by recorded hash. Initial fixture query used app=stage-bench-api instead of actual app.kubernetes.io/name selector, so empty list is not a health assertion."
+}

@@ -1,0 +1,8 @@
+checks:
+  incident:
+    artifact: evidence/incident.md
+    command: python3 workflow/fixes/BENCH-STAGE/evidence/p3/verify-final-evidence.py
+  p3:
+    artifact: evidence/p3/verdict.md
+    result: PASS
+    command: python3 workflow/fixes/BENCH-STAGE/evidence/p3/verify-final-evidence.py

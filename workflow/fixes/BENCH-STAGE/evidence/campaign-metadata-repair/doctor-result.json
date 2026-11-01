@@ -1,0 +1,11 @@
+{
+  "result": "PASS",
+  "exit_code": 0,
+  "command": [
+    "/workspace/.phorvex-workflow-venv/bin/python",
+    "workflow/tools/workflow.py",
+    "doctor"
+  ],
+  "log_sha256": "c8b1cb40b311ef0fca2dc74a46c566aa6ad334af1bfc19ce5b177c084c8c88ef",
+  "note": "Standalone schema/metadata precheck; final CI still reruns its exact pinned workflow job."
+}

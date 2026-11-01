@@ -1,0 +1,66 @@
+{
+  "at": "2026-10-31T23:58:28.930974+00:00",
+  "prefix": {
+    "seq": 145,
+    "hash": "3a5ff8a8e67719609a2de5d1cc56a3c4fa60b6429bd5eb43199e52807e28be21"
+  },
+  "session": "31c6c65ef02e41d289b4eb1b9edd58ce",
+  "snapshot": {
+    "at": 1793491069.3905637,
+    "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "policy_generation": 1,
+    "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+    "spec_replicas": 3,
+    "class": "stateless",
+    "ready_pod_uids": [
+      "1bca3fbc-ea94-434e-9e05-26467b4a863e",
+      "21d9a1cc-f24f-4c4c-b497-d2389c8b748b",
+      "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+    ],
+    "complete_from": 1793490906.471366,
+    "watermark": 1793491069.3905637,
+    "measurement": "watch-observed-service-ready-backends",
+    "mode": "isolated-calibration",
+    "authoritative": false,
+    "reasons": [],
+    "moves": [
+      {
+        "id": "calibration-508855b5cb284d1399cf80ef35d440e7",
+        "revision": 1,
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "action": "rotate",
+        "containment": false,
+        "state": "settled",
+        "observed_at": 1793491034.5271733,
+        "attributed": true,
+        "measured": true,
+        "intervals": [
+          {
+            "endpoint_uid": "5b2594d7-8c64-411e-80dc-033592597fda:3196aa4b-4fd8-4785-b147-0c661627bbaa",
+            "start": 1793491032.670833,
+            "end": 1793491034.5271733
+          }
+        ],
+        "reservation": null,
+        "overdue": false
+      }
+    ],
+    "samples": [
+      {
+        "id": "calibration-508855b5cb284d1399cf80ef35d440e7",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248",
+        "action": "rotate",
+        "at": 1793491034.5271733,
+        "duration": 4.697852373123169,
+        "censored": false,
+        "overdue": false,
+        "suspect": false
+      }
+    ],
+    "journal_seq": 121,
+    "journal_hash": "d51c843ad3bcc0f1aad024bfd7813a768b1520af3d917f1883de510fdbad4a4f"
+  },
+  "storage": null
+}

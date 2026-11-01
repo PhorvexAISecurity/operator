@@ -1,0 +1,27 @@
+{
+  "source_sha": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+  "description": "Coherent final committed-source preflight followed by separate issue-specific acceptance; all current CI recipes and tool versions retained, no live cluster jobs. Earlier 348 interrupted run remains separate.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-de426ee1-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-de426ee1-status.json",
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ]
+}

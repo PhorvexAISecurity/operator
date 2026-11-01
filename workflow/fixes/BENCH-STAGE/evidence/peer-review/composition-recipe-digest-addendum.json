@@ -1,0 +1,11 @@
+{
+  "schema": "phorvex-bench.operational-recipe-review.v1",
+  "reviewer": "stage_review",
+  "result": "PASS_STATIC_RECIPE",
+  "created_at": "2026-10-31T23:33:50.027151+00:00",
+  "recipe": "workflow/fixes/BENCH-STAGE/evidence/compose-stage-relay-images.py",
+  "recipe_sha256": "1b520488dad2e2375eadf113bf469bde583804300875a2f7ed2197527d405460",
+  "followup_to": "workflow/fixes/BENCH-STAGE/evidence/peer-review/composition-recipe-review.json",
+  "change": "The exact local manifest digest is now calculated by crane digest --tarball and recorded per image; compare this with publication and runtime digests. Existing static recipe verdict otherwise unchanged.",
+  "pending": "Actual archive/config/exported binary hashes and clean source receipt review before deployment. No artifacts reviewed or deployment approved in this static addendum."
+}

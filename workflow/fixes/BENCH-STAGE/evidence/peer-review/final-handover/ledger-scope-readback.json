@@ -1,0 +1,164 @@
+{
+  "at": "2026-11-01T01:26:41.994814+00:00",
+  "reviewer": "stage-review",
+  "read_only": true,
+  "ledger": {
+    "path": "/home/hami/phorvex-benchmark/stage-data/mutations.jsonl",
+    "sha256": "38b736cf3e86e1746cdffd9bfe33b5225280a243ef16f204f7322810af69673e",
+    "bytes": 4265,
+    "rows": 10,
+    "operations": [
+      {
+        "at": "2026-10-31T22:37:20.480312+00:00",
+        "operation": "apply-reviewed-stage-dryrun-fixture",
+        "state": "intent",
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T22:37:23.490355+00:00",
+        "operation": "apply-reviewed-stage-dryrun-fixture",
+        "state": "completed",
+        "exit": 0,
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T22:54:04.626522+00:00",
+        "operation": "stage-capture-pvc-and-reader-account",
+        "state": "intent",
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T22:54:08.176588+00:00",
+        "operation": "stage-capture-pvc-and-reader-account",
+        "state": "completed",
+        "exit": 0,
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T22:54:08.177782+00:00",
+        "operation": "pin-stage-chart-source-and-capture-images",
+        "state": "intent",
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T22:54:09.990206+00:00",
+        "operation": "pin-stage-chart-source-and-capture-images",
+        "state": "completed",
+        "exit": 0,
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T23:01:56.230031+00:00",
+        "action": "controlled-stage-calibration",
+        "namespace": "phorvex-staging-demo",
+        "pod": "stage-bench-api-f9b895d7-9g4nd",
+        "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+        "brain_issued": false,
+        "deadline_seconds": 120,
+        "reservation": 159,
+        "result": {
+          "http_status": 200,
+          "acknowledged": true,
+          "returned_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+          "id": "calibration-46866ef1e9d4439ba1976903c0ec3057",
+          "pod_uid": "38677032-a920-4979-87f6-a00e682f6b42",
+          "operation": "uid-preconditioned-delete"
+        }
+      },
+      {
+        "at": "2026-10-31T23:48:23.431570+00:00",
+        "action": "reviewed-stage-relay-appset-patch",
+        "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "result": {}
+      },
+      {
+        "at": "2026-10-31T23:57:12.675912+00:00",
+        "action": "controlled-stage-calibration",
+        "namespace": "phorvex-staging-demo",
+        "pod": "stage-bench-api-f9b895d7-tjfh6",
+        "pod_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+        "brain_issued": false,
+        "deadline_seconds": 120,
+        "reservation": 159,
+        "source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "result": {
+          "http_status": 200,
+          "acknowledged": true,
+          "returned_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+          "id": "calibration-508855b5cb284d1399cf80ef35d440e7",
+          "pod_uid": "3196aa4b-4fd8-4785-b147-0c661627bbaa",
+          "operation": "uid-preconditioned-delete"
+        }
+      },
+      {
+        "at": "2026-11-01T00:29:10.889173+00:00",
+        "action": "controlled-stage-calibration",
+        "round": "round-3",
+        "result": {
+          "http_status": 200,
+          "acknowledged": true,
+          "returned_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+          "id": "calibration-ae24648058404084bd3820ee5481134c",
+          "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+          "operation": "uid-preconditioned-delete"
+        }
+      }
+    ]
+  },
+  "scope": {
+    "phorvexpolicy": {
+      "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+      "generation": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      },
+      "mode": "dryRun",
+      "minAvailable": null,
+      "replicaBudget": 1
+    },
+    "service": {
+      "uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+      "generation": null,
+      "selector": {
+        "app.kubernetes.io/name": "stage-bench-api"
+      },
+      "mode": null,
+      "minAvailable": null,
+      "replicaBudget": null
+    },
+    "poddisruptionbudget": {
+      "uid": "41140f0f-830c-4322-93c2-b8805889f8bf",
+      "generation": 1,
+      "selector": {
+        "matchLabels": {
+          "app.kubernetes.io/name": "stage-bench-api"
+        }
+      },
+      "mode": null,
+      "minAvailable": 2,
+      "replicaBudget": null
+    }
+  },
+  "pointer_at_inspection": {
+    "manifest_sha256": "4ecf96ee02b13602397f687977ce2ecdd03eb056d6fdcd62f0c4462fa921d972",
+    "trace_file": "stage-bench-defense.bdbd1e0c6bafb630ca5e3325549d980e9605d4a7e314a9223581594c410ceab1.trace.json",
+    "trace_sha256": "bdbd1e0c6bafb630ca5e3325549d980e9605d4a7e314a9223581594c410ceab1",
+    "keys": [
+      "image_digest",
+      "normalization",
+      "policy",
+      "policy_uid",
+      "producer",
+      "repository",
+      "schema",
+      "snapshot_digests",
+      "snapshot_source_revision",
+      "source_revision",
+      "trace_file",
+      "trace_sha256"
+    ]
+  },
+  "result": "PASS_LEDGER_AND_RETAINED_SCOPE; transient cleanup and automatic recovery remain separate"
+}

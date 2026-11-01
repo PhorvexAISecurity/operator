@@ -1,0 +1,29 @@
+...............................................................................................................................................................fatal: bad object ffffffffffffffffffffffffffffffffffffffff
+..............................................................................................................................................
+----------------------------------------------------------------------
+Ran 301 tests in 394.034s
+
+OK
+fix index: PASS
+issues render: PASS
+doctor: 0 error(s), 20 warning(s)
+WARN: 221 archived records (fixes 197, campaigns 7 with 52 rounds, assessments 17) are verified only against PhorvexSecurity/operator@65af1c99; here doctor checks their structure, frozen STATUS digests and retained evidence, not removed evidence or source-commit pins (see ARCHIVE.yaml)
+WARN: M-25: legacy record lacks verify.sh
+WARN: T0-C: local-original evidence unavailable evidence/live/01-post-deploy-0.4.80-17082b7.jsonl
+WARN: T0-C: local-original evidence unavailable evidence/live/02-validator-strict-v3-0.4.80.json
+WARN: T0-C: local-original evidence unavailable evidence/live/02-validator-strict-v3-0.4.80.md
+WARN: T0-C: legacy record lacks verify.sh
+WARN: T1-B: legacy record lacks verify.sh
+WARN: T1-C: legacy record lacks verify.sh
+WARN: T1-D: legacy record lacks verify.sh
+WARN: T1-E: legacy record lacks verify.sh
+WARN: T1-M020: legacy record lacks verify.sh
+WARN: T1-M023: legacy record lacks verify.sh
+WARN: T1-M028: legacy record lacks verify.sh
+WARN: T1-M160: legacy record lacks verify.sh
+WARN: M-36: main-pending state is ahead of all linked fix records
+WARN: origin/main advanced to 9b5a3eb0e9b1; sync-main is required
+WARN: 25 local-original artifact(s) are unavailable in this clone
+WARN: 126 historical anatomy join(s) need semantic review
+WARN: 34 newly filed issue(s) await anatomy join review
+WARN: anatomy is stale relative to the observed deployed source; release sync required

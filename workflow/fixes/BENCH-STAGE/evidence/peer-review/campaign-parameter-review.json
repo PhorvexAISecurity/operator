@@ -1,0 +1,180 @@
+{
+  "result": "PASS_REAL_PARAMETER_REPLAY_COMPONENT",
+  "checked_at": "2026-11-01T00:36:21.603825+00:00",
+  "package": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-initial",
+  "manifest_sha256": "e4c76604c8999f5d84cfc1df82ff111465efeb7856cacf417265fa8e5347fa18",
+  "files_verified": 46,
+  "jobs": [
+    {
+      "job": "83014231aae7",
+      "experiment_id": "2c3bdec7-9f84-4a50-b4b8-313e11ff562b",
+      "parameter": "P-FEA-006",
+      "arms": [
+        "control",
+        "v1.0",
+        "v1.2",
+        "v1.5"
+      ],
+      "distinct_frozen_ticks": 64,
+      "exact_baseline": 64,
+      "matched_all_arms": 64,
+      "changed_all_arms": 0,
+      "funnel_rows": 768,
+      "cost_rows": 748,
+      "cohort_hash": "sha256:03d223da21db669ca0adfd8f3dcefcbdb666df3009ecc94c741a6806e8776699",
+      "effective_values": {
+        "control": {
+          "label": "recorded 1.2",
+          "value": 1.2
+        },
+        "v1.0": {
+          "label": "1.0",
+          "value": 1.0
+        },
+        "v1.2": {
+          "label": "1.2",
+          "value": 1.2
+        },
+        "v1.5": {
+          "label": "1.5",
+          "value": 1.5
+        }
+      },
+      "cost_ceiling_observed_by_arm": {
+        "control": [
+          "1.2"
+        ],
+        "v1.0": [
+          "1"
+        ],
+        "v1.2": [
+          "1.2"
+        ],
+        "v1.5": [
+          "1.5"
+        ]
+      },
+      "provenance_sha256": "c9dad5fae6bed04dc3652183b938f4ef3aa037217346a30558b7585436a81458",
+      "result_sha256": "0b843fa417288c2aa72648bf32e1b15348a18a8913bd4d9fbc4fe5489367349c"
+    },
+    {
+      "job": "32f795de4856",
+      "experiment_id": "7961f667-ee01-4213-9aa5-cc4393b78bf1",
+      "parameter": "P-FEA-005",
+      "arms": [
+        "control",
+        "v300",
+        "v900",
+        "v1800"
+      ],
+      "distinct_frozen_ticks": 64,
+      "exact_baseline": 64,
+      "matched_all_arms": 64,
+      "changed_all_arms": 0,
+      "funnel_rows": 768,
+      "cost_rows": 664,
+      "cohort_hash": "sha256:ae63d820be878761ddcd8925a19da6835c37dc7e60b0a67035b1432bce3fa10e",
+      "effective_values": {
+        "control": {
+          "label": "recorded 1m",
+          "value": 60.0
+        },
+        "v1800": {
+          "label": "30m",
+          "value": 1800.0
+        },
+        "v300": {
+          "label": "5m",
+          "value": 300.0
+        },
+        "v900": {
+          "label": "15m",
+          "value": 900.0
+        }
+      },
+      "cost_ceiling_observed_by_arm": {
+        "control": [
+          "1.2"
+        ],
+        "v300": [
+          "1.2"
+        ],
+        "v900": [
+          "1.2"
+        ],
+        "v1800": [
+          "1.2"
+        ]
+      },
+      "provenance_sha256": "f65deae0c9f8ac88e3546ce45d1733bb098812ee55273a388e52824b6f12abe6",
+      "result_sha256": "659120b3ce05e1fa135b051699ed20300d832fd8e5b5ad34d43ddb7f919bd012"
+    },
+    {
+      "job": "29c3cdd547cd",
+      "experiment_id": "df250104-af61-4aaa-adc4-c6bd21f16aab",
+      "parameter": "P-OBJ-003",
+      "arms": [
+        "control",
+        "unset",
+        "v0",
+        "v1.2",
+        "v10"
+      ],
+      "distinct_frozen_ticks": 64,
+      "exact_baseline": 64,
+      "matched_all_arms": 64,
+      "changed_all_arms": 0,
+      "funnel_rows": 960,
+      "cost_rows": 930,
+      "cohort_hash": "sha256:dbdee1fbb5d3b4185cd65a81a6d323fde133ad7821e5be5c594617179e3074c5",
+      "effective_values": {
+        "control": {
+          "label": "recorded 1",
+          "value": 1
+        },
+        "unset": {
+          "label": "UNSET",
+          "value": null
+        },
+        "v0": {
+          "label": "0.0",
+          "value": 0.0
+        },
+        "v1.2": {
+          "label": "1.2",
+          "value": 1.2
+        },
+        "v10": {
+          "label": "10.0",
+          "value": 10.0
+        }
+      },
+      "cost_ceiling_observed_by_arm": {
+        "control": [
+          "1.2"
+        ],
+        "unset": [
+          "1.2"
+        ],
+        "v0": [
+          "1.2"
+        ],
+        "v1.2": [
+          "1.2"
+        ],
+        "v10": [
+          "1.2"
+        ]
+      },
+      "provenance_sha256": "713c1fa7c9d721accd1a61d1262ca062422cc3bdb1311e8f9f80f548ec7712f8",
+      "result_sha256": "95a48615aeacbccfac46f9f9edf07ff26b61c58eee0c1dc86fa6f11f0973aa14"
+    }
+  ],
+  "reviewer_control_correction": "Initial ad-hoc assertion combined ARM_LEVEL and PAIRED_DIFF_VS_CONTROL M-P21 rows; corrected to compare ARM_LEVEL counts. No product/evidence change.",
+  "limits": [
+    "Operator-submitted actual BenchBot queue/execution and actual Telegram delivery; no incoming Telegram upload was exercised by this acceptance run.",
+    "Each experiment uses its own independently frozen 64-tick cohort; paired arms within each use identical hashes.",
+    "No selected decision changed on this benign fixture; no security efficacy, realized SLO impact, or independent-tick precision is demonstrated.",
+    "Actual parameter execution/baseline acceptance is separate from still-pending LLM code and integrated endpoint campaign acceptance."
+  ]
+}

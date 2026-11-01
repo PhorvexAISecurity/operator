@@ -1,0 +1,24 @@
+{
+  "events": 1079,
+  "first": 1793487631.134576,
+  "last": 1793489471.9415832,
+  "observed_span_seconds": 1840.807007074356,
+  "logical_bytes": 5515312,
+  "sqlite_bytes": 5885952,
+  "counter": "5515312",
+  "per_record_zlib1_plus128_estimate_bytes": 1727736,
+  "kind_counts": {
+    "session": 1,
+    "list": 6,
+    "checkpoint": 180,
+    "watch": 889,
+    "intent": 1,
+    "receipt": 1,
+    "stopped": 1
+  },
+  "max_logical_bytes": 2147483648,
+  "estimated_days_until_2GiB_at_same_logical_rate": 8.295724036806783,
+  "estimated_30d_logical_bytes_at_same_rate": 7765989943.030759,
+  "estimated_30d_encoded_bytes_at_same_rate": 2432787193.2199287,
+  "estimate_is_extrapolation_not_guarantee": true
+}

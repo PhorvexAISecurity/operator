@@ -1,0 +1,29 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "description": "Coherent final committed-source preflight at reviewed clock repair3e11, then issue-specific acceptance. Lead confirmed subsequent live coverage reset came from node shutdown/drain affecting unrelated pods; fresh live coverage matures separately. No live refresh PASS is implied by local tests.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-3e11f4e7-runner.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/preflight-3e11f4e7-status.json",
+  "total_timeout_seconds": 5100,
+  "steps": [
+    {
+      "name": "exact-current-ci-preflight",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-preflight.sh"
+      ],
+      "timeout_seconds": 3900
+    },
+    {
+      "name": "issue-specific-acceptance",
+      "command": [
+        "bash",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/final-source/run-acceptance.sh"
+      ],
+      "timeout_seconds": 1200
+    }
+  ],
+  "launch_prerequisite": "Lead explicitly authorized launch after identifying environmental node shutdown/drain; source3e11 remains frozen. Actual refreshed endpoint cohort remains a separate live obligation.",
+  "launch_authorized_at": "2026-11-01T00:28:44.582480+00:00"
+}

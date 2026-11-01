@@ -1,0 +1,52 @@
+{
+  "result": "PASS_COHERENT_FINAL_SOURCE_RECEIPTS",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T02:00:44.074388+00:00",
+  "head": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "base": "9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40",
+  "strict_validation": "preflight.validate_receipt(require_worktree=True); recipe2 source-attested CI plan and every raw job hash",
+  "preflight_sha256": "591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee",
+  "gates": 18,
+  "jobs": [
+    "diff",
+    "workflow",
+    "chart-4",
+    "chart-5",
+    "chart-6",
+    "chart-7",
+    "chart-8",
+    "chart-9",
+    "chart-10",
+    "go-unit-phorvex",
+    "go-affected-services",
+    "go-unit-build-metricvalidity",
+    "go-unit-build-test-harness",
+    "go-unit-build-phoenix-extended",
+    "go-unit-libs-logging",
+    "go-unit-build-integrations-epss-ecr-auth-runtime",
+    "go-unit-farm-fixtures-agentsim",
+    "go-build-vet-phorvex"
+  ],
+  "acceptance_sha256": "21f14263674e7995d0977bc297cc0d23cfd249c9bc1e2d8a36fa241758b01d22",
+  "dedicated_top_level_pass_counts": {
+    "l1.txt": 7,
+    "l2.txt": 19
+  },
+  "canonical_diff_sha256": "57825848f895303ba707ee10aefa9cd83aa10ae19e0ca881afc1dd812c3bb77e",
+  "fix_state_at_inspection": "PR_READY",
+  "fix_revision_at_inspection": 18,
+  "p3": {
+    "result": "PASS",
+    "by": "bench-v3-lead",
+    "artifact": "evidence/p3/verdict.md",
+    "sha256": "d5b84ee3c1e48d1161505763fcd37e36ee8329d79e44a4b10698cf1857a1a0a4",
+    "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+    "at": "2026-11-01T01:59:37+00:00",
+    "incident_sha256": "61d74b0801985e7ddcecabb9f8fa2a900ce868c57ffeb5e1626a684b9df913cc"
+  },
+  "limits": [
+    "Recorded tests independently validated; no suite rerun or new cluster action.",
+    "Local recipe preflight does not claim remote go-envtest/shared E2E or all PR CI passed.",
+    "This source gate closes the earlier conditional source-review acceptance; PR publication and merge remain distinct."
+  ]
+}

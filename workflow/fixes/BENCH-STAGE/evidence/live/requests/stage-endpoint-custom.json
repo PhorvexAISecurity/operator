@@ -1,0 +1,21 @@
+{
+  "schema": "phorvex-bench.endpoint-study.v1",
+  "title": "Stage real custom V2/V3: s=.95 W=240 L=300 theta=.25",
+  "policy": "phorvex-staging-demo/stage-bench-defense",
+  "ticks": 64,
+  "config": {
+    "lookback": 300,
+    "eta": 0.1,
+    "min": 0.001,
+    "max": 100,
+    "g_max": 1,
+    "max_dt": 5,
+    "delta": 2
+  },
+  "dataset": "recorded",
+  "study": {
+    "slo_target": 0.95,
+    "window": 240,
+    "worth_threshold": 0.25
+  }
+}

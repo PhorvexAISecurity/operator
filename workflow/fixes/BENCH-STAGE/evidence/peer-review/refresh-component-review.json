@@ -1,0 +1,48 @@
+{
+  "schema": "phorvex-bench.independent-component-review.v1",
+  "reviewer": "stage_review (independent, no implementation ownership)",
+  "created_at": "2026-10-31T23:33:50.003151+00:00",
+  "result": "PASS_REFRESH_COMPONENT",
+  "scope": "Frozen endpoint refresh, journal normalization, immutable generation publication and initial endpoint reader; consumer stage-sync ownership race is tracked separately and still pending.",
+  "head": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "source_manifest": "workflow/fixes/BENCH-STAGE/evidence/refresh-controls/source-manifest.json",
+  "source_manifest_sha256": "a27d65bdeefb3ec9956265c7307f310bcad53b9834766cdc1c71f0987d526021",
+  "sources": {
+    "benchmark/bot/endpoint_study.py": "176d77e0e3a368a8b7abb4ef2ca18da9f18f3bb2857ae6512c0cae53e95eb39d",
+    "benchmark/bot/test_endpoint_study.py": "1fb481a2ff921545aa28efb4b46b2fc1d0af297bf6ca3acfdb98090d560f1535",
+    "benchmark/stage/README.md": "f454bc1f4d21a2c39f6f4c19837abbe80e80b5e7773f9fa1c929d835a822d7ff",
+    "benchmark/stage/normalize.py": "fb48cccb44cb4aea122d57f44239479d94419b5ed8804f20270105950d4ab083",
+    "benchmark/stage/test_evidence.py": "4a1bb36e024c21563ca17e7010606f21aa66a5115ed6a115d22495a4d943eba1",
+    "benchmark/worker/endpoint_refresh.py": "f8c735a3ca619ab782089832e7482efe31f5740c52f87e8ffaf8f45dabd28b29",
+    "benchmark/worker/test_endpoint_refresh.py": "b3de3a949863bf2128063b5e098879dc2329f8fc954545858c0366085b404eea"
+  },
+  "checks": [
+    "One validated SQLite read snapshot fixes the journal prefix across selection and both normalization passes; a later watermark seals observation only, never supplies future object state.",
+    "Selected content-addressed snapshot bytes match exact source, image, recorder-process marker and policy UID, and finalized decision clocks lie within the continuously sealed observed segment.",
+    "Captured-image control and local-base executables must reproduce every exact digest baseline before the candidate exporter; cross-source producer identity remains explicit.",
+    "Per-tick source facts/gates remain source-owned. Measured readiness history remains shadow evidence, with null counterfactual realized charges and unaccepted experimental SLO settings.",
+    "Missing history, stale watermarks, changed engines/live identity, bad source hashes and baseline divergence stop publication. Immutable generations survive later installs and the last-good manifest remains unchanged on pre-publication failure.",
+    "Refresh freezes input bytes under a shared cache lock; pruning/publication use exclusive cache locks and protect active manifest digests, unowned caches and foreign source records.",
+    "The original 30-day insufficient-history regression now resolves the immutable generation filename, returns BLOCKED before either arm and preserves both generation and manifest bytes.",
+    "Bounded ticks, output file sizes, runtime, snapshot bytes and generation capacity have executable controls; capacity failure is explicit and does not silently delete historical generations."
+  ],
+  "tests": {
+    "command": "TMPDIR=/workspace/.phorvex-test-tmp /workspace/.phorvex-workflow-venv/bin/python -m unittest benchmark.worker.test_endpoint_refresh benchmark.stage.test_evidence benchmark.bot.test_endpoint_study -v",
+    "log": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-independent-tests.log",
+    "sha256": "7cbb9efcfaa138bf2f7c1a338da899ad6986dd69c94a5bac2da48121f1756152",
+    "passed": 52,
+    "skipped": 0,
+    "breakdown": {
+      "refresh": 14,
+      "stage_evidence": 25,
+      "endpoint_integration": 13
+    },
+    "boundary": "Actual journal/object fixtures, filesystem locks and executable scripted transport boundaries; compiled shared Go reference controls are included. This is not live actual-brain deployment acceptance."
+  },
+  "open_integration": [
+    "R6: stage sync releases its shared cache lock before exclusive managed-download registration; a concurrent same-policy sync can register a common digest before pruning and cause the first registration to fail. stage_bot is adding a per-policy sync mutex and concurrency test. Failure is closed, with no false completeness.",
+    "Final integrated source SHA, complete suite/preflight, reviewed actual OCI artifacts, stage rollout, continuously observed fresh cohort, real bot reports and cleanup remain required."
+  ],
+  "live_changes": false,
+  "overall_delivery_accepted": false
+}

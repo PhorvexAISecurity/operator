@@ -1,0 +1,135 @@
+{
+  "result": "PASS_COMPONENTS_PENDING_COHERENT_PREFLIGHT_AND_HANDOVER",
+  "reviewer": "stage-review",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "source_delta_from_runtime_3e11": [
+    "deploy/helm/phorvex-stack/charts/phorvex-0.1.4.tgz"
+  ],
+  "evidence": [
+    {
+      "finding": "R1",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r1-component-review.json",
+      "sha256": "51c087475985d87b46f9e760e3c6ec6583efeec717a3267ad3ab1fca3a9aab50"
+    },
+    {
+      "finding": "R1",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/dynamic-study-scope-review.json",
+      "sha256": "6317d2ff6e10c628038b2f528c75a22492f09291bcb782a578f8b3a601904757"
+    },
+    {
+      "finding": "R2",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/missing-stage-pin-control-after.json",
+      "sha256": "903a8d95955a11f6f16b3bdc1ac03ae7d6e9040f4bb1df89f56c78e217131344"
+    },
+    {
+      "finding": "R2",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/dynamic-study-scope-review.json",
+      "sha256": "6317d2ff6e10c628038b2f528c75a22492f09291bcb782a578f8b3a601904757"
+    },
+    {
+      "finding": "R3",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/dynamic-study-scope-review.json",
+      "sha256": "6317d2ff6e10c628038b2f528c75a22492f09291bcb782a578f8b3a601904757"
+    },
+    {
+      "finding": "R3",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-oci-review.json",
+      "sha256": "265e952f828ff1453e7b775be63b7c19270195ebccb41403a1713c3ae6a1d3d0"
+    },
+    {
+      "finding": "R3",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-600/component-review.json",
+      "sha256": "69ae78c351b1b81fd17743924489139d29477aaa1bc361cc6afe4d220e0a1372"
+    },
+    {
+      "finding": "R3",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/actual-cohort-binary-control.json",
+      "sha256": "7ee5f6729d6bea7393b7ae815a1d6a53dc827e9b25e39b750dc97b874908dd34"
+    },
+    {
+      "finding": "R4",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/../relay-component-review.json",
+      "sha256": "2ec509b8f13fb2bdb871bb1aa99a5b1772e3918969496dec18a05b7d770df416"
+    },
+    {
+      "finding": "R4",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-compiled-artifacts-review.json",
+      "sha256": "e40fdd76932a947d65249b07676fb8a72d4ebaf17d408890c415720de8224046"
+    },
+    {
+      "finding": "R4",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/relay-oci-review.json",
+      "sha256": "265e952f828ff1453e7b775be63b7c19270195ebccb41403a1713c3ae6a1d3d0"
+    },
+    {
+      "finding": "R5",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r5-pagination-review.json",
+      "sha256": "807ed0ed13db21bd3aefc287c69ce551f815a6717512021a7805665f605d9cb0"
+    },
+    {
+      "finding": "R5",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/sync-old-image-page-control-after.json",
+      "sha256": "86e1d80ea9a2b88c9e5473ba444ad27939384b80432ba69b229c096333fbd1ec"
+    },
+    {
+      "finding": "R6",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r6-sync-review.json",
+      "sha256": "f069d36d7f5cfcdd2683c3d23a074f698e1583062319d39776e55bec7e4e4964"
+    },
+    {
+      "finding": "R6",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-component-review.json",
+      "sha256": "fc330c6ebecdb50a51736248bcd49d782e1419030e35b6944b6e0630077c092d"
+    },
+    {
+      "finding": "R7",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r7-r8-component-review.json",
+      "sha256": "4eac6f9cb8c76836f52d818fc3c5c05152a9e0ef092e1791bfc6ed1517236eb4"
+    },
+    {
+      "finding": "R7",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r7-r8-pdf-text-review.json",
+      "sha256": "33c72ff76b05eb2fbb1a71175312a696c1524ef89dbc4b51979cc98146bc7d2e"
+    },
+    {
+      "finding": "R8",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r7-r8-component-review.json",
+      "sha256": "4eac6f9cb8c76836f52d818fc3c5c05152a9e0ef092e1791bfc6ed1517236eb4"
+    },
+    {
+      "finding": "R8",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/final-ci-benchmark-path-control-after.json",
+      "sha256": "d2bc4bad1263cb5c9d27093c34a8ead41a95f8adbefb4622fdbd9e83254f8f84"
+    },
+    {
+      "finding": "R9",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/component-review.json",
+      "sha256": "f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56"
+    },
+    {
+      "finding": "R9",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/r9-clock/actual-failed-cohort-before-after.json",
+      "sha256": "698152a2a75ff9469ddd5cd4fecc799696b48690e1420594f10ce2c881c30af5"
+    },
+    {
+      "finding": "Refresh and storage",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/refresh-component-review.json",
+      "sha256": "fc330c6ebecdb50a51736248bcd49d782e1419030e35b6944b6e0630077c092d"
+    },
+    {
+      "finding": "Refresh and storage",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/storage-component-review.json",
+      "sha256": "4d1f78b1d4047b13811a1da05697545732d01c0e7bb2dc2c66dea5c5c9ae6ff7"
+    },
+    {
+      "finding": "Refresh and storage",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/storage-real-backup-independent.json",
+      "sha256": "e31a87e8b19585d57d47e8d0384866106f44d75660071321528afc22489a1640"
+    },
+    {
+      "finding": "Final packaging",
+      "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/packaging/component-review.json",
+      "sha256": "67a8fb3e9db59b3503c54d1e094d7b00dd8351907b8a0b0d3e704992ece7e4e8"
+    }
+  ]
+}

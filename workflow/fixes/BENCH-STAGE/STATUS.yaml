@@ -1,0 +1,317 @@
+schema_version: 1
+protocol_version: 2
+delivery_version: 1
+fix_loop: lead_worker
+revision: 19
+change_class: B
+approvals:
+  pr_open: operations/AUTONOMY.md
+  deploy: fixes/BENCH-STAGE/AUTHORIZATION.md
+checks:
+  decision:
+    result: PASS
+    by: bench-v3-lead
+    artifact: 03-decision.md
+    sha256: 78e6fcf878b71db8d756eb492d533a736f1f3503e28e3894ba94001dc0a930e4
+    source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+    at: '2026-10-31T23:38:58+00:00'
+    contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+    approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+    rationale: Real measured current quota cannot retain original30day window; bounded
+      lossless encoding and truthful capacity accounting preserve evidence semantics
+  red:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/baseline-red.md
+    sha256: 1b1c5aa989e4b99460af548a5018353880bf4b32b626fe704f8e127fe1959569
+    source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+    at: '2026-10-31T23:03:51+00:00'
+  preflight:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/preflight/receipt.json
+    sha256: 591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:53+00:00'
+  implementation:
+    result: PASS
+    by: bench-v3-worker
+    artifact: 04-diff.patch
+    sha256: 57825848f895303ba707ee10aefa9cd83aa10ae19e0ca881afc1dd812c3bb77e
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:54+00:00'
+  l0:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/preflight/run-1793496303783085569/go-unit-phorvex.log
+    sha256: 4b048f8441a266ada9ceaf0021247a2f0562fc723342e2f5912a81ac2f17267d
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:55+00:00'
+  l1:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l1.txt
+    sha256: bd0174abd71c9a4d260a70e6f438d3b8a0c6903bc151936043f232a22ea5280b
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:56+00:00'
+  l2:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l2.txt
+    sha256: 7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:56+00:00'
+  positive_control:
+    result: PASS
+    by: bench-v3-worker
+    artifact: evidence/final-source/l2.txt
+    sha256: 7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:57:57+00:00'
+  incident:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/incident.md
+    sha256: 61d74b0801985e7ddcecabb9f8fa2a900ce868c57ffeb5e1626a684b9df913cc
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:59:37+00:00'
+    baseline_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  p3:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/p3/verdict.md
+    sha256: d5b84ee3c1e48d1161505763fcd37e36ee8329d79e44a4b10698cf1857a1a0a4
+    source_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+    at: '2026-11-01T01:59:37+00:00'
+    incident_sha256: 61d74b0801985e7ddcecabb9f8fa2a900ce868c57ffeb5e1626a684b9df913cc
+  l3:
+    result: PASS
+    by: bench-v3-lead
+    artifact: evidence/live/l3-verdict.md
+    sha256: fce67902d9cb700a12e2a98b019cd86b22b1e4221ba5cbc95e079fa327225900
+    source_sha: ef94fad362dabb51469211388ef80cdfa6eee1d4
+    at: '2026-11-01T02:01:18+00:00'
+    deployment_digest: sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
+fix_id: BENCH-STAGE
+issues: []
+title: Source-pinned stage brain benchmarks through the bot
+profile: standard
+state: PR_READY
+roles:
+  human_owner: hamihoriyat
+  proposer: bench-v3-lead
+  implementer: bench-v3-worker
+  skeptic: bench-v3-lead
+  live_verifier: bench-v3-lead
+  coordinator: bench-v3-lead
+capabilities_required:
+  go_toolchain: true
+  cluster_access: true
+  deployment_authority: true
+baseline:
+  code_branch: main
+  code_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  deployed_image: null
+  deployed_git_sha: bb92355cf7b6c4a696f44caf52bd5fa1268e7303
+blind_derivation:
+  status: pending
+  sha256: null
+  sealed_at: null
+implementation:
+  branch: fix/benchmark-stage
+  base_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  head_sha: ec310e276e45e6a218f7520880e22c6c1c687817
+  stacked_on: []
+pull_request:
+  url: null
+  reviewed_head: null
+  merge_sha: null
+  checks: pending
+  patch_equivalence: pending
+deployment:
+  image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
+  digest: sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90
+  git_sha: ef94fad362dabb51469211388ef80cdfa6eee1d4
+  rolled_out_at: '2026-10-31T23:49:07.055708+00:00'
+verification:
+  required:
+  - L0
+  - L1
+  - L2
+  - L3
+  live_required: true
+  soak_required: false
+  p3: PASS
+  l0: PASS
+  l1: PASS
+  l2: PASS
+  l3: PASS
+  l4: pending
+  positive_control: PASS
+synchronization:
+  issue_entries: pending
+  master_register: pending
+  anatomy_release: pending
+  permanent_tests: pending
+dependencies: []
+blockers: []
+residuals: []
+next_action:
+  owner: coordinator
+  action: Push/open or update the reviewed PR under existing scope; record its actual
+    head and CI. No merge/deploy.
+updated_at: '2026-11-01T02:01:18+00:00'
+follow_up_to: BENCH-V3
+configuration_history:
+- at: '2026-10-31T22:25:19+00:00'
+  by: bench-v3-lead
+  fields:
+  - approvals
+  - baseline
+  - capabilities_required
+  - change_class
+  - implementation
+  - roles
+  - verification
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+- at: '2026-10-31T22:26:19+00:00'
+  by: bench-v3-lead
+  fields:
+  - approvals
+  - verification
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+- at: '2026-10-31T23:59:10+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T00:11:25+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T00:19:37+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T01:09:38+00:00'
+  by: bench-v3-worker
+  fields:
+  - implementation
+  approval_ref: null
+- at: '2026-11-01T02:00:40+00:00'
+  by: bench-v3-lead
+  fields:
+  - deployment
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+transitions:
+- from: TRIAGED
+  to: DESIGNING
+  at: '2026-10-31T22:25:50+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: null
+  approval_ref: null
+  forced: false
+- from: DESIGNING
+  to: AGREED
+  at: '2026-10-31T22:27:24+00:00'
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  note: null
+  approval_ref: null
+  forced: false
+- from: AGREED
+  to: IMPLEMENTED
+  at: '2026-11-01T01:57:58+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: IMPLEMENTED
+  to: OFFLINE_VERIFIED
+  at: '2026-11-01T01:58:14+00:00'
+  by: bench-v3-worker
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: OFFLINE_VERIFIED
+  to: DIFF_REVIEW_PASSED
+  at: '2026-11-01T01:59:47+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+- from: DIFF_REVIEW_PASSED
+  to: PR_READY
+  at: '2026-11-01T02:00:04+00:00'
+  by: bench-v3-lead
+  artifact: null
+  note: Validated role handoff
+  approval_ref: null
+  forced: false
+check_history:
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 6dc0ff886a215f775030a690a346bafc2a81ee073f3ef33fd661b7fc019b3198
+  source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  at: '2026-10-31T22:26:10+00:00'
+  contract_sha256: 94c3caa78ba6b355a385104505a0ea6f116f869c48e3018ff1fee1e1b33ef6fc
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  rationale: Explicit user scope covers stage benchmark implementation and deployment
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 6dc0ff886a215f775030a690a346bafc2a81ee073f3ef33fd661b7fc019b3198
+  source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  at: '2026-10-31T22:27:23+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  rationale: Bind signed plan to explicit L3 and stage deploy scope
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: b1bc652e764edeaa3756e74ab6b9382e6ae5133b71b48e932141e119c3f4cc27
+  source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  at: '2026-10-31T22:29:01+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  rationale: Bounded implementation choices under user stage benchmark scope; no claim
+    of production SLO or move attribution
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: 5357ed119d5e17fcc518f2ffe4d435c7017021b85e382a0bdd69befbc06093cb
+  source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  at: '2026-10-31T22:38:56+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  rationale: Preserve original isolated experimental requirement and exact control/candidate
+    source provenance
+- check: decision
+  result: PASS
+  by: bench-v3-lead
+  artifact: 03-decision.md
+  sha256: b99f5d3139b1a248a454653c622705c3a12659cef459bb8cc022513fc69f25d2
+  source_sha: 9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40
+  at: '2026-10-31T22:50:59+00:00'
+  contract_sha256: 67e94dbf89daba88da4a55a936a02e1212f7ba3e39de94409405e503a2a198ca
+  approval_ref: fixes/BENCH-STAGE/AUTHORIZATION.md
+  rationale: Necessary permanent regression and source-verification dependency within
+    authorized benchmark work
+handoff:
+  id: BENCH-STAGE:17:review
+  from: bench-v3-lead
+  to: bench-v3-lead
+  role: coordinator
+  kind: review
+  revision: 17

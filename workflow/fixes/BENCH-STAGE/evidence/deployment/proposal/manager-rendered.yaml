@@ -1,0 +1,917 @@
+---
+# Source: phorvex/templates/rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+---
+# Source: phorvex/templates/services-dashboard.yaml
+# The services dashboard of this environment, for the Grafana sidecar, which loads
+# ConfigMaps labelled grafana_dashboard=1 from every namespace.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staging-phorvex-services-dashboard
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    grafana_dashboard: "1"
+data:
+  phorvex-services-staging.json: "{\n \"uid\": \"phorvex-services-staging\",\n \"title\": \"Phorvex services \\u2014 staging\",\n \"description\": \"The split Phorvex services of one environment (ADR-0001): scrape health, gRPC calls between the services, ticks, decisions, actuations, stateful rotation and resources. Rendered by the manager chart (phorvex.metrics.dashboard).\",\n \"tags\": [\n  \"phorvex\",\n  \"staging\"\n ],\n \"timezone\": \"browser\",\n \"schemaVersion\": 39,\n \"version\": 1,\n \"editable\": true,\n \"time\": {\n  \"from\": \"now-6h\",\n  \"to\": \"now\"\n },\n \"refresh\": \"1m\",\n \"templating\": {\n  \"list\": [\n   {\n    \"name\": \"datasource\",\n    \"type\": \"datasource\",\n    \"query\": \"prometheus\",\n    \"label\": \"Prometheus\",\n    \"current\": {},\n    \"hide\": 0\n   }\n  ]\n },\n \"annotations\": {\n  \"list\": []\n },\n \"panels\": [\n  {\n   \"type\": \"row\",\n   \"title\": \"Services\",\n   \"collapsed\": false,\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 0,\n    \"w\": 24,\n    \"h\": 1\n   },\n   \"panels\": [],\n   \"id\": 1\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Scraped and up\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 1,\n    \"w\": 8,\n    \"h\": 5\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"up{environment=\\\"staging\\\"}\",\n     \"legendFormat\": \"{{job}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {},\n    \"overrides\": []\n   },\n   \"options\": {\n    \"reduceOptions\": {\n     \"calcs\": [\n      \"lastNotNull\"\n     ],\n     \"fields\": \"\",\n     \"values\": false\n    },\n    \"colorMode\": \"value\",\n    \"graphMode\": \"area\",\n    \"textMode\": \"auto\"\n   },\n   \"description\": \"1 when Prometheus scrapes the service's metrics port.\",\n   \"id\": 2\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Kill switch engaged\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 8,\n    \"y\": 1,\n    \"w\": 4,\n    \"h\": 5\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"max(phorvex_kill_switch_engaged{environment=\\\"staging\\\"})\",\n     \"legendFormat\": \"engaged\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {},\n    \"overrides\": []\n   },\n   \"options\": {\n    \"reduceOptions\": {\n     \"calcs\": [\n      \"lastNotNull\"\n     ],\n     \"fields\": \"\",\n     \"values\": false\n    },\n    \"colorMode\": \"value\",\n    \"graphMode\": \"area\",\n    \"textMode\": \"auto\"\n   },\n   \"description\": \"1 while the manager actuates nothing.\",\n   \"id\": 3\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Protected Pods\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 1,\n    \"w\": 4,\n    \"h\": 5\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum(phorvex_protected_pods{environment=\\\"staging\\\"})\",\n     \"legendFormat\": \"pods\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {},\n    \"overrides\": []\n   },\n   \"options\": {\n    \"reduceOptions\": {\n     \"calcs\": [\n      \"lastNotNull\"\n     ],\n     \"fields\": \"\",\n     \"values\": false\n    },\n    \"colorMode\": \"value\",\n    \"graphMode\": \"area\",\n    \"textMode\": \"auto\"\n   },\n   \"id\": 4\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Restarts (1h)\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 16,\n    \"y\": 1,\n    \"w\": 8,\n    \"h\": 5\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace=\\\"phorvex-staging\\\"}[1h]))\",\n     \"legendFormat\": \"{{pod}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {},\n    \"overrides\": []\n   },\n   \"options\": {\n    \"reduceOptions\": {\n     \"calcs\": [\n      \"lastNotNull\"\n     ],\n     \"fields\": \"\",\n     \"values\": false\n    },\n    \"colorMode\": \"value\",\n    \"graphMode\": \"area\",\n    \"textMode\": \"auto\"\n   },\n   \"id\": 5\n  },\n  {\n   \"type\": \"row\",\n   \"title\": \"Service calls (gRPC)\",\n   \"collapsed\": false,\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 6,\n    \"w\": 24,\n    \"h\": 1\n   },\n   \"panels\": [],\n   \"id\": 6\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Calls answered per second\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 7,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (grpc_service, grpc_method, grpc_code) (rate(phorvex_grpc_server_handled_total{environment=\\\"staging\\\"}[5m]))\",\n     \"legendFormat\": \"{{grpc_method}} {{grpc_code}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 7\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Failed calls per second\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 7,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (grpc_service, grpc_method, grpc_code) (rate(phorvex_grpc_server_handled_total{environment=\\\"staging\\\",grpc_code!=\\\"OK\\\"}[5m]))\",\n     \"legendFormat\": \"{{grpc_method}} {{grpc_code}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 8\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Answer time p95\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 15,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"histogram_quantile(0.95, sum by (le, grpc_method) (rate(phorvex_grpc_server_handling_seconds_bucket{environment=\\\"staging\\\"}[5m])))\",\n     \"legendFormat\": \"{{grpc_method}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 9\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Manager's calls p95 (client side)\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 15,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"histogram_quantile(0.95, sum by (le, grpc_method) (rate(phorvex_grpc_client_handling_seconds_bucket{environment=\\\"staging\\\"}[5m])))\",\n     \"legendFormat\": \"{{grpc_method}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 10\n  },\n  {\n   \"type\": \"row\",\n   \"title\": \"Ticks and decisions\",\n   \"collapsed\": false,\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 23,\n    \"w\": 24,\n    \"h\": 1\n   },\n   \"panels\": [],\n   \"id\": 11\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Manager tick p95 by outcome\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 24,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"histogram_quantile(0.95, sum by (le, outcome) (rate(phorvex_manager_tick_duration_seconds_bucket{environment=\\\"staging\\\"}[5m])))\",\n     \"legendFormat\": \"{{outcome}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 12\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Policy tick outcomes per minute\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 24,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (tenant, outcome) (rate(phorvex_tick_outcomes_total{environment=\\\"staging\\\"}[5m])) * 60\",\n     \"legendFormat\": \"{{tenant}} {{outcome}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"normal\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 13\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Decisions per hour by action\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 32,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action, selected) (increase(phorvex_decisions_total{environment=\\\"staging\\\"}[1h]))\",\n     \"legendFormat\": \"{{action}} selected={{selected}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 14\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Actuations and failures per hour\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 32,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action) (increase(phorvex_actuations_total{environment=\\\"staging\\\"}[1h]))\",\n     \"legendFormat\": \"acted {{action}}\"\n    },\n    {\n     \"refId\": \"B\",\n     \"expr\": \"sum by (action, reason) (increase(phorvex_actuation_failures_total{environment=\\\"staging\\\"}[1h]))\",\n     \"legendFormat\": \"failed {{action}} {{reason}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 15\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"SecurityEvents first seen per hour, by trust\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 40,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (trust) (increase(phorvex_security_events_first_seen_total{environment=\\\"staging\\\"}[1h]))\",\n     \"legendFormat\": \"{{trust}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"description\": \"Events the manager ingested: trusted ones come from an allowlisted, stamped identity such as the attacks service.\",\n   \"id\": 16\n  },\n  {\n   \"type\": \"row\",\n   \"title\": \"Stateful rotation\",\n   \"collapsed\": false,\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 48,\n    \"w\": 24,\n    \"h\": 1\n   },\n   \"panels\": [],\n   \"id\": 20\n  },\n  {\n   \"type\": \"stat\",\n   \"title\": \"Stateful rotations (24h) by outcome\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 49,\n    \"w\": 8,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (outcome) (increase(phorvex_stateful_rotations_total{environment=\\\"staging\\\"}[24h]))\",\n     \"legendFormat\": \"{{outcome}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {},\n    \"overrides\": []\n   },\n   \"options\": {\n    \"reduceOptions\": {\n     \"calcs\": [\n      \"lastNotNull\"\n     ],\n     \"fields\": \"\",\n     \"values\": false\n    },\n    \"colorMode\": \"value\",\n    \"graphMode\": \"area\",\n    \"textMode\": \"auto\"\n   },\n   \"id\": 21\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Stateful rotations per hour by class and outcome\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 8,\n    \"y\": 49,\n    \"w\": 16,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action, outcome) (increase(phorvex_stateful_rotations_total{environment=\\\"staging\\\"}[1h]))\",\n     \"legendFormat\": \"{{action}} {{outcome}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 22\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Recovery to a confirmed member (p50, p95)\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 57,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"histogram_quantile(0.5, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\\\"staging\\\"}[1h])))\",\n     \"legendFormat\": \"{{action}} p50\"\n    },\n    {\n     \"refId\": \"B\",\n     \"expr\": \"histogram_quantile(0.95, sum by (le, action) (rate(phorvex_stateful_rotation_recovery_seconds_bucket{environment=\\\"staging\\\"}[1h])))\",\n     \"legendFormat\": \"{{action}} p95\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"s\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 23\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Stateful decisions per hour by class\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 57,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action, selected) (increase(phorvex_decisions_total{environment=\\\"staging\\\",action=~\\\"stateful-.*\\\"}[1h]))\",\n     \"legendFormat\": \"{{action}} selected={{selected}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 24\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Stateful candidates excluded per hour\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 65,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action, reason) (increase(phorvex_candidates_excluded_total{environment=\\\"staging\\\",action=~\\\"stateful-.*\\\"}[1h]))\",\n     \"legendFormat\": \"{{action}} {{reason}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 25\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Stateful actuation failures per hour\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 65,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (action, reason) (increase(phorvex_actuation_failures_total{environment=\\\"staging\\\",action=~\\\"stateful-.*\\\"}[1h]))\",\n     \"legendFormat\": \"{{action}} {{reason}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"reqps\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 26\n  },\n  {\n   \"type\": \"row\",\n   \"title\": \"Resources\",\n   \"collapsed\": false,\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 73,\n    \"w\": 24,\n    \"h\": 1\n   },\n   \"panels\": [],\n   \"id\": 17\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"CPU by Pod\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 0,\n    \"y\": 74,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\\\"phorvex-staging\\\",container!=\\\"\\\"}[5m]))\",\n     \"legendFormat\": \"{{pod}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"cores\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 18\n  },\n  {\n   \"type\": \"timeseries\",\n   \"title\": \"Memory by Pod\",\n   \"datasource\": {\n    \"type\": \"prometheus\",\n    \"uid\": \"${datasource}\"\n   },\n   \"gridPos\": {\n    \"x\": 12,\n    \"y\": 74,\n    \"w\": 12,\n    \"h\": 8\n   },\n   \"targets\": [\n    {\n     \"refId\": \"A\",\n     \"expr\": \"sum by (pod) (container_memory_working_set_bytes{namespace=\\\"phorvex-staging\\\",container!=\\\"\\\"})\",\n     \"legendFormat\": \"{{pod}}\"\n    }\n   ],\n   \"fieldConfig\": {\n    \"defaults\": {\n     \"unit\": \"bytes\",\n     \"custom\": {\n      \"drawStyle\": \"line\",\n      \"lineWidth\": 1,\n      \"fillOpacity\": 10,\n      \"showPoints\": \"never\",\n      \"stacking\": {\n       \"mode\": \"none\"\n      }\n     }\n    },\n    \"overrides\": []\n   },\n   \"options\": {\n    \"legend\": {\n     \"displayMode\": \"table\",\n     \"placement\": \"right\",\n     \"calcs\": [\n      \"lastNotNull\"\n     ]\n    },\n    \"tooltip\": {\n     \"mode\": \"multi\"\n    }\n   },\n   \"id\": 19\n  }\n ]\n}\n"
+---
+# Source: phorvex/templates/audit-pvc.yaml
+# The decision audit the console streams from.
+#
+# ReadWriteOnce is deliberate and sufficient: the only two readers/writers are the operator
+# and the console, and they run as containers in the SAME pod, so the volume is attached to
+# exactly one node. Sharing it between two Deployments would have required an RWX
+# filesystem (EFS) for what is a single append-only file.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: staging-phorvex-audit
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: gp2-csi
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: staging-phorvex-manager-role
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - apiextensions.k8s.io
+  resourceNames:
+  - phorvexpolicies.phorvex.ai
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - namespaces
+  - nodes
+  - services
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts
+  verbs:
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  - clusterroles
+  - rolebindings
+  - clusterrolebindings
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - selfsubjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - amtd.r6security.com
+  resources:
+  - securityevents
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - amtd.r6security.com
+  resources:
+  - adaptivemovingtargetdefenses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - phorvex.ai
+  resources:
+  - phorvexpolicies/finalizers
+  verbs:
+  - update
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: staging-phorvex-manager-rolebinding
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: staging-phorvex-manager-role
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-operation-journal
+  namespace: "phorvex-staging"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - delete
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "phorvex-staging-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - statefulsets
+  - daemonsets
+  - deployments
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - replicationcontrollers
+  verbs:
+  - get
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - list
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "console-identity-shared"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - statefulsets
+  - daemonsets
+  - deployments
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - replicationcontrollers
+  verbs:
+  - get
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - list
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "p6-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - networkpolicies
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - apps
+  resources:
+  - replicasets
+  - statefulsets
+  - daemonsets
+  - deployments
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - replicationcontrollers
+  verbs:
+  - get
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - list
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-agent-action-deny
+  namespace: "p6-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - agent-deny-guard
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: staging-phorvex-leader-election
+  namespace: "phorvex-staging"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+rules:
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - create
+  - update
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-operation-journal
+  namespace: "phorvex-staging"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-operation-journal
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "phorvex-staging-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-actuator-routine
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "console-identity-shared"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-actuator-routine
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-actuator-routine
+  namespace: "p6-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-actuator-routine
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-agent-action-deny
+  namespace: "p6-demo"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-agent-action-deny
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/dispatcher-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: staging-phorvex-leader-election
+  namespace: "phorvex-staging"
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: staging-phorvex-leader-election
+subjects:
+- kind: ServiceAccount
+  name: staging-phorvex-manager
+  namespace: phorvex-staging
+---
+# Source: phorvex/templates/audit-source-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-phorvex-audit-source
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    app.kubernetes.io/component: audit-source
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/component: manager
+  ports:
+  - name: audit-tls
+    port: 8445
+    targetPort: audit-tls
+---
+# Source: phorvex/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-phorvex
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  replicas: 1
+  # A ReadWriteOnce volume can only be attached to one node at a time, so a RollingUpdate
+  # would deadlock: the new pod cannot mount the PVC until the old pod releases it, and the
+  # old pod is not terminated until the new one is Ready.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex
+      app.kubernetes.io/instance: staging
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phorvex
+        app.kubernetes.io/instance: staging
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/part-of: phorvex
+        app.kubernetes.io/component: manager
+    spec:
+      serviceAccountName: staging-phorvex-manager
+      securityContext:
+        runAsNonRoot: true
+        # Containers run as non-root; fsGroup makes configured durable volumes
+        # group-writable and lets the manager read its 0440 webhook key.
+        fsGroup: 65532
+        # Avoid recursively widening process-private parameter material after
+        # the manager has restored it to 0700/0600 at startup.
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: manager
+        image: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7"
+        imagePullPolicy: IfNotPresent
+        args:
+        - --base-interval=10s
+        - --actions-supported-debounce=3
+        - --calibration-shadow=true
+        - --calibration-sample=5m
+        - --calibration-refresh=30m
+        - --calibration-lookback=168h
+        - --calibration-export-dir=/var/run/phorvex-calibration
+        - --metrics-bind-address=:8080
+        - --health-probe-bind-address=:8081
+        - --leader-elect=true
+        - --brain-endpoint=staging-brain:9090
+        - --sensor-endpoint=staging-sensor:9090
+        - --actuator-endpoint=staging-actuator:9090
+        - --grpc-tls-cert=/etc/phorvex/grpc-tls/tls.crt
+        - --grpc-tls-key=/etc/phorvex/grpc-tls/tls.key
+        - --grpc-tls-ca=/etc/phorvex/grpc-tls/ca.crt
+        - --prometheus-url=http://kube-prom-stack-kube-prome-prometheus.monitoring.svc.cluster.local:9090
+        - --policy-namespaces=phorvex-staging-demo,console-identity-shared,p6-demo
+        - --max-retained-quarantines-per-namespace=1
+        - --serving-security-mode=secure-required
+        - --gpu-envelope-max=0.2925
+        - --pcie-class-table={"Tesla T4":{"gen":3,"width":16}}
+        - --trusted-detectors=phorvex-staging/staging-attacks,p6/p6-attacks
+        - --persistence-observer-identity=
+        - --persistence-observer-namespaces=
+        - --audit-json=/audit/live.jsonl
+        - --audit-max-bytes=268435456
+        - --audit-max-backups=4
+        - --audit-source-addr=:8445
+        - --audit-source-cert=/etc/audit-server/tls.crt
+        - --audit-source-key=/etc/audit-server/tls.key
+        - --audit-source-ca=/etc/audit-server/ca.crt
+        - --audit-source-client-dns=staging-phorvex-console.phorvex-staging.svc
+        - --math-lab-capture-cost-evidence=true
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PHORVEX_BRAIN_IMAGE
+          value: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7"
+        - name: PHORVEX_VOICE_ADMISSION_ENABLED
+          value: "false"
+        - name: PHORVEX_INJECTOR_IDENTITY
+          value: "phorvex-staging/staging-attacks"
+        - name: PHORVEX_EVENT_IDENTITY_POLICY
+          value: "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+        - name: PHORVEX_ACTUATOR
+          value: "native"
+        ports:
+        - name: metrics
+          containerPort: 8080
+        - name: health
+          containerPort: 8081
+        - name: audit-tls
+          containerPort: 8445
+        # Startup waits for each remote service in turn, up to its 2m
+        # --<service>-connect-timeout, before /healthz answers; liveness only starts
+        # once this passes, so it must outlast all three waits.
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          periodSeconds: 10
+          failureThreshold: 42
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+        volumeMounts:
+        - name: grpc-tls
+          mountPath: /etc/phorvex/grpc-tls
+          readOnly: true
+        - name: audit
+          mountPath: /audit
+        - name: audit-server
+          mountPath: /etc/audit-server
+          readOnly: true
+        - name: calibration-evidence
+          mountPath: /var/run/phorvex-calibration
+      volumes:
+      - name: grpc-tls
+        secret:
+          secretName: staging-dispatcher-grpc-tls
+      - name: audit
+        persistentVolumeClaim:
+          claimName: staging-phorvex-audit
+      - name: audit-server
+        secret:
+          secretName: staging-phorvex-audit-server
+      - name: calibration-evidence
+        emptyDir: {}
+---
+# Source: phorvex/templates/podmonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: staging-phorvex
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  namespaceSelector:
+    matchNames: ["phorvex-staging"]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: phorvex
+      app.kubernetes.io/instance: staging
+      app.kubernetes.io/component: manager
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s
+    # The services' own namespace labels (a policy's tenant) stay theirs.
+    honorLabels: true
+    relabelings:
+    - action: replace
+      sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: instance
+    - action: replace
+      targetLabel: environment
+      replacement: "staging"
+    metricRelabelings:
+      - action: replace
+        regex: phorvex_cost_nan_unactionable_total
+        replacement: phorvex_staging_cost_nan_unactionable_total
+        sourceLabels:
+        - __name__
+        targetLabel: __name__
+---
+# Source: phorvex/templates/services-rules.yaml
+# Alerts on this environment's services. Severity info: Prometheus and Grafana show
+# them, and the cluster's Alertmanager pages no one for them.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: staging-phorvex-services
+  namespace: phorvex-staging
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+spec:
+  groups:
+  - name: phorvex-services-staging
+    rules:
+    - alert: PhorvexServiceDown
+      expr: max by (job, instance) (up{environment="staging"}) == 0
+      for: 5m
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: A Phorvex service of staging is not scraped.
+    - alert: PhorvexServiceCallsFailing
+      expr: >-
+        sum by (grpc_service, grpc_method) (rate(phorvex_grpc_server_handled_total{environment="staging",grpc_code!="OK"}[10m]))
+        / clamp_min(sum by (grpc_service, grpc_method) (rate(phorvex_grpc_server_handled_total{environment="staging"}[10m])), 1e-9) > 0.05
+      for: 10m
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: More than 5% of a service's gRPC calls in staging fail.
+    - alert: PhorvexManagerTicksIncomplete
+      expr: >-
+        sum(increase(phorvex_manager_tick_duration_seconds_count{environment="staging"}[15m])) > 0
+        and sum(increase(phorvex_manager_tick_duration_seconds_count{environment="staging",outcome="finished-full-snapshot"}[15m])) == 0
+      for: 15m
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: The staging manager ticks, but none completed with a full snapshot in 15 minutes.
+    - alert: PhorvexServiceRestarting
+      expr: sum by (pod) (increase(kube_pod_container_status_restarts_total{namespace="phorvex-staging"}[15m])) > 2
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: A Pod in phorvex-staging restarted more than twice in 15 minutes.
+    # Stateful rotation (docs/stateful-rotation.md). The actuator never claims a
+    # replacement it did not observe; these surface the dispatches that left a member
+    # unproven and an owner that did not return to fully Ready. Each also counts a
+    # series first exported within its window (last_over_time ... unless ... offset),
+    # which increase() cannot see, including one from an actuator Pod since replaced.
+    - alert: PhorvexStatefulRotationNotConfirmed
+      expr: >-
+        (sum by (namespace, action, outcome) (increase(phorvex_stateful_rotations_total{environment="staging",outcome=~"unconfirmed|partial|error"}[30m])) > 0)
+        or (sum by (namespace, action, outcome) ((last_over_time(phorvex_stateful_rotations_total{environment="staging",outcome=~"unconfirmed|partial|error"}[30m])
+        unless phorvex_stateful_rotations_total{environment="staging",outcome=~"unconfirmed|partial|error"} offset 30m) > 0) > 0)
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: A stateful rotation in staging ended unconfirmed, partial or in error; check the owner's members.
+    - alert: PhorvexStatefulOwnerNotRecovered
+      expr: >-
+        max by (namespace, statefulset) (kube_statefulset_replicas - kube_statefulset_status_replicas_ready) > 0
+        and on (namespace) (
+        (sum by (namespace) (increase(phorvex_stateful_rotations_total{environment="staging"}[2h])) > 0)
+        or (sum by (namespace) ((last_over_time(phorvex_stateful_rotations_total{environment="staging"}[2h])
+        unless phorvex_stateful_rotations_total{environment="staging"} offset 2h) > 0) > 0))
+      for: 15m
+      labels: {severity: info, environment: "staging"}
+      annotations:
+        summary: A StatefulSet that staging rotated has had a member not Ready for 15 minutes; every stateful class on it stays refused until it recovers.
+---
+# Source: phorvex/templates/attacks-targets-policy.yaml
+# The attacks service's SecurityEvents target only console.attackNamespaces. SecurityEvents
+# are cluster-scoped, so RBAC cannot confine what it creates, changes or deletes; this policy
+# matches the attacks service's own requests only, and leaves every other requester's,
+# production's included, alone. It runs in the API server and cannot fail open.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: staging-attacks-targets-664615def0
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/policy: attacks-targets
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+    - apiGroups: ["amtd.r6security.com"]
+      apiVersions: ["*"]
+      operations: ["CREATE", "UPDATE", "DELETE"]
+      resources: ["securityevents"]
+  matchConditions:
+  - name: the-attacks-service
+    expression: "request.userInfo.username == \"system:serviceaccount:phorvex-staging:staging-attacks\""
+  variables:
+  - name: targets
+    expression: "request.operation == 'DELETE' ? oldObject.spec.targets : object.spec.targets"
+  validations:
+  - expression: "size(variables.targets) > 0 && variables.targets.all(t, [\"phorvex-staging-demo\",\"console-identity-shared\",\"p6-demo\"].exists(n, t.startsWith(n + '/')))"
+    reason: Forbidden
+    message: "the attacks service may only target, change or delete SecurityEvents of Pods in phorvex-staging-demo, console-identity-shared, p6-demo"
+---
+# Source: phorvex/templates/attacks-targets-policy.yaml
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: staging-attacks-targets-664615def0
+  labels:
+    app.kubernetes.io/name: phorvex
+    app.kubernetes.io/instance: staging
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: phorvex
+    phorvex.ai/policy: attacks-targets
+spec:
+  policyName: staging-attacks-targets-664615def0
+  validationActions: ["Deny"]

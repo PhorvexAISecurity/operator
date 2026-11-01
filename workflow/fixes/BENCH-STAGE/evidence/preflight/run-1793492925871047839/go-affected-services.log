@@ -1,0 +1,8 @@
+### Services this change affects
+
+- `manager`
+- `brain`
+- `sensor`
+- `actuator`
+- `console`
+- `attacks`

@@ -1,0 +1,28 @@
+{
+  "at": "2026-11-01T01:58:17.463851+00:00",
+  "by": "bench-v3-lead",
+  "source_sha": "ec310e276e45e6a218f7520880e22c6c1c687817",
+  "result": "PASS_FINAL_REVIEW_INPUTS",
+  "scope": "Input/hash and recorded-outcome verification; original producer executions retain their own commands and sources.",
+  "preflight_sha256": "591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee",
+  "coherent_passed_gates": 18,
+  "canonical_patch_sha256": "57825848f895303ba707ee10aefa9cd83aa10ae19e0ca881afc1dd812c3bb77e",
+  "acceptance": {
+    "l1.txt": {
+      "sha256": "bd0174abd71c9a4d260a70e6f438d3b8a0c6903bc151936043f232a22ea5280b",
+      "passed_test_rows": 9
+    },
+    "l2.txt": {
+      "sha256": "7353bf04591d369bfdb62182499de7cd80635405fb7cf38a4d2e61e37ce543fc",
+      "passed_test_rows": 34
+    }
+  },
+  "incident_bindings_verified": 30,
+  "operational_bindings_verified": 13,
+  "recovery_review_sha256": "870a39bf1087a356b9af9ed6cadca6d67e57281654014ea65b7f3147e6e6c648",
+  "user_zip_sha256": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+  "metadata_only_worktree_delta": [
+    "workflow/campaigns/INDEX.yaml",
+    "workflow/intake/INDEX.yaml"
+  ]
+}

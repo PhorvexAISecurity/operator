@@ -1,0 +1,163 @@
+{
+  "result": "PASS_REAL_GAP_INVALIDATION; automatic recovery pending separately",
+  "reviewer": "stage-review",
+  "at": "2026-11-01T01:27:21.296153+00:00",
+  "raw_journal": {
+    "path": "/workspace/.phorvex-test-tmp/post-retry-journal.db",
+    "sha256": "b647b2e7a2e6ba6834536b51e68260ecc82f61ea46ec21095ef2bb0016874b04",
+    "bytes": 5976064,
+    "records_verified": 2208,
+    "read_mode": "SQLite read-only immutable; no Journal constructor or writes"
+  },
+  "sessions": [
+    {
+      "seq": 1,
+      "at": 1793492343.1484134,
+      "id": "a0b816ff152b4944b08de1e506829059"
+    }
+  ],
+  "coverage_changes": [
+    {
+      "seq": 1759,
+      "at": 1793495303.5191417,
+      "kind": "watch",
+      "coverage_from": null,
+      "reasons": [
+        "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+      ],
+      "ready": [
+        "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+        "3a90af0e-0515-4492-9c08-cd45c7b61923"
+      ],
+      "session": "a0b816ff152b4944b08de1e506829059"
+    },
+    {
+      "seq": 1767,
+      "at": 1793495303.8012414,
+      "kind": "watch",
+      "coverage_from": null,
+      "reasons": [
+        "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+        "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+      ],
+      "ready": [
+        "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+        "3a90af0e-0515-4492-9c08-cd45c7b61923"
+      ],
+      "session": "a0b816ff152b4944b08de1e506829059"
+    },
+    {
+      "seq": 1781,
+      "at": 1793495306.4060414,
+      "kind": "watch",
+      "coverage_from": 1793495306.4060414,
+      "reasons": [],
+      "ready": [
+        "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+        "3a90af0e-0515-4492-9c08-cd45c7b61923",
+        "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+      ],
+      "session": "a0b816ff152b4944b08de1e506829059"
+    }
+  ],
+  "actual_pod_eviction_conditions": [
+    {
+      "seq": 1758,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    },
+    {
+      "seq": 1760,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    },
+    {
+      "seq": 1763,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    },
+    {
+      "seq": 1772,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    },
+    {
+      "seq": 1773,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    },
+    {
+      "seq": 1774,
+      "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+      "node": "ip-172-27-62-45.us-east-2.compute.internal",
+      "condition": {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-01T01:08:23Z",
+        "message": "Eviction API: evicting",
+        "reason": "EvictionByEvictionAPI",
+        "status": "True",
+        "type": "DisruptionTarget"
+      }
+    }
+  ],
+  "seal": {
+    "a0b816ff152b4944b08de1e506829059": 1793496014.5865812
+  },
+  "moves": [
+    {
+      "id": "calibration-ae24648058404084bd3820ee5481134c",
+      "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+      "state": "settled",
+      "duration": 9.18130350112915,
+      "loss_seconds": 3.187344551086426
+    }
+  ],
+  "investigation_receipt_sha256": "34a70493b01629b26f7f7201b7b065642260ffe8ef6bcec8b99e01b984b1e90b",
+  "interpretation": [
+    "Actual fixture pod EvictionByEvictionAPI and endpoint membership loss invalidated coverage; no observer session restart was recorded.",
+    "Ready replacement at 01:08:26 begins a new continuous segment; old history is not bridged.",
+    "The external eviction has no calibration intent or attributed move. Exactly one prior calibration remains settled; zero open reservations.",
+    "Actor behind the eviction is not established by these Pod/Node observations.",
+    "This proves safe refusal, not automatic post-gap READY recovery."
+  ]
+}

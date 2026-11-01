@@ -1,0 +1,121 @@
+{
+  "result": "PASS_REAL_CODE_REPLAY_AND_FINAL_DELIVERY",
+  "checked_at": "2026-11-01T01:14:43.617289+00:00",
+  "package": "/workspace/.phorvex-test-tmp/phorvex-stage-benchmark-20261101-final",
+  "zip_sha256": "cb49697cddebf1630087ce4e21fb52d89ca227713e9e3043b25f1734f2ddd7d9",
+  "package_manifest_sha256": "6e81f9bcbec1b1222249f5aec3ff60b4c377f524570d25baa5359fa26d870a1c",
+  "verified_files": 102,
+  "terminal_jobs": 14,
+  "omitted": 0,
+  "pending": 0,
+  "code_job": "c963f138052b",
+  "candidate": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+  "base": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "distinct_frozen_ticks": 64,
+  "exact_reproduced_by_all_three_arms": 64,
+  "toolchain_fidelity": "EXACT",
+  "changed_decisions_all_arms": 0,
+  "test_gates": {
+    "base-local": {
+      "commit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "counts": {
+        "fail": 0,
+        "pass": 465,
+        "skip": 2
+      },
+      "packages": [
+        "./cmd/brain-replay",
+        "./internal/decision",
+        "./internal/model"
+      ],
+      "returncode": 0,
+      "status": "PASS",
+      "toolchain": "go1.26.10"
+    },
+    "candidate": {
+      "commit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+      "counts": {
+        "fail": 0,
+        "pass": 509,
+        "skip": 2
+      },
+      "packages": [
+        "./cmd/brain-replay",
+        "./internal/decision",
+        "./internal/model"
+      ],
+      "returncode": 0,
+      "status": "PASS",
+      "toolchain": "go1.26.10"
+    }
+  },
+  "trace_comparisons": [
+    {
+      "file": "decision_funnel.csv",
+      "rows": 576,
+      "all_three_arm_rows_identical_except_arm_id": true,
+      "sha256": "04765a7261cac666e5602d4c044783eac06f8e198b81a586594990c557ce4064"
+    },
+    {
+      "file": "candidate_gate_trace.csv",
+      "rows": 13824,
+      "all_three_arm_rows_identical_except_arm_id": true,
+      "sha256": "ec74846b7a72419d83f08e88aa59d9eba8d2ef96ba2e0f7b07c81c4908885942"
+    },
+    {
+      "file": "cost_truth.csv",
+      "rows": 561,
+      "all_three_arm_rows_identical_except_arm_id": true,
+      "sha256": "dc6d6c35229933224db31e47383ecebe2441d3d418dc9244a85e22b97c18e459"
+    }
+  ],
+  "actual_raw_control": {
+    "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/actual-cohort-binary-control.json",
+    "sha256": "7ee5f6729d6bea7393b7ae815a1d6a53dc827e9b25e39b750dc97b874908dd34"
+  },
+  "exact_candidate_bundle_review": {
+    "path": "workflow/fixes/BENCH-STAGE/evidence/peer-review/code-retry/candidate-bundle-review.json",
+    "sha256": "64cb8f5479b48e3c840c597aa2a1e58c095ef77cf7b50e6ca809126c1e8b096e"
+  },
+  "unchanged_previous_endpoint_and_failed_attempt_files": [
+    "jobs/f4f05c4d2de3/endpoint/capture-control-summary.json",
+    "jobs/f4f05c4d2de3/endpoint/trace.json",
+    "jobs/f4f05c4d2de3/endpoint/study-settings.json",
+    "jobs/f4f05c4d2de3/endpoint/summary.json",
+    "jobs/f4f05c4d2de3/endpoint/dataset-manifest.json",
+    "jobs/f4f05c4d2de3/endpoint/base-local-summary.json",
+    "jobs/f4f05c4d2de3/endpoint/result.json",
+    "jobs/f4f05c4d2de3/endpoint/report.html",
+    "jobs/f4f05c4d2de3/endpoint/metrics.csv",
+    "jobs/d024b2f8a9fd/endpoint/capture-control-summary.json",
+    "jobs/d024b2f8a9fd/endpoint/trace.json",
+    "jobs/d024b2f8a9fd/endpoint/study-settings.json",
+    "jobs/d024b2f8a9fd/endpoint/summary.json",
+    "jobs/d024b2f8a9fd/endpoint/dataset-manifest.json",
+    "jobs/d024b2f8a9fd/endpoint/base-local-summary.json",
+    "jobs/d024b2f8a9fd/endpoint/result.json",
+    "jobs/d024b2f8a9fd/endpoint/report.html",
+    "jobs/d024b2f8a9fd/endpoint/metrics.csv",
+    "jobs/5aeb716b562f/endpoint/trace.json",
+    "jobs/5aeb716b562f/endpoint/study-settings.json",
+    "jobs/5aeb716b562f/endpoint/dataset-manifest.json",
+    "jobs/5aeb716b562f/endpoint/result.json",
+    "jobs/5aeb716b562f/endpoint/report.html",
+    "jobs/5aeb716b562f/endpoint/metrics.csv",
+    "jobs/4b8171ea3c83/TESTS.json",
+    "jobs/4b8171ea3c83/brain.diff"
+  ],
+  "receipt_files_verified": [
+    "report",
+    "metrics",
+    "candidate diff",
+    "tests"
+  ],
+  "limits": [
+    "Operator-submitted acceptance uses real bot queue/execution and Telegram delivery; no incoming Telegram update is claimed.",
+    "Pure helper is defined and unit-tested but not invoked by active picker. Unchanged replay is expected and does not complete integrated V2.",
+    "Candidate results are observational across source versions; realized security and counterfactual costs remain unknown.",
+    "The first failed attempt stays FAILED and is retained; a successful new preregistered retry does not establish the first timeout root cause.",
+    "This supports H2 code path and final artifact delivery. Campaign/source completion still depends on final cleanup and exact ec310 coherent preflight."
+  ]
+}

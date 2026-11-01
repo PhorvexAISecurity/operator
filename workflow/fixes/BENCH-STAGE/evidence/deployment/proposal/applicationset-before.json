@@ -1,0 +1,267 @@
+{
+  "apiVersion": "argoproj.io/v1alpha1",
+  "kind": "ApplicationSet",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"argoproj.io/v1alpha1\",\"kind\":\"ApplicationSet\",\"metadata\":{\"annotations\":{},\"name\":\"phorvex-services\",\"namespace\":\"argocd\"},\"spec\":{\"generators\":[{\"matrix\":{\"generators\":[{\"list\":{\"elements\":[{\"environment\":\"staging\",\"namespace\":\"phorvex-staging\",\"release\":\"staging\",\"server\":\"https://kubernetes.default.svc\"}]}},{\"list\":{\"elements\":[{\"chart\":\"phorvex/charts/phorvex\",\"service\":\"manager\"},{\"chart\":\"deploy/charts/phorvex-brain\",\"service\":\"brain\"},{\"chart\":\"deploy/charts/phorvex-sensor\",\"service\":\"sensor\"},{\"chart\":\"deploy/charts/phorvex-actuator\",\"service\":\"actuator\"},{\"chart\":\"deploy/charts/phorvex-attacks\",\"service\":\"attacks\"},{\"chart\":\"deploy/charts/phorvex-console\",\"service\":\"console\"}]}}]}}],\"goTemplate\":true,\"goTemplateOptions\":[\"missingkey=error\"],\"template\":{\"metadata\":{\"finalizers\":[\"resources-finalizer.argocd.argoproj.io\"],\"labels\":{\"app.kubernetes.io/part-of\":\"phorvex\",\"phorvex.ai/environment\":\"{{.environment}}\",\"phorvex.ai/service\":\"{{.service}}\"},\"name\":\"phorvex-{{.service}}-{{.environment}}\"},\"spec\":{\"destination\":{\"namespace\":\"{{.namespace}}\",\"server\":\"{{.server}}\"},\"ignoreDifferences\":[{\"group\":\"apiextensions.k8s.io\",\"jsonPointers\":[\"/status\"],\"kind\":\"CustomResourceDefinition\"},{\"jsonPointers\":[\"/data\"],\"kind\":\"ConfigMap\",\"name\":\"agent-deny-guard\",\"namespace\":\"p6-demo\"},{\"jsonPointers\":[\"/data\"],\"kind\":\"Secret\",\"name\":\"{{.release}}-phorvex-webhook-cert\"},{\"group\":\"admissionregistration.k8s.io\",\"jqPathExpressions\":[\".webhooks[]?.clientConfig.caBundle\"],\"kind\":\"MutatingWebhookConfiguration\"},{\"group\":\"admissionregistration.k8s.io\",\"jqPathExpressions\":[\".webhooks[]?.clientConfig.caBundle\"],\"kind\":\"ValidatingWebhookConfiguration\"}],\"project\":\"phorvex-services\",\"sources\":[{\"helm\":{\"releaseName\":\"{{.release}}\",\"skipCrds\":true,\"valueFiles\":[\"$values/deploy/environments/{{.environment}}/phorvex.yaml\",\"$values/deploy/environments/{{.environment}}/{{.service}}.yaml\",\"$values/deploy/environments/{{.environment}}/catalogue-family.yaml\"]},\"path\":\"{{.chart}}\",\"repoURL\":\"https://github.com/PhorvexSecurity/operator-refactored.git\",\"targetRevision\":\"main\"},{\"ref\":\"values\",\"repoURL\":\"https://github.com/PhorvexSecurity/operator-refactored.git\",\"targetRevision\":\"main\"}],\"syncPolicy\":{\"automated\":{\"enabled\":true,\"prune\":false,\"selfHeal\":true},\"retry\":{\"backoff\":{\"duration\":\"15s\",\"factor\":2},\"limit\":3},\"syncOptions\":[\"CreateNamespace=true\",\"ServerSideApply=true\",\"RespectIgnoreDifferences=true\"]}}}}}\n"
+    },
+    "creationTimestamp": "2026-10-22T09:18:11Z",
+    "generation": 5,
+    "name": "phorvex-services",
+    "namespace": "argocd",
+    "resourceVersion": "101945175",
+    "uid": "e55f3b21-b600-423b-9f10-1faa1c09f6b5"
+  },
+  "spec": {
+    "generators": [
+      {
+        "matrix": {
+          "generators": [
+            {
+              "list": {
+                "elements": [
+                  {
+                    "environment": "staging",
+                    "namespace": "phorvex-staging",
+                    "release": "staging",
+                    "server": "https://kubernetes.default.svc"
+                  }
+                ]
+              }
+            },
+            {
+              "list": {
+                "elements": [
+                  {
+                    "chart": "phorvex/charts/phorvex",
+                    "service": "manager"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-brain",
+                    "service": "brain"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-sensor",
+                    "service": "sensor"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-actuator",
+                    "service": "actuator"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-attacks",
+                    "service": "attacks"
+                  },
+                  {
+                    "chart": "deploy/charts/phorvex-console",
+                    "service": "console"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "goTemplate": true,
+    "goTemplateOptions": [
+      "missingkey=error"
+    ],
+    "template": {
+      "metadata": {
+        "finalizers": [
+          "resources-finalizer.argocd.argoproj.io"
+        ],
+        "labels": {
+          "app.kubernetes.io/part-of": "phorvex",
+          "phorvex.ai/environment": "{{.environment}}",
+          "phorvex.ai/service": "{{.service}}"
+        },
+        "name": "phorvex-{{.service}}-{{.environment}}"
+      },
+      "spec": {
+        "destination": {
+          "namespace": "{{.namespace}}",
+          "server": "{{.server}}"
+        },
+        "ignoreDifferences": [
+          {
+            "group": "apiextensions.k8s.io",
+            "jsonPointers": [
+              "/status"
+            ],
+            "kind": "CustomResourceDefinition"
+          },
+          {
+            "jsonPointers": [
+              "/data"
+            ],
+            "kind": "ConfigMap",
+            "name": "agent-deny-guard",
+            "namespace": "p6-demo"
+          },
+          {
+            "jsonPointers": [
+              "/data"
+            ],
+            "kind": "Secret",
+            "name": "{{.release}}-phorvex-webhook-cert"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "jqPathExpressions": [
+              ".webhooks[]?.clientConfig.caBundle"
+            ],
+            "kind": "MutatingWebhookConfiguration"
+          },
+          {
+            "group": "admissionregistration.k8s.io",
+            "jqPathExpressions": [
+              ".webhooks[]?.clientConfig.caBundle"
+            ],
+            "kind": "ValidatingWebhookConfiguration"
+          }
+        ],
+        "project": "phorvex-services",
+        "sources": [
+          {
+            "helm": {
+              "releaseName": "{{.release}}",
+              "skipCrds": true,
+              "valueFiles": [
+                "$values/deploy/environments/{{.environment}}/phorvex.yaml",
+                "$values/deploy/environments/{{.environment}}/{{.service}}.yaml",
+                "$values/deploy/environments/{{.environment}}/catalogue-family.yaml"
+              ]
+            },
+            "path": "{{.chart}}",
+            "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+            "targetRevision": "main"
+          },
+          {
+            "ref": "values",
+            "repoURL": "https://github.com/PhorvexSecurity/operator-refactored.git",
+            "targetRevision": "main"
+          }
+        ],
+        "syncPolicy": {
+          "automated": {
+            "enabled": true,
+            "prune": false,
+            "selfHeal": true
+          },
+          "retry": {
+            "backoff": {
+              "duration": "15s",
+              "factor": 2
+            },
+            "limit": 3
+          },
+          "syncOptions": [
+            "CreateNamespace=true",
+            "ServerSideApply=true",
+            "RespectIgnoreDifferences=true"
+          ]
+        }
+      }
+    }
+  },
+  "status": {
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-10-22T09:18:11Z",
+        "message": "All applications have been generated successfully",
+        "reason": "ApplicationSetUpToDate",
+        "status": "False",
+        "type": "ErrorOccurred"
+      },
+      {
+        "lastTransitionTime": "2026-10-22T09:18:11Z",
+        "message": "Successfully generated parameters for all Applications",
+        "reason": "ParametersGenerated",
+        "status": "True",
+        "type": "ParametersGenerated"
+      },
+      {
+        "lastTransitionTime": "2026-10-22T09:18:11Z",
+        "message": "All applications have been generated successfully",
+        "reason": "ApplicationSetUpToDate",
+        "status": "True",
+        "type": "ResourcesUpToDate"
+      }
+    ],
+    "health": {
+      "message": "All applications have been generated successfully",
+      "status": "Healthy"
+    },
+    "resources": [
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Healthy"
+        },
+        "kind": "Application",
+        "name": "phorvex-actuator-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      },
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Progressing"
+        },
+        "kind": "Application",
+        "name": "phorvex-attacks-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      },
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Healthy"
+        },
+        "kind": "Application",
+        "name": "phorvex-brain-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      },
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Healthy"
+        },
+        "kind": "Application",
+        "name": "phorvex-console-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      },
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Healthy"
+        },
+        "kind": "Application",
+        "name": "phorvex-manager-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      },
+      {
+        "group": "argoproj.io",
+        "health": {
+          "status": "Healthy"
+        },
+        "kind": "Application",
+        "name": "phorvex-sensor-staging",
+        "namespace": "argocd",
+        "status": "OutOfSync",
+        "version": "v1alpha1"
+      }
+    ],
+    "resourcesCount": 6
+  }
+}

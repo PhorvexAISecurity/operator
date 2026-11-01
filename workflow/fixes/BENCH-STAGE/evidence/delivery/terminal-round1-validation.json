@@ -1,0 +1,165 @@
+{
+  "schema": "phorvex-bench.collection-check.v1",
+  "result": "PASS",
+  "scope": "Delivery integrity only; root independently verifies actual benchmark correctness",
+  "archive": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-terminal-round1.zip",
+  "directory": "/workspace/.phorvex-test-tmp/stage-delivery-20261101-terminal-round1",
+  "archive_sha256": "5484588f4f642a4f4c4fe6baf885c0b4678307015e6cce279e388a2872266ce4",
+  "archive_bytes": 4842557,
+  "files": 81,
+  "collection_state": "REPORTS_COLLECTED",
+  "pending_jobs": [],
+  "omitted": [],
+  "failed_code_preserved": {
+    "batch": "474cff3249df",
+    "child": "4b8171ea3c83",
+    "state": "FAILED",
+    "test_summary": "jobs/4b8171ea3c83/TESTS.json"
+  },
+  "jobs": [
+    {
+      "id": "8ffcfca38357",
+      "kind": "batch",
+      "state": "DONE"
+    },
+    {
+      "id": "474cff3249df",
+      "kind": "batch",
+      "state": "FAILED"
+    },
+    {
+      "id": "180d1e5b1ee9",
+      "kind": "batch",
+      "state": "DONE"
+    },
+    {
+      "id": "74240aadda51",
+      "kind": "batch",
+      "state": "DONE"
+    },
+    {
+      "id": "84fcf64f961b",
+      "kind": "batch",
+      "state": "BLOCKED"
+    },
+    {
+      "id": "83014231aae7",
+      "kind": "param",
+      "state": "DONE"
+    },
+    {
+      "id": "32f795de4856",
+      "kind": "param",
+      "state": "DONE"
+    },
+    {
+      "id": "29c3cdd547cd",
+      "kind": "param",
+      "state": "DONE"
+    },
+    {
+      "id": "4b8171ea3c83",
+      "kind": "bench",
+      "state": "FAILED"
+    },
+    {
+      "id": "f4f05c4d2de3",
+      "kind": "endpoint",
+      "state": "DONE"
+    },
+    {
+      "id": "d024b2f8a9fd",
+      "kind": "endpoint",
+      "state": "DONE"
+    },
+    {
+      "id": "5aeb716b562f",
+      "kind": "endpoint",
+      "state": "BLOCKED"
+    }
+  ],
+  "results": [
+    {
+      "job": "29c3cdd547cd",
+      "path": "jobs/29c3cdd547cd/mathlab/result.json",
+      "schema": "math-lab.experiment-result.v1",
+      "state": "COMPLETE",
+      "mode": null,
+      "comparable_ticks": null,
+      "control_eligible": 64,
+      "baseline_exact_count": null,
+      "comparison_status": "MATCHED_REPLAY"
+    },
+    {
+      "job": "32f795de4856",
+      "path": "jobs/32f795de4856/mathlab/result.json",
+      "schema": "math-lab.experiment-result.v1",
+      "state": "COMPLETE",
+      "mode": null,
+      "comparable_ticks": null,
+      "control_eligible": 64,
+      "baseline_exact_count": null,
+      "comparison_status": "MATCHED_REPLAY"
+    },
+    {
+      "job": "5aeb716b562f",
+      "path": "jobs/5aeb716b562f/endpoint/result.json",
+      "schema": "phorvex-bench.endpoint-result.v1",
+      "state": "BLOCKED",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 0,
+      "control_eligible": null,
+      "baseline_exact_count": null,
+      "comparison_status": null
+    },
+    {
+      "job": "83014231aae7",
+      "path": "jobs/83014231aae7/mathlab/result.json",
+      "schema": "math-lab.experiment-result.v1",
+      "state": "COMPLETE",
+      "mode": null,
+      "comparable_ticks": null,
+      "control_eligible": 64,
+      "baseline_exact_count": null,
+      "comparison_status": "MATCHED_REPLAY"
+    },
+    {
+      "job": "d024b2f8a9fd",
+      "path": "jobs/d024b2f8a9fd/endpoint/result.json",
+      "schema": "phorvex-bench.endpoint-result.v1",
+      "state": "COMPLETE",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 64,
+      "control_eligible": null,
+      "baseline_exact_count": 64,
+      "comparison_status": "OBSERVATIONAL"
+    },
+    {
+      "job": "f4f05c4d2de3",
+      "path": "jobs/f4f05c4d2de3/endpoint/result.json",
+      "schema": "phorvex-bench.endpoint-result.v1",
+      "state": "COMPLETE",
+      "mode": "PAIRED_BRAIN_REPLAY",
+      "comparable_ticks": 64,
+      "control_eligible": null,
+      "baseline_exact_count": 64,
+      "comparison_status": "OBSERVATIONAL"
+    }
+  ],
+  "receipt_phases": {
+    "bot-acceptance": {
+      "phase": "bot-acceptance",
+      "bot_source": "348c1c7a64256e945f10077b3eb8e2a6cca107ea",
+      "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "state": "FAIL"
+    },
+    "endpoint-bot-acceptance": {
+      "phase": "endpoint-bot-acceptance",
+      "bot_source": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+      "capture_source": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+      "state": "PASS"
+    }
+  },
+  "guide_sha256": "d1f1567f36a7a9572ac9042dcae0d36f5ac07938ecac28b70804a2a862098183",
+  "collector_sha256": "ed3e006271acc470d2631f0627808522db50812532f52b44c0b2526d48523dbf"
+}

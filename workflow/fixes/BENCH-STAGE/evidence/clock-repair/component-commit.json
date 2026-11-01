@@ -1,0 +1,12 @@
+{
+  "source_sha": "3e11f4e7ca8424c31a387b53e04942a18ee7d977",
+  "parent_sha": "de426ee1b4f41d4e57a3abdcf4335f62f7f549e7",
+  "paths": [
+    "benchmark/worker/endpoint_refresh.py",
+    "benchmark/worker/test_endpoint_refresh.py"
+  ],
+  "source_manifest_sha256": "c82b5a271531c3b63b3a8002f2277103d53dbda638d6e049d0d419a8791d9490",
+  "review_sha256": "f069ec637b0a316f67182eab31bdd05d627b749d34377eef4b6b994072d24d56",
+  "result": "EXACT_REVIEWED_COMPONENT_COMMITTED",
+  "note": "No live installation or full-preflight result claimed by this commit receipt."
+}

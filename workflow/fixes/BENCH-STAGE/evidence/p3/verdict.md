@@ -1,0 +1,24 @@
+# Independent P3 verdict: PASS
+
+Reviewer: bench-v3-lead. Implementation author: bench-v3-worker and assigned component workers. Reviewed source: ec310e276e45e6a218f7520880e22c6c1c687817 against baseline9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40. Recorded after the coherent final preflight and dedicated acceptance completed successfully; no previous failed run was relabelled or spliced into this receipt.
+
+The canonical binary/full-index patch matches the pinned Git objects byte for byte. All18 selected current-CI local gates passed with verified original log hashes, pinned tool/recipe authorities and unchanged worktree source. The separate invariant and integration runs passed7 and19 top-level controls respectively, including actual producer, baseline, non-cost gate, resource, containment, identity, transport and CLI controls. The permanent benchmark wrapper passed168bot/72worker/45stage tests with zero skips. The broader446tools suite retains its one existing opt-in Docker skip and nine expected failures; all seven Go modules and build/vet pass. Remote GitHub CI/envtest remains a distinct status.
+
+Independent incident reproduction is retained in incident.md: actual9b baseline capture502 and unavailable export with successful binary-version controls; independently executed recorder/store/RPC/audit path and real brain producer/selector tests; repaired source-bound live capture and exact baseline reproduction. This is not a mocked final-status test. The lead reviewed the complete changed-path set through the preserved component/source manifests and canonical diff; the independent peer challenged the imported bot/collector/worker integration. R1–R9 are closed by concrete before/after controls, and generated chart packaging is independently checked at the final source. Default production decision behavior and existing gates remain intact; experimental study execution is explicit.
+
+Actual live evidence supports the declared stage scope: three parameter experiments, two configured endpoint comparisons and one new actual model/code experiment each complete on64frozen real snapshots with exact baselines. Source/image/UID, tested candidate, built binary and outbound Telegram report identities match. The original code deadline failure is retained, not overwritten; its two opt-in skips and the lack of a proven contention cause remain explicit. The successful helper is not invoked by active selection. The original30day request correctly remainsBLOCKED, and missing prices/history remain distinct from legitimate worth/resource/budget refusal.
+
+Independent operational acceptance confirms exact deployed ef94 capture identity, separately identified d552offline engine and3e11bot/refresher, reviewed archive-only equivalence to finalec310, active/enabled persistent services, three ready dryRun fixture pods, bounded storage and cleanup. Real external eviction invalidated coverage; three subsequent blocked refreshes preserved last-good bytes/timestamps, and the timer later recovered64fresh fully covered ticks with no bridging or weakened threshold. Private raw journals/cohorts and the exact candidate source bundle remain reproducible; remote temporary auth and scratch clones are removed. Local delivery auth is retained only until pending branch/PR publication.
+
+Limits are part of the accepted scope: no active V3 policy deployment, complete History-aware realized-effect implementation, general security efficacy, independent-sample claim, realized counterfactual cost claim or30day readiness guarantee. Kubernetes readiness is the observed measurement. Actual submission used the real bot queue and Telegram delivery, rather than claiming an incoming upload. Future main merge/release reconciliation is separate and is not authorized or claimed here.
+
+Verdict: PASS for reviewed stage benchmark implementation and source-pinned operational composition. No unresolved source-review finding or live handover blocker remains. Deliver the reviewed PR without merging main; preserve original attempts, campaign deviations and stated limits.
+
+Evidence bindings:
+
+- evidence/preflight/receipt.json — SHA256 591c7f18701ef617008ed9d70c29630925dc9df74a0ddd67fd20ae95a79bccee
+- evidence/final-source/acceptance-ec310e27.json — SHA256 21f14263674e7995d0977bc297cc0d23cfd249c9bc1e2d8a36fa241758b01d22
+- evidence/p3/review-input-verification.json — SHA256 792195fdf05305ec57115dd9ee0f555eceecfe3b2b33e3f45b8f3ed4a89d58de
+- evidence/peer-review/final-source-component-closure.json — SHA256 47d693524292c461b71d33bdb3fd0e6113e2d6fd7f3978f10b2464d2340efeb5
+- evidence/peer-review/final-handover/operational-review.json — SHA256 4ff58dee166905fa966e63665af0066fc36b6511c70262657524895862e5f0ab
+- evidence/peer-review/code-retry/replay-delivery-review.json — SHA256 61990fee5f7d781aefd5e2b26f733b4317587469e34377748a223374e5e38507

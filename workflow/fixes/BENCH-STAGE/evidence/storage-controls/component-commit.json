@@ -1,0 +1,16 @@
+{
+  "source_sha": "1a70c2b1167e0725b90f7b0219488ca315abaa26",
+  "parent": "d552ad0c03cdc3fce8120fe8889b2efe5d55d393",
+  "files": {
+    "benchmark/stage/README.md": "4319b7a8f549afa66727e6d319fef591b54674404762ba988868b8d0e523c26a",
+    "benchmark/stage/evidence.py": "20dafaa390ffd45bef96d6735729de3efe209e79b8693630b49361beee983008",
+    "benchmark/stage/normalize.py": "fb48cccb44cb4aea122d57f44239479d94419b5ed8804f20270105950d4ab083",
+    "benchmark/stage/observe.py": "1cfe6f63747468babaf054a94106aa80f5f7f489d0c9bed3b25750fd5647c747",
+    "benchmark/stage/stage-observer.service.example": "8ac8ae9afe0fb1abab4790410da7b9c2499bd82220c716770f650e9d9c44e57d",
+    "benchmark/stage/test_evidence.py": "4a1bb36e024c21563ca17e7010606f21aa66a5115ed6a115d22495a4d943eba1",
+    "benchmark/stage/test_storage.py": "4f518591094c89f4c27fa1d4c740ed27321c55e83072accecb318fac46244099"
+  },
+  "review_receipt": "evidence/peer-review/storage-component-review.json",
+  "normalizer_review_receipt": "evidence/peer-review/r6-sync-review.json",
+  "raw_databases_committed": false
+}

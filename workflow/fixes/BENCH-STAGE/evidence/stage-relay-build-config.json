@@ -1,0 +1,27 @@
+{
+  "source_sha": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "description": "Clean reviewed relay-only source, exact pinned Docker builder Go1.26.10, static binaries for isolated stage OCI images. No experimental V3 source.",
+  "cwd": "/workspace/operator-benchmark-stage",
+  "env": {},
+  "log": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/stage-relay-build.txt",
+  "status": "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/stage-relay-build-status.json",
+  "total_timeout_seconds": 1800,
+  "steps": [
+    {
+      "name": "compile-reviewed-stage-binaries",
+      "command": [
+        "python3",
+        "/workspace/operator-benchmark-stage/workflow/fixes/BENCH-STAGE/evidence/build-stage-relay-images.py",
+        "--checkout",
+        "/workspace/.phorvex-test-tmp/stage-relay-build-ef94fad3",
+        "--source",
+        "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+        "--output",
+        "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3",
+        "--go",
+        "/workspace/.phorvex-go/go/bin/go"
+      ],
+      "timeout_seconds": 1800
+    }
+  ]
+}

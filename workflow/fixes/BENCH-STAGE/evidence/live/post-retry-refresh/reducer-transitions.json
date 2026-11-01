@@ -1,0 +1,208 @@
+{
+  "frozen_prefix": {
+    "hash": "ff9f266466f8fdb5edcccc1226b412eb5e7dad177d673f2611782fddeffe5da4",
+    "seq": 2208
+  },
+  "last_observed_state": {
+    "at": 1793496054.6928186,
+    "authoritative": false,
+    "class": "stateless",
+    "complete_from": null,
+    "journal_hash": "ff9f266466f8fdb5edcccc1226b412eb5e7dad177d673f2611782fddeffe5da4",
+    "journal_seq": 2208,
+    "measurement": "watch-observed-service-ready-backends",
+    "mode": "isolated-calibration",
+    "moves": [
+      {
+        "action": "rotate",
+        "attributed": true,
+        "containment": false,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "intervals": [
+          {
+            "end": 1793492954.0956402,
+            "endpoint_uid": "5b2594d7-8c64-411e-80dc-033592597fda:7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "start": 1793492950.9082956
+          }
+        ],
+        "measured": true,
+        "observed_at": 1793492954.0956402,
+        "overdue": false,
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "reservation": null,
+        "revision": 1,
+        "state": "settled",
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      }
+    ],
+    "policy_generation": 1,
+    "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "ready_pod_uids": [
+      "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+      "3a90af0e-0515-4492-9c08-cd45c7b61923",
+      "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+    ],
+    "reasons": [
+      "API_WATCH_WATERMARK_BEHIND_TICK"
+    ],
+    "samples": [
+      {
+        "action": "rotate",
+        "at": 1793492954.0956402,
+        "censored": false,
+        "duration": 9.18130350112915,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "overdue": false,
+        "suspect": false,
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      }
+    ],
+    "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "spec_replicas": 3,
+    "watermark": 1793496014.5865812,
+    "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+  },
+  "sealed_sessions": {
+    "a0b816ff152b4944b08de1e506829059": 1793496014.5865812
+  },
+  "transitions": [
+    {
+      "at": 1793495303.5191417,
+      "kind": "watch",
+      "seq": 1759,
+      "state": {
+        "complete_from": null,
+        "known_pod_uids": [
+          "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923"
+        ],
+        "moves": {
+          "calibration-ae24648058404084bd3820ee5481134c": {
+            "ack_at": 1793492950.8871768,
+            "duration": 9.18130350112915,
+            "intent_at": 1793492944.9143367,
+            "observed_at": 1793492954.0956402,
+            "origin": "controlled-stage-calibration",
+            "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "state": "settled"
+          }
+        },
+        "ready_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923"
+        ],
+        "reasons": [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD"
+        ],
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "stream": "endpointslices",
+      "type": "MODIFIED"
+    },
+    {
+      "at": 1793495303.8012414,
+      "kind": "watch",
+      "seq": 1767,
+      "state": {
+        "complete_from": null,
+        "known_pod_uids": [
+          "0bdbadbb-6240-49bc-981b-84a5313e29dd",
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923",
+          "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+        ],
+        "moves": {
+          "calibration-ae24648058404084bd3820ee5481134c": {
+            "ack_at": 1793492950.8871768,
+            "duration": 9.18130350112915,
+            "intent_at": 1793492944.9143367,
+            "observed_at": 1793492954.0956402,
+            "origin": "controlled-stage-calibration",
+            "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "state": "settled"
+          }
+        },
+        "ready_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923"
+        ],
+        "reasons": [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ],
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "stream": "pods",
+      "type": "ADDED"
+    },
+    {
+      "at": 1793495304.0996857,
+      "kind": "watch",
+      "seq": 1774,
+      "state": {
+        "complete_from": null,
+        "known_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923",
+          "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+        ],
+        "moves": {
+          "calibration-ae24648058404084bd3820ee5481134c": {
+            "ack_at": 1793492950.8871768,
+            "duration": 9.18130350112915,
+            "intent_at": 1793492944.9143367,
+            "observed_at": 1793492954.0956402,
+            "origin": "controlled-stage-calibration",
+            "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "state": "settled"
+          }
+        },
+        "ready_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923"
+        ],
+        "reasons": [
+          "UNATTRIBUTED_PENDING_OR_TERMINATING_POD",
+          "UNATTRIBUTED_POD_MEMBERSHIP_CHANGE"
+        ],
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "stream": "pods",
+      "type": "DELETED"
+    },
+    {
+      "at": 1793495306.4060414,
+      "kind": "watch",
+      "seq": 1781,
+      "state": {
+        "complete_from": 1793495306.4060414,
+        "known_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923",
+          "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+        ],
+        "moves": {
+          "calibration-ae24648058404084bd3820ee5481134c": {
+            "ack_at": 1793492950.8871768,
+            "duration": 9.18130350112915,
+            "intent_at": 1793492944.9143367,
+            "observed_at": 1793492954.0956402,
+            "origin": "controlled-stage-calibration",
+            "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+            "state": "settled"
+          }
+        },
+        "ready_pod_uids": [
+          "2d36dae1-284d-4058-ba68-ad8a6edff96e",
+          "3a90af0e-0515-4492-9c08-cd45c7b61923",
+          "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+        ],
+        "reasons": [],
+        "session": "a0b816ff152b4944b08de1e506829059"
+      },
+      "stream": "endpointslices",
+      "type": "MODIFIED"
+    }
+  ]
+}

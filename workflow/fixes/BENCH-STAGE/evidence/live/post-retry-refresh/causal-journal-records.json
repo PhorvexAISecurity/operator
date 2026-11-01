@@ -1,0 +1,3329 @@
+{
+  "controls": [
+    {
+      "at": 1793492343.1484134,
+      "data": {
+        "checkpoint_seconds": 10,
+        "clock": "collector-serialized-observation-utc",
+        "id": "a0b816ff152b4944b08de1e506829059"
+      },
+      "hash": "4c03fbcfcce838fea1df7df5793fd49fae92d231a176e4e49f1855e7470783de",
+      "kind": "session",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1
+    },
+    {
+      "at": 1793492944.9143367,
+      "data": {
+        "action": "rotate",
+        "deadline": 1793493064.9140232,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "origin": "controlled-stage-calibration",
+        "pod_name": "stage-bench-api-f9b895d7-25bpm",
+        "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+        "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+        "reservation": 159,
+        "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+      },
+      "hash": "a85692b9601dcb333d0f8768eadbb618dfa18ecb09866af115b07aca49a80afb",
+      "kind": "intent",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 344
+    },
+    {
+      "at": 1793492950.8871768,
+      "data": {
+        "acknowledged": true,
+        "deletion_timestamp": "2026-11-01T00:29:40Z",
+        "http_status": 200,
+        "id": "calibration-ae24648058404084bd3820ee5481134c",
+        "operation": "uid-preconditioned-delete",
+        "pod_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82",
+        "reason": null,
+        "resource_version": "102392682",
+        "response_kind": "Pod",
+        "returned_uid": "7e2a3d65-e66d-4864-b128-c5164045fa82"
+      },
+      "hash": "6e551a272b6a4a5880def2a4492ca61ef03830a8ecf2146b0984c4302eba098e",
+      "kind": "receipt",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 346
+    }
+  ],
+  "database_sha256": "b647b2e7a2e6ba6834536b51e68260ecc82f61ea46ec21095ef2bb0016874b04",
+  "records": [
+    {
+      "at": 1793495300.9337893,
+      "data": {
+        "object": {
+          "apiVersion": "phorvex.ai/v1alpha1",
+          "kind": "PhorvexPolicy",
+          "metadata": {
+            "creationTimestamp": "2026-10-31T22:37:23Z",
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/part-of": "stage-brain-benchmark"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "phorvex.ai/v1alpha1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:labels": {
+                      "f:app.kubernetes.io/part-of": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:actions": {
+                      "f:enabled": {
+                        "v:\"rotate\"": {}
+                      }
+                    },
+                    "f:assetValue": {
+                      "f:blastRadiusFromGraph": {},
+                      "f:fromLabels": {
+                        "f:data-class": {
+                          ".": {},
+                          "f:internal": {},
+                          "f:public": {},
+                          "f:restricted": {}
+                        }
+                      },
+                      "f:weightSecrets": {}
+                    },
+                    "f:budget": {
+                      "f:antiOverRotationWindow": {},
+                      "f:maxGracePeriodSeconds": {},
+                      "f:maxMovesPerTick": {},
+                      "f:proactiveFloor": {},
+                      "f:tickInterval": {}
+                    },
+                    "f:mode": {},
+                    "f:objective": {
+                      "f:costWeights": {
+                        "f:flowDisruption": {},
+                        "f:normSparsity": {}
+                      },
+                      "f:disruptionAversion": {},
+                      "f:lambda": {}
+                    },
+                    "f:selector": {},
+                    "f:slo": {
+                      "f:costCeiling": {},
+                      "f:minAvailableReplicas": {}
+                    },
+                    "f:tenant": {},
+                    "f:triggers": {
+                      "f:eventAgeHorizon": {},
+                      "f:eventDriven": {},
+                      "f:reactiveOnly": {}
+                    }
+                  }
+                },
+                "manager": "stage-brain-benchmark",
+                "operation": "Apply",
+                "time": "2026-10-31T22:37:23Z"
+              },
+              {
+                "apiVersion": "phorvex.ai/v1alpha1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    ".": {},
+                    "f:conditions": {
+                      ".": {},
+                      "k:{\"type\":\"ActionsSupported\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"ActuationPrepared\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"DryRun\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"EmissionHistory\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"ExistentialScopeComplete\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"ExistentialUncontainable\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"KillSwitch\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PolicyActionVocabulary\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Ready\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"StandingPolicy\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"TelemetryDegraded\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"TenantCollision\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"ValidationError\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:message": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:killSwitchEngaged": {},
+                    "f:lastTickTime": {},
+                    "f:observedGeneration": {},
+                    "f:selectedPods": {},
+                    "f:tenant": {}
+                  }
+                },
+                "manager": "manager",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T01:08:20Z"
+              }
+            ],
+            "name": "stage-bench-defense",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428199",
+            "uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3"
+          },
+          "spec": {
+            "actions": {
+              "enabled": [
+                "rotate"
+              ]
+            },
+            "assetValue": {
+              "blastRadiusFromGraph": true,
+              "fromLabels": {
+                "data-class": {
+                  "internal": "0.4",
+                  "public": "0.1",
+                  "restricted": "1.0"
+                }
+              },
+              "weightSecrets": "0.8"
+            },
+            "budget": {
+              "antiOverRotationWindow": "30s",
+              "maxGracePeriodSeconds": 30,
+              "maxMovesPerTick": 1,
+              "proactiveFloor": "60s",
+              "tickInterval": "5s"
+            },
+            "mode": "dryRun",
+            "objective": {
+              "costWeights": {
+                "flowDisruption": "0.6",
+                "normSparsity": "0.4"
+              },
+              "disruptionAversion": "1",
+              "lambda": "0"
+            },
+            "selector": {
+              "matchLabels": {
+                "app.kubernetes.io/name": "stage-bench-api"
+              }
+            },
+            "slo": {
+              "costCeiling": "1.2",
+              "minAvailableReplicas": 2
+            },
+            "tenant": "stage-brain-benchmark",
+            "triggers": {
+              "eventAgeHorizon": "1h",
+              "eventDriven": true,
+              "reactiveOnly": false
+            }
+          },
+          "status": {
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-10-31T22:37:23Z",
+                "message": "policy accepted",
+                "observedGeneration": 1,
+                "reason": "Valid",
+                "status": "False",
+                "type": "ValidationError"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:24Z",
+                "message": "spec.tenant \"stage-brain-benchmark\" resolves to exactly one policy-owned economic unit",
+                "observedGeneration": 1,
+                "reason": "UniqueOwner",
+                "status": "False",
+                "type": "TenantCollision"
+              },
+              {
+                "lastTransitionTime": "2026-11-01T00:19:02Z",
+                "message": "emission count covers the full trailing window; emission is not confirmed effect",
+                "observedGeneration": 1,
+                "reason": "CompleteWindow",
+                "status": "True",
+                "type": "EmissionHistory"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "PHORVEXSEC-208 interim: no qualified exposure lacked a selected containing move this tick; not a safety claim",
+                "observedGeneration": 1,
+                "reason": "NoUncontainableDecision",
+                "status": "False",
+                "type": "ExistentialUncontainable"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "no unresolved scope in supplied outcome inventory; not a completeness or safety claim",
+                "observedGeneration": 1,
+                "reason": "NoUnresolvedScope",
+                "status": "True",
+                "type": "ExistentialScopeComplete"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "phorvex is ingesting, scoring and logging decisions",
+                "observedGeneration": 1,
+                "reason": "Ticking",
+                "status": "True",
+                "type": "Ready"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "policy dry-run mode suppresses new actuation",
+                "observedGeneration": 1,
+                "reason": "PolicyDryRun",
+                "status": "True",
+                "type": "DryRun"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "all enabled actions have matching capabilities in the selected fleet",
+                "observedGeneration": 1,
+                "reason": "AllEnabledActionsSupported",
+                "status": "True",
+                "type": "ActionsSupported"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "native=missing (native policy binding is absent); mutation prohibited by PolicyDryRun; standing route configuration only; no defense effect is claimed",
+                "observedGeneration": 1,
+                "reason": "BrakedWithDrift",
+                "status": "False",
+                "type": "StandingPolicy"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "standing actuator route prepared or observed this tick",
+                "observedGeneration": 1,
+                "reason": "Prepared",
+                "status": "True",
+                "type": "ActuationPrepared"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "PhorvexPolicy action enum observed at 2026-11-01T01:08:13Z (CRD UID 4f0ae75d-8bf9-4c96-ac0c-85e133babaee, resourceVersion 99463085); 0 known actions absent",
+                "observedGeneration": 1,
+                "reason": "SchemaObserved",
+                "status": "True",
+                "type": "PolicyActionVocabulary"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "telemetry source answering",
+                "observedGeneration": 1,
+                "reason": "Healthy",
+                "status": "False",
+                "type": "TelemetryDegraded"
+              },
+              {
+                "lastTransitionTime": "2026-10-31T22:37:25Z",
+                "message": "actuation is permitted; the dynamic sentinel is absent",
+                "observedGeneration": 1,
+                "reason": "SentinelAbsent",
+                "status": "False",
+                "type": "KillSwitch"
+              }
+            ],
+            "killSwitchEngaged": false,
+            "lastTickTime": "2026-11-01T01:08:20Z",
+            "observedGeneration": 1,
+            "selectedPods": 3,
+            "tenant": "stage-brain-benchmark"
+          }
+        },
+        "resource_version": "102428199",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "policy",
+        "type": "MODIFIED"
+      },
+      "hash": "b22aadbe1e8aed9d2d058565c7d2112850f64c63540b0547d9da66308ea62eca",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1757
+    },
+    {
+      "at": 1793495303.4879398,
+      "data": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:17:47Z",
+            "generateName": "stage-bench-api-f9b895d7-",
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/name": "stage-bench-api",
+              "data-class": "public",
+              "pod-template-hash": "f9b895d7",
+              "topology.kubernetes.io/region": "us-east-2",
+              "topology.kubernetes.io/zone": "us-east-2b"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/name": {},
+                      "f:data-class": {},
+                      "f:pod-template-hash": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"6aed8cb2-da50-42f7-81b8-47641ded6c56\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:containers": {
+                      "k:{\"name\":\"web\"}": {
+                        ".": {},
+                        "f:image": {},
+                        "f:imagePullPolicy": {},
+                        "f:name": {},
+                        "f:ports": {
+                          ".": {},
+                          "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                            ".": {},
+                            "f:containerPort": {},
+                            "f:name": {},
+                            "f:protocol": {}
+                          }
+                        },
+                        "f:readinessProbe": {
+                          ".": {},
+                          "f:failureThreshold": {},
+                          "f:httpGet": {
+                            ".": {},
+                            "f:path": {},
+                            "f:port": {},
+                            "f:scheme": {}
+                          },
+                          "f:initialDelaySeconds": {},
+                          "f:periodSeconds": {},
+                          "f:successThreshold": {},
+                          "f:timeoutSeconds": {}
+                        },
+                        "f:resources": {
+                          ".": {},
+                          "f:limits": {
+                            ".": {},
+                            "f:memory": {}
+                          },
+                          "f:requests": {
+                            ".": {},
+                            "f:cpu": {},
+                            "f:memory": {}
+                          }
+                        },
+                        "f:securityContext": {
+                          ".": {},
+                          "f:allowPrivilegeEscalation": {},
+                          "f:capabilities": {
+                            ".": {},
+                            "f:drop": {}
+                          },
+                          "f:readOnlyRootFilesystem": {}
+                        },
+                        "f:terminationMessagePath": {},
+                        "f:terminationMessagePolicy": {},
+                        "f:volumeMounts": {
+                          ".": {},
+                          "k:{\"mountPath\":\"/tmp\"}": {
+                            ".": {},
+                            "f:mountPath": {},
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    },
+                    "f:dnsPolicy": {},
+                    "f:enableServiceLinks": {},
+                    "f:restartPolicy": {},
+                    "f:schedulerName": {},
+                    "f:securityContext": {
+                      ".": {},
+                      "f:fsGroup": {},
+                      "f:runAsNonRoot": {},
+                      "f:runAsUser": {},
+                      "f:seccompProfile": {
+                        ".": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:terminationGracePeriodSeconds": {},
+                    "f:volumes": {
+                      ".": {},
+                      "k:{\"name\":\"tmp\"}": {
+                        ".": {},
+                        "f:emptyDir": {
+                          ".": {},
+                          "f:sizeLimit": {}
+                        },
+                        "f:name": {}
+                      }
+                    }
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T00:17:46Z"
+              },
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    "f:allocatedResources": {
+                      ".": {},
+                      "f:cpu": {},
+                      "f:memory": {}
+                    },
+                    "f:conditions": {
+                      "k:{\"type\":\"ContainersReady\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Initialized\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodReadyToStartContainers\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodScheduled\"}": {
+                        "f:observedGeneration": {}
+                      },
+                      "k:{\"type\":\"Ready\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:containerStatuses": {},
+                    "f:hostIP": {},
+                    "f:hostIPs": {},
+                    "f:observedGeneration": {},
+                    "f:phase": {},
+                    "f:podIP": {},
+                    "f:podIPs": {
+                      ".": {},
+                      "k:{\"ip\":\"172.27.54.192\"}": {
+                        ".": {},
+                        "f:ip": {}
+                      }
+                    },
+                    "f:resources": {
+                      ".": {},
+                      "f:limits": {
+                        ".": {},
+                        "f:memory": {}
+                      },
+                      "f:requests": {
+                        ".": {},
+                        "f:memory": {}
+                      }
+                    },
+                    "f:startTime": {}
+                  }
+                },
+                "manager": "kubelet",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T00:17:51Z"
+              }
+            ],
+            "name": "stage-bench-api-f9b895d7-5wlvd",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "stage-bench-api-f9b895d7",
+                "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+              }
+            ],
+            "resourceVersion": "102428261",
+            "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+          },
+          "spec": {
+            "containers": [
+              {
+                "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/",
+                    "port": "http",
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 1,
+                  "periodSeconds": 2,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": true,
+            "nodeName": "ip-172-27-62-45.us-east-2.compute.internal",
+            "preemptionPolicy": "PreemptLowerPriority",
+            "priority": 0,
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "fsGroup": 101,
+              "runAsNonRoot": true,
+              "runAsUser": 101,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "default",
+            "serviceAccountName": "default",
+            "terminationGracePeriodSeconds": 30,
+            "tolerations": [
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "volumes": [
+              {
+                "emptyDir": {
+                  "sizeLimit": "16Mi"
+                },
+                "name": "tmp"
+              },
+              {
+                "name": "kube-api-access-mcfmf",
+                "projected": {
+                  "defaultMode": 420,
+                  "sources": [
+                    {
+                      "serviceAccountToken": {
+                        "expirationSeconds": 3607,
+                        "path": "token"
+                      }
+                    },
+                    {
+                      "configMap": {
+                        "items": [
+                          {
+                            "key": "ca.crt",
+                            "path": "ca.crt"
+                          }
+                        ],
+                        "name": "kube-root-ca.crt"
+                      }
+                    },
+                    {
+                      "downwardAPI": {
+                        "items": [
+                          {
+                            "fieldRef": {
+                              "apiVersion": "v1",
+                              "fieldPath": "metadata.namespace"
+                            },
+                            "path": "namespace"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "status": {
+            "allocatedResources": {
+              "cpu": "20m",
+              "memory": "32Mi"
+            },
+            "conditions": [
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodReadyToStartContainers"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Initialized"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:51Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Ready"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:51Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "ContainersReady"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodScheduled"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "message": "Eviction API: evicting",
+                "reason": "EvictionByEvictionAPI",
+                "status": "True",
+                "type": "DisruptionTarget"
+              }
+            ],
+            "containerStatuses": [
+              {
+                "allocatedResources": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                },
+                "containerID": "containerd://486867b8aad63a15df874f1426ba1d985b269dc94ac47facc2f80597cf3d3a29",
+                "image": "sha256:47ce8258a10e28ce4b4498588c25ef77ae328f4c56cbe3e8d5dcf4f6d8019997",
+                "imageID": "docker.io/nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "lastState": {},
+                "name": "web",
+                "ready": true,
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "restartCount": 0,
+                "started": true,
+                "state": {
+                  "running": {
+                    "startedAt": "2026-11-01T00:17:49Z"
+                  }
+                },
+                "user": {
+                  "linux": {
+                    "gid": 101,
+                    "supplementalGroups": [
+                      101
+                    ],
+                    "uid": 101
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true,
+                    "recursiveReadOnly": "Disabled"
+                  }
+                ]
+              }
+            ],
+            "hostIP": "172.27.62.45",
+            "hostIPs": [
+              {
+                "ip": "172.27.62.45"
+              }
+            ],
+            "observedGeneration": 1,
+            "phase": "Running",
+            "podIP": "172.27.54.192",
+            "podIPs": [
+              {
+                "ip": "172.27.54.192"
+              }
+            ],
+            "qosClass": "Burstable",
+            "resources": {
+              "limits": {
+                "memory": "96Mi"
+              },
+              "requests": {
+                "memory": "32Mi"
+              }
+            },
+            "startTime": "2026-11-01T00:17:47Z"
+          }
+        },
+        "resource_version": "102428261",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "pods",
+        "type": "MODIFIED"
+      },
+      "hash": "773341d2ea5d4917236c0e02676027833ecbb723ad944c624547dea08381cf70",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1758
+    },
+    {
+      "at": 1793495303.5191417,
+      "data": {
+        "object": {
+          "addressType": "IPv4",
+          "apiVersion": "discovery.k8s.io/v1",
+          "endpoints": [
+            {
+              "addresses": [
+                "172.27.11.84"
+              ],
+              "conditions": {
+                "ready": true,
+                "serving": true,
+                "terminating": false
+              },
+              "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-fntvf",
+                "namespace": "phorvex-staging-demo",
+                "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+              },
+              "zone": "us-east-2a"
+            },
+            {
+              "addresses": [
+                "172.27.54.192"
+              ],
+              "conditions": {
+                "ready": false,
+                "serving": true,
+                "terminating": true
+              },
+              "nodeName": "ip-172-27-62-45.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-5wlvd",
+                "namespace": "phorvex-staging-demo",
+                "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+              },
+              "zone": "us-east-2b"
+            },
+            {
+              "addresses": [
+                "172.27.35.80"
+              ],
+              "conditions": {
+                "ready": true,
+                "serving": true,
+                "terminating": false
+              },
+              "nodeName": "ip-172-27-47-45.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-hkbkv",
+                "namespace": "phorvex-staging-demo",
+                "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+              },
+              "zone": "us-east-2a"
+            }
+          ],
+          "kind": "EndpointSlice",
+          "metadata": {
+            "creationTimestamp": "2026-10-31T22:37:23Z",
+            "generateName": "stage-bench-api-",
+            "generation": 28,
+            "labels": {
+              "app.kubernetes.io/part-of": "stage-brain-benchmark",
+              "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io",
+              "kubernetes.io/service-name": "stage-bench-api"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "discovery.k8s.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:addressType": {},
+                  "f:endpoints": {},
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/part-of": {},
+                      "f:endpointslice.kubernetes.io/managed-by": {},
+                      "f:kubernetes.io/service-name": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"5b2594d7-8c64-411e-80dc-033592597fda\"}": {}
+                    }
+                  },
+                  "f:ports": {}
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T01:08:23Z"
+              }
+            ],
+            "name": "stage-bench-api-fwjdk",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "Service",
+                "name": "stage-bench-api",
+                "uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+              }
+            ],
+            "resourceVersion": "102428267",
+            "uid": "2b9f9f01-585e-43bb-90f6-c27e8d78f56c"
+          },
+          "ports": [
+            {
+              "name": "http",
+              "port": 8080,
+              "protocol": "TCP"
+            }
+          ]
+        },
+        "resource_version": "102428267",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "endpointslices",
+        "type": "MODIFIED"
+      },
+      "hash": "6d79dea9b45fa8bb5b4b69118a3d87ec33dbb8676ca4bf541562695293fc9a8f",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1759
+    },
+    {
+      "at": 1793495303.6085181,
+      "data": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:17:47Z",
+            "deletionGracePeriodSeconds": 30,
+            "deletionTimestamp": "2026-11-01T01:08:53Z",
+            "generateName": "stage-bench-api-f9b895d7-",
+            "generation": 2,
+            "labels": {
+              "app.kubernetes.io/name": "stage-bench-api",
+              "data-class": "public",
+              "pod-template-hash": "f9b895d7",
+              "topology.kubernetes.io/region": "us-east-2",
+              "topology.kubernetes.io/zone": "us-east-2b"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/name": {},
+                      "f:data-class": {},
+                      "f:pod-template-hash": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"6aed8cb2-da50-42f7-81b8-47641ded6c56\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:containers": {
+                      "k:{\"name\":\"web\"}": {
+                        ".": {},
+                        "f:image": {},
+                        "f:imagePullPolicy": {},
+                        "f:name": {},
+                        "f:ports": {
+                          ".": {},
+                          "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                            ".": {},
+                            "f:containerPort": {},
+                            "f:name": {},
+                            "f:protocol": {}
+                          }
+                        },
+                        "f:readinessProbe": {
+                          ".": {},
+                          "f:failureThreshold": {},
+                          "f:httpGet": {
+                            ".": {},
+                            "f:path": {},
+                            "f:port": {},
+                            "f:scheme": {}
+                          },
+                          "f:initialDelaySeconds": {},
+                          "f:periodSeconds": {},
+                          "f:successThreshold": {},
+                          "f:timeoutSeconds": {}
+                        },
+                        "f:resources": {
+                          ".": {},
+                          "f:limits": {
+                            ".": {},
+                            "f:memory": {}
+                          },
+                          "f:requests": {
+                            ".": {},
+                            "f:cpu": {},
+                            "f:memory": {}
+                          }
+                        },
+                        "f:securityContext": {
+                          ".": {},
+                          "f:allowPrivilegeEscalation": {},
+                          "f:capabilities": {
+                            ".": {},
+                            "f:drop": {}
+                          },
+                          "f:readOnlyRootFilesystem": {}
+                        },
+                        "f:terminationMessagePath": {},
+                        "f:terminationMessagePolicy": {},
+                        "f:volumeMounts": {
+                          ".": {},
+                          "k:{\"mountPath\":\"/tmp\"}": {
+                            ".": {},
+                            "f:mountPath": {},
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    },
+                    "f:dnsPolicy": {},
+                    "f:enableServiceLinks": {},
+                    "f:restartPolicy": {},
+                    "f:schedulerName": {},
+                    "f:securityContext": {
+                      ".": {},
+                      "f:fsGroup": {},
+                      "f:runAsNonRoot": {},
+                      "f:runAsUser": {},
+                      "f:seccompProfile": {
+                        ".": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:terminationGracePeriodSeconds": {},
+                    "f:volumes": {
+                      ".": {},
+                      "k:{\"name\":\"tmp\"}": {
+                        ".": {},
+                        "f:emptyDir": {
+                          ".": {},
+                          "f:sizeLimit": {}
+                        },
+                        "f:name": {}
+                      }
+                    }
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T00:17:46Z"
+              },
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    "f:allocatedResources": {
+                      ".": {},
+                      "f:cpu": {},
+                      "f:memory": {}
+                    },
+                    "f:conditions": {
+                      "k:{\"type\":\"ContainersReady\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Initialized\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodReadyToStartContainers\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodScheduled\"}": {
+                        "f:observedGeneration": {}
+                      },
+                      "k:{\"type\":\"Ready\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:containerStatuses": {},
+                    "f:hostIP": {},
+                    "f:hostIPs": {},
+                    "f:observedGeneration": {},
+                    "f:phase": {},
+                    "f:podIP": {},
+                    "f:podIPs": {
+                      ".": {},
+                      "k:{\"ip\":\"172.27.54.192\"}": {
+                        ".": {},
+                        "f:ip": {}
+                      }
+                    },
+                    "f:resources": {
+                      ".": {},
+                      "f:limits": {
+                        ".": {},
+                        "f:memory": {}
+                      },
+                      "f:requests": {
+                        ".": {},
+                        "f:memory": {}
+                      }
+                    },
+                    "f:startTime": {}
+                  }
+                },
+                "manager": "kubelet",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T00:17:51Z"
+              }
+            ],
+            "name": "stage-bench-api-f9b895d7-5wlvd",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "stage-bench-api-f9b895d7",
+                "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+              }
+            ],
+            "resourceVersion": "102428264",
+            "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+          },
+          "spec": {
+            "containers": [
+              {
+                "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/",
+                    "port": "http",
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 1,
+                  "periodSeconds": 2,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": true,
+            "nodeName": "ip-172-27-62-45.us-east-2.compute.internal",
+            "preemptionPolicy": "PreemptLowerPriority",
+            "priority": 0,
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "fsGroup": 101,
+              "runAsNonRoot": true,
+              "runAsUser": 101,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "default",
+            "serviceAccountName": "default",
+            "terminationGracePeriodSeconds": 30,
+            "tolerations": [
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "volumes": [
+              {
+                "emptyDir": {
+                  "sizeLimit": "16Mi"
+                },
+                "name": "tmp"
+              },
+              {
+                "name": "kube-api-access-mcfmf",
+                "projected": {
+                  "defaultMode": 420,
+                  "sources": [
+                    {
+                      "serviceAccountToken": {
+                        "expirationSeconds": 3607,
+                        "path": "token"
+                      }
+                    },
+                    {
+                      "configMap": {
+                        "items": [
+                          {
+                            "key": "ca.crt",
+                            "path": "ca.crt"
+                          }
+                        ],
+                        "name": "kube-root-ca.crt"
+                      }
+                    },
+                    {
+                      "downwardAPI": {
+                        "items": [
+                          {
+                            "fieldRef": {
+                              "apiVersion": "v1",
+                              "fieldPath": "metadata.namespace"
+                            },
+                            "path": "namespace"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "status": {
+            "allocatedResources": {
+              "cpu": "20m",
+              "memory": "32Mi"
+            },
+            "conditions": [
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodReadyToStartContainers"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Initialized"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:51Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Ready"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:51Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "ContainersReady"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodScheduled"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "message": "Eviction API: evicting",
+                "reason": "EvictionByEvictionAPI",
+                "status": "True",
+                "type": "DisruptionTarget"
+              }
+            ],
+            "containerStatuses": [
+              {
+                "allocatedResources": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                },
+                "containerID": "containerd://486867b8aad63a15df874f1426ba1d985b269dc94ac47facc2f80597cf3d3a29",
+                "image": "sha256:47ce8258a10e28ce4b4498588c25ef77ae328f4c56cbe3e8d5dcf4f6d8019997",
+                "imageID": "docker.io/nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "lastState": {},
+                "name": "web",
+                "ready": true,
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "restartCount": 0,
+                "started": true,
+                "state": {
+                  "running": {
+                    "startedAt": "2026-11-01T00:17:49Z"
+                  }
+                },
+                "user": {
+                  "linux": {
+                    "gid": 101,
+                    "supplementalGroups": [
+                      101
+                    ],
+                    "uid": 101
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true,
+                    "recursiveReadOnly": "Disabled"
+                  }
+                ]
+              }
+            ],
+            "hostIP": "172.27.62.45",
+            "hostIPs": [
+              {
+                "ip": "172.27.62.45"
+              }
+            ],
+            "observedGeneration": 1,
+            "phase": "Running",
+            "podIP": "172.27.54.192",
+            "podIPs": [
+              {
+                "ip": "172.27.54.192"
+              }
+            ],
+            "qosClass": "Burstable",
+            "resources": {
+              "limits": {
+                "memory": "96Mi"
+              },
+              "requests": {
+                "memory": "32Mi"
+              }
+            },
+            "startTime": "2026-11-01T00:17:47Z"
+          }
+        },
+        "resource_version": "102428264",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "pods",
+        "type": "MODIFIED"
+      },
+      "hash": "55d405bff3104f579dcba65c03a5f5c4cf90884003d8c36ee88992c87eb81edb",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1760
+    },
+    {
+      "at": 1793495303.8012414,
+      "data": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:23Z",
+            "generateName": "stage-bench-api-f9b895d7-",
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/name": "stage-bench-api",
+              "data-class": "public",
+              "pod-template-hash": "f9b895d7"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/name": {},
+                      "f:data-class": {},
+                      "f:pod-template-hash": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"6aed8cb2-da50-42f7-81b8-47641ded6c56\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:containers": {
+                      "k:{\"name\":\"web\"}": {
+                        ".": {},
+                        "f:image": {},
+                        "f:imagePullPolicy": {},
+                        "f:name": {},
+                        "f:ports": {
+                          ".": {},
+                          "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                            ".": {},
+                            "f:containerPort": {},
+                            "f:name": {},
+                            "f:protocol": {}
+                          }
+                        },
+                        "f:readinessProbe": {
+                          ".": {},
+                          "f:failureThreshold": {},
+                          "f:httpGet": {
+                            ".": {},
+                            "f:path": {},
+                            "f:port": {},
+                            "f:scheme": {}
+                          },
+                          "f:initialDelaySeconds": {},
+                          "f:periodSeconds": {},
+                          "f:successThreshold": {},
+                          "f:timeoutSeconds": {}
+                        },
+                        "f:resources": {
+                          ".": {},
+                          "f:limits": {
+                            ".": {},
+                            "f:memory": {}
+                          },
+                          "f:requests": {
+                            ".": {},
+                            "f:cpu": {},
+                            "f:memory": {}
+                          }
+                        },
+                        "f:securityContext": {
+                          ".": {},
+                          "f:allowPrivilegeEscalation": {},
+                          "f:capabilities": {
+                            ".": {},
+                            "f:drop": {}
+                          },
+                          "f:readOnlyRootFilesystem": {}
+                        },
+                        "f:terminationMessagePath": {},
+                        "f:terminationMessagePolicy": {},
+                        "f:volumeMounts": {
+                          ".": {},
+                          "k:{\"mountPath\":\"/tmp\"}": {
+                            ".": {},
+                            "f:mountPath": {},
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    },
+                    "f:dnsPolicy": {},
+                    "f:enableServiceLinks": {},
+                    "f:restartPolicy": {},
+                    "f:schedulerName": {},
+                    "f:securityContext": {
+                      ".": {},
+                      "f:fsGroup": {},
+                      "f:runAsNonRoot": {},
+                      "f:runAsUser": {},
+                      "f:seccompProfile": {
+                        ".": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:terminationGracePeriodSeconds": {},
+                    "f:volumes": {
+                      ".": {},
+                      "k:{\"name\":\"tmp\"}": {
+                        ".": {},
+                        "f:emptyDir": {
+                          ".": {},
+                          "f:sizeLimit": {}
+                        },
+                        "f:name": {}
+                      }
+                    }
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T01:08:23Z"
+              }
+            ],
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "stage-bench-api-f9b895d7",
+                "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+              }
+            ],
+            "resourceVersion": "102428270",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "spec": {
+            "containers": [
+              {
+                "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/",
+                    "port": "http",
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 1,
+                  "periodSeconds": 2,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-rzzxb",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": true,
+            "preemptionPolicy": "PreemptLowerPriority",
+            "priority": 0,
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "fsGroup": 101,
+              "runAsNonRoot": true,
+              "runAsUser": 101,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "default",
+            "serviceAccountName": "default",
+            "terminationGracePeriodSeconds": 30,
+            "tolerations": [
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "volumes": [
+              {
+                "emptyDir": {
+                  "sizeLimit": "16Mi"
+                },
+                "name": "tmp"
+              },
+              {
+                "name": "kube-api-access-rzzxb",
+                "projected": {
+                  "defaultMode": 420,
+                  "sources": [
+                    {
+                      "serviceAccountToken": {
+                        "expirationSeconds": 3607,
+                        "path": "token"
+                      }
+                    },
+                    {
+                      "configMap": {
+                        "items": [
+                          {
+                            "key": "ca.crt",
+                            "path": "ca.crt"
+                          }
+                        ],
+                        "name": "kube-root-ca.crt"
+                      }
+                    },
+                    {
+                      "downwardAPI": {
+                        "items": [
+                          {
+                            "fieldRef": {
+                              "apiVersion": "v1",
+                              "fieldPath": "metadata.namespace"
+                            },
+                            "path": "namespace"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "status": {
+            "phase": "Pending",
+            "qosClass": "Burstable"
+          }
+        },
+        "resource_version": "102428270",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "pods",
+        "type": "ADDED"
+      },
+      "hash": "7c0857f77f664b23ba1c28e3f20f19bead0ad446f0edfb608f985be413bbd62c",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1767
+    },
+    {
+      "at": 1793495304.0996857,
+      "data": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T00:17:47Z",
+            "deletionGracePeriodSeconds": 0,
+            "deletionTimestamp": "2026-11-01T01:08:23Z",
+            "generateName": "stage-bench-api-f9b895d7-",
+            "generation": 2,
+            "labels": {
+              "app.kubernetes.io/name": "stage-bench-api",
+              "data-class": "public",
+              "pod-template-hash": "f9b895d7",
+              "topology.kubernetes.io/region": "us-east-2",
+              "topology.kubernetes.io/zone": "us-east-2b"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/name": {},
+                      "f:data-class": {},
+                      "f:pod-template-hash": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"6aed8cb2-da50-42f7-81b8-47641ded6c56\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:containers": {
+                      "k:{\"name\":\"web\"}": {
+                        ".": {},
+                        "f:image": {},
+                        "f:imagePullPolicy": {},
+                        "f:name": {},
+                        "f:ports": {
+                          ".": {},
+                          "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                            ".": {},
+                            "f:containerPort": {},
+                            "f:name": {},
+                            "f:protocol": {}
+                          }
+                        },
+                        "f:readinessProbe": {
+                          ".": {},
+                          "f:failureThreshold": {},
+                          "f:httpGet": {
+                            ".": {},
+                            "f:path": {},
+                            "f:port": {},
+                            "f:scheme": {}
+                          },
+                          "f:initialDelaySeconds": {},
+                          "f:periodSeconds": {},
+                          "f:successThreshold": {},
+                          "f:timeoutSeconds": {}
+                        },
+                        "f:resources": {
+                          ".": {},
+                          "f:limits": {
+                            ".": {},
+                            "f:memory": {}
+                          },
+                          "f:requests": {
+                            ".": {},
+                            "f:cpu": {},
+                            "f:memory": {}
+                          }
+                        },
+                        "f:securityContext": {
+                          ".": {},
+                          "f:allowPrivilegeEscalation": {},
+                          "f:capabilities": {
+                            ".": {},
+                            "f:drop": {}
+                          },
+                          "f:readOnlyRootFilesystem": {}
+                        },
+                        "f:terminationMessagePath": {},
+                        "f:terminationMessagePolicy": {},
+                        "f:volumeMounts": {
+                          ".": {},
+                          "k:{\"mountPath\":\"/tmp\"}": {
+                            ".": {},
+                            "f:mountPath": {},
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    },
+                    "f:dnsPolicy": {},
+                    "f:enableServiceLinks": {},
+                    "f:restartPolicy": {},
+                    "f:schedulerName": {},
+                    "f:securityContext": {
+                      ".": {},
+                      "f:fsGroup": {},
+                      "f:runAsNonRoot": {},
+                      "f:runAsUser": {},
+                      "f:seccompProfile": {
+                        ".": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:terminationGracePeriodSeconds": {},
+                    "f:volumes": {
+                      ".": {},
+                      "k:{\"name\":\"tmp\"}": {
+                        ".": {},
+                        "f:emptyDir": {
+                          ".": {},
+                          "f:sizeLimit": {}
+                        },
+                        "f:name": {}
+                      }
+                    }
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T00:17:46Z"
+              },
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    "f:allocatedResources": {
+                      ".": {},
+                      "f:cpu": {},
+                      "f:memory": {}
+                    },
+                    "f:conditions": {
+                      "k:{\"type\":\"ContainersReady\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Initialized\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodReadyToStartContainers\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodScheduled\"}": {
+                        "f:observedGeneration": {}
+                      },
+                      "k:{\"type\":\"Ready\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:containerStatuses": {},
+                    "f:hostIP": {},
+                    "f:hostIPs": {},
+                    "f:observedGeneration": {},
+                    "f:phase": {},
+                    "f:podIP": {},
+                    "f:podIPs": {
+                      ".": {},
+                      "k:{\"ip\":\"172.27.54.192\"}": {
+                        ".": {},
+                        "f:ip": {}
+                      }
+                    },
+                    "f:resources": {
+                      ".": {},
+                      "f:limits": {
+                        ".": {},
+                        "f:memory": {}
+                      },
+                      "f:requests": {
+                        ".": {},
+                        "f:memory": {}
+                      }
+                    },
+                    "f:startTime": {}
+                  }
+                },
+                "manager": "kubelet",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T01:08:23Z"
+              }
+            ],
+            "name": "stage-bench-api-f9b895d7-5wlvd",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "stage-bench-api-f9b895d7",
+                "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+              }
+            ],
+            "resourceVersion": "102428324",
+            "uid": "0bdbadbb-6240-49bc-981b-84a5313e29dd"
+          },
+          "spec": {
+            "containers": [
+              {
+                "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/",
+                    "port": "http",
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 1,
+                  "periodSeconds": 2,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": true,
+            "nodeName": "ip-172-27-62-45.us-east-2.compute.internal",
+            "preemptionPolicy": "PreemptLowerPriority",
+            "priority": 0,
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "fsGroup": 101,
+              "runAsNonRoot": true,
+              "runAsUser": 101,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "default",
+            "serviceAccountName": "default",
+            "terminationGracePeriodSeconds": 30,
+            "tolerations": [
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "volumes": [
+              {
+                "emptyDir": {
+                  "sizeLimit": "16Mi"
+                },
+                "name": "tmp"
+              },
+              {
+                "name": "kube-api-access-mcfmf",
+                "projected": {
+                  "defaultMode": 420,
+                  "sources": [
+                    {
+                      "serviceAccountToken": {
+                        "expirationSeconds": 3607,
+                        "path": "token"
+                      }
+                    },
+                    {
+                      "configMap": {
+                        "items": [
+                          {
+                            "key": "ca.crt",
+                            "path": "ca.crt"
+                          }
+                        ],
+                        "name": "kube-root-ca.crt"
+                      }
+                    },
+                    {
+                      "downwardAPI": {
+                        "items": [
+                          {
+                            "fieldRef": {
+                              "apiVersion": "v1",
+                              "fieldPath": "metadata.namespace"
+                            },
+                            "path": "namespace"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "status": {
+            "allocatedResources": {
+              "cpu": "20m",
+              "memory": "32Mi"
+            },
+            "conditions": [
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "message": "Eviction API: evicting",
+                "reason": "EvictionByEvictionAPI",
+                "status": "True",
+                "type": "DisruptionTarget"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "observedGeneration": 2,
+                "status": "False",
+                "type": "PodReadyToStartContainers"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 2,
+                "reason": "PodCompleted",
+                "status": "True",
+                "type": "Initialized"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "observedGeneration": 2,
+                "reason": "PodCompleted",
+                "status": "False",
+                "type": "Ready"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "observedGeneration": 2,
+                "reason": "PodCompleted",
+                "status": "False",
+                "type": "ContainersReady"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T00:17:47Z",
+                "observedGeneration": 2,
+                "status": "True",
+                "type": "PodScheduled"
+              }
+            ],
+            "containerStatuses": [
+              {
+                "allocatedResources": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                },
+                "containerID": "containerd://486867b8aad63a15df874f1426ba1d985b269dc94ac47facc2f80597cf3d3a29",
+                "image": "sha256:47ce8258a10e28ce4b4498588c25ef77ae328f4c56cbe3e8d5dcf4f6d8019997",
+                "imageID": "docker.io/nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "lastState": {},
+                "name": "web",
+                "ready": false,
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "restartCount": 0,
+                "started": false,
+                "state": {
+                  "terminated": {
+                    "containerID": "containerd://486867b8aad63a15df874f1426ba1d985b269dc94ac47facc2f80597cf3d3a29",
+                    "exitCode": 0,
+                    "finishedAt": "2026-11-01T01:08:23Z",
+                    "reason": "Completed",
+                    "startedAt": "2026-11-01T00:17:49Z"
+                  }
+                },
+                "user": {
+                  "linux": {
+                    "gid": 101,
+                    "supplementalGroups": [
+                      101
+                    ],
+                    "uid": 101
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-mcfmf",
+                    "readOnly": true,
+                    "recursiveReadOnly": "Disabled"
+                  }
+                ]
+              }
+            ],
+            "hostIP": "172.27.62.45",
+            "hostIPs": [
+              {
+                "ip": "172.27.62.45"
+              }
+            ],
+            "observedGeneration": 2,
+            "phase": "Succeeded",
+            "podIP": "172.27.54.192",
+            "podIPs": [
+              {
+                "ip": "172.27.54.192"
+              }
+            ],
+            "qosClass": "Burstable",
+            "resources": {
+              "limits": {
+                "memory": "96Mi"
+              },
+              "requests": {
+                "memory": "32Mi"
+              }
+            },
+            "startTime": "2026-11-01T00:17:47Z"
+          }
+        },
+        "resource_version": "102428324",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "pods",
+        "type": "DELETED"
+      },
+      "hash": "0b55b79ac263d99c43e32d0d60c833fe1620eeb090f0533c56302e611a91f908",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1774
+    },
+    {
+      "at": 1793495306.375042,
+      "data": {
+        "object": {
+          "apiVersion": "v1",
+          "kind": "Pod",
+          "metadata": {
+            "creationTimestamp": "2026-11-01T01:08:23Z",
+            "generateName": "stage-bench-api-f9b895d7-",
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/name": "stage-bench-api",
+              "data-class": "public",
+              "pod-template-hash": "f9b895d7",
+              "topology.kubernetes.io/region": "us-east-2",
+              "topology.kubernetes.io/zone": "us-east-2b"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/name": {},
+                      "f:data-class": {},
+                      "f:pod-template-hash": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"6aed8cb2-da50-42f7-81b8-47641ded6c56\"}": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:containers": {
+                      "k:{\"name\":\"web\"}": {
+                        ".": {},
+                        "f:image": {},
+                        "f:imagePullPolicy": {},
+                        "f:name": {},
+                        "f:ports": {
+                          ".": {},
+                          "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                            ".": {},
+                            "f:containerPort": {},
+                            "f:name": {},
+                            "f:protocol": {}
+                          }
+                        },
+                        "f:readinessProbe": {
+                          ".": {},
+                          "f:failureThreshold": {},
+                          "f:httpGet": {
+                            ".": {},
+                            "f:path": {},
+                            "f:port": {},
+                            "f:scheme": {}
+                          },
+                          "f:initialDelaySeconds": {},
+                          "f:periodSeconds": {},
+                          "f:successThreshold": {},
+                          "f:timeoutSeconds": {}
+                        },
+                        "f:resources": {
+                          ".": {},
+                          "f:limits": {
+                            ".": {},
+                            "f:memory": {}
+                          },
+                          "f:requests": {
+                            ".": {},
+                            "f:cpu": {},
+                            "f:memory": {}
+                          }
+                        },
+                        "f:securityContext": {
+                          ".": {},
+                          "f:allowPrivilegeEscalation": {},
+                          "f:capabilities": {
+                            ".": {},
+                            "f:drop": {}
+                          },
+                          "f:readOnlyRootFilesystem": {}
+                        },
+                        "f:terminationMessagePath": {},
+                        "f:terminationMessagePolicy": {},
+                        "f:volumeMounts": {
+                          ".": {},
+                          "k:{\"mountPath\":\"/tmp\"}": {
+                            ".": {},
+                            "f:mountPath": {},
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    },
+                    "f:dnsPolicy": {},
+                    "f:enableServiceLinks": {},
+                    "f:restartPolicy": {},
+                    "f:schedulerName": {},
+                    "f:securityContext": {
+                      ".": {},
+                      "f:fsGroup": {},
+                      "f:runAsNonRoot": {},
+                      "f:runAsUser": {},
+                      "f:seccompProfile": {
+                        ".": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:terminationGracePeriodSeconds": {},
+                    "f:volumes": {
+                      ".": {},
+                      "k:{\"name\":\"tmp\"}": {
+                        ".": {},
+                        "f:emptyDir": {
+                          ".": {},
+                          "f:sizeLimit": {}
+                        },
+                        "f:name": {}
+                      }
+                    }
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T01:08:23Z"
+              },
+              {
+                "apiVersion": "v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:status": {
+                    "f:allocatedResources": {
+                      ".": {},
+                      "f:cpu": {},
+                      "f:memory": {}
+                    },
+                    "f:conditions": {
+                      "k:{\"type\":\"ContainersReady\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Initialized\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodReadyToStartContainers\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"PodScheduled\"}": {
+                        "f:observedGeneration": {}
+                      },
+                      "k:{\"type\":\"Ready\"}": {
+                        ".": {},
+                        "f:lastProbeTime": {},
+                        "f:lastTransitionTime": {},
+                        "f:observedGeneration": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:containerStatuses": {},
+                    "f:hostIP": {},
+                    "f:hostIPs": {},
+                    "f:observedGeneration": {},
+                    "f:phase": {},
+                    "f:podIP": {},
+                    "f:podIPs": {
+                      ".": {},
+                      "k:{\"ip\":\"172.27.50.212\"}": {
+                        ".": {},
+                        "f:ip": {}
+                      }
+                    },
+                    "f:resources": {
+                      ".": {},
+                      "f:limits": {
+                        ".": {},
+                        "f:memory": {}
+                      },
+                      "f:requests": {
+                        ".": {},
+                        "f:cpu": {},
+                        "f:memory": {}
+                      }
+                    },
+                    "f:startTime": {}
+                  }
+                },
+                "manager": "kubelet",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T01:08:26Z"
+              }
+            ],
+            "name": "stage-bench-api-f9b895d7-47tcs",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "apps/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "ReplicaSet",
+                "name": "stage-bench-api-f9b895d7",
+                "uid": "6aed8cb2-da50-42f7-81b8-47641ded6c56"
+              }
+            ],
+            "resourceVersion": "102428385",
+            "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+          },
+          "spec": {
+            "containers": [
+              {
+                "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "web",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/",
+                    "port": "http",
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 1,
+                  "periodSeconds": 2,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-rzzxb",
+                    "readOnly": true
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "enableServiceLinks": true,
+            "nodeName": "ip-172-27-62-202.us-east-2.compute.internal",
+            "preemptionPolicy": "PreemptLowerPriority",
+            "priority": 0,
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "fsGroup": 101,
+              "runAsNonRoot": true,
+              "runAsUser": 101,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "default",
+            "serviceAccountName": "default",
+            "terminationGracePeriodSeconds": 30,
+            "tolerations": [
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/not-ready",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              },
+              {
+                "effect": "NoExecute",
+                "key": "node.kubernetes.io/unreachable",
+                "operator": "Exists",
+                "tolerationSeconds": 300
+              }
+            ],
+            "volumes": [
+              {
+                "emptyDir": {
+                  "sizeLimit": "16Mi"
+                },
+                "name": "tmp"
+              },
+              {
+                "name": "kube-api-access-rzzxb",
+                "projected": {
+                  "defaultMode": 420,
+                  "sources": [
+                    {
+                      "serviceAccountToken": {
+                        "expirationSeconds": 3607,
+                        "path": "token"
+                      }
+                    },
+                    {
+                      "configMap": {
+                        "items": [
+                          {
+                            "key": "ca.crt",
+                            "path": "ca.crt"
+                          }
+                        ],
+                        "name": "kube-root-ca.crt"
+                      }
+                    },
+                    {
+                      "downwardAPI": {
+                        "items": [
+                          {
+                            "fieldRef": {
+                              "apiVersion": "v1",
+                              "fieldPath": "metadata.namespace"
+                            },
+                            "path": "namespace"
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "status": {
+            "allocatedResources": {
+              "cpu": "20m",
+              "memory": "32Mi"
+            },
+            "conditions": [
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:24Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodReadyToStartContainers"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Initialized"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:26Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "Ready"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:26Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "ContainersReady"
+              },
+              {
+                "lastProbeTime": null,
+                "lastTransitionTime": "2026-11-01T01:08:23Z",
+                "observedGeneration": 1,
+                "status": "True",
+                "type": "PodScheduled"
+              }
+            ],
+            "containerStatuses": [
+              {
+                "allocatedResources": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                },
+                "containerID": "containerd://caddc333795191d940aca929f7bc4fbe2ec12a9520fa999eecc8869e2bab308b",
+                "image": "sha256:47ce8258a10e28ce4b4498588c25ef77ae328f4c56cbe3e8d5dcf4f6d8019997",
+                "imageID": "docker.io/nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                "lastState": {},
+                "name": "web",
+                "ready": true,
+                "resources": {
+                  "limits": {
+                    "memory": "96Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "32Mi"
+                  }
+                },
+                "restartCount": 0,
+                "started": true,
+                "state": {
+                  "running": {
+                    "startedAt": "2026-11-01T01:08:25Z"
+                  }
+                },
+                "user": {
+                  "linux": {
+                    "gid": 101,
+                    "supplementalGroups": [
+                      101
+                    ],
+                    "uid": 101
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "/tmp",
+                    "name": "tmp"
+                  },
+                  {
+                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "name": "kube-api-access-rzzxb",
+                    "readOnly": true,
+                    "recursiveReadOnly": "Disabled"
+                  }
+                ]
+              }
+            ],
+            "hostIP": "172.27.62.202",
+            "hostIPs": [
+              {
+                "ip": "172.27.62.202"
+              }
+            ],
+            "observedGeneration": 1,
+            "phase": "Running",
+            "podIP": "172.27.50.212",
+            "podIPs": [
+              {
+                "ip": "172.27.50.212"
+              }
+            ],
+            "qosClass": "Burstable",
+            "resources": {
+              "limits": {
+                "memory": "96Mi"
+              },
+              "requests": {
+                "cpu": "20m",
+                "memory": "32Mi"
+              }
+            },
+            "startTime": "2026-11-01T01:08:23Z"
+          }
+        },
+        "resource_version": "102428385",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "pods",
+        "type": "MODIFIED"
+      },
+      "hash": "0487250599e431559940e982491192c5f88fa4c05a4db4df9187b37fc1ac91f9",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1780
+    },
+    {
+      "at": 1793495306.4060414,
+      "data": {
+        "object": {
+          "addressType": "IPv4",
+          "apiVersion": "discovery.k8s.io/v1",
+          "endpoints": [
+            {
+              "addresses": [
+                "172.27.11.84"
+              ],
+              "conditions": {
+                "ready": true,
+                "serving": true,
+                "terminating": false
+              },
+              "nodeName": "ip-172-27-11-194.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-fntvf",
+                "namespace": "phorvex-staging-demo",
+                "uid": "2d36dae1-284d-4058-ba68-ad8a6edff96e"
+              },
+              "zone": "us-east-2a"
+            },
+            {
+              "addresses": [
+                "172.27.35.80"
+              ],
+              "conditions": {
+                "ready": true,
+                "serving": true,
+                "terminating": false
+              },
+              "nodeName": "ip-172-27-47-45.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-hkbkv",
+                "namespace": "phorvex-staging-demo",
+                "uid": "3a90af0e-0515-4492-9c08-cd45c7b61923"
+              },
+              "zone": "us-east-2a"
+            },
+            {
+              "addresses": [
+                "172.27.50.212"
+              ],
+              "conditions": {
+                "ready": true,
+                "serving": true,
+                "terminating": false
+              },
+              "nodeName": "ip-172-27-62-202.us-east-2.compute.internal",
+              "targetRef": {
+                "kind": "Pod",
+                "name": "stage-bench-api-f9b895d7-47tcs",
+                "namespace": "phorvex-staging-demo",
+                "uid": "f1bec83f-f17d-48bd-bdb1-289a790f4212"
+              },
+              "zone": "us-east-2b"
+            }
+          ],
+          "kind": "EndpointSlice",
+          "metadata": {
+            "annotations": {
+              "endpoints.kubernetes.io/last-change-trigger-time": "2026-11-01T01:08:26Z"
+            },
+            "creationTimestamp": "2026-10-31T22:37:23Z",
+            "generateName": "stage-bench-api-",
+            "generation": 31,
+            "labels": {
+              "app.kubernetes.io/part-of": "stage-brain-benchmark",
+              "endpointslice.kubernetes.io/managed-by": "endpointslice-controller.k8s.io",
+              "kubernetes.io/service-name": "stage-bench-api"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "discovery.k8s.io/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:addressType": {},
+                  "f:endpoints": {},
+                  "f:metadata": {
+                    "f:annotations": {
+                      ".": {},
+                      "f:endpoints.kubernetes.io/last-change-trigger-time": {}
+                    },
+                    "f:generateName": {},
+                    "f:labels": {
+                      ".": {},
+                      "f:app.kubernetes.io/part-of": {},
+                      "f:endpointslice.kubernetes.io/managed-by": {},
+                      "f:kubernetes.io/service-name": {}
+                    },
+                    "f:ownerReferences": {
+                      ".": {},
+                      "k:{\"uid\":\"5b2594d7-8c64-411e-80dc-033592597fda\"}": {}
+                    }
+                  },
+                  "f:ports": {}
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "time": "2026-11-01T01:08:26Z"
+              }
+            ],
+            "name": "stage-bench-api-fwjdk",
+            "namespace": "phorvex-staging-demo",
+            "ownerReferences": [
+              {
+                "apiVersion": "v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "Service",
+                "name": "stage-bench-api",
+                "uid": "5b2594d7-8c64-411e-80dc-033592597fda"
+              }
+            ],
+            "resourceVersion": "102428386",
+            "uid": "2b9f9f01-585e-43bb-90f6-c27e8d78f56c"
+          },
+          "ports": [
+            {
+              "name": "http",
+              "port": 8080,
+              "protocol": "TCP"
+            }
+          ]
+        },
+        "resource_version": "102428386",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "endpointslices",
+        "type": "MODIFIED"
+      },
+      "hash": "c384b6390462f0a9536e526e0fc46212dd179fb3470ce8c97de74f2090c77753",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1781
+    },
+    {
+      "at": 1793495306.4171102,
+      "data": {
+        "object": {
+          "apiVersion": "apps/v1",
+          "kind": "Deployment",
+          "metadata": {
+            "annotations": {
+              "deployment.kubernetes.io/revision": "1"
+            },
+            "creationTimestamp": "2026-10-31T22:37:22Z",
+            "generation": 1,
+            "labels": {
+              "app.kubernetes.io/part-of": "stage-brain-benchmark"
+            },
+            "managedFields": [
+              {
+                "apiVersion": "apps/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:labels": {
+                      "f:app.kubernetes.io/part-of": {}
+                    }
+                  },
+                  "f:spec": {
+                    "f:replicas": {},
+                    "f:selector": {},
+                    "f:template": {
+                      "f:metadata": {
+                        "f:labels": {
+                          "f:app.kubernetes.io/name": {},
+                          "f:data-class": {}
+                        }
+                      },
+                      "f:spec": {
+                        "f:containers": {
+                          "k:{\"name\":\"web\"}": {
+                            ".": {},
+                            "f:image": {},
+                            "f:name": {},
+                            "f:ports": {
+                              "k:{\"containerPort\":8080,\"protocol\":\"TCP\"}": {
+                                ".": {},
+                                "f:containerPort": {},
+                                "f:name": {}
+                              }
+                            },
+                            "f:readinessProbe": {
+                              "f:httpGet": {
+                                "f:path": {},
+                                "f:port": {}
+                              },
+                              "f:initialDelaySeconds": {},
+                              "f:periodSeconds": {}
+                            },
+                            "f:resources": {
+                              "f:limits": {
+                                "f:memory": {}
+                              },
+                              "f:requests": {
+                                "f:cpu": {},
+                                "f:memory": {}
+                              }
+                            },
+                            "f:securityContext": {
+                              "f:allowPrivilegeEscalation": {},
+                              "f:capabilities": {
+                                "f:drop": {}
+                              },
+                              "f:readOnlyRootFilesystem": {}
+                            },
+                            "f:volumeMounts": {
+                              "k:{\"mountPath\":\"/tmp\"}": {
+                                ".": {},
+                                "f:mountPath": {},
+                                "f:name": {}
+                              }
+                            }
+                          }
+                        },
+                        "f:securityContext": {
+                          "f:fsGroup": {},
+                          "f:runAsNonRoot": {},
+                          "f:runAsUser": {},
+                          "f:seccompProfile": {
+                            "f:type": {}
+                          }
+                        },
+                        "f:volumes": {
+                          "k:{\"name\":\"tmp\"}": {
+                            ".": {},
+                            "f:emptyDir": {
+                              "f:sizeLimit": {}
+                            },
+                            "f:name": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "manager": "stage-brain-benchmark",
+                "operation": "Apply",
+                "time": "2026-10-31T22:37:22Z"
+              },
+              {
+                "apiVersion": "apps/v1",
+                "fieldsType": "FieldsV1",
+                "fieldsV1": {
+                  "f:metadata": {
+                    "f:annotations": {
+                      ".": {},
+                      "f:deployment.kubernetes.io/revision": {}
+                    }
+                  },
+                  "f:status": {
+                    "f:availableReplicas": {},
+                    "f:conditions": {
+                      ".": {},
+                      "k:{\"type\":\"Available\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:lastUpdateTime": {},
+                        "f:message": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      },
+                      "k:{\"type\":\"Progressing\"}": {
+                        ".": {},
+                        "f:lastTransitionTime": {},
+                        "f:lastUpdateTime": {},
+                        "f:message": {},
+                        "f:reason": {},
+                        "f:status": {},
+                        "f:type": {}
+                      }
+                    },
+                    "f:observedGeneration": {},
+                    "f:readyReplicas": {},
+                    "f:replicas": {},
+                    "f:terminatingReplicas": {},
+                    "f:updatedReplicas": {}
+                  }
+                },
+                "manager": "kube-controller-manager",
+                "operation": "Update",
+                "subresource": "status",
+                "time": "2026-11-01T01:08:26Z"
+              }
+            ],
+            "name": "stage-bench-api",
+            "namespace": "phorvex-staging-demo",
+            "resourceVersion": "102428391",
+            "uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+          },
+          "spec": {
+            "progressDeadlineSeconds": 600,
+            "replicas": 3,
+            "revisionHistoryLimit": 10,
+            "selector": {
+              "matchLabels": {
+                "app.kubernetes.io/name": "stage-bench-api"
+              }
+            },
+            "strategy": {
+              "rollingUpdate": {
+                "maxSurge": "25%",
+                "maxUnavailable": "25%"
+              },
+              "type": "RollingUpdate"
+            },
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/name": "stage-bench-api",
+                  "data-class": "public"
+                }
+              },
+              "spec": {
+                "containers": [
+                  {
+                    "image": "nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0",
+                    "imagePullPolicy": "IfNotPresent",
+                    "name": "web",
+                    "ports": [
+                      {
+                        "containerPort": 8080,
+                        "name": "http",
+                        "protocol": "TCP"
+                      }
+                    ],
+                    "readinessProbe": {
+                      "failureThreshold": 3,
+                      "httpGet": {
+                        "path": "/",
+                        "port": "http",
+                        "scheme": "HTTP"
+                      },
+                      "initialDelaySeconds": 1,
+                      "periodSeconds": 2,
+                      "successThreshold": 1,
+                      "timeoutSeconds": 1
+                    },
+                    "resources": {
+                      "limits": {
+                        "memory": "96Mi"
+                      },
+                      "requests": {
+                        "cpu": "20m",
+                        "memory": "32Mi"
+                      }
+                    },
+                    "securityContext": {
+                      "allowPrivilegeEscalation": false,
+                      "capabilities": {
+                        "drop": [
+                          "ALL"
+                        ]
+                      },
+                      "readOnlyRootFilesystem": true
+                    },
+                    "terminationMessagePath": "/dev/termination-log",
+                    "terminationMessagePolicy": "File",
+                    "volumeMounts": [
+                      {
+                        "mountPath": "/tmp",
+                        "name": "tmp"
+                      }
+                    ]
+                  }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                  "fsGroup": 101,
+                  "runAsNonRoot": true,
+                  "runAsUser": 101,
+                  "seccompProfile": {
+                    "type": "RuntimeDefault"
+                  }
+                },
+                "terminationGracePeriodSeconds": 30,
+                "volumes": [
+                  {
+                    "emptyDir": {
+                      "sizeLimit": "16Mi"
+                    },
+                    "name": "tmp"
+                  }
+                ]
+              }
+            }
+          },
+          "status": {
+            "availableReplicas": 3,
+            "conditions": [
+              {
+                "lastTransitionTime": "2026-10-31T22:37:22Z",
+                "lastUpdateTime": "2026-10-31T22:37:26Z",
+                "message": "ReplicaSet \"stage-bench-api-f9b895d7\" has successfully progressed.",
+                "reason": "NewReplicaSetAvailable",
+                "status": "True",
+                "type": "Progressing"
+              },
+              {
+                "lastTransitionTime": "2026-11-01T01:08:26Z",
+                "lastUpdateTime": "2026-11-01T01:08:26Z",
+                "message": "Deployment has minimum availability.",
+                "reason": "MinimumReplicasAvailable",
+                "status": "True",
+                "type": "Available"
+              }
+            ],
+            "observedGeneration": 1,
+            "readyReplicas": 3,
+            "replicas": 3,
+            "terminatingReplicas": 0,
+            "updatedReplicas": 3
+          }
+        },
+        "resource_version": "102428391",
+        "session": "a0b816ff152b4944b08de1e506829059",
+        "stream": "deployment",
+        "type": "MODIFIED"
+      },
+      "hash": "aab592ca2845ff24616eb73bb72b44ae952e09c771419df07bbae63c18899eef",
+      "kind": "watch",
+      "schema": "phorvex-stage.observation.v1",
+      "seq": 1782
+    }
+  ],
+  "scope": {
+    "context": "arn:aws:eks:us-east-2:753556437180:cluster/phorvex-dev-eks",
+    "deployment_name": "stage-bench-api",
+    "image_digest": "sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90",
+    "measurement": "watch-observed-service-ready-backends",
+    "mode": "isolated-calibration",
+    "namespace": "phorvex-staging-demo",
+    "policy_name": "stage-bench-defense",
+    "policy_uid": "621c056d-ae10-452c-8828-b2dd0bbb5cb3",
+    "repository": "PhorvexSecurity/operator-refactored",
+    "schema": "phorvex-stage.scope.v1",
+    "selector": {
+      "app.kubernetes.io/name": "stage-bench-api"
+    },
+    "service_name": "stage-bench-api",
+    "service_uid": "5b2594d7-8c64-411e-80dc-033592597fda",
+    "source_revision": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+    "workload_uid": "be5030d0-6ab8-4b2f-9921-29876f856248"
+  },
+  "selection": "Unmodified decoded records selected by sequence; full frozen journal retained privately with database SHA256."
+}

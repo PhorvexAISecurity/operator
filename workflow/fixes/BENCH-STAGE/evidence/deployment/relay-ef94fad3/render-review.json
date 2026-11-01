@@ -1,0 +1,102 @@
+{
+  "result": "PASS",
+  "reviewer": "bench-v3-lead",
+  "changes": {
+    "brain": [
+      {
+        "container": "brain",
+        "field": "image",
+        "before": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:staging-0.10.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:1ee0c571784e489c0591b8810c7f287c3efd653707ab0c833af389614c5da148",
+        "after": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+      },
+      {
+        "container": "brain",
+        "field": "env",
+        "before": null,
+        "after": [
+          {
+            "name": "PHORVEX_BRAIN_IMAGE",
+            "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:f1e5e306a686388196077aaa8d6f6b398ab7509dedc7a28c1649ae92d604dc90"
+          }
+        ]
+      }
+    ],
+    "manager": [
+      {
+        "container": "manager",
+        "field": "image",
+        "before": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7",
+        "after": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e"
+      },
+      {
+        "container": "manager",
+        "field": "env",
+        "before": [
+          {
+            "name": "POD_NAMESPACE",
+            "valueFrom": {
+              "fieldRef": {
+                "fieldPath": "metadata.namespace"
+              }
+            }
+          },
+          {
+            "name": "PHORVEX_BRAIN_IMAGE",
+            "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:staging-0.16.0-git-9b5a3eb0e9b1b5a033290cee1302aa6b5059cf40@sha256:85dc01f3afa9448a4a41fc4a39ad928653cf49a294ae56bec8f2e38839c799a7"
+          },
+          {
+            "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+            "value": "false"
+          },
+          {
+            "name": "PHORVEX_INJECTOR_IDENTITY",
+            "value": "phorvex-staging/staging-attacks"
+          },
+          {
+            "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+            "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+          },
+          {
+            "name": "PHORVEX_ACTUATOR",
+            "value": "native"
+          }
+        ],
+        "after": [
+          {
+            "name": "POD_NAMESPACE",
+            "valueFrom": {
+              "fieldRef": {
+                "fieldPath": "metadata.namespace"
+              }
+            }
+          },
+          {
+            "name": "PHORVEX_BRAIN_IMAGE",
+            "value": "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager:benchmark-relay-git-ef94fad362dabb51469211388ef80cdfa6eee1d4@sha256:c8764181c667fcd77f1eaad3c5a49d2e561557e568cff5253ae7f44378959e7e"
+          },
+          {
+            "name": "PHORVEX_VOICE_ADMISSION_ENABLED",
+            "value": "false"
+          },
+          {
+            "name": "PHORVEX_INJECTOR_IDENTITY",
+            "value": "phorvex-staging/staging-attacks"
+          },
+          {
+            "name": "PHORVEX_EVENT_IDENTITY_POLICY",
+            "value": "phorvex-system-phorvex-phorvex-se-creator-8acf73b8d0"
+          },
+          {
+            "name": "PHORVEX_ACTUATOR",
+            "value": "native"
+          }
+        ]
+      }
+    ]
+  },
+  "scope": "Only brain/manager Deployment container image or environment changes; all other resources match prior reviewed overlay",
+  "files": {
+    "manager-rendered.yaml": "16a0db03eafadbeb95983d05b6c944876b4ec36aea276bc83f1bbfc2b508ecee",
+    "brain-rendered.yaml": "7c53129393526fbd4092d9141928a5aaca552fb7f1400da59f3b44355260b833"
+  }
+}

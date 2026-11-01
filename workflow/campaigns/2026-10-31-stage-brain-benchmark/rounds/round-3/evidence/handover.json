@@ -1,0 +1,8 @@
+{
+  "recorded_at": "2026-11-01T00:29:51.458041+00:00",
+  "old_observer": "DONE 2026-11-01T00:25:07Z",
+  "new_observer": "persistent read-only collector started 00:19:02Z, actual new coverage after node-drain gap 00:22:32Z",
+  "round2_qualification": "latest endpoint refresh blocked because node drains caused untracked fixture replacements; parameter batch3/3 completed, V2A stillrunning",
+  "round3_physical_calibration": "exact UID acknowledged HTTP200 at00:29:10Z; original response deletionTimestamp00:29:40 includes30s grace; at most one physicaldelete inthisround",
+  "note": "This bookkeeping transition follows the actual command; preregistered spec existed before mutation. No timestamp is backdated."
+}

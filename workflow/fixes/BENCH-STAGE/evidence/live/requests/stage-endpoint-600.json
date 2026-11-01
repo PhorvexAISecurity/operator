@@ -1,0 +1,15 @@
+{
+  "schema": "phorvex-bench.endpoint-study.v1",
+  "title": "Stage V2/V3: observed 600-second study (requires 600 seconds of retained history)",
+  "policy": "phorvex-staging-demo/stage-bench-defense",
+  "ticks": 64,
+  "config": {
+    "lookback": 600
+  },
+  "dataset": "recorded",
+  "study": {
+    "slo_target": 0.9,
+    "window": 600,
+    "worth_threshold": 0
+  }
+}

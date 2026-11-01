@@ -1,0 +1,62 @@
+{
+  "at": "2026-10-31T23:54:12.665613+00:00",
+  "reason": "Owned reproducible build intermediates after independently reviewed immutable ECR publication and verified runtime. Independent base/candidate and source receipts retained.",
+  "removed": [
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/manager",
+      "bytes": 67915938,
+      "sha256": "517ab1813ea3a09713dda02615bf8e092ab7266ea66f6403527d0a8353bf9336"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/service",
+      "bytes": 41017506,
+      "sha256": "b03f2c1c0fd5a1d4a291ee425c6659626bd9ecc5d1f6f7c77d275d95cc1c4380"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/brain-replay",
+      "bytes": 39575714,
+      "sha256": "a26b0acc67914b16e87ff9b0912ff59da3852212226e61844dc22a29daabf3cb"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/phorvex-recovery",
+      "bytes": 47759522,
+      "sha256": "1849c227b08a600240e3997615eacf475b2e57c7a6ec1a2ba51c69c9e086c7f9"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/phorvex-mig-allocation-helper",
+      "bytes": 10330274,
+      "sha256": "496e43183e4d93f489191ffd677ff9eb785ad7fb21fe66d83927c2b6fd1414f5"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/loss-observer",
+      "bytes": 37253282,
+      "sha256": "3b53121e609db0f0fe921741d5bf91f6a13ed572e4c7bd124578732ff80aca90"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/current-inventory-observer",
+      "bytes": 37273762,
+      "sha256": "a11d80ce485ef262900118143ecaad2a476077af848086eaab8b4ed3c456324b"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/persistence-observer",
+      "bytes": 37318818,
+      "sha256": "86da8cbb5dd0978e369fa20f2e0abeda5c743996d8d186ef047f9b06695589ee"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/bin/cost-budget-admin",
+      "bytes": 47571106,
+      "sha256": "2011bd0d532bb0967a272f6362cad8b5991006fc5d5c2cc4aa0774bfb412bc89"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/brain-binaries.tar",
+      "bytes": 80599040,
+      "sha256": "bfb7972f14c9a0b2a39cf60966bdfed15a9d88a10de0cc808fbcdb521ca2c752"
+    },
+    {
+      "path": "/workspace/.phorvex-test-tmp/stage-relay-artifacts-ef94fad3/manager-binaries.tar",
+      "bytes": 325007360,
+      "sha256": "b73189f9bc6c43a0ca5f00c2308422e979d4448b20b1aaadb0e5abf23e53408f"
+    }
+  ],
+  "freed_bytes": 771622322
+}

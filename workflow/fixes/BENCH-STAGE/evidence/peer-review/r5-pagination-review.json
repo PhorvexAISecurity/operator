@@ -1,0 +1,32 @@
+{
+  "schema": "phorvex-bench.component-review.v1",
+  "reviewer": "/root/stage_review",
+  "reviewed_at": "2026-10-31T23:19:20.258277+00:00",
+  "component": "R5 bounded source-scoped snapshot pagination",
+  "result": "PASS",
+  "files_sha256": {
+    "benchmark/worker/mathlab/snapshots.py": "6a4bb432e2797f83a69e8f28c987ed772df9d79751deb251a21b73d35a445678",
+    "benchmark/bot/test_stage_runtime.py": "3c4dc14a3be7c6cc9aafaa51339ab099f9eec44355a7745188b3ffa64b2011eb"
+  },
+  "independent_incident": "sync-old-image-page-control-after.json",
+  "selected_tests": {
+    "passed": 5,
+    "failed": 0,
+    "names": [
+      "test_stage_sync_paginates_old_image_pages_and_equal_time_boundaries",
+      "test_bounded_index_scan_resumes_remote_progress_and_never_skips_unreturned_ties",
+      "test_missing_pin_after_freeze_blocks_code_and_direct_worker_requests",
+      "test_same_source_old_image_and_legacy_headers_never_inherit_current_pin",
+      "test_stage_sync_filters_actual_headers_and_resumes_from_matching_image"
+    ]
+  },
+  "evidence_log": "pagination-and-scope-tests.log",
+  "scope_note": "Broader combined12test run had11pass and1 concurrent integration error in old dataset-path test after generation install writer changed. That failure is retained and belongs to pending observer refresh/install review; it is not waived and no whole-integration PASS is claimed.",
+  "observations": [
+    "Traverses old image pages; repeat sync converges",
+    "Inclusive equal-time boundary never skipped by epsilon",
+    "Finite8page bound and scope-bound continuation",
+    "Untraversable5000same-time group explicit",
+    "Downloaded bytes retain digest/source/image/UID checks"
+  ]
+}

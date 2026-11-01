@@ -1,0 +1,33 @@
+{
+  "schema": "phorvex-bench/candidate/v1",
+  "runId": "c963f138052b",
+  "baseTag": null,
+  "baseCommit": "ef94fad362dabb51469211388ef80cdfa6eee1d4",
+  "candidateBranch": "bench-candidate/c963f138052b",
+  "candidateTag": "bench-c963f138052b",
+  "candidateCommit": "4b01653a26c163911122f03de94ca8386d1cd6f6",
+  "repo": "/home/hami/phorvex-benchmark/bot/jobs/c963f138052b/candidate-src",
+  "changedPaths": [
+    {
+      "status": "A",
+      "path": "phorvex/internal/model/economics_endpoint_seconds_v2.go"
+    },
+    {
+      "status": "A",
+      "path": "phorvex/internal/model/economics_endpoint_seconds_v2_test.go"
+    }
+  ],
+  "planner": "openai",
+  "model": "gpt-6.1-sol",
+  "promptSha256": "6988f031335e3d44b2f66d512ca823a9dd9779be0b15cab8986a8c9b18c86a6f",
+  "diffSha256": "a92ebd74b1bb3e88cf265f6891c3236865acdf2e6ccbbcbcd3b9b3abc342b4b9",
+  "createdAt": "2026-11-01T00:52:29Z",
+  "guardrails": {
+    "scope": "phorvex/**/*.go, excluding phorvex/tools/; existing _test.go files are immutable; new test files allowed",
+    "base": "detached clone of the working repo",
+    "allowDelete": false,
+    "noMerge": true,
+    "noPush": true,
+    "worksOnWorkingRepo": false
+  }
+}

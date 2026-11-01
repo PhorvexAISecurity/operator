@@ -1,0 +1,23 @@
+{
+  "schema": "phorvex-bench.collector-freeze.v1",
+  "result": "PASS",
+  "changes": [
+    "Third code-bot-retry phase retained separately",
+    "Retry receipt top-level previous_failed_batch and retry_policy retained",
+    "Prior failed job remains in explicit final selection"
+  ],
+  "tests": {
+    "passed": 2,
+    "skipped": 0,
+    "scope": "Local collector fixtures only"
+  },
+  "source_sha256": {
+    "collect-bot-delivery.py": "d168c71b44f1294a98e14696e604d8007d2188cc9d53f78d4a97356af3712434",
+    "test_delivery_collector.py": "5766d29b478449234d7c2edaec48d82f24c48c08798187a49657e7b67a523714",
+    "OPERATOR.md": "95d3e8f3fb6f4fa2bcbef013c5d05130940fdc4dac5d69fad58b0d50f1226f9f",
+    "USER-GUIDANCE-fa.txt": "3295920a73f23eba2680083099a957d58114a126338b727000dbfc6169211fc2",
+    "collector-code-retry-tests.txt": "03d712a264c1b155ecc5f606afe75d5f072f619ef68974d13c02141297c6b99a"
+  },
+  "remote_collection_performed": false,
+  "next_action": "Wait for lead terminal notification; then collect all six batches"
+}
