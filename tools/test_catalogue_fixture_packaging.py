@@ -81,6 +81,8 @@ def configured_values(family: str) -> dict:
         },
         "prometheusEvidence": {"enabled": True},
     })
+    if family == "identity-sa-rotate":
+        catalog["familyFixtures"]["images"]["workload"] = ""
     if family == "agent-action":
         catalog["agentAction"] = {
             "enabled": True,
@@ -161,7 +163,8 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
                         self.assertNotIn("*", rule.get("verbs", []), role["metadata"]["name"])
                 policies = [item for item in docs if item.get("kind") == "PhorvexPolicy"
                             and item.get("metadata", {}).get("namespace") in destinations]
-                self.assertEqual({item["metadata"]["namespace"] for item in policies}, set(destinations))
+                expected_policy_namespaces = set() if family == "identity-sa-rotate" else set(destinations)
+                self.assertEqual({item["metadata"]["namespace"] for item in policies}, expected_policy_namespaces)
                 for item in docs:
                     pod_spec = None
                     if item.get("kind") in {"Deployment", "Job"}:
@@ -194,6 +197,12 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
                         )
 
     def test_family_specific_exact_contracts(self):
+        identity = objects(self.render("identity-sa-rotate").stdout)
+        self.assertFalse([
+            item for item in identity
+            if item.get("metadata", {}).get("namespace") == "console-identity-shared"
+            and item.get("kind") in {"ServiceAccount", "Deployment", "PhorvexPolicy"}
+        ], "identity profile must not claim the externally owned shared fixture")
         quarantine = objects(self.render("quarantine").stdout)
         q_policy = next(item for item in quarantine if item.get("kind") == "PhorvexPolicy"
                         and item["metadata"]["namespace"] == "p1-demo")
@@ -416,7 +425,7 @@ class CatalogueFixtureSourceTests(unittest.TestCase):
             with self.subTest(family=family):
                 args = argparse.Namespace(
                     profile=family,
-                    workload_image=IMAGES["workload"],
+                    workload_image="" if family == "identity-sa-rotate" else IMAGES["workload"],
                     phorvex_image=IMAGES["phorvex"],
                     agent_image="registry.example.test/phorvex/agentsim@" + DIGEST,
                     python_image=IMAGES["python"],

@@ -19,7 +19,7 @@ PIN = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 DEFAULT_PYTHON = "docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d"
 DEFAULT_KWOK = "registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0"
 WORKLOAD_FAMILIES = {
-    "controller-stop", "credential", "identity-sa-rotate", "image",
+    "controller-stop", "credential", "image",
     "network-edge", "node-recycle", "pod-rotate", "quarantine",
 }
 PHORVEX_FAMILIES = {"datastore", "serving-kv", "serving-rate"}
@@ -45,6 +45,8 @@ def overlay(args: argparse.Namespace) -> dict:
     staging = yaml.safe_load(STAGING.read_text(encoding="utf-8"))["phorvex"]
     base_namespaces = ["phorvex-staging-demo", "console-identity-shared"]
     scopes = list(dict.fromkeys(base_namespaces + destinations))
+    if args.profile == "identity-sa-rotate" and args.workload_image:
+        raise ValueError("--workload-image must be empty for the externally owned identity fixture")
     workload = immutable("workload_image", args.workload_image, args.profile in WORKLOAD_FAMILIES)
     phorvex = immutable("phorvex_image", args.phorvex_image, args.profile in PHORVEX_FAMILIES)
     agent = immutable("agent_image", args.agent_image, args.profile == "agent-action")

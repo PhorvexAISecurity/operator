@@ -346,7 +346,6 @@ class StagingTargetTests(unittest.TestCase):
         complete = RELEASE.complete(prepared, publication_results(prepared))
         profiles = (
             ("agent-action", "agent-sim", "--agent-image"),
-            ("identity-sa-rotate", "catalogue-workload", "--workload-image"),
         )
         for profile, component, image_flag in profiles:
             with self.subTest(profile=profile):
@@ -385,17 +384,38 @@ class StagingTargetTests(unittest.TestCase):
                 if component == "catalogue-workload":
                     self.assertIn([image_flag, image], [rendered_command[i:i + 2] for i in range(len(rendered_command) - 1)])
 
-    def test_active_catalogue_window_rejects_wrong_identity_fixture_pin(self):
+    def test_active_catalogue_window_accepts_shared_identity_without_image_consumer(self):
         prepared = prepared_batch()
         complete = RELEASE.complete(prepared, publication_results(prepared))
-        release = complete["releases"]["catalogue-workload"]
-        image = f"{release['repository']}@{release['digest']}"
         agent_release = complete["releases"]["agent-sim"]
         agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
         generated = subprocess.run([
             "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
             "--profile", "identity-sa-rotate", "--agent-image", agent_image,
-            "--workload-image", image,
+        ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            overlay = root / "deploy/environments/staging/catalogue-family.yaml"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(generated, encoding="utf-8")
+            completed = mock.Mock(stdout=generated)
+            with (
+                mock.patch.object(RELEASE, "ROOT", root),
+                mock.patch.object(RELEASE.subprocess, "run", return_value=completed) as render,
+            ):
+                consumers = RELEASE.active_catalogue_fixture_consumers(complete)
+        self.assertEqual(consumers, {})
+        rendered_command = render.call_args.args[0]
+        self.assertNotIn("--workload-image", rendered_command)
+
+    def test_active_catalogue_window_rejects_unexpected_identity_fixture_pin(self):
+        prepared = prepared_batch()
+        complete = RELEASE.complete(prepared, publication_results(prepared))
+        agent_release = complete["releases"]["agent-sim"]
+        agent_image = f"{agent_release['repository']}@{agent_release['digest']}"
+        generated = subprocess.run([
+            "python3", str(ROOT / "tools/render_catalogue_staging_values.py"),
+            "--profile", "identity-sa-rotate", "--agent-image", agent_image,
         ], cwd=ROOT, check=True, text=True, capture_output=True).stdout
         values = yaml.safe_load(generated)
         values["phorvex"]["console"]["attackCatalog"]["familyFixtures"]["images"]["workload"] = (
