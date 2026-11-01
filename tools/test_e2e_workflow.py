@@ -33,6 +33,7 @@ class E2EWorkflowTests(unittest.TestCase):
         self.assertEqual(setup_go[0]['with']['go-version-file'], 'build/test-harness/go.mod')
         self.assertEqual(setup_go[0]['with']['cache-dependency-path'], 'build/test-harness/go.sum')
         runs = '\n'.join(s.get('run', '') for s in job['steps'])
+        self.assertIn('pip install PyYAML==6.0.2 -r tools/benchmark-test-requirements.txt', runs)
         self.assertIn('unittest discover -s End-to-End/pipeline', runs)
         self.assertIn('unittest discover -s tools', runs)
         self.assertNotIn('pipeline/e2e.py', runs)

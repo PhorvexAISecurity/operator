@@ -42,8 +42,8 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: v3.16.4
-      - name: Install test dependency
-        run: python -m pip install PyYAML==6.0.2
+      - name: Install test dependencies
+        run: python -m pip install PyYAML==6.0.2 -r tools/benchmark-test-requirements.txt
       - name: Harness regressions and production-law mapping
         run: python -m unittest discover -s End-to-End/pipeline -p 'test_*.py' -v
       - name: Chart isolation, detector permissions and workflow regressions
