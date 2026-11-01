@@ -57,19 +57,31 @@ func TestPrometheusRangeCoverageAllowsSeriesBornAfterEmptyBaseline(t *testing.T)
 }
 
 func TestPrometheusAnchoredRangeGridIncludesCaptureBoundaries(t *testing.T) {
-	baseline := time.Unix(1793462689, 743478967).UTC()
-	final := baseline.Add(2*time.Minute + 18*time.Second + 869772400*time.Nanosecond)
-	endAt := final.Add(37 * time.Millisecond)
-	start, end, step := prometheusAnchoredRange(baseline, endAt, 15*time.Second)
-	if !start.Equal(baseline.Truncate(time.Millisecond)) || !start.Before(baseline) || !end.Equal(endAt) {
+	// These are the real boundaries that exposed Prometheus truncating the old
+	// 14.2096114987s step to 14.209s and ending the range before final.
+	baseline := time.Unix(1793499604, 36584556).UTC()
+	final := time.Unix(1793499746, 130795597).UTC()
+	start, end, step := prometheusAnchoredRange(baseline, final, 15*time.Second)
+	if !start.Equal(baseline.Truncate(time.Millisecond)) || !start.Before(baseline) || end.Before(final) {
 		t.Fatalf("range boundaries moved: start=%s end=%s", start, end)
 	}
 	if step <= 0 || step > 15 {
 		t.Fatalf("range step=%f", step)
 	}
-	intervals := math.Round(end.Sub(start).Seconds() / step)
+	parsedStep, err := time.ParseDuration(strconv.FormatFloat(step, 'f', -1, 64) + "s")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsedStep%time.Millisecond != 0 {
+		t.Fatalf("range step %s is not integral milliseconds", parsedStep)
+	}
+	intervals := math.Round(float64(end.Sub(start)) / float64(parsedStep))
 	first := float64(start.UnixNano()) / float64(time.Second)
-	last := first + intervals*step
+	lastAt := start.Add(time.Duration(intervals) * parsedStep)
+	if !lastAt.Equal(end) {
+		t.Fatalf("serialized grid ends at %s, want %s", lastAt, end)
+	}
+	last := float64(lastAt.UnixNano()) / float64(time.Second)
 	if !prometheusRangeCoversCaptures(first, last, baseline, final, true) {
 		t.Fatalf("anchored grid did not cover baseline=%s final=%s: first=%f last=%f", baseline, final, first, last)
 	}

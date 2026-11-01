@@ -262,8 +262,19 @@ func (s *Server) completePrometheusRunEvidence(ctx context.Context, evidence *Pr
 				evidence.Errors = append(evidence.Errors, metric.Key+": final: staging decision telemetry is absent or older than 90s")
 			}
 		}
+		start, end, step := prometheusAnchoredRange(evidence.BaselineAt, finalAt, cfg.RangeStep)
+		if delay := time.Until(end); delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				metric.Errors = append(metric.Errors, "range: "+ctx.Err().Error())
+				evidence.Errors = append(evidence.Errors, metric.Key+": range: "+ctx.Err().Error())
+				continue
+			case <-timer.C:
+			}
+		}
 		rawAt := time.Now().UTC()
-		start, end, step := prometheusAnchoredRange(evidence.BaselineAt, rawAt, cfg.RangeStep)
 		rangeSeries, rawCapture, rangeErr := prometheusQuery(ctx, cfg, "/api/v1/query_range", url.Values{
 			"query": {metric.Query}, "start": {formatPrometheusTime(start)},
 			"end": {formatPrometheusTime(end)}, "step": {strconv.FormatFloat(step, 'f', -1, 64)},
@@ -427,18 +438,39 @@ func prometheusRangeCoversCaptures(first, last float64, baselineAt, finalAt time
 	return (!baselinePresent || first <= baseline+tolerance) && last+tolerance >= final
 }
 
-// Anchor the range grid at the serialized baseline and terminal capture
-// boundaries. Prometheus sample timestamps are millisecond-precision, so the
-// start is truncated rather than rounded past the baseline. A fixed step aligned
-// from the run's end can otherwise skip a series that exists at baseline.
-func prometheusAnchoredRange(baselineAt, endAt time.Time, maxStep time.Duration) (time.Time, time.Time, float64) {
+// Anchor the range grid at the serialized baseline and at or after the terminal
+// capture. Prometheus parses query_range steps at millisecond precision. A
+// fractional-millisecond step is truncated by the server and can accumulate
+// several milliseconds of drift before the final sample. Use an integral
+// millisecond step and an exact grid end instead; the caller waits for that end
+// before querying, so no future sample is requested.
+func prometheusAnchoredRange(baselineAt, finalAt time.Time, maxStep time.Duration) (time.Time, time.Time, float64) {
 	start := baselineAt.Truncate(time.Millisecond)
-	duration := endAt.Sub(start)
-	intervals := math.Ceil(duration.Seconds() / maxStep.Seconds())
+	required := finalAt.Sub(start)
+	if required < time.Millisecond {
+		required = time.Millisecond
+	}
+	requiredMillis := required / time.Millisecond
+	if required%time.Millisecond != 0 {
+		requiredMillis++
+	}
+	maxStepMillis := maxStep / time.Millisecond
+	if maxStepMillis < 1 {
+		maxStepMillis = 1
+	}
+	intervals := requiredMillis / maxStepMillis
+	if requiredMillis%maxStepMillis != 0 {
+		intervals++
+	}
 	if intervals < 1 {
 		intervals = 1
 	}
-	return start, endAt, duration.Seconds() / intervals
+	stepMillis := requiredMillis / intervals
+	if requiredMillis%intervals != 0 {
+		stepMillis++
+	}
+	end := start.Add(intervals * stepMillis * time.Millisecond)
+	return start, end, float64(stepMillis) / 1000
 }
 
 func prometheusRangeQueryCoversCaptures(raw, baseline, final *PrometheusResponseCapture) bool {
