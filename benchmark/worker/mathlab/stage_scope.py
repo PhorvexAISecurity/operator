@@ -31,6 +31,10 @@ class StageError(ValueError):
     pass
 
 
+class StageLeaseBusy(StageError):
+    """The bounded wait for an actual conflicting pin lease expired."""
+
+
 def observation_git_env():
     # Older supported Git versions do not honor GIT_NO_LAZY_FETCH. Denying
     # every transport is the additional fail-closed boundary for promisor
@@ -75,7 +79,7 @@ def pin_lock(data_dir, exclusive=False, timeout=20, readonly=False):
                 break
             except BlockingIOError:
                 if time.monotonic() >= deadline:
-                    raise StageError('stage pin is busy with active jobs or reconciliation; retry after it completes')
+                    raise StageLeaseBusy('stage pin is busy with active jobs or reconciliation; retry after it completes')
                 time.sleep(min(.05, max(0, deadline-time.monotonic())))
         held[key] = (fd, exclusive)
         try:

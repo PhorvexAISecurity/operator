@@ -7,7 +7,7 @@ backdating or automatic deletion of journals/results is performed here.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import fcntl
 import heapq
@@ -311,13 +311,35 @@ def verify_live(pin, policy):
 
 def refresh(data_dir, *args, **kwargs):
     # Reconciliation cannot replace the pin/engine while this exact cohort runs.
-    with stage_scope.pin_lock(data_dir, timeout=20):
+    started, started_at = time.monotonic(), utc()
+    with ExitStack() as leases:
+        try:
+            leases.enter_context(stage_scope.pin_lock(data_dir, timeout=20))
+        except stage_scope.StageLeaseBusy as exc:
+            # Only acquisition timeout is a prerequisite. Exceptions raised by
+            # the refresh body must not be reclassified as lease contention.
+            return _refresh(data_dir, *args, **kwargs, _lease_blocked={
+                "error": exc, "started": started, "started_at": started_at,
+                "wait_seconds": time.monotonic()-started})
         return _refresh(data_dir, *args, **kwargs)
+
+
+def finish_status(state, pointer, status_path, started, *, publish=True):
+    try:
+        current_manifest = read_json(pointer, {}) or {}
+    except (OSError, ValueError):
+        current_manifest = {}
+    state["current_dataset"] = {key: current_manifest.get(key) for key in
+                                ("trace_file", "trace_sha256", "source_revision", "snapshot_source_revision", "snapshot_digests")}
+    state.update(finished_at=utc(), elapsed_seconds=round(time.monotonic()-started, 3))
+    if publish:
+        atomic_json(status_path, state)
+    return state
 
 
 def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, worth_threshold,
             ticks=64, timeout=900, max_work_bytes=512 << 20, max_generation_bytes=512 << 20,
-            max_corpus_bytes=2 << 30, max_observation_age=600):
+            max_corpus_bytes=2 << 30, max_observation_age=600, _lease_blocked=None):
     stage_scope.policy(policy)
     if (any(type(x) not in (float, int) or not math.isfinite(x) for x in (target, window, lookback, worth_threshold)) or
             not 0 < target < 1 or not 1 <= window <= 2592000 or not 1 <= lookback <= 2592000 or worth_threshold < 0):
@@ -335,10 +357,11 @@ def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, 
     status_path = data_dir / "mathlab/endpoint-refresh" / (policy + ".status.json")
     status_path.parent.mkdir(parents=True, exist_ok=True)
     pointer = data_dir / "mathlab/endpoint-traces" / (policy + ".manifest.json")
-    started = time.monotonic()
+    started = _lease_blocked["started"] if _lease_blocked else time.monotonic()
     deadline = started + timeout
     state = {"schema": "phorvex-stage.endpoint-refresh.v1", "state": "RUNNING", "policy": policy,
-             "started_at": utc(), "phase": "DISCOVER", "requested_ticks": ticks,
+             "started_at": _lease_blocked["started_at"] if _lease_blocked else utc(),
+             "phase": "LEASE" if _lease_blocked else "DISCOVER", "requested_ticks": ticks,
              "study_settings": {"target": target, "window": window, "lookback": lookback, "worth_threshold": worth_threshold},
              "bounds": {"timeout_seconds": timeout, "work_bytes": max_work_bytes,
                         "generation_bytes": max_generation_bytes, "corpus_bytes": max_corpus_bytes,
@@ -346,8 +369,17 @@ def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, 
     with status_path.with_suffix(".lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise RefreshBlocked("REFRESH_ALREADY_RUNNING") from exc
+        except BlockingIOError:
+            state.update(state="BLOCKED", phase="LEASE", reason="REFRESH_ALREADY_RUNNING")
+            # The status belongs to the active refresher. Return this attempt's
+            # result without modifying its status or the current dataset.
+            return finish_status(state, pointer, status_path, started, publish=False)
+        if _lease_blocked:
+            state.update(state="BLOCKED", phase="LEASE", reason="STAGE_PIN_LEASE_BUSY",
+                         error_type=type(_lease_blocked["error"]).__name__,
+                         detail=str(_lease_blocked["error"]),
+                         lease_wait_seconds=round(_lease_blocked["wait_seconds"], 3))
+            return finish_status(state, pointer, status_path, started)
         atomic_json(status_path, state)
         try:
             with wall_limit(timeout):
@@ -454,15 +486,7 @@ def _refresh(data_dir, repo, policy, journal_path, *, target, window, lookback, 
                     journal.close()
         except Exception as exc:
             state.update(state="BLOCKED", reason=str(exc)[:2000], error_type=type(exc).__name__)
-        try:
-            current_manifest = read_json(pointer, {}) or {}
-        except (OSError, ValueError):
-            current_manifest = {}
-        state["current_dataset"] = {key: current_manifest.get(key) for key in
-                                    ("trace_file", "trace_sha256", "source_revision", "snapshot_source_revision", "snapshot_digests")}
-        state.update(finished_at=utc(), elapsed_seconds=round(time.monotonic()-started, 3))
-        atomic_json(status_path, state)
-        return state
+        return finish_status(state, pointer, status_path, started)
 
 
 def main():
