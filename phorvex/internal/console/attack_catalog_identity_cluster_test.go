@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	kubernetesfake "k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -184,6 +185,68 @@ func TestIdentityClusterPrepareRejects(t *testing.T) {
 			mutate(o)
 			if _, err := o.cluster(t).Prepare(context.Background()); err == nil {
 				t.Fatalf("%s state was accepted by prepare", name)
+			}
+		})
+	}
+}
+
+func TestIdentityClusterPhysicalRotationOracleRequiresCredentialRejectionAndPodRetention(t *testing.T) {
+	for _, tc := range []struct {
+		name                         string
+		credentialAuthenticatedAfter bool
+		podUID                       string
+		wantValidated                bool
+	}{
+		{name: "rotated-service-account", podUID: idPodUID, wantValidated: true},
+		{name: "old-credential-still-authenticates", credentialAuthenticatedAfter: true, podUID: idPodUID},
+		{name: "pod-was-replaced", podUID: "replacement-pod-uid"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			o := newIdentityClusterObjects()
+			o.pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+			cluster := o.cluster(t)
+			fixture, err := cluster.Prepare(ctx)
+			if err != nil {
+				t.Fatalf("prepare: %v", err)
+			}
+
+			rotatedSA := o.sa.DeepCopy()
+			rotatedSA.UID = "sa-uid-new-0002"
+			if _, err = cluster.kube.CoreV1().ServiceAccounts(idNS).Update(ctx, rotatedSA, metav1.UpdateOptions{}); err != nil {
+				t.Fatalf("rotate ServiceAccount: %v", err)
+			}
+			pod := o.pod.DeepCopy()
+			pod.UID = types.UID(tc.podUID)
+			if _, err = cluster.kube.CoreV1().Pods(idNS).Update(ctx, pod, metav1.UpdateOptions{}); err != nil {
+				t.Fatalf("update Pod: %v", err)
+			}
+			replayed := false
+			cluster.kube.(*kubernetesfake.Clientset).PrependReactor("create", "tokenreviews", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				review := action.(k8stesting.CreateAction).GetObject().(*authenticationv1.TokenReview).DeepCopy()
+				if review.Spec.Token != fixture.Credential {
+					t.Fatal("physical observation did not replay the prepared credential")
+				}
+				replayed = true
+				review.Status.Authenticated = tc.credentialAuthenticatedAfter
+				return true, review, nil
+			})
+
+			result, err := cluster.Physical(ctx, fixture)
+			if err != nil {
+				t.Fatalf("physical observation: %v", err)
+			}
+			if result.Oracle != "service-account-rotation-v1" {
+				t.Errorf("physical oracle = %q, want service-account-rotation-v1", result.Oracle)
+			}
+			if !replayed || !result.CredentialAuthenticatedBefore || result.CredentialAuthenticatedAfter != tc.credentialAuthenticatedAfter {
+				t.Errorf("physical observation lost credential replay evidence: %+v", result)
+			}
+			if result.OldServiceAccountUID != idSAUID || result.NewServiceAccountUID != string(rotatedSA.UID) || result.PodUID != idPodUID {
+				t.Errorf("physical observation lost bound identity evidence: %+v", result)
+			}
+			if result.PodRetained != (tc.podUID == idPodUID) || result.Validated != tc.wantValidated {
+				t.Errorf("physical observation accepted the wrong rotation outcome: %+v", result)
 			}
 		})
 	}
