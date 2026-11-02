@@ -228,6 +228,148 @@ func TestPrometheusRunEvidencePersistsBaselineFinalDeltasAndRange(t *testing.T) 
 	}
 }
 
+func TestPrometheusRunMetricActionPreservesOtherFamilies(t *testing.T) {
+	for _, tc := range []struct{ family, action string }{
+		{"agent-action", "agent-action-deny"},
+		{"credential", "credential-revoke"},
+		{"datastore", "datastore-restore"},
+		{"identity-sa-rotate", "identity-rotate"},
+		{"image", "registry-rollback"},
+		{"network-edge", "network-isolate"},
+		{"node-recycle", "node-cordon-drain-replace"},
+		{"pod-rotate", "rotate"},
+		{"quarantine", "quarantine"},
+		{"sensitive-output", "sensitive-output-policy-activate"},
+		{"serving-kv", "kv-reset"},
+		{"serving-rate", "throttle"},
+		// The real controller retirement primitive outside the reviewed family
+		// and a mismatched family/action pair must never be remapped.
+		{"unrelated-family", "controller-stop"},
+		{"controller-stop", "quarantine"},
+	} {
+		t.Run(tc.family+"/"+tc.action, func(t *testing.T) {
+			if got := prometheusRunMetricAction(tc.family, tc.action); got != tc.action {
+				t.Fatalf("metric action = %q, want unchanged %q", got, tc.action)
+			}
+		})
+	}
+}
+
+func TestPrometheusControllerStopCapturesNativeRotateEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		present bool
+		advance bool
+	}{
+		{name: "positive-native-delta", present: true, advance: true},
+		{name: "missing-native-counter"},
+		{name: "zero-native-delta", present: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var mu sync.Mutex
+			instantCalls := map[string]int{}
+			prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				query := r.URL.Query().Get("query")
+				isNative := strings.Contains(query, `action="rotate"`)
+				missing := strings.Contains(query, `action="controller-stop"`) || (isNative && !tc.present)
+				labels := map[string]string{}
+				if strings.Contains(query, `selected="true"`) {
+					labels["mode"] = "active"
+				}
+				baseline, final := "10", "11"
+				if strings.Contains(query, "< bool 90") {
+					baseline, final = "1", "1"
+				} else if isNative && !tc.advance {
+					final = baseline
+				}
+				resultType := "vector"
+				series := map[string]any{"metric": labels}
+				if r.URL.Path == "/api/v1/query_range" {
+					resultType = "matrix"
+					start, _ := strconv.ParseFloat(r.URL.Query().Get("start"), 64)
+					end, _ := strconv.ParseFloat(r.URL.Query().Get("end"), 64)
+					series["values"] = [][]any{{start, baseline}, {end, final}}
+				} else {
+					mu.Lock()
+					instantCalls[query]++
+					call := instantCalls[query]
+					mu.Unlock()
+					value := baseline
+					if call > 1 {
+						value = final
+					}
+					at, _ := strconv.ParseFloat(r.URL.Query().Get("time"), 64)
+					series["value"] = []any{at, value}
+				}
+				result := []any{series}
+				if missing {
+					result = []any{}
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{"status": "success", "data": map[string]any{
+					"resultType": resultType, "result": result,
+				}})
+			}))
+			defer prometheus.Close()
+			cfg := Config{StateDir: t.TempDir(), RunPrometheusEvidence: PrometheusRunEvidenceConfig{
+				Enabled: true, URL: prometheus.URL, Environment: "staging", SettleDelay: time.Millisecond,
+				RequestTimeout: time.Second, RangeStep: 15 * time.Second,
+			}}
+			server := &Server{cfg: cfg}
+			started := time.Now().UTC().Add(-time.Minute)
+			evidence, err := server.beginPrometheusRunEvidence(context.Background(), "controller-test", "AML.T0074", "controller-stop", "p4-demo", "controller-stop", AttackCatalogExecutionActive, AttackCatalogTriggerReactive, started)
+			if err != nil {
+				t.Fatalf("baseline capture: %v", err)
+			}
+			if err = server.completePrometheusRunEvidence(context.Background(), evidence, time.Now().UTC()); err != nil {
+				t.Fatalf("terminal capture: %v", err)
+			}
+			if evidence.ExpectedAction != "controller-stop" || evidence.Family != "controller-stop" || evidence.Status != "COMPLETE" {
+				t.Fatalf("logical evidence identity changed: %+v", evidence)
+			}
+			for _, metric := range evidence.Metrics {
+				for _, capture := range []*PrometheusResponseCapture{metric.BaselineCapture, metric.FinalCapture, metric.RawCapture} {
+					if err = validatePrometheusResponseCapture(capture, started, time.Now().UTC()); err != nil || capture.Parameters["query"] != metric.Query {
+						t.Fatalf("%s lost its bound raw capture: %v", metric.Key, err)
+					}
+				}
+				if metric.Key == "noop" || metric.Key == "trusted-events" || metric.Key == "telemetry-source-fresh" {
+					continue
+				}
+				if !strings.Contains(metric.Query, `tenant="p4-demo",environment="staging",action="rotate"`) {
+					t.Fatalf("%s did not query the native action: %s", metric.Key, metric.Query)
+				}
+				if !tc.present {
+					if len(metric.Baseline) != 0 || len(metric.Final) != 0 || len(metric.Range) != 0 || len(metric.Deltas) != 0 {
+						t.Fatalf("%s fabricated absent native counters: %+v", metric.Key, metric)
+					}
+				} else {
+					wantDelta := float64(0)
+					if tc.advance {
+						wantDelta = 1
+					}
+					if len(metric.Baseline) != 1 || len(metric.Final) != 1 || len(metric.Range) != 1 || len(metric.Deltas) != 1 || metric.Deltas[0].Delta != wantDelta {
+						t.Fatalf("%s lost native samples or delta: %+v", metric.Key, metric)
+					}
+				}
+			}
+			if tc.present && tc.advance {
+				if len(evidence.ObservedDecisionModes) != 1 || evidence.ObservedDecisionModes[0] != "active" {
+					t.Fatalf("positive native selection was not observed: %v", evidence.ObservedDecisionModes)
+				}
+			} else if len(evidence.ObservedDecisionModes) != 0 {
+				t.Fatalf("missing/zero native delta fabricated a selected mode: %v", evidence.ObservedDecisionModes)
+			}
+			result := AttackCatalogResult{CatalogueID: evidence.CatalogueID, RunID: evidence.RunID, Family: evidence.Family,
+				ExpectedAction: "controller-stop", ExecutionMode: AttackCatalogExecutionActive, TriggerMode: AttackCatalogTriggerReactive,
+				StartedAt: started, FinishedAt: time.Now().UTC()}
+			if err = validatePrometheusReleaseEvidence(evidence, result); (err == nil) != tc.present {
+				t.Fatalf("native capture validation with present=%v: %v", tc.present, err)
+			}
+		})
+	}
+}
+
 func TestPrometheusRunEvidenceBaselineFailurePersistsPartialAndStopsPreflight(t *testing.T) {
 	prometheus := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "unavailable", http.StatusServiceUnavailable)
