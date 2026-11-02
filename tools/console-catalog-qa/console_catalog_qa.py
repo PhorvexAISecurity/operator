@@ -636,8 +636,13 @@ def physical_oracle_valid(
         or physical.get("runID") != run_id
         or not isinstance(physical.get("oracle"), str)
         or not physical.get("oracle")
-        or not isinstance(physical.get("evidence"), dict)
-        or not physical.get("evidence")
+    ):
+        return False
+
+    # Identity rotation publishes its physical readbacks as typed fields. The
+    # other producers publish an additional native evidence object.
+    if family != "identity-sa-rotate" and (
+        not isinstance(physical.get("evidence"), dict) or not physical.get("evidence")
     ):
         return False
 
@@ -682,10 +687,15 @@ def physical_oracle_valid(
             return False
 
     if family == "identity-sa-rotate":
+        old_uid = physical.get("oldServiceAccountUID")
+        new_uid = physical.get("newServiceAccountUID")
         return (
-            bool(physical.get("oldServiceAccountUID"))
-            and bool(physical.get("newServiceAccountUID"))
-            and physical.get("oldServiceAccountUID") != physical.get("newServiceAccountUID")
+            physical.get("oracle") == "service-account-rotation-v1"
+            and isinstance(old_uid, str) and bool(old_uid)
+            and isinstance(new_uid, str) and bool(new_uid)
+            and old_uid != new_uid
+            and by_name["service_account_uid_changed"].get("before") == old_uid
+            and by_name["service_account_uid_changed"].get("after") == new_uid
             and physical.get("credentialAuthenticatedBefore") is True
             and physical.get("credentialAuthenticatedAfter") is False
             and physical.get("podRetained") is True
