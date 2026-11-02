@@ -2,8 +2,8 @@
 # The release (phase 5c) writes the published brain image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
-  tag: "staging-0.10.0-git-a7d22003f13791b7d913eb5452de933732a15269"
-  digest: "sha256:93cfcf4406ac82d4f0cb252f2bea1eeb587610ff8c7ade51b8b45a2e6ba716e5"
+  tag: "staging-0.10.0-git-d246cb2d74f256207f9a575fde2b81599aa3f6df"
+  digest: "sha256:80d8a5d0c4b08e001d3c980d8fcc7f0caa39319f841fbd1c89924b2438234a98"
 # Persist the allowlisted capture across normal staging image releases.
 phorvex:
   mathLab:
