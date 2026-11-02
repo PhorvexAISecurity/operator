@@ -2,14 +2,14 @@ phorvex:
   policyNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
-  - p2-demo
+  - p4-demo
   actuatorNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
-  - p2-demo
+  - p4-demo
   trustedDetectors:
   - phorvex-staging/staging-attacks
-  - p2/p2-attacks
+  - p4/p4-attacks
   agentActionDeny:
     enabled: false
     namespaces: []
@@ -22,13 +22,13 @@ phorvex:
     attackNamespaces:
     - phorvex-staging-demo
     - console-identity-shared
-    - p2-demo
+    - p4-demo
     attackCatalog:
       enabled: true
-      authorizationTenant: p2-demo
+      authorizationTenant: p4-demo
       familyFixtures:
         enabled: true
-        profile: pod-rotate
+        profile: controller-stop
         namespaceUID: ''
         cleanupPolicy: Delete
         images:
@@ -47,10 +47,10 @@ phorvex:
       grants:
         data: "{\n  \"version\": 1,\n  \"subjects\": [\n    {\n      \"issuer\": \"https://cognito-idp.us-east-2.amazonaws.com/us-east-2_JfwlBPRbB\"\
           ,\n      \"subject\": \"71fb8550-3041-702a-5735-a33baf8836c8\",\n      \"roles\": [\n        \"operator\"\n    \
-          \  ],\n      \"tenants\": [\n        \"p2-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n\
+          \  ],\n      \"tenants\": [\n        \"p4-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n      ],\n\
           \      \"note\": \"The production console's operator, confined to staging's demo tenant.\"\n    },\n    {\n    \
           \  \"issuer\": \"https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401\",\n      \"subject\"\
           : \"system:serviceaccount:phorvex-staging:staging-phorvex-console-e2e\",\n      \"roles\": [\n        \"operator\"\
-          \n      ],\n      \"tenants\": [\n        \"p2-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n   \
+          \n      ],\n      \"tenants\": [\n        \"p4-demo\"\n      ],\n      \"targets\": [\n        \"default\"\n   \
           \   ],\n      \"note\": \"Staging End-to-End runs against the demo tenant; token minted per run, never stored.\"\
           \n    }\n  ]\n}\n"
