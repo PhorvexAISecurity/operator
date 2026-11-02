@@ -28,7 +28,7 @@ phorvex:
       authorizationTenant: p4-demo
       familyFixtures:
         enabled: true
-        profile: controller-stop
+        profile: credential
         namespaceUID: ''
         cleanupPolicy: Delete
         images:
