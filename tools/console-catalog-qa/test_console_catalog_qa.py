@@ -104,7 +104,6 @@ def strict_evidence(
                 "kind": "service-account-rotated-credential-replay",
                 "oracle": "service-account-rotation-v1",
                 "observedAt": "2026-11-02T00:00:00Z",
-                "evidence": {"schema": "identity-service-account-rotation-v1"},
                 "oldServiceAccountUID": "old-uid",
                 "newServiceAccountUID": "new-uid" if physical_validated else "old-uid",
                 "credentialAuthenticatedBefore": True,
@@ -529,6 +528,31 @@ class DriverTest(unittest.TestCase):
         self.assertEqual(raw_verdict, "DEFENDED")
         self.assertFalse(result["bindings"]["physicalOracle"])
 
+    def test_identity_typed_readbacks_pass_without_native_evidence_blob(self) -> None:
+        evidence = strict_evidence("cat-90", IDS[0])
+        physical = evidence["attackCatalogueResult"]["physicalValidation"]
+        self.assertNotIn("evidence", physical)
+        passed, reasons, _ = qa.evaluate_strict_pass(
+            IDS[0], "cat-90", status("cat-90", IDS[0]), evidence
+        )
+        self.assertTrue(passed, reasons)
+
+        for field, value in (
+            ("oldServiceAccountUID", "unrelated-old-uid"),
+            ("newServiceAccountUID", "unrelated-new-uid"),
+            ("oracle", "unrelated-oracle"),
+            ("credentialAuthenticatedAfter", True),
+            ("podRetained", False),
+        ):
+            with self.subTest(field=field):
+                changed = json.loads(json.dumps(evidence))
+                changed["attackCatalogueResult"]["physicalValidation"][field] = value
+                passed, _, bindings = qa.evaluate_strict_pass(
+                    IDS[0], "cat-90", status("cat-90", IDS[0]), changed
+                )
+                self.assertFalse(passed)
+                self.assertFalse(bindings["physicalOracle"])
+
     def test_agent_action_two_sided_oracle_and_runtime_mode_pass(self) -> None:
         evidence = strict_evidence("cat-13", IDS[0])
         result = evidence["attackCatalogueResult"]
@@ -634,6 +658,13 @@ class DriverTest(unittest.TestCase):
         self.assertTrue(passed, reasons)
         self.assertTrue(bindings["physicalOracle"])
 
+        native = result["physicalValidation"].pop("evidence")
+        passed, _, bindings = qa.evaluate_strict_pass(
+            IDS[0], "cat-127", status("cat-127", IDS[0]), evidence
+        )
+        self.assertFalse(passed)
+        self.assertFalse(bindings["physicalOracle"])
+        result["physicalValidation"]["evidence"] = native
         result["physicalValidation"]["evidence"]["networkPolicyValid"] = False
         passed, reasons, bindings = qa.evaluate_strict_pass(
             IDS[0], "cat-127", status("cat-127", IDS[0]), evidence
