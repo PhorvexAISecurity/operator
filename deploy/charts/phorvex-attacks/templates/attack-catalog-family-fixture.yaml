@@ -240,7 +240,13 @@ spec:
         image: {{ $workloadImage | quote }}
         imagePullPolicy: IfNotPresent
         ports: [{name: http, containerPort: 8080}]
+        {{- if eq $family "image" }}
+        # The image family replaces this container with an untrusted image that serves the
+        # app port but not the fixture's /healthz route; readiness is the served port.
+        readinessProbe: {tcpSocket: {port: http}, periodSeconds: 3}
+        {{- else }}
         readinessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 3}
+        {{- end }}
         securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}}
         resources:
           requests: {cpu: 10m, memory: 16Mi}

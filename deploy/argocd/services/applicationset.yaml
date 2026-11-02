@@ -106,6 +106,23 @@ spec:
         namespace: p6-demo
         jsonPointers:
         - /data
+      # The image catalogue family swaps these fixture containers to an untrusted image and
+      # measures Phorvex's registry-rollback restoring the trusted pin. Self-heal would revert
+      # that drift first and pre-empt the defense under test, so Argo ignores only the two
+      # fixture containers' image field. The fixture digest is reproducible
+      # (release/staging-fixture-identities.json); the rollback and the run cleanup restore it.
+      - group: apps
+        kind: Deployment
+        name: demo-api
+        namespace: p2-demo
+        jqPathExpressions:
+        - .spec.template.spec.containers[].image
+      - group: apps
+        kind: Deployment
+        name: demo-api
+        namespace: p3-demo
+        jqPathExpressions:
+        - .spec.template.spec.containers[].image
       # The manager chart generates its admission webhook certificate when it finds
       # none, and Argo CD renders without cluster access, so every render brings a new
       # one. The first sync installs the certificate and its CA bundle together; later
