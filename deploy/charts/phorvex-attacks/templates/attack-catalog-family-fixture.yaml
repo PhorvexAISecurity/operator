@@ -304,7 +304,7 @@ spec:
   budget: {antiOverRotationWindow: 90s, maxGracePeriodSeconds: 30, maxMovesPerTick: 1, proactiveFloor: 15m, tickInterval: 5s}
   objective: {costWeights: {flowDisruption: "0.6", normSparsity: "0.4"}, disruptionAversion: "1", lambda: "0"}
   slo:
-    costCeiling: "1.2"
+    costCeiling: {{ if eq $family "pod-rotate" }}"1.7"{{ else }}"1.2"{{ end }}
     minAvailableReplicas: {{ if eq $family "network-edge" }}3{{ else if has $family (list "quarantine" "pod-rotate" "controller-stop" "node-recycle") }}2{{ else }}1{{ end }}
   triggers: {eventAgeHorizon: 1h, eventDriven: true, reactiveOnly: true}
 {{- end }}

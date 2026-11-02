@@ -268,6 +268,17 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
         c_policy = next(item for item in controller if item.get("kind") == "PhorvexPolicy"
                         and item["metadata"]["namespace"] == "p4-demo")
         self.assertEqual(c_policy["spec"]["actions"]["enabled"], ["rotate"])
+        pod_rotate = objects(self.render("pod-rotate").stdout)
+        pod_rotate_policy = next(
+            item for item in pod_rotate if item.get("kind") == "PhorvexPolicy"
+            and item["metadata"]["namespace"] == "p2-demo"
+        )
+        # A missing-load rotate has an audited CHi of 1.60. Keep G9 active
+        # while allowing that reviewed envelope with a bounded 0.10 margin.
+        self.assertEqual(pod_rotate_policy["spec"]["slo"]["costCeiling"], "1.7")
+        self.assertEqual(pod_rotate_policy["spec"]["slo"]["minAvailableReplicas"], 2)
+        self.assertTrue(pod_rotate_policy["spec"]["triggers"]["reactiveOnly"])
+        self.assertEqual(q_policy["spec"]["slo"]["costCeiling"], "1.2")
         datastore = objects(self.render("datastore").stdout)
         trusted = next(item for item in datastore if item.get("kind") == "ConfigMap"
                        and item["metadata"]["name"] == "datastore-trusted-snapshot")
