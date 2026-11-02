@@ -3,16 +3,13 @@ phorvex:
   - phorvex-staging-demo
   - console-identity-shared
   - p2-demo
-  - p3-demo
   actuatorNamespaces:
   - phorvex-staging-demo
   - console-identity-shared
   - p2-demo
-  - p3-demo
   trustedDetectors:
   - phorvex-staging/staging-attacks
   - p2/p2-attacks
-  - p3/p3-attacks
   agentActionDeny:
     enabled: false
     namespaces: []
@@ -26,13 +23,12 @@ phorvex:
     - phorvex-staging-demo
     - console-identity-shared
     - p2-demo
-    - p3-demo
     attackCatalog:
       enabled: true
       authorizationTenant: p2-demo
       familyFixtures:
         enabled: true
-        profile: image
+        profile: network-edge
         namespaceUID: ''
         cleanupPolicy: Delete
         images:
