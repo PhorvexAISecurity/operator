@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -206,6 +207,111 @@ func isolatedFixtureContract(t *testing.T, profile, fixture, namespace, name, co
 			`"container":"`+container+`","component":"`+fixture+`"}]}}],`+
 			`"releases":{"`+fixture+`":{"repository":"`+repository+`","digest":"`+digest+`"}}}`+"\n")
 	return root, consumer, repository + "@" + digest
+}
+
+func TestSourceReleaseTreeCarriesOptionalStagingFixtureAuthority(t *testing.T) {
+	// Use the real completed native batch, including its full release repository
+	// and controller-stop consumer, rather than the minimal matcher fixture.
+	nativeRaw, err := os.ReadFile(filepath.Join("..", "..", "..", "release", "staging-batch.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native isolatedFixtureBatch
+	if err = json.Unmarshal(nativeRaw, &native); err != nil {
+		t.Fatal(err)
+	}
+	release := native.Releases["catalogue-workload"]
+	if release.Repository != ReleaseRegistry+"/"+StagingRepositoryPrefix+"catalogue-workload" || !digestSHA.MatchString(release.Digest) {
+		t.Fatalf("native fixture release is incomplete: %+v", release)
+	}
+	image := release.Repository + "@" + release.Digest
+	for _, tc := range []struct {
+		name          string
+		active        bool
+		batchAtSource bool
+		wrongDigest   bool
+		wrongSlot     bool
+		wantPass      bool
+	}{
+		{name: "source-authority-survives-checkout-substitution", active: true, batchAtSource: true, wantPass: true},
+		{name: "checkout-authority-cannot-fill-missing-source", active: true},
+		{name: "checkout-authority-cannot-replace-source-digest", active: true, batchAtSource: true, wrongDigest: true},
+		{name: "source-authority-cannot-bind-another-slot", active: true, batchAtSource: true, wrongSlot: true},
+		{name: "historical-source-without-optional-batch", wantPass: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newBatchTestRepo(t, batchVersions())
+			useRealReleaseRenderer(t)
+			t.Setenv("KUBECONFIG", "/dev/null")
+			component := componentByName("attacks")
+			if tc.active {
+				writeConsumerFixture(t, r.root, "deploy/environments/staging/catalogue-family.yaml",
+					"phorvex:\n  console:\n    attackCatalog:\n      enabled: true\n      familyFixtures:\n        enabled: true\n        profile: controller-stop\n        images:\n          workload: "+image+"\n")
+				namespace := "p4-demo"
+				if tc.wrongSlot {
+					namespace = "unreviewed-namespace"
+				}
+				writeConsumerFixture(t, r.root, component.Chart+"/templates/catalogue-fixture.yaml",
+					"apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: demo-api\n  namespace: "+namespace+"\nspec:\n  template:\n    spec:\n      containers:\n      - name: web\n        image: '{{ .Values.phorvex.console.attackCatalog.familyFixtures.images.workload }}'\n")
+			}
+			pinnedRaw := nativeRaw
+			if tc.wrongDigest {
+				var batch map[string]any
+				if err := json.Unmarshal(nativeRaw, &batch); err != nil {
+					t.Fatal(err)
+				}
+				batch["releases"].(map[string]any)["catalogue-workload"].(map[string]any)["digest"] = "sha256:" + strings.Repeat("f", 64)
+				pinnedRaw, err = json.Marshal(batch)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.batchAtSource {
+				writeConsumerFixture(t, r.root, "release/staging-batch.json", string(pinnedRaw))
+			}
+			source := r.source
+			if tc.active || tc.batchAtSource {
+				source = r.commit("pin active catalogue fixture authority")
+			}
+			// The checkout always disagrees with source. Extraction must neither
+			// borrow this authority nor lose the authority committed at source.
+			checkoutRaw := nativeRaw
+			if tc.wantPass && tc.batchAtSource {
+				checkoutRaw = []byte("{}\n")
+			}
+			writeConsumerFixture(t, r.root, "release/staging-batch.json", string(checkoutRaw))
+			extracted, cleanup, err := sourceReleaseTree(r.root, source, ReleaseEnvironment)
+			if err != nil {
+				t.Fatalf("extract source deployment closure: %v", err)
+			}
+			defer cleanup()
+			target := ComponentDeploy{Chart: component.Chart,
+				ValuesFile: "deploy/environments/staging/attacks.yaml", Path: component.Deploy.Path,
+				RepositoryKey: component.Deploy.Repository, TagKey: component.Deploy.Tag, DigestKey: component.Deploy.Digest}
+			route, err := resolveDeploymentRoute(extracted, ReleaseEnvironment, component.Name, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			consumers, _, err := probeConsumers(extracted, route, target, component.Name, nil)
+			if (err == nil) != tc.wantPass {
+				t.Fatalf("source-pinned consumer probe pass=%v, want %v: %v", err == nil, tc.wantPass, err)
+			}
+			if tc.wantPass && (len(consumers) != 1 || consumers[0].Container != "attacks") {
+				t.Fatalf("fixture was incorrectly claimed as a service image consumer: %+v", consumers)
+			}
+			if !tc.wantPass && !strings.Contains(err.Error(), "unbound authoritative rendered consumer") {
+				t.Fatalf("consumer probe failed for an unrelated reason: %v", err)
+			}
+			raw, readErr := os.ReadFile(filepath.Join(extracted, "release", "staging-batch.json"))
+			if tc.batchAtSource {
+				if readErr != nil || string(raw) != string(pinnedRaw) {
+					t.Fatalf("extracted authority differs from the exact source bytes: %v", readErr)
+				}
+			} else if !os.IsNotExist(readErr) {
+				t.Fatalf("historical source borrowed checkout authority: %v", readErr)
+			}
+		})
+	}
 }
 
 func TestExactIsolatedStagingConsumerIsTheOnlyExternalConsumerAllowed(t *testing.T) {

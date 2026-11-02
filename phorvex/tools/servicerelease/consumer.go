@@ -1153,6 +1153,16 @@ func sourceReleaseTree(root, source, environment string) (string, func(), error)
 		return "", nil, fmt.Errorf("%s: spec.generators must be a list", deploymentManifest)
 	}
 	paths := []string{".dockerignore", deploymentManifest, filepath.ToSlash(filepath.Join("deploy", "environments", environment))}
+	// Active catalogue images are bound to this source-pinned batch during
+	// consumer probing. Historical sources may predate the optional authority.
+	const stagingBatchPath = "release/staging-batch.json"
+	listed, err := git(root, "ls-tree", "--name-only", source, "--", stagingBatchPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("resolve optional staging fixture authority: %w", err)
+	}
+	if strings.TrimSpace(listed) != "" {
+		paths = append(paths, stagingBatchPath)
+	}
 	for _, component := range Components {
 		element, err := findElement(generators, "service", component.Name)
 		if err != nil {
