@@ -221,6 +221,11 @@ spec:
       # to remain intact. Keep this staging-only fixture off interruptible nodes
       # so unrelated Spot replacement cannot be mistaken for actuator fallout.
       nodeSelector: {eks.amazonaws.com/capacityType: ON_DEMAND}
+      # The fixture is 10m CPU / 16Mi per replica. Permit the long-lived
+      # ON_DEMAND system pools so strict QA does not scale a disposable node
+      # merely to obtain a second failure domain.
+      tolerations:
+      - {key: CriticalAddonsOnly, operator: Equal, value: "true", effect: NoSchedule}
       topologySpreadConstraints:
       - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app.kubernetes.io/name: demo-api}}}
       {{- else if eq $family "node-recycle" }}
