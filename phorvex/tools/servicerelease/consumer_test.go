@@ -187,27 +187,53 @@ func TestConsumerProbeRejectsEveryUnboundAuthoritativeWorkloadAndContainerClass(
 	}
 }
 
-func TestExactIsolatedStagingConsumerIsTheOnlyExternalConsumerAllowed(t *testing.T) {
+func isolatedFixtureContract(t *testing.T, profile, fixture, namespace, name, container string) (string, ImageConsumer, string) {
+	t.Helper()
+	root := t.TempDir()
+	digest := "sha256:" + strings.Repeat("a", 64)
+	repository := ReleaseRegistry + "/" + StagingRepositoryPrefix + fixture
+	fieldPath := "/spec/template/spec/containers/0/image"
 	consumer := ImageConsumer{
-		APIVersion: "apps/v1", Kind: "Deployment", Namespace: "p6-demo", Name: "agent-sim",
-		Section: "containers", Container: "agent-sim", FieldPath: "/spec/template/spec/containers/0/image",
+		APIVersion: "apps/v1", Kind: "Deployment", Namespace: namespace, Name: name,
+		Section: "containers", Container: container, FieldPath: fieldPath,
 	}
-	image := ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim@sha256:" + strings.Repeat("a", 64)
-	if !exactIsolatedStagingConsumer("attacks", consumer, image) {
-		t.Fatal("exact isolated staging consumer was rejected")
-	}
+	writeConsumerFixture(t, root, "deploy/environments/staging/catalogue-family.yaml",
+		"phorvex:\n  console:\n    attackCatalog:\n      enabled: true\n      familyFixtures:\n        enabled: true\n        profile: "+profile+"\n")
+	writeConsumerFixture(t, root, "release/staging-batch.json",
+		`{"components":[{"component":"`+fixture+`","kind":"fixture","deploy":{"consumers":[{`+
+			`"profile":"`+profile+`","apiVersion":"apps/v1","kind":"Deployment",`+
+			`"namespace":"`+namespace+`","name":"`+name+`","fieldPath":"`+fieldPath+`",`+
+			`"container":"`+container+`","component":"`+fixture+`"}]}}],`+
+			`"releases":{"`+fixture+`":{"repository":"`+repository+`","digest":"`+digest+`"}}}`+"\n")
+	return root, consumer, repository + "@" + digest
+}
+
+func TestExactIsolatedStagingConsumerIsTheOnlyExternalConsumerAllowed(t *testing.T) {
 	for _, test := range []struct {
-		name, component, image string
-		consumer               ImageConsumer
+		profile, fixture, namespace, name, container string
 	}{
-		{"wrong component", "manager", image, consumer},
-		{"wrong namespace", "attacks", image, func() ImageConsumer { changed := consumer; changed.Namespace = "default"; return changed }()},
-		{"shared repository", "attacks", ReleaseRegistry + "/phorvex/agent-sim@sha256:" + strings.Repeat("a", 64), consumer},
-		{"mutable tag", "attacks", ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim:latest", consumer},
+		{"agent-action", "agent-sim", "p6-demo", "agent-sim", "agent-sim"},
+		{"pod-rotate", "catalogue-workload", "p2-demo", "demo-api", "web"},
 	} {
-		t.Run(test.name, func(t *testing.T) {
-			if exactIsolatedStagingConsumer(test.component, test.consumer, test.image) {
-				t.Fatal("non-exact isolated staging consumer was accepted")
+		t.Run(test.profile, func(t *testing.T) {
+			root, consumer, image := isolatedFixtureContract(t, test.profile, test.fixture, test.namespace, test.name, test.container)
+			if !exactIsolatedStagingConsumer(root, "attacks", consumer, image) {
+				t.Fatal("exact isolated staging fixture consumer was rejected")
+			}
+			for _, invalid := range []struct {
+				name, component, image string
+				consumer               ImageConsumer
+			}{
+				{"wrong component", "manager", image, consumer},
+				{"wrong namespace", "attacks", image, func() ImageConsumer { changed := consumer; changed.Namespace = "default"; return changed }()},
+				{"shared repository", "attacks", ReleaseRegistry + "/phorvex/" + test.fixture + "@sha256:" + strings.Repeat("a", 64), consumer},
+				{"mutable tag", "attacks", ReleaseRegistry + "/" + StagingRepositoryPrefix + test.fixture + ":latest", consumer},
+			} {
+				t.Run(invalid.name, func(t *testing.T) {
+					if exactIsolatedStagingConsumer(root, invalid.component, invalid.consumer, invalid.image) {
+						t.Fatal("non-exact isolated staging consumer was accepted")
+					}
+				})
 			}
 		})
 	}
