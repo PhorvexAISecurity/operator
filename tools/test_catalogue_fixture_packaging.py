@@ -282,6 +282,11 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
         self.assertEqual(pod_rotate_policy["spec"]["slo"]["minAvailableReplicas"], 2)
         self.assertTrue(pod_rotate_policy["spec"]["triggers"]["reactiveOnly"])
         self.assertEqual(q_policy["spec"]["slo"]["costCeiling"], "1.2")
+        for family, policy_name, ceiling in (("image", "demo-api-defense", "1.7"), ("node-recycle", "node-defense", "1.8")):
+            policies = [item for item in objects(self.render(family).stdout)
+                        if item.get("kind") == "PhorvexPolicy" and item["metadata"]["name"] == policy_name]
+            self.assertTrue(policies, family)
+            self.assertEqual({item["spec"]["slo"]["costCeiling"] for item in policies}, {ceiling}, family)
         network_edge = objects(self.render("network-edge").stdout)
         edge_role = [item for item in network_edge if item.get("kind") == "Role"
                         and item["metadata"]["name"].endswith("-network-edge-fixture")]
