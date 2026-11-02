@@ -452,13 +452,25 @@ spec:
     metadata: {labels: {app: kwok-controller-p3}}
     spec:
       serviceAccountName: kwok-controller-p3
-      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      # The upstream kwok image declares no USER; pin an unprivileged UID so runAsNonRoot admits it.
+      securityContext: {runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: {type: RuntimeDefault}}
       containers:
       - name: kwok
         image: {{ $kwokImage | quote }}
-        args: [--manage-all-nodes=false, --manage-nodes-with-annotation-selector=kwok.x-k8s.io/node=fake]
+        # kwok v0.8 ships no built-in lifecycle; the reviewed upstream stages make the fake
+        # nodes Ready and run the Pods scheduled onto them.
+        args: [--manage-all-nodes=false, --manage-nodes-with-annotation-selector=kwok.x-k8s.io/node=fake, --config=/etc/kwok/stages.yaml]
         resources: {requests: {cpu: 20m, memory: 32Mi}, limits: {cpu: 200m, memory: 128Mi}}
         securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+        volumeMounts: [{name: stages, mountPath: /etc/kwok, readOnly: true}]
+      volumes: [{name: stages, configMap: {name: kwok-stages-p3}}]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: kwok-stages-p3, namespace: p3-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+data:
+  stages.yaml: |
+{{ .Files.Get "files/kwok/stages.yaml" | indent 4 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -466,6 +478,23 @@ metadata: {name: {{ .Release.Name }}-kwok-controller-p3, labels: {phorvex.ai/cat
 rules:
 - {apiGroups: [""], resources: [nodes], verbs: [get, list, watch]}
 - {apiGroups: [""], resources: [nodes, nodes/status], resourceNames: [p3-node-a, p3-node-b], verbs: [get, update, patch]}
+# kwok finds the Pods bound to its fake nodes with a cluster-wide nodeName watch; it only
+# mutates Pods in p3-demo (Role below), the only namespace that tolerates the fake nodes.
+- {apiGroups: [""], resources: [pods], verbs: [get, list, watch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: kwok-controller-p3, namespace: p3-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [""], resources: [pods], verbs: [update, patch, delete]}
+- {apiGroups: [""], resources: [pods/status], verbs: [update, patch]}
+- {apiGroups: [""], resources: [events], verbs: [create, patch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: kwok-controller-p3, namespace: p3-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: kwok-controller-p3}
+subjects: [{kind: ServiceAccount, name: kwok-controller-p3, namespace: p3-demo}]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
