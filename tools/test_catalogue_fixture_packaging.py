@@ -282,6 +282,17 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
         self.assertEqual(pod_rotate_policy["spec"]["slo"]["minAvailableReplicas"], 2)
         self.assertTrue(pod_rotate_policy["spec"]["triggers"]["reactiveOnly"])
         self.assertEqual(q_policy["spec"]["slo"]["costCeiling"], "1.2")
+        network_edge = objects(self.render("network-edge").stdout)
+        edge_role = [item for item in network_edge if item.get("kind") == "Role"
+                        and item["metadata"]["name"].endswith("-network-edge-fixture")]
+        self.assertEqual(len(edge_role), 1)
+        self.assertEqual(edge_role[0]["metadata"]["namespace"], "p2-demo")
+        self.assertEqual(edge_role[0]["rules"], [
+            {"apiGroups": ["networking.k8s.io"], "resources": ["networkpolicies"], "verbs": ["get", "delete"]},
+            {"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "update"]},
+        ])
+        self.assertFalse([item for item in pod_rotate if item.get("kind") == "Role"
+                          and item["metadata"]["name"].endswith("-network-edge-fixture")])
         datastore = objects(self.render("datastore").stdout)
         trusted = next(item for item in datastore if item.get("kind") == "ConfigMap"
                        and item["metadata"]["name"] == "datastore-trusted-snapshot")
