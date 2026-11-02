@@ -126,7 +126,10 @@ func TestVLLMDecisionWatchSamplesBeforeAndAfterEffectAcrossRotation(t *testing.T
 	steps := 0
 	r := vllmWatchRecord(start)
 	r.ID, r.Status, r.started, r.accepted = "atk-watch", "running", start, start
-	s := NewServer(Config{StateDir: t.TempDir(), AuditPath: path,
+	// This is a direct watcher test, not a server-startup reconciliation test.
+	// Leaving StateDir unset prevents the startup reconciler from sharing and
+	// advancing this watcher's deterministic clock in a background goroutine.
+	s := NewServer(Config{AuditPath: path,
 		Now: func() time.Time { return current },
 		Sleep: func(d time.Duration) {
 			current = current.Add(d)
