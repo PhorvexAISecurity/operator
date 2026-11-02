@@ -216,7 +216,14 @@ spec:
       serviceAccountName: demo-api
       automountServiceAccountToken: false
       securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
-      {{- if eq $family "node-recycle" }}
+      {{- if eq $family "controller-stop" }}
+      # The strict controller-stop oracle requires the two non-target siblings
+      # to remain intact. Keep this staging-only fixture off interruptible nodes
+      # so unrelated Spot replacement cannot be mistaken for actuator fallout.
+      nodeSelector: {eks.amazonaws.com/capacityType: ON_DEMAND}
+      topologySpreadConstraints:
+      - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: demo-api}}}
+      {{- else if eq $family "node-recycle" }}
       nodeSelector: {phorvex.ai/lane: p3}
       tolerations:
       - {key: phorvex.ai/kwok, operator: Equal, value: "true", effect: NoSchedule}
