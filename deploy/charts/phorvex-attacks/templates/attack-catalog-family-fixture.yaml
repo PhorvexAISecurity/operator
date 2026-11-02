@@ -222,7 +222,7 @@ spec:
       # so unrelated Spot replacement cannot be mistaken for actuator fallout.
       nodeSelector: {eks.amazonaws.com/capacityType: ON_DEMAND}
       topologySpreadConstraints:
-      - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: DoNotSchedule, labelSelector: {matchLabels: {app.kubernetes.io/name: demo-api}}}
+      - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app.kubernetes.io/name: demo-api}}}
       {{- else if eq $family "node-recycle" }}
       nodeSelector: {phorvex.ai/lane: p3}
       tolerations:
