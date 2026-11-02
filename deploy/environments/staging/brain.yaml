@@ -2,14 +2,14 @@
 # The release (phase 5c) writes the published brain image here, under `image`.
 image:
   repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/brain"
-  tag: "staging-0.10.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
-  digest: "sha256:f82484e4500b88ef278e1201327c50425e63347e52a11b410088ddae6018f358"
+  tag: "staging-0.10.0-git-063c727411beb7e28d4166430fd2ed387c758df5"
+  digest: "sha256:7ce69592d3bfd0605893eb27562962d2cba696fe279db57f18e94f919263b4f4"
 # Persist the allowlisted capture across normal staging image releases.
 phorvex:
   mathLab:
     capturePolicies:
-    - phorvex-staging-demo/demo-api-defense
-    - phorvex-staging-demo/stage-bench-defense
+      - phorvex-staging-demo/demo-api-defense
+      - phorvex-staging-demo/stage-bench-defense
     captureMaxBytes: 1073741824
 mathLabStore:
   existingClaim: staging-brain-mathlab

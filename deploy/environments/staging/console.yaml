@@ -7,14 +7,14 @@ phorvex:
       grants:
         # Add to the final catalogue's grants; never replace its operator subjects.
         extraSubjects:
-        - issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
-          subject: system:serviceaccount:phorvex-staging:staging-brain-benchmark
-          roles: [investor]
-          tenants: [phorvex-staging-demo]
-          targets: [default]
-          note: Read-only source-pinned stage brain benchmark snapshot collection.
+          - issuer: https://oidc.eks.us-east-2.amazonaws.com/id/B4E80A6F4AB1E51169435AFFDC706401
+            subject: system:serviceaccount:phorvex-staging:staging-brain-benchmark
+            roles: [investor]
+            tenants: [phorvex-staging-demo]
+            targets: [default]
+            note: Read-only source-pinned stage brain benchmark snapshot collection.
     image:
       repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/console"
-      tag: "staging-0.16.0-git-be676c84d162528c10bacb84c8e6a11de30ade5d"
-      releaseDigest: "sha256:0ffc607dab5034811dc48da1e06d026950fdea7c175c3473a2484947c5ff27d2"
-      releaseSourceSHA: "be676c84d162528c10bacb84c8e6a11de30ade5d"
+      tag: "staging-0.16.0-git-063c727411beb7e28d4166430fd2ed387c758df5"
+      releaseDigest: "sha256:969878b4dc79045892317b54b0d24412cf6372786f9f3a82b9aa25a726f59ba9"
+      releaseSourceSHA: "063c727411beb7e28d4166430fd2ed387c758df5"
