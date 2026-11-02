@@ -11,14 +11,16 @@ phorvex:
   - phorvex-staging/staging-attacks
   - p6/p6-attacks
   agentActionDeny:
-    enabled: true
-    namespaces:
-    - p6-demo
-  outputPolicy:
     enabled: false
-    targetNamespace: ''
+    namespaces: []
+  outputPolicy:
+    enabled: true
+    targetNamespace: p6-demo
     configMapName: ''
-    configMapNames: []
+    configMapNames:
+    - phorvex-output-policy-gfx-t0069
+    - phorvex-output-policy-gfx-t0069-001
+    - phorvex-output-policy-gfx-t0069-002
   console:
     attackNamespaces:
     - phorvex-staging-demo
@@ -29,7 +31,7 @@ phorvex:
       authorizationTenant: p6-demo
       familyFixtures:
         enabled: true
-        profile: agent-action
+        profile: sensitive-output
         namespaceUID: ''
         cleanupPolicy: Delete
         images:
@@ -39,7 +41,7 @@ phorvex:
           python: docker.io/library/python@sha256:60d9996b6a8a3689d36db740b49f4327be3be09a21122bd02fb8895abb38b50d
           kwok: registry.k8s.io/kwok/kwok@sha256:6d25aa8fbdfe78845423160bf125b5513f9522e2770981f0945c2a250c2b26f0
       agentAction:
-        enabled: true
+        enabled: false
         namespace: p6-demo
         image: 753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/agent-sim@sha256:24dce230cb855afd7c74d8568a2cff58cf2156f074b4357e61ac851968073ab8
       prometheusEvidence:
