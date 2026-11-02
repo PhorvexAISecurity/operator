@@ -849,17 +849,90 @@ func authoritativeComponent(consumer ImageConsumer, image string) string {
 	return ""
 }
 
-func exactIsolatedStagingConsumer(component string, consumer ImageConsumer, image string) bool {
+type isolatedFixtureConsumer struct {
+	Profile    string `json:"profile"`
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Namespace  string `json:"namespace"`
+	Name       string `json:"name"`
+	FieldPath  string `json:"fieldPath"`
+	Container  string `json:"container"`
+	Component  string `json:"component"`
+}
+
+type isolatedFixtureBatch struct {
+	Components []struct {
+		Component string `json:"component"`
+		Kind      string `json:"kind"`
+		Deploy    struct {
+			Consumers []isolatedFixtureConsumer `json:"consumers"`
+		} `json:"deploy"`
+	} `json:"components"`
+	Releases map[string]Released `json:"releases"`
+}
+
+type activeFixtureOverlay struct {
+	Phorvex struct {
+		Console struct {
+			AttackCatalog struct {
+				Enabled        bool `yaml:"enabled"`
+				FamilyFixtures struct {
+					Enabled bool   `yaml:"enabled"`
+					Profile string `yaml:"profile"`
+				} `yaml:"familyFixtures"`
+			} `yaml:"attackCatalog"`
+		} `yaml:"console"`
+	} `yaml:"phorvex"`
+}
+
+func exactIsolatedStagingConsumer(root, component string, consumer ImageConsumer, image string) bool {
 	if component != "attacks" {
 		return false
 	}
-	want := ImageConsumer{
-		APIVersion: "apps/v1", Kind: "Deployment", Namespace: "p6-demo", Name: "agent-sim",
-		Section: "containers", Container: "agent-sim", FieldPath: "/spec/template/spec/containers/0/image",
+	overlayRaw, err := readRegularFile(filepath.Join(root, "deploy/environments/staging/catalogue-family.yaml"))
+	if err != nil {
+		return false
 	}
-	prefix := ReleaseRegistry + "/" + StagingRepositoryPrefix + "agent-sim@"
-	return consumer.key() == want.key() && strings.HasPrefix(image, prefix) &&
-		digestSHA.MatchString(strings.TrimPrefix(image, prefix))
+	var overlay activeFixtureOverlay
+	if err := yaml.Unmarshal(overlayRaw, &overlay); err != nil {
+		return false
+	}
+	fixtures := overlay.Phorvex.Console.AttackCatalog.FamilyFixtures
+	if !overlay.Phorvex.Console.AttackCatalog.Enabled || !fixtures.Enabled || fixtures.Profile == "" {
+		return false
+	}
+
+	batchRaw, err := readRegularFile(filepath.Join(root, "release/staging-batch.json"))
+	if err != nil {
+		return false
+	}
+	var batch isolatedFixtureBatch
+	if err := json.Unmarshal(batchRaw, &batch); err != nil {
+		return false
+	}
+	for _, fixture := range batch.Components {
+		if fixture.Kind != "fixture" || fixture.Component == "" {
+			continue
+		}
+		release, ok := batch.Releases[fixture.Component]
+		if !ok || release.Repository == "" || !digestSHA.MatchString(release.Digest) ||
+			image != release.Repository+"@"+release.Digest {
+			continue
+		}
+		for _, candidate := range fixture.Deploy.Consumers {
+			if candidate.Profile != fixtures.Profile || candidate.Component != fixture.Component {
+				continue
+			}
+			want := ImageConsumer{
+				APIVersion: candidate.APIVersion, Kind: candidate.Kind, Namespace: candidate.Namespace,
+				Name: candidate.Name, Container: candidate.Container, FieldPath: candidate.FieldPath,
+			}
+			if consumer.key() == want.key() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func probeConsumers(root string, route deploymentRoute, target ComponentDeploy, component string, overrideRaw []byte) ([]ImageConsumer, map[string]string, error) {
@@ -922,10 +995,11 @@ func probeConsumersForRepository(root string, route deploymentRoute, target Comp
 		slot := probeSlots[key]
 		authoritative := authoritativeComponent(slot, before)
 		if before == after {
-			// The reviewed agent-action window renders one isolated, digest-pinned
-			// staging fixture through the attacks chart. It is exhaustively scanned
-			// here but is not controlled by the attacks service image value.
-			if exactIsolatedStagingConsumer(component, slot, before) {
+			// A reviewed catalogue window can render one isolated, digest-pinned
+			// staging fixture through the attacks chart. It is exhaustively bound to
+			// the active profile and release batch, but is not controlled by the
+			// attacks service image value.
+			if exactIsolatedStagingConsumer(root, component, slot, before) {
 				continue
 			}
 			if authoritative != "" {
