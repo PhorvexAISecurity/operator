@@ -42,6 +42,71 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 DEFAULT_CATALOGUE = REPO_ROOT / "phorvex" / "internal" / "attackcatalog" / "catalog.json"
 
+# These are physical before/after relations, not catalogue metadata or a
+# producer-supplied passed flag. Keep this contract aligned with the independent
+# console-evidence-audit verifier.
+PHYSICAL_ORACLE_SPECS: dict[str, tuple[str, dict[str, tuple[Any, ...]]]] = {
+    "agent-action": ("app-action-denied-two-sided", {
+        "abusive_action_blocked": ("transition", "allowed", "blocked"),
+        "benign_action_preserved": ("equal",),
+        "peer_unchanged": ("equal",),
+    }),
+    "controller-stop": ("controller-stopped-availability", {
+        "target_controller_stopped": ("transition", "running", "stopped"),
+        "availability_preserved": ("after_true",),
+    }),
+    "credential": ("credential-revoked-two-sided", {
+        "credential_revoked": ("transition", "authenticated", "denied"),
+        "benign_credential_valid": ("transition", "authenticated", "authenticated"),
+    }),
+    "datastore": ("datastore-restored-readback", {
+        "datastore_state_changed": ("different",),
+        "legitimate_read_preserved": ("equal",),
+    }),
+    "identity-sa-rotate": ("service-account-rotated-credential-replay", {
+        "service_account_uid_changed": ("different",),
+        "old_credential_revoked": ("transition", "authenticated", "denied"),
+        "pod_uid_unchanged": ("equal",),
+    }),
+    "image": ("image-rollback-runtime", {
+        "image_digest_changed": ("different",),
+        "availability_preserved": ("after_true",),
+    }),
+    "network-edge": ("network-edge-blocked-two-sided", {
+        "forbidden_edge_blocked": ("transition", "reached", "blocked"),
+        "legitimate_edge_preserved": ("equal",),
+        "target_pod_uid_unchanged": ("equal",),
+    }),
+    "node-recycle": ("node-replaced-two-sided", {
+        "target_pod_uid_changed": ("different",),
+        "peer_node_unchanged": ("equal",),
+        "availability_preserved": ("after_true",),
+    }),
+    "pod-rotate": ("pod-uid-replaced-availability", {
+        "target_pod_uid_changed": ("different",),
+        "sibling_pod_uid_unchanged": ("equal",),
+        "availability_preserved": ("after_true",),
+    }),
+    "quarantine": ("pod-quarantined-network", {
+        "forbidden_edge_blocked": ("transition", "reached", "blocked"),
+        "legitimate_edge_preserved": ("equal",),
+        "target_pod_uid_unchanged": ("equal",),
+    }),
+    "sensitive-output": ("sensitive-output-blocked-two-sided", {
+        "sensitive_output_blocked": ("transition", "disclosed", "blocked"),
+        "benign_output_preserved": ("equal",),
+    }),
+    "serving-kv": ("key-reset-two-sided", {
+        "compromised_key_changed": ("different",),
+        "benign_key_preserved": ("equal",),
+        "serving_pods_consistent": ("after_true",),
+    }),
+    "serving-rate": ("abusive-rate-throttled-two-sided", {
+        "abusive_request_throttled": ("transition", "admitted", "throttled"),
+        "legitimate_request_preserved": ("equal",),
+    }),
+}
+
 
 class QAError(RuntimeError):
     """A configuration, contract, or persistence error."""
@@ -534,19 +599,101 @@ def positive_prometheus_delta(metric: dict[str, Any], *, mode: str | None = None
     return False
 
 
-def physical_oracle_valid(physical: Any, signal_row: Any) -> bool:
-    if not isinstance(physical, dict) or physical.get("validated") is not True or len(physical) <= 1:
-        return False
-    if "podUID" in physical and not (
-        isinstance(signal_row, dict)
-        and bool(physical.get("podUID"))
-        and physical.get("podUID") == signal_row.get("targetUID")
+def normalized_physical_scalar(value: Any) -> Any:
+    return value.strip().lower() if isinstance(value, str) else value
+
+
+def physical_relation_holds(before: Any, after: Any, relation: tuple[Any, ...]) -> bool:
+    operator = relation[0]
+    if operator == "different":
+        return before != after
+    if operator == "equal":
+        return before == after
+    if operator == "after_true":
+        return after is True
+    if operator == "transition":
+        return (
+            normalized_physical_scalar(before) == relation[1]
+            and normalized_physical_scalar(after) == relation[2]
+        )
+    return False
+
+
+def physical_oracle_valid(
+    physical: Any,
+    signal_row: Any,
+    family: Any,
+    catalogue_id: str,
+    run_id: str,
+) -> bool:
+    if (
+        not isinstance(physical, dict)
+        or physical.get("validated") is not True
+        or not isinstance(signal_row, dict)
+        or not isinstance(family, str)
+        or physical.get("family") != family
+        or physical.get("catalogueID") != catalogue_id
+        or physical.get("runID") != run_id
+        or not isinstance(physical.get("oracle"), str)
+        or not physical.get("oracle")
+        or not isinstance(physical.get("evidence"), dict)
+        or not physical.get("evidence")
     ):
         return False
 
-    if physical.get("kind") == "app-action-denied-two-sided":
+    spec = PHYSICAL_ORACLE_SPECS.get(family)
+    if spec is None or physical.get("kind") != spec[0]:
+        return False
+    try:
+        observed_at = parse_time(physical.get("observedAt"))
+    except QAError:
+        return False
+    observations = physical.get("observations")
+    if not isinstance(observations, list):
+        return False
+    by_name: dict[str, dict[str, Any]] = {}
+    for row in observations:
+        if not isinstance(row, dict) or not isinstance(row.get("name"), str) or row.get("name") in by_name:
+            return False
+        by_name[row["name"]] = row
+    expected = spec[1]
+    if set(by_name) != set(expected):
+        return False
+    for name, relation in expected.items():
+        row = by_name[name]
+        if "before" not in row or "after" not in row or row.get("passed") is not True:
+            return False
+        if not physical_relation_holds(row.get("before"), row.get("after"), relation):
+            return False
+        try:
+            if parse_time(row.get("observed_at")) > observed_at:
+                return False
+        except QAError:
+            return False
+
+    target_uid = signal_row.get("targetUID")
+    if not isinstance(target_uid, str) or not target_uid:
+        return False
+    if physical.get("podUID") not in (None, "") and physical.get("podUID") != target_uid:
+        return False
+    for name in ("pod_uid_unchanged", "target_pod_uid_unchanged"):
+        row = by_name.get(name)
+        if row is not None and (row.get("before") != target_uid or row.get("after") != target_uid):
+            return False
+
+    if family == "identity-sa-rotate":
+        return (
+            bool(physical.get("oldServiceAccountUID"))
+            and bool(physical.get("newServiceAccountUID"))
+            and physical.get("oldServiceAccountUID") != physical.get("newServiceAccountUID")
+            and physical.get("credentialAuthenticatedBefore") is True
+            and physical.get("credentialAuthenticatedAfter") is False
+            and physical.get("podRetained") is True
+            and physical.get("podUID") == target_uid
+        )
+
+    if family == "agent-action":
         detail = physical.get("evidence")
-        observations = physical.get("observations")
         return (
             physical.get("oracle") == "agent-action-deny-enforcement-v1"
             and physical.get("podRetained") is True
@@ -560,26 +707,33 @@ def physical_oracle_valid(physical: Any, signal_row: Any) -> bool:
             and detail.get("servingSetRetained") is True
             and all(bool(detail.get(key)) for key in ("guardUID", "podUID", "serviceUID"))
             and detail.get("podUID") == physical.get("podUID")
-            and isinstance(observations, list)
-            and len(observations) >= 3
-            and all(isinstance(row, dict) and row.get("passed") is True for row in observations)
-            and {"abusive_action_blocked", "benign_action_preserved", "peer_unchanged"}
-            <= {row.get("name") for row in observations}
         )
 
-    if "oldServiceAccountUID" in physical or "newServiceAccountUID" in physical:
-        if not (
-            bool(physical.get("oldServiceAccountUID"))
-            and bool(physical.get("newServiceAccountUID"))
-            and physical.get("oldServiceAccountUID") != physical.get("newServiceAccountUID")
-        ):
-            return False
-    if "credentialAuthenticatedBefore" in physical and physical.get("credentialAuthenticatedBefore") is not True:
-        return False
-    if "credentialAuthenticatedAfter" in physical and physical.get("credentialAuthenticatedAfter") is not False:
-        return False
-    if "podRetained" in physical and physical.get("podRetained") is not True:
-        return False
+    if family == "quarantine":
+        detail = physical.get("evidence")
+        return (
+            physical.get("oracle") == "k8s-pod-quarantine.v1"
+            and detail.get("schema") == "phorvex.attack-catalogue-k8s-physical.v1"
+            and detail.get("family") == family
+            and detail.get("catalogueID") == catalogue_id
+            and detail.get("logicalAction") == "quarantine"
+            and detail.get("nativeAction") == "quarantine"
+            and detail.get("targetUID") == target_uid
+            and detail.get("targetQuarantined") is True
+            and detail.get("targetEndpointAbsent") is True
+            and detail.get("networkPolicyValid") is True
+            and detail.get("siblingsIntact") is True
+            and detail.get("availabilityHeld") is True
+            and detail.get("replacementReady") is True
+            and all(bool(detail.get(key)) for key in (
+                "profile", "deploymentUID", "serviceUID", "networkPolicyName", "networkPolicyUID",
+            ))
+            and isinstance(detail.get("readyReplicas"), int)
+            and detail.get("readyReplicas") > 0
+            and isinstance(detail.get("availableReplicas"), int)
+            and detail.get("availableReplicas") > 0
+        )
+
     return True
 
 
@@ -675,7 +829,9 @@ def evaluate_strict_pass(
         and actuator.get("handler") == expected_action
     ):
         reasons.append("exact signal, selected decision, and actuator receipt chain is incomplete")
-    if physical_oracle_valid(result.get("physicalValidation"), signal_row):
+    if physical_oracle_valid(
+        result.get("physicalValidation"), signal_row, result.get("family"), catalogue_id, run_id
+    ):
         bindings["physicalOracle"] = True
     else:
         reasons.append("physical oracle is absent or unvalidated")
