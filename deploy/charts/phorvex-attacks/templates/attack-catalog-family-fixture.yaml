@@ -251,6 +251,12 @@ spec:
         resources:
           requests: {cpu: 10m, memory: 16Mi}
           limits: {cpu: 200m, memory: 64Mi}
+        {{- if eq $family "image" }}
+        # The untrusted nginx images write their pid and temp paths under /tmp; the root
+        # filesystem stays read-only.
+        volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {sizeLimit: 16Mi}}]
+        {{- end }}
 ---
 apiVersion: v1
 kind: ServiceAccount
