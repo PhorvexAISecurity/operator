@@ -544,16 +544,9 @@ func (a *infraAttackCatalogAdapter) Preflight(ctx context.Context, run AttackCat
 	if run.RunID == "" || run.CatalogueID != a.profile.ID || run.ExpectedAction != a.profile.ExpectedAction {
 		return nil, fmt.Errorf("%s adapter received a different catalogue ID or profile", a.profile.ID)
 	}
-	runtime := a.fixedRuntime
-	if runtime == nil {
-		if a.server == nil || a.cfg.Service == ServiceConsole || !a.Availability().Available {
-			return nil, fmt.Errorf("%s attacks-service runtime is unavailable", a.profile.ID)
-		}
-		var err error
-		runtime, err = newKubernetesInfraCatalogueRuntime(a.cfg, a.profile)
-		if err != nil {
-			return nil, err
-		}
+	runtime, err := a.runtime()
+	if err != nil {
+		return nil, err
 	}
 	fixture, err := runtime.Prepare(ctx, a.profile)
 	if err != nil {
@@ -648,6 +641,47 @@ func (a *infraAttackCatalogAdapter) Execute(ctx context.Context, run AttackCatal
 		case <-ticker.C:
 		}
 	}
+}
+
+func (a *infraAttackCatalogAdapter) runtime() (infraCatalogueRuntime, error) {
+	if a.fixedRuntime != nil {
+		return a.fixedRuntime, nil
+	}
+	if a.server == nil || a.cfg.Service == ServiceConsole || !a.Availability().Available {
+		return nil, fmt.Errorf("%s attacks-service runtime is unavailable", a.profile.ID)
+	}
+	return newKubernetesInfraCatalogueRuntime(a.cfg, a.profile)
+}
+
+// infraCatalogueRetryVerifier is a runtime's read-only proof that a prior run's
+// exact identities are absent from the cluster.
+type infraCatalogueRetryVerifier interface {
+	ReconcileRetrySafety(context.Context, infraCatalogueProfile, AttackCatalogResult) (AttackCatalogRetrySafety, error)
+}
+
+// supportsRetryReconcile admits only the families whose residue can be proven
+// absent from cluster state alone, without the run-private prepared state.
+func (a *infraAttackCatalogAdapter) supportsRetryReconcile() bool {
+	return a != nil && a.profile.validate() == nil && a.profile.Family == infraFamilyNetworkEdge
+}
+
+// ReconcileRetrySafety re-reads the prior run's exact SecurityEvent and family
+// identities. A clean answer only releases the retry gate; the historical verdict
+// and evidence remain unchanged.
+func (a *infraAttackCatalogAdapter) ReconcileRetrySafety(ctx context.Context, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if !a.supportsRetryReconcile() || persisted.CatalogueID != a.profile.ID || persisted.Family != a.profile.Family || persisted.RunID == "" {
+		return safety, errors.New("infra catalogue retry reconciliation binding is invalid")
+	}
+	runtime, err := a.runtime()
+	if err != nil {
+		return safety, err
+	}
+	verifier, ok := runtime.(infraCatalogueRetryVerifier)
+	if !ok {
+		return safety, errors.New("infra catalogue runtime has no read-only retry verifier")
+	}
+	return verifier.ReconcileRetrySafety(ctx, a.profile, persisted)
 }
 
 func (a *infraAttackCatalogAdapter) Cleanup(ctx context.Context, _ AttackCatalogRunContext, prepared AttackCatalogPreparation) AttackCatalogCleanupResult {

@@ -515,6 +515,49 @@ func (k *kubernetesInfraCatalogueRuntime) cleanupNetwork(ctx context.Context, pr
 	return networkMarkersAbsent(pod), nil
 }
 
+// ReconcileRetrySafety is deliberately read-only. For network-edge it proves that
+// the prior run's exact SecurityEvent and isolation NetworkPolicy are absent and
+// that no fixture Pod carries isolation markers. It repairs nothing and cannot
+// upgrade the old verdict.
+func (k *kubernetesInfraCatalogueRuntime) ReconcileRetrySafety(ctx context.Context, profile infraCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if profile.ID != k.profile.ID || profile.Namespace != k.profile.Namespace || profile.Family != infraFamilyNetworkEdge ||
+		persisted.CatalogueID != profile.ID || persisted.Family != profile.Family || persisted.RunID == "" ||
+		persisted.Signal.Name == "" || persisted.Signal.TargetUID == "" {
+		return safety, errors.New("infra catalogue retry reconciliation identity is incomplete")
+	}
+	if _, err := k.dynamic.Resource(securityEventGVR).Get(ctx, persisted.Signal.Name, metav1.GetOptions{}); err == nil {
+		safety.Reason = "run-owned SecurityEvent is still present"
+		return safety, nil
+	} else if !apierrors.IsNotFound(err) {
+		return safety, errors.New("run-owned SecurityEvent absence is unverified")
+	}
+	name := strings.TrimPrefix(networkPolicyObject(profile.Namespace, persisted.Signal.TargetUID), "NetworkPolicy/"+profile.Namespace+"/")
+	if _, err := k.kube.NetworkingV1().NetworkPolicies(profile.Namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
+		safety.Reason = "prior target isolation NetworkPolicy is still present"
+		return safety, nil
+	} else if !apierrors.IsNotFound(err) {
+		return safety, errors.New("prior isolation NetworkPolicy absence is unverified")
+	}
+	selector, err := labels.Parse(profile.Selector)
+	if err != nil || selector.Empty() {
+		return safety, errors.New("reviewed infra selector is invalid")
+	}
+	pods, err := k.kube.CoreV1().Pods(profile.Namespace).List(ctx, metav1.ListOptions{LabelSelector: selector.String()})
+	if err != nil {
+		return safety, errors.New("network isolation marker absence is unverified")
+	}
+	for i := range pods.Items {
+		if !networkMarkersAbsent(&pods.Items[i]) {
+			safety.Reason = "a fixture Pod still carries network isolation markers"
+			return safety, nil
+		}
+	}
+	safety.Verified, safety.RetrySafe = true, true
+	safety.Reason = "prior network-edge identities are absent and no fixture Pod carries isolation markers"
+	return safety, nil
+}
+
 func networkMarkersAbsent(pod *corev1.Pod) bool {
 	return pod != nil && pod.Labels[infraNetworkIsolatedLabel] == "" &&
 		pod.Annotations[infraNetworkSnapshotAnnotation] == "" && pod.Annotations[infraNetworkEpochAnnotation] == ""
