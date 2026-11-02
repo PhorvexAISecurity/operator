@@ -232,6 +232,64 @@ func (b *identityAgentCatalogueBinding) Physical(ctx context.Context, profile id
 	return private.cluster.Physical(ctx, private.fixture, &private.state)
 }
 
+// agentCatalogueRetryVerifier is the read-only retry re-verification of a live agent-action cluster.
+type agentCatalogueRetryVerifier interface {
+	reconcileRetrySafety(ctx context.Context, p identityAgentServerProfile, signalName string) (AttackCatalogRetrySafety, error)
+}
+
+// reconcileRetrySafety clears a stale unsafe agent-action run only when its exact SecurityEvent is
+// absent and the fixed fixture passes the same read-only preflight a new run requires: two Ready
+// Pods behind the reviewed Service, an empty deny ledger and app guard, and allow-baseline probes.
+func (b *identityAgentCatalogueBinding) reconcileRetrySafety(ctx context.Context, profile identityCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if profile.Family != identityCatalogueAgent || persisted.CatalogueID != profile.ID {
+		return safety, errors.New("agent-action retry reconciliation binding is invalid")
+	}
+	if !b.Availability(profile).Available {
+		return safety, errors.New("agent-action retry reconciliation is unavailable in this deployment")
+	}
+	serverProfile, ok := agentCatalogueServerProfiles[profile.ID]
+	if !ok || validateAgentCatalogueServerProfile(profile.ID) != nil {
+		return safety, errors.New("agent-action retry reconciliation server profile is unavailable")
+	}
+	cluster := b.fixedCluster
+	if cluster == nil {
+		if b.server == nil {
+			return safety, errors.New("agent-action retry reconciliation runtime is unavailable")
+		}
+		var err error
+		if cluster, err = newKubernetesAgentCatalogueCluster(b.cfg); err != nil {
+			return safety, err
+		}
+	}
+	verifier, ok := cluster.(agentCatalogueRetryVerifier)
+	if !ok {
+		return safety, errors.New("agent-action cluster does not support read-only retry reconciliation")
+	}
+	return verifier.reconcileRetrySafety(ctx, serverProfile, persisted.Signal.Name)
+}
+
+func (k *kubernetesAgentCatalogueCluster) reconcileRetrySafety(ctx context.Context, p identityAgentServerProfile, signalName string) (AttackCatalogRetrySafety, error) {
+	safety := AttackCatalogRetrySafety{CheckedAt: time.Now().UTC()}
+	if signalName != "" {
+		_, err := k.dynamic.Resource(securityEventGVR).Get(ctx, signalName, metav1.GetOptions{})
+		if err == nil {
+			safety.Reason = "run-owned SecurityEvent " + signalName + " is still present"
+			return safety, nil
+		}
+		if !apierrors.IsNotFound(err) {
+			return safety, errors.New("agent-action SecurityEvent absence is unverified")
+		}
+	}
+	if _, err := k.Prepare(ctx, p); err != nil {
+		safety.Reason = "agent-action fixture is not clean or healthy: " + err.Error()
+		return safety, nil
+	}
+	safety.Verified, safety.RetrySafe = true, true
+	safety.Reason = "run-owned SecurityEvent absent; deny guard empty and fixture healthy"
+	return safety, nil
+}
+
 func (b *identityAgentCatalogueBinding) Cleanup(ctx context.Context, profile identityCatalogueProfile, prepared *identityCatalogueBindingPreparation, signal identityCatalogueBindingSignal) (identityCatalogueCleanupObservation, error) {
 	private, ok := identityAgentPrivate(prepared)
 	if !ok || profile.Family != identityCatalogueAgent || private.fixture.Profile.CatalogueID != profile.ID {

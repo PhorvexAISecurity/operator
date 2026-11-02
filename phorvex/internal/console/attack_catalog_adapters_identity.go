@@ -606,9 +606,9 @@ func (a *identityFamilyCatalogueAdapter) Cleanup(ctx context.Context, _ AttackCa
 }
 
 // identityCatalogueRetryReconciler is implemented by the identity families that
-// can re-verify retry-safety read-only from their fixed profile. Only the
-// credential-revoke family currently can (identity-sa-rotate and agent-action do
-// not, so their stale unsafe runs are never cleared without an operator).
+// can re-verify retry-safety read-only from their fixed profile: credential-revoke
+// and agent-action can; identity-sa-rotate cannot, so its stale unsafe runs are
+// never cleared without an operator.
 type identityCatalogueRetryReconciler interface {
 	reconcileRetrySafety(ctx context.Context, profile identityCatalogueProfile, persisted AttackCatalogResult) (AttackCatalogRetrySafety, error)
 }
