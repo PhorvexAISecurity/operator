@@ -5,6 +5,6 @@ phorvex:
     captureCostEvidence: true
   image:
     repository: "753556437180.dkr.ecr.us-east-2.amazonaws.com/phorvex/staging/manager"
-    tag: "staging-0.16.0-git-a7d22003f13791b7d913eb5452de933732a15269"
-    releaseDigest: "sha256:44d8d6a811e8f3fe4ee327becc955256fc2faaeeb29a9fedfaabd820b5a9a511"
-    releaseSourceSHA: "a7d22003f13791b7d913eb5452de933732a15269"
+    tag: "staging-0.16.0-git-d246cb2d74f256207f9a575fde2b81599aa3f6df"
+    releaseDigest: "sha256:572d365380d3a575965c37c6a8b2aef57ecbec1acb7ec3cb70d960430a3ad3e7"
+    releaseSourceSHA: "d246cb2d74f256207f9a575fde2b81599aa3f6df"
