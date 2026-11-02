@@ -68,6 +68,7 @@ def strict_evidence(
             "schema": "phorvex.attack-catalogue-result.v1",
             "catalogueID": catalogue_id,
             "runID": run_id,
+            "family": "identity-sa-rotate",
             "triggerMode": "reactive",
             "executionMode": "active",
             "visible": True,
@@ -97,8 +98,33 @@ def strict_evidence(
             },
             "physicalValidation": {
                 "validated": physical_validated,
+                "catalogueID": catalogue_id,
+                "runID": run_id,
+                "family": "identity-sa-rotate",
+                "kind": "service-account-rotated-credential-replay",
+                "oracle": "service-account-rotation-v1",
+                "observedAt": "2026-11-02T00:00:00Z",
+                "evidence": {"schema": "identity-service-account-rotation-v1"},
                 "oldServiceAccountUID": "old-uid",
                 "newServiceAccountUID": "new-uid" if physical_validated else "old-uid",
+                "credentialAuthenticatedBefore": True,
+                "credentialAuthenticatedAfter": False,
+                "podRetained": True,
+                "podUID": "target-uid",
+                "observations": [
+                    {
+                        "name": "service_account_uid_changed", "before": "old-uid",
+                        "after": "new-uid", "passed": True, "observed_at": "2026-11-02T00:00:00Z",
+                    },
+                    {
+                        "name": "old_credential_revoked", "before": "authenticated",
+                        "after": "denied", "passed": True, "observed_at": "2026-11-02T00:00:00Z",
+                    },
+                    {
+                        "name": "pod_uid_unchanged", "before": "target-uid", "after": "target-uid",
+                        "passed": True, "observed_at": "2026-11-02T00:00:00Z",
+                    },
+                ],
             },
             "cleanup": {
                 "attempted": True,
@@ -507,13 +533,18 @@ class DriverTest(unittest.TestCase):
         evidence = strict_evidence("cat-13", IDS[0])
         result = evidence["attackCatalogueResult"]
         result["expectedAction"] = "agent-action-deny"
+        result["family"] = "agent-action"
         result["decision"]["action"] = "agent-action-deny"
         result["actuator"]["handler"] = "agent-action-deny"
         result["signal"]["targetUID"] = "pod-uid"
         result["physicalValidation"] = {
             "validated": True,
+            "catalogueID": IDS[0],
+            "runID": "cat-13",
+            "family": "agent-action",
             "kind": "app-action-denied-two-sided",
             "oracle": "agent-action-deny-enforcement-v1",
+            "observedAt": "2026-11-02T00:00:00Z",
             "podRetained": True,
             "podUID": "pod-uid",
             "credentialAuthenticatedBefore": False,
@@ -531,9 +562,9 @@ class DriverTest(unittest.TestCase):
                 "serviceUID": "service-uid",
             },
             "observations": [
-                {"name": "abusive_action_blocked", "passed": True},
-                {"name": "benign_action_preserved", "passed": True},
-                {"name": "peer_unchanged", "passed": True},
+                {"name": "abusive_action_blocked", "before": "allowed", "after": "blocked", "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
+                {"name": "benign_action_preserved", "before": "allowed", "after": "allowed", "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
+                {"name": "peer_unchanged", "before": "service-uid", "after": "service-uid", "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
             ],
         }
         passed, reasons, bindings = qa.evaluate_strict_pass(
@@ -546,6 +577,66 @@ class DriverTest(unittest.TestCase):
         result["physicalValidation"]["evidence"]["deniedAfter"] = False
         passed, reasons, bindings = qa.evaluate_strict_pass(
             IDS[0], "cat-13", status("cat-13", IDS[0]), evidence
+        )
+        self.assertFalse(passed)
+        self.assertFalse(bindings["physicalOracle"])
+        self.assertIn("physical oracle is absent or unvalidated", reasons)
+
+    def test_quarantine_oracle_validates_its_own_contract_not_unrelated_zero_values(self) -> None:
+        evidence = strict_evidence("cat-127", IDS[0])
+        result = evidence["attackCatalogueResult"]
+        result["family"] = "quarantine"
+        result["expectedAction"] = "quarantine"
+        result["decision"]["action"] = "quarantine"
+        result["actuator"]["handler"] = "quarantine"
+        result["signal"]["targetUID"] = "target-pod-uid"
+        result["physicalValidation"] = {
+            "validated": True,
+            "catalogueID": IDS[0],
+            "runID": "cat-127",
+            "family": "quarantine",
+            "kind": "pod-quarantined-network",
+            "oracle": "k8s-pod-quarantine.v1",
+            "observedAt": "2026-11-02T00:00:00Z",
+            "podRetained": False,
+            "credentialAuthenticatedBefore": False,
+            "credentialAuthenticatedAfter": False,
+            "evidence": {
+                "schema": "phorvex.attack-catalogue-k8s-physical.v1",
+                "catalogueID": IDS[0],
+                "family": "quarantine",
+                "profile": "farm-p1-quarantine-v1",
+                "logicalAction": "quarantine",
+                "nativeAction": "quarantine",
+                "targetUID": "target-pod-uid",
+                "targetQuarantined": True,
+                "targetEndpointAbsent": True,
+                "networkPolicyValid": True,
+                "siblingsIntact": True,
+                "availabilityHeld": True,
+                "replacementReady": True,
+                "deploymentUID": "deployment-uid",
+                "serviceUID": "service-uid",
+                "networkPolicyName": "quarantine-target-pod-uid",
+                "networkPolicyUID": "network-policy-uid",
+                "readyReplicas": 3,
+                "availableReplicas": 3,
+            },
+            "observations": [
+                {"name": "forbidden_edge_blocked", "before": "reached", "after": "blocked", "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
+                {"name": "legitimate_edge_preserved", "before": True, "after": True, "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
+                {"name": "target_pod_uid_unchanged", "before": "target-pod-uid", "after": "target-pod-uid", "passed": True, "observed_at": "2026-11-02T00:00:00Z"},
+            ],
+        }
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            IDS[0], "cat-127", status("cat-127", IDS[0]), evidence
+        )
+        self.assertTrue(passed, reasons)
+        self.assertTrue(bindings["physicalOracle"])
+
+        result["physicalValidation"]["evidence"]["networkPolicyValid"] = False
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            IDS[0], "cat-127", status("cat-127", IDS[0]), evidence
         )
         self.assertFalse(passed)
         self.assertFalse(bindings["physicalOracle"])
