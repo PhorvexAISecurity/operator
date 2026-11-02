@@ -413,6 +413,21 @@ apiVersion: v1
 kind: Service
 metadata: {name: c2-sink, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
 spec: {selector: {app: c2-sink}, ports: [{name: http, port: 8080, targetPort: http}]}
+---
+# Exact cleanup removes the network-isolate NetworkPolicy (UID precondition) and the
+# isolation markers on the target Pod; the attacks identity only reads them otherwise.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: {{ $attacksSA }}-network-edge-fixture, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+rules:
+- {apiGroups: [networking.k8s.io], resources: [networkpolicies], verbs: [get, delete]}
+- {apiGroups: [""], resources: [pods], verbs: [get, update]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata: {name: {{ $attacksSA }}-network-edge-fixture, namespace: p2-demo, labels: {phorvex.ai/catalogue-fixture-profile: {{ $family | quote }}, phorvex.ai/cleanup-policy: Delete}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ $attacksSA }}-network-edge-fixture}
+subjects: [{kind: ServiceAccount, name: {{ $attacksSA }}, namespace: {{ .Release.Namespace }}}]
 {{- end }}
 {{- if eq $family "node-recycle" }}
 ---
