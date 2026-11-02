@@ -268,6 +268,9 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
         c_policy = next(item for item in controller if item.get("kind") == "PhorvexPolicy"
                         and item["metadata"]["namespace"] == "p4-demo")
         self.assertEqual(c_policy["spec"]["actions"]["enabled"], ["rotate"])
+        self.assertEqual(c_policy["spec"]["slo"]["costCeiling"], "1.7")
+        self.assertEqual(c_policy["spec"]["slo"]["minAvailableReplicas"], 2)
+        self.assertTrue(c_policy["spec"]["triggers"]["reactiveOnly"])
         pod_rotate = objects(self.render("pod-rotate").stdout)
         pod_rotate_policy = next(
             item for item in pod_rotate if item.get("kind") == "PhorvexPolicy"
