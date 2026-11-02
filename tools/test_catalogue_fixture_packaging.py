@@ -293,6 +293,16 @@ class CatalogueFixtureRenderTests(unittest.TestCase):
         ])
         self.assertFalse([item for item in pod_rotate if item.get("kind") == "Role"
                           and item["metadata"]["name"].endswith("-network-edge-fixture")])
+        image = objects(self.render("image").stdout)
+        image_web = [item for item in image if item.get("kind") == "Deployment" and item["metadata"]["name"] == "demo-api"]
+        self.assertEqual(sorted(item["metadata"]["namespace"] for item in image_web), ["p2-demo", "p3-demo"])
+        for deployment in image_web:
+            pod = deployment["spec"]["template"]["spec"]
+            self.assertTrue(pod["containers"][0]["securityContext"]["readOnlyRootFilesystem"])
+            self.assertEqual(pod["containers"][0]["volumeMounts"], [{"name": "tmp", "mountPath": "/tmp"}])
+            self.assertEqual(pod["volumes"], [{"name": "tmp", "emptyDir": {"sizeLimit": "16Mi"}}])
+        self.assertFalse([item for item in network_edge if item.get("kind") == "Deployment"
+                          and item["metadata"]["name"] == "demo-api" and "volumes" in item["spec"]["template"]["spec"]])
         datastore = objects(self.render("datastore").stdout)
         trusted = next(item for item in datastore if item.get("kind") == "ConfigMap"
                        and item["metadata"]["name"] == "datastore-trusted-snapshot")
