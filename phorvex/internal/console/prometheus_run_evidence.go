@@ -140,6 +140,16 @@ func prometheusRunQueries(tenant, environment, action string) []prometheusRunQue
 	}
 }
 
+// Query the fixed profile's product primitive while retaining the catalogue's
+// logical ExpectedAction on the evidence envelope.
+func prometheusRunMetricAction(family, expectedAction string) string {
+	profile, err := k8sCatalogueProfileForFamily(family)
+	if err == nil && profile.ExpectedAction == expectedAction {
+		return profile.NativeAction
+	}
+	return expectedAction
+}
+
 func (c PrometheusRunEvidenceConfig) normalized() PrometheusRunEvidenceConfig {
 	if c.SettleDelay <= 0 {
 		c.SettleDelay = 35 * time.Second
@@ -189,7 +199,7 @@ func (s *Server) beginPrometheusRunEvidence(ctx context.Context, runID, catalogu
 		ObservedDecisionModes: []string{}, Status: "BASELINE_CAPTURED", StartedAt: started.UTC(), BaselineAt: time.Now().UTC(),
 		RangeStep: cfg.RangeStep.String(), Metrics: []PrometheusMetricEvidence{},
 	}
-	for _, query := range prometheusRunQueries(tenant, cfg.Environment, action) {
+	for _, query := range prometheusRunQueries(tenant, cfg.Environment, prometheusRunMetricAction(family, action)) {
 		querySum := sha256.Sum256([]byte(query.query))
 		metric := PrometheusMetricEvidence{Key: query.key, Query: query.query,
 			QuerySHA256: hex.EncodeToString(querySum[:]), Baseline: []PrometheusSeries{}}
