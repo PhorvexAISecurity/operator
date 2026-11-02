@@ -328,7 +328,10 @@ spec:
   budget: {antiOverRotationWindow: 90s, maxGracePeriodSeconds: 30, maxMovesPerTick: 1, proactiveFloor: 15m, tickInterval: 5s}
   objective: {costWeights: {flowDisruption: "0.6", normSparsity: "0.4"}, disruptionAversion: "1", lambda: "0"}
   slo:
-    costCeiling: {{ if has $family (list "pod-rotate" "controller-stop") }}"1.7"{{ else }}"1.2"{{ end }}
+    # The ceiling must admit the worst-case cost (0.4*norm + 0.6*CFlowMaximum 2.0) of the family's
+    # expected action: replacement-class moves (rotate, registry-rollback, controller-stop) reach
+    # 1.60; node-cordon-drain-replace prices at the shared-device anchor 1.25 and reaches 1.70.
+    costCeiling: {{ if eq $family "node-recycle" }}"1.8"{{ else if has $family (list "pod-rotate" "controller-stop" "image") }}"1.7"{{ else }}"1.2"{{ end }}
     minAvailableReplicas: {{ if eq $family "network-edge" }}3{{ else if has $family (list "quarantine" "pod-rotate" "controller-stop" "node-recycle") }}2{{ else }}1{{ end }}
   triggers: {eventAgeHorizon: 1h, eventDriven: true, reactiveOnly: true}
 {{- end }}
