@@ -13,3 +13,13 @@ phorvex:
     captureMaxBytes: 1073741824
 mathLabStore:
   existingClaim: staging-brain-mathlab
+# The existing math-lab EBS volume is zonal (us-east-2b). Keep the core Brain
+# off interruptible capacity and permit the long-lived system pool in that AZ;
+# otherwise a node replacement leaves the RWO PVC permanently unschedulable.
+nodeSelector:
+  eks.amazonaws.com/capacityType: ON_DEMAND
+tolerations:
+  - key: CriticalAddonsOnly
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
