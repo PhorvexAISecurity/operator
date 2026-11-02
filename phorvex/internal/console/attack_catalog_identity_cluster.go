@@ -215,7 +215,8 @@ func (k *kubernetesIdentityCatalogCluster) CreateSignal(ctx context.Context, ent
 }
 
 func (k *kubernetesIdentityCatalogCluster) Physical(ctx context.Context, f identityCatalogFixture) (AttackCatalogPhysicalResult, error) {
-	result := AttackCatalogPhysicalResult{OldServiceAccountUID: f.ServiceAccountUID, PodUID: f.PodUID, CredentialAuthenticatedBefore: true}
+	result := AttackCatalogPhysicalResult{Oracle: identityRotationOracle,
+		OldServiceAccountUID: f.ServiceAccountUID, PodUID: f.PodUID, CredentialAuthenticatedBefore: true}
 	sa, err := k.kube.CoreV1().ServiceAccounts(f.Namespace).Get(ctx, f.ServiceAccountName, metav1.GetOptions{})
 	if err != nil {
 		return result, err
