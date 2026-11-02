@@ -747,6 +747,39 @@ def physical_oracle_valid(
     return True
 
 
+def actuator_handler_matches_reviewed_mapping(
+    result: Mapping[str, Any],
+    signal_row: Any,
+    expected_action: Any,
+    actuator: Any,
+) -> bool:
+    if not isinstance(expected_action, str) or not expected_action or not isinstance(actuator, dict):
+        return False
+    handler = actuator.get("handler")
+    if result.get("family") != "controller-stop":
+        return handler == expected_action
+
+    # controller-stop is the reviewed logical bucket for a native Pod eviction.
+    # Accept that one non-identity mapping only when the independent physical
+    # evidence binds the same logical action, native action and target UID.
+    physical = result.get("physicalValidation")
+    detail = physical.get("evidence") if isinstance(physical, dict) else None
+    return (
+        expected_action == "controller-stop"
+        and handler == "rotate"
+        and isinstance(signal_row, dict)
+        and isinstance(detail, dict)
+        and physical.get("oracle") == "k8s-controller-stop-rotate-eviction.v1"
+        and detail.get("schema") == "phorvex.attack-catalogue-k8s-physical.v1"
+        and detail.get("catalogueID") == result.get("catalogueID")
+        and detail.get("family") == "controller-stop"
+        and detail.get("logicalAction") == expected_action
+        and detail.get("nativeAction") == handler
+        and detail.get("targetUID") == signal_row.get("targetUID")
+        and bool(detail.get("profile"))
+    )
+
+
 def evaluate_strict_pass(
     catalogue_id: str,
     run_id: str,
@@ -836,7 +869,7 @@ def evaluate_strict_pass(
         and decision.get("action") == expected_action
         and isinstance(actuator, dict)
         and actuator.get("receiptObserved") is True
-        and actuator.get("handler") == expected_action
+        and actuator_handler_matches_reviewed_mapping(result, signal_row, expected_action, actuator)
     ):
         reasons.append("exact signal, selected decision, and actuator receipt chain is incomplete")
     if physical_oracle_valid(

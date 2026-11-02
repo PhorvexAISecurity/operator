@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from contextlib import redirect_stderr, redirect_stdout
+import copy
 import importlib.util
 import io
 import json
@@ -672,6 +673,68 @@ class DriverTest(unittest.TestCase):
         self.assertFalse(passed)
         self.assertFalse(bindings["physicalOracle"])
         self.assertIn("physical oracle is absent or unvalidated", reasons)
+
+    def test_controller_stop_requires_reviewed_logical_to_native_mapping(self) -> None:
+        evidence = strict_evidence("cat-192", "AML.T0074")
+        result = evidence["attackCatalogueResult"]
+        result["family"] = "controller-stop"
+        result["expectedAction"] = "controller-stop"
+        result["decision"]["action"] = "controller-stop"
+        result["actuator"]["handler"] = "rotate"
+        result["signal"]["targetUID"] = "target-pod-uid"
+        result["physicalValidation"] = {
+            "validated": True,
+            "catalogueID": "AML.T0074",
+            "runID": "cat-192",
+            "family": "controller-stop",
+            "kind": "controller-stopped-availability",
+            "oracle": "k8s-controller-stop-rotate-eviction.v1",
+            "observedAt": "2026-11-02T00:00:00Z",
+            "evidence": {
+                "schema": "phorvex.attack-catalogue-k8s-physical.v1",
+                "catalogueID": "AML.T0074",
+                "family": "controller-stop",
+                "profile": "farm-p4-controller-stop-v1",
+                "logicalAction": "controller-stop",
+                "nativeAction": "rotate",
+                "targetUID": "target-pod-uid",
+            },
+            "observations": [
+                {
+                    "name": "target_controller_stopped", "before": "running", "after": "stopped",
+                    "passed": True, "observed_at": "2026-11-02T00:00:00Z",
+                },
+                {
+                    "name": "availability_preserved", "before": True, "after": True,
+                    "passed": True, "observed_at": "2026-11-02T00:00:00Z",
+                },
+            ],
+        }
+
+        passed, reasons, bindings = qa.evaluate_strict_pass(
+            "AML.T0074", "cat-192", status("cat-192", "AML.T0074"), evidence
+        )
+        self.assertTrue(passed, reasons)
+        self.assertTrue(bindings["physicalOracle"])
+
+        for label, mutate in {
+            "logical handler substituted for native handler":
+                lambda row: row["actuator"].__setitem__("handler", "controller-stop"),
+            "native evidence rebound to the logical action":
+                lambda row: row["physicalValidation"]["evidence"].__setitem__("nativeAction", "controller-stop"),
+            "logical evidence rebound to the native action":
+                lambda row: row["physicalValidation"]["evidence"].__setitem__("logicalAction", "rotate"),
+        }.items():
+            with self.subTest(label=label):
+                tampered = copy.deepcopy(result)
+                mutate(tampered)
+                candidate = copy.deepcopy(evidence)
+                candidate["attackCatalogueResult"] = tampered
+                passed, reasons, _ = qa.evaluate_strict_pass(
+                    "AML.T0074", "cat-192", status("cat-192", "AML.T0074"), candidate
+                )
+                self.assertFalse(passed)
+                self.assertIn("exact signal, selected decision, and actuator receipt chain is incomplete", reasons)
 
     def test_reactive_prometheus_binding_requires_trusted_event_delta(self) -> None:
         evidence = strict_evidence("run-1", IDS[0])
